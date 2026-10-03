@@ -23,6 +23,7 @@ export * from './store';
 export * from './save';
 export * from './move';
 export * from './versions';
+export * from './archive';
 export {
   PageEditor,
   type PageEditorMessages,

@@ -18,9 +18,10 @@ import '@/components/ui/markdown-editor.css';
 //
 //  • `saveUpdate` — one Yjs update as raw bytes to `POST /api/pages/<id>/updates`.
 //    200 resolves `{ revision }`. 413 rejects with a `PageBodyTooLargeError`,
-//    which carries `code: 'PAGE_BODY_TOO_LARGE'` — the ONE rejection the editor
-//    treats as final (`too_large`). Anything else (a fetch that never reached the
-//    server, a 5xx) rejects as a plain error, which the editor reads as `offline`
+//    which carries `code: 'PAGE_BODY_TOO_LARGE'` — final (`too_large`). A 409
+//    `PAGE_ARCHIVED` (the page was archived under this tab, MOTIR-7423) rejects
+//    with `code: 'PAGE_ARCHIVED'` — final too (`archived`). Anything else (a
+//    fetch that never reached the server, a 5xx) rejects as a plain error, which the editor reads as `offline`
 //    and retries with backoff.
 //  • `uploadImage` — multipart `POST /api/pages/<id>/images` → `{ url }`.
 //  • `messages` — `pages.editor.*` from `next-intl`, plus the app's existing
@@ -75,6 +76,14 @@ export async function sendPageUpdate(
     headers: { 'Content-Type': 'application/octet-stream' },
   });
   if (res.status === 413) throw await tooLargeFrom(res);
+  if (res.status === 409) {
+    // Archived under this tab (MOTIR-7423): a FINAL refusal, carried by its code
+    // so the editor stops instead of retrying. Any other 409 stays retryable.
+    const body = (await res.json().catch(() => ({}))) as { code?: unknown };
+    if (body.code === 'PAGE_ARCHIVED') {
+      throw Object.assign(new Error('This page is archived.'), { code: 'PAGE_ARCHIVED' });
+    }
+  }
   if (!res.ok) throw new Error(`Page save failed with HTTP ${res.status}`);
   return (await res.json()) as { revision: number };
 }
@@ -95,6 +104,7 @@ export async function uploadPageImage(pageId: string, file: File): Promise<{ url
 function usePageEditorMessages(): PageEditorMessages {
   const t = useTranslations('pages.editor');
   const tMarkdown = useTranslations('markdownEditor');
+  const tArchive = useTranslations('pages.archive.refusal');
   return useMemo(
     () => ({
       bodyLabel: t('bodyLabel'),
@@ -141,8 +151,13 @@ function usePageEditorMessages(): PageEditorMessages {
         reload: t('tooLarge.reload'),
         newPageNewTab: t('tooLarge.newPageNewTab'),
       },
+      archived: {
+        title: tArchive('editingArchived'),
+        body: tArchive('editingArchivedBody'),
+        reload: tArchive('reload'),
+      },
     }),
-    [t, tMarkdown],
+    [t, tMarkdown, tArchive],
   );
 }
 

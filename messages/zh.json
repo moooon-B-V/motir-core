@@ -443,6 +443,10 @@
       "label": "编辑页面",
       "description": "创建页面、重命名页面并修改其内容。"
     },
+    "page_delete": {
+      "label": "删除页面",
+      "description": "永久删除已归档的页面及其已归档的子页面。"
+    },
     "public_request_comment": {
       "label": "评论请求",
       "description": "在公开请求的讨论串中回复。仅适用于公开项目。"
@@ -12096,6 +12100,100 @@
         "failed": "无法恢复 v{number}。未做任何更改，请重试。"
       },
       "unsavedHold": "在你的编辑保存之前无法恢复。页面显示“已保存”后即可恢复。"
+    },
+    "archive": {
+      "menuItem": "归档…",
+      "pageActions": "“{title}”的页面操作",
+      "confirm": {
+        "title": "归档“{title}”及其 {count} 个子页面？",
+        "body": "它们将从页面树和搜索中移除，历史记录会被保留。恢复后，它们会全部回到原来的位置。不会删除任何内容。",
+        "impact": "将归档 <b>{total} 个页面</b>：“{title}”以及 {names}。",
+        "more": "等另外 {count} 个",
+        "action": "归档 {total} 个页面"
+      },
+      "archiving": "正在归档…",
+      "archived": "已归档“{title}”及其 {count} 个子页面",
+      "archivedOne": "已归档“{title}”",
+      "undo": "撤销",
+      "archiveFailed": "无法归档“{title}”，请重试。",
+      "banner": {
+        "title": "此页面已归档",
+        "meta": "由 <b>{name}</b> 于 {date} 归档 · 已从页面树和搜索中隐藏，其历史记录会被保留。",
+        "withSubPages": "它的 {count} 个子页面也一并归档。",
+        "restoreHint": "恢复后它会回到原来的位置。",
+        "subTitle": "此页面随“{root}”一起归档",
+        "subMeta": "由 <b>{name}</b> 于 {date} 归档 · 恢复“{root}”即可让它回来。"
+      },
+      "openRoot": "打开“{root}”",
+      "restore": "恢复",
+      "restoreLabel": "恢复“{title}”",
+      "restoring": "正在恢复…",
+      "restored": "已恢复“{title}”及其 {count} 个子页面",
+      "restoredOne": "已恢复“{title}”",
+      "landing": {
+        "ancestorPage": "已恢复到“{landing}”下，因为“{parent}”已归档。",
+        "folder": "已恢复到文件夹“{folder}”中，因为“{parent}”及其上级页面都已归档。",
+        "root": "已恢复到项目根目录，因为它原先所在的页面和文件夹都已不在页面树中。",
+        "depth": "已恢复到“{landing}”下，因为放回“{parent}”下会使页面嵌套超过 10 层。"
+      },
+      "open": "打开",
+      "restoreFailed": "无法恢复“{title}”，请重试。",
+      "history": {
+        "readOnly": "已归档页面的版本只能查看，不能恢复。请先恢复此页面。"
+      },
+      "delete": {
+        "menuItem": "删除…",
+        "title": "永久删除“{title}”？",
+        "body": "这将永久删除<b>“{title}”</b>及其 <b>{count} 个子页面</b>，以及它们的全部历史记录——每个已保存的版本和图片。<b>此操作无法撤销。</b>",
+        "bodyOne": "这将永久删除<b>“{title}”</b>及其全部历史记录——每个已保存的版本和图片。它没有子页面。<b>此操作无法撤销。</b>",
+        "impact": "将删除 <b>{total} 个页面</b>。它们都已归档——页面树不会有任何变化。",
+        "impactOne": "将删除 <b>1 个页面</b>。它已归档——页面树不会有任何变化。",
+        "history": "它们的版本和图片会一并删除。",
+        "action": "删除 {total} 个页面",
+        "actionOne": "删除页面",
+        "deleting": "正在删除…",
+        "failed": "无法删除“{title}”。未删除任何内容——请重试。",
+        "deleted": "{count, plural, =0 {已删除“{title}”} other {已删除“{title}”及其 {count} 个子页面}}"
+      },
+      "list": {
+        "link": "已归档页面",
+        "title": "已归档页面",
+        "back": "返回页面",
+        "subtitle": "已从页面树和搜索中隐藏，其历史记录会被保留。恢复后，页面会回到原来的位置。",
+        "col": {
+          "page": "页面",
+          "cameFrom": "原位置",
+          "archivedBy": "归档人",
+          "archivedAt": "归档时间",
+          "actions": "操作"
+        },
+        "subPages": "{count} 个子页面",
+        "noSubPages": "无子页面",
+        "archivedAncestor": "（已归档）",
+        "projectRoot": "项目根目录",
+        "more": "“{title}”的更多操作",
+        "empty": {
+          "title": "没有已归档的页面",
+          "body": "从页面树中归档的页面会连同其子页面显示在这里，直到有人恢复或删除它。"
+        },
+        "loadFailed": "无法加载已归档页面。",
+        "loadMore": "加载更多",
+        "loading": "正在加载…",
+        "shown": "已显示 {count} 个"
+      },
+      "refusal": {
+        "parentArchived": "“{parent}”已归档，因此不能在其下添加任何内容。未做任何更改。",
+        "alreadyArchived": "“{title}”已归档",
+        "alreadyArchivedBody": "有人刚刚归档了它。页面树已刷新。",
+        "editingArchived": "此页面已被归档",
+        "editingArchivedBody": "有人在你编辑时归档了它，因此自上次保存以来的编辑未被保存——此标签页之后的编辑也不会再保存。请先复制需要保留的内容，然后重新加载。",
+        "reload": "重新加载页面",
+        "notArchived": "“{title}”已不再处于归档状态——有人恢复了它——因此无法删除。请先归档。",
+        "notArchivedList": "“{title}”已不再处于归档状态",
+        "notArchivedListBody": "有人刚刚恢复了它，因此无需恢复或删除。列表已刷新。",
+        "rootRequired": "无法恢复“{title}”",
+        "rootRequiredBody": "“{title}”是作为“{root}”的一部分归档的。恢复“{root}”即可让它回来。"
+      }
     }
   }
 }

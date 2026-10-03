@@ -14,9 +14,135 @@ export interface PageDto {
   bodyState: string;
   /** ISO-8601. */
   updatedAt: string;
-  /** Whether the caller holds `page:edit` — the editor opens writable or read-only. */
+  /**
+   * Whether the caller may write THIS page — `page:edit`, and the page is live.
+   * An archived page is read-only whatever the role (MOTIR-7421), so the editor
+   * host mounts read-only.
+   */
   canEdit: boolean;
+  /**
+   * Whether the caller holds `page:delete` (MOTIR-7419) — Manager only — so the
+   * page can hide Delete… without a second round trip.
+   */
+  canDelete: boolean;
+  /**
+   * ISO-8601 when the page is archived (MOTIR-7420), `null` while it is live. An
+   * archived page still opens at its address, read-only (§7).
+   */
+  archivedAt: string | null;
+  /**
+   * The page whose archive took this one — itself for an archive root; `null`
+   * while live. A sub-page's banner links to it: only the root restores or
+   * deletes (MOTIR-7421).
+   */
+  archiveRoot: { id: string; title: string } | null;
+  /** Who archived it; `null` while live, or once that user is deleted. */
+  archivedBy: { id: string; name: string } | null;
+  /**
+   * Whether the caller may restore THIS page — `page:edit`, and it is an archive
+   * root. Reported beside `canDelete` (the permission), so a sub-page shows
+   * neither action and links to its root instead.
+   */
+  canRestore: boolean;
 }
+
+/**
+ * One row of the Archived pages list (MOTIR-7420): an archive ROOT — a sub-page
+ * that left with it is not a row of its own — with how many sub-pages left with
+ * it and the placement it was archived from, so the list can say where it came
+ * from.
+ */
+export interface PageArchivedRootDto {
+  id: string;
+  title: string;
+  /** ISO-8601. */
+  archivedAt: string;
+  archivedBy: { id: string; name: string } | null;
+  /** The pages that left with it, itself excluded. */
+  subPageCount: number;
+  /** The parent it was archived from. */
+  parent: PageParentDto;
+  /** Its stored ancestor chain, root-first — the came-from trail's pages. */
+  ancestorPageIds: string[];
+}
+
+/**
+ * One Archived pages row as the service returns it (MOTIR-7421): the root, and
+ * where it came from — its stored ancestor pages by title (an ancestor deleted
+ * since reads as an em dash; an archived one by its own title), under the folder
+ * chain its topmost page was filed in.
+ */
+export interface PageArchivedListItemDto extends PageArchivedRootDto {
+  cameFrom: PageTrailDto;
+  /**
+   * The came-from pages that are themselves archived (each archived separately,
+   * so each is a row of its own) — the list marks them "(archived)" (MOTIR-7424).
+   */
+  archivedAncestorIds: string[];
+}
+
+/** A page of the Archived pages list, newest first. */
+export interface PageArchivedListDto {
+  items: PageArchivedListItemDto[];
+  /** Pass back to read the next page; `null` after the last. */
+  nextCursor: string | null;
+}
+
+export interface ListArchivedPagesInput {
+  projectId: string;
+  cursor?: string | null;
+  limit?: number | null;
+}
+
+/** Archive, restore or permanently delete one page — always by its id in a project. */
+export interface PageArchiveActionInput {
+  projectId: string;
+  pageId: string;
+}
+
+/** What an archive returns: the set that left, root first. */
+export interface ArchivePageResultDto {
+  archivedIds: string[];
+  rootId: string;
+  /** The sub-pages that left with it — the set minus the root. */
+  subPageCount: number;
+}
+
+/**
+ * Where a restored page landed — `original` (where it was), `ancestorPage` (the
+ * nearest live ancestor), `folder` or `root` — with the parent's display name,
+ * for the restored-elsewhere notice. `title` is `null` at the project root.
+ */
+export interface PageRestoreLandingDto {
+  kind: 'original' | 'ancestorPage' | 'folder' | 'root';
+  parentPageId: string | null;
+  folderId: string | null;
+  title: string | null;
+}
+
+export interface RestorePageResultDto {
+  restoredIds: string[];
+  landing: PageRestoreLandingDto;
+}
+
+export interface DeletePageResultDto {
+  deletedIds: string[];
+}
+
+/**
+ * The sub-pages an archive of a page TAKES (a live page: its live descendants)
+ * or TOOK (an archive root: the rest of its set) — what the archive confirm,
+ * the archived banner and the permanent-delete confirm count (MOTIR-7423).
+ */
+export interface PageArchiveSetDto {
+  /** The sub-pages, the page itself excluded. */
+  subPageCount: number;
+  /** Up to {@link PAGE_ARCHIVE_SET_TITLES} of their titles, shallowest first. */
+  subPageTitles: string[];
+}
+
+/** How many sub-page titles the archive confirm names before "and N more". */
+export const PAGE_ARCHIVE_SET_TITLES = 5;
 
 /** A page row without its body — what a create or a rename returns. */
 export interface PageSummaryDto {

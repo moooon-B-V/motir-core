@@ -411,6 +411,7 @@ model User {
   createdFolders                   Folder[]                      @relation("FolderCreator")
   createdPages                     Page[]                        @relation("PageCreator")
   updatedPages                     Page[]                        @relation("PageUpdater")
+  archivedPages                    Page[]                        @relation("PageArchiver")
   // Page versions this person authored (Story MOTIR-5754). Restrict, as
   // `Page.updatedBy`: authorship is durable attribution.
   pageVersions                     PageVersion[]                 @relation("PageVersionAuthor")
@@ -11764,23 +11765,42 @@ model Folder {
 // no-cycle rule, are SECURITY DEFINER triggers in the migration; RLS is the
 // `folder` pair. Prisma does not model CHECK constraints or triggers.
 model Page {
-  id              String   @id @default(cuid())
-  workspaceId     String   @map("workspace_id")
-  projectId       String   @map("project_id")
-  title           String   @default("") @db.Text
-  parentPageId    String?  @map("parent_page_id")
-  folderId        String?  @map("folder_id")
-  position        String   @db.Text
-  ancestorPageIds String[] @default([]) @map("ancestor_page_ids")
-  bodyState       Bytes    @map("body_state")
-  bodyJson        Json     @map("body_json")
-  bodyMarkdown    String   @default("") @map("body_markdown") @db.Text
-  bodyText        String   @default("") @map("body_text") @db.Text
-  revision        Int      @default(1)
-  createdById     String   @map("created_by_id")
-  updatedById     String   @map("updated_by_id")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id              String    @id @default(cuid())
+  workspaceId     String    @map("workspace_id")
+  projectId       String    @map("project_id")
+  title           String    @default("") @db.Text
+  parentPageId    String?   @map("parent_page_id")
+  folderId        String?   @map("folder_id")
+  position        String    @db.Text
+  ancestorPageIds String[]  @default([]) @map("ancestor_page_ids")
+  bodyState       Bytes     @map("body_state")
+  bodyJson        Json      @map("body_json")
+  bodyMarkdown    String    @default("") @map("body_markdown") @db.Text
+  bodyText        String    @default("") @map("body_text") @db.Text
+  revision        Int       @default(1)
+  createdById     String    @map("created_by_id")
+  updatedById     String    @map("updated_by_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  // ARCHIVE (Story MOTIR-5755 · MOTIR-7417, `docs/decisions/pages.md` §7). Live:
+  // `archivedAt` and `archiveRootId` both null; archived: both set (the
+  // `page_archive_pairing` CHECK). `archiveRootId` is the page the member
+  // archived — every sub-page that left with it carries the same id — and is
+  // deliberately NOT a relation (a self-FK's SET NULL would break the pairing;
+  // the same choice as `ancestorPageIds`). An archived page keeps its own
+  // parent / folder / position: that IS where a restore returns it.
+  //
+  // ⚠️ Its two indexes are hand-written PARTIAL indexes and deliberately NOT
+  // declared here: `page_archived_roots_idx` on `(project_id, archived_at DESC,
+  // id DESC) WHERE archive_root_id = id` (the Archived pages keyset) and
+  // `page_archive_root_idx` on `(archive_root_id) WHERE archive_root_id IS NOT
+  // NULL` (one archive set). Prisma cannot express a `WHERE`; declaring either
+  // as a plain `@@index` would make `migrate dev` build a NON-partial index from
+  // an empty database. Neither shares a column list with an `@@index` below, so
+  // the differ ignores both (the MOTIR-1960 rule).
+  archivedAt      DateTime? @map("archived_at") @db.Timestamptz(3)
+  archiveRootId   String?   @map("archive_root_id")
+  archivedById    String?   @map("archived_by_id")
 
   workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -11791,6 +11811,8 @@ model Page {
   folder      Folder?       @relation("PageFolder", fields: [folderId], references: [id], onDelete: NoAction)
   createdBy   User          @relation("PageCreator", fields: [createdById], references: [id], onDelete: Restrict)
   updatedBy   User          @relation("PageUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  // SET NULL: deleting the user forgets who archived the page, never that it is.
+  archivedBy  User?         @relation("PageArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
   // The page's history (Story MOTIR-5754). Cascade: deleting a page takes them.
   versions    PageVersion[]
 
@@ -12306,21 +12328,21 @@ model AgentInstance {
   volumeId  String? @map("volume_id")
   region    String
 
-  state          AgentInstanceState @default(starting)
+  state           AgentInstanceState              @default(starting)
   /// Set on `failed`, in words a person can read; cleared on a later wake.
-  failureReason  String?            @map("failure_reason")
+  failureReason   String?                         @map("failure_reason")
   /// Why the stop in flight was begun (MOTIR-7406): written with the
   /// `running → hibernating` move and cleared when the stop settles, so a stop
   /// the SWEEP settles closes the interval with that reason (`credits`,
   /// `backstop`, `idle`, …) rather than a blanket `hibernated`.
   hibernateReason AgentInstanceIntervalEndReason? @map("hibernate_reason")
-  stateChangedAt DateTime           @default(now()) @map("state_changed_at")
+  stateChangedAt  DateTime                        @default(now()) @map("state_changed_at")
   /// The idle signal (§2): bumped by create, wake, and later stories' relay
   /// and runs. The idle sweep compares it with the 30-minute window.
-  lastActivityAt DateTime           @default(now()) @map("last_activity_at")
+  lastActivityAt  DateTime                        @default(now()) @map("last_activity_at")
   /// A deleted instance keeps its row so its intervals keep their parent (§4);
   /// every list excludes it.
-  deletedAt      DateTime?          @map("deleted_at")
+  deletedAt       DateTime?                       @map("deleted_at")
 
   /// `agent-instance-storage.md` §4 (MOTIR-6921): when the org's AI plan lapsed,
   /// the instant this instance is deleted — the start of the UTC day 30 days on.

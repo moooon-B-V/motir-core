@@ -29,9 +29,13 @@ import * as Y from 'yjs';
 //  • `PAGE_BODY_TOO_LARGE` is final. The status reads `too_large` and nothing is
 //    sent again from this loop; the content stays in the editor so it can be
 //    copied out (the notes' "the loop stops for good").
+//  • `PAGE_ARCHIVED` is final too (Story MOTIR-5755 · MOTIR-7423): someone
+//    archived the page while this tab was writing it, and every further save
+//    would be refused the same way, so retrying would only spin. The status
+//    reads `archived` and the loop stops exactly as it does for `too_large`.
 
-/** The save indicator's four values. */
-export type SaveStatus = 'saved' | 'saving' | 'offline' | 'too_large';
+/** The save indicator's values. */
+export type SaveStatus = 'saved' | 'saving' | 'offline' | 'too_large' | 'archived';
 
 /** Quiet before a batch goes. */
 export const AUTOSAVE_QUIET_MS = 1_000;
@@ -58,6 +62,17 @@ export function isPageBodyTooLarge(err: unknown): boolean {
     typeof err === 'object' &&
     err !== null &&
     (err as { code?: unknown }).code === 'PAGE_BODY_TOO_LARGE'
+  );
+}
+
+/**
+ * Is a rejection the save route's archived refusal (409 `PAGE_ARCHIVED`)? The
+ * host turns that answer into a rejection carrying the `code`, exactly as it
+ * does the size refusal (MOTIR-7423).
+ */
+export function isPageArchived(err: unknown): boolean {
+  return (
+    typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'PAGE_ARCHIVED'
   );
 }
 
@@ -171,10 +186,10 @@ export function startAutosave(options: AutosaveOptions): Autosave {
     // matter to Yjs; keeping it is what matters.
     buffer = [batch, ...buffer];
     clearSendTimers();
-    if (isPageBodyTooLarge(err)) {
+    if (isPageBodyTooLarge(err) || isPageArchived(err)) {
       stopped = true;
       clearRetry();
-      setStatus('too_large');
+      setStatus(isPageArchived(err) ? 'archived' : 'too_large');
       return;
     }
     if (disposed) return;

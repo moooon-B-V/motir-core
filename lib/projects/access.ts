@@ -87,6 +87,15 @@ export function canEditPages(i: ProjectAccessInputs): boolean {
 }
 
 /**
+ * Whether the actor may PERMANENTLY DELETE an archived page and its archived
+ * sub-pages (Story MOTIR-5755 · MOTIR-7419, `docs/decisions/pages.md` §5). Held
+ * by Manager only; archiving and restoring stay on `page:edit`.
+ */
+export function canDeletePages(i: ProjectAccessInputs): boolean {
+  return hasPermission(i, 'page:delete');
+}
+
+/**
  * Whether the actor may COMMENT on the project's issues (Story 5.1 — Jira's
  * "Add comments" permission). Held by an entrant whose workspace role carries
  * `comment:add`; the read-only Viewer role never comments.

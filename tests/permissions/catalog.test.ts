@@ -323,7 +323,7 @@ const INSTANCE_ENFORCED: PermissionKey[] = ['instance:use'];
  * through `projectAccessService.assertCanViewPages` / `assertCanEditPages`, which
  * consult them via `canViewPages` / `canEditPages`.
  */
-const PAGE_ENFORCED: PermissionKey[] = ['page:view', 'page:edit'];
+const PAGE_ENFORCED: PermissionKey[] = ['page:view', 'page:edit', 'page:delete'];
 
 // ⚠️ `MERGE_GATE_ENFORCED` WAS HERE — MOTIR-4793's `work_item:merge_pull_request`,
 // the floor the `pull_request_merge` handler named. Bug MOTIR-5603 · MOTIR-5616
@@ -421,13 +421,17 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => INSTANCE_ENFORCED.includes(k))).toEqual(
       INSTANCE_ENFORCED,
     );
-    // …and MOTIR-7277's two page keys.
+    // …and MOTIR-7277's two page keys, and MOTIR-7419's `page:delete`.
     expect(ENFORCED_PERMISSIONS.filter((k) => PAGE_ENFORCED.includes(k))).toEqual(PAGE_ENFORCED);
     expect(PERMISSION_CATALOG['page:view']).toMatchObject({
       domain: 'page',
       enforcement: 'enforced',
     });
     expect(PERMISSION_CATALOG['page:edit']).toMatchObject({
+      domain: 'page',
+      enforcement: 'enforced',
+    });
+    expect(PERMISSION_CATALOG['page:delete']).toMatchObject({
       domain: 'page',
       enforcement: 'enforced',
     });
@@ -523,11 +527,23 @@ describe('i18n totality — BOTH catalogs, so a key cannot ship half-translated'
 });
 
 describe('PERMISSION_IMPLICATIONS — the one key that confers another (MOTIR-3629)', () => {
-  it('maps `work_item:delete` to `work_item:archive`, and nothing else', () => {
+  it('maps `work_item:delete` to `work_item:archive`, `page:delete` to `page:edit`, and nothing else', () => {
     // Asserted as the WHOLE map, not as one lookup: an entry added without an
     // argument is the failure mode this guard exists for, and an extra row here
-    // would otherwise pass every test in this file.
-    expect(PERMISSION_IMPLICATIONS).toEqual({ 'work_item:delete': ['work_item:archive'] });
+    // would otherwise pass every test in this file. MOTIR-7419 argues the second
+    // row at the constant: a role that may destroy a page may also archive it,
+    // the only way to reach a deletable page.
+    expect(PERMISSION_IMPLICATIONS).toEqual({
+      'work_item:delete': ['work_item:archive'],
+      'page:delete': ['page:edit'],
+    });
+  });
+
+  it('a role holding `page:delete` resolves `page:edit` too, and not the reverse (MOTIR-7419)', () => {
+    expect([...withImpliedPermissions(['page:delete'] as PermissionKey[])].sort()).toEqual(
+      ['page:delete', 'page:edit'].sort(),
+    );
+    expect([...withImpliedPermissions(['page:edit'] as PermissionKey[])]).toEqual(['page:edit']);
   });
 
   it('names only real catalog keys, on both sides', () => {

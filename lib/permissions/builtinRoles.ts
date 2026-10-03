@@ -142,6 +142,10 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // both through this whole set, `member` both, `viewer` `page:view` only.
   'page:view',
   'page:edit',
+  // MOTIR-7419 — PERMANENTLY deleting an archived page: Manager/admin only
+  // (pages ADR §5). `member` and `viewer` do not list it, so neither does the
+  // Viewer-derived `VISITOR_PERMISSIONS`.
+  'page:delete',
   // MOTIR-2256 — the twelve per-domain administrative keys that fall out of
   // `project:administer`. Admin holds all twelve, which is what makes the split
   // neutral wherever the umbrella already stood.

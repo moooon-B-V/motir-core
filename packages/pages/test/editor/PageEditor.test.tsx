@@ -6,7 +6,7 @@ import * as Y from 'yjs';
 import { PageEditor, type PageEditorProps } from '../../src/editor/PageEditor';
 import type { SaveStatus } from '../../src/editor/autosave';
 import { emptyState, markdownToUpdate } from '../../src';
-import { MESSAGES, stateFromMarkdown, textAfter, tooLargeError } from './fixtures';
+import { MESSAGES, archivedError, stateFromMarkdown, textAfter, tooLargeError } from './fixtures';
 
 // `<PageEditor>` mounted for real under jsdom (MOTIR-7275): a real Tiptap editor
 // bound to a real Yjs doc, with fake `saveUpdate` / `uploadImage` props and fake
@@ -201,6 +201,31 @@ describe('autosave', () => {
     expect(h.saveUpdate).toHaveBeenCalledTimes(1);
     expect(h.surface.textContent).toContain('pnpm releasehugemore');
     expect(h.editor.isEditable).toBe(true);
+  });
+
+  it('stops for good on PAGE_ARCHIVED with the archived callout and Reload page (MOTIR-7423)', async () => {
+    const onReloadSaved = vi.fn();
+    const onNewPage = vi.fn();
+    const h = mount({ onReloadSaved, onNewPage });
+    h.type('late');
+    await h.advance(1_000);
+    await h.settle(archivedError());
+
+    expect(h.indicator().textContent).toBe('Not saved');
+    expect(h.indicator().getAttribute('data-status')).toBe('archived');
+    const callout = screen.getByRole('alert');
+    expect(callout.getAttribute('data-refusal')).toBe('archived');
+    expect(within(callout).getByText(MESSAGES.archived.title)).toBeTruthy();
+    expect(within(callout).getByText(MESSAGES.archived.body)).toBeTruthy();
+    // The archived page offers no "new page in a new tab" — only the reload.
+    expect(within(callout).getAllByRole('button')).toHaveLength(1);
+    fireEvent.click(within(callout).getByRole('button', { name: 'Reload page' }));
+    expect(onReloadSaved).toHaveBeenCalledTimes(1);
+
+    h.type('more');
+    await h.advance(60_000);
+    expect(h.saveUpdate).toHaveBeenCalledTimes(1);
+    expect(h.surface.textContent).toContain('latemore');
   });
 
   it('draws the refusal without actions when the host gives none', async () => {

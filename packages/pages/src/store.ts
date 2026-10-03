@@ -8,9 +8,17 @@ import type { PagePlacement } from './types';
 //
 // Only the methods the shipped procedures call are here. Later stories add
 // their own with the procedures that call them: the version methods
-// (MOTIR-5754 · §6), `setArchived` and `deletePages` (MOTIR-5755). The placement
-// methods (`findFolder`, `findSubtree`, `siblingNeighbours`, `updatePlacement`,
-// `rebaseDescendants`) are the page tree's (MOTIR-5753 · MOTIR-7368).
+// (MOTIR-5754 · §6). The placement methods (`findFolder`, `findSubtree`,
+// `siblingNeighbours`, `updatePlacement`, `rebaseDescendants`) are the page
+// tree's (MOTIR-5753 · MOTIR-7368); `setArchived`, `findArchiveSet`,
+// `deletePages` and `positionTaken` are archive's (MOTIR-5755 · MOTIR-7418, §7).
+//
+// ⚠️ LIVE vs ARCHIVED (§7). The LEVEL reads — `lastSiblingPosition`,
+// `siblingNeighbours`, `positionTaken` — see LIVE pages only: an archived page
+// has left the tree, and its kept `position` must not shape a level it is not
+// in. The ROW reads — `lockPage`, `findPage`, `findSubtree`, `findArchiveSet` —
+// return archived pages too, and the procedures decide what an archived page
+// may do.
 
 /** A page row, without its body state. */
 export interface PageRow {
@@ -27,6 +35,15 @@ export interface PageRow {
   readonly updatedById: string;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  /** When the page was archived (§7); `null` while it is live. */
+  readonly archivedAt: Date | null;
+  /**
+   * The page whose archive took this one — itself for the page a member
+   * archived, that page for every sub-page that left with it. `null` while live.
+   */
+  readonly archiveRootId: string | null;
+  /** Who archived it; `null` while live, or once that user is deleted. */
+  readonly archivedById: string | null;
 }
 
 /** A page row read under its lock, with the canonical body state. */
@@ -70,10 +87,15 @@ export interface FolderRef {
   readonly projectId: string;
 }
 
-/** One page of a moving subtree: the facts the depth check and the rewrite read. */
+/**
+ * One page of a subtree or an archive set: the facts the depth check and the
+ * rewrite read, and whether — and by which archive — it is archived.
+ */
 export interface SubtreePage {
   readonly id: string;
   readonly ancestorPageIds: readonly string[];
+  readonly archivedAt: Date | null;
+  readonly archiveRootId: string | null;
 }
 
 /**
@@ -155,7 +177,11 @@ export interface PageStore {
   lastSiblingPosition(projectId: string, parent: PagePlacement): Promise<string | null>;
   /** Reads one folder; `null` if absent or out of scope. */
   findFolder(folderId: string): Promise<FolderRef | null>;
-  /** Every DESCENDANT of a page (the page itself excluded), at any depth. */
+  /**
+   * Every DESCENDANT of a page (the page itself excluded), at any depth —
+   * archived descendants INCLUDED, because a move carries them (they are still
+   * its sub-pages) and archive, restore and delete must see them.
+   */
   findSubtree(pageId: string): Promise<SubtreePage[]>;
   /**
    * The positions to mint between at one parent's level. `beforeId` names the
@@ -204,6 +230,26 @@ export interface PageStore {
   deleteOldestVersions(pageId: string, keep: number): Promise<void>;
   /** Rewrites a page's derived link rows (§8.1); a no-op until the linking epic lands. */
   replaceDerivedLinks(pageId: string, links: readonly DerivedPageLink[]): Promise<void>;
+  /**
+   * Stamps (or, with three `null`s, clears) the archive columns of every page in
+   * `ids`, in ONE write (§7). Nothing else on the rows changes.
+   */
+  setArchived(
+    ids: readonly string[],
+    archivedAt: Date | null,
+    archiveRootId: string | null,
+    archivedById: string | null,
+  ): Promise<void>;
+  /** Every page whose `archiveRootId` is `rootId` — one archive set, its root included. */
+  findArchiveSet(rootId: string): Promise<SubtreePage[]>;
+  /**
+   * Permanently deletes every page in `ids` in ONE statement, so the
+   * `parent_page_id` foreign key is checked once, at its end; their versions go
+   * with them (`page_version` cascades).
+   */
+  deletePages(ids: readonly string[]): Promise<void>;
+  /** Whether a LIVE page at one parent's level already holds `position`. */
+  positionTaken(projectId: string, parent: PagePlacement, position: string): Promise<boolean>;
 }
 
 /** The time source, injected so time-dependent rules are testable without fake timers. */

@@ -69,6 +69,11 @@ export const MESSAGES: PageEditorMessages = {
     reload: 'Reload saved version',
     newPageNewTab: 'New page in a new tab',
   },
+  archived: {
+    title: 'This page was archived',
+    body: 'Someone archived it while you were editing.',
+    reload: 'Reload page',
+  },
 };
 
 /** The rejection the host raises for the save route's 413. */
@@ -76,4 +81,9 @@ export function tooLargeError(): Error & { code: string } {
   return Object.assign(new Error('This page body is too large.'), {
     code: 'PAGE_BODY_TOO_LARGE',
   });
+}
+
+/** The rejection the host raises for the save route's 409 `PAGE_ARCHIVED` (MOTIR-7423). */
+export function archivedError(): Error & { code: string } {
+  return Object.assign(new Error('This page is archived.'), { code: 'PAGE_ARCHIVED' });
 }

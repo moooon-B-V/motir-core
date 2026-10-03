@@ -70,9 +70,10 @@ const PUBLIC_SET_AT_MIGRATION = [
  * of the resolver is compared with the TypeScript one minus these.
  * MOTIR-6872 — `instance:use` (agent instances), granted to member and above.
  * MOTIR-7277 — `page:view` (every built-in) and `page:edit` (member and above).
+ * MOTIR-7419 — `page:delete`, the gated/admin set only.
  */
 const KEYS_ADDED_AFTER_MIGRATION = {
-  gated: ['instance:use', 'page:view', 'page:edit'],
+  gated: ['instance:use', 'page:view', 'page:edit', 'page:delete'],
   member: ['instance:use', 'page:view', 'page:edit'],
   viewer: ['page:view'],
 };

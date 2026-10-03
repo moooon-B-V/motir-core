@@ -8,6 +8,11 @@ import type { PageVersionListItemDto } from '@/lib/dto/pages';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 
+// PageView's own ⋯ and the archived banner read the router (MOTIR-7423).
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+}));
+
 // The page's HISTORY PANEL (Story MOTIR-5754 · MOTIR-7387) —
 // `design/pages/page--history.mock.html` states 2–7 and 14, driven under
 // happy-dom with the REAL `<PageEditor>` behind the REAL host, for the live page

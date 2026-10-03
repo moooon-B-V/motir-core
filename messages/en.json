@@ -443,6 +443,10 @@
       "label": "Edit pages",
       "description": "Create pages, rename them and change what they say."
     },
+    "page_delete": {
+      "label": "Delete pages",
+      "description": "Permanently delete an archived page and its archived sub-pages."
+    },
     "public_request_comment": {
       "label": "Comment on requests",
       "description": "Reply on a public request's thread. Public projects only."
@@ -12100,6 +12104,100 @@
         "failed": "v{number} couldn’t be restored. Nothing was changed — try again."
       },
       "unsavedHold": "Restore is held until your edits are saved. It becomes available as soon as the page says Saved."
+    },
+    "archive": {
+      "menuItem": "Archive…",
+      "pageActions": "Page actions for {title}",
+      "confirm": {
+        "title": "{count, plural, one {Archive “{title}” and its # sub-page?} other {Archive “{title}” and its # sub-pages?}}",
+        "body": "They leave the page tree and search, and keep their history. Restore brings all of them back to where they were. Nothing is deleted.",
+        "impact": "<b>{total, plural, one {# page} other {# pages}}</b> will be archived: “{title}” and {names}.",
+        "more": "and {count} more",
+        "action": "{total, plural, one {Archive # page} other {Archive # pages}}"
+      },
+      "archiving": "Archiving…",
+      "archived": "{count, plural, one {Archived “{title}” and # sub-page} other {Archived “{title}” and # sub-pages}}",
+      "archivedOne": "Archived “{title}”",
+      "undo": "Undo",
+      "archiveFailed": "Couldn’t archive “{title}”. Try again.",
+      "banner": {
+        "title": "This page is archived",
+        "meta": "Archived by <b>{name}</b> · {date} · It’s hidden from the page tree and search, and kept with its history.",
+        "withSubPages": "{count, plural, one {Its # sub-page was archived with it.} other {Its # sub-pages were archived with it.}}",
+        "restoreHint": "Restore it to bring it back where it was.",
+        "subTitle": "This page was archived with “{root}”",
+        "subMeta": "Archived by <b>{name}</b> · {date} · Restore “{root}” to bring it back."
+      },
+      "openRoot": "Open “{root}”",
+      "restore": "Restore",
+      "restoreLabel": "Restore “{title}”",
+      "restoring": "Restoring…",
+      "restored": "{count, plural, one {Restored “{title}” and # sub-page} other {Restored “{title}” and # sub-pages}}",
+      "restoredOne": "Restored “{title}”",
+      "landing": {
+        "ancestorPage": "Restored under “{landing}”, because “{parent}” is archived.",
+        "folder": "Restored into the folder “{folder}”, because “{parent}” and the pages above it are archived.",
+        "root": "Restored at the project root, because none of the pages or folders it was in is still in the tree.",
+        "depth": "Restored under “{landing}”, because putting it back under “{parent}” would nest pages more than 10 levels deep."
+      },
+      "open": "Open",
+      "restoreFailed": "Couldn’t restore “{title}”. Try again.",
+      "history": {
+        "readOnly": "Versions of an archived page can be read, not restored. Restore the page first."
+      },
+      "delete": {
+        "menuItem": "Delete…",
+        "title": "Delete “{title}” permanently?",
+        "body": "{count, plural, one {This deletes <b>“{title}”</b> and its <b># sub-page</b>, with all of their history — every saved version and image. <b>This can’t be undone.</b>} other {This deletes <b>“{title}”</b> and its <b># sub-pages</b>, with all of their history — every saved version and image. <b>This can’t be undone.</b>}}",
+        "bodyOne": "This deletes <b>“{title}”</b> and all of its history — every saved version and image. It has no sub-pages. <b>This can’t be undone.</b>",
+        "impact": "<b>{total, plural, one {# page} other {# pages}}</b> will be deleted. All of them are already archived — nothing in the page tree changes.",
+        "impactOne": "<b>1 page</b> will be deleted. It is already archived — nothing in the page tree changes.",
+        "history": "Their versions and images go with them.",
+        "action": "{total, plural, one {Delete # page} other {Delete # pages}}",
+        "actionOne": "Delete page",
+        "deleting": "Deleting…",
+        "failed": "Couldn’t delete “{title}”. Nothing was deleted — try again.",
+        "deleted": "{count, plural, =0 {Deleted “{title}”} one {Deleted “{title}” and # sub-page} other {Deleted “{title}” and # sub-pages}}"
+      },
+      "list": {
+        "link": "Archived pages",
+        "title": "Archived pages",
+        "back": "Back to Pages",
+        "subtitle": "Hidden from the page tree and search, with their history kept. Restore one to put it back where it was.",
+        "col": {
+          "page": "Page",
+          "cameFrom": "Came from",
+          "archivedBy": "Archived by",
+          "archivedAt": "Archived",
+          "actions": "Actions"
+        },
+        "subPages": "{count, plural, one {# sub-page} other {# sub-pages}}",
+        "noSubPages": "No sub-pages",
+        "archivedAncestor": "(archived)",
+        "projectRoot": "Project root",
+        "more": "More actions for “{title}”",
+        "empty": {
+          "title": "No archived pages",
+          "body": "When a page is archived from the tree, it shows up here with its sub-pages until someone restores or deletes it."
+        },
+        "loadFailed": "Couldn’t load the archived pages.",
+        "loadMore": "Load more",
+        "loading": "Loading…",
+        "shown": "{count} shown"
+      },
+      "refusal": {
+        "parentArchived": "“{parent}” is archived, so nothing can be added under it. Nothing was changed.",
+        "alreadyArchived": "“{title}” is already archived",
+        "alreadyArchivedBody": "Someone archived it a moment ago. The tree has been refreshed.",
+        "editingArchived": "This page was archived",
+        "editingArchivedBody": "Someone archived it while you were editing, so your edits since the last save weren’t saved — and nothing more will be from this tab. Copy anything you want to keep, then reload.",
+        "reload": "Reload page",
+        "notArchived": "“{title}” isn’t archived any more — someone restored it — so it can’t be deleted. Archive it first.",
+        "notArchivedList": "“{title}” isn’t archived any more",
+        "notArchivedListBody": "Someone restored it a moment ago, so there is nothing to restore or delete. The list has been refreshed.",
+        "rootRequired": "Couldn’t restore “{title}”",
+        "rootRequiredBody": "“{title}” is archived as part of “{root}”. Restore “{root}” to bring it back."
+      }
     }
   }
 }

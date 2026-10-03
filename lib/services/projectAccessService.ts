@@ -22,6 +22,7 @@ import {
   canUpvotePublicRequest,
   canViewPages,
   canEditPages,
+  canDeletePages,
   type ProjectAccessInputs,
 } from '@/lib/projects/access';
 import {
@@ -615,6 +616,22 @@ export const projectAccessService = {
   },
 
   /**
+   * Assert the actor may PERMANENTLY DELETE the project's archived pages
+   * (MOTIR-7419). The same refusal shape as {@link assertCanEditPages}: a
+   * non-browser is refused as 'browse' (→ 404), a browser without `page:delete`
+   * as 'edit' (→ 403).
+   */
+  async assertCanDeletePages(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
+    if (!canDeletePages(inputs)) throw new ProjectAccessDeniedError(projectId, 'edit');
+  },
+
+  /**
    * The actor's PAGE capabilities — the non-throwing form, for the read that
    * renders the editor writable or read-only (`pagesService.getPage`'s `canEdit`).
    * Throws only ProjectNotFoundError.
@@ -623,12 +640,13 @@ export const projectAccessService = {
     projectId: string,
     ctx: AccessActorContext,
     tx?: Prisma.TransactionClient,
-  ): Promise<{ canViewPages: boolean; canEditPages: boolean }> {
+  ): Promise<{ canViewPages: boolean; canEditPages: boolean; canDeletePages: boolean }> {
     const inputs = await resolveInputs(projectId, ctx, tx);
     const browse = canBrowse(inputs);
     return {
       canViewPages: browse && canViewPages(inputs),
       canEditPages: browse && canEditPages(inputs),
+      canDeletePages: browse && canDeletePages(inputs),
     };
   },
 

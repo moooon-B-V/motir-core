@@ -52,6 +52,13 @@ import { PageView } from './_components/PageView';
 // also after the gate, so the path paints open with the page selected and the
 // page itself never waits on them. A page that 404s renders neither (base
 // state 12); the sidebar is navigation only, the same for every reader.
+//
+// ── AN ARCHIVED PAGE (Story MOTIR-5755 · MOTIR-7423) ──────────────────────
+// It still opens here (design MOTIR-7416, surface 5): the read is the same, and
+// `PageView` draws the archived banner and mounts the editor read-only
+// (`canEdit` is false for an archived page). Its breadcrumb is the trail it was
+// archived from — where a restore puts it back — and its sidebar is the live
+// tree, which does not hold it.
 
 type Params = { params: Promise<{ pageId: string }> };
 
@@ -107,6 +114,24 @@ async function loadTrail(pageId: string): Promise<PageTrailDto | null> {
   }
 }
 
+/**
+ * How many sub-pages left with an archived root — `0` when the count cannot be
+ * read, which costs the banner one sentence, not the page.
+ */
+async function loadSubPageCount(pageId: string): Promise<number> {
+  const scope = await loadScope();
+  try {
+    const set = await pagesService.describeArchiveSet(scope.service, {
+      projectId: scope.projectId,
+      pageId,
+    });
+    return set.subPageCount;
+  } catch (err) {
+    console.error('[pages] the archive set could not be read', err);
+    return 0;
+  }
+}
+
 /** The rows open on arrival, root-first: the trail's folders, then its pages. */
 function expandedPathOf(trail: PageTrailDto | null): string[] {
   if (!trail) return [];
@@ -138,11 +163,20 @@ export default async function PageAtItsAddress({ params }: Params) {
   if (!read.loaded) notFound();
   const { page, viewerId } = read.loaded;
   const scope = await loadScope();
+  // An archived ROOT's banner says how many sub-pages left with it (MOTIR-7423);
+  // read after the gate, and only for that case. A sub-page's banner names its
+  // root instead, and a live page needs no count until someone asks to archive it.
+  const archivedRoot =
+    page.archivedAt !== null && (page.archiveRoot === null || page.archiveRoot.id === page.id);
+  const subPageCount = archivedRoot ? await loadSubPageCount(page.id) : 0;
 
   return (
     <PageSidebarLayout
       tree={
-        <Suspense fallback={<SidebarFrame />}>
+        // Keyed on the archive state: archiving or restoring this page re-reads
+        // the route, and the tree is a client island seeded once — the new key
+        // remounts it on the server's fresh levels, so it drops or lists the page.
+        <Suspense key={page.archivedAt ?? 'live'} fallback={<SidebarFrame />}>
           <PageSidebarTree
             service={scope.service}
             projectId={scope.projectId}
@@ -163,6 +197,18 @@ export default async function PageAtItsAddress({ params }: Params) {
             title: page.title,
             bodyState: page.bodyState,
             canEdit: page.canEdit,
+            parentTitle: trail?.pages.at(-1)?.title ?? null,
+            archived:
+              page.archivedAt === null
+                ? null
+                : {
+                    archivedAt: page.archivedAt,
+                    archivedBy: page.archivedBy,
+                    archiveRoot: page.archiveRoot,
+                    canRestore: page.canRestore,
+                    canDelete: page.canDelete,
+                    subPageCount,
+                  },
           }}
           titleMaxLength={PAGE_TITLE_MAX_LENGTH}
         />

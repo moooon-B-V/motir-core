@@ -8,7 +8,11 @@ import {
   PageFolderNotFoundError,
   PageLevelCursorInvalidError,
   PageNeighbourInvalidError,
+  PageArchiveRootRequiredError,
+  PageArchivedError,
+  PageNotArchivedError,
   PageNotFoundError,
+  PageParentArchivedError,
   PageParentNotAllowedError,
   PageTitleTooLongError,
   PageUpdateMalformedError,
@@ -99,6 +103,23 @@ export function pageErrorResponse(err: unknown): NextResponse {
   }
   if (err instanceof PageLevelCursorInvalidError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  // The archive refusals (Story MOTIR-5755 · MOTIR-7422). A write to an archived
+  // page and an action on the wrong archive state are conflicts with the page's
+  // current state, 409; a sub-page names its root so the client can link to the
+  // page that restores or deletes. A create or move UNDER an archived page is a
+  // tree refusal like the others above, 422.
+  if (err instanceof PageArchivedError || err instanceof PageNotArchivedError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof PageArchiveRootRequiredError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, rootId: err.rootId },
+      { status: 409 },
+    );
+  }
+  if (err instanceof PageParentArchivedError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
   }
   throw err;
 }

@@ -1,7 +1,9 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
+import { Archive } from 'lucide-react';
 import { memberPageContext, pageScope } from '@/lib/pages/projectPageContext';
 import { pagesService } from '@/lib/services/pagesService';
 import { foldersService } from '@/lib/services/foldersService';
@@ -56,6 +58,10 @@ import { PagesIndexFrame } from './_components/PagesIndexFrame';
 // shared `FolderCommandsProvider`, which wraps both. Folder writes assert
 // `work_item:edit`, so the tree offers them only to a reader holding it too.
 //
+// ── THE ARCHIVE'S DOOR (Story MOTIR-5755 · MOTIR-7424) ─────────────────────
+// The header's **Archived pages** link opens `/pages/archived` for every reader
+// who reached this page — reading the archive is `page:view`, the key gated above.
+//
 // ── `?folder=<id>` — THE BREADCRUMB'S WAY INTO THE TREE (MOTIR-7375) ───────
 // A page's breadcrumb links a folder segment here (`page--tree-sidebar.mock.html`
 // panel 4): the tree opens with the path to that folder AND the folder itself
@@ -99,8 +105,16 @@ export default async function PagesIndexPage({ searchParams }: SearchParams = {}
             </h1>
             <p className="mt-1 text-sm text-(--el-text-secondary)">{t('tree.subtitle')}</p>
           </div>
-          {/* Each renders only for its keys — both read `useProjectAccess()`. */}
+          {/* Each New renders only for its keys — both read `useProjectAccess()`.
+              Archived pages is every reader's: the list is `page:view` (MOTIR-7424). */}
           <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/pages/archived"
+              className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-transparent px-3 font-sans text-sm text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              <Archive className="h-4 w-4" aria-hidden />
+              {t('archive.list.link')}
+            </Link>
             <NewFolderButton />
             <NewPageButton />
           </div>

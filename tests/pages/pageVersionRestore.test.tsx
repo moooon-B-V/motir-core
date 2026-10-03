@@ -8,6 +8,11 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { PageView, type PageViewPage } from '@/app/(authed)/pages/[pageId]/_components/PageView';
 import type { PageVersionListItemDto } from '@/lib/dto/pages';
 
+// PageView's own ⋯ and the archived banner read the router (MOTIR-7423).
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+}));
+
 // RESTORE from the history panel (Story MOTIR-5754 · MOTIR-7388) —
 // `design/pages/page--history.mock.html` states 7–13, driven under happy-dom
 // with the REAL editor host for the live page and the version beside it. Only
