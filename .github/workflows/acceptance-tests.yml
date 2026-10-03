@@ -680,23 +680,55 @@ jobs:
       # The assertions never saw it, because they read the DOM's text, not pixels.
       # Probe first; install only when missing, bounded and retried the way
       # e2e-setup's apt step is (MOTIR-2970), and clear an apt a timeout orphaned.
+      #
+      # ⚠️ AND IT MUST NOT CHANGE A SINGLE LATIN GLYPH. Installed as it ships,
+      # Noto CJK went ahead of the runner's own fonts, so characters the page's
+      # web font lacks — the em dash, the ellipsis — fell back to its FULL-WIDTH
+      # forms. Lines grew, a banner wrapped, a terminal lost a row, and an
+      # unrelated receipt went red on a scrolled-off line. So the families that
+      # answered BEFORE the install are pinned back in front of it, and the step
+      # fails if any of those fallbacks now answers differently.
       - name: Install a CJK font for the recordings
         shell: bash
         run: |
           if fc-list :lang=zh 2>/dev/null | grep -q .; then echo "a CJK font is present"; exit 0; fi
+          probe() {
+            for q in sans-serif serif monospace 'sans-serif:charset=2014' 'sans-serif:charset=2026' 'monospace:charset=2014'; do
+              printf '%s=%s\n' "$q" "$(fc-match -f '%{family[0]}' "$q" 2>/dev/null)"
+            done
+          }
+          before="$(probe)"
+          echo "fallbacks before:"; echo "$before"
+          installed=0
           for attempt in 1 2 3; do
             status=0
             sudo timeout --kill-after=15s 300s bash -c \
               'apt-get update -qq && apt-get install -y -qq --no-install-recommends fontconfig fonts-noto-cjk' \
               || status=$?
-            if [ "$status" -eq 0 ] && fc-list :lang=zh | grep -q .; then exit 0; fi
+            if [ "$status" -eq 0 ] && fc-list :lang=zh | grep -q .; then installed=1; break; fi
             echo "CJK font install attempt $attempt failed (status $status)"
             sudo pkill -x apt-get || true
             sudo pkill -x dpkg || true
             sudo dpkg --configure -a || true
             sleep 15
           done
-          exit 1
+          [ "$installed" -eq 1 ] || exit 1
+          # The pre-install families first again, for every generic family — the
+          # CJK font then answers only the characters none of them has.
+          {
+            echo '<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig>'
+            for generic in sans-serif serif monospace; do
+              family="$(printf '%s\n' "$before" | sed -n "s/^${generic}=//p")"
+              [ -n "$family" ] && echo "<alias binding=\"strong\"><family>${generic}</family><prefer><family>${family}</family></prefer></alias>"
+            done
+            echo '</fontconfig>'
+          } | sudo tee /etc/fonts/conf.d/99-latin-before-cjk.conf >/dev/null
+          sudo fc-cache -f >/dev/null
+          after="$(probe)"
+          echo "fallbacks after:"; echo "$after"
+          if [ "$before" != "$after" ]; then
+            echo "::error::installing the CJK font changed a Latin fallback"; exit 1
+          fi
 
       # WHICH specs this PR owns (restored by MOTIR-7253 from MOTIR-1937). The
       # uploader publishes a recording only when its OWN spec is in this list:
