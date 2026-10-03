@@ -112,6 +112,8 @@ export default defineConfig({
       'tests/api/pages-routes-tree.test.ts',
       // A page's history (Story MOTIR-5754 · MOTIR-7385 · 7386).
       'tests/api/pages-history-routes.test.ts',
+      // Archive, restore, delete and the Archived pages list (Story MOTIR-5755 · MOTIR-7422).
+      'tests/api/pages-archive-routes.test.ts',
       // The client surfaces (MOTIR-7280 · 7300).
       'tests/components/new-page-button.test.tsx',
       'tests/components/page-view.test.tsx',
