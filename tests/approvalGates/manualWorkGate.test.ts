@@ -18,7 +18,12 @@ vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
-const { manualWorkGateService } = await import('@/lib/services/manualWorkGateService');
+const { manualWorkGateService, hopsToStatus } =
+  await import('@/lib/services/manualWorkGateService');
+const { manualWorkGateHandler, isManualWork } =
+  await import('@/lib/approvalGates/manualWorkHandler');
+const { approvalGateRepository } = await import('@/lib/repositories/approvalGateRepository');
+const { workItemTodoRepository } = await import('@/lib/repositories/workItemTodoRepository');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 const { ApprovalGateVerbNotOfferedError } = await import('@/lib/approvalGates/errors');
 const { ApprovalGatePendingError } = await import('@/lib/workItems/errors');
@@ -297,5 +302,183 @@ describe('withdrawn', () => {
       supersededCause: 'closed_without_decision',
       decidedById: null,
     });
+  });
+});
+
+// THE RESIDUE THE STORY'S COVERAGE FLOOR FOUND (MOTIR-7479) — arms no door reaches in an
+// ordinary fixture, each driven here by a real row rather than skipped.
+describe('the handler, called directly', () => {
+  const argsFor =
+    (gateRow: { id: string; workItemId: string | null; subjectId: string }) =>
+    (tx: Parameters<typeof manualWorkGateHandler.approve>[0]['tx']) => ({
+      gate: {
+        id: gateRow.id,
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: gateRow.workItemId,
+        subjectId: gateRow.subjectId,
+      },
+      item: null,
+      ctx: fx.ctx,
+      tx,
+      resolvedStatusKey: 'done',
+    });
+
+  it('resolves the card while it is manual, and nothing once it is not or is gone', async () => {
+    const card = await manualCard();
+    const gate = await raisedGate(card.id);
+    const resolve = (subjectId: string) =>
+      withWorkspaceContext(fx.ctx, (tx) =>
+        manualWorkGateHandler.resolveSubject({ ...argsFor({ ...gate, subjectId })(tx) }),
+      );
+
+    expect((await resolve(card.id))?.id).toBe(card.id);
+    expect(await resolve('no-such-card')).toBeNull();
+    await adminDb.workItem.update({
+      where: { id: card.id },
+      data: { type: 'code', executor: 'coding_agent' },
+    });
+    expect(await resolve(card.id)).toBeNull();
+    expect(isManualWork({ type: 'code', executor: 'human' })).toBe(true);
+  });
+
+  it('has no version and asks nothing on review entry', async () => {
+    const card = await manualCard();
+    const gate = await raisedGate(card.id);
+    await withWorkspaceContext(fx.ctx, async (tx) => {
+      const args = argsFor(gate)(tx);
+      expect(await manualWorkGateHandler.subjectVersion(args)).toBeNull();
+      expect(await manualWorkGateHandler.currentSubject(args)).toBeNull();
+    });
+  });
+
+  it('approve with no status in the target category writes none, and moves nothing', async () => {
+    const card = await manualCard();
+    const gate = await raisedGate(card.id);
+    const effect = await withWorkspaceContext(fx.ctx, (tx) =>
+      manualWorkGateHandler.approve({ ...argsFor(gate)(tx), resolvedStatusKey: null }),
+    );
+    expect(effect).toEqual({
+      statusWritten: null,
+      statusDeferredReason: 'no_status_in_target_category',
+    });
+    expect(await statusOf(card.id)).toBe('todo');
+  });
+
+  it('requestChanges refuses by name even when a caller reaches past the door', async () => {
+    const card = await manualCard();
+    const gate = await raisedGate(card.id);
+    const err = await withWorkspaceContext(fx.ctx, (tx) =>
+      manualWorkGateHandler.requestChanges(argsFor(gate)(tx)),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApprovalGateVerbNotOfferedError);
+  });
+});
+
+describe('the raise’s remaining guards', () => {
+  it('a card in another workspace, or no card at all, is `not_found`', async () => {
+    const other = await makeWorkItemFixture({ name: 'Other Co', identifier: 'OTH' });
+    const theirs = await workItemsService.createWorkItem(
+      {
+        projectId: other.projectId,
+        kind: 'task',
+        title: 'Theirs',
+        type: 'manual',
+        executor: 'human',
+      },
+      other.ctx,
+    );
+    expect((await raise(theirs.id, fx.ownerId)).skipped).toBe('not_found');
+    expect((await raise('no-such-card', fx.ownerId)).skipped).toBe('not_found');
+    expect(await adminDb.approvalGate.count({ where: { kind: 'manual_work' } })).toBe(0);
+  });
+
+  it('a choice card is asked by its own kind — no second question', async () => {
+    const choice = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Pick one',
+        type: 'choice',
+        executor: 'human',
+      },
+      fx.ctx,
+    );
+    expect((await raise(choice.id, fx.ownerId)).skipped).toBe('asked_by_own_kind');
+    expect(await gatesOf(choice.id)).toHaveLength(0);
+  });
+
+  it('an unassigned card a run with NO starter reaches routes to its reporter, unassigned', async () => {
+    const card = await manualCard();
+    const result = await raise(card.id, null);
+    expect(result).toMatchObject({
+      raised: true,
+      assignedToStarter: false,
+      routedToId: fx.ownerId,
+    });
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).assigneeId).toBe(
+      null,
+    );
+  });
+});
+
+describe('hopsToStatus', () => {
+  const hops = (status: string, target: string) =>
+    withWorkspaceContext(fx.ctx, (tx) =>
+      hopsToStatus({ projectId: fx.projectId, workspaceId: fx.workspaceId, status }, target, tx),
+    );
+
+  it('walks the declared edges, and is empty when the card is already there', async () => {
+    expect(await hops('todo', 'done')).toEqual(['in_progress', 'done']);
+    expect(await hops('done', 'done')).toEqual([]);
+  });
+
+  it('is null for a status the workflow does not have, or a target no edge reaches', async () => {
+    expect(await hops('todo', 'no-such-status')).toBeNull();
+    expect(await hops('no-such-status', 'done')).toBeNull();
+    await adminDb.workflowTransition.deleteMany({ where: { projectId: fx.projectId } });
+    expect(await hops('todo', 'done')).toBeNull();
+  });
+
+  it('is the one direct hop under an OPEN workflow policy', async () => {
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { workflowPolicyMode: 'open' },
+    });
+    expect(await hops('todo', 'done')).toEqual(['done']);
+  });
+});
+
+describe('the reads the rows and the run surfaces make', () => {
+  it('an empty set reads nothing', async () => {
+    await withWorkspaceContext(fx.ctx, async (tx) => {
+      expect(
+        await approvalGateRepository.findLatestWithPeopleByWorkItems([], 'manual_work', tx),
+      ).toEqual(new Map());
+      expect(await workItemTodoRepository.countByWorkItems([], tx)).toEqual(new Map());
+    });
+  });
+
+  it('the head per card is the live question, else the latest decided one', async () => {
+    const card = await manualCard();
+    const first = await raisedGate(card.id);
+    await approvalGatesService.decide(
+      { gateId: first.id, decision: 'approve', source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
+      fx.ctx,
+    );
+    const read = () =>
+      withWorkspaceContext(fx.ctx, (tx) =>
+        approvalGateRepository.findLatestWithPeopleByWorkItems([card.id], 'manual_work', tx),
+      );
+    expect((await read()).get(card.id)).toMatchObject({ id: first.id, state: 'approved' });
+
+    // Reopened and reached again: the awaiting row is the head, though an older one was decided.
+    await workItemsService.updateStatus(card.id, 'in_progress', fx.ctx);
+    expect((await raise(card.id, fx.ownerId)).raised).toBe(true);
+    const [, second] = await adminDb.approvalGate.findMany({
+      where: { workItemId: card.id, kind: 'manual_work' },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect((await read()).get(card.id)).toMatchObject({ id: second!.id, state: 'awaiting' });
   });
 });
