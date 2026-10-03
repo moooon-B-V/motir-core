@@ -15,7 +15,8 @@ import type { Prisma } from '@/generated/prisma/client';
 // The route parses and delegates. Every refusal below is a typed domain error
 // the service raises and `DOMAIN_ERROR_STATUS` maps — an already-closed run
 // (409), an event naming a card the run does not own (422), an over-sized log
-// body (413), a run at its event ceiling (422).
+// body (413), a run at its event ceiling (422), a `model` on an event that is
+// not `agent_exited` (422, MOTIR-7502).
 // ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-688) reports here,
 // and ONLY for its own run: `dispatchRunService.appendEvents` refuses any other
 // `{id}` with `DISPATCH_RUN_TOKEN_OUT_OF_SCOPE` (403) before reading it.
@@ -40,6 +41,7 @@ export const POST = withV1Route<{ id: string }>(
         ...(event.skipReason !== undefined ? { skipReason: event.skipReason } : {}),
         ...(event.sessionBranch !== undefined ? { sessionBranch: event.sessionBranch } : {}),
         ...(event.exitCode !== undefined ? { exitCode: event.exitCode } : {}),
+        ...(event.model !== undefined ? { model: event.model } : {}),
       })),
       ctx.service,
     );

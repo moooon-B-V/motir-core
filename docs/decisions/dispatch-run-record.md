@@ -465,3 +465,45 @@ Liveness is a timestamp and a rule, read when it is needed. Nothing is written w
 
 See [`run-death-keeps-work.md`](run-death-keeps-work.md) for the decision and what it
 rejected.
+
+## AMENDMENT 4 — every LEG records the model that ran it (MOTIR-7502, 2026-10-03)
+
+[`agent-reported-runs.md`](agent-reported-runs.md) is this record's AMENDMENT 3. This one
+adds one column to the LEG and changes nothing above: Q1's set, Q2's enums, Q3's three
+boundaries and Q4's privacy rule all stand.
+
+- **The column.** `DispatchRunCard.model` (`dispatch_run_card.model`, nullable text) is
+  the agent's **SELF-REPORTED** model for that leg — the `MOTIR_AGENT_REPORT` file the
+  agent writes, read by the CLI's `readAgentReport` (MOTIR-2419). Null when the agent
+  reported none. **It is never inferred**: not from the agent name, not from the profile,
+  not from the run's `model`. An empty record is honest; a guessed one is not.
+- **Its one producer is the `agent_exited` event that names the leg.** The append takes
+  the event's TOP-LEVEL `model` when present, else its `data.model` — the shape every CLI
+  since MOTIR-2419 already sends, so an installed CLI fills the column without upgrading.
+  Top-level wins when both are present. The value is written onto the leg in the same
+  transaction as the event and its `exitCode`, the path `exitCode` already takes.
+- **One validity rule, in one place:** `normalizeReportedModel`
+  (`lib/dispatchRuns/reportedModel.ts`) — a string, trimmed, non-blank, at most 200
+  characters, else null. It restates the CLI's own rule (`MAX_MODEL_LENGTH` in
+  `packages/cli/src/agentRun.ts`) on the server, because the server does not trust the
+  wire. The back-fill migration (MOTIR-7503) mirrors it in SQL and cites it.
+- **Nothing else writes it.** A null result writes nothing: an exit with no report never
+  erases a model the leg already holds. No other event kind writes it, and a `model` on
+  any other kind is **refused** (`DISPATCH_RUN_EVENT_MODEL_NOT_ALLOWED`, 422) rather than
+  dropped, with nothing in that batch written. The server never fills it from its own
+  inference.
+- **Legs written before the writer deployed** are back-filled once, by a forward-only
+  migration, from their latest `agent_exited` event's `data.model` under the same rule,
+  only where the column is still null (MOTIR-7503).
+- **THE READ RULE: the leg's `model`, else the run's `model`.** The run-level
+  `DispatchRun.model` is what a hosted or instance start sets, and what an agent-reported
+  run (AMENDMENT 3) opens with. A CLI leg is more specific than its run, because one run
+  can hold legs worked by different models, so the CLI sets no run-level model. A reader
+  asking "which model ran this item" takes the leg's and falls back to the run's.
+- **Q3 §3 holds.** A model name is an identifier, not usage: no token, credit or cost
+  column is added, here or anywhere in `motir-core`.
+
+The two reads that carry a leg — `GET /api/v1/dispatch-runs/{id}` (`cards[].model`) and the
+browser's run DTO (`DispatchRunCardDto.model`) — return it. Nothing renders it yet;
+showing and comparing models across runs belongs to the reporting work that reads this
+column.

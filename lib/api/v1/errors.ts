@@ -203,6 +203,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // card to add: the SET is the plan the run published, and letting it grow
   // behind that plan would defeat the record.
   UNKNOWN_DISPATCH_RUN_CARD: 422,
+  // 422 — `model` on an event that is not `agent_exited` (MOTIR-7502). The leg's
+  // model has one producer, the agent's exit; refused by name, never dropped.
+  DISPATCH_RUN_EVENT_MODEL_NOT_ALLOWED: 422,
   // 413 — an over-sized opt-in log body. REFUSED rather than truncated: a
   // silently shortened log reads as the whole tail, and the line that mattered is
   // the one that was cut.

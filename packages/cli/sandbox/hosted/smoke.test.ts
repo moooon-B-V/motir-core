@@ -665,6 +665,7 @@ function dispatchRun(s: Scenario, status: 'running' | 'succeeded') {
       startedAt: null,
       endedAt: null,
       exitCode: null,
+      model: null,
     })),
     seq: 0,
     continues: s.continues ?? null,
