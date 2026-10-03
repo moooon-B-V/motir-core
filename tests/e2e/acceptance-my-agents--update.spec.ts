@@ -59,7 +59,24 @@ async function createAgent(page: Page, name: string): Promise<string> {
   const res = await created;
   expect(res.status()).toBe(201);
   await expect(dialog).toBeHidden();
+  await backToList(page, name);
+  // The boot now runs after the 201 (Story MOTIR-7393): wait for it to finish,
+  // as the inline boot used to before Create answered.
+  await expect(rowOf(page, name)).toHaveAttribute('data-state', 'running');
   return ((await res.json()) as { instance: { id: string } }).instance.id;
+}
+
+/**
+ * Create now opens the new agent's panel (Story MOTIR-7393); this walk reads the
+ * list's table, so it closes the panel and returns to it. Navigation only.
+ */
+async function backToList(page: Page, name: string): Promise<void> {
+  await page
+    .getByRole('main')
+    .getByTestId('agent-panel')
+    .getByRole('button', { name: `Close ${name}` })
+    .click();
+  await expect(page.getByRole('table')).toBeVisible();
 }
 
 async function goToMyAgents(page: Page): Promise<void> {
