@@ -14,8 +14,12 @@ export abstract class MotirAiError extends Error {
 // caller's fault.
 export class MotirAiUnavailableError extends MotirAiError {
   readonly code = 'MOTIR_AI_UNAVAILABLE' as const;
-  constructor(detail: string) {
-    super(`motir-ai is unavailable: ${detail}`);
+  // `options.cause` carries the underlying transport error. It rides the
+  // standard `Error.cause` — which the error monitor records as a linked
+  // exception — and NOT the message, because the v1 API returns the message to
+  // the caller and the cause's text names private hosts and addresses.
+  constructor(detail: string, options?: { cause?: unknown }) {
+    super(`motir-ai is unavailable: ${detail}`, options);
     this.name = 'MotirAiUnavailableError';
   }
 }
