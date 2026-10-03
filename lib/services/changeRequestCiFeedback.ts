@@ -1,4 +1,5 @@
 import { Prisma, type GithubInstallation, type GithubRepo } from '@/generated/prisma/client';
+import { createConcurrencyGate } from '@/lib/async/concurrencyGate';
 import {
   bindWorkspaceContext,
   withSystemContext,
@@ -178,14 +179,55 @@ export type CiFeedbackContextResolution =
   | { kind: 'unknown_repo' };
 
 /**
+ * How many CI deliveries this process applies AT ONCE (MOTIR-6788). The rest wait
+ * in line in memory, holding no connection.
+ *
+ * ⚠️ WITHOUT THIS LIMIT A BURST OF DELIVERIES TOOK THE WHOLE POOL, AND EVERY OTHER
+ * ROUTE WITH IT. Every delivery for one change request locks the SAME rows — the
+ * change request (the render fold's `lockById`) and each card it delivers (the
+ * `ciState` / fix-reason recomputes) — so a burst is serialised by Postgres, and
+ * each delivery waited for its turn inside an open transaction, on a pooled
+ * connection, for up to {@link CI_FEEDBACK_TX_TIMEOUT_MS}. With pg's default pool
+ * of 10, ten such waiters left nothing: production recorded `maxWait` P2028s on
+ * this route AND on `GET /api/notifications/unread-count` and `GET /api/plans/[id]`
+ * with the route-handler pool at total 10 / idle 0 / waiting 5–11, a healthy event
+ * loop, and the page runtime's pool idle beside it (MOTIR-6999, MOTIR-7000,
+ * MOTIR-6703, MOTIR-6702). Some of the deliveries themselves gave up the same way —
+ * and a delivery that gives up is a check conclusion GitHub never redelivers.
+ *
+ * Why 3: a delivery holds at most ONE connection at a time (its transactions run
+ * one after another; the parallel reads inside one share that transaction's
+ * connection), so the gate bounds this path to 3 of the pool's 10 and leaves 7 for
+ * everything else. More would not make a burst faster: deliveries for one change
+ * request queue on its row locks whatever the limit, and deliveries for different
+ * change requests are short when nothing makes them wait. The budgets
+ * ({@link CI_FEEDBACK_TX_TIMEOUT_MS}, `maxWait`) and the pool size are unchanged.
+ *
+ * Module-local on purpose: it limits the pool of the runtime it runs in, and the
+ * webhook routes that reach it share one route-handler runtime (MOTIR-7073).
+ */
+const CI_FEEDBACK_CONCURRENCY = 3;
+const ciFeedbackGate = createConcurrencyGate(CI_FEEDBACK_CONCURRENCY);
+
+/**
  * Apply one normalized CI / pipeline event to its linked work item's verification
  * feedback. `resolveContext` runs INSIDE the resolve transaction and maps the
  * provider's raw payload to `{ installation, repo, buildChecksUrl }` (or a
  * "couldn't resolve" reason). The event's change request (a GitHub PR / GitLab MR)
  * is resolved from the shared change-request table by the event's PR/MR-number
  * list first, else the head branch — the same resolver both hosts share.
+ *
+ * At most {@link CI_FEEDBACK_CONCURRENCY} deliveries run at once in this process;
+ * a delivery beyond that waits for a slot before it opens any transaction.
  */
 export async function applyCiStatusFeedback(
+  event: NormalizedStatusEvent,
+  resolveContext: (tx: Prisma.TransactionClient) => Promise<CiFeedbackContextResolution>,
+): Promise<CiFeedbackResult> {
+  return ciFeedbackGate.run(() => applyOneCiDelivery(event, resolveContext));
+}
+
+async function applyOneCiDelivery(
   event: NormalizedStatusEvent,
   resolveContext: (tx: Prisma.TransactionClient) => Promise<CiFeedbackContextResolution>,
 ): Promise<CiFeedbackResult> {
