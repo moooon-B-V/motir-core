@@ -1231,7 +1231,13 @@ export const agentInstanceLifecycleService = {
     } else {
       await assertNoRunningRun(row, 'hibernated');
     }
-    if (!(await systemTransition(row, ['running'], 'hibernating'))) return false;
+    // The reason rides the move (MOTIR-7406): a stop the sweep settles later,
+    // because this one failed or outlived the inline wait, closes with it.
+    if (
+      !(await systemTransition(row, ['running'], 'hibernating', { hibernateReason: endReason }))
+    ) {
+      return false;
+    }
     const handle = handleOf(row);
     if (handle) {
       // §4 (MOTIR-7026): the last sign-in answer before the volume goes quiet is
@@ -1619,23 +1625,50 @@ export const agentInstanceLifecycleService = {
 
   /**
    * SETTLE A STOP (`hibernating`), idempotently: once Fly reports the machine
-   * stopped, close the interval at Fly's stop instant with `endReason` and move
-   * to `hibernated`. A machine found gone fails the instance (`lost`). Called
-   * inline by {@link beginHibernate} with the reason it was started for, and by
-   * the sweep for a stop a previous pass left in motion (then `hibernated`).
+   * stopped, close the interval at Fly's stop instant and move to `hibernated`.
+   * A machine found gone fails the instance (`lost`). Called inline by
+   * {@link beginHibernate} with the reason it was started for, and by the sweep
+   * for a stop a previous pass left in motion.
+   *
+   * The interval closes with `endReason` when given, else the reason the row
+   * recorded when the hibernate began, else `hibernated` (a row that entered
+   * `hibernating` before the reason was recorded) — MOTIR-7406.
+   *
+   * `reissueStop` (the sweep's, MOTIR-7406): a machine still `running` means the
+   * stop never reached it — Fly refused it, or it was lost — so send it again,
+   * once per call, and read the machine again. `stop` is idempotent, so a stop
+   * that did land costs nothing. The inline settle never re-issues: it polls the
+   * stop it just sent.
    */
   async settleStop(
     instanceId: string,
-    endReason: AgentInstanceIntervalEndReason = 'hibernated',
+    endReason?: AgentInstanceIntervalEndReason,
+    opts: { reissueStop?: boolean } = {},
   ): Promise<'hibernated' | 'failed' | 'pending' | 'noop'> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt || row.state !== 'hibernating') return 'noop';
     const handle = handleOf(row);
     /* v8 ignore next -- a hibernating instance was running, so it has a handle. */
     if (!handle) return 'pending';
+    const orchestrator = getPersistentOrchestrator();
     let status;
     try {
-      status = await getPersistentOrchestrator().describePersistent(handle);
+      status = await orchestrator.describePersistent(handle);
+      if (opts.reissueStop && status.state === 'running') {
+        try {
+          await orchestrator.stop(handle);
+        } catch (err) {
+          console.warn(
+            '[agentInstanceLifecycle] the re-issued stop failed; the next pass retries',
+            {
+              instanceId: row.id,
+              detail: describeError(err),
+            },
+          );
+          return 'pending';
+        }
+        status = await orchestrator.describePersistent(handle);
+      }
     } catch {
       return 'pending';
     }
@@ -1649,8 +1682,14 @@ export const agentInstanceLifecycleService = {
     if (status.state !== 'stopped') return 'pending';
     // Move first: a Delete that took the agent out of `hibernating` meanwhile wins,
     // and its settle closes the interval `deleted` (AMENDMENT 4).
-    if (!(await systemTransition(row, ['hibernating'], 'hibernated'))) return 'noop';
-    await closeOpenInterval(row, status.stoppedAt ?? agentInstanceClock.now(), endReason);
+    if (!(await systemTransition(row, ['hibernating'], 'hibernated', { hibernateReason: null }))) {
+      return 'noop';
+    }
+    await closeOpenInterval(
+      row,
+      status.stoppedAt ?? agentInstanceClock.now(),
+      endReason ?? row.hibernateReason ?? 'hibernated',
+    );
     return 'hibernated';
   },
 

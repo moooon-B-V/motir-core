@@ -12225,6 +12225,11 @@ model AgentInstance {
   state          AgentInstanceState @default(starting)
   /// Set on `failed`, in words a person can read; cleared on a later wake.
   failureReason  String?            @map("failure_reason")
+  /// Why the stop in flight was begun (MOTIR-7406): written with the
+  /// `running → hibernating` move and cleared when the stop settles, so a stop
+  /// the SWEEP settles closes the interval with that reason (`credits`,
+  /// `backstop`, `idle`, …) rather than a blanket `hibernated`.
+  hibernateReason AgentInstanceIntervalEndReason? @map("hibernate_reason")
   stateChangedAt DateTime           @default(now()) @map("state_changed_at")
   /// The idle signal (§2): bumped by create, wake, and later stories' relay
   /// and runs. The idle sweep compares it with the 30-minute window.
