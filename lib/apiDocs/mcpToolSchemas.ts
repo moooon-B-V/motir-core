@@ -867,6 +867,46 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  create_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      title: {
+        type: 'string',
+        description: 'The page’s title. Omit for an untitled page; rename it in the editor later.',
+      },
+      markdown: {
+        type: 'string',
+        description: 'The page’s body as markdown. Omit for an empty page.',
+      },
+      parent: {
+        type: 'object',
+        properties: {
+          kind: {
+            type: 'string',
+            minLength: 1,
+            description: '`root`, `folder` (an id from `list_folders`) or `page` (a page id).',
+          },
+          id: {
+            type: 'string',
+            minLength: 1,
+            description: 'The folder or page id. Required unless `kind` is `root`.',
+          },
+        },
+        required: ['kind'],
+        additionalProperties: false,
+        description:
+          'Where to file the page: `{ "kind": "root" }`, `{ "kind": "folder", "id": … }` or `{ "kind": "page", "id": … }` for a sub-page. Omit to file it at the project root.',
+      },
+    },
+    required: ['projectKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   create_plan: {
     type: 'object',
     properties: {
@@ -1265,6 +1305,24 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['key'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  get_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+    },
+    required: ['projectKey', 'pageId'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -2500,6 +2558,35 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  update_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      markdown: {
+        type: 'string',
+        description:
+          'The page’s WHOLE new body as markdown. It replaces the body; it is not appended.',
+      },
+      revision: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          'The `revision` your `get_page` (or `create_page`) returned. A page saved since is refused PAGE_REVISION_CONFLICT and nothing is written.',
+      },
+    },
+    required: ['projectKey', 'pageId', 'markdown', 'revision'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   update_plan: {
     type: 'object',
     properties: {
@@ -3276,6 +3363,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   create_acceptance_upload: 'Create acceptance upload',
   create_design_upload: 'Create design upload',
   create_folder: 'Create folder',
+  create_page: 'Create page',
   create_plan: 'Open a plan to propose into',
   create_sprint: 'Create sprint',
   create_work_item: 'Create work item',
@@ -3290,6 +3378,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_approval_gate: 'Get approval gate',
   get_approved_shape_verdict: 'Is this card still what its plan approved?',
   get_design: 'Get design',
+  get_page: 'Get page',
   get_plan: 'Read plan proposals',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
@@ -3329,6 +3418,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   unlink_pull_request: 'Unlink pull request',
   unlink_work_items: 'Unlink work items',
   update_folder: 'Update folder',
+  update_page: 'Update page',
   update_plan: "Correct a plan's own title and summary",
   update_plan_item: 'Deepen a proposal you appended',
   update_plan_proposal: 'Correct a proposal, including its structure',
@@ -3469,6 +3559,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: false,
     openWorldHint: false,
   },
+  create_page: {
+    title: 'Create page',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   create_plan: {
     title: 'Open a plan to propose into',
     readOnlyHint: false,
@@ -3547,6 +3644,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   get_design: { title: 'Get design', readOnlyHint: true, openWorldHint: false },
+  get_page: { title: 'Get page', readOnlyHint: true, openWorldHint: false },
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },
   get_plan_status: { title: 'Plan status', readOnlyHint: true, openWorldHint: false },
   get_project_state: { title: 'Get project state', readOnlyHint: true, openWorldHint: false },
@@ -3742,6 +3840,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,
+    openWorldHint: false,
+  },
+  update_page: {
+    title: 'Update page',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
     openWorldHint: false,
   },
   update_plan: {

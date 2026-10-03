@@ -118,6 +118,10 @@ describe('CLI_TOKEN_GRANT (the device-approval fixed grant)', () => {
         // already performs on browse; the argument is on the constant.
         'plan:view_any',
         'run:view_any',
+        // MOTIR-7412 — the page keys, for `get_page` / `create_page` /
+        // `update_page`; the argument is on the constant.
+        'page:view',
+        'page:edit',
       ].sort(),
     );
   });
@@ -125,6 +129,8 @@ describe('CLI_TOKEN_GRANT (the device-approval fixed grant)', () => {
   it('withholds the two a remote unattended credential must not hold', () => {
     expect(CLI_TOKEN_GRANT).not.toContain('work_item:delete');
     expect(CLI_TOKEN_GRANT).not.toContain('sprint:manage');
+    // MOTIR-7412 — pages joined the grant without their destroying key (§5).
+    expect(CLI_TOKEN_GRANT).not.toContain('page:delete');
   });
 
   it('is entirely grantable', () => {
@@ -205,6 +211,11 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // MOTIR-6329), which the forward map does not carry.
       'plan:view_any',
       'run:view_any',
+      // MOTIR-7410 — minted with pages (MOTIR-7277) and made grantable by
+      // `get_page`, the first tool to assert it. No stale row may acquire it.
+      'page:view',
+      // MOTIR-7411 — the same, made grantable by `create_page` / `update_page`.
+      'page:edit',
     ];
     expect([...union].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
@@ -255,6 +266,16 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // project's lesson corpus. The loss is correct, and naming it is what
       // keeps this check exhaustive rather than what excuses it.
       reinforce_lesson: true,
+      // MOTIR-7410. A FIFTH loss, of the lesson tools' kind: no legacy scope ever
+      // gated `get_page`, because `page:view` did not exist when the six strings
+      // were written. Its `TOOL_SCOPES` row files it under `read` as the nearest
+      // bucket; the forward map is NOT widened, so a stale `read` row cannot start
+      // reading a project's pages.
+      get_page: true,
+      // MOTIR-7411 — the page writes, the same kind of loss: `page:edit` postdates
+      // the six strings, so a stale `write` row cannot start rewriting pages.
+      create_page: true,
+      update_page: true,
     };
     const losses: string[] = [];
     for (const name of MCP_TOOL_NAMES) {

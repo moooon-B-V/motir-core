@@ -218,3 +218,54 @@ export interface RestorePageVersionInput {
   pageId: string;
   number: number;
 }
+
+// ── The markdown doors (Story MOTIR-5760 · MOTIR-7409) — `docs/decisions/pages.md` §8.2 ──
+
+/**
+ * One page as an AGENT reads it: its body as markdown, never the Yjs bytes, and
+ * the `revision` a later `savePageMarkdown` must state.
+ */
+export interface PageMarkdownDto {
+  id: string;
+  projectId: string;
+  title: string;
+  /** Where the page is filed — at most one is set; both `null` at the project root. */
+  placement: { parentPageId: string | null; folderId: string | null };
+  /** Advances by one on every save; pass it back to write. */
+  revision: number;
+  /** The newest version (§6). `null` only for a page whose history predates versions. */
+  latestVersion: {
+    number: number;
+    authorId: string;
+    /** The author's display name; `''` only if the batch read did not return them. */
+    authorName: string;
+    /** ISO-8601. */
+    savedAt: string;
+  } | null;
+  markdown: string;
+  /** ISO-8601. */
+  updatedAt: string;
+}
+
+export interface GetPageMarkdownInput {
+  projectId: string;
+  pageId: string;
+}
+
+export interface SavePageMarkdownInput {
+  projectId: string;
+  pageId: string;
+  /** The WHOLE body, as markdown. */
+  markdown: string;
+  /** The `revision` the caller read; a stale one is refused `PAGE_REVISION_CONFLICT`. */
+  expectedRevision: number;
+}
+
+export interface CreatePageFromMarkdownInput {
+  projectId: string;
+  title?: string;
+  /** Where the page goes; the project root when omitted. */
+  parent?: PageParentInput;
+  /** The initial body; an empty or omitted one leaves the page empty, as New page does. */
+  markdown?: string;
+}

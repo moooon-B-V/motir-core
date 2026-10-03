@@ -10,6 +10,7 @@ import {
   toPageDto,
   toPageLevelRow,
   toPageListItemDto,
+  toPageMarkdownDto,
   toPageMoveResultDto,
   toPageTrailDto,
   toPageTreeFolderRowDto,
@@ -31,6 +32,7 @@ import {
   parsePlacement,
   renamePage as renamePageProcedure,
   restorePageVersion as restorePageVersionProcedure,
+  savePageMarkdown as savePageMarkdownProcedure,
   savePageUpdate as savePageUpdateProcedure,
   systemClock,
   type PagePlacement,
@@ -38,8 +40,10 @@ import {
   type PageStore,
 } from '@/lib/pages';
 import type {
+  CreatePageFromMarkdownInput,
   CreatePageInput,
   GetPageInput,
+  GetPageMarkdownInput,
   GetPageTrailInput,
   ListPageTreeLevelInput,
   GetPageVersionInput,
@@ -48,6 +52,7 @@ import type {
   MovePageInput,
   PageDto,
   PageListItemDto,
+  PageMarkdownDto,
   PageMoveResultDto,
   PageSummaryDto,
   PageTrailDto,
@@ -58,6 +63,7 @@ import type {
   RenamePageInput,
   RestorePageVersionInput,
   RestorePageVersionResultDto,
+  SavePageMarkdownInput,
   SavePageResultDto,
   SavePageUpdateInput,
 } from '@/lib/dto/pages';
@@ -103,6 +109,12 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //    exactly once.
 //
 // 5. HISTORY IS READ UNDER `page:view` AND RESTORED UNDER `page:edit` (§5).
+//
+// 6. AN AGENT READS AND WRITES MARKDOWN (§8.2, MOTIR-7409). `getPageMarkdown`
+//    serves the derived `body_markdown` column and never the Yjs bytes; the
+//    markdown writes run the package's `savePageMarkdown`, which decides
+//    staleness under the page lock — the `PAGE_REVISION_CONFLICT` refusal passes
+//    through this file untouched, like every other content refusal.
 
 /** The page, refused as unknown unless it lives in `projectId`. */
 async function findInProject(store: PageStore, projectId: string, pageId: string) {
@@ -183,6 +195,23 @@ async function assertLevelParent(
     const page = await pageRepository.findById(parent.pageId, tx);
     if (!page || page.projectId !== projectId) throw new PageNotFoundError(parent.pageId);
   }
+}
+
+/**
+ * The page as an agent reads it, inside the caller's transaction: the markdown
+ * row, its newest version, and that version's author named in ONE batch read.
+ * `null` when the page is absent, invisible or in another project.
+ */
+async function readPageMarkdown(
+  projectId: string,
+  pageId: string,
+  tx: Prisma.TransactionClient,
+): Promise<PageMarkdownDto | null> {
+  const record = await pageRepository.findWithMarkdownById(pageId, tx);
+  if (!record || record.projectId !== projectId) return null;
+  const latest = await pageVersionRepository.findLatest(pageId, tx);
+  const authors = latest ? await userRepository.findByIds([latest.authorId], tx) : [];
+  return toPageMarkdownDto(record, latest, authors[0]?.name);
 }
 
 function toSummary(row: PageRow): PageSummaryDto {
@@ -386,6 +415,80 @@ export const pagesService = {
       const editors = await userRepository.findByIds(editorIds, tx);
       const nameById = new Map(editors.map((u) => [u.id, u.name]));
       return records.map((r) => toPageListItemDto(r, nameById.get(r.updatedById)));
+    });
+  },
+
+  /**
+   * A page as an AGENT reads it — title, placement, revision, newest version and
+   * body as markdown (§8.2). `page:view`. No row lock, so it never waits on a save.
+   */
+  async getPageMarkdown(
+    ctx: ServiceContext,
+    input: GetPageMarkdownInput,
+  ): Promise<PageMarkdownDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      const page = await readPageMarkdown(input.projectId, input.pageId, tx);
+      if (!page) throw new PageNotFoundError(input.pageId);
+      return page;
+    });
+  },
+
+  /**
+   * Replace a page's body with markdown, stating the revision the caller read —
+   * `page:edit`. The package refuses a stale revision with
+   * `PageRevisionConflictError` (409) and writes nothing; otherwise the page is
+   * read back in the same transaction.
+   */
+  async savePageMarkdown(
+    ctx: ServiceContext,
+    input: SavePageMarkdownInput,
+  ): Promise<PageMarkdownDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
+      const store = pageStoreFor(tx);
+      await findInProject(store, input.projectId, input.pageId);
+      await savePageMarkdownProcedure(store, systemClock, {
+        pageId: input.pageId,
+        actorId: ctx.userId,
+        markdown: input.markdown,
+        expectedRevision: input.expectedRevision,
+      });
+      return (await readPageMarkdown(input.projectId, input.pageId, tx))!;
+    });
+  },
+
+  /**
+   * Create a page under a parent and, when `markdown` is given, write its body —
+   * in ONE transaction, so the page never exists without the body it was created
+   * with. `page:edit`. The body save states the new row's revision, and being the
+   * same author inside the coalescing window it extends version 1 rather than
+   * starting version 2 (§6). A refused parent or body rolls the page back.
+   */
+  async createPageFromMarkdown(
+    ctx: ServiceContext,
+    input: CreatePageFromMarkdownInput,
+  ): Promise<PageMarkdownDto> {
+    const parent = parsePlacement(input.parent ?? { kind: 'root' });
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
+      const store = pageStoreFor(tx);
+      const row = await createPageProcedure(store, systemClock, {
+        workspaceId: ctx.workspaceId,
+        projectId: input.projectId,
+        actorId: ctx.userId,
+        title: input.title,
+        parent,
+      });
+      if (input.markdown) {
+        await savePageMarkdownProcedure(store, systemClock, {
+          pageId: row.id,
+          actorId: ctx.userId,
+          markdown: input.markdown,
+          expectedRevision: row.revision,
+        });
+      }
+      return (await readPageMarkdown(input.projectId, row.id, tx))!;
     });
   },
 
