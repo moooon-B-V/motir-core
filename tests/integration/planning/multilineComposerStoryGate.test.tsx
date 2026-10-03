@@ -355,6 +355,8 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
   const FIXED = [
     // The platform lessons console's why / how-to-apply editors (MOTIR-1411).
     'app/(admin)/admin/planning-lessons/_components/LessonCurate.tsx',
+    // The ops reason field (MOTIR-752): a fixed three-row editor.
+    'app/(admin)/admin/tenants/[orgId]/_components/ops/ReasonConfirmDialog.tsx',
     'app/(authed)/_components/ReportWidgetModal.tsx',
     'app/(authed)/backlog/_components/StartSprintDialog.tsx',
     'app/(authed)/filters/_components/EditFilterDialog.tsx',

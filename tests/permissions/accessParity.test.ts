@@ -71,6 +71,8 @@ const MANAGER: readonly PermissionKey[] = [
   'lesson:reinforce',
   'lesson:view',
   'member:manage',
+  // MOTIR-7419 — permanently deleting an archived page: Manager only.
+  'page:delete',
   'page:edit',
   'page:view',
   'plan:view_any',

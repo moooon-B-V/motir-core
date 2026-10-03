@@ -24,6 +24,8 @@ import type { FolderCommandActions } from '@/components/folders/folderActions';
 import type { FolderDeletionPreviewDto, FolderPickerNodeDto } from '@/lib/dto/folders';
 import type { PageParentDto, PageTreeLevelDto, PageTreeRowDto } from '@/lib/dto/pages';
 import { serverActionRejectionKey } from '@/lib/utils/serverActionRejection';
+import { ArchivePageDialog } from '@/components/pages/archive/ArchivePageDialog';
+import { useArchivePage, type ArchiveTarget } from '@/components/pages/archive/useArchivePage';
 import { PagePlacementPicker } from './PagePlacementPicker';
 import {
   PageTreeDnd,
@@ -108,6 +110,16 @@ import {
 // moved before the server answers: on success the target opens, on a refusal
 // the row is where it always was, keeps focus, and a toast says the move's own
 // sentence. The sidebar (`density="compact"`) and a viewer get no drag at all.
+//
+// ── ARCHIVING (Story MOTIR-5755 · MOTIR-7423) ──────────────────────────────
+// A page row's menu ends in **Archive…** after a separator (design MOTIR-7416,
+// surface 1). It goes through `useArchivePage`: a row with no chevron archives
+// at once, one with sub-pages confirms first. On success the row leaves its
+// level IN PLACE — its sub-pages go with it, being under it — and the level is
+// re-read so the parent's chevron follows; Undo re-reads the level (and the
+// page's own, if loaded), so the set comes back in its stored order. A stale
+// tab's PAGE_ARCHIVED re-reads the level the same way. The tree does this
+// itself: it is a client island, which `router.refresh()` cannot reach.
 //
 // ── SEAMS ──────────────────────────────────────────────────────────────────
 // `pageMenuEntries` / `folderMenuEntries` still append to a row's menu, after
@@ -242,6 +254,19 @@ export interface PageTreeProps {
   revealKey?: LevelKey;
   /** Also move focus to `revealKey`'s row once it is shown (`/pages?folder=<id>`). */
   focusRevealed?: boolean;
+}
+
+/** The loaded title of the row a level key names (`page:<id>` / `folder:<id>`), if loaded. */
+function loadedTitle(
+  levels: Record<LevelKey, LevelState>,
+  key: LevelKey,
+  untitled: string,
+): string | null {
+  for (const level of Object.values(levels)) {
+    const row = level.rows.find((r) => rowKey(r) === key);
+    if (row) return row.kind === 'folder' ? row.name : row.title || untitled;
+  }
+  return null;
 }
 
 /** Walk up from `el` to the nearest ancestor that scrolls vertically. */
@@ -402,6 +427,26 @@ export function PageTree({
   }, []);
   const { move } = usePageMove({ refresh: refreshLevels, detach: detachRow });
 
+  // ── Archiving a page (MOTIR-7423) ─────────────────────────────────────────
+  // Where each archived page was, so the right level is re-read afterwards.
+  const archivedFrom = useRef<Record<string, LevelKey>>({});
+  const archive = useArchivePage({
+    onArchived: (target) => {
+      const from = archivedFrom.current[target.id];
+      if (from === undefined) return;
+      detachRow(target.id, from);
+      refreshLevels([from]);
+    },
+    onRestored: (target) => {
+      const from = archivedFrom.current[target.id];
+      if (from !== undefined) refreshLevels([from, `page:${target.id}`]);
+    },
+    onStale: (target) => {
+      const from = archivedFrom.current[target.id];
+      if (from !== undefined) refreshLevels([from]);
+    },
+  });
+
   // The root when the server did not read it, and every open level of the
   // arrival path the server did not hand in — read once, on mount.
   const readOnMount = useRef<LevelKey[] | null>([
@@ -479,7 +524,7 @@ export function PageTree({
   // target opens so the result is in view. A refusal renders at the picker's
   // top and the tree is untouched; `gone` also re-opens the list fresh.
   const pickPagePlacement = useCallback(
-    async (target: PageParentDto) => {
+    async (target: PageParentDto, targetName?: string) => {
       const current = picker;
       if (!current || current.kind !== 'page' || current.pending) return;
       const openSeq = pickerSeq.current;
@@ -488,6 +533,7 @@ export function PageTree({
         pageId: current.pageId,
         from: current.levelKey,
         parent: target,
+        parentTitle: targetName ?? null,
       });
       if (outcome === null || pickerSeq.current !== openSeq) return;
       if (outcome.ok) {
@@ -1074,7 +1120,12 @@ export function PageTree({
   // the move's own sentence — the snap-back of panel 11.
   const commitDrop = useCallback(
     async (request: PageMoveRequest) => {
-      const outcome = await move(request);
+      const outcome = await move({
+        ...request,
+        parentTitle:
+          request.parentTitle ??
+          loadedTitle(levelsRef.current, parentKey(request.parent), tp('untitled')),
+      });
       if (outcome === null) return;
       if (outcome.ok) {
         reveal(parentKey(outcome.result.parent));
@@ -1083,7 +1134,7 @@ export function PageTree({
       toast({ variant: 'error', title: outcome.message });
       focusRow(`page:${request.pageId}`);
     },
-    [move, reveal, toast, focusRow],
+    [move, reveal, toast, focusRow, tp],
   );
 
   const onRowKeyDown = useCallback(
@@ -1137,21 +1188,34 @@ export function PageTree({
   );
 
   // ── The row menus ─────────────────────────────────────────────────────────
+
   /** A level's loaded sibling ids of one kind, in order — what Move up / down reason about. */
   const siblingIds = (levelKey: LevelKey, kind: PageTreeRowDto['kind']) =>
     (levels[levelKey]?.rows ?? []).filter((r) => r.kind === kind).map((r) => r.id);
 
-  // A page row: New sub-page · Move to… | Move up · Move down — the edge entries
-  // ABSENT on the first / last sibling page (MOTIR-7374).
+  // A page row: New sub-page · Move to… | Move up · Move down | Archive… — the
+  // edge entries ABSENT on the first / last sibling page (MOTIR-7374).
   const pageMenu = (row: PageTreePageRowDto, levelKey: LevelKey): ReactNode | null => {
     if (!canEdit) return null;
     const siblings = siblingIds(levelKey, 'page');
     const at = siblings.indexOf(row.id);
     const open = picker?.kind === 'page' && picker.pageId === row.id;
+    const title = row.title || tp('untitled');
+    const archiveTarget: ArchiveTarget = {
+      id: row.id,
+      title,
+      hasChildren: row.hasChildren,
+      parentTitle: loadedTitle(levels, levelKey, tp('untitled')),
+    };
     return (
       <PageRowMenu
-        title={row.title || tp('untitled')}
-        onNewSubPage={() => void create({ kind: 'page', id: row.id })}
+        title={title}
+        onArchive={() => {
+          archivedFrom.current[row.id] = levelKey;
+          archive.request(archiveTarget);
+        }}
+        archiveDisabled={archive.pendingId !== null}
+        onNewSubPage={() => void create({ kind: 'page', id: row.id }, title)}
         onMoveTo={() => openPagePicker(row, levelKey)}
         onMoveUp={at > 0 ? () => void reorderPage(row, levelKey, siblings, 'up') : undefined}
         onMoveDown={
@@ -1174,7 +1238,7 @@ export function PageTree({
               projectKey={projectKey}
               refusal={picker.refusal}
               pending={picker.pending}
-              onPick={(target) => void pickPagePlacement(target)}
+              onPick={(target, name) => void pickPagePlacement(target, name)}
               onDismiss={closePicker}
             />
           ) : null
@@ -1436,7 +1500,9 @@ export function PageTree({
                 variant="secondary"
                 size="sm"
                 leftIcon={<Plus className="h-3.5 w-3.5" />}
-                onClick={() => void create(parent)}
+                onClick={() =>
+                  void create(parent, loadedTitle(levels, item.level, tp('untitled')) ?? undefined)
+                }
               >
                 {parent.kind === 'page' ? t('newSubPage') : t('newPageHere')}
               </Button>
@@ -1507,6 +1573,7 @@ export function PageTree({
         treeFrame
       )}
       {dialog}
+      {archive.confirm ? <ArchivePageDialog {...archive.confirm} /> : null}
     </>
   );
 }

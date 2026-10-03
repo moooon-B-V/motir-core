@@ -32,7 +32,20 @@ export type FolderMenuEntry =
     }
   | { kind: 'separator'; key: string };
 
-export function FolderRowMenu({ label, entries }: { label: string; entries: FolderMenuEntry[] }) {
+export function FolderRowMenu({
+  label,
+  entries,
+  trigger = 'row',
+}: {
+  label: string;
+  entries: FolderMenuEntry[];
+  /**
+   * The trigger's chrome: a row's small control (the default), or a standalone
+   * `Button variant="secondary" size="sm"` square — the page's own ⋯ in its
+   * title row (Story MOTIR-5755 · MOTIR-7423).
+   */
+  trigger?: 'row' | 'button';
+}) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   // Whether the menu closed because an entry was chosen: that entry decides
@@ -71,12 +84,20 @@ export function FolderRowMenu({ label, entries }: { label: string; entries: Fold
     >
       <Popover.Trigger
         aria-label={label}
+        {...(trigger === 'button' ? { 'aria-haspopup': 'menu' as const } : null)}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
-        className={cn(
-          'relative z-10 ml-auto inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
-          open && 'bg-(--el-border-soft) text-(--el-text)',
-        )}
+        className={
+          trigger === 'button'
+            ? cn(
+                'inline-flex h-(--height-btn-sm) w-(--height-btn-sm) shrink-0 items-center justify-center rounded-(--radius-btn) border border-(--el-button-border) p-(--spacing-icon-btn) text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+                open && 'bg-(--el-surface)',
+              )
+            : cn(
+                'relative z-10 ml-auto inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+                open && 'bg-(--el-border-soft) text-(--el-text)',
+              )
+        }
       >
         <Ellipsis className="h-4 w-4" aria-hidden />
       </Popover.Trigger>

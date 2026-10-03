@@ -443,6 +443,10 @@
       "label": "编辑页面",
       "description": "创建页面、重命名页面并修改其内容。"
     },
+    "page_delete": {
+      "label": "删除页面",
+      "description": "永久删除已归档的页面及其已归档的子页面。"
+    },
     "public_request_comment": {
       "label": "评论请求",
       "description": "在公开请求的讨论串中回复。仅适用于公开项目。"
@@ -8453,8 +8457,7 @@
       "tenants": "租户",
       "users": "用户",
       "monitoring": "监控",
-      "governance": "治理",
-      "soonGovernance": "10.3"
+      "auditLog": "审计日志"
     },
     "topBar": {
       "staffMark": "平台员工",
@@ -8588,11 +8591,21 @@
           "user": {
             "password_reset_sent": "已发送密码重置",
             "suspend": "已停用",
-            "unsuspend": "已解除停用"
+            "unsuspend": "已解除停用",
+            "impersonation_start": "开始了员工会话",
+            "impersonation_end": "结束了员工会话",
+            "impersonation_action": "在员工会话中执行了操作"
           },
           "org": {
             "internal_billing_set": "已标记为内部计费",
-            "internal_billing_unset": "已移除内部计费标记"
+            "internal_billing_unset": "已移除内部计费标记",
+            "credit_grant": "已发放额度",
+            "credit_adjust": "已调整额度余额",
+            "plan_set": "已更改 AI 套餐",
+            "suspend": "已暂停组织",
+            "reactivate": "已恢复组织",
+            "kill_switch_off": "已关闭一项紧急开关",
+            "kill_switch_on": "已重新开启一项紧急开关"
           },
           "ai": {
             "planner_model": {
@@ -9452,7 +9465,8 @@
       "tabs": {
         "overview": "概览",
         "usage": "用量与成本",
-        "billing": "账单与套餐"
+        "billing": "账单与套餐",
+        "operations": "运营"
       },
       "month": {
         "title": "用量与成本 · {month}",
@@ -9658,6 +9672,316 @@
       },
       "jobs": {
         "empty": "该工作区没有记录任何已归属的规划或智能体运行。"
+      }
+    },
+    "imp": {
+      "viewAs": "以 {firstName} 的身份查看",
+      "title": "以 {name} 的身份查看 Motir",
+      "body": "在员工会话中以 {email} 的身份打开 {org} 的应用。在你退出或会话到期之前，每个页面都会显示横幅。",
+      "access": "访问权限",
+      "readOnly": "只读",
+      "full": "完全访问",
+      "length": "结束时间",
+      "minutes": "{n} 分钟",
+      "lengthHint": "最长 60 分钟。新会话需要新的理由。",
+      "readOnlyNote": "只读：你看到的与 {firstName} 看到的完全一致，所有会更改内容的控件都已禁用。",
+      "fullWarning": "完全访问将以 {firstName} 的身份操作。你所做的任何更改都是真实的，会写入 {org} 的数据，并记录为你代表 {firstName} 所做。",
+      "reasonLabel": "理由 — 必填，将写入审计日志",
+      "reasonHint": "记录在会话以及会话中的每个操作上。",
+      "start": {
+        "readOnly": "开始只读会话",
+        "full": "开始完全访问会话"
+      },
+      "cancel": "取消",
+      "failedTitle": "员工会话未能开始",
+      "ineligible": {
+        "self": "你不能以自己的身份查看 Motir。",
+        "platform_staff": "此账户是平台员工。员工不能以员工身份查看。",
+        "suspended_account": "此账户已被停用，因此没有可查看的内容。",
+        "suspended_organization": "此账户所在的组织已被暂停。请先重新激活，或在控制台中查看。",
+        "no_workspace": "此账户不属于任何工作区，因此没有可打开的应用。"
+      },
+      "error": {
+        "REASON_REQUIRED": "理由为必填项 — 它会记录在会话以及会话中的每个操作上。",
+        "NOT_FOUND": "该账户已不存在。请重新加载页面。",
+        "INELIGIBLE": "目前无法以此账户身份查看。请重新加载页面查看原因。",
+        "INVALID": "请选择控制台提供的访问权限和时长。",
+        "NOT_PERMITTED": "只有超级管理员可以开始员工会话。",
+        "FAILED": "出现错误，未开始任何会话。该故障已被记录。"
+      },
+      "bar": {
+        "readOnly": "<b>正在以 {name} 的身份查看</b>（{email}）· {org} — 员工会话，<b>只读</b>，结束于 {time}",
+        "full": "<b>正在以 {name} 的身份操作</b>（{email}）· {org} — 员工会话，<b>完全访问</b>，每项更改都由你负责，结束于 {time}",
+        "exit": "退出会话"
+      },
+      "disabledTip": "只读员工会话",
+      "ended": {
+        "title": "你的员工会话已于 {time} 结束",
+        "body": "你已不再以 {name} 的身份查看 Motir。该会话以及你在其中打开的所有内容都已记入审计日志。",
+        "back": "返回控制台",
+        "again": "开始新会话",
+        "endedBy": {
+          "operator": "你退出了会话。",
+          "expiry": "会话时间已用完。",
+          "revoked": "会话在到期前失效 — 你已退出登录、你的平台角色已更改，或该账户已被停用。"
+        }
+      }
+    },
+    "ops": {
+      "status": {
+        "title": "组织状态",
+        "subtitle": "停用一个组织会拒绝其下所有工作区的每一位成员。",
+        "active": "{workspaces} 个工作区中的 {members} 位成员可以登录并工作。",
+        "activePill": "正常",
+        "suspendedPill": "已停用",
+        "suspendedSince": "自 {at} 起 · 操作者 {operator} · “{reason}”",
+        "suspendedSinceNoReason": "自 {at} 起 · 操作者 {operator}",
+        "suspendedEffect": "每位成员在下一次请求时都会被拒绝。没有任何内容被删除。",
+        "operatorUnknown": "一位已不在的操作者"
+      },
+      "suspend": {
+        "button": "停用组织",
+        "title": "停用 {org}？",
+        "lead": "停用用于处理欠费或滥用。从你确认的那一刻起：",
+        "c1": "全部 {workspaces} 个工作区的全部 {members} 位成员会在下一次请求时被拒绝，并看到该组织已被停用。",
+        "c2": "新的规划任务和智能体运行会被拒绝；正在运行的会被停止。",
+        "c3": "不会删除任何内容。工作项、代码仓库和账本都保持原样，其他超级管理员可以重新启用它。",
+        "confirm": "停用 {org}"
+      },
+      "reactivate": {
+        "button": "重新启用组织",
+        "title": "重新启用 {org}？",
+        "body": "全部 {members} 位成员从下一次请求起即可重新登录并工作。紧急开关保持各自的状态——你关闭的开关仍然保持关闭。",
+        "confirm": "重新启用 {org}"
+      },
+      "typeToConfirm": "输入 {slug} 以确认",
+      "reason": {
+        "label": "原因——必填，将写入审计日志",
+        "placeholder": "你为什么要这样做？如有工单请注明。",
+        "hint": "日后任何查看该组织的操作者都会看到。仅写“支持”说明不了任何事。"
+      },
+      "cancel": "取消",
+      "failedTitle": "未做任何更改",
+      "result": {
+        "suspended": "已停用 {org}。其成员从下一次请求起会被拒绝。",
+        "reactivated": "已重新启用 {org}。其成员可以重新工作。",
+        "granted": "已向 {org} 发放 {n} 积分。账本和审计日志均已记录。",
+        "adjusted": "已将 {org} 的余额调整 {n} 积分。账本和审计日志均已记录。",
+        "planSet": "{org} 现在使用 {tier} 套餐。",
+        "planUnchanged": "{org} 原本就是 {tier} 套餐。此次分配已记录。",
+        "replayed": "该操作此前已生效——没有写入新的内容。",
+        "switchOff": "已为 {org} 关闭 {switch}。",
+        "switchOn": "已为 {org} 重新开启 {switch}。",
+        "creditUnreachable": "无法连接积分服务。未发放任何积分，也未记录任何内容。请稍后重试。"
+      },
+      "error": {
+        "REASON_REQUIRED": "必须填写原因——它会写入审计日志。",
+        "NOT_FOUND": "该组织已不存在。请刷新页面。",
+        "ALREADY_IN_STATE": "有人先一步更改了它。请刷新页面查看当前状态。",
+        "NOT_PERMITTED": "只有超级管理员可以执行此操作。",
+        "FAILED": "出现了问题，未做任何更改。该故障已记录。",
+        "AMOUNT_INVALID": "请输入账本可容纳的整数积分。",
+        "LARGE_GRANT_UNCONFIRMED": "这么大额的发放需要输入组织的标识符以确认。",
+        "INSUFFICIENT_BALANCE": "这会使余额低于零。",
+        "CONFLICT": "积分服务以与先前操作冲突为由拒绝了它。请刷新后重试。",
+        "REJECTED": "积分服务拒绝了它。请检查数额或套餐后重试。",
+        "CREDIT_SERVICE_UNREACHABLE": "无法连接积分服务。未发放任何积分，也未记录任何内容。请稍后重试。",
+        "UNKNOWN_KEY": "该开关已不存在。请刷新页面。"
+      },
+      "credits": {
+        "title": "积分与套餐",
+        "subtitle": "积分是 Motir 的内部单位，而不是货币。数据读取自积分服务；每一次写入都会被记录。",
+        "balance": "余额",
+        "plan": "AI 套餐",
+        "noPlan": "无套餐",
+        "amount": "{n} 积分",
+        "lastPlanChange": "由 {operator} 于 {at} 设置 · “{reason}”",
+        "grant": "发放积分",
+        "adjust": "调整余额",
+        "changePlan": "更改套餐",
+        "error": {
+          "title": "无法加载积分",
+          "body": "积分服务没有响应，因此未显示余额、套餐和账本。这些数字并不是零——只是没有加载出来。上方的状态和紧急开关仍然可用。"
+        }
+      },
+      "grant": {
+        "title": "向 {org} 发放积分",
+        "body": "以发放条目的形式向该组织的余额增加积分。不更改任何套餐，也不涉及任何 Stripe 对象。",
+        "amount": "发放的积分",
+        "confirm": "发放 {n} 积分",
+        "large": "这是一笔大额发放——{threshold} 积分或更多。请输入组织的标识符以确认。"
+      },
+      "adjust": {
+        "title": "调整 {org} 的余额",
+        "body": "以调整条目修正余额——用于账单错误。补偿性积分属于发放，而不是调整。",
+        "amount": "积分变动",
+        "hint": "使用 − 号扣除积分。余额不得低于零。",
+        "confirm": "调整 {n} 积分"
+      },
+      "balanceAfter": "调整后余额：{after} 积分（当前 {now}）",
+      "plan": {
+        "title": "更改 {org} 的 AI 套餐",
+        "body": "设置该组织积分额度所依据的套餐等级。",
+        "current": "当前为 {tier}。",
+        "currentNone": "当前没有套餐。",
+        "tier": "套餐",
+        "choose": "选择套餐",
+        "allotmentMonthly": "{name} · 每月 {credits} 积分",
+        "allotmentOnce": "{name} · 一次性 {credits} 积分",
+        "allotmentCustom": "{name} · 定制额度",
+        "stripe": "{org} 通过 Stripe 支付套餐费用。此操作只更改 Motir 读取的套餐等级；不会更改或取消 Stripe 订阅，并且订阅的下一个事件会再次按 Stripe 设置套餐等级。",
+        "confirm": "将套餐更改为 {tier}"
+      },
+      "ledger": {
+        "col": {
+          "when": "时间",
+          "kind": "类型",
+          "credits": "积分",
+          "balanceAfter": "变动后余额",
+          "by": "操作者",
+          "reason": "原因"
+        },
+        "kind": {
+          "grant": "发放",
+          "adjustment": "调整",
+          "top_up": "充值",
+          "debit": "扣费",
+          "internal_offset": "内部抵扣",
+          "allotment": "额度"
+        },
+        "newer": "较新",
+        "older": "较早",
+        "empty": {
+          "title": "尚无积分交易",
+          "body": "{org} 尚未被扣费、充值或发放任何积分。其余额为 0 积分。"
+        }
+      },
+      "switches": {
+        "title": "紧急开关",
+        "subtitle": "按组织持久保存的开关，默认开启。更改会在该组织的下一次请求时生效——无需部署。",
+        "col": {
+          "switch": "开关",
+          "whenOff": "关闭时",
+          "state": "状态",
+          "lastChanged": "上次更改"
+        },
+        "on": "开启",
+        "off": "关闭——已停用",
+        "turnOff": "关闭",
+        "turnOn": "开启",
+        "never": "从未更改",
+        "lastChange": "{at} · {operator} · “{reason}”",
+        "suspendedNote": "该组织已被停用，因此无论这里如何设置，所有开关都按关闭处理。",
+        "unavailable": "无法加载紧急开关。请刷新页面重试。",
+        "confirmOff": {
+          "title": "为 {org} 关闭 {switch}？"
+        },
+        "confirmOn": {
+          "title": "为 {org} 重新开启 {switch}？",
+          "body": "{org} 的每位成员从下一次请求起即可重新使用 {switch}。"
+        }
+      },
+      "switch": {
+        "ai_planning": {
+          "name": "AI 规划",
+          "whenOff": "新的规划任务会被拒绝，并提示“你的组织已暂停规划”。已在运行的任务会完成。"
+        },
+        "hosted_runs": {
+          "name": "托管智能体运行",
+          "whenOff": "新的智能体运行和智能体实例会被拒绝。正在运行的容器会被停止。"
+        },
+        "web_search": {
+          "name": "网页搜索",
+          "whenOff": "规划和智能体在没有网页搜索的情况下运行；搜索调用会返回“不可用”。"
+        }
+      },
+      "readOnlyRole": "只有超级管理员可以更改这些内容。你以 {role} 角色可以查看它们。",
+      "role": {
+        "support": "支持",
+        "operator": "运维",
+        "superadmin": "超级管理员"
+      },
+      "audit": {
+        "title": "针对该组织的平台操作",
+        "subtitle": "针对该组织的每一次操作者写入，最新的在前。仅追加。",
+        "open": "在审计日志中打开",
+        "empty": "尚无操作者更改过该组织的任何内容。",
+        "noReason": "未记录原因"
+      }
+    },
+    "audit": {
+      "title": "审计日志",
+      "subtitle": "每一次平台员工操作，最新的在前。仅追加且哈希链接：任何条目在写入后被更改，都会从该条目起断开链条。",
+      "chain": {
+        "ok": "链条已验证",
+        "okDetail": "全部 {count} 条记录的哈希链完整，已检查至 #{last}，检查时间 {time}。",
+        "okEmpty": "尚无可检查的记录。",
+        "verify": "重新验证",
+        "brokenTitle": "链条已断开",
+        "broken": "链条在第 #{n} 条记录（{at}）处断开。该记录已与为其记录的哈希不符，因此它及其后的 {after} 条记录都不能被视为原样。此次检查未做任何更改；记录按存储原样显示。",
+        "show": "显示 #{n}",
+        "verified": "已验证",
+        "mismatch": "哈希不匹配",
+        "unverified": "未验证",
+        "label": "链条完整性"
+      },
+      "filter": {
+        "label": "筛选审计日志",
+        "text": "搜索原因和目标",
+        "operator": "操作者",
+        "operatorPlaceholder": "任何人——粘贴用户 ID",
+        "tenant": "租户",
+        "tenantPlaceholder": "任何组织——粘贴组织 ID",
+        "action": "操作",
+        "anyAction": "任意操作",
+        "from": "开始日期",
+        "to": "结束日期",
+        "scope": "显示",
+        "writes": "写入",
+        "writesReads": "写入与读取",
+        "apply": "应用筛选",
+        "invalid": "无法读取这些筛选条件。请检查日期并清除页面位置。"
+      },
+      "col": {
+        "when": "时间（UTC）",
+        "operator": "操作者",
+        "action": "操作",
+        "target": "目标",
+        "reason": "原因",
+        "chain": "链条"
+      },
+      "detail": {
+        "entry": "记录",
+        "actor": "执行者",
+        "action": "操作",
+        "target": "目标",
+        "reason": "原因",
+        "payload": "负载",
+        "hash": "哈希",
+        "chainedTo": "链接至 #{prev}",
+        "genesis": "第一条记录——未链接到任何记录",
+        "none": "—",
+        "toggle": "显示第 #{n} 条记录"
+      },
+      "empty": {
+        "title": "没有符合这些筛选条件的记录",
+        "body": "没有匹配的记录。请放宽日期范围，或切换为“写入与读取”。"
+      },
+      "clear": "清除筛选",
+      "newer": "较新",
+      "older": "较早",
+      "tableLabel": "审计日志记录"
+    },
+    "member": {
+      "suspended": {
+        "title": "{org} 已被停用",
+        "body": "你的组织对 Motir 的访问已暂停。没有任何内容被删除。请联系你所在组织的所有者，或发送邮件至 support@motir.co。",
+        "unknownTitle": "该组织不可用",
+        "unknownBody": "你目前无法打开它。如果你认为这是一个错误，请发送邮件至 support@motir.co。",
+        "switchTitle": "在其他组织中工作",
+        "switchTo": "切换到 {org}",
+        "switchFailed": "无法打开该组织。请刷新页面。",
+        "signOut": "退出登录"
       }
     },
     "tenant": {
@@ -12301,6 +12625,100 @@
         "failed": "无法恢复 v{number}。未做任何更改，请重试。"
       },
       "unsavedHold": "在你的编辑保存之前无法恢复。页面显示“已保存”后即可恢复。"
+    },
+    "archive": {
+      "menuItem": "归档…",
+      "pageActions": "“{title}”的页面操作",
+      "confirm": {
+        "title": "归档“{title}”及其 {count} 个子页面？",
+        "body": "它们将从页面树和搜索中移除，历史记录会被保留。恢复后，它们会全部回到原来的位置。不会删除任何内容。",
+        "impact": "将归档 <b>{total} 个页面</b>：“{title}”以及 {names}。",
+        "more": "等另外 {count} 个",
+        "action": "归档 {total} 个页面"
+      },
+      "archiving": "正在归档…",
+      "archived": "已归档“{title}”及其 {count} 个子页面",
+      "archivedOne": "已归档“{title}”",
+      "undo": "撤销",
+      "archiveFailed": "无法归档“{title}”，请重试。",
+      "banner": {
+        "title": "此页面已归档",
+        "meta": "由 <b>{name}</b> 于 {date} 归档 · 已从页面树和搜索中隐藏，其历史记录会被保留。",
+        "withSubPages": "它的 {count} 个子页面也一并归档。",
+        "restoreHint": "恢复后它会回到原来的位置。",
+        "subTitle": "此页面随“{root}”一起归档",
+        "subMeta": "由 <b>{name}</b> 于 {date} 归档 · 恢复“{root}”即可让它回来。"
+      },
+      "openRoot": "打开“{root}”",
+      "restore": "恢复",
+      "restoreLabel": "恢复“{title}”",
+      "restoring": "正在恢复…",
+      "restored": "已恢复“{title}”及其 {count} 个子页面",
+      "restoredOne": "已恢复“{title}”",
+      "landing": {
+        "ancestorPage": "已恢复到“{landing}”下，因为“{parent}”已归档。",
+        "folder": "已恢复到文件夹“{folder}”中，因为“{parent}”及其上级页面都已归档。",
+        "root": "已恢复到项目根目录，因为它原先所在的页面和文件夹都已不在页面树中。",
+        "depth": "已恢复到“{landing}”下，因为放回“{parent}”下会使页面嵌套超过 10 层。"
+      },
+      "open": "打开",
+      "restoreFailed": "无法恢复“{title}”，请重试。",
+      "history": {
+        "readOnly": "已归档页面的版本只能查看，不能恢复。请先恢复此页面。"
+      },
+      "delete": {
+        "menuItem": "删除…",
+        "title": "永久删除“{title}”？",
+        "body": "这将永久删除<b>“{title}”</b>及其 <b>{count} 个子页面</b>，以及它们的全部历史记录——每个已保存的版本和图片。<b>此操作无法撤销。</b>",
+        "bodyOne": "这将永久删除<b>“{title}”</b>及其全部历史记录——每个已保存的版本和图片。它没有子页面。<b>此操作无法撤销。</b>",
+        "impact": "将删除 <b>{total} 个页面</b>。它们都已归档——页面树不会有任何变化。",
+        "impactOne": "将删除 <b>1 个页面</b>。它已归档——页面树不会有任何变化。",
+        "history": "它们的版本和图片会一并删除。",
+        "action": "删除 {total} 个页面",
+        "actionOne": "删除页面",
+        "deleting": "正在删除…",
+        "failed": "无法删除“{title}”。未删除任何内容——请重试。",
+        "deleted": "{count, plural, =0 {已删除“{title}”} other {已删除“{title}”及其 {count} 个子页面}}"
+      },
+      "list": {
+        "link": "已归档页面",
+        "title": "已归档页面",
+        "back": "返回页面",
+        "subtitle": "已从页面树和搜索中隐藏，其历史记录会被保留。恢复后，页面会回到原来的位置。",
+        "col": {
+          "page": "页面",
+          "cameFrom": "原位置",
+          "archivedBy": "归档人",
+          "archivedAt": "归档时间",
+          "actions": "操作"
+        },
+        "subPages": "{count} 个子页面",
+        "noSubPages": "无子页面",
+        "archivedAncestor": "（已归档）",
+        "projectRoot": "项目根目录",
+        "more": "“{title}”的更多操作",
+        "empty": {
+          "title": "没有已归档的页面",
+          "body": "从页面树中归档的页面会连同其子页面显示在这里，直到有人恢复或删除它。"
+        },
+        "loadFailed": "无法加载已归档页面。",
+        "loadMore": "加载更多",
+        "loading": "正在加载…",
+        "shown": "已显示 {count} 个"
+      },
+      "refusal": {
+        "parentArchived": "“{parent}”已归档，因此不能在其下添加任何内容。未做任何更改。",
+        "alreadyArchived": "“{title}”已归档",
+        "alreadyArchivedBody": "有人刚刚归档了它。页面树已刷新。",
+        "editingArchived": "此页面已被归档",
+        "editingArchivedBody": "有人在你编辑时归档了它，因此自上次保存以来的编辑未被保存——此标签页之后的编辑也不会再保存。请先复制需要保留的内容，然后重新加载。",
+        "reload": "重新加载页面",
+        "notArchived": "“{title}”已不再处于归档状态——有人恢复了它——因此无法删除。请先归档。",
+        "notArchivedList": "“{title}”已不再处于归档状态",
+        "notArchivedListBody": "有人刚刚恢复了它，因此无需恢复或删除。列表已刷新。",
+        "rootRequired": "无法恢复“{title}”",
+        "rootRequiredBody": "“{title}”是作为“{root}”的一部分归档的。恢复“{root}”即可让它回来。"
+      }
     }
   }
 }

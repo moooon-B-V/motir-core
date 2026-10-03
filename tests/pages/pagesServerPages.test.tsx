@@ -52,6 +52,11 @@ vi.mock('next-intl/server', async () => ({
 
 const IndexPage = await import('@/app/(authed)/pages/page');
 const AddressPage = await import('@/app/(authed)/pages/[pageId]/page');
+const ArchivedPage = await import('@/app/(authed)/pages/archived/page');
+const { ArchivedPagesList } =
+  await import('@/app/(authed)/pages/archived/_components/ArchivedPagesList');
+const { ArchivedPagesFrame } =
+  await import('@/app/(authed)/pages/archived/_components/ArchivedPagesFrame');
 const { PagesIndex } = await import('@/app/(authed)/pages/_components/PagesIndex');
 const { NewPageButton } = await import('@/app/(authed)/pages/_components/NewPageButton');
 const { PagesIndexFrame } = await import('@/app/(authed)/pages/_components/PagesIndexFrame');
@@ -182,6 +187,8 @@ describe('/pages — the index', () => {
 
       const tree = await renderTree(IndexPage.default);
       expect(textOf(tree)).toContain('title');
+      // The archive's door is every reader's (MOTIR-7424).
+      expect(textOf(tree)).toContain('archive.list.link');
       expect(findFirst(tree, NewPageButton)).toBeDefined();
       const boundary = findFirst<{ fallback: ReactElement; children: ReactElement }>(
         tree,
@@ -228,6 +235,84 @@ describe('/pages — the index', () => {
   });
 });
 
+describe('/pages/archived — the Archived pages list (MOTIR-7424)', () => {
+  it.each([
+    ['manager', true, true],
+    ['member', true, false],
+    ['viewer', false, false],
+  ] as const)(
+    'a %s gets the header and the archive roots behind the in-page frame (restore %s, delete %s)',
+    async (role, canRestore, canDelete) => {
+      const f = await makeFixture();
+      const projectId = f.manager.projectId;
+      const root = await pagesService.createPage(f.manager, { projectId, title: 'Old' });
+      await pagesService.createPage(f.manager, {
+        projectId,
+        title: 'Old child',
+        parent: { kind: 'page', id: root.id },
+      });
+      await pagesService.createPage(f.manager, { projectId, title: 'Live' });
+      await pagesService.archivePage(f.manager, { projectId, pageId: root.id });
+      const elsewhere = await pagesService.createPage(f.manager, {
+        projectId: f.other.projectId,
+        title: 'Elsewhere',
+      });
+      await pagesService.archivePage(f.manager, {
+        projectId: f.other.projectId,
+        pageId: elsewhere.id,
+      });
+      reader.current = role === 'manager' ? f.manager : await readerAs(f, role, role);
+
+      const tree = await renderTree(ArchivedPage.default);
+      for (const key of ['back', 'title', 'subtitle']) expect(textOf(tree)).toContain(key);
+      const boundary = findFirst<{
+        fallback: ReactElement<{ showActions: boolean }>;
+        children: ReactElement;
+      }>(tree, Suspense)!;
+      expect(boundary.props.fallback.type).toBe(ArchivedPagesFrame);
+      expect(boundary.props.fallback.props.showActions).toBe(canRestore || canDelete);
+
+      const body = (await settle(boundary.props.children)) as ReactElement<{
+        initial: { items: { id: string; subPageCount: number }[]; nextCursor: null };
+        projectKey: string;
+        canRestore: boolean;
+        canDelete: boolean;
+      }>;
+      expect(body.type).toBe(ArchivedPagesList);
+      // The root alone — its sub-page is its count; the other project's never.
+      expect(body.props.initial.items.map((i) => [i.id, i.subPageCount])).toEqual([[root.id, 1]]);
+      expect(body.props.initial.nextCursor).toBeNull();
+      expect(body.props.projectKey).toBe('RSC');
+      expect(body.props.canRestore).toBe(canRestore);
+      expect(body.props.canDelete).toBe(canDelete);
+    },
+  );
+
+  it('a reader without `page:view` gets notFound() and nothing is read', async () => {
+    const f = await makeFixture();
+    reader.current = await browserWithoutPageKeys(f);
+    const list = vi.spyOn(pagesService, 'listArchivedPages');
+    await expect(renderTree(ArchivedPage.default)).rejects.toBeInstanceOf(NotFound);
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('a first page that cannot be read is the list’s error state, never a 500', async () => {
+    const f = await makeFixture();
+    reader.current = f.manager;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(pagesService, 'listArchivedPages').mockRejectedValueOnce(new Error('down'));
+    const tree = await renderTree(ArchivedPage.default);
+    const boundary = findFirst<{ children: ReactElement }>(tree, Suspense)!;
+    const body = (await settle(boundary.props.children)) as ReactElement<{ initial: unknown }>;
+    expect(body.props.initial).toBeNull();
+    expect(error).toHaveBeenCalled();
+  });
+
+  it('is titled from the catalogue', async () => {
+    expect(await ArchivedPage.generateMetadata()).toEqual({ title: 'title' });
+  });
+});
+
 describe('/pages/<id> — the page at its address', () => {
   it('a member gets the page’s view, writable, behind the in-page frame', async () => {
     const f = await makeFixture();
@@ -267,6 +352,70 @@ describe('/pages/<id> — the page at its address', () => {
       false,
     );
     expect(await AddressPage.generateMetadata(params(page.id))).toEqual({ title: 'untitled' });
+  });
+
+  it('an archived root reads read-only with its archive state and its sub-page count (MOTIR-7423)', async () => {
+    const f = await makeFixture();
+    const projectId = f.manager.projectId;
+    const parent = await pagesService.createPage(f.manager, { projectId, title: 'Handbook' });
+    const root = await pagesService.createPage(f.manager, {
+      projectId,
+      title: 'Runbook',
+      parent: { kind: 'page', id: parent.id },
+    });
+    const sub = await pagesService.createPage(f.manager, {
+      projectId,
+      title: 'Deploy',
+      parent: { kind: 'page', id: root.id },
+    });
+    await pagesService.archivePage(f.manager, { projectId, pageId: root.id });
+    reader.current = f.manager;
+
+    type ViewProps = {
+      page: {
+        canEdit: boolean;
+        parentTitle: string | null;
+        archived: {
+          archiveRoot: { id: string } | null;
+          canRestore: boolean;
+          canDelete: boolean;
+          subPageCount: number;
+        } | null;
+      };
+    };
+    const rootView = findFirst<ViewProps>(
+      await renderTree(AddressPage.default, params(root.id)),
+      PageView,
+    )!;
+    expect(rootView.props.page.canEdit).toBe(false);
+    expect(rootView.props.page.parentTitle).toBe('Handbook');
+    expect(rootView.props.page.archived).toMatchObject({
+      archiveRoot: { id: root.id },
+      canRestore: true,
+      canDelete: true,
+      subPageCount: 1,
+    });
+
+    // A sub-page names its root; it carries no count of its own.
+    const subView = findFirst<ViewProps>(
+      await renderTree(AddressPage.default, params(sub.id)),
+      PageView,
+    )!;
+    expect(subView.props.page.parentTitle).toBe('Runbook');
+    expect(subView.props.page.archived).toMatchObject({
+      archiveRoot: { id: root.id },
+      subPageCount: 0,
+    });
+
+    // A count that cannot be read costs the sentence, not the page.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(pagesService, 'describeArchiveSet').mockRejectedValueOnce(new Error('set down'));
+    const degraded = findFirst<ViewProps>(
+      await renderTree(AddressPage.default, params(root.id)),
+      PageView,
+    )!;
+    expect(degraded.props.page.archived!.subPageCount).toBe(0);
+    expect(error).toHaveBeenCalled();
   });
 
   it('an unknown id, a page from another project and a non-browser all get notFound() — and no title', async () => {

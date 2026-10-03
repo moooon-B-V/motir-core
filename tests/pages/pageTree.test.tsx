@@ -487,7 +487,7 @@ describe('PageTree — New page here / New sub-page (panel 2)', () => {
       within(menu)
         .getAllByRole('menuitem')
         .map((el) => el.textContent),
-    ).toEqual(['New sub-page', 'Move to…', 'Move down', 'Move Auth flow']);
+    ).toEqual(['New sub-page', 'Move to…', 'Move down', 'Archive…', 'Move Auth flow']);
     await press(within(menu).getByRole('menuitem', { name: 'Move Auth flow' }));
     expect(onMove).toHaveBeenCalledTimes(1);
 

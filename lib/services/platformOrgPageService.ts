@@ -12,6 +12,7 @@ import {
   type RawSpendRow,
 } from '@/lib/ai/motirAiClient';
 import type {
+  PlatformOrgOperationsDTO,
   PlatformOrgOverviewDTO,
   PlatformOrgUsageScope,
   PlatformOrgUsageTabDTO,
@@ -33,6 +34,7 @@ import { currentMonth } from '@/lib/platform/spend';
 import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogRepository';
 import { platformEstateRepository } from '@/lib/repositories/platformEstateRepository';
 import { platformOrganizationRepository } from '@/lib/repositories/platformOrganizationRepository';
+import { platformUserRepository } from '@/lib/repositories/platformUserRepository';
 import {
   isOperatorWrite,
   PLATFORM_ORG_ACTION_LOG_LIMIT,
@@ -90,6 +92,62 @@ async function settle<T>(read: Promise<T>): Promise<T | null> {
 }
 
 export const platformOrgPageService = {
+  /**
+   * The OPERATIONS tab's own read (MOTIR-752): the organization with its
+   * suspension, its member and workspace counts (the status line's "{members}
+   * members across {workspaces} workspaces"), and the operator writes on it —
+   * ONE `estate.read` naming the org. Any staff role reads it (design Panel 8c:
+   * operator / support see the tab read-only). A missing org throws inside the
+   * transaction, so a typed-in id leaves no audit row.
+   */
+  async getOperations(
+    principal: PlatformPrincipal,
+    organizationId: string,
+  ): Promise<PlatformOrgOperationsDTO> {
+    await requirePlatformStaff('support');
+    return withPlatformRead(
+      principal,
+      {
+        action: 'estate.read',
+        targetKind: 'organization',
+        targetId: organizationId,
+        organizationId,
+        metadata: { surface: 'operations' },
+      },
+      async (tx) => {
+        const org = await platformOrganizationRepository.findOrganizationById(organizationId, tx);
+        if (!org) throw new PlatformOrganizationNotFoundError(organizationId);
+        const trail = await platformAuditLogRepository.listByTarget(
+          'organization',
+          organizationId,
+          PLATFORM_ORG_ACTION_LOG_LIMIT,
+          tx,
+        );
+        const memberCount = await platformEstateRepository.countOrganizationMembers(
+          organizationId,
+          tx,
+        );
+        const workspaceCount = await platformEstateRepository.countOrganizationWorkspaces(
+          organizationId,
+          tx,
+        );
+        const suspendedByUserId = org.suspendedAt ? org.suspendedByUserId : null;
+        const suspender = suspendedByUserId
+          ? await platformUserRepository.findById(suspendedByUserId, tx)
+          : null;
+        return {
+          organization: toPlatformOrganizationDetailDTO(org),
+          memberCount,
+          workspaceCount,
+          suspendedBy: suspender
+            ? { userId: suspender.id, email: suspender.email, name: suspender.name || null }
+            : null,
+          actions: trail.filter(isOperatorWrite).map(toPlatformAuditLogDTO),
+        };
+      },
+    );
+  },
+
   async getOverview(
     principal: PlatformPrincipal,
     organizationId: string,

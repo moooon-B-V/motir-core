@@ -74,4 +74,14 @@ export interface PageEditorMessages {
     reload: string;
     newPageNewTab: string;
   };
+  /**
+   * `pages.archive.refusal.editingArchived*` — the same callout when the page was
+   * archived under this tab (MOTIR-7423). `status.tooLarge` ("Not saved") is the
+   * indicator's word for both.
+   */
+  archived: {
+    title: string;
+    body: string;
+    reload: string;
+  };
 }

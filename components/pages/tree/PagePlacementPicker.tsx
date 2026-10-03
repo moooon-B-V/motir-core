@@ -89,7 +89,8 @@ export interface PagePlacementPickerProps {
   /** A refusal from the last write, shown at the top. */
   refusal: string | null;
   pending?: boolean;
-  onPick: (parent: PageParentDto) => void;
+  /** Pick a destination; `name` is how the picker shows it (named in a refusal). */
+  onPick: (parent: PageParentDto, name: string) => void;
   onDismiss: () => void;
 }
 
@@ -255,7 +256,7 @@ export function PagePlacementPicker({
   const choose = (option: Extract<PickerLine, { type: 'option' }>) => {
     if (option.disabledReason !== null || pending) return;
     if (option.current) onDismiss();
-    else onPick(option.parent);
+    else onPick(option.parent, option.name);
   };
 
   const onListKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {

@@ -351,8 +351,40 @@ Three things this fixes, each because getting it wrong has already cost this rep
   UPDATE and DELETE _under a platform context_ because the totality guard requires the
   verbs to be covered; what makes the table append-only is that
   `platformAuditLogRepository` exposes `create` and reads and no mutator. Tamper-_evidence_
-  (the hash chain) is deliberately not in this ADR — it is MOTIR-751's, and the design
-  says so explicitly. Do not read this bullet as a claim that the row cannot be edited.
+  (the hash chain) was deliberately not in this ADR — it is MOTIR-751's, and shipped there
+  (the amendment below). Do not read this bullet as a claim that the row cannot be edited:
+  it still can be, by anyone with write access to the table. What changed is that the edit
+  is now DETECTED.
+
+> **⚠️ AMENDED 2026-10-03 (MOTIR-751 · Story 10.3) — the table is now a HASH CHAIN.**
+> `PlatformAuditLog` gained `seq` (unique, 1, 2, 3, … with no gaps), `prevHash` (the previous
+> entry's hash; NULL only for #1) and `entryHash` = **SHA-256** over the row's canonical form
+> — `["motir.platform_audit.v1", seq, createdAt, actorUserId, actorRole, action, targetKind,
+targetId, targetLabel, organizationId, reason, metadata, prevHash]`, sorted-key JSON, defined
+> in `lib/platform/auditChain.ts` and mirrored byte-for-byte in SQL by
+> `platform_audit_entry_hash()` (migration `20261003000000_platform_audit_hash_chain`).
+>
+> - **No new table.** The design (MOTIR-746) and §7 below both said 10.3 extends this one;
+>   the card's `AdminAuditEntry` sketch was superseded on the record.
+> - **The append is still `withPlatformRead`'s first write.** It takes a transaction-scoped
+>   advisory lock on the chain head, reads the head, and inserts `head.seq + 1` chained to
+>   it — so concurrent appends serialize and the chain cannot fork. The cost, stated: the
+>   lock is held to COMMIT, so platform transactions serialize behind one another; `fn`
+>   must stay short and must never open a second platform context.
+> - **Plain SHA-256, not an HMAC.** Verification then needs no secret — anyone with the
+>   rows, or a database session running the SQL mirror, can recompute the chain. The
+>   accepted limit is that someone with WRITE access can rewrite a SUFFIX of the chain and
+>   re-hash it consistently, and can truncate the newest rows. Detecting that needs a hash
+>   held outside the database: an HMAC key kept outside it, or periodically anchoring the
+>   head `(seq, entryHash)` somewhere external. Both are **deferred hardening**, unowned.
+> - **Rows that predate the chain were chained by the migration**, in `(created_at, id)`
+>   order, with the same v1 form. Their hashes attest to their content as of 2026-10-03,
+>   not before.
+> - **`platformAuditService.verifyChain`** recomputes every hash and link and reports the
+>   FIRST broken entry (`hash_mismatch` / `link_mismatch` / `seq_gap`) and how many follow
+>   it; **`platformAuditService.searchEntries`** is the keyset-paged (50) search the
+>   audit-log page (MOTIR-752) renders. Both are `superadmin` and both are themselves
+>   audited, as `audit.verify` and `audit.read`.
 
 The table is **not** added to that test's `DELIBERATELY_UNGUARDED` map: it ships a policy,
 which is the other branch of the same either/or.
@@ -434,7 +466,7 @@ every consumer builds to.
 | Classify an **organization** internal-billing / remove it        | **MOTIR-4565** (Story MOTIR-4337) | `superadmin` | **yes**         | yes     |
 | Set the platform planning model per audience                     | **MOTIR-7227** (Story MOTIR-7220) | `superadmin` | **yes**         | yes     |
 | Stop one organisation's fleet containers                         | **MOTIR-7317** (Story MOTIR-6905) | `superadmin` | **yes**         | yes     |
-| The audit-log **VIEW**, searchable + tamper-evident (hash chain) | 10.3 MOTIR-751                    | `superadmin` | n/a             | n/a     |
+| The audit-log **VIEW**, searchable + tamper-evident (hash chain) | 10.3 MOTIR-751                    | `superadmin` | no              | yes     |
 | Grant / revoke `platformRole`                                    | 10.3 (no card yet — §6)           | `superadmin` | yes             | yes     |
 
 Every one of those writes reuses **this** gate and **this** `PlatformAuditLog`. The day-1
@@ -480,6 +512,104 @@ rather than introducing a second one.
 > platform-wide lesson-retirement window N, with `lesson-retention` as `targetId` and
 > `{ before: { days }, after: { days } }` as metadata.
 >
+> **⚠️ AMENDED 2026-10-03 (Story 10.3 · MOTIR-747) — credit & plan ops.** The "Credit grants, plan /
+> tier assignment" row ships as `platformCreditOpsService` (`grantCredits` / `adjustCredits` /
+> `setPlan` / `getLedger`) over motir-ai's `POST /v1/admin/credits`, `POST /v1/admin/tier` and
+> `GET /v1/admin/ledger`. Three actions join `PLATFORM_AUDIT_ACTIONS`, all `reason: 'required'`,
+> `targetKind: 'organization'`: **`org.credit_grant`** and **`org.credit_adjust`** (metadata
+> `{ requestId, credits, balanceBefore, balanceAfter }`, the balances as the operator saw them) and
+> **`org.plan_set`** (metadata `{ requestId, fromTierKey, toTierKey }`). The ledger read is an
+> `estate.read` at `support`. motir-ai's write runs INSIDE the audited transaction, so a refusal or
+> an unreachable credit service leaves no row; the residual case (motir-ai applied, core's commit
+> failed) is recoverable because every write is idempotent on its `requestId`. Core gained no
+> billing table.
+
+> **⚠️ AMENDED 2026-10-03 (Story 10.3 · MOTIR-748) — organization suspension.** The "Suspend /
+> reactivate an organization" row ships as `platformOrgLifecycleService.suspend` / `.reactivate`
+> over three new `organization` columns (`suspended_at`, `suspended_reason`,
+> `suspended_by_user_id` → `user`, `ON DELETE SET NULL`). Two actions join
+> `PLATFORM_AUDIT_ACTIONS`, both `reason: 'required'`, `targetKind: 'organization'`:
+> **`org.suspend`** and **`org.reactivate`**. Each locks the org row (`FOR UPDATE`) and refuses a
+> no-op inside the audited transaction, so the refusal leaves no row. The EFFECT is enforced at the
+> two gates every door already passes: `organizationsService.resolveWorkspaceAccess` (cookie pages,
+> the cookie API, server actions, OAuth connections) and `apiTokensService.verify` (PATs, device
+> credentials, run tokens), each raising `OrganizationSuspendedError` → 403
+> `ORGANIZATION_SUSPENDED` on an API, a redirect to `/organization-suspended?org=<id>` on a page.
+> It is raised only after membership is established, so a non-member keeps the no-leak 404. This
+> tier is untouched: the console reads through `withPlatformRead`, never through the tenant gate,
+> so staff keep full access to a suspended org. A suspend also stops the org's CI fleet after
+> commit (`fleetStopService.stopOrganization(…, 'admin_stop')`, best-effort).
+
+> **⚠️ AMENDED 2026-10-03 (Story 10.3 · MOTIR-750) — per-org kill-switches.** The "Per-org feature
+> flags / kill-switches" row ships as `featureFlagService` over one new table, `org_feature_flag`
+> (unique `(organization_id, key)`, overrides only — absence is the registry default, ON for every
+> key). The keys are a CLOSED set: `ai_planning`, `hosted_runs`, `web_search`. Two actions join
+> `PLATFORM_AUDIT_ACTIONS`, both `reason: 'required'`, `targetKind: 'organization'`:
+> **`org.kill_switch_off`** and **`org.kill_switch_on`**, metadata `{ key, enabled }`. A flip locks
+> the organization row (a first flip has no override row to lock) and refuses a no-op inside the
+> audited transaction. The table carries NO tenant arm: `app.platform_staff` reads and writes,
+> `app.system_admin` reads (the hot-path evaluation, which several actorless callers reach). A
+> suspended org (MOTIR-748) evaluates every switch OFF without touching its overrides. The switches
+> are not the internal-billing classification (MOTIR-4337), and MOTIR-751's log is their only log.
+
+> **⚠️ AMENDED 2026-10-03 (Story 10.3 · MOTIR-749) — staff "View as" sessions.** The
+> "Write-level impersonation (time-boxed)" row ships as `impersonationService` over one new table,
+> `impersonation_session` (the card called it a grant; it is a SESSION with a start, a box and an
+> end). The row holds the SHA-256 of a random token, the operator (`operator_user_id` → `user`) and
+> the role they held, the operator's own Better-Auth session id it is bound to, the target account,
+> its organization and the one workspace the session is pinned to (all `@relation`, `ON DELETE
+CASCADE`), the mode (`read_only` · `full`), the reason, `started_at` / `expires_at`, and
+> `ended_at` / `ended_by` (`operator` · `expiry` · `revoked`). RLS has no tenant arm:
+> `app.platform_staff` reads and writes, `app.system_admin` reads (the request gate is actorless).
+> **Both modes are `superadmin`** — a read-only session still reads a customer's data AS that
+> customer, which no `support` read does — and every start carries a REQUIRED REASON and a time-box
+> of 15 / 30 / 60 minutes (never extended; a new session asks for a new reason).
+>
+> - **How it is carried.** The operator keeps their own session; a start sets ONE more cookie,
+>   `motir_staff_session` (httpOnly, lax, expiring with the box) holding the token. Nothing is
+>   minted for the customer. `readSession` (`lib/auth`) — which every tenant door already goes
+>   through — resolves it and substitutes the TARGET's identity, attaching the session and the
+>   operator's own identity as `impersonation`. An ended / expired / revoked / unknown token makes
+>   the request signed-out (fail closed), and the `(authed)` layout sends it through
+>   `/api/staff-session/clear` to the ended page. The console never reads through it:
+>   `requirePlatformStaff` reads the operator's raw session whenever the cookie is present.
+> - **The chokepoint.** In `read_only` a MUTATING request — a Server Action on a tenant page, an
+>   unsafe method on the cookie API, or a route handler reached with a browser `Origin` — is refused
+>   with `ImpersonationReadOnlyError` (403 `IMPERSONATION_READ_ONLY`) before any service runs. In
+>   `full` it is audited first. In either mode minting a credential (PAT, device approval, OAuth
+>   consent: `IMPERSONATION_CREDENTIAL_REFUSED`) and accepting the customer's legal terms are
+>   refused, and the customer's 2FA and re-consent holds are not applied to the operator.
+> - **Four actions** join `PLATFORM_AUDIT_ACTIONS`, `targetKind: 'user'`, the target as `targetId`:
+>   **`user.impersonation_start`** (`reason: 'required'`; metadata `{ mode, durationMinutes,
+startedAt, expiresAt, targetUserId, targetEmail, organizationId, organizationName, workspaceId,
+tokenHashPrefix }`), **`user.impersonation_end`** (metadata `{ sessionId, mode, endedBy,
+startedAt, expiresAt, endedAt }`, plus `supersededBy` / `revokedBecause` when they apply),
+>   **`user.impersonation_action`** — EACH mutating request of a `full` session, written BEFORE it
+>   runs (metadata `{ sessionId, mode, method, path, serverAction }`; a failed write fails the
+>   request) — and **`user.impersonation_view`**, each tenant page rendered in either mode
+>   (metadata `{ sessionId, mode, path }`). The end and action rows carry the session's reason
+>   (`reason: 'inherited'` — required, but supplied by the session rather than typed again).
+> - **The vocabulary gains an explicit KIND.** Every action now declares `kind: 'read' | 'write'`
+>   beside its reason policy; `PLATFORM_AUDIT_READ_ACTIONS` and the operator-write test derive from
+>   it rather than from the reason policy, which `inherited` made ambiguous. `user.impersonation_view`
+>   is a read; the other three are writes.
+> - **Eligibility.** Refused (`ImpersonationTargetIneligibleError`), before the transaction and again
+>   inside it: the operator's own account, any platform staff member, a suspended account, an account
+>   with no workspace, and **an account whose organization is suspended** — a session into a
+>   suspended org would show the operator an app its members cannot reach. An org suspended
+>   MID-session shows the ordinary suspension refusal; an account suspended mid-session, an operator
+>   who loses `superadmin`, or an operator who signs out REVOKES the session at the next request.
+> - **Expiry.** The gate refuses a session from `expires_at` whatever else happens; the bar sends
+>   the browser to the ended page at that instant; and `system.impersonation-expiry-sweep`
+>   (`*/5 * * * *`, `latest`) writes the end row for a session nobody came back to.
+>
+> **Not built here**, named so it is not mistaken for done: the TWO-PERSON rule (§1's _"possibly
+> two-person"_ — no second approver exists yet; the mandatory reason, the time-box and the
+> per-action trail are the controls); Better-Auth's own `/api/auth/*` endpoints and the client
+> `useSession()` still see the operator; individual API GETs inside a session are not audited (the
+> page views are); and the app-wide "edit disabled in read-only" affordance — the server refuses
+> the write today, the UI does not yet grey the control.
+
 > **⚠️ AMENDED 2026-10-03 (Story MOTIR-6905 · MOTIR-7317).** The fleet-stop row is the third member
 > from outside Epic 10. A stop cancels one organisation's GitHub Actions runs, destroys its CI
 > containers, ends its hosted-agent runs and hibernates its agent instances, so it is destructive and
@@ -495,17 +625,17 @@ rather than introducing a second one.
 Named with their owner, so no deliverable leaves the plan at the moment this card goes
 done (the MOTIR-1916 rule):
 
-| Not decided here                                                                                          | Owner                                                                          |
-| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Which tables get a `platform_staff` READ arm, and each policy's SQL                                       | MOTIR-730 (10.1.3)                                                             |
-| The `PlatformUsageDTO` shape and the platform rollup table + its job                                      | MOTIR-732 (10.1.5)                                                             |
-| The console's own layout, copy and i18n namespace                                                         | `design/platform-admin/` (merged) + MOTIR-2896                                 |
-| The `PLATFORM_AUDIT_ACTIONS` vocabulary's initial members                                                 | MOTIR-2896 seeds it; each consumer extends it                                  |
-| Hash-chained tamper evidence and the audit-log viewer                                                     | MOTIR-751 (10.3.6)                                                             |
-| Write-level impersonation's time-box, two-person rule and banner                                          | MOTIR-749 (10.3.4)                                                             |
-| Whether `/admin` is reachable in a self-hosted build                                                      | open — no card; see Consequences                                               |
-| The production bootstrap of the first staff row                                                           | **MOTIR-2932** (8.5.18), filed by this ADR                                     |
-| The account-SUSPENSION **mechanism** — the `User` columns, the session revocation and the sign-in refusal | **MOTIR-1167** (8.5.11) — shipped there; added retroactively by **MOTIR-3641** |
+| Not decided here                                                                                          | Owner                                                                                       |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Which tables get a `platform_staff` READ arm, and each policy's SQL                                       | MOTIR-730 (10.1.3)                                                                          |
+| The `PlatformUsageDTO` shape and the platform rollup table + its job                                      | MOTIR-732 (10.1.5)                                                                          |
+| The console's own layout, copy and i18n namespace                                                         | `design/platform-admin/` (merged) + MOTIR-2896                                              |
+| The `PLATFORM_AUDIT_ACTIONS` vocabulary's initial members                                                 | MOTIR-2896 seeds it; each consumer extends it                                               |
+| Hash-chained tamper evidence and the audit-log viewer                                                     | MOTIR-751 (10.3.6) — shipped; §3b's amendment. The page is MOTIR-752                        |
+| Write-level impersonation's time-box, two-person rule and banner                                          | MOTIR-749 (10.3.4) — shipped (§7's amendment) except the two-person rule, which has no card |
+| Whether `/admin` is reachable in a self-hosted build                                                      | open — no card; see Consequences                                                            |
+| The production bootstrap of the first staff row                                                           | **MOTIR-2932** (8.5.18), filed by this ADR                                                  |
+| The account-SUSPENSION **mechanism** — the `User` columns, the session revocation and the sign-in refusal | **MOTIR-1167** (8.5.11) — shipped there; added retroactively by **MOTIR-3641**              |
 
 **⚠️ The row above is recorded, not deferred, and it is the one this table was missing.** §7 allocates
 _"suspend / reactivate an account"_ to MOTIR-1167 and `design/platform-admin/design-notes.md` Panel 9

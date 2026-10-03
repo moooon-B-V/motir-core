@@ -165,5 +165,23 @@ export function createPageStore(tx: Prisma.TransactionClient): PageStore {
     // ADR §2: "a no-op adapter until then" — the derived link rows are the
     // linking epic's (MOTIR-5747), which replaces this body with its writer.
     async replaceDerivedLinks() {},
+
+    // ── Archive (Story MOTIR-5755 · MOTIR-7418 port, MOTIR-7420 Postgres). ──
+
+    async setArchived(ids, archivedAt, archiveRootId, archivedById) {
+      await pageRepository.setArchived(ids, archivedAt, archiveRootId, archivedById, tx);
+    },
+
+    async findArchiveSet(rootId) {
+      return pageRepository.findArchiveSet(rootId, tx);
+    },
+
+    async deletePages(ids) {
+      await pageRepository.deletePages(ids, tx);
+    },
+
+    async positionTaken(projectId, parent, position) {
+      return pageRepository.positionTaken(projectId, parent, position, tx);
+    },
   };
 }

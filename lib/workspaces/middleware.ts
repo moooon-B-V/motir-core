@@ -58,11 +58,20 @@ function parseCookieHeader(header: string | null, name: string): string | null {
 export async function resolveWorkspaceContext(request: Request): Promise<WorkspaceContext | null> {
   // Through `readSession`, so a dropped connection on the session read is retried
   // and named rather than escaping as Better-Auth's 500 (MOTIR-5864).
-  const session = await readSession(request.headers);
+  //
+  // The METHOD rides along: it is the strongest signal the staff-session gate
+  // has that this request writes (MOTIR-749 — refused in a read-only session,
+  // audited in a full-access one).
+  const session = await readSession(request.headers, { method: request.method });
   if (!session) return null;
 
   const userId = session.user.id;
-  const cookieWorkspaceId = parseCookieHeader(request.headers.get('cookie'), WORKSPACE_COOKIE_NAME);
+  // A staff "View as" session is PINNED to the workspace it was started in: the
+  // operator's own `workspace_id` cookie names THEIR workspace, never the
+  // customer's, so it is not consulted.
+  const cookieWorkspaceId =
+    session.impersonation?.session.workspaceId ??
+    parseCookieHeader(request.headers.get('cookie'), WORKSPACE_COOKIE_NAME);
 
   const workspaceId = await resolveActiveWorkspaceId(userId, cookieWorkspaceId, session.user.name);
   if (!workspaceId) return null;

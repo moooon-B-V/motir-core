@@ -1,6 +1,11 @@
 import { PAGE_BODY_MAX_BYTES, PAGE_VERSION_CAP, PAGE_VERSION_WINDOW_MS } from './constants';
 import { applyUpdate, deriveFormats, stateToUpdate } from './document/convert';
-import { PageBodyTooLargeError, PageNotFoundError, PageVersionNotFoundError } from './errors';
+import {
+  PageArchivedError,
+  PageBodyTooLargeError,
+  PageNotFoundError,
+  PageVersionNotFoundError,
+} from './errors';
 import type { Clock, PageRow, PageStore, PageVersionRow } from './store';
 
 // A page's VERSIONS (Story MOTIR-5754 · MOTIR-7383), `docs/decisions/pages.md`
@@ -117,6 +122,8 @@ export async function restorePageVersion(
 ): Promise<RestorePageVersionResult> {
   const page = await store.lockPage(input.pageId);
   if (!page) throw new PageNotFoundError(input.pageId);
+  // An archived page is read-only (§7): its history can be read, not restored.
+  if (page.archivedAt !== null) throw new PageArchivedError(input.pageId);
 
   const source = await store.findVersion(input.pageId, input.number);
   if (!source) throw new PageVersionNotFoundError(input.pageId, input.number);

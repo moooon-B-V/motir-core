@@ -1174,6 +1174,7 @@ cluster bought nothing. The why is
 | `system.code-graph-index-catch-up`          | `*/5 * * * *` |
 | `system.fleet-debit-monitor`                | `*/5 * * * *` |
 | `system.migrate-onboarding-sweep`           | `*/5 * * * *` |
+| `system.impersonation-expiry-sweep`         | `*/5 * * * *` |
 | `system.monitor-issue-reconcile`            | `*/5 * * * *` |
 | `system.plan-target-lock-sweep`             | `*/5 * * * *` |
 | `system.public-address-certificate-refresh` | `*/5 * * * *` |

@@ -20,6 +20,7 @@ import { OrgFleetCard } from './_components/OrgFleetCard';
 import { OrgIndexCostCard } from './_components/OrgIndexCostCard';
 import { BillingTab } from './_components/BillingTab';
 import { OrgPageHeader } from './_components/OrgPageHeader';
+import { OperationsTabRoute } from './_components/ops/OperationsTab';
 import { UsageTab } from './_components/UsageTab';
 import { orgTabHref, orgUsageHref, parseOrgTab, safeTenantsHref } from './_components/orgNav';
 
@@ -29,7 +30,7 @@ import { orgTabHref, orgUsageHref, parseOrgTab, safeTenantsHref } from './_compo
  *
  * Reached from Tenants (D10). NO breadcrumb: ← Tenants returns to the list with its
  * filter, period and sort (`?from=`). Three tabs as URL state — Overview, Usage &
- * cost (MOTIR-7288), Billing & plans (MOTIR-7289). The Overview: this month by
+ * cost (MOTIR-7288), Billing & plans (MOTIR-7289), Operations (MOTIR-752). The Overview: this month by
  * category, Members, Workspaces with this month's credits, Recent jobs, and the
  * shipped Index & fleet cost card, classification control and action log.
  *
@@ -102,6 +103,11 @@ export default async function AdminOrganizationPage({
           }
         />
       </div>
+    );
+  }
+  if (tab === 'operations') {
+    return (
+      <OperationsTabRoute principal={principal} orgId={orgId} backHref={backHref} chips={chips} />
     );
   }
   if (tab === 'billing') {

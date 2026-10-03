@@ -1,3 +1,4 @@
+import { orgFeatureDisabledResponse } from '@/lib/featureFlags/errorResponse';
 import { NextResponse } from 'next/server';
 
 import {
@@ -13,6 +14,8 @@ import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 // an unrecognized error so the route can rethrow (a 500). Kept out of the route
 // files so the resume + advance handlers map identically.
 export function mapMigrateError(err: unknown): NextResponse | null {
+  const switchedOff = orgFeatureDisabledResponse(err);
+  if (switchedOff) return switchedOff;
   if (err instanceof MigrateOnboardingNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }

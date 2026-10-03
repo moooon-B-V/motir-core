@@ -1,11 +1,17 @@
 import { Prisma, type Page } from '@/generated/prisma/client';
 import {
   PAGE_RECORD_SELECT,
+  type PageArchivedRootRecord,
   type PageLevelRecord,
   type PageLockedRecord,
   type PageMarkdownRecord,
   type PageRecord,
 } from '@/lib/mappers/pageMappers';
+import {
+  archivedRootsLimit,
+  decodeArchivedRootsCursor,
+  encodeArchivedRootsCursor,
+} from '@/lib/pages/archivedRootsCursor';
 
 // Page repository — single operations on the `page` table (Story MOTIR-5752 ·
 // MOTIR-7276). The persistence leaf under the `PageStore` adapter
@@ -16,6 +22,15 @@ import {
 // reasoning: `page` carries the workspace policy pair and no system or public
 // arm, so an UNBOUND read returns nothing and raises nothing, and a project's
 // pages would render as a project with none.
+//
+// ⚠️ LIVE vs ARCHIVED (Story MOTIR-5755 · MOTIR-7420, `docs/decisions/pages.md`
+// §7). An archived page has LEFT THE TREE: every read that draws the tree — a
+// level, its `hasChildren`, a breadcrumb, the flat index, a level's positions,
+// a folder's filed pages — carries {@link LIVE}, and the level reads take it
+// through {@link levelPredicate}, so it is written once rather than per query.
+// The reads that deliberately DO see archived pages say why on the method:
+// `lockById`, `findById`, `findWithBodyById`, `findSubtree`, `findArchiveSet`,
+// `listArchivedRoots` — and the write `moveFiledPages`.
 
 /** What `insert` writes — the unchecked create shape, ids rather than relations. */
 export type PageCreateInput = Prisma.PageUncheckedCreateInput;
@@ -63,6 +78,8 @@ export interface PageFolderRef {
 export interface PageSubtreeRecord {
   id: string;
   ancestorPageIds: string[];
+  archivedAt: Date | null;
+  archiveRootId: string | null;
 }
 
 /** What `updatePlacement` writes. */
@@ -74,19 +91,30 @@ export interface PagePlacementUpdate {
   updatedById: string;
 }
 
+/** One row of the Archived pages list (`listArchivedRoots`) and the cursor that follows it. */
+export interface PageArchivedRootsPage {
+  rows: PageArchivedRootRecord[];
+  /** `null` when this was the last page. */
+  nextCursor: string | null;
+}
+
+/** A page still in the tree — alias `p`. Never written out per query. */
+const LIVE = Prisma.sql`p."archived_at" IS NULL`;
+
 /**
- * The rows of ONE level, alias `p`: at the root neither column is set; in a
+ * The LIVE rows of ONE level, alias `p`: at the root neither column is set; in a
  * folder the folder is (a sub-page never carries one — `page_parent_xor_folder`);
- * under a page the parent is.
+ * under a page the parent is. An archived page is in no level (§7), so its kept
+ * `position` never shapes one.
  */
 function levelPredicate(parent: PageParentRef): Prisma.Sql {
   switch (parent.kind) {
     case 'root':
-      return Prisma.sql`p."parent_page_id" IS NULL AND p."folder_id" IS NULL`;
+      return Prisma.sql`p."parent_page_id" IS NULL AND p."folder_id" IS NULL AND ${LIVE}`;
     case 'folder':
-      return Prisma.sql`p."folder_id" = ${parent.folderId}`;
+      return Prisma.sql`p."folder_id" = ${parent.folderId} AND ${LIVE}`;
     case 'page':
-      return Prisma.sql`p."parent_page_id" = ${parent.pageId}`;
+      return Prisma.sql`p."parent_page_id" = ${parent.pageId} AND ${LIVE}`;
   }
 }
 
@@ -98,7 +126,7 @@ export const pageRepository = {
    */
   async listByProject(projectId: string, tx: Prisma.TransactionClient): Promise<PageListRecord[]> {
     return tx.page.findMany({
-      where: { projectId },
+      where: { projectId, archivedAt: null },
       select: { id: true, title: true, updatedAt: true, updatedById: true },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
     });
@@ -106,7 +134,8 @@ export const pageRepository = {
 
   /**
    * Read one page `FOR UPDATE`, body included. `null` when it does not exist or
-   * is invisible under RLS.
+   * is invisible under RLS. Archived pages included: the procedures lock a page
+   * to decide what it may do, and an archived one is refused there (§7).
    *
    * ⚠️ THIS LOCK IS A SAVE'S WHOLE CONCURRENCY GUARANTEE: two saves of one page
    * in two transactions serialise here, and the second merges onto the state
@@ -127,7 +156,10 @@ export const pageRepository = {
              "created_by_id" AS "createdById",
              "updated_by_id" AS "updatedById",
              "created_at" AS "createdAt",
-             "updated_at" AS "updatedAt"
+             "updated_at" AS "updatedAt",
+             "archived_at" AS "archivedAt",
+             "archive_root_id" AS "archiveRootId",
+             "archived_by_id" AS "archivedById"
         FROM "page"
        WHERE "id" = ${id}
          FOR UPDATE
@@ -138,7 +170,8 @@ export const pageRepository = {
   /**
    * Read one page WITH its body state and no lock — the read model's door
    * (`pagesService.getPage`). A reader never blocks a save, and a save never
-   * waits on a reader. `null` when absent or invisible.
+   * waits on a reader. `null` when absent or invisible. Archived pages included:
+   * an archived page opens read-only at its own address (§7).
    */
   async findWithBodyById(
     id: string,
@@ -165,7 +198,10 @@ export const pageRepository = {
     });
   },
 
-  /** Read one page without its body. `null` when absent or invisible. */
+  /**
+   * Read one page without its body. `null` when absent or invisible. Archived
+   * pages included — the row read every procedure decides on (§7).
+   */
   async findById(id: string, tx: Prisma.TransactionClient): Promise<PageRecord | null> {
     return tx.page.findUnique({ where: { id }, select: PAGE_RECORD_SELECT });
   },
@@ -174,7 +210,8 @@ export const pageRepository = {
    * The id, title and folder of each page in `ids` — a page's breadcrumb
    * (`pagesService.getPageTrail`, MOTIR-7370), read in ONE query whatever the
    * depth. Unordered: the caller orders by the chain it already holds. An id
-   * that does not exist, or is invisible under RLS, simply does not come back.
+   * that does not exist, is invisible under RLS, or is ARCHIVED simply does not
+   * come back — an archived ancestor is no longer a place in the tree.
    */
   async findTrailByIds(
     ids: readonly string[],
@@ -182,8 +219,27 @@ export const pageRepository = {
   ): Promise<Array<Pick<Page, 'id' | 'title' | 'folderId'>>> {
     if (ids.length === 0) return [];
     return tx.page.findMany({
-      where: { id: { in: [...ids] } },
+      where: { id: { in: [...ids] }, archivedAt: null },
       select: { id: true, title: true, folderId: true },
+    });
+  },
+
+  /**
+   * The id, title and folder of each page in `ids`, ARCHIVED ONES INCLUDED, in ONE query —
+   * the Archived pages list's came-from trail (MOTIR-7421), which names where an
+   * archived page used to sit, its archived ancestors among it. Unordered; an id
+   * that is gone simply does not come back. Unlike {@link findTrailByIds}, which
+   * draws a live page's breadcrumb and so reads live pages only. `archivedAt`
+   * says which of them is archived — the list marks those (MOTIR-7424).
+   */
+  async findTitlesByIds(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<Page, 'id' | 'title' | 'folderId' | 'archivedAt'>>> {
+    if (ids.length === 0) return [];
+    return tx.page.findMany({
+      where: { id: { in: [...ids] } },
+      select: { id: true, title: true, folderId: true, archivedAt: true },
     });
   },
 
@@ -206,8 +262,8 @@ export const pageRepository = {
   },
 
   /**
-   * The greatest position among one parent's pages — the root, a folder or a
-   * page — or `null` for an empty level. Compared in `COLLATE "C"` — code-unit
+   * The greatest position among one parent's LIVE pages — the root, a folder or
+   * a page — or `null` for an empty level. Compared in `COLLATE "C"` — code-unit
    * order, the order fractional keys are minted in — whatever the database's
    * default collation.
    */
@@ -305,11 +361,17 @@ export const pageRepository = {
 
   /**
    * Every DESCENDANT of a page, at any depth (the page itself excluded): the rows
-   * whose ancestor chain contains it.
+   * whose ancestor chain contains it. Archived descendants INCLUDED, unfiltered on
+   * purpose: a move rebases them with their ancestor, and restore and delete read
+   * a subtree's archived pages — the package filters what it needs (§7).
    */
   async findSubtree(pageId: string, tx: Prisma.TransactionClient): Promise<PageSubtreeRecord[]> {
     return tx.$queryRaw<PageSubtreeRecord[]>`
-      SELECT "id", "ancestor_page_ids" AS "ancestorPageIds" FROM "page"
+      SELECT "id",
+             "ancestor_page_ids" AS "ancestorPageIds",
+             "archived_at" AS "archivedAt",
+             "archive_root_id" AS "archiveRootId"
+        FROM "page"
        WHERE "ancestor_page_ids" @> ARRAY[${pageId}]::text[]
     `;
   },
@@ -359,7 +421,8 @@ export const pageRepository = {
    * TOTAL order, and seeks strictly after `after`, so a page created or moved
    * between two reads never shifts a page boundary. Reads `limit` rows; the
    * caller asks for one more than it serves to learn whether a page follows.
-   * `hasChildren` is whether the page holds any sub-page.
+   * `hasChildren` is whether the page holds any LIVE sub-page: a page whose only
+   * children are archived shows no expander.
    */
   async findLevelAfter(
     projectId: string,
@@ -376,7 +439,8 @@ export const pageRepository = {
              p."title",
              p."position",
              p."updated_at" AS "updatedAt",
-             EXISTS (SELECT 1 FROM "page" c WHERE c."parent_page_id" = p."id") AS "hasChildren"
+             EXISTS (SELECT 1 FROM "page" c
+                      WHERE c."parent_page_id" = p."id" AND c."archived_at" IS NULL) AS "hasChildren"
         FROM "page" p
        WHERE p."project_id" = ${projectId}
          AND ${levelPredicate(parent)}
@@ -387,8 +451,10 @@ export const pageRepository = {
   },
 
   /**
-   * The pages FILED in one folder — its top-level pages, the set a folder delete
-   * moves up (MOTIR-7371) — in level order, `(position, id) COLLATE "C"`. A
+   * The LIVE pages FILED in one folder — its top-level pages, the set a folder
+   * delete mints new positions for (MOTIR-7371) — in level order,
+   * `(position, id) COLLATE "C"`. Archived filed pages are not here; the delete
+   * still carries them up, in `moveFiledPages`. A
    * sub-page carries no `folder_id` (`page_parent_xor_folder`), so it is never
    * here: it follows its parent wherever the parent goes.
    */
@@ -399,13 +465,17 @@ export const pageRepository = {
     return tx.$queryRaw<Array<{ id: string; position: string }>>`
       SELECT p."id", p."position" FROM "page" p
        WHERE p."folder_id" = ${folderId}
+         AND ${LIVE}
        ORDER BY p."position" COLLATE "C" ASC, p."id" COLLATE "C" ASC
     `;
   },
 
-  /** How many pages are filed directly in `folderId` — the set `findFiledInFolder` reads. */
+  /**
+   * How many LIVE pages are filed directly in `folderId` — the set
+   * `findFiledInFolder` reads, and the folder delete dialog's page count.
+   */
   async countFiledInFolder(folderId: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.page.count({ where: { folderId } });
+    return tx.page.count({ where: { folderId, archivedAt: null } });
   },
 
   /**
@@ -413,8 +483,15 @@ export const pageRepository = {
    * (`toFolderId` null), each at the position the caller minted for it, in ONE
    * `UPDATE` (MOTIR-7371 — a folder delete's move-up). Only rows still filed in
    * `fromFolderId` are touched. Their sub-pages are not rows of this write: a
-   * sub-page carries no folder, and its ancestor chain names pages only. Returns
-   * the number of pages moved.
+   * sub-page carries no folder, and its ancestor chain names pages only.
+   *
+   * ⚠️ EVERY ARCHIVED PAGE FILED IN `fromFolderId` MOVES TOO, whether or not
+   * `positions` names it, and keeps its own position (an archived page is in no
+   * level, so its position orders nothing until a restore re-checks it). Not
+   * moving it would leave a row pointing at the folder, and `page.folder_id` is
+   * `NO ACTION`: the folder delete would fail. §7 also relies on it — "a folder
+   * deleted meanwhile has already moved the page up". Returns the number of
+   * pages moved, archived ones included.
    */
   async moveFiledPages(
     fromFolderId: string,
@@ -422,16 +499,149 @@ export const pageRepository = {
     positions: ReadonlyArray<{ id: string; position: string }>,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
-    if (positions.length === 0) return 0;
+    const ids = positions.map((p) => p.id);
     return tx.$executeRaw`
       UPDATE "page" p
          SET "folder_id" = ${toFolderId}::text,
-             "position" = v."position"
-        FROM unnest(${positions.map((p) => p.id)}::text[], ${positions.map((p) => p.position)}::text[])
-             AS v("id", "position")
-       WHERE p."id" = v."id"
-         AND p."folder_id" = ${fromFolderId}
+             "position" = COALESCE(
+               (SELECT v."position"
+                  FROM unnest(${ids}::text[], ${positions.map((p) => p.position)}::text[])
+                       AS v("id", "position")
+                 WHERE v."id" = p."id"),
+               p."position")
+       WHERE p."folder_id" = ${fromFolderId}
+         AND (p."id" = ANY(${ids}::text[]) OR p."archived_at" IS NOT NULL)
     `;
+  },
+
+  // ── Archive (Story MOTIR-5755 · MOTIR-7420) ─────────────────────────────────
+
+  /**
+   * Write one archive state onto every page in `ids` in ONE `UPDATE` — archive
+   * (`archivedAt` + the root's id + who) or restore (all three `null`). One
+   * statement, so `page_archive_pairing` and every reader see the whole set
+   * leave or come back at once.
+   */
+  async setArchived(
+    ids: readonly string[],
+    archivedAt: Date | null,
+    archiveRootId: string | null,
+    archivedById: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    return tx.$executeRaw`
+      UPDATE "page"
+         SET "archived_at" = ${archivedAt}::timestamptz,
+             "archive_root_id" = ${archiveRootId}::text,
+             "archived_by_id" = ${archivedById}::text
+       WHERE "id" = ANY(${[...ids]}::text[])
+    `;
+  },
+
+  /**
+   * One ARCHIVE SET — every page whose `archive_root_id` is `rootId`, the root
+   * itself included (`page_archive_root_idx`). Archived pages by definition.
+   */
+  async findArchiveSet(rootId: string, tx: Prisma.TransactionClient): Promise<PageSubtreeRecord[]> {
+    return tx.$queryRaw<PageSubtreeRecord[]>`
+      SELECT "id",
+             "ancestor_page_ids" AS "ancestorPageIds",
+             "archived_at" AS "archivedAt",
+             "archive_root_id" AS "archiveRootId"
+        FROM "page"
+       WHERE "archive_root_id" = ${rootId}
+    `;
+  },
+
+  /**
+   * Permanently delete every page in `ids` in ONE `DELETE`. One statement, so
+   * `page_parent_page_id_fkey` (`NO ACTION`) is checked once, at its end: a set
+   * whose pages point at each other deletes, and a survivor still pointing into
+   * the set fails the whole statement and deletes nothing. `page_version` rows
+   * cascade; `attachment.page_id` is set null, and the orphan sweep
+   * (`attachmentRepository.listOrphans`) reclaims the blob. Returns the count.
+   */
+  async deletePages(ids: readonly string[], tx: Prisma.TransactionClient): Promise<number> {
+    if (ids.length === 0) return 0;
+    return tx.$executeRaw`DELETE FROM "page" WHERE "id" = ANY(${[...ids]}::text[])`;
+  },
+
+  /** Whether a LIVE page at one parent's level already holds `position` — a restore's check. */
+  async positionTaken(
+    projectId: string,
+    parent: PageParentRef,
+    position: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<Array<{ taken: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM "page" p
+         WHERE p."project_id" = ${projectId}
+           AND ${levelPredicate(parent)}
+           AND p."position" = ${position}
+      ) AS "taken"
+    `;
+    return Boolean(rows[0]?.taken);
+  },
+
+  /**
+   * One KEYSET page of a project's ARCHIVE ROOTS — the Archived pages list —
+   * newest first, `(archived_at DESC, id DESC)`, over `page_archived_roots_idx`
+   * (`WHERE archive_root_id = id`, so a sub-page that left with its root is never
+   * a row). The default page size and its cap are the tree level's (50 / 100); a
+   * cursor this read did not issue is `PAGE_CURSOR_INVALID`. Each row carries its
+   * sub-page count — its set minus itself, from ONE grouped subquery over the
+   * page's roots, never a count per row — and its stored placement, so the list
+   * can say where it came from. Archived pages by definition.
+   */
+  async listArchivedRoots(
+    projectId: string,
+    page: { cursor?: string | null; limit?: number | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<PageArchivedRootsPage> {
+    const limit = archivedRootsLimit(page.limit);
+    const after = page.cursor ? decodeArchivedRootsCursor(page.cursor) : null;
+    const seek = after
+      ? Prisma.sql`AND (p."archived_at", p."id") < (${after.archivedAt}::timestamptz, ${after.id})`
+      : Prisma.empty;
+    const rows = await tx.$queryRaw<PageArchivedRootRecord[]>`
+      WITH roots AS (
+        SELECT p."id", p."title", p."archived_at", p."archived_by_id",
+               p."parent_page_id", p."folder_id", p."ancestor_page_ids"
+          FROM "page" p
+         WHERE p."project_id" = ${projectId}
+           AND p."archive_root_id" = p."id"
+           ${seek}
+         ORDER BY p."archived_at" DESC, p."id" DESC
+         LIMIT ${limit + 1}
+      )
+      SELECT r."id",
+             r."title",
+             r."archived_at" AS "archivedAt",
+             r."archived_by_id" AS "archivedById",
+             COALESCE(s."count", 0)::int AS "subPageCount",
+             r."parent_page_id" AS "parentPageId",
+             r."folder_id" AS "folderId",
+             r."ancestor_page_ids" AS "ancestorPageIds"
+        FROM roots r
+        LEFT JOIN (
+          SELECT m."archive_root_id", COUNT(*) - 1 AS "count"
+            FROM "page" m
+           WHERE m."archive_root_id" IN (SELECT "id" FROM roots)
+           GROUP BY m."archive_root_id"
+        ) s ON s."archive_root_id" = r."id"
+       ORDER BY r."archived_at" DESC, r."id" DESC
+    `;
+    const served = rows.slice(0, limit);
+    const last = served[served.length - 1];
+    return {
+      rows: served,
+      nextCursor:
+        rows.length > limit && last
+          ? encodeArchivedRootsCursor({ archivedAt: last.archivedAt, id: last.id })
+          : null,
+    };
   },
 
   async insert(data: PageCreateInput, tx: Prisma.TransactionClient): Promise<PageRecord> {

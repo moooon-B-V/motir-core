@@ -76,8 +76,14 @@ const STORY_FILES = [
   // hooks — the `*.tsx` glob above stops at `components/pages/`, one level up.
   'components/pages/tree/*.tsx',
   'components/pages/tree/*.ts',
+  // Story MOTIR-5755 (archive; MOTIR-7423): the archive / restore / delete
+  // client, its two hooks, the confirms and the archived banner.
+  'components/pages/archive/*.tsx',
+  'components/pages/archive/*.ts',
   // The tree routes' `parent` parser (`?parent=` and the JSON `parent`).
   'lib/pages/parentInput.ts',
+  // Story MOTIR-5755 (archive; MOTIR-7420): the Archived pages list's cursor.
+  'lib/pages/archivedRootsCursor.ts',
   // `app/(authed)/pages/**` — the index, New page and the page at its address.
   'app/**/pages/page.tsx',
   'app/**/pages/*/page.tsx',
@@ -110,6 +116,8 @@ export default defineConfig({
       'tests/integration/pagesStoryGate.test.ts',
       'tests/integration/pagesTreeStoryGate.test.ts',
       'tests/integration/pageHistoryStoryGate.test.ts',
+      // Story MOTIR-5755's (archive, restore and delete; MOTIR-7425).
+      'tests/integration/pageArchiveStoryGate.test.ts',
       // Agents read and write a page over the MCP (Story MOTIR-5760 · MOTIR-7413):
       // the story gate, the three tools' suites and the device grant.
       'tests/integration/pagesMcpStoryGate.test.ts',
@@ -130,6 +138,8 @@ export default defineConfig({
       'tests/api/pages-routes-tree.test.ts',
       // A page's history (Story MOTIR-5754 · MOTIR-7385 · 7386).
       'tests/api/pages-history-routes.test.ts',
+      // Archive, restore, delete and the Archived pages list (Story MOTIR-5755 · MOTIR-7422).
+      'tests/api/pages-archive-routes.test.ts',
       // The client surfaces (MOTIR-7280 · 7300).
       'tests/components/new-page-button.test.tsx',
       'tests/components/page-view.test.tsx',

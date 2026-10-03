@@ -83,13 +83,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         navMonitoring: t('nav.monitoring'),
         navAiPlanning: t('shell.navAiPlanning'),
         navPlanningLessons: t('shell.navPlanningLessons'),
-        navGovernance: t('nav.governance'),
+        navAuditLog: t('nav.auditLog'),
         staffMarkTitle: t('topBar.staffMark'),
         staffMarkSubtitle: t('topBar.allReadsAudited'),
         searchPlaceholder: t('topBar.searchPlaceholder'),
         footerStaff: t('shell.footerStaff'),
         exitToApp: t('shell.exitToApp'),
-        soonGovernance: t('nav.soonGovernance'),
       }}
     >
       {children}

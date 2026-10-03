@@ -37,6 +37,13 @@ const RENDERINGS: Record<SaveStatus, Rendering> = {
     label: (m) => m.tooLarge,
     className: 'font-medium text-(--el-danger-on-surface)',
   },
+  // The page was archived under this tab (MOTIR-7423): the same "Not saved" the
+  // size refusal reads, beside the same callout.
+  archived: {
+    icon: TriangleAlert,
+    label: (m) => m.tooLarge,
+    className: 'font-medium text-(--el-danger-on-surface)',
+  },
 };
 
 export interface SaveIndicatorProps {

@@ -28,6 +28,7 @@ import {
   OwnerOnlyByTransferError,
   OwnershipChangedError,
   OwnershipConfirmationMismatchError,
+  OrganizationSuspendedError,
 } from '@/lib/organizations/errors';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -44,6 +45,7 @@ import {
 import type {
   CurrentOrganizationDTO,
   OrganizationDTO,
+  OrganizationSuspensionNoticeDTO,
   OrgFootprintDTO,
   OrgMemberDTO,
   OrgMemberPageDTO,
@@ -174,7 +176,7 @@ export const organizationsService = {
       const workspace = await workspaceRepository.findByIdInTx(workspaceId, t);
       if (!workspace) return null;
 
-      const orgMembership = await organizationMembershipRepository.findByOrgAndUserInTx(
+      const orgMembership = await organizationMembershipRepository.findByOrgAndUserWithOrgStateInTx(
         workspace.organizationId,
         userId,
         t,
@@ -182,6 +184,18 @@ export const organizationsService = {
       // Org membership gates workspace access — no org membership ⇒ denied,
       // even if a (stale) workspace membership row exists.
       if (!orgMembership) return null;
+      // A SUSPENDED organization refuses every one of its members, whatever
+      // their role (MOTIR-748). Raised only AFTER membership is established, so
+      // a non-member still gets the no-leak null (→ 404); a member gets the
+      // dedicated ORGANIZATION_SUSPENDED refusal each door translates (403 on an
+      // API, a redirect on a page). Every workspace-scoped door — the session
+      // resolver, server actions, OAuth/MCP connections — reaches this gate.
+      if (orgMembership.organization.suspendedAt) {
+        throw new OrganizationSuspendedError(
+          orgMembership.organization.id,
+          orgMembership.organization.name,
+        );
+      }
 
       const workspaceMembership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
         userId,
@@ -679,6 +693,29 @@ export const organizationsService = {
       organizationMembershipRepository.findOrganizationsByUser(userId, tx),
     );
     return orgs.map(toOrganizationDTO);
+  },
+
+  /**
+   * The member-side SUSPENDED notice (MOTIR-752): whether `organizationId` is a
+   * suspended organization the user belongs to, and which of their other
+   * organizations are open to switch to. One membership read under the user's
+   * own RLS context — an organization the user does not belong to is never
+   * named, so a forged `?org=` learns nothing.
+   */
+  async getSuspensionNotice(
+    userId: string,
+    organizationId: string | null,
+  ): Promise<OrganizationSuspensionNoticeDTO> {
+    const orgs = await withUserContext(userId, (tx) =>
+      organizationMembershipRepository.findOrganizationsByUser(userId, tx),
+    );
+    const named = organizationId
+      ? orgs.find((o) => o.id === organizationId && o.suspendedAt !== null)
+      : undefined;
+    return {
+      organization: named ? toOrganizationDTO(named) : null,
+      alternatives: orgs.filter((o) => o.suspendedAt === null).map(toOrganizationDTO),
+    };
   },
 
   /**

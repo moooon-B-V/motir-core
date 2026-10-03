@@ -25,12 +25,14 @@ export interface MemoryPage extends LockedPageRow {
   readonly bodyText: string;
 }
 
+/** Whether a LIVE page sits at `parent` — the level reads never see an archived page. */
 const sameParent = (page: PageRow, parent: PagePlacement): boolean =>
-  parent.kind === 'root'
+  page.archivedAt === null &&
+  (parent.kind === 'root'
     ? page.parentPageId === null && page.folderId === null
     : parent.kind === 'folder'
       ? page.folderId === parent.folderId
-      : page.parentPageId === parent.pageId;
+      : page.parentPageId === parent.pageId);
 
 /**
  * An in-memory `PageStore` that records every call, so a test can assert what a
@@ -100,7 +102,7 @@ export class MemoryPageStore implements PageStore {
     this.record('findSubtree', pageId);
     return [...this.pages.values()]
       .filter((page) => page.ancestorPageIds.includes(pageId))
-      .map((page) => ({ id: page.id, ancestorPageIds: page.ancestorPageIds }));
+      .map(toSubtreePage);
   }
 
   async siblingNeighbours(
@@ -166,6 +168,9 @@ export class MemoryPageStore implements PageStore {
       updatedById: row.body.updatedById,
       createdAt: row.createdAt,
       updatedAt: row.body.updatedAt,
+      archivedAt: null,
+      archiveRootId: null,
+      archivedById: null,
       bodyState: row.body.state,
       bodyJson: row.body.json,
       bodyMarkdown: row.body.markdown,
@@ -252,7 +257,64 @@ export class MemoryPageStore implements PageStore {
   async replaceDerivedLinks(pageId: string, links: readonly DerivedPageLink[]): Promise<void> {
     this.record('replaceDerivedLinks', pageId, links);
   }
+
+  async setArchived(
+    ids: readonly string[],
+    archivedAt: Date | null,
+    archiveRootId: string | null,
+    archivedById: string | null,
+  ): Promise<void> {
+    this.record('setArchived', ids, archivedAt, archiveRootId, archivedById);
+    // `page_archive_pairing`, as the table holds it.
+    if ((archivedAt === null) !== (archiveRootId === null)) {
+      throw new Error('page_archive_pairing violated');
+    }
+    for (const id of ids) {
+      const page = this.pages.get(id)!;
+      this.pages.set(id, { ...page, archivedAt, archiveRootId, archivedById });
+    }
+  }
+
+  async findArchiveSet(rootId: string): Promise<SubtreePage[]> {
+    this.record('findArchiveSet', rootId);
+    return [...this.pages.values()]
+      .filter((page) => page.archiveRootId === rootId)
+      .map(toSubtreePage);
+  }
+
+  async deletePages(ids: readonly string[]): Promise<void> {
+    this.record('deletePages', ids);
+    const doomed = new Set(ids);
+    // ONE statement: `parent_page_id NO ACTION` is checked at its END, so a
+    // survivor still pointing into the deleted set fails the whole delete.
+    for (const page of this.pages.values()) {
+      if (!doomed.has(page.id) && page.parentPageId !== null && doomed.has(page.parentPageId)) {
+        throw new Error(
+          `page_parent_page_id_fkey violated: ${page.id} still references ${page.parentPageId}`,
+        );
+      }
+    }
+    for (const id of ids) this.pages.delete(id);
+    // `page_version` cascades with its page.
+    this.versions = this.versions.filter((v) => !doomed.has(v.pageId));
+  }
+
+  async positionTaken(
+    projectId: string,
+    parent: PagePlacement,
+    position: string,
+  ): Promise<boolean> {
+    this.record('positionTaken', projectId, parent, position);
+    return this.level(projectId, parent).some((page) => page.position === position);
+  }
 }
+
+const toSubtreePage = (page: PageRow): SubtreePage => ({
+  id: page.id,
+  ancestorPageIds: page.ancestorPageIds,
+  archivedAt: page.archivedAt,
+  archiveRootId: page.archiveRootId,
+});
 
 /** A clock that returns a fixed instant, advanced by hand. */
 export class FixedClock implements Clock {

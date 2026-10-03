@@ -15,6 +15,8 @@ import {
   OrganizationDeletionAlreadyStartedError,
   OrganizationNameMismatchError,
   StepUpFailedError,
+  OrganizationSuspendedError,
+  ORGANIZATION_SUSPENDED_PATH,
 } from '@/lib/organizations/errors';
 
 // Typed-error → HTTP-status mapper for the organization routes (Story 6.10.5),
@@ -33,6 +35,9 @@ export function mapOrgError(err: unknown): NextResponse | null {
   }
   if (err instanceof OrgForbiddenError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
+  }
+  if (err instanceof OrganizationSuspendedError) {
+    return organizationSuspendedResponse(err);
   }
   if (err instanceof OrgInviteeNotFoundError) {
     // The invited email has no Motir account — a client-correctable input, so
@@ -87,4 +92,23 @@ export function mapOrgError(err: unknown): NextResponse | null {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
   return null;
+}
+
+/**
+ * The ONE wire shape of the suspension refusal (MOTIR-748): 403
+ * `ORGANIZATION_SUSPENDED`, naming the organization so a client can say which
+ * one, plus where a browser should go to read about it. Shared by every cookie
+ * door (`requireCompliantWorkspaceContext`, `mapOrgError`) so they cannot drift.
+ */
+export function organizationSuspendedResponse(err: OrganizationSuspendedError): NextResponse {
+  return NextResponse.json(
+    {
+      code: err.code,
+      error: err.message,
+      organizationId: err.organizationId,
+      organizationName: err.organizationName,
+      noticeAt: `${ORGANIZATION_SUSPENDED_PATH}?org=${encodeURIComponent(err.organizationId)}`,
+    },
+    { status: 403 },
+  );
 }

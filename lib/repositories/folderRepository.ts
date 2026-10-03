@@ -286,8 +286,9 @@ export const folderRepository = {
    * minted in, and the page level's own order), seeking strictly after `after`;
    * reads `limit` rows, so the caller asks for one more than it serves.
    *
-   * ⚠️ `hasChildren` here is a CHILD FOLDER or a PAGE FILED in the folder — what
-   * the `/pages` tree can expand into. Work items do not count: `/pages` shows
+   * ⚠️ `hasChildren` here is a CHILD FOLDER or a LIVE PAGE FILED in the folder —
+   * what the `/pages` tree can expand into; an archived page is in no level
+   * (MOTIR-7420). Work items do not count: `/pages` shows
    * none. `findLevel` keeps the `/items` predicate (child folder or work item),
    * so a folder holding only pages shows no expander in `/items`, which shows no
    * pages (`docs/decisions/pages.md` AMENDMENT 1).
@@ -315,7 +316,8 @@ export const folderRepository = {
              f."position",
              (
                EXISTS (SELECT 1 FROM "folder" c WHERE c."parent_folder_id" = f."id")
-               OR EXISTS (SELECT 1 FROM "page" p WHERE p."folder_id" = f."id")
+               OR EXISTS (SELECT 1 FROM "page" p
+                           WHERE p."folder_id" = f."id" AND p."archived_at" IS NULL)
              ) AS "hasChildren"
         FROM "folder" f
        WHERE f."project_id" = ${projectId}
@@ -484,8 +486,10 @@ export const folderRepository = {
    * Direct, never recursive: a filed epic counts once however many stories it
    * holds (`design/roadmap/design-notes.md` decision 3).
    *
-   * `pageCount` (MOTIR-7371) is the pages filed straight into the folder — its
-   * top-level pages; a sub-page carries no folder and follows its page. The
+   * `pageCount` (MOTIR-7371) is the LIVE pages filed straight into the folder —
+   * its top-level pages; a sub-page carries no folder and follows its page, and
+   * an archived page is in no level (MOTIR-7420), so a folder holding only
+   * archived pages reads as empty. The
    * roadmap card reads only the first two counts: `/items` and the roadmap show
    * no pages.
    */
@@ -503,7 +507,8 @@ export const folderRepository = {
                  AND w."archivedAt" IS NULL
                  AND w."triagedAt" IS NULL) AS "itemCount",
              (SELECT COUNT(*)::int FROM "page" p
-               WHERE p."folder_id" = f."id") AS "pageCount"
+               WHERE p."folder_id" = f."id"
+                 AND p."archived_at" IS NULL) AS "pageCount"
         FROM "folder" f
        WHERE f."id" IN (${Prisma.join([...folderIds])})`;
   },

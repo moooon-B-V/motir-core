@@ -9,13 +9,13 @@ import {
   Building2,
   Coins,
   LogOut,
+  ScrollText,
   Search,
   Server,
   Shield,
   Sparkles,
   UserSearch,
 } from 'lucide-react';
-import { Pill } from '@/components/ui/Pill';
 import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
 import type { PlatformOperatorDTO } from '@/lib/dto/platform';
 
@@ -26,8 +26,9 @@ import type { PlatformOperatorDTO } from '@/lib/dto/platform';
  *
  * Composed from the shipped primitives, per the asset's own "Primitives
  * composed (no hand-rolling)" section: `Sidebar` for the rail (brand header,
- * grouped rows, the reserved 10.2 / 10.3 rows, the operator footer + "Exit to
- * app"), `Pill` for the reserved-row tags. No bespoke admin CSS, and every
+ * grouped rows — every one live now that the reserved Governance row became the
+ * superadmin's Audit log (MOTIR-752) — the operator footer + "Exit to app"). No
+ * bespoke admin CSS, and every
  * colour routes through `--el-*` — the tint-sky operator bar with an `--el-info`
  * rule and shield is the asset's colour-roles table, not a choice made here.
  *
@@ -54,26 +55,13 @@ export interface AdminShellLabels {
   /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
   navAiPlanning: string;
   navPlanningLessons: string;
-  navGovernance: string;
+  /** Operations → Audit log (MOTIR-752), superadmin only. */
+  navAuditLog: string;
   staffMarkTitle: string;
   staffMarkSubtitle: string;
   searchPlaceholder: string;
   footerStaff: string;
   exitToApp: string;
-  /**
-   * The version tags on the reserved rows — the story that builds each. The
-   * asset draws "10.3"; "10.1" carries the two Platform rows neither this
-   * foundation nor MOTIR-1167 builds (MOTIR-732 / MOTIR-733).
-   *
-   * ⚠️ `soonMonitoring` IS GONE (MOTIR-1167). Monitoring is a LIVE row now — the
-   * day-1 health glance took the Operations → Monitoring row the asset reserved
-   * for 10.2, exactly as the asset's own boundary #1 says it would: *"the day-1
-   * glance takes the left-nav Operations → Monitoring row that Panels 2–6 draw
-   * as a reserved 10.2 stub … when MOTIR-737 draws the full ops board, that
-   * board takes this row and this panel goes away."* The row has one owner at a
-   * time, and this is the handover.
-   */
-  soonGovernance: string;
 }
 
 export interface AdminShellProps {
@@ -173,13 +161,21 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           href: '/admin/planning-lessons',
           active: pathname.startsWith('/admin/planning-lessons'),
         },
-        {
-          icon: <Shield />,
-          label: labels.navGovernance,
-          href: '/admin/governance',
-          disabled: true,
-          badge: <Pill tone="neutral">{labels.soonGovernance}</Pill>,
-        },
+        // The reserved `Governance · 10.3` row goes LIVE as the audit log
+        // (design `platform-admin` AMENDMENT 2026-10-03 § 3, MOTIR-752). Every
+        // other 10.3 write sits on the org or user page it targets; the log is
+        // the one estate-wide surface. `superadmin` only — for the other roles
+        // the row is absent and the route 404s (design § Roles).
+        ...(operator.role === 'superadmin'
+          ? [
+              {
+                icon: <ScrollText />,
+                label: labels.navAuditLog,
+                href: '/admin/audit-log',
+                active: pathname.startsWith('/admin/audit-log'),
+              },
+            ]
+          : []),
       ],
     },
   ];

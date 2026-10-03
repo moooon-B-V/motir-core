@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { ArrowDown, ArrowUp, FolderInput, Plus } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, FolderInput, Plus } from 'lucide-react';
 import { FolderPickerPopover } from '@/components/folders/FolderPicker';
 import { FolderRowMenu, type FolderMenuEntry } from '@/components/folders/FolderRowMenu';
 
@@ -19,6 +19,12 @@ import { FolderRowMenu, type FolderMenuEntry } from '@/components/folders/Folder
 // as shipped, and the approved design keeps both). The separator is drawn only
 // when one of the two remains.
 //
+// **Archive…** (Story MOTIR-5755 · MOTIR-7423, design MOTIR-7416 surface 1)
+// comes last, after its own separator, in ordinary ink — archiving is
+// reversible, so it is not a danger entry. It is drawn only when the tree hands
+// in `onArchive`, which it does for a reader who may edit pages; a live page
+// has no Delete… for anyone (delete is from the archive only).
+//
 // The menu is also the ANCHOR of the Move to… picker (`PagePlacementPicker`),
 // exactly as `/items` anchors its folder picker to the row's actions button, so
 // the panel opens where the person was looking.
@@ -32,6 +38,10 @@ export interface PageRowMenuProps {
   onMoveUp?: () => void;
   /** Omitted on the last sibling page: the entry is absent. */
   onMoveDown?: () => void;
+  /** Archive the page; omitted, there is no Archive… entry. */
+  onArchive?: () => void;
+  /** An archive is in flight: the entry is drawn disabled until it answers. */
+  archiveDisabled?: boolean;
   /** Entries a later card appends after the card's own (the `pageMenuEntries` seam). */
   extraEntries?: FolderMenuEntry[];
   /** Whether the Move to… picker is open, anchored to this menu. */
@@ -47,6 +57,8 @@ export function PageRowMenu({
   onMoveTo,
   onMoveUp,
   onMoveDown,
+  onArchive,
+  archiveDisabled = false,
   extraEntries = [],
   pickerOpen,
   onPickerOpenChange,
@@ -54,6 +66,7 @@ export function PageRowMenu({
 }: PageRowMenuProps) {
   const t = useTranslations('pages.tree');
   const tf = useTranslations('folders');
+  const ta = useTranslations('pages.archive');
   const entries: FolderMenuEntry[] = [
     {
       kind: 'item',
@@ -82,6 +95,19 @@ export function PageRowMenu({
       icon: ArrowDown,
       onSelect: onMoveDown,
     });
+  }
+  if (onArchive) {
+    entries.push(
+      { kind: 'separator', key: 'archive-sep' },
+      {
+        kind: 'item',
+        key: 'archive',
+        label: ta('menuItem'),
+        icon: Archive,
+        disabled: archiveDisabled,
+        onSelect: onArchive,
+      },
+    );
   }
   entries.push(...extraEntries);
 
