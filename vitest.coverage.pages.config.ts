@@ -104,6 +104,8 @@ export default defineConfig({
       'tests/integration/pagesStoryGate.test.ts',
       'tests/integration/pagesTreeStoryGate.test.ts',
       'tests/integration/pageHistoryStoryGate.test.ts',
+      // Story MOTIR-5755's (archive, restore and delete; MOTIR-7425).
+      'tests/integration/pageArchiveStoryGate.test.ts',
       // The per-card server suites (MOTIR-7276 · 7277 · 7278 · 7279 · 7300).
       'tests/page-schema-rls.test.ts',
       'tests/pages/*.test.ts',
