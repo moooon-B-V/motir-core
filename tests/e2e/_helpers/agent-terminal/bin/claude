@@ -11,7 +11,7 @@
 #
 # `claude -p <prompt>` is the UNATTENDED mode a card's run starts it in (Story
 # MOTIR-6864 · MOTIR-7031, `motir-run.py`): it prints its work, then keeps working
-# — a progress line every few seconds — until the file named by
+# — a progress line once a minute — until the file named by
 # `MOTIR_E2E_RELEASE` exists, so the spec decides when the work is done without a
 # clock. Then it says so and exits 0.
 #
@@ -29,7 +29,10 @@ if [ "${1:-}" = "-p" ] && [ "${2:-}" != "--output-format" ]; then
   while [ -n "$release" ] && [ ! -e "$release" ]; do
     sleep 1
     waited=$((waited + 1))
-    if [ $((waited % 6)) -eq 0 ]; then echo "· still working (${waited}s)"; fi
+    # Once a minute, the real CLI's heartbeat cadence (each line is a beat in
+    # motir-run.py). Every 6s filled the watched terminal's rows within a minute
+    # and scrolled the run's own first lines out of view (MOTIR-7393).
+    if [ $((waited % 60)) -eq 0 ]; then echo "· still working (${waited}s)"; fi
   done
   echo "Tests pass. Committed the change to the run's branch."
   exit 0

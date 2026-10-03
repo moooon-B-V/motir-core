@@ -14,12 +14,17 @@ import {
   MY_AGENTS_LIST_LIMIT,
   type AgentMove,
 } from '@/lib/agentInstances/presentation';
-import type { AgentInstanceListItemDto, AgentInstanceListPageDto } from '@/lib/dto/agentInstances';
+import type {
+  AgentInstanceDto,
+  AgentInstanceListItemDto,
+  AgentInstanceListPageDto,
+} from '@/lib/dto/agentInstances';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import type { Locale } from '@/lib/i18n/locales';
 import { formatDate } from '@/lib/utils/datetime';
 import { AgentPanel, TAB_PARAM, type AgentPanelActions, type AgentPanelTab } from './AgentPanel';
 import { AgentRowMenu } from './AgentRowMenu';
+import { bootRowLine } from './AgentBootReadout';
 import { CreateAgentDialog, type OfferedProfile } from './CreateAgentDialog';
 import { AgentImageVersion } from './AgentImageVersion';
 import { DeleteAgentDialog } from './DeleteAgentDialog';
@@ -117,6 +122,8 @@ export function MyAgentsRoom({
     openAgentId ? { id: openAgentId, tab: openTab } : null,
   );
   const returnFocusTo = useRef<string | null>(null);
+  /** A just-created agent: its panel's name heading takes focus once it renders (boot delta, panel 1). */
+  const focusHeadingOf = useRef<string | null>(null);
   const seq = useRef(0);
   const base = `/api/projects/${encodeURIComponent(projectKey)}/instances`;
 
@@ -158,16 +165,26 @@ export function MyAgentsRoom({
     (doors.find((el) => el.getClientRects().length > 0) ?? doors[0])?.focus();
   }, [openId]);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    if (!focusHeadingOf.current || openId !== focusHeadingOf.current) return;
+    focusHeadingOf.current = null;
+    document
+      .querySelector<HTMLElement>('[data-testid="agent-panel"] [data-agent-heading]')
+      ?.focus();
+  }, [openId]);
+
+  const load = useCallback(async (): Promise<AgentInstanceListPageDto | null> => {
     const mine = ++seq.current;
     try {
       const res = await fetch(`${base}?limit=${MY_AGENTS_LIST_LIMIT}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
       const body = (await res.json()) as AgentInstanceListPageDto;
       if (mine === seq.current) setData(body);
+      return body;
     } catch {
       // A failed re-read keeps the last good list on screen; only a failed FIRST
       // read shows the failure face.
+      return null;
     }
   }, [base]);
 
@@ -184,10 +201,13 @@ export function MyAgentsRoom({
   async function send(
     url: string,
     init: RequestInit,
-  ): Promise<{ ok: true } | { ok: false; body: { code?: string; reason?: string } | null }> {
+  ): Promise<
+    | { ok: true; body: { instance?: AgentInstanceDto } | null }
+    | { ok: false; body: { code?: string; reason?: string } | null }
+  > {
     try {
       const res = await fetch(url, init);
-      if (res.ok) return { ok: true };
+      if (res.ok) return { ok: true, body: (await res.json().catch(() => null)) as never };
       return { ok: false, body: (await res.json().catch(() => null)) as never };
     } catch {
       return { ok: false, body: null };
@@ -207,7 +227,38 @@ export function MyAgentsRoom({
       setCreateRefusal(refusalFor(result.body, input.name));
       return;
     }
+    // THE BOOT DELTA, panel 1: the create answers at `starting`, so the dialog
+    // closes on the answer and the new agent's panel opens. The list is a client
+    // island, so the row goes in from the answer itself (newest first) — a stale
+    // in-flight re-read is retired by the sequence bump — and the poll that runs
+    // while it boots carries it from there.
     setCreateOpen(false);
+    const instance = result.body?.instance;
+    if (instance) {
+      seq.current += 1;
+      const row: AgentInstanceListItemDto = {
+        ...instance,
+        profileName: profiles.find((p) => p.id === instance.profileId)?.name ?? instance.profileId,
+        machineSecondsThisMonth: 0,
+        creditsThisMonth: 0,
+        stopReason: null,
+        scheduledDeletionAt: null,
+        activeRun: null,
+        lastRun: null,
+        bootStep: null,
+      };
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              total: prev.total + 1,
+              instances: [row, ...prev.instances.filter((r) => r.id !== row.id)],
+            }
+          : prev,
+      );
+      focusHeadingOf.current = instance.id;
+      openAgent(instance.id);
+    }
     await load();
   }
 
@@ -288,8 +339,19 @@ export function MyAgentsRoom({
         const result = await send(`${base}/${encodeURIComponent(row.id)}/wake`, {
           method: 'POST',
         });
-        await load();
-        return result.ok ? null : refusalFor(result.body, row.name);
+        const fresh = await load();
+        if (result.ok) return null;
+        // Already woken — by the row's menu a moment before the panel opened on a
+        // list still reading hibernated, or by another tab. The wake asked for is
+        // under way, so there is nothing to refuse, and a refusal would hide the
+        // boot read-out (MOTIR-7393).
+        const now = fresh?.instances.find((r) => r.id === row.id)?.state;
+        if (
+          result.body?.code === 'agent_instance_state_conflict' &&
+          (now === 'waking' || now === 'starting' || now === 'running')
+        )
+          return null;
+        return refusalFor(result.body, row.name);
       },
       onRefresh: () => void load(),
     }),
@@ -427,6 +489,7 @@ export function MyAgentsRoom({
 /** The line under a row's name: progress in motion, the failure, or why Motir stopped it. */
 function useRowLine() {
   const t = useTranslations('myAgents');
+  const tb = useTranslations('myAgents.boot');
   return (row: AgentInstanceListItemDto): { text: string; danger: boolean } | null => {
     if (row.state === 'failed') {
       const reason = row.failureReason ?? '';
@@ -448,6 +511,10 @@ function useRowLine() {
     }
     if (row.state === 'hibernated' && row.stopReason) {
       return { text: t(`stop.${row.stopReason}`), danger: false };
+    }
+    // The boot delta, panel 10: a booting row names the step it is on.
+    if ((row.state === 'starting' || row.state === 'waking') && row.bootStep) {
+      return { text: bootRowLine(row.bootStep, tb), danger: false };
     }
     if (
       row.state === 'starting' ||

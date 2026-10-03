@@ -139,6 +139,29 @@ describe('fakePersistentOrchestrator', () => {
     expect((await fake.describePersistent(h)).exitCode).toBeNull();
   });
 
+  it('records the machine’s own events: launch, start, and an exit with the scripted code (MOTIR-7396)', async () => {
+    fake.setBootBehaviour('never_start');
+    const h = await fake.provisionPersistent(SPEC);
+    expect((await fake.describePersistent(h)).events.map((e) => e.type)).toEqual(['launch']);
+    fake.exitOutside(h.machineId, 3);
+    await fake.start(h);
+    fake.completeBoot(h.machineId);
+    const events = (await fake.describePersistent(h)).events;
+    expect(events.map((e) => e.type)).toEqual(['launch', 'exit', 'start']);
+    expect(events[1]).toMatchObject({ type: 'exit', exitCode: 3 });
+    expect(events[0]!.at).toBeInstanceOf(Date);
+  });
+
+  it('records start after a start and nothing for a gone machine', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    await fake.stop(h);
+    await fake.start(h);
+    const events = (await fake.describePersistent(h)).events;
+    expect(events.map((e) => e.type)).toEqual(['launch', 'start', 'stop', 'exit', 'start']);
+    await fake.destroyPersistent(h);
+    expect((await fake.describePersistent(h)).events).toEqual([]);
+  });
+
   it('destroyPersistent takes the machine THEN the volume, idempotently', async () => {
     const h = await fake.provisionPersistent(SPEC);
     await fake.destroyPersistent(h);

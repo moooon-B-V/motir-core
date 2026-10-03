@@ -80,6 +80,7 @@ import { organizationErasureSweep } from './definitions/organizationErasureSweep
 import { organizationRetentionPurge } from './definitions/organizationRetentionPurge';
 import { dlqStandingDepthSweep } from './definitions/dlqStandingDepthSweep';
 import { agentInstanceIdleCheck } from './definitions/agentInstanceIdleCheck';
+import { agentInstanceBoot } from './definitions/agentInstanceBoot';
 import { agentInstanceRunLaunch } from './definitions/agentInstanceRunLaunch';
 import { agentInstanceRunSupervise } from './definitions/agentInstanceRunSupervise';
 import { agentInstanceSweep } from './definitions/agentInstanceSweep';
@@ -185,6 +186,7 @@ export const jobDefinitions = [
   // Agent instances (Story MOTIR-6860 · MOTIR-6873): the per-instance idle timer
   // and the 30-minute sweep beneath it.
   agentInstanceIdleCheck,
+  agentInstanceBoot,
   agentInstanceRunLaunch,
   agentInstanceRunSupervise,
   agentInstanceSweep,

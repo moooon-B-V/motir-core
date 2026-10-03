@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **83 tools**.
+`initialize` handshake and registers **86 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -2935,6 +2935,94 @@ Gated on `work_item:edit`.
 **Output** — `structuredContent`: `{ deletedFolderId, destinationFolderId,
 movedFolderIds, movedWorkItemIds }` — `destinationFolderId` is `null` when the
 contents moved to the root.
+
+### Pages
+
+A **page** is a project's document — a decision, a spec, a runbook — kept in the
+project's `/pages` tree beside the work it describes
+([`docs/decisions/pages.md`](decisions/pages.md)). Its canonical body is the
+editor's collaborative document; an agent reads and writes it as **markdown**,
+converted on the server through the same package the editor uses (§8.2). A page
+is addressed by its project key and its opaque **id** — the `<id>` in the page's
+address `/pages/<id>`. The token `motir login` mints carries `page:view` and
+`page:edit`, so a dispatched agent reaches all three tools; it never carries
+`page:delete` ([`docs/decisions/pages.md`](decisions/pages.md) §5). A token
+minted before that grant changed gains them at its next `motir login`. Every
+refusal is the page service's own, returned as a typed tool error carrying its
+code:
+
+| Code                        | Meaning                                                                                                                                                     |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PAGE_NOT_FOUND`            | No such page in that project — the same answer for an unknown id and another project's page.                                                                |
+| `PAGE_REVISION_CONFLICT`    | `update_page` sent a `revision` the page has moved past. Nothing was written; the message names both revisions. Call `get_page`, redo the edit, send again. |
+| `PAGE_BODY_TOO_LARGE`       | The markdown is over 1 MiB, or the body it makes is over 2 MiB. The message names the size and the limit. Nothing was written.                              |
+| `PAGE_TITLE_TOO_LONG`       | `create_page`'s `title` is over 255 characters.                                                                                                             |
+| `PAGE_PARENT_NOT_ALLOWED`   | A `parent.kind` other than `root`, `folder` or `page` — a page cannot be filed under a work item.                                                           |
+| `PAGE_PARENT_ID_REQUIRED`   | A `folder` or `page` parent with no `id`.                                                                                                                   |
+| `FOLDER_NOT_FOUND`          | The parent folder is not in this project.                                                                                                                   |
+| `CROSS_PROJECT_PAGE_PARENT` | The parent page or folder belongs to another project.                                                                                                       |
+| `PAGE_CYCLE`                | A page placed under itself or one of its own sub-pages.                                                                                                     |
+| `PAGE_DEPTH_EXCEEDED`       | The sub-page would sit deeper than 10 levels.                                                                                                               |
+
+#### `get_page`
+
+Read one page as markdown. The read an agent makes before it writes: the
+`revision` it returns is what a write must send back. Gated on `page:view`, the
+key the page's own address checks. It takes no lock, so it never waits on a
+person's save.
+
+| Input        | Type   | Required | Notes                                      |
+| ------------ | ------ | -------- | ------------------------------------------ |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                |
+| `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`. |
+
+**Output** — `structuredContent`: `{ id, projectId, title, placement, revision,
+latestVersion, markdown, updatedAt }`. `placement` is `{ parentPageId, folderId }`
+— at most one is set, both `null` at the project root. `latestVersion` is the
+newest entry of the page's history, `{ number, authorId, authorName, savedAt }`
+(`null` only for a page older than versions). The text summary is the title, the
+placement, `revision N`, who saved the newest version, then the markdown.
+
+#### `create_page`
+
+Create a page with a markdown body, filed at the project root, in a folder, or
+under another page as a sub-page. Gated on `page:edit`, the key the editor's save
+checks. The page and its body are written in one transaction, so a refusal (a
+parent that is not allowed, a body over the cap) leaves no page behind.
+
+| Input        | Type   | Required | Notes                                                                                                                        |
+| ------------ | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                                                                                                  |
+| `title`      | string | no       | Omit for an untitled page.                                                                                                   |
+| `markdown`   | string | no       | The body. Omit for an empty page.                                                                                            |
+| `parent`     | object | no       | `{ "kind": "root" }`, `{ "kind": "folder", "id" }` (an id from `list_folders`) or `{ "kind": "page", "id" }`. Default: root. |
+
+**Output** — the new page, in `get_page`'s shape. The text summary names its id,
+its address `/pages/<id>` and its `revision`, which is what `update_page` needs.
+
+#### `update_page`
+
+**Replace** a page's whole body with markdown. It does not append or patch: an
+agent edits a page by reading it with `get_page`, changing the markdown, and
+writing the full result back with the `revision` it read. Gated on `page:edit`.
+
+A stale `revision` is **refused, not merged** (`PAGE_REVISION_CONFLICT`, nothing
+written). The editor's own saves are collaborative updates that merge; a
+whole-body replace cannot, and written over a newer revision it would silently
+erase what a person saved in between. The refusal names the page's revision and
+the one sent, and tells the agent to call `get_page`, apply its change to what
+that returns, and send the new revision. Whatever a write replaces stays a
+restorable version in the page's history, which is why the tool is annotated
+`destructiveHint: false`. It does not rename the page.
+
+| Input        | Type    | Required | Notes                                                      |
+| ------------ | ------- | -------- | ---------------------------------------------------------- |
+| `projectKey` | string  | yes      | Project key, e.g. `"ACME"`.                                |
+| `pageId`     | string  | yes      | The page id — the `<id>` in `/pages/<id>`.                 |
+| `markdown`   | string  | yes      | The page's whole new body.                                 |
+| `revision`   | integer | yes      | The `revision` `get_page` or `create_page` returned (≥ 1). |
+
+**Output** — the saved page, in `get_page`'s shape, at its new `revision`.
 
 ### Search
 

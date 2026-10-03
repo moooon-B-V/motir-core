@@ -1356,6 +1356,8 @@ model Organization {
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
   agentInstanceStorageCharges AgentInstanceStorageCharge[]
+  /// An agent's boot attempts (`agent-instances.md` AMENDMENT 6, MOTIR-7397). Cascade.
+  agentInstanceBootAttempts   AgentInstanceBootAttempt[]
 
   @@map("organization")
 }
@@ -1581,6 +1583,10 @@ model Workspace {
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
   agentInstanceStorageCharges AgentInstanceStorageCharge[]
+  /// An agent's boot attempts and their steps (`agent-instances.md` AMENDMENT 6,
+  /// MOTIR-7397). Cascade.
+  agentInstanceBootAttempts   AgentInstanceBootAttempt[]
+  agentInstanceBootSteps      AgentInstanceBootStep[]
   /// The agent terminal's tickets and connection records (MOTIR-6940). Cascade.
   agentTerminalTickets        AgentTerminalTicket[]
   agentTerminalConnections    AgentTerminalConnection[]
@@ -12382,6 +12388,8 @@ model AgentInstance {
   terminalTickets     AgentTerminalTicket[]
   terminalConnections AgentTerminalConnection[]
   storageCharges      AgentInstanceStorageCharge[]
+  /// `agent-instances.md` AMENDMENT 6 (MOTIR-7397): one per create and per wake.
+  bootAttempts        AgentInstanceBootAttempt[]
   /// agent-instance-run.md §5 (MOTIR-7023): the runs executed in this agent.
   dispatchRuns        DispatchRun[]
 
@@ -12557,4 +12565,113 @@ model AgentInstanceStorageCharge {
   @@index([chargeOutcome, day])
   @@index([workspaceId])
   @@map("agent_instance_storage_charge")
+}
+
+/// Whether a boot attempt was opened by a create or a wake (`agent-instances.md`
+/// AMENDMENT 6 §2). A wake writes its `clone` rows `skipped`.
+enum AgentInstanceBootKind {
+  create
+  wake
+
+  @@map("agent_instance_boot_kind")
+}
+
+/// How a CLOSED boot attempt ended (AMENDMENT 6 §2) — the stream's `done` frame.
+enum AgentInstanceBootOutcome {
+  running
+  failed
+  deleted
+
+  @@map("agent_instance_boot_outcome")
+}
+
+/// The five boot steps, in order (AMENDMENT 6 §1). `clone` is one row per
+/// project repository.
+enum AgentInstanceBootStepKind {
+  provision
+  machine_start
+  clone
+  terminal_check
+  ready
+
+  @@map("agent_instance_boot_step_kind")
+}
+
+/// The five states a boot step is in (AMENDMENT 6 §1).
+enum AgentInstanceBootStepState {
+  waiting
+  in_progress
+  done
+  failed
+  skipped
+
+  @@map("agent_instance_boot_step_state")
+}
+
+/// ONE BOOT ATTEMPT of an agent (`docs/decisions/agent-instances.md` AMENDMENT 6
+/// §2, §4 · MOTIR-7397): numbered per agent from 1, opened by each create and
+/// each wake, so a read shows the current attempt and history is never
+/// overwritten. It carries the LEASE that makes one party — the boot driver
+/// holding it — the only writer of its steps.
+model AgentInstanceBootAttempt {
+  id              String                @id @default(cuid())
+  workspaceId     String                @map("workspace_id")
+  organizationId  String                @map("organization_id")
+  agentInstanceId String                @map("agent_instance_id")
+  /// 1, 2, 3 … per agent; unique with the agent.
+  attempt         Int
+  kind            AgentInstanceBootKind
+
+  /// The job run holding the lease, null while nobody has taken it.
+  leaseHolder    String?   @map("lease_holder")
+  /// A lease past this instant is free to take (AMENDMENT 6 §4).
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+
+  startedAt DateTime                  @map("started_at")
+  /// Null while the attempt is OPEN.
+  endedAt   DateTime?                 @map("ended_at")
+  outcome   AgentInstanceBootOutcome?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace     Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization  Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agentInstance AgentInstance           @relation(fields: [agentInstanceId], references: [id], onDelete: Cascade)
+  steps         AgentInstanceBootStep[]
+
+  @@unique([agentInstanceId, attempt])
+  @@index([workspaceId])
+  @@map("agent_instance_boot_attempt")
+}
+
+/// ONE STEP of a boot attempt (AMENDMENT 6 §1). Written `waiting` (or `skipped`)
+/// when the attempt opens; every later write stamps a new `seq`, monotonic per
+/// AGENT across its attempts, which is the stream's `since` cursor.
+model AgentInstanceBootStep {
+  id            String                     @id @default(cuid())
+  workspaceId   String                     @map("workspace_id")
+  bootAttemptId String                     @map("boot_attempt_id")
+  seq           Int
+  step          AgentInstanceBootStepKind
+  /// `owner/name` on a `clone` row, null elsewhere.
+  repository    String?
+  /// The row's place in the read-out, 0-based.
+  ordinal       Int
+  state         AgentInstanceBootStepState
+  startedAt     DateTime?                  @map("started_at")
+  endedAt       DateTime?                  @map("ended_at")
+  /// The failure's words, the exit code, or the terminal probe's answer.
+  detail        String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  bootAttempt AgentInstanceBootAttempt @relation(fields: [bootAttemptId], references: [id], onDelete: Cascade)
+
+  @@unique([bootAttemptId, ordinal])
+  @@index([bootAttemptId, seq])
+  @@index([workspaceId])
+  @@map("agent_instance_boot_step")
 }

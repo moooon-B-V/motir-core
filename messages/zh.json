@@ -9930,6 +9930,58 @@
         "state": "该智能体当前{state}，暂时无法更新。",
         "unknown": "Motir 暂时无法检查新版本。请几分钟后重试。"
       }
+    },
+    "boot": {
+      "label": "启动步骤",
+      "title": {
+        "create": "正在启动",
+        "wake": "正在唤醒",
+        "failed": "{time} 后失败",
+        "deleted": "已删除 — 此面板即将关闭"
+      },
+      "step": {
+        "provision": "分配机器",
+        "machineStart": "启动机器",
+        "clone": "克隆 {repository}",
+        "terminalCheck": "检查终端",
+        "ready": "就绪"
+      },
+      "state": {
+        "waiting": "等待中",
+        "inProgress": "进行中",
+        "done": "完成",
+        "failed": "失败",
+        "skipped": "已跳过"
+      },
+      "announce": "{step}：{state}",
+      "skipped": {
+        "clone": "已跳过 — 唤醒会保留主目录",
+        "terminal": "已跳过 — 此部署没有终端"
+      },
+      "detail": {
+        "cloneNoAccess": "无法读取 {repository} — 应用没有访问权限",
+        "exited": "机器在启动过程中退出（退出码 {code}）",
+        "deadline": "启动未能在 {minutes} 分钟内完成",
+        "deleted": "在启动过程中被删除"
+      },
+      "summary": {
+        "create": "启动用时 {time}",
+        "wake": "唤醒用时 {time}"
+      },
+      "showSteps": "显示步骤",
+      "hideSteps": "隐藏步骤",
+      "duration": {
+        "seconds": "{s} 秒",
+        "minutes": "{m} 分 {s} 秒"
+      },
+      "row": {
+        "provision": "正在分配机器…",
+        "machineStart": "正在启动机器…",
+        "clone": "正在克隆 {repository}…",
+        "terminalCheck": "正在检查终端…",
+        "ready": "即将就绪…"
+      },
+      "terminalClosed": "智能体运行后终端才会打开。"
     }
   },
   "runs": {

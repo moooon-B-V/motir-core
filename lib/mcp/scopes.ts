@@ -200,6 +200,13 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   get_project_state: 'read',
   skeleton: 'read',
   list_folders: 'read',
+  // MOTIR-7410 — a page read. Mapped into the RETIRED vocabulary only because
+  // this table is total over the registry; its real gate is `page:view`.
+  get_page: 'read',
+  // MOTIR-7411 — the page writes. Filed under `work_items:write` for totality
+  // only; their real gate is `page:edit`.
+  create_page: 'work_items:write',
+  update_page: 'work_items:write',
   // The SEMANTIC search (MOTIR-3101). A read at the gate — `assertCanBrowse` and
   // nothing more — which is what this legacy table records. That it also spends
   // an AI call is bounded by the `ai:chat` rate limit inside the tool, not by a

@@ -17,6 +17,7 @@ import {
   restoreLanding,
   restorePage,
   restorePageVersion,
+  savePageMarkdown,
   savePageUpdate,
   type LandingAncestor,
   type PagePlacement,
@@ -388,7 +389,7 @@ describe('deletePage', () => {
 });
 
 describe('the archived-page refusals in the other procedures', () => {
-  it('savePageUpdate, renamePage and the version restore refuse an archived page', async () => {
+  it('savePageUpdate, savePageMarkdown, renamePage and the version restore refuse an archived page', async () => {
     const page = await create('Plan');
     await archive(page);
 
@@ -396,6 +397,18 @@ describe('the archived-page refusals in the other procedures', () => {
       savePageUpdate(store, clock, { pageId: page, actorId: 'u1', update: new Uint8Array([1]) }),
     );
     expect(save).toMatchObject({ code: 'PAGE_ARCHIVED', status: 409 });
+    expect(store.called('updateBody')).toBe(0);
+
+    // The agent's markdown save (MOTIR-5760) refuses it too, before staleness.
+    const markdown = await refused(
+      savePageMarkdown(store, clock, {
+        pageId: page,
+        actorId: 'u1',
+        markdown: 'x',
+        expectedRevision: -1,
+      }),
+    );
+    expect(markdown).toMatchObject({ code: 'PAGE_ARCHIVED', status: 409 });
     expect(store.called('updateBody')).toBe(0);
 
     const rename = await refused(renamePage(store, { pageId: page, actorId: 'u1', title: 'x' }));
