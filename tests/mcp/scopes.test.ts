@@ -118,6 +118,10 @@ describe('CLI_TOKEN_GRANT (the device-approval fixed grant)', () => {
         // already performs on browse; the argument is on the constant.
         'plan:view_any',
         'run:view_any',
+        // MOTIR-7412 — the page keys, for `get_page` / `create_page` /
+        // `update_page`; the argument is on the constant.
+        'page:view',
+        'page:edit',
       ].sort(),
     );
   });
@@ -125,6 +129,8 @@ describe('CLI_TOKEN_GRANT (the device-approval fixed grant)', () => {
   it('withholds the two a remote unattended credential must not hold', () => {
     expect(CLI_TOKEN_GRANT).not.toContain('work_item:delete');
     expect(CLI_TOKEN_GRANT).not.toContain('sprint:manage');
+    // MOTIR-7412 — pages joined the grant without their destroying key (§5).
+    expect(CLI_TOKEN_GRANT).not.toContain('page:delete');
   });
 
   it('is entirely grantable', () => {

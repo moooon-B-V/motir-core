@@ -2944,8 +2944,12 @@ project's `/pages` tree beside the work it describes
 editor's collaborative document; an agent reads and writes it as **markdown**,
 converted on the server through the same package the editor uses (§8.2). A page
 is addressed by its project key and its opaque **id** — the `<id>` in the page's
-address `/pages/<id>`. Every refusal is the page service's own, returned as a
-typed tool error carrying its code:
+address `/pages/<id>`. The token `motir login` mints carries `page:view` and
+`page:edit`, so a dispatched agent reaches all three tools; it never carries
+`page:delete` ([`docs/decisions/pages.md`](decisions/pages.md) §5). A token
+minted before that grant changed gains them at its next `motir login`. Every
+refusal is the page service's own, returned as a typed tool error carrying its
+code:
 
 | Code                        | Meaning                                                                                                                                                     |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
