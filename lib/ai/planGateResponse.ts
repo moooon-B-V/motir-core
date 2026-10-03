@@ -1,3 +1,4 @@
+import { orgFeatureDisabledResponse } from '@/lib/featureFlags/errorResponse';
 import { NextResponse } from 'next/server';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 
@@ -32,6 +33,9 @@ import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/erro
  * handling its own domain errors.
  */
 export function aiPlanGateErrorResponse(err: unknown): NextResponse | null {
+  // A per-org kill-switch (MOTIR-750) — `ai_planning` off, or a suspended org.
+  const switchedOff = orgFeatureDisabledResponse(err);
+  if (switchedOff) return switchedOff;
   if (err instanceof ProjectNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }

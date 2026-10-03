@@ -84,6 +84,32 @@ export const platformEstateRepository = {
   },
 
   /**
+   * One account's WORKSPACE memberships with each workspace's organization
+   * (MOTIR-749) — where a staff "View as" session can enter. Oldest membership
+   * first, so the default is the account's first home; capped by `take`.
+   */
+  async listWorkspaceMembershipsForUser(
+    userId: string,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.workspaceMembership.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take,
+      select: {
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            organization: { select: { id: true, name: true, suspendedAt: true } },
+          },
+        },
+      },
+    });
+  },
+
+  /**
    * One keyset page of an organization's MEMBERS (MOTIR-733), oldest first on
    * `(createdAt, id)` — the person, their organization role and when they joined.
    */
@@ -189,6 +215,14 @@ export const platformEstateRepository = {
   /** How many accounts hold a membership of one workspace. */
   async countWorkspaceMembers(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.workspaceMembership.count({ where: { workspaceId } });
+  },
+
+  /** How many workspaces one organization holds (the Operations tab's status line, MOTIR-752). */
+  async countOrganizationWorkspaces(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.workspace.count({ where: { organizationId } });
   },
 
   /** How many accounts hold a membership of one organization. */

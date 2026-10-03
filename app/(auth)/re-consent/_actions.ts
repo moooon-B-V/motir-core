@@ -1,6 +1,7 @@
 'use server';
 
 import { getSession } from '@/lib/auth';
+import { ImpersonationReadOnlyError } from '@/lib/platform/errors';
 import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
 
 // The re-consent interstitial's one write (Story 8.4 · Subtask MOTIR-1135).
@@ -25,6 +26,9 @@ import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
 export async function acceptCurrentLegalDocumentsAction(): Promise<void> {
   const session = await getSession();
   if (!session) throw new Error('UNAUTHENTICATED');
+  // Agreeing to terms is the CUSTOMER's act, never a platform operator's on their
+  // behalf — refused in every mode of a staff "View as" session (MOTIR-749).
+  if (session.impersonation) throw new ImpersonationReadOnlyError(session.impersonation.session.id);
 
   await legalAcceptanceService.recordAcceptance(session.user.id);
 }

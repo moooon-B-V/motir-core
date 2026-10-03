@@ -4,7 +4,7 @@
  * (its filter, period and sort) is restored by the back button.
  */
 
-export const ORG_TABS = ['overview', 'usage', 'billing'] as const;
+export const ORG_TABS = ['overview', 'usage', 'billing', 'operations'] as const;
 export type OrgTab = (typeof ORG_TABS)[number];
 
 export function parseOrgTab(raw: string | undefined): OrgTab {

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { workspacesService } from '@/lib/services/workspacesService';
 import {
   PLATFORM_AUDIT_ACTIONS,
+  PLATFORM_AUDIT_READ_ACTIONS,
   isPlatformAuditAction,
   reasonPolicyFor,
   reasonSatisfied,
@@ -137,7 +138,13 @@ describe('append-only, as an application property', () => {
     // is exactly this surface. A future `update` / `delete` added here fails the
     // assertion rather than passing review.
     expect(Object.keys(platformAuditLogRepository).sort()).toEqual([
+      // MOTIR-751's verifier reads — the per-batch walk and the "N after it" count.
+      'countAfterSeq',
       'create',
+      // MOTIR-751's append path: the head the next row chains to, read under
+      // `lockChainHead`. A read, and an advisory lock that writes nothing.
+      'findBySeq',
+      'findChainHead',
       // MOTIR-6905's last-stop line on the tenant page's Fleet card (MOTIR-7320):
       // the newest `fleet.stop` on one target. A READ, added by the story and
       // missed here until its integration gate (MOTIR-7321) ran this file.
@@ -150,6 +157,10 @@ describe('append-only, as an application property', () => {
       // so, which is the moment a `deleteMany` slipped in beside one would have
       // to be argued for rather than merged.
       'listByTarget',
+      'listChainBatch',
+      'lockChainHead',
+      // MOTIR-751's audit-log search — a read.
+      'search',
     ]);
   });
 });
@@ -184,6 +195,29 @@ describe('the reason rule', () => {
     // The platform planning model per audience (Story MOTIR-7220 · MOTIR-7227) —
     // `superadmin` and `required`, like every billing-class row in ADR §7.
     'ai.planner_model.set': 'required',
+    // Story 10.3's credit & plan ops (MOTIR-747) — `superadmin`, `required`: they
+    // change what an organization holds and is charged.
+    'org.credit_grant': 'required',
+    'org.credit_adjust': 'required',
+    'org.plan_set': 'required',
+    // MOTIR-748 — suspending and reactivating an organization are writes.
+    'org.suspend': 'required',
+    'org.reactivate': 'required',
+    // MOTIR-750 — flipping a per-org kill-switch is a write.
+    'org.kill_switch_off': 'required',
+    'org.kill_switch_on': 'required',
+    // MOTIR-749 — staff "View as" sessions. The START is a write whose reason the
+    // operator types; the END and every mutating request inside a full-access
+    // session are writes carrying the SESSION's reason (`inherited`); a page
+    // opened inside a session is a read.
+    'user.impersonation_start': 'required',
+    'user.impersonation_end': 'inherited',
+    'user.impersonation_view': 'never',
+    'user.impersonation_action': 'inherited',
+    // MOTIR-751 — reading the audit log, and verifying its chain, are platform
+    // READS like any other: audited, reason-free.
+    'audit.read': 'never',
+    'audit.verify': 'never',
     // A platform admin's stop of one organisation's fleet (Story MOTIR-6905 ·
     // MOTIR-7317) — destructive and cross-tenant, so `superadmin` with a reason.
     'fleet.stop': 'required',
@@ -203,13 +237,29 @@ describe('the reason rule', () => {
   it('every READ is reason-free and every WRITE demands one', () => {
     // The property underneath the table above, stated so it survives the table
     // growing: the ADR's rule is *"REQUIRED for every write action, NULL for a
-    // read"*, and `<domain>.<verb>` names the verb. Reads are the closed set;
-    // anything else is a write.
-    const READS = ['console.open', 'estate.read', 'health.read', 'user.read'];
+    // read"*. Since MOTIR-749 the kind is explicit, so this pins the two columns
+    // together: a read is `never`, and a write is `required` or — inside a staff
+    // session — `inherited` (the session's reason, still non-blank on the row).
+    const READS = [
+      'console.open',
+      'estate.read',
+      'health.read',
+      'user.read',
+      'user.impersonation_view',
+      'audit.read',
+      'audit.verify',
+    ];
     for (const action of Object.keys(PLATFORM_AUDIT_ACTIONS)) {
       const key = action as keyof typeof PLATFORM_AUDIT_ACTIONS;
-      expect(reasonPolicyFor(key), action).toBe(READS.includes(action) ? 'never' : 'required');
+      if (READS.includes(action)) {
+        expect(PLATFORM_AUDIT_ACTIONS[key].kind, action).toBe('read');
+        expect(reasonPolicyFor(key), action).toBe('never');
+      } else {
+        expect(PLATFORM_AUDIT_ACTIONS[key].kind, action).toBe('write');
+        expect(reasonPolicyFor(key), action).not.toBe('never');
+      }
     }
+    expect([...PLATFORM_AUDIT_READ_ACTIONS].sort()).toEqual([...READS].sort());
   });
 
   it('holds in both arms', () => {
@@ -226,6 +276,11 @@ describe('the reason rule', () => {
     // A space is not a reason. The design puts it behind a confirm dialog
     // precisely so somebody has to type one.
     expect(reasonSatisfied('required', '   ')).toBe(false);
+    // `inherited` (MOTIR-749) is held to the same bar — the service copies the
+    // session's reason onto the row, and a blank one is still no reason.
+    expect(reasonSatisfied('inherited', 'reproduce ticket #4507')).toBe(true);
+    expect(reasonSatisfied('inherited', null)).toBe(false);
+    expect(reasonSatisfied('inherited', '  ')).toBe(false);
   });
 
   it('a read passes the service check with no reason', () => {

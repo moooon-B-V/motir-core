@@ -1,5 +1,6 @@
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
+import { redirectIfOrganizationSuspended } from '@/lib/organizations/suspensionRedirect';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { DeviceApproval } from './_components/DeviceApproval';
 import { DeviceSignedOut } from './_components/DeviceSignedOut';
@@ -51,7 +52,7 @@ export default async function DevicePage({
   // membership on approve regardless of what the form posts.
   const [scopeOrgs, ctx] = await Promise.all([
     apiTokensService.listScopeOptions(session.user.id),
-    getWorkspaceContext(),
+    redirectIfOrganizationSuspended(getWorkspaceContext()),
   ]);
   const workspaces = scopeOrgs.flatMap((org) =>
     org.workspaces.map((workspace) => ({

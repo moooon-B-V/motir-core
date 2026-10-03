@@ -11,6 +11,7 @@ import 'server-only';
 // streams them, mapping the §5 problem+json taxonomy to motir-core typed errors.
 
 import { mintJobToken } from './jobToken';
+import { assertFlagOn, evaluateOrgFeatureFlags } from '@/lib/featureFlags/evaluate';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import {
@@ -24,6 +25,8 @@ import {
 } from '@/lib/ciFleet/indexAllowance';
 import {
   MotirAiConfigError,
+  MotirAiConflictError,
+  MotirAiInsufficientBalanceError,
   MotirAiUnavailableError,
   PlannerModelNotOfferedError,
   PlannerModelUnreachableError,
@@ -31,6 +34,12 @@ import {
   type JobView,
 } from './errors';
 import type {
+  AdminCreditWriteInput,
+  AdminCreditWriteResult,
+  AdminLedgerQuery,
+  AdminLedgerRead,
+  AdminTierWriteInput,
+  AdminTierWriteResult,
   CiOverageDebitInput,
   JobContextBag,
   JobKind,
@@ -276,6 +285,16 @@ export async function submitJob(
   actor: RequestActor,
 ): Promise<{ jobId: string }> {
   const { url, serviceToken } = config();
+  // THE PER-ORG KILL-SWITCHES (MOTIR-750), read here because every new planning
+  // job — every surface, every actorless cadence — leaves through this one
+  // function. One indexed statement against core's own database, no external
+  // round trip; a suspended org (MOTIR-748) reads every switch off. `ai_planning`
+  // off refuses the job before anything is minted or sent (→ 403
+  // `ORG_FEATURE_DISABLED`); `web_search` off rides the envelope as
+  // `tenant.webSearch: false` for motir-ai to honour.
+  const switches = await evaluateOrgFeatureFlags(tenant.organizationId);
+  assertFlagOn(switches, 'ai_planning');
+  const sentTenant: Tenant = switches.web_search ? tenant : { ...tenant, webSearch: false };
   const readBackToken = mintJobToken({
     userId: actor.userId,
     workspaceId: tenant.workspaceId,
@@ -284,7 +303,7 @@ export async function submitJob(
   const envelope: RequestEnvelope = {
     envelopeVersion: 'v1',
     jobKind: kind,
-    tenant,
+    tenant: sentTenant,
     context,
     readBackToken,
   };
@@ -2266,6 +2285,141 @@ export async function setPlannerModel(
   const body = (await res.json().catch(() => null)) as PlannerModelWriteResult | null;
   if (!body || typeof body.previousModel !== 'string' || typeof body.model !== 'string') {
     throw new MotirAiUnavailableError('motir-ai answered a body that is not a planner-model write');
+  }
+  return body;
+}
+
+// ── Platform-staff credit ops (MOTIR-747 · 10.3.2) ──────────────────────────
+//
+// The operator side of motir-ai's credit ledger: grant / adjust an org's credits,
+// assign its plan tier, read its ledger. Called ONLY from
+// `platformCreditOpsService` (superadmin-gated and audited on core's side); the
+// ledger stays in motir-ai and core holds no billing table. Like the planner-model
+// pair above these THROW rather than degrade — the console shows an error state
+// rather than a guessed balance, and "the figures aren't loaded" is never drawn as 0.
+
+/**
+ * Map a staff credit op's non-2xx answer. `conflict` is split on its detail
+ * prefix (`insufficient_balance:` is the overdraw; anything else is a reused
+ * `requestId` or an erased org) before the generic §5 switch.
+ */
+async function adminCreditProblem(res: Response): Promise<Error> {
+  const problem = await readProblem(res);
+  if (problem.code === 'conflict') {
+    const detail = problem.detail ?? problem.title;
+    if (detail.startsWith('insufficient_balance:')) {
+      return new MotirAiInsufficientBalanceError(detail);
+    }
+    return new MotirAiConflictError(detail);
+  }
+  return errorFromProblem(problem);
+}
+
+function isAdminCreditWriteResult(body: unknown): body is AdminCreditWriteResult {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as Partial<AdminCreditWriteResult>;
+  return (
+    typeof b.balanceCredits === 'number' &&
+    typeof b.idempotent === 'boolean' &&
+    !!b.transaction &&
+    typeof b.transaction.id === 'string' &&
+    typeof b.transaction.credits === 'number'
+  );
+}
+
+function isAdminTierWriteResult(body: unknown): body is AdminTierWriteResult {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as Partial<AdminTierWriteResult>;
+  return (
+    typeof b.changed === 'boolean' &&
+    typeof b.idempotent === 'boolean' &&
+    !!b.assignment &&
+    typeof b.assignment.toTierKey === 'string' &&
+    !!b.tier &&
+    typeof b.tier.key === 'string'
+  );
+}
+
+function isAdminLedgerRead(body: unknown): body is AdminLedgerRead {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as Partial<AdminLedgerRead>;
+  return (
+    typeof b.known === 'boolean' && typeof b.balanceCredits === 'number' && Array.isArray(b.entries)
+  );
+}
+
+/**
+ * POST /v1/admin/credits — append ONE staff `grant` (positive) or `adjustment`
+ * (signed, non-zero) row to an org's ledger. Idempotent on `requestId`: a replay
+ * answers the stored row with `idempotent: true` and writes nothing.
+ *
+ * @throws MotirAiInsufficientBalanceError when an adjustment would overdraw.
+ * @throws MotirAiConflictError for a reused `requestId` or an erased org.
+ * @throws MotirAiBadRequestError for `validation_error`.
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a malformed body.
+ */
+export async function adminWriteCredits(
+  input: AdminCreditWriteInput,
+): Promise<AdminCreditWriteResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/credits`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await adminCreditProblem(res);
+  const body: unknown = await res.json().catch(() => null);
+  if (!isAdminCreditWriteResult(body)) {
+    throw new MotirAiUnavailableError('motir-ai answered a body that is not a credit write');
+  }
+  return body;
+}
+
+/**
+ * POST /v1/admin/tier — assign an org's `PlanTier`. Grants nothing (a tier's
+ * allotment arrives with its billing cycle), and a paid org's next Stripe
+ * subscription event still sets its tier from the subscription.
+ *
+ * @throws MotirAiConflictError for a reused `requestId` or an erased org.
+ * @throws MotirAiBadRequestError for `validation_error` (an unknown `tierKey`).
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a malformed body.
+ */
+export async function adminAssignTier(input: AdminTierWriteInput): Promise<AdminTierWriteResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/tier`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await adminCreditProblem(res);
+  const body: unknown = await res.json().catch(() => null);
+  if (!isAdminTierWriteResult(body)) {
+    throw new MotirAiUnavailableError('motir-ai answered a body that is not a tier assignment');
+  }
+  return body;
+}
+
+/**
+ * GET /v1/admin/ledger — one org's balance, tier, latest staff tier assignment
+ * and one page of its ledger, newest first. Provisions nothing: an org motir-ai
+ * has never seen answers `known: false` with a zero balance.
+ *
+ * @throws MotirAiBadRequestError for a bad `limit` / `cursor`.
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a malformed body.
+ */
+export async function getAdminLedger(query: AdminLedgerQuery): Promise<AdminLedgerRead> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ coreOrganizationId: query.coreOrganizationId });
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  if (query.cursor) params.set('cursor', query.cursor);
+  const res = await aiFetch(`${url}/v1/admin/ledger?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw await adminCreditProblem(res);
+  const body: unknown = await res.json().catch(() => null);
+  if (!isAdminLedgerRead(body)) {
+    throw new MotirAiUnavailableError('motir-ai answered a body that is not a ledger read');
   }
   return body;
 }
