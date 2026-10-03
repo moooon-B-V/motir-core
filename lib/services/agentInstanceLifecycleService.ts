@@ -534,6 +534,15 @@ const RUN_BOOT_FAILED = 'the agent stopped before the run could start';
  * releasing its slot — and, first, closing the run running in it `failed` (§6).
  * A move that LOSES (a Delete got there first, AMENDMENT 4) closes nothing: the
  * winner owns the interval, and `settleDelete` closes it `deleted`.
+ *
+ * ⚠️ AND IT STOPS THE MACHINE (MOTIR-7343). `failed` is a resting state like
+ * `hibernated`: its interval is closed and its slot released, so nobody is
+ * charged for the machine from here on. Most ways in leave it RUNNING — a clone
+ * or probe that failed on a booted machine, a boot past its deadline that may
+ * still come up, a machine Fly reports `failed` — and the attribution reconciler
+ * then stopped it, unbilled, ten minutes later. Stopped, never destroyed: the
+ * home volume is kept, and Wake starts the same machine again. Best effort — a
+ * refused stop is logged, the reconciler stays the backstop, and the move stands.
  */
 async function failInstance(
   row: AgentInstance,
@@ -552,7 +561,21 @@ async function failInstance(
       targetImageVersion: null,
     },
   );
-  if (moved) await closeOpenInterval(row, agentInstanceClock.now(), 'lost');
+  if (!moved) return;
+  await closeOpenInterval(row, agentInstanceClock.now(), 'lost');
+  const handle = handleOf(row);
+  if (!handle) return;
+  try {
+    await getPersistentOrchestrator().stop(handle);
+  } catch (err) {
+    console.warn(
+      '[agentInstanceLifecycle] stop after failure failed; the reconciler will stop it',
+      {
+        instanceId: row.id,
+        detail: describeError(err),
+      },
+    );
+  }
 }
 
 /**
