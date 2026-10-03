@@ -59,27 +59,33 @@ type Params = { params: Promise<{ pageId: string }> };
 const loadScope = cache(async () => pageScope(await memberPageContext()));
 
 /** Read the page as the signed-in member, or `null` for every not-found case. */
-const loadPage = cache(async (pageId: string): Promise<PageDto | null> => {
-  const scope = await loadScope();
-  try {
-    return await pagesService.getPage(scope.service, { projectId: scope.projectId, pageId });
-  } catch (err) {
-    // ⚠️ BOTH kinds of `ProjectAccessDeniedError` are a not-found here (MOTIR-7281).
-    // `getPage` asserts `page:view`, and a reader who may BROWSE the project but
-    // does not hold it — a workspace custom role, which holds `page:view` only
-    // when an admin ticks it — is refused with kind 'edit'. Rethrowing that sent
-    // them to the error boundary, while `/pages` answers the same reader with its
-    // `notFound()`. The page they cannot read is one they cannot see.
-    if (
-      err instanceof ProjectAccessDeniedError ||
-      err instanceof PageNotFoundError ||
-      err instanceof ProjectNotFoundError
-    ) {
-      return null;
+const loadPage = cache(
+  async (pageId: string): Promise<{ page: PageDto; viewerId: string } | null> => {
+    const scope = await loadScope();
+    try {
+      const page = await pagesService.getPage(scope.service, {
+        projectId: scope.projectId,
+        pageId,
+      });
+      return { page, viewerId: scope.userId };
+    } catch (err) {
+      // ⚠️ BOTH kinds of `ProjectAccessDeniedError` are a not-found here (MOTIR-7281).
+      // `getPage` asserts `page:view`, and a reader who may BROWSE the project but
+      // does not hold it — a workspace custom role, which holds `page:view` only
+      // when an admin ticks it — is refused with kind 'edit'. Rethrowing that sent
+      // them to the error boundary, while `/pages` answers the same reader with its
+      // `notFound()`. The page they cannot read is one they cannot see.
+      if (
+        err instanceof ProjectAccessDeniedError ||
+        err instanceof PageNotFoundError ||
+        err instanceof ProjectNotFoundError
+      ) {
+        return null;
+      }
+      throw err;
     }
-    throw err;
-  }
-});
+  },
+);
 
 /** The page's trail, or `null` when it cannot be read (the breadcrumb then reads Pages › page). */
 async function loadTrail(pageId: string): Promise<PageTrailDto | null> {
@@ -110,8 +116,9 @@ function expandedPathOf(trail: PageTrailDto | null): string[] {
 /** The browser tab reads the page's title, or the untitled copy. */
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { pageId } = await params;
-  const page = await loadPage(pageId);
-  if (!page) return {};
+  const loaded = await loadPage(pageId);
+  if (!loaded) return {};
+  const { page } = loaded;
   const t = await getTranslations('pages');
   return { title: page.title || t('untitled') };
 }
@@ -122,14 +129,14 @@ export default async function PageAtItsAddress({ params }: Params) {
   // read never leaves the trail's read running behind the error boundary.
   const [read, trail] = await Promise.all([
     loadPage(pageId).then(
-      (page) => ({ page }),
+      (loaded) => ({ loaded }),
       (error: unknown) => ({ error }),
     ),
     loadTrail(pageId),
   ]);
   if ('error' in read) throw read.error;
-  const page = read.page;
-  if (!page) notFound();
+  if (!read.loaded) notFound();
+  const { page, viewerId } = read.loaded;
   const scope = await loadScope();
 
   return (
@@ -149,6 +156,8 @@ export default async function PageAtItsAddress({ params }: Params) {
     >
       <Suspense fallback={<PageFrame />}>
         <PageView
+          key={page.id}
+          viewerId={viewerId}
           page={{
             id: page.id,
             title: page.title,

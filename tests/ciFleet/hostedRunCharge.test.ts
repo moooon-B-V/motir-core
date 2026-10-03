@@ -19,6 +19,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
 import { grantPaidAiPlan } from '../helpers/paidAiPlan';
+import { leakedKeys } from '../helpers/payloadKeys';
 
 // A HOSTED RUN IS CHARGED FOR ITS MACHINE TIME WHEN ITS CONTAINER SETTLES
 // (Story MOTIR-683 · Subtask MOTIR-6514; `docs/decisions/hosted-agent-machine-charge.md`).
@@ -185,8 +186,10 @@ describe('a settled hosted-agent container charges its run once', () => {
       coreWorkspaceId: tenant.workspaceId,
       coreProjectId: tenant.projectId,
     });
-    // AC 7 — no meter row, cost or rate crosses the boundary.
-    expect(JSON.stringify(calls[0])).not.toMatch(/costUsd|usdPerSecond|handleId|cost/i);
+    // AC 7 — no meter row, cost or rate crosses the boundary. Scanned over the
+    // payload's KEYS: its values are generated ids, which spell `cost` often
+    // enough to eject unrelated pull requests from the merge queue (MOTIR-7349).
+    expect(leakedKeys(calls[0], /cost|usdPerSecond|handleId/i)).toEqual([]);
   });
 
   // AC 3

@@ -12,6 +12,7 @@ import {
   PageParentNotAllowedError,
   PageTitleTooLongError,
   PageUpdateMalformedError,
+  PageVersionNotFoundError,
 } from '@/lib/pages';
 
 // The page routes' refusal map (Story MOTIR-5752 · MOTIR-7278) — the same shape
@@ -47,6 +48,12 @@ export function pageErrorResponse(err: unknown): NextResponse {
   }
   if (err instanceof ProjectNotFoundError || err instanceof PageNotFoundError) {
     return pageNotFoundResponse();
+  }
+  // A version the cap pruned, or never existed (MOTIR-7386). DISTINCT from the
+  // page's 404 so the history panel can say which; only a caller who can browse
+  // the project reaches it, so it says nothing to a stranger.
+  if (err instanceof PageVersionNotFoundError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }
   if (err instanceof PageBodyTooLargeError) return pageBodyTooLargeResponse(err.limit, err.size);
   // An empty or undecodable save body (MOTIR-7281). The editor host reads any
@@ -94,4 +101,22 @@ export function pageErrorResponse(err: unknown): NextResponse {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
   }
   throw err;
+}
+
+/**
+ * A history route's positive-integer input (`before`, `limit`, a version
+ * `number`) — `null` when it is anything else, which the route answers as 400.
+ */
+export function parsePositiveInt(raw: string): number | null {
+  if (!/^[1-9][0-9]*$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+/** The 400 a history route sends for a malformed integer input. */
+export function badIntegerResponse(name: string): NextResponse {
+  return NextResponse.json(
+    { code: 'BAD_REQUEST', error: `Expected \`${name}\` to be a positive integer.` },
+    { status: 400 },
+  );
 }

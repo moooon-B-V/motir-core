@@ -5,10 +5,11 @@ the `/pages` index with **New page**, and the page at its own address, `/pages/<
 the story ships — fresh, being written, saved / saving / offline, refused as too large, read-only,
 loading and not found.
 
-| Surface                 | Asset             | States | Gates                                               |
-| ----------------------- | ----------------- | ------ | --------------------------------------------------- |
-| The rail row and index  | `pages.mock.html` | 1–5    | MOTIR-7300 (section, rail row, ⌘K, index, New page) |
-| The page at its address | `page.mock.html`  | 6–12   | MOTIR-7275 (editor, toolbar, indicator), MOTIR-7280 |
+| Surface                 | Asset                     | States | Gates                                                 |
+| ----------------------- | ------------------------- | ------ | ----------------------------------------------------- |
+| The rail row and index  | `pages.mock.html`         | 1–5    | MOTIR-7300 (section, rail row, ⌘K, index, New page)   |
+| The page at its address | `page.mock.html`          | 6–12   | MOTIR-7275 (editor, toolbar, indicator), MOTIR-7280   |
+| A page’s history        | `page--history.mock.html` | 1–14   | MOTIR-5754 (History control, panel, compare, restore) |
 
 ## ⚠️ This is a REDRAW, and it follows a refusal
 
@@ -721,3 +722,287 @@ No element is built twice; where two cards touch one component, the split is sta
 - **Archive, delete and restore of a page** — MOTIR-5755.
 - **A combined tree of folders, pages and work items** — deferred by ADR AMENDMENT 1.
 - **Page search** — the Move to… picker has none in this story.
+
+## History (MOTIR-5754 · MOTIR-7381)
+
+**Story MOTIR-5754 · design subtask MOTIR-7381.** Any reader of a page (`page:view`) opens its
+**history**: the list of saved versions, each opened on its own beside the current page; an editor
+(`page:edit`) restores one. This section **amends** § _The page — `/pages/<id>` (states 6–12)_ above,
+drawn in `design/pages/page.mock.html`, by a new delta mock; the approved mock is not edited. It composes
+with MOTIR-7367's approved design for the same route (§ _The page tree_, `page--tree-sidebar.mock.html`):
+the sidebar tree and the breadcrumb are that design's, drawn here only as context and not redrawn.
+
+| Amends                                                     | By                        | Panels |
+| ---------------------------------------------------------- | ------------------------- | ------ |
+| § The page — `/pages/<id>` (states 6–12), `page.mock.html` | `page--history.mock.html` | 1–14   |
+
+**References.** Confluence Cloud's page history (a list of versions with author and date; a version opened
+on its own; _Restore this version_ makes a copy that becomes current and keeps every earlier one) for the
+model. Notion's page-history side panel for the layout: history opens **beside** the page, not on a
+separate screen.
+
+**What it rests on** (`docs/decisions/pages.md` §6): a version is a snapshot with a number, an author,
+`saved_at` and an optional `restored_from_version_id`; saves by one author within 10 minutes fold into one
+version; a page keeps **100** versions (writing the 101st deletes the oldest); **restore creates a new
+version** and rewinds nothing. Reading versions needs `page:view`; restoring needs `page:edit`.
+
+### Conventions
+
+The base design's (§ _Conventions both assets follow_): `--el-*` colour only, the element shape tokens,
+the Tier-3 layer declared on every `[data-theme]` scope, every state in light and dark, zh on the dark board
+of panels 1–6 and 8–14, and **page content never translated**. Every secondary line is
+`--el-text-secondary`; `--el-text-muted` and `--el-text-faint` are not used anywhere in the asset.
+
+### The access path — History in the title row (state 1)
+
+- **Where:** the trailing end of the page's **title row**. The breadcrumb (MOTIR-7367) stays above the
+  title; the title keeps the row's leading edge and its `font-serif text-2xl` 32px line box; **History**
+  is top-aligned to that line box, so the row's height does not change.
+- **What:** `Button variant="secondary" size="sm"` with the lucide **`History`** glyph and a visible label
+  _History_. A visible label rather than an icon button, because the glyph alone reads as "recent" or
+  "undo" and this is the only door to a feature a viewer has never seen.
+- **Why the title row, not the toolbar:** the toolbar is a writer's (it is not rendered for a viewer, base
+  state 10). History is every reader's, so it sits where a viewer and a writer both have something: the
+  title row. A viewer gets the same control in the same place (state 14).
+- **Open:** `aria-expanded="true"`, `aria-controls="page-history"`, and the pressed look —
+  `--el-surface` fill, `--el-border-strong` border — while the panel is open. Pressing it again closes
+  the panel.
+- **The rail and the tree:** unchanged. The rail's Pages row stays active; the tree's selected row stays
+  this page.
+
+### The panel — where it opens, how it closes (states 2–6)
+
+- **Wide, ≥ 1440px:** a right-hand column **beside** the page — rail · page tree (248px) · page · history
+  (**340px**). It pushes the reading column instead of covering it, so the page stays readable while the
+  list is open. `<aside id="page-history" aria-labelledby>`, `--el-page-bg`, a left rule in
+  `--el-border`.
+- **1280–1439px:** the same column; the **page tree sidebar hides while History is open** and returns
+  when it closes. This does **not** write the reader's stored hide/show preference (MOTIR-7367's
+  `localStorage` convenience) — it is a layout yield, not a choice.
+- **Below 1280px** (where MOTIR-7367 already starts the tree hidden): History opens as an **overlay sheet
+  from the right**, 340px, over `--el-overlay-scrim`, with `--shadow-modal` — the mirror of the tree's
+  narrow drawer (panel 4, third board). Focus moves into the sheet and is returned to the History control
+  on close.
+- **Closes by:** the close button (`X` icon button, _Close history_), **Esc** (when no confirm is open; a
+  first Esc inside compare closes compare, the next closes the panel), pressing **History** again, the
+  scrim (narrow only), and **navigating away** — to another page through the tree or the breadcrumb, or
+  anywhere else. The panel does not persist across pages: a page opens with history closed.
+- **Head:** the `History` glyph 16px in `--el-text-secondary` + _History_, 14px semibold `--el-text`; the
+  close button at its end. A 1px `--el-border` rule under it.
+
+### A version row
+
+One `<button aria-pressed>` per version in an `<ol aria-label="Versions of this page">`, newest first, 8px
+list padding, 2px gaps. Padding `--spacing-control-y` / `--spacing-control-x`, `--radius-control`:
+
+1. **Avatar** — 24px circle (`rounded-full`, genuinely circular), the author's initials, 10px bold
+   `--el-text-strong` on one of `--el-avatar-lavender` / `-sky` / `-mint` (picked by the user id, the same
+   person always the same tint). `aria-hidden`; the name beside it carries the meaning.
+2. **Version** — `v{number}`, 13.5px semibold `--el-text`, tabular numerals; its accessible name is
+   _Version {number}_.
+3. **Current** — on the newest row only: a `Pill`-shaped chip, `--el-tint-lavender` fill,
+   `--el-text-strong` ink, `--radius-badge`, `--spacing-chip-x/y`, 11.5px. The row also carries
+   `aria-current="true"`. It is never compared and never restored; pressing it closes compare and returns
+   to the page.
+4. **Time** — at the trailing end of the first line, 12.5px `--el-text-secondary`, a `<time datetime>`
+   of `saved_at` with the full timestamp in `title`. **Under 24 hours: relative** (`Intl.RelativeTimeFormat`
+   in the active locale: _12 minutes ago_ / _12 分钟前_, _just now_ / _刚刚_ under a minute). **24 hours
+   and older: absolute** (`Intl.DateTimeFormat`, medium date + short time: _28 Sep 2026, 11:05_ /
+   _2026年9月28日 11:05_). The same formatter the index's _Edited {time}_ uses; no message key.
+5. **Author** — the display name on the second line, 13px `--el-text-secondary`; _You_ / _你_ when the
+   author is the reader.
+6. **Restore line** (restore rows only) — `RotateCcw` 12px + _Restored from v{n}_, 12.5px
+   `--el-text-secondary`. When v{n} has been pruned by the 100-version cap, _(no longer kept)_ follows in
+   italic — the line still says what happened; it just cannot link to it (panel 5, v71; panel 12, v5).
+
+| Row state | Treatment                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| resting   | transparent                                                                                    |
+| hover     | `--el-surface-soft` (every ink on it is `--el-text` / `--el-text-secondary`, AA)               |
+| selected  | `--el-surface` + 1px `--el-border`, `aria-pressed="true"` — the version shown in compare       |
+| new       | `--el-tint-mint` for the moment after a restore (state 10), then resting; reduced motion: none |
+| focus     | the app's `--focus-ring-color` ring                                                            |
+
+### Loading, one version, Load more, failed (states 2, 3, 5, 6)
+
+- **2 · Loading.** The panel's head paints at once; the list is **six skeleton rows** — a 24px circle and
+  two bars (70% / 45%), `--el-muted`, `--radius-control` — `aria-hidden`, with one polite
+  _Loading history_ in a `role="status"`. The History control is already pressed.
+- **3 · One version.** A page that has only been created: one row, **v1**, **Current**, and a line under
+  the list (12.5px `--el-text-secondary`): _This is the only version so far. Each editing session adds
+  one._ No Restore exists anywhere — there is nothing to restore to.
+- **5 · At the page size.** The service pages versions **50 at a time** (`PAGE_LEVEL_PAGE_SIZE`, the same
+  keyset-cursor read as the tree). When there are more, the list ends in **Load more** — `Button
+variant="secondary" size="sm"`, full width — which appends the next 50 in place and keeps the
+  selection; while it reads, the button shows the spinner. The foot also says _A page keeps its latest
+  100 versions._, so a reader looking for something older knows why it is not there. With the 100 cap,
+  Load more appears at most once.
+- **6 · Load failed.** In place of the list: one inline row, `role="alert"` — `TriangleAlert` 16px in
+  `--el-danger-on-surface`, _Couldn't load the history._ in `--el-text`, and **Try again** (secondary, sm).
+  The page is untouched. A failed **Load more** puts the same row at the list foot and keeps the rows
+  already shown.
+
+### A version shown — before and after (state 7)
+
+Pressing a row that is not Current opens **compare**:
+
+- **The main column splits in two**, under the breadcrumb and title row: the **current page** on the
+  left (where it already was — the reader's eye does not have to move to find it) and the **selected
+  version** on the right, next to the panel. `role="region"`, _Comparing v{n} with the current page_.
+  Each is a card frame (`--el-border`, `--radius-card`); the version's sits on **`--el-surface-soft`** so it
+  never reads as the page.
+- **Both are read-only**, rendered by the same `.motir-prose` rules as the page (base § _The body_), from
+  the version's stored `body_state`. **No character diff** — two documents side by side, as the card asks.
+  While compare is open the writer's editor is not mounted; closing compare returns to the editor with
+  the caret where it was.
+- **The page tree sidebar hides** while compare is open (MOTIR-7367's _Show page tree_ button leads the
+  breadcrumb, panel 3 of that mock) and returns when compare closes; the stored preference is not
+  written.
+- **Current column head:** _Current page_ (13.5px semibold `--el-text`) · _v7_ (`--el-text-secondary`) ·
+  for a writer, the **save indicator** (base state 8's chip, unchanged) at its end, because a save can
+  still be in flight (state 13).
+- **Version column head:** _v{n}_ · avatar + author · time · **Restore this version** (`Button
+variant="secondary" size="sm"`, `RotateCcw`) — **editors only, never on the Current row** · a close
+  icon button (_Close v{n}_).
+- **Closes by:** the close button, **Esc**, pressing the selected row again, or pressing the Current row.
+- **Viewer:** the same compare with **no Restore** and no save indicator. Nothing is drawn disabled.
+
+### Restore (states 8–13)
+
+- **8 · Confirm.** `Modal` size sm, `role="alertdialog"`, initial focus on **Cancel**. Title _Restore
+  v3?_ (`font-serif text-xl`, `--el-text`); body _The page will show v3's content as a new version.
+  Nothing is deleted._ (`--el-text-subtitle`); footer **Cancel** (secondary) and **Restore v3**
+  (primary, `RotateCcw`). Esc / Cancel / × close it and nothing changes.
+- **9 · Restoring.** The confirm stays open: **Restore v3** shows the spinner and _Restoring…_
+  (`aria-busy`), Cancel and × are disabled — a restore cannot be abandoned half way. Behind it the panel is
+  **`inert` + `aria-busy`**, with a 2px `--el-accent` indeterminate bar under its head: no row can be
+  pressed while the request is in flight. Nothing is dimmed (dimming would lower the inks' contrast).
+- **10 · Restored.** The modal and compare close. The page shows **v3's content**, now the body of the new
+  version, in the editor (the save indicator reads _Saved_; a client holding newer state merges, ADR §6).
+  The panel stays open with the **new row on top** — v8, the restorer, _just now_, **Current**,
+  _Restored from v3_, briefly `--el-tint-mint` — and v7 loses its Current chip; **every earlier version is
+  still listed**. A success `Toast` (border `--el-success`, `CircleCheck` in `--el-success`, title in
+  `--el-text`): _Restored v3 as v8._ The tree sidebar returns.
+- **11 · Refused, too large — `413 PAGE_BODY_TOO_LARGE`.** Restoring would take the page past its 2 MB
+  limit (`PAGE_BODY_MAX_BYTES`, shown as **2 MB**, as in base state 9). The confirm closes and a **danger
+  callout** opens under the version column's head, `role="alert"`: `--el-danger-surface` fill, 1px
+  `--el-danger` border, `TriangleAlert` in `--el-danger-on-surface`, text in `--el-danger-surface-text`,
+  `--radius-card`. It says what happened and that **nothing was changed**. Restore for that version is
+  then disabled and described by the callout (it would fail the same way). No new row; v7 is still Current.
+- **12 · Refused, the version is gone — `404 PAGE_VERSION_NOT_FOUND`.** The version was pruned between
+  listing and restoring. The confirm and compare close (there is nothing left to show); the page is
+  untouched; the panel **re-reads its list** and shows the same danger callout above it: the version is no
+  longer kept, a page keeps its latest 100, nothing was changed, the list was refreshed. In the refreshed
+  list the pruned rows are gone (pruning takes the oldest first, so in practice this happens only at the
+  100-version cap, when other saves push the oldest out while the confirm is open) and any row restored
+  from one now reads _(no longer kept)_.
+- **13 · Unsaved edits — Restore held.** While the writer's save indicator is anything but **Saved**
+  (`saving`, `offline`, `too_large` — `packages/pages/src/editor/SaveIndicator.tsx`'s `SaveStatus`),
+  **Restore this version** is disabled and a line under the version's head (12.5px
+  `--el-text-secondary`, `TriangleAlert` 14px, `aria-describedby` of the button) says why and when it
+  returns: _Restore is held until your edits are saved. It becomes available as soon as the page says
+  Saved._ It enables itself the moment the status is `saved`. A restore over a pending save would race
+  it — the pending batch would land on top of the restored content. `too_large` never returns to `saved`
+  without a reload, so Restore stays held there; base state 9's callout already tells the writer to
+  reload.
+
+### State 14 — viewer
+
+`page:view` without `page:edit`: the title is the plain `<h1>`, there is no toolbar and no save indicator,
+and **History** is the same control in the same place. The list is identical (the viewer's own versions,
+if any, would read _You_). A version opened shows the same compare **with no Restore** (state 7, second
+board). Nothing is drawn disabled for a viewer — a disabled control is a promise the product then refuses.
+
+### Colour and shape — per element
+
+| Element                 | Primitive / source                     | Colour                                                                                                          | Shape                                                                    |
+| ----------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| History control         | `Button` secondary sm + `History` 16px | `--el-text`, border `--el-button-border`; open: `--el-surface` fill, `--el-border-strong`                       | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`                  |
+| Panel                   | `<aside>`                              | `--el-page-bg`, left rule `--el-border`                                                                         | 340px                                                                    |
+| Panel head              | heading + icon button                  | title `--el-text`, glyph `--el-text-secondary`; close `--el-text-secondary`, hover `--el-surface` / `--el-text` | close `--height-btn-sm` square, `--radius-control`, `--spacing-icon-btn` |
+| Narrow sheet            | the same `<aside>` over the scrim      | `--el-overlay-scrim`                                                                                            | `--shadow-modal`                                                         |
+| Version row             | `<button aria-pressed>`                | `--el-text` / `--el-text-secondary`; hover `--el-surface-soft`; selected `--el-surface` + `--el-border`         | `--radius-control`, `--spacing-control-x/y`                              |
+| Avatar                  | initials circle                        | `--el-avatar-lavender/-sky/-mint`, ink `--el-text-strong`                                                       | 24px, `rounded-full`                                                     |
+| Current chip            | `Pill` shape                           | `--el-tint-lavender`, ink `--el-text-strong`                                                                    | `--radius-badge`, `--spacing-chip-x/y`                                   |
+| Restore line            | `RotateCcw` 12px + text                | `--el-text-secondary`                                                                                           | —                                                                        |
+| New row (after restore) | the row                                | `--el-tint-mint`                                                                                                | as the row                                                               |
+| Skeleton                | `PageSkeleton`'s `Block`               | `--el-muted`                                                                                                    | `--radius-control`; avatar block `rounded-full`                          |
+| Load failed             | inline `ErrorState` grammar            | glyph `--el-danger-on-surface`, text `--el-text`; Try again secondary                                           | `--radius-btn`, `--height-btn-sm`                                        |
+| Load more               | `Button` secondary sm, full width      | `--el-text`, `--el-button-border`                                                                               | `--radius-btn`, `--height-btn-sm`                                        |
+| Busy bar                | 2px bar under the head                 | `--el-accent`                                                                                                   | —                                                                        |
+| Compare columns         | card frames                            | current `--el-page-bg`; version `--el-surface-soft`; both `--el-border`                                         | `--radius-card`                                                          |
+| Restore this version    | `Button` secondary sm + `RotateCcw`    | `--el-text`, `--el-button-border`; disabled at 50% opacity (the primitive's)                                    | `--radius-btn`, `--height-btn-sm`                                        |
+| Hold line               | text + `TriangleAlert` 14px            | `--el-text-secondary` on `--el-surface-soft`                                                                    | —                                                                        |
+| Confirm                 | `Modal` sm, `alertdialog`              | `--el-page-bg`, `--el-border`; title `--el-text`, body `--el-text-subtitle`; scrim `--el-overlay-scrim`         | `--radius-modal`, `--shadow-modal`, `--spacing-card-padding`             |
+| Restore vN (confirm)    | `Button` primary                       | `--el-accent` / `--el-accent-text`                                                                              | `--radius-btn`, `--height-btn-md`                                        |
+| Refusal callout         | base state 9's callout                 | `--el-danger-surface`, border `--el-danger`, glyph `--el-danger-on-surface`, text `--el-danger-surface-text`    | `--radius-card`                                                          |
+| Toast                   | `Toast` success                        | `--el-page-bg`, border `--el-success`, glyph `--el-success`, title `--el-text`                                  | `--radius-card`, `--shadow-elevated`                                     |
+
+`--el-danger-text` is not used (no danger fill exists on this surface). The board annotations
+(`.ph-panelNote`, `.ph-boardTag`) are `--el-text-secondary` on `--el-surface`.
+
+### Copy — history
+
+New keys live under `pages.history.*`. ICU arguments as in the shipped catalogue (`{number}`, `{from}`).
+
+| Key                              | en                                                                                                                        | zh                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `pages.history.open`             | History                                                                                                                   | 历史记录                                                                      |
+| `pages.history.title`            | History                                                                                                                   | 历史记录                                                                      |
+| `pages.history.close`            | Close history                                                                                                             | 关闭历史记录                                                                  |
+| `pages.history.listLabel`        | Versions of this page                                                                                                     | 此页面的版本                                                                  |
+| `pages.history.version`          | v{number}                                                                                                                 | v{number}                                                                     |
+| `pages.history.versionLabel`     | Version {number}                                                                                                          | 第 {number} 版                                                                |
+| `pages.history.current`          | Current                                                                                                                   | 当前                                                                          |
+| `pages.history.you`              | You                                                                                                                       | 你                                                                            |
+| `pages.history.restoredFrom`     | Restored from v{number}                                                                                                   | 从 v{number} 恢复                                                             |
+| `pages.history.noLongerKept`     | (no longer kept)                                                                                                          | （已不再保留）                                                                |
+| `pages.history.loading`          | Loading history                                                                                                           | 正在加载历史记录                                                              |
+| `pages.history.loadFailed`       | Couldn’t load the history.                                                                                                | 无法加载历史记录。                                                            |
+| `pages.history.retry`            | Try again                                                                                                                 | 重试                                                                          |
+| `pages.history.loadMore`         | Load more                                                                                                                 | 加载更多                                                                      |
+| `pages.history.keepsLatest`      | A page keeps its latest 100 versions.                                                                                     | 页面保留最近的 100 个版本。                                                   |
+| `pages.history.onlyVersion`      | This is the only version so far. Each editing session adds one.                                                           | 这是目前唯一的版本。每次编辑会话都会新增一个版本。                            |
+| `pages.history.compare.label`    | Comparing v{number} with the current page                                                                                 | 正在将 v{number} 与当前页面对比                                               |
+| `pages.history.compare.current`  | Current page                                                                                                              | 当前页面                                                                      |
+| `pages.history.compare.close`    | Close v{number}                                                                                                           | 关闭 v{number}                                                                |
+| `pages.history.restore`          | Restore this version                                                                                                      | 恢复此版本                                                                    |
+| `pages.history.confirm.title`    | Restore v{number}?                                                                                                        | 恢复 v{number}？                                                              |
+| `pages.history.confirm.body`     | The page will show v{number}’s content as a new version. Nothing is deleted.                                              | 页面将以新版本的形式显示 v{number} 的内容。不会删除任何内容。                 |
+| `pages.history.confirm.action`   | Restore v{number}                                                                                                         | 恢复 v{number}                                                                |
+| `pages.history.restoring`        | Restoring…                                                                                                                | 正在恢复…                                                                     |
+| `pages.history.restored`         | Restored v{from} as v{number}.                                                                                            | 已将 v{from} 恢复为 v{number}。                                               |
+| `pages.history.refusal.tooLarge` | v{number} can’t be restored: the page would pass its 2 MB limit. Nothing was changed.                                     | 无法恢复 v{number}：页面将超过 2 MB 的上限。未做任何更改。                    |
+| `pages.history.refusal.gone`     | v{number} is no longer kept — a page keeps its latest 100 versions. Nothing was changed, and the list has been refreshed. | v{number} 已不再保留——页面只保留最近的 100 个版本。未做任何更改，列表已刷新。 |
+| `pages.history.unsavedHold`      | Restore is held until your edits are saved. It becomes available as soon as the page says Saved.                          | 在你的编辑保存之前无法恢复。页面显示“已保存”后即可恢复。                      |
+| `common.cancel` (exists)         | Cancel                                                                                                                    | 取消                                                                          |
+| `common.close` (exists)          | Close                                                                                                                     | 关闭                                                                          |
+| `pages.editor.status.*` (exists) | Saved · Saving… · Offline — edits kept · Not saved                                                                        | 已保存 · 正在保存… · 离线——编辑已保留 · 未保存                                |
+
+- **Times carry no key**: relative under 24 hours through `Intl.RelativeTimeFormat`, absolute after
+  through `Intl.DateTimeFormat`, both in the active locale (§ _A version row_, item 4).
+- `pages.history.unsavedHold` names **Saved** because that is the word the writer's indicator shows
+  (`pages.editor.status.saved`); the zh string quotes 已保存 for the same reason. If the indicator's word
+  changes, this string changes with it.
+- `pages.history.retry` carries the same words as `common.retry`; a builder may reuse `common.retry`
+  instead of adding the key — the words are what is specified.
+- `{number}` in `pages.history.refusal.*` is the version the reader tried to restore; the 2 MB and 100 are
+  written into the copy, as base state 9 writes 2 MB (`PAGE_BODY_MAX_BYTES`, `PAGE_VERSION_CAP`).
+
+### Open questions handed to the cards
+
+- **Esc order.** Drawn as: confirm → compare → panel, one layer per press. If the shell already binds Esc
+  for something on this route, that binding wins and this order follows it.
+- **The new-row tint** fades after a moment; the duration is the builder's (the toast's own lifetime is a
+  fair default), and under `prefers-reduced-motion` the tint simply is not applied.
+- **Restoring an agent's version.** An agent's markdown write is a save by the token's user (ADR §6), so
+  its row shows that user; nothing marks it as an agent's. If agent authorship should be visible here,
+  that is a model change, not a design one.
+
+### Not drawn here
+
+- **A character or block diff** between versions — out of scope by the card; compare is side by side.
+- **Naming or pinning a version**, and **deleting a single version** — neither exists in the model.
+- **History of an archived page** — MOTIR-5755 (archive and restore of a page).
+- **The page tree sidebar and breadcrumb** — MOTIR-7367's, unchanged; drawn only as context.
+- **Co-editing while comparing** — MOTIR-5750.

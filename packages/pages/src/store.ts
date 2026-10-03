@@ -8,7 +8,7 @@ import type { PagePlacement } from './types';
 //
 // Only the methods the shipped procedures call are here. Later stories add
 // their own with the procedures that call them: the version methods
-// (MOTIR-5754), `setArchived` and `deletePages` (MOTIR-5755). The placement
+// (MOTIR-5754 · §6), `setArchived` and `deletePages` (MOTIR-5755). The placement
 // methods (`findFolder`, `findSubtree`, `siblingNeighbours`, `updatePlacement`,
 // `rebaseDescendants`) are the page tree's (MOTIR-5753 · MOTIR-7368).
 
@@ -93,6 +93,49 @@ export interface PagePlacementWrite {
   readonly ancestorPageIds: readonly string[];
 }
 
+/** One version of a page (§6), without its snapshot. */
+export interface PageVersionRow {
+  readonly id: string;
+  readonly pageId: string;
+  /** Per page, from 1, never reused — the next is always `max + 1`. */
+  readonly number: number;
+  readonly authorId: string;
+  readonly startedAt: Date;
+  readonly savedAt: Date;
+  /** The source of a restore; `null` once that source is pruned. */
+  readonly restoredFromVersionId: string | null;
+  /** The source's number, kept when the source is pruned; `null` unless a restore. */
+  readonly restoredFromNumber: number | null;
+}
+
+/** A version with its snapshot, as a restore reads it. */
+export interface PageVersionWithBody extends PageVersionRow {
+  readonly bodyState: Uint8Array;
+  readonly bodyMarkdown: string;
+}
+
+/** A new version, as `insertVersion` writes it — its page's tenancy stamped on it. */
+export interface PageVersionInsert {
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly pageId: string;
+  readonly number: number;
+  readonly authorId: string;
+  readonly bodyState: Uint8Array;
+  readonly bodyMarkdown: string;
+  readonly startedAt: Date;
+  readonly savedAt: Date;
+  readonly restoredFromVersionId: string | null;
+  readonly restoredFromNumber: number | null;
+}
+
+/** An extension of the latest version: its snapshot and `savedAt` move forward. */
+export interface PageVersionUpdate {
+  readonly bodyState: Uint8Array;
+  readonly bodyMarkdown: string;
+  readonly savedAt: Date;
+}
+
 /** The page persistence port — one instance per transaction. */
 export interface PageStore {
   /** Reads one page `FOR UPDATE`, body state included; `null` if absent or out of scope. */
@@ -147,6 +190,18 @@ export interface PageStore {
    * `newAncestorPageIds` (`rebaseAncestorIds`, applied to the whole subtree).
    */
   rebaseDescendants(pageId: string, newAncestorPageIds: readonly string[]): Promise<void>;
+  /** The newest version of a page; `null` when it has none. */
+  latestVersion(pageId: string): Promise<PageVersionRow | null>;
+  /** Writes a new version. */
+  insertVersion(row: PageVersionInsert): Promise<PageVersionRow>;
+  /** Extends a version: replaces its snapshot and moves its `savedAt`. */
+  updateVersion(versionId: string, row: PageVersionUpdate): Promise<void>;
+  /** Version `number` of THIS page, with its snapshot; `null` when it has no such version. */
+  findVersion(pageId: string, number: number): Promise<PageVersionWithBody | null>;
+  /** How many versions a page keeps. */
+  countVersions(pageId: string): Promise<number>;
+  /** Deletes a page's oldest versions until `keep` remain. */
+  deleteOldestVersions(pageId: string, keep: number): Promise<void>;
   /** Rewrites a page's derived link rows (§8.1); a no-op until the linking epic lands. */
   replaceDerivedLinks(pageId: string, links: readonly DerivedPageLink[]): Promise<void>;
 }

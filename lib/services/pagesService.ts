@@ -2,8 +2,10 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { pageRepository } from '@/lib/repositories/pageRepository';
+import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import {
+  toBase64,
   toLockedPageRow,
   toPageDto,
   toPageLevelRow,
@@ -12,6 +14,9 @@ import {
   toPageTrailDto,
   toPageTreeFolderRowDto,
   toPageTreePageRowDto,
+  toPageVersionDto,
+  toPageVersionListItemDto,
+  toPageVersionRow,
 } from '@/lib/mappers/pageMappers';
 import {
   PAGE_LEVEL_PAGE_SIZE,
@@ -19,11 +24,13 @@ import {
   PageFolderNotFoundError,
   PageLevelCursorInvalidError,
   PageNotFoundError,
+  PageVersionNotFoundError,
   createPage as createPageProcedure,
   movePage as movePageProcedure,
   pageStoreFor,
   parsePlacement,
   renamePage as renamePageProcedure,
+  restorePageVersion as restorePageVersionProcedure,
   savePageUpdate as savePageUpdateProcedure,
   systemClock,
   type PagePlacement,
@@ -35,6 +42,8 @@ import type {
   GetPageInput,
   GetPageTrailInput,
   ListPageTreeLevelInput,
+  GetPageVersionInput,
+  ListPageVersionsInput,
   ListPagesInput,
   MovePageInput,
   PageDto,
@@ -44,7 +53,11 @@ import type {
   PageTrailDto,
   PageTreeLevelDto,
   PageTreeRowDto,
+  PageVersionDto,
+  PageVersionListDto,
   RenamePageInput,
+  RestorePageVersionInput,
+  RestorePageVersionResultDto,
   SavePageResultDto,
   SavePageUpdateInput,
 } from '@/lib/dto/pages';
@@ -75,7 +88,10 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //    `tests/services/pagesService.integration.test.ts` proves it with real
 //    parallel transactions. A MOVE takes the same project structure lock first
 //    (`movePage` in the package), so a move, a create and another move
-//    serialise, and a refusal anywhere rolls the whole move back.
+//    serialise, and a refusal anywhere rolls the whole move back. A RESTORE
+//    (MOTIR-5754) reads the version and the current state under the same
+//    `lockPage`, so it serialises with a save —
+//    `tests/services/pagesService.history.integration.test.ts`.
 //
 // 4. A TREE LEVEL IS READ ONE PARENT AT A TIME, NEVER AS A PROJECT WALK
 //    (`listTreeLevel`, MOTIR-7370). At the root or in a folder the level is two
@@ -85,6 +101,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //    `(position, id)` served, so a page boundary never shifts when a row is
 //    created or moved between two reads, and walking the level visits each row
 //    exactly once.
+//
+// 5. HISTORY IS READ UNDER `page:view` AND RESTORED UNDER `page:edit` (§5).
 
 /** The page, refused as unknown unless it lives in `projectId`. */
 async function findInProject(store: PageStore, projectId: string, pageId: string) {
@@ -401,6 +419,84 @@ export const pagesService = {
         update: input.update,
       });
       return { revision };
+    });
+  },
+
+  /**
+   * One page of a page's history, newest first, each with its author's display
+   * name — `page:view`. Keyset-paged on the version number (`before`), 50 by
+   * default and 100 at most. Three reads in one transaction: the newest number
+   * (for `isCurrent`), the rows (no snapshots), then the authors in ONE batch.
+   */
+  async listPageVersions(
+    ctx: ServiceContext,
+    input: ListPageVersionsInput,
+  ): Promise<PageVersionListDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      await findInProject(pageStoreFor(tx), input.projectId, input.pageId);
+      const limit = Math.min(
+        Math.max(1, Math.trunc(input.limit ?? PAGE_LEVEL_PAGE_SIZE)),
+        PAGE_LEVEL_PAGE_SIZE_MAX,
+      );
+      const latest = await pageVersionRepository.findLatest(input.pageId, tx);
+      // One extra row says whether another page follows, without a count.
+      const records = await pageVersionRepository.listByPage(
+        input.pageId,
+        { beforeNumber: input.before, limit: limit + 1 },
+        tx,
+      );
+      const rows = records.slice(0, limit).map(toPageVersionRow);
+      const authors = await userRepository.findByIds([...new Set(rows.map((r) => r.authorId))], tx);
+      const nameById = new Map(authors.map((u) => [u.id, u.name]));
+      return {
+        items: rows.map((r) =>
+          toPageVersionListItemDto(r, nameById.get(r.authorId), r.number === latest?.number),
+        ),
+        nextBefore: records.length > limit ? rows.at(-1)!.number : null,
+      };
+    });
+  },
+
+  /** One version with its snapshot — `page:view`. An unknown number is `PageVersionNotFoundError`. */
+  async getPageVersion(ctx: ServiceContext, input: GetPageVersionInput): Promise<PageVersionDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      const store = pageStoreFor(tx);
+      await findInProject(store, input.projectId, input.pageId);
+      const version = await store.findVersion(input.pageId, input.number);
+      if (!version) throw new PageVersionNotFoundError(input.pageId, input.number);
+      const latest = await store.latestVersion(input.pageId);
+      const [author] = await userRepository.findByIds([version.authorId], tx);
+      return toPageVersionDto(version, author?.name, version.number === latest?.number);
+    });
+  },
+
+  /**
+   * Make version `number` the page's current content as a NEW version —
+   * `page:edit`. Runs the package's procedure under the page's lock, and returns
+   * the new state so an open editor re-seeds from it without a second read.
+   */
+  async restorePageVersion(
+    ctx: ServiceContext,
+    input: RestorePageVersionInput,
+  ): Promise<RestorePageVersionResultDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
+      const store = pageStoreFor(tx);
+      await findInProject(store, input.projectId, input.pageId);
+      const result = await restorePageVersionProcedure(store, systemClock, {
+        pageId: input.pageId,
+        number: input.number,
+        actorId: ctx.userId,
+      });
+      const page = await store.lockPage(input.pageId);
+      const [author] = await userRepository.findByIds([ctx.userId], tx);
+      return {
+        revision: result.revision,
+        version: toPageVersionListItemDto(result.version, author?.name, true),
+        bodyState: toBase64(page!.bodyState),
+      };
     });
   },
 };

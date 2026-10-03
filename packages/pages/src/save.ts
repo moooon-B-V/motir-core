@@ -11,9 +11,10 @@ import { positionBetween } from './position';
 import type { Clock, PageRow, PageStore } from './store';
 import { planPlacement } from './tree';
 import type { PagePlacement } from './types';
+import { recordVersion } from './versions';
 
 // The SAVE procedures (Story MOTIR-5752 · MOTIR-7274), `docs/decisions/pages.md`
-// §2–§3: what a create, a rename and a save write, decided here and persisted
+// §2–§3 — and, since MOTIR-5754, the version each one leaves (§6, `versions.ts`): what a create, a rename and a save write, decided here and persisted
 // through a `PageStore`. The app's service owns the transaction and the
 // permission gate; these own the ORDER, which is the part that keeps a save
 // from losing an update or storing an oversize body:
@@ -63,8 +64,9 @@ export async function createPage(
   const { ancestorPageIds } = planPlacement({ placement: parent, parent: parentPage });
   const last = await store.lastSiblingPosition(input.projectId, parent);
   const state = emptyState();
+  const formats = deriveFormats(state);
   const now = clock.now();
-  return store.insertPage({
+  const page = await store.insertPage({
     workspaceId: input.workspaceId,
     projectId: input.projectId,
     title,
@@ -73,7 +75,7 @@ export async function createPage(
     ancestorPageIds,
     body: {
       state,
-      ...deriveFormats(state),
+      ...formats,
       revision: 1,
       updatedById: input.actorId,
       updatedAt: now,
@@ -81,6 +83,21 @@ export async function createPage(
     createdById: input.actorId,
     createdAt: now,
   });
+  // A page's history starts with its creation (§6): version 1, the empty body.
+  await store.insertVersion({
+    workspaceId: page.workspaceId,
+    projectId: page.projectId,
+    pageId: page.id,
+    number: 1,
+    authorId: input.actorId,
+    bodyState: state,
+    bodyMarkdown: formats.markdown,
+    startedAt: now,
+    savedAt: now,
+    restoredFromVersionId: null,
+    restoredFromNumber: null,
+  });
+  return page;
 }
 
 export interface RenamePageInput {
@@ -129,12 +146,23 @@ export async function savePageUpdate(
   }
 
   const revision = page.revision + 1;
+  const formats = deriveFormats(state);
+  const now = clock.now();
   await store.updateBody(input.pageId, {
     state,
-    ...deriveFormats(state),
+    ...formats,
     revision,
     updatedById: input.actorId,
-    updatedAt: clock.now(),
+    updatedAt: now,
+  });
+  // Every save leaves a version (§6) — extended or new, under the same lock and
+  // the same instant as the body write.
+  await recordVersion(store, {
+    page,
+    actorId: input.actorId,
+    state,
+    markdown: formats.markdown,
+    now,
   });
   // Link extraction (§8.1) is the linking epic's; the port is called now so the
   // save path's shape is fixed when it lands.

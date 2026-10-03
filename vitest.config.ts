@@ -496,6 +496,17 @@ export default defineConfig({
         // 100 functions / 100 lines. Pinned at the project's 90, not at the
         // measurement, so ordinary churn does not fail the build.
         'lib/services/platformHealthService.ts',
+        // Story MOTIR-736 (10.2) · gate MOTIR-744 — the three new provider readers
+        // behind the system-health board. MEASURED on the parent branch over
+        // `tests/deployment`, `tests/gateway`, `tests/monitoring` and `tests/platform`:
+        // every file 100 lines / 100 functions, branches 91.4–100. Pinned at the
+        // project's 90, as `platformHealthService.ts` above is.
+        'lib/deployment/adapters/fly/flyMachinesStatus.ts',
+        'lib/deployment/providers.ts',
+        'lib/gateway/statusClient.ts',
+        'lib/gateway/statusProvider.ts',
+        'lib/monitoring/sentryErrorCount.ts',
+        'lib/monitoring/errorCountProvider.ts',
         // Story MOTIR-3416 · Subtask MOTIR-3472 — the SCHEDULED cutover's own new
         // surface. `lib/jobs/engine/scheduler.ts` needs no entry: the glob above
         // is a glob precisely so a new engine file joins the gate without anyone
@@ -4181,6 +4192,17 @@ export default defineConfig({
         'lib/repositories/jobEventRepository.ts': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-3766 — measured at 100 / 95.45 / 100 / 100; see the `include` note.
         'lib/services/platformHealthService.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-744 — the story 10.2 readers; see the `include` note.
+        'lib/deployment/adapters/fly/flyMachinesStatus.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/deployment/providers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/gateway/statusClient.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/gateway/statusProvider.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/sentryErrorCount.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/errorCountProvider.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workspaces/membershipGate.ts': { branches: 90, functions: 90, lines: 90 },
         // Bug MOTIR-2643 — MEASURED before being pinned, on this branch, with
         // `tests/acceptance-video-diagnostics.test.ts`: 90.9 branches / 100
