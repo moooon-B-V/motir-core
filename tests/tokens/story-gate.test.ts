@@ -168,6 +168,9 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
       // MOTIR-7410 — `get_page` asserts `page:view`, minted with pages (MOTIR-7277)
       // long after the six strings; a stale row must not start reading pages.
       get_page: true,
+      // MOTIR-7411 — `page:edit`, the same: a stale row must not start writing pages.
+      create_page: true,
+      update_page: true,
     };
     for (const name of MCP_TOOL_NAMES) {
       const reachable = verified.grant.includes(TOOL_PERMISSIONS[name]);

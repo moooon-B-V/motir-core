@@ -66,6 +66,12 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // (`GRANTABLE_PERMISSIONS` is derived from this map). `CLI_TOKEN_GRANT` is NOT
   // widened here — MOTIR-7412 adds the page keys to it.
   get_page: 'page:view',
+  // ── page:edit — the page writes (MOTIR-7411) ──────────────────────────────
+  // `pagesService.createPageFromMarkdown` / `savePageMarkdown` assert
+  // `assertCanEditPages` (`page:edit`), the key the editor's save route checks.
+  // They make `page:edit` grantable; `CLI_TOKEN_GRANT` is widened by MOTIR-7412.
+  create_page: 'page:edit',
+  update_page: 'page:edit',
   list_ready: 'project:browse',
   next_ready: 'project:browse',
   // Reads the item and assembles text; it never claims the item or flips its

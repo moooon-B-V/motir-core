@@ -105,6 +105,8 @@ import { CREATE_FOLDER_TOOL_NAME, registerCreateFolder } from './tools/createFol
 import { UPDATE_FOLDER_TOOL_NAME, registerUpdateFolder } from './tools/updateFolder';
 import { DELETE_FOLDER_TOOL_NAME, registerDeleteFolder } from './tools/deleteFolder';
 import { GET_PAGE_TOOL_NAME, registerGetPage } from './tools/getPage';
+import { CREATE_PAGE_TOOL_NAME, registerCreatePage } from './tools/createPage';
+import { UPDATE_PAGE_TOOL_NAME, registerUpdatePage } from './tools/updatePage';
 import {
   SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
   registerSearchWorkItemsSemantic,
@@ -220,6 +222,8 @@ export const MCP_TOOL_NAMES = [
   UPDATE_FOLDER_TOOL_NAME,
   DELETE_FOLDER_TOOL_NAME,
   GET_PAGE_TOOL_NAME,
+  CREATE_PAGE_TOOL_NAME,
+  UPDATE_PAGE_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
   VALIDATE_WORK_ITEM_TOOL_NAME,
@@ -438,9 +442,11 @@ export function registerMcpTools(
   registerCreateFolder(target, resolveContext);
   registerUpdateFolder(target, resolveContext);
   registerDeleteFolder(target, resolveContext);
-  // Page tools (MOTIR-5760) — an agent reads a page as markdown by id
+  // Page tools (MOTIR-5760) — an agent reads and writes a page as markdown by id
   // (`docs/decisions/pages.md` §8.2), over the same page service the editor uses.
   registerGetPage(target, resolveContext);
+  registerCreatePage(target, resolveContext);
+  registerUpdatePage(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
   registerListSprints(target, resolveContext);
   // Sprint finishability check (7.8.15) — productizes the re-validate-the-active-

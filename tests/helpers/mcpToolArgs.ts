@@ -54,6 +54,9 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // non-member reads tenant A's project as not-found before the page id is
     // looked at; on the caller's own project it reads the seeded page.
     get_page: { projectKey: t.projectKey, pageId: t.pageId },
+    // MOTIR-7411 — the page writes, aimed the same way.
+    create_page: { projectKey: t.projectKey, markdown: 'rogue' },
+    update_page: { projectKey: t.projectKey, pageId: t.pageId, markdown: 'rogue', revision: 1 },
     get_work_item: { key: t.item1 },
     get_design: { key: t.item1 },
     list_designs: { projectKey: t.projectKey },

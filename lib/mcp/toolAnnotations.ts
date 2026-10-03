@@ -288,6 +288,26 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   list_work_item_todos: { readOnlyHint: true, openWorldHint: false },
   // R: getPage.ts → pagesService.getPageMarkdown — no lock, no write
   get_page: { readOnlyHint: true, openWorldHint: false },
+  // W: createPage.ts → pagesService.createPageFromMarkdown — inserts a page; additive
+  create_page: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  // ⚠️ `update_page` REPLACES the body and is still `destructiveHint: false`, on
+  // purpose (MOTIR-7411): the replaced body stays a restorable version in the
+  // page's history, so the write is reversible, and MCP clients read this hint to
+  // decide whether to stop and ask a person first — a prompt a reversible page
+  // edit does not warrant. A replay at the same revision is refused
+  // PAGE_REVISION_CONFLICT, so it is not idempotent.
+  // W: updatePage.ts → pagesService.savePageMarkdown — replaces the body; the old one stays a version
+  update_page: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   // W: workItemTodos.ts → workItemTodosService.addTodo — appends a step + revision; additive
   add_work_item_todo: {
     readOnlyHint: false,

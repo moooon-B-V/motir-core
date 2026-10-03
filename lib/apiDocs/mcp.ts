@@ -623,6 +623,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Read one page as markdown — its title, where it is filed, its revision and newest version — to read it or to write it back.',
     descriptionFingerprint: '38b27a805548',
   },
+  create_page: {
+    summary:
+      'Create a page with a markdown body — at the root, in a folder or as a sub-page — and get its id and revision.',
+    descriptionFingerprint: '2c4a5319e315',
+  },
+  update_page: {
+    summary:
+      'Replace a page’s whole body with markdown at the revision you read; a page saved since is refused, not merged.',
+    descriptionFingerprint: 'aac141bef380',
+  },
   search_work_items_semantic: {
     summary:
       'Has this already been built? Search by MEANING rather than substring — keys, titles and scores only.',

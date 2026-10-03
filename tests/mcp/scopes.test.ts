@@ -208,6 +208,8 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // MOTIR-7410 — minted with pages (MOTIR-7277) and made grantable by
       // `get_page`, the first tool to assert it. No stale row may acquire it.
       'page:view',
+      // MOTIR-7411 — the same, made grantable by `create_page` / `update_page`.
+      'page:edit',
     ];
     expect([...union].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
@@ -264,6 +266,10 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // bucket; the forward map is NOT widened, so a stale `read` row cannot start
       // reading a project's pages.
       get_page: true,
+      // MOTIR-7411 — the page writes, the same kind of loss: `page:edit` postdates
+      // the six strings, so a stale `write` row cannot start rewriting pages.
+      create_page: true,
+      update_page: true,
     };
     const losses: string[] = [];
     for (const name of MCP_TOOL_NAMES) {

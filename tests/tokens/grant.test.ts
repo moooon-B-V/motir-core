@@ -337,8 +337,12 @@ describe('expandStoredGrant — reading a row written before this story', () => 
       // with pages (MOTIR-7277). A stale `read` row may never start reading a
       // project's documents.
       'page:view',
+      // MOTIR-7411 — `create_page` / `update_page` make `page:edit` grantable; a
+      // stale `write` row may never start rewriting a project's documents.
+      'page:edit',
     ];
     expect(GRANTABLE_PERMISSIONS).toContain('page:view');
+    expect(GRANTABLE_PERMISSIONS).toContain('page:edit');
     expect([...grant].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
     );
