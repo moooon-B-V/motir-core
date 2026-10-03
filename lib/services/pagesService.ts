@@ -609,6 +609,9 @@ export const pagesService = {
       const ancestors = await pageRepository.findTitlesByIds(ancestorIds, tx);
       const ancestorById = new Map(ancestors.map((p) => [p.id, p.title]));
       const folderOfAncestor = new Map(ancestors.map((p) => [p.id, p.folderId]));
+      const archivedAncestors = new Set(
+        ancestors.filter((p) => p.archivedAt !== null).map((p) => p.id),
+      );
 
       // A root's folder is its topmost page's: its own without ancestors, else
       // the top ancestor's — read in the same batch as the titles. A deleted top
@@ -640,6 +643,7 @@ export const pagesService = {
             row.archivedById === null ? undefined : nameById.get(row.archivedById),
             ancestorById,
             folderId === null ? [] : (chains.get(folderId) ?? []),
+            archivedAncestors,
           );
         }),
         nextCursor,

@@ -74,6 +74,11 @@ export interface PageArchivedRootDto {
  */
 export interface PageArchivedListItemDto extends PageArchivedRootDto {
   cameFrom: PageTrailDto;
+  /**
+   * The came-from pages that are themselves archived (each archived separately,
+   * so each is a row of its own) — the list marks them "(archived)" (MOTIR-7424).
+   */
+  archivedAncestorIds: string[];
 }
 
 /** A page of the Archived pages list, newest first. */

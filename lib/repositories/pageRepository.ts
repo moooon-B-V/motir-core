@@ -213,16 +213,17 @@ export const pageRepository = {
    * the Archived pages list's came-from trail (MOTIR-7421), which names where an
    * archived page used to sit, its archived ancestors among it. Unordered; an id
    * that is gone simply does not come back. Unlike {@link findTrailByIds}, which
-   * draws a live page's breadcrumb and so reads live pages only.
+   * draws a live page's breadcrumb and so reads live pages only. `archivedAt`
+   * says which of them is archived — the list marks those (MOTIR-7424).
    */
   async findTitlesByIds(
     ids: readonly string[],
     tx: Prisma.TransactionClient,
-  ): Promise<Array<Pick<Page, 'id' | 'title' | 'folderId'>>> {
+  ): Promise<Array<Pick<Page, 'id' | 'title' | 'folderId' | 'archivedAt'>>> {
     if (ids.length === 0) return [];
     return tx.page.findMany({
       where: { id: { in: [...ids] } },
-      select: { id: true, title: true, folderId: true },
+      select: { id: true, title: true, folderId: true, archivedAt: true },
     });
   },
 

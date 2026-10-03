@@ -393,12 +393,30 @@ describe('pagesService.listArchivedPages', () => {
             { id: mid.id, title: 'Mid' },
           ],
         },
+        archivedAncestorIds: [],
       },
     ]);
 
     await expect(
       pagesService.listArchivedPages(viewer, { projectId: f.projectId, cursor: 'nope' }),
     ).rejects.toMatchObject({ code: 'PAGE_CURSOR_INVALID' });
+  });
+
+  it('marks a came-from ancestor that was archived after it (MOTIR-7424)', async () => {
+    const f = await makeFixture();
+    const top = await create(f, 'Top');
+    const mid = await create(f, 'Mid', { kind: 'page', id: top.id });
+    const deep = await create(f, 'Deep', { kind: 'page', id: mid.id });
+    await pagesService.archivePage(f.manager, act(f, deep.id));
+    await pagesService.archivePage(f.manager, act(f, mid.id));
+
+    const { items } = await pagesService.listArchivedPages(f.manager, {
+      projectId: f.projectId,
+    });
+    const row = items.find((i) => i.id === deep.id)!;
+    expect(row.cameFrom.pages.map((p) => p.title)).toEqual(['Top', 'Mid']);
+    expect(row.archivedAncestorIds).toEqual([mid.id]);
+    expect(items.find((i) => i.id === mid.id)!.archivedAncestorIds).toEqual([]);
   });
 
   it('keeps a came-from slot for an ancestor that is gone, as an em dash', () => {

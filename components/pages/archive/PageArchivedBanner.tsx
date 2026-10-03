@@ -3,10 +3,11 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useFormatter, useNow, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { Archive, ArrowRight, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { DeletePageDialog } from './DeletePageDialog';
+import { useArchivedAtLabel } from './useArchivedAtLabel';
 import { useRestorePage } from './useRestorePage';
 
 // THE ARCHIVED PAGE'S BANNER (Story MOTIR-5755 · MOTIR-7423) — design MOTIR-7416,
@@ -32,8 +33,6 @@ import { useRestorePage } from './useRestorePage';
 // permanent-delete confirm; once it answers, the page no longer exists, so the
 // browser goes to `/pages` with the toast.
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export interface ArchivedPageInfo {
   id: string;
   /** As the page shows it (Untitled already resolved). */
@@ -55,16 +54,6 @@ export interface PageArchivedBannerProps {
 }
 
 const bold = (chunks: ReactNode) => <span className="font-medium text-(--el-text)">{chunks}</span>;
-
-/** Relative under a day, absolute after — the History panel's rule for a time. */
-function useArchivedAtLabel(iso: string): string {
-  const format = useFormatter();
-  const now = useNow();
-  const date = new Date(iso);
-  return now.getTime() - date.getTime() < DAY_MS
-    ? format.relativeTime(date, now)
-    : format.dateTime(date, { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 export function PageArchivedBanner({ page, subPageCount, parentTitle }: PageArchivedBannerProps) {
   const t = useTranslations('pages.archive');

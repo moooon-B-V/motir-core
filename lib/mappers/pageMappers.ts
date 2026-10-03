@@ -345,12 +345,14 @@ export function toPageTrailDto(
  * names the stored ancestor pages that still exist, archived ones included; an
  * ancestor deleted since is kept in place as an em dash, so the trail keeps its
  * shape. `folders` is the chain the topmost page was filed in, root-first.
+ * `archivedAncestors` names the ancestors that are archived themselves.
  */
 export function toPageArchivedListItemDto(
   record: PageArchivedRootRecord,
   archiverName: string | undefined,
   ancestorTitles: ReadonlyMap<string, string>,
   folders: ReadonlyArray<{ id: string; name: string }>,
+  archivedAncestors: ReadonlySet<string> = new Set(),
 ): PageArchivedListItemDto {
   return {
     ...toPageArchivedRootDto(record, archiverName),
@@ -358,5 +360,6 @@ export function toPageArchivedListItemDto(
       folders,
       record.ancestorPageIds.map((id) => ({ id, title: ancestorTitles.get(id) ?? '\u2014' })),
     ),
+    archivedAncestorIds: record.ancestorPageIds.filter((id) => archivedAncestors.has(id)),
   };
 }
