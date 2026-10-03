@@ -1,4 +1,8 @@
 import type {
+  AgentInstanceBootKind,
+  AgentInstanceBootOutcome,
+  AgentInstanceBootStepKind,
+  AgentInstanceBootStepState,
   AgentInstanceChargeOutcome,
   AgentInstanceIntervalEndReason,
   AgentInstanceState,
@@ -19,6 +23,10 @@ import type { DispatchRunStatus } from '@/lib/dto/dispatchRuns';
 // and publishing them would make them a contract this shape owes stability to.
 
 export type {
+  AgentInstanceBootKind,
+  AgentInstanceBootOutcome,
+  AgentInstanceBootStepKind,
+  AgentInstanceBootStepState,
   AgentInstanceChargeOutcome,
   AgentInstanceIntervalEndReason,
   AgentInstanceState,
@@ -90,6 +98,38 @@ export interface AgentInstanceIntervalDto {
   chargeOutcome: AgentInstanceChargeOutcome | null;
 }
 
+/**
+ * One step of a boot attempt (`agent-instances.md` AMENDMENT 6 §1, §6). `seq` is
+ * the stream's cursor; `repository` is `owner/name` on a `clone` row.
+ */
+export interface AgentInstanceBootStepDto {
+  seq: number;
+  step: AgentInstanceBootStepKind;
+  repository: string | null;
+  ordinal: number;
+  state: AgentInstanceBootStepState;
+  startedAt: string | null;
+  endedAt: string | null;
+  detail: string | null;
+}
+
+/** An agent's CURRENT boot attempt and its steps in read-out order (AMENDMENT 6 §6). */
+export interface AgentInstanceBootDto {
+  attempt: number;
+  kind: AgentInstanceBootKind;
+  startedAt: string;
+  endedAt: string | null;
+  outcome: AgentInstanceBootOutcome | null;
+  /** The attempt's highest step `seq` — the stream cursor this read is current to. */
+  seq: number;
+  steps: AgentInstanceBootStepDto[];
+}
+
+/** One `step` frame of the boot stream (AMENDMENT 6 §7): the step and its attempt. */
+export interface AgentInstanceBootStepFrameDto extends AgentInstanceBootStepDto {
+  attempt: number;
+}
+
 /** One row of the My agents page: the instance plus its machine time this month. */
 export interface AgentInstanceListItemDto extends AgentInstanceDto {
   profileName: string;
@@ -114,6 +154,18 @@ export interface AgentInstanceListItemDto extends AgentInstanceDto {
   activeRun: AgentInstanceActiveRunDto | null;
   /** The agent's latest CLOSED run while none is active, or null (MOTIR-7029). */
   lastRun: AgentInstanceLastRunDto | null;
+  /**
+   * While `starting` / `waking`, the boot step in progress — the row's line
+   * (MOTIR-7395 panel 10); null between two steps, with no recorded attempt, and
+   * in every other state.
+   */
+  bootStep: AgentInstanceBootRowStepDto | null;
+}
+
+/** The step a booting row names: which one, and its repository on a `clone`. */
+export interface AgentInstanceBootRowStepDto {
+  step: AgentInstanceBootStepKind;
+  repository: string | null;
 }
 
 /**
@@ -147,7 +199,7 @@ export interface AgentInstanceLastRunDto {
 }
 
 /** The hibernations Motir makes on its own, which the page explains. */
-export type AgentInstanceStopReason = 'credits' | 'idle' | 'backstop';
+export type AgentInstanceStopReason = 'credits' | 'idle' | 'backstop' | 'admin_stop';
 
 export interface AgentInstanceListPageDto {
   instances: AgentInstanceListItemDto[];

@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Bot,
   History,
+  ListChecks,
   ListTree,
   MessagesSquare,
   RotateCw,
@@ -80,6 +81,9 @@ const ORIGIN_ICON: Record<PlanSessionOriginDto, typeof MessagesSquare> = {
   expand: ListTree,
   cadence: RotateCw,
   legacy: History,
+  // A guide conversation (MOTIR-7464) is left out of the Plans room by the list
+  // read, so this row never renders one; the entry keeps the map TOTAL.
+  guide: ListChecks,
 };
 
 /** The chip, one `Pill` tone per plan state — the tones the Plans page has always

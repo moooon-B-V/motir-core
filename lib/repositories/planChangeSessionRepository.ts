@@ -104,6 +104,25 @@ export const planChangeSessionRepository = {
     });
   },
 
+  /** The GUIDE read (Story MOTIR-7459 · MOTIR-7464; ADR AMENDMENT 2, A2.2): this
+   *  member's OWN most recent `guide` conversation on one card's scope. No resume
+   *  window: a saved walk is resumable for as long as its list is on the card.
+   *  Never another member's, and never a planning conversation of the same
+   *  scope — {@link findResumableForUser} reads only `conversation`, and this
+   *  reads only `guide`, so the two doors never pick up each other's thread. */
+  async findLatestGuideForUser(
+    projectId: string,
+    scopeKey: string,
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    return tx.planChangeSession.findFirst({
+      where: { projectId, scopeKey, workspaceId, createdById: userId, origin: 'guide' },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
   /** The SEEDED-session read (AMENDMENT 17 §9; MOTIR-6207): this member's OWN
    *  most recent session seeded by `seedGateId` in this project, active at or
    *  after `since`. Never another member's (sessions are per member), never an
@@ -254,6 +273,10 @@ export const planChangeSessionRepository = {
    * item`, two plain joins, so a seeded row costs no query of its own.
    * `seedCardInProject` is the browse fact the mapper keys off — see
    * `toPlanSessionRowDto`.
+   *
+   * A `guide` conversation (MOTIR-7464; ADR `conversation-turn-intent.md`
+   * AMENDMENT 2, A2.2) is NOT a planning session — it submits no plan — so it is
+   * left out of the Plans room, here and in {@link countByLatestPlanState} alike.
    */
   async listPageByProject(
     args: {
@@ -303,6 +326,7 @@ export const planChangeSessionRepository = {
         SELECT count(*)::int AS "n" FROM "plan" p WHERE p."session_id" = s."id"
       ) pc ON true
       WHERE s."project_id" = ${args.projectId} AND s."workspace_id" = ${args.workspaceId}
+        AND s."origin" <> 'guide'
         ${stateFilter(args.state)} ${mineFilter(args.mine ?? null)} ${after} ${only}
         ${sessionWithheldSql(args.hiddenIds)}
       ORDER BY s."last_activity_at" DESC, s."id" DESC
@@ -397,6 +421,7 @@ export const planChangeSessionRepository = {
       FROM "plan_change_session" s
       ${latestPlanJoin}
       WHERE s."project_id" = ${projectId} AND s."workspace_id" = ${workspaceId}
+        AND s."origin" <> 'guide'
         ${mineFilter(mine)}
         ${sessionWithheldSql(hiddenIds)}
       GROUP BY 1

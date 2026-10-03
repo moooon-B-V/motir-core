@@ -568,7 +568,7 @@ export const agentInstanceRunService = {
    * THE LAUNCH JOB'S WAIT (§4) — one pass: `ready` once the run is still open and
    * its agent is `running`; `noop` for a run already closed (a cancel, a reap);
    * `failed` once the run was ended because its agent stopped or never came up.
-   * An agent still `starting` / `waking` is settled once and the answer is
+   * An agent still `starting` / `waking` is READ, never settled (its boot driver owns it), and the answer is
    * `{ deferUntil }` — the job DEFERS to it (the engine's defer is the jobs
    * runtime's, never a service's).
    */
@@ -576,10 +576,9 @@ export const agentInstanceRunService = {
     const run = await withSystemContext((tx) => dispatchRunRepository.findById(dispatchRunId, tx));
     if (!run || run.status !== 'running' || !run.agentInstanceId) return 'noop';
     let agent = await readAgent(run.agentInstanceId);
-    if (agent && (agent.state === 'starting' || agent.state === 'waking')) {
-      await agentInstanceLifecycleService.settleBoot(agent.id);
-      agent = await readAgent(agent.id);
-    } else if (agent && agent.state === 'updating') {
+    // AMENDMENT 6 §4: a boot is its driver's — this only READS how it stands and
+    // defers while it runs, never settling it beside the driver.
+    if (agent && agent.state === 'updating') {
       // The launch's wake applied a pinned update (Q5): the run starts on whichever
       // image the update settles on.
       await agentInstanceLifecycleService.settleUpdate(agent.id);
@@ -708,22 +707,19 @@ export const agentInstanceRunService = {
     const ctx: ServiceContext = { userId: run.createdById, workspaceId: run.workspaceId };
     const close = CLOSE_FOR[outcome];
     try {
-      await dispatchRunService.appendEvents(
-        dispatchRunId,
-        [
-          {
-            kind: 'log',
-            body: `[motir] run in agent ended (${close.label}): ${detail}\n`,
-            // `message` is what the *run died* sentence reads to split a timeout.
-            data: { end: outcome, message: detail },
-          },
-        ],
-        ctx,
-      );
+      // The closing line is written INSIDE the close's transaction, under its row
+      // lock: a CLI close that commits first rolls it back with the refusal, so a
+      // `succeeded` run never carries an "ended (cancelled)" line (MOTIR-7489).
       await dispatchRunService.close(
         dispatchRunId,
         { stopReason: close.stopReason, status: close.status },
         ctx,
+        'wait',
+        {
+          // `message` is what the *run died* sentence reads to split a timeout.
+          data: { end: outcome, message: detail },
+          body: `[motir] run in agent ended (${close.label}): ${detail}\n`,
+        },
       );
     } catch (err) {
       // The CLI (or another path) closed it between the read and the close: its

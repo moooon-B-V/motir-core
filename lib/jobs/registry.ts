@@ -42,6 +42,7 @@ import { ciLiveCharge } from './definitions/ciLiveCharge';
 import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
 import { ciRunnerProvisionSweep, ciRunnerBoot } from './definitions/ciRunnerFleet';
 import { fleetAttribution } from './definitions/fleetAttribution';
+import { fleetDebitMonitor } from './definitions/fleetDebitMonitor';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
   statusDerivationOnChildSetChanged,
@@ -79,6 +80,7 @@ import { organizationErasureSweep } from './definitions/organizationErasureSweep
 import { organizationRetentionPurge } from './definitions/organizationRetentionPurge';
 import { dlqStandingDepthSweep } from './definitions/dlqStandingDepthSweep';
 import { agentInstanceIdleCheck } from './definitions/agentInstanceIdleCheck';
+import { agentInstanceBoot } from './definitions/agentInstanceBoot';
 import { agentInstanceRunLaunch } from './definitions/agentInstanceRunLaunch';
 import { agentInstanceRunSupervise } from './definitions/agentInstanceRunSupervise';
 import { agentInstanceSweep } from './definitions/agentInstanceSweep';
@@ -140,6 +142,7 @@ export const jobDefinitions = [
   ciRunnerProvisionSweep,
   ciRunnerBoot,
   fleetAttribution,
+  fleetDebitMonitor,
   hostedRunSupervise,
   planDriftOnTransitioned,
   statusDerivationOnTransitioned,
@@ -183,6 +186,7 @@ export const jobDefinitions = [
   // Agent instances (Story MOTIR-6860 · MOTIR-6873): the per-instance idle timer
   // and the 30-minute sweep beneath it.
   agentInstanceIdleCheck,
+  agentInstanceBoot,
   agentInstanceRunLaunch,
   agentInstanceRunSupervise,
   agentInstanceSweep,

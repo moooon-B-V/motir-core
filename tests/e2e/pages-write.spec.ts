@@ -1,5 +1,5 @@
 import type { Locator, Page, Response } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
@@ -9,7 +9,16 @@ import { pagesService } from '@/lib/services/pagesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
-// WRITE A PAGE — THE ACCEPTANCE RECEIPT (Story MOTIR-5752 · Subtask MOTIR-7282).
+// WRITE A PAGE — Story MOTIR-5752's walk, as a REGRESSION spec. It was that
+// story's acceptance receipt (`acceptance-pages.spec.ts`, Subtask MOTIR-7282);
+// Story MOTIR-5753 PROMOTED it into the main lane (docs/acceptance-lane-triage.md
+// § MOTIR-5753) when the `/pages` tree replaced the flat list it read back from.
+// The import swap to `_helpers/promoted-regression` keeps every `chapter()` as a
+// step and drops the pacing; the only assertions restated are the three the tree
+// replaced — the "Back to Pages" link (now the breadcrumb's Pages segment), the
+// "Pages in this project" list (now the tree's root rows), and "listed first"
+// (the tree is in POSITION order, so a new root page is drawn LAST).
+//
 // The story's verification recipe, in a real browser against a production build
 // and a real database.
 //
@@ -172,7 +181,7 @@ test('a member writes a page and reads it back; two sessions both keep their edi
   await resetDatabase();
   const seed = await seedProject();
   await seedViewer(seed);
-  // An older page, so "listed first" means the new page went to the top.
+  // An older page, so the new one is drawn after it: the tree is in position order.
   await pagesService.createPage(seed.ctx, { projectId: seed.projectId, title: 'Onboarding notes' });
 
   await signIn(page, MEMBER_EMAIL, PASSWORD);
@@ -263,14 +272,20 @@ test('a member writes a page and reads it back; two sessions both keep their edi
       await expect(page).toHaveTitle(TITLE);
       await beat();
 
-      // Back on /pages, the page is listed first under its title.
-      await page.getByRole('link', { name: 'Back to Pages', exact: true }).click();
-      await page.waitForURL('**/pages');
-      const rows = page.getByRole('list', { name: 'Pages in this project' }).getByRole('link');
+      // Back on /pages through the breadcrumb, the page is a root row of the tree
+      // under its title — after the older page, in position order.
+      await page
+        .getByRole('navigation', { name: 'Where this page is', exact: true })
+        .getByRole('link', { name: 'Pages', exact: true })
+        .click();
+      await page.waitForURL((u) => u.pathname === '/pages');
+      const rows = page
+        .getByRole('tree', { name: 'Folders and pages in this project', exact: true })
+        .locator('[data-testid="page-tree-page"][aria-level="1"]');
       await expect(rows).toHaveCount(2);
-      await expect(rows.first()).toHaveAttribute('href', `/pages/${pageId}`);
-      await expect(rows.first()).toContainText(TITLE);
-      await expect(rows.nth(1)).toContainText('Onboarding notes');
+      await expect(rows.nth(1).getByRole('link')).toHaveAttribute('href', `/pages/${pageId}`);
+      await expect(rows.nth(1)).toContainText(TITLE);
+      await expect(rows.first()).toContainText('Onboarding notes');
     },
   );
 
@@ -322,13 +337,12 @@ test('a member writes a page and reads it back; two sessions both keep their edi
       await page.getByRole('link', { name: 'Pages', exact: true }).click();
       await page.waitForURL('**/pages');
       const row = page
-        .getByRole('list', { name: 'Pages in this project' })
-        .getByRole('link')
-        .filter({ hasText: TITLE });
+        .getByRole('tree', { name: 'Folders and pages in this project', exact: true })
+        .getByRole('treeitem', { name: TITLE, exact: true });
       await expect(row).toBeVisible();
       await expect(page.getByRole('button', { name: 'New page', exact: true })).toHaveCount(0);
 
-      await row.click();
+      await row.getByRole('link').click();
       await page.waitForURL(`**/pages/${pageId}`);
       await expect(page.getByRole('heading', { name: TITLE, level: 1 })).toBeVisible();
       const body = bodyOf(page);

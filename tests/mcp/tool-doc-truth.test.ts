@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { fingerprintToolText } from '@/lib/apiDocs/mcpFingerprint';
+import { withoutMcpToolReference } from '@/lib/apiDocs/mcpToolReference';
 import { mcpToolFingerprint, mcpToolRows, type McpCatalogueToolName } from '@/lib/apiDocs/mcp';
 
 // THE TOOL-DOC TRUTH GATE — the fingerprint half of Story MOTIR-2309's gate
@@ -46,6 +47,19 @@ interface ListedTool {
   description?: string;
 }
 
+/**
+ * The tool's AUTHORED text: its description without the reference link the
+ * registration seam appends (MOTIR-7391). The link is derived — the same sentence
+ * on every tool, held by `tests/mcp/tool-reference-links.test.ts` — so moving its
+ * url gives no summary anything new to re-read.
+ */
+function authoredFingerprint(tool: ListedTool): string {
+  return fingerprintToolText(
+    tool.title ?? '',
+    withoutMcpToolReference(tool.name, tool.description ?? ''),
+  );
+}
+
 async function listShippedTools(): Promise<ListedTool[]> {
   const server = buildMcpServer(() => STUB_CONTEXT);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -72,7 +86,7 @@ function driftedPins(
   return shipped
     .map((tool) => {
       const name = tool.name as McpCatalogueToolName;
-      const expected = fingerprintToolText(tool.title ?? '', tool.description ?? '');
+      const expected = authoredFingerprint(tool);
       const held = stored(name);
       return held === expected ? null : `${name}: stored ${held}, shipped ${expected}`;
     })
@@ -124,7 +138,7 @@ describe('the authored tool summaries against the SHIPPED tools/list', () => {
     const victim = shipped[0]?.name as McpCatalogueToolName;
     expect(victim, 'the server exposed no tools at all').toBeDefined();
 
-    const shippedPin = fingerprintToolText(shipped[0]?.title ?? '', shipped[0]?.description ?? '');
+    const shippedPin = authoredFingerprint(shipped[0]!);
     const perturbed = 'ffffffffffff';
     expect(perturbed).not.toBe(shippedPin);
 

@@ -87,6 +87,8 @@ const MODE_LABEL_KEY: Record<PlanningMode, string> = {
   replan: 'mode.replan',
   contextual: 'mode.contextual',
   roadmap: 'mode.roadmap',
+  // Drawn by `GuideRail`; listed so the map stays total over the modes.
+  guide: 'mode.guide',
 };
 
 const MODE_LEAD_KEY: Record<PlanningMode, string> = {
@@ -95,6 +97,7 @@ const MODE_LEAD_KEY: Record<PlanningMode, string> = {
   replan: 'lead.replan',
   contextual: 'lead.contextual',
   roadmap: 'lead.roadmap',
+  guide: 'lead.contextualItem',
 };
 
 /** The originating DETAIL wins over the mode's generic line when one was carried
@@ -1440,7 +1443,7 @@ function outcomeChipSummary(
   };
 }
 
-function Bubble({
+export function Bubble({
   role,
   label,
   tone = 'default',

@@ -174,6 +174,7 @@ const counted = {
     name: 'Parked',
     childFolderCount: 1,
     workItemCount: 2,
+    pageCount: 0,
     destination: { folderId: null, name: null },
   },
 };
@@ -191,6 +192,7 @@ describe('IssueTreeTable — delete a folder', () => {
         destinationFolderId: null,
         movedFolderIds: ['f3'],
         movedWorkItemIds: ['w8', 'w9'],
+        movedPageIds: [],
       },
     });
     mocks.listRootIssuesAction.mockResolvedValue({
@@ -219,7 +221,7 @@ describe('IssueTreeTable — delete a folder', () => {
       resolveCount(counted);
     });
     expect(within(dialog).getByTestId('folder-delete-moves').textContent).toBe(
-      '1 folder and 2 work items will move to Project root. No work items are deleted.',
+      '1 folder and 2 work items will move to Project root. No work items or pages are deleted.',
     );
     expect(mocks.describeFolderDeletionAction).toHaveBeenCalledWith({ folderId: 'f1' });
 

@@ -76,7 +76,21 @@ async function createAgent(page: Page, name: string, codingAgent: string): Promi
   await dialog.getByRole('button', { name: copy.create.submit }).click();
   expect((await created).status()).toBe(201);
   await expect(dialog).toBeHidden();
+  await backToList(page, name);
   await expect(rowOf(page, name)).toHaveAttribute('data-state', 'running');
+}
+
+/**
+ * Create now opens the new agent's panel (Story MOTIR-7393); this walk reads the
+ * list's table, so it closes the panel and returns to it. Navigation only.
+ */
+async function backToList(page: Page, name: string): Promise<void> {
+  await page
+    .getByRole('main')
+    .getByTestId('agent-panel')
+    .getByRole('button', { name: `Close ${name}` })
+    .click();
+  await expect(page.getByRole('table')).toBeVisible();
 }
 
 async function openMenu(page: Page, name: string): Promise<Locator> {

@@ -211,6 +211,8 @@ const ACTIONS: {
   },
   { file: 'app/(authed)/items/[key]/todoActions.ts', action: 'addTodoAction', kind: 'member' },
   { file: 'app/(authed)/items/[key]/todoActions.ts', action: 'deleteTodoAction', kind: 'member' },
+  // Read only by the guide overlay, which a Visitor never opens (MOTIR-7466).
+  { file: 'app/(authed)/items/[key]/todoActions.ts', action: 'listTodosAction', kind: 'member' },
   { file: 'app/(authed)/items/[key]/todoActions.ts', action: 'moveTodoAction', kind: 'member' },
   { file: 'app/(authed)/items/[key]/todoActions.ts', action: 'setTodoDoneAction', kind: 'member' },
   { file: 'app/(authed)/items/[key]/todoActions.ts', action: 'updateTodoAction', kind: 'member' },

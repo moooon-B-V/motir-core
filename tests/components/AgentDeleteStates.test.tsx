@@ -40,6 +40,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     scheduledDeletionAt: null,
     activeRun: null,
     lastRun: null,
+    bootStep: null,
     ...over,
   };
 }

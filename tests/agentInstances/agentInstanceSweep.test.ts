@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { installInlineBootDriver } from '../helpers/agentBootDriver';
 import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { fakePersistentOrchestrator as fleet } from '@motir/orchestrator';
 import { db } from '@/lib/db';
@@ -100,6 +101,7 @@ beforeEach(async () => {
     virtualNow += ms;
   });
   fleet.setNow(() => new Date(virtualNow));
+  installInlineBootDriver();
 });
 
 afterEach(async () => {

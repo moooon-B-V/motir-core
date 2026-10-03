@@ -96,6 +96,10 @@ const CANONICAL_JOB_KINDS = [
   // already in motir-ai's canonical set. Adding it HERE, with the dispatch that
   // sends it, closes the drift that card's envelope documented.
   'debug_bug',
+  // `guide_work_item` (Story MOTIR-7459 — MOTIR-7463 handler / MOTIR-7464 dispatch);
+  // already in motir-ai's canonical set. Adding it HERE, with the guide door that
+  // sends it, closes the drift that card's envelope documented.
+  'guide_work_item',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).

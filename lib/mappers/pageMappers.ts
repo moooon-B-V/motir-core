@@ -2,9 +2,15 @@ import type { Page, PageVersion } from '@/generated/prisma/client';
 import type {
   PageDto,
   PageListItemDto,
+  PageMarkdownDto,
+  PageMoveResultDto,
+  PageParentDto,
+  PageTrailDto,
+  PageTreeRowDto,
   PageVersionDto,
   PageVersionListItemDto,
 } from '@/lib/dto/pages';
+import type { FolderTreeRow } from '@/lib/mappers/folderMappers';
 import type { LockedPageRow, PageRow, PageVersionRow, PageVersionWithBody } from '@/lib/pages';
 
 // Page rows ↔ `@motir/pages`' port rows (Story MOTIR-5752 · MOTIR-7276).
@@ -20,6 +26,11 @@ export type PageRecord = Omit<Page, 'bodyState' | 'bodyJson' | 'bodyMarkdown' | 
 /** The raw `SELECT … FOR UPDATE` row `pageRepository.lockById` returns. */
 export interface PageLockedRecord extends PageRecord {
   bodyState: Uint8Array;
+}
+
+/** A page read with its derived markdown and no Yjs state (MOTIR-7409). */
+export interface PageMarkdownRecord extends PageRecord {
+  bodyMarkdown: string;
 }
 
 /**
@@ -157,6 +168,41 @@ export function toPageVersionDto(
 }
 
 /**
+ * The raw row `pageRepository.findLevelAfter` returns (MOTIR-7369): one page of
+ * a tree level, no body, with whether it holds any sub-page.
+ */
+export interface PageLevelRecord {
+  id: string;
+  title: string;
+  position: string;
+  updatedAt: Date;
+  hasChildren: boolean;
+}
+
+/**
+ * One page of a `/pages` tree level, as the page service composes the level
+ * (MOTIR-7370): what the row renders, and the `(position, id)` the keyset cursor
+ * pages on.
+ */
+export interface PageLevelRow {
+  readonly id: string;
+  readonly title: string;
+  readonly position: string;
+  readonly updatedAt: Date;
+  readonly hasChildren: boolean;
+}
+
+export function toPageLevelRow(record: PageLevelRecord): PageLevelRow {
+  return {
+    id: record.id,
+    title: record.title,
+    position: record.position,
+    updatedAt: record.updatedAt,
+    hasChildren: Boolean(record.hasChildren),
+  };
+}
+
+/**
  * The page as the read model returns it (MOTIR-7277): the canonical state as
  * base64 — the editor's seed, from which it derives everything else — and
  * whether THIS caller may write it.
@@ -188,5 +234,77 @@ export function toPageListItemDto(
     title: record.title,
     updatedAt: record.updatedAt.toISOString(),
     updatedBy: { id: record.updatedById, name: editorName ?? '' },
+  };
+}
+
+// ── The page tree (Story MOTIR-5753 · MOTIR-7370) ──────────────────────────
+
+/** A folder of a `/pages` tree level (`folderRepository.findLevelForPages`) → wire row. */
+export function toPageTreeFolderRowDto(row: FolderTreeRow): PageTreeRowDto {
+  return { kind: 'folder', id: row.id, name: row.name, hasChildren: Boolean(row.hasChildren) };
+}
+
+/** A page of a `/pages` tree level → wire row. */
+export function toPageTreePageRowDto(row: PageLevelRow): PageTreeRowDto {
+  return { kind: 'page', id: row.id, title: row.title, hasChildren: row.hasChildren };
+}
+
+/** A page's parent from its two placement columns (`page_parent_xor_folder`: at most one is set). */
+export function toPageParentDto(row: Pick<PageRow, 'parentPageId' | 'folderId'>): PageParentDto {
+  if (row.parentPageId !== null) return { kind: 'page', id: row.parentPageId };
+  if (row.folderId !== null) return { kind: 'folder', id: row.folderId };
+  return { kind: 'root' };
+}
+
+/** Where a move left the page. */
+export function toPageMoveResultDto(row: PageRow, moved: boolean): PageMoveResultDto {
+  return {
+    id: row.id,
+    parent: toPageParentDto(row),
+    position: row.position,
+    ancestorPageIds: [...row.ancestorPageIds],
+    moved,
+  };
+}
+
+/** A page's breadcrumb: its folder chain and its ancestor pages, each root-first. */
+export function toPageTrailDto(
+  folders: ReadonlyArray<{ id: string; name: string }>,
+  pages: ReadonlyArray<{ id: string; title: string }>,
+): PageTrailDto {
+  return {
+    folders: folders.map((f) => ({ id: f.id, name: f.name })),
+    pages: pages.map((p) => ({ id: p.id, title: p.title })),
+  };
+}
+
+// ── The markdown doors (Story MOTIR-5760 · MOTIR-7409) ───────────────────────
+
+/**
+ * A page as an agent reads it: the markdown column, where it is filed, the
+ * revision to write against and its newest version with the author's name the
+ * service resolved in one batch.
+ */
+export function toPageMarkdownDto(
+  record: PageMarkdownRecord,
+  latest: PageVersionRecord | null,
+  authorName: string | undefined,
+): PageMarkdownDto {
+  return {
+    id: record.id,
+    projectId: record.projectId,
+    title: record.title,
+    placement: { parentPageId: record.parentPageId, folderId: record.folderId },
+    revision: record.revision,
+    latestVersion: latest
+      ? {
+          number: latest.number,
+          authorId: latest.authorId,
+          authorName: authorName ?? '',
+          savedAt: latest.savedAt.toISOString(),
+        }
+      : null,
+    markdown: record.bodyMarkdown,
+    updatedAt: record.updatedAt.toISOString(),
   };
 }

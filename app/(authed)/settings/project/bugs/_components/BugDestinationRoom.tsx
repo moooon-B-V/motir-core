@@ -7,7 +7,7 @@ import { Bug, ExternalLink, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { SettingsCard } from '@/components/settings/SettingsCard';
-import { FolderPickerPanel } from '@/app/(authed)/items/_components/FolderPicker';
+import { FolderPickerPanel } from '@/components/folders/FolderPicker';
 import type { FolderPickerNodeDto } from '@/lib/dto/folders';
 import type { BugDestinationDto } from '@/lib/dto/projects';
 import { setAdvancedParam } from '@/lib/issues/issueListAdvancedFilter';

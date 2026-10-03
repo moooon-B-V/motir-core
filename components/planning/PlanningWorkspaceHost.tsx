@@ -23,6 +23,7 @@ import {
 } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
+import { GuideWorkspaceHost } from '@/components/planning/GuideWorkspaceHost';
 import { PlanCloseGuard } from '@/components/planning/PlanCloseGuard';
 import {
   usePlanChangeConversation,
@@ -225,7 +226,42 @@ export interface PlanningWorkspaceHostProps {
   sessionIsResume?: boolean;
 }
 
-export function PlanningWorkspaceHost({
+/**
+ * The host, by MODE (MOTIR-7466). GUIDE is a different room on the same frame —
+ * the card's to-do list on the canvas and the guide conversation in the rail —
+ * so it is a different component rather than a branch inside the plan host's
+ * hooks: none of the plan host's state (targets, the follow-move, the proposal,
+ * the close guard) exists in a guide, and mounting it would open the project
+ * conversation for nothing.
+ *
+ * A guide whose card did not resolve for this viewer has nothing to walk, so it
+ * degrades to the project conversation — the same rule an unresolvable
+ * `planItem` already follows.
+ */
+export function PlanningWorkspaceHost(props: PlanningWorkspaceHostProps) {
+  const { launch, initialTarget } = props;
+  if (launch.mode === 'guide') {
+    if (initialTarget) {
+      return (
+        <GuideWorkspaceHost
+          projectName={props.projectName}
+          card={initialTarget}
+          onClose={props.onClose}
+        />
+      );
+    }
+    return (
+      <PlanWorkspaceHost
+        {...props}
+        launch={{ ...launch, mode: 'project', from: 'project', itemKey: null }}
+        anchorId={null}
+      />
+    );
+  }
+  return <PlanWorkspaceHost {...props} />;
+}
+
+function PlanWorkspaceHost({
   canManage = false,
   projectKey,
   projectName,

@@ -13,6 +13,8 @@ vi.mock('@/lib/auth', () => ({ getSession: async () => session.current }));
 vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.current }));
 
 import { db } from '@/lib/db';
+import { createPage, pageStoreFor, systemClock, type PagePlacement } from '@/lib/pages';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { foldersService } from '@/lib/services/foldersService';
@@ -83,6 +85,7 @@ describe('deleteFolderAction', () => {
         name: 'Doomed',
         childFolderCount: 2,
         workItemCount: 3,
+        pageCount: 0,
         destination: { folderId: later.id, name: 'Later' },
       },
     });
@@ -111,6 +114,56 @@ describe('deleteFolderAction', () => {
     ).resolves.toMatchObject({ folderId: bystander.id });
     // Five it made, plus the seeded Bugs folder (MOTIR-4935).
     await expect(adminDb.folder.count({ where: { projectId: fx.projectId } })).resolves.toBe(6);
+  });
+
+  it('counts and moves up a folder holding only pages (MOTIR-7371), keeping the sub-page under its page', async () => {
+    const fx = await makeWorkItemFixture();
+    actAs(fx, fx.ctx.userId);
+    const later = await folder(fx, 'Later');
+    const doomed = await folder(fx, 'Specs', later.id);
+    const page = (parent: PagePlacement, title: string) =>
+      withWorkspaceContext({ ...fx.ctx, projectId: fx.projectId }, (tx) =>
+        createPage(pageStoreFor(tx), systemClock, {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          actorId: fx.ctx.userId,
+          title,
+          parent,
+        }),
+      );
+    const one = await page({ kind: 'folder', folderId: doomed.id }, 'One');
+    const two = await page({ kind: 'folder', folderId: doomed.id }, 'Two');
+    const sub = await page({ kind: 'page', pageId: two.id }, 'Two · sub');
+
+    await expect(describeFolderDeletionAction({ folderId: doomed.id })).resolves.toEqual({
+      ok: true,
+      preview: {
+        folderId: doomed.id,
+        name: 'Specs',
+        childFolderCount: 0,
+        workItemCount: 0,
+        pageCount: 2,
+        destination: { folderId: later.id, name: 'Later' },
+      },
+    });
+
+    const res = await deleteFolderAction({ folderId: doomed.id });
+    expect(res).toMatchObject({
+      ok: true,
+      result: { destinationFolderId: later.id, movedPageIds: [one.id, two.id] },
+    });
+    await expect(adminDb.folder.findUnique({ where: { id: doomed.id } })).resolves.toBeNull();
+    const rows = await adminDb.page.findMany({
+      where: { id: { in: [one.id, two.id, sub.id] } },
+      select: { id: true, folderId: true, parentPageId: true },
+    });
+    expect(new Map(rows.map((r) => [r.id, r]))).toEqual(
+      new Map([
+        [one.id, { id: one.id, folderId: later.id, parentPageId: null }],
+        [two.id, { id: two.id, folderId: later.id, parentPageId: null }],
+        [sub.id, { id: sub.id, folderId: null, parentPageId: two.id }],
+      ]),
+    );
   });
 
   it('returns FOLDER_NAME_TAKEN, naming the child, when a child folder name is already at the destination — and deletes nothing', async () => {

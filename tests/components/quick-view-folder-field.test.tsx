@@ -54,7 +54,7 @@ import {
   FolderCommandsProvider,
   useFolderCommands,
   type WorkItemPlacement,
-} from '@/app/(authed)/items/_components/FolderCommands';
+} from '@/components/folders/FolderCommands';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 
 function status(key: string, label: string, category: WorkflowStatusDto['category']) {

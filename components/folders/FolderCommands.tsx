@@ -12,14 +12,14 @@ import {
 import { FolderPlus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
-import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // The channel between the /items TOOLBAR and the tree island (Story MOTIR-5308 ·
-// MOTIR-5344). The toolbar's "New folder" creates at the project root, but the
-// name row it opens — and the level the created folder lands in — belong to the
-// lazy tree, a client island rendered in a different branch of the page. The
-// tree REGISTERS the command while it is mounted; the button only asks for it.
-// A registration rather than a state tick, so no effect ever sets state in
+// MOTIR-5344). Shared since MOTIR-7374: `/pages` registers its own tree on it
+// the same way, so both surfaces' header "New folder" reach their tree alike.
+// The toolbar's "New folder" creates at the project root, but the name row it
+// opens — and the level the created folder lands in — belong to the lazy tree,
+// a client island rendered in a different branch of the page. The tree REGISTERS
+// the command while it is mounted; the button only asks for it. A registration rather than a state tick, so no effect ever sets state in
 // response to a button press elsewhere on the page.
 //
 // The toolbar renders ABOVE the page's <Suspense> and the tree streams in below
@@ -112,21 +112,22 @@ export function useFolderCommands(): FolderCommandsValue | null {
 }
 
 /**
- * The toolbar's "New folder" (the design's panel 1) — a secondary button beside
- * the primary "New work item". The toolbar places it in the unfiltered Tree view
- * only; it renders only for a member holding `work_item:edit`, the key
- * `foldersService.createFolder` asserts.
+ * A "New folder" button that asks the registered tree for a new ROOT folder (the
+ * design's panel 1) — a secondary button beside the surface's primary create.
+ * It carries NO permission check of its own: each surface wraps it in the gate
+ * its folder writes need (`/items`' `NewFolderButton` reads `work_item:edit`,
+ * `/pages`' reads `page:edit` too), because `components/` cannot read the app's
+ * access provider. Outside a provider it renders nothing.
  */
-export function NewFolderButton() {
+export function NewRootFolderButton() {
   const t = useTranslations('folders');
   const commands = useFolderCommands();
-  const { can } = useProjectAccess();
   // A request still held when the button leaves was for a tree that never came.
   useEffect(() => {
     if (!commands) return;
     return () => commands.cancelNewRootFolder();
   }, [commands]);
-  if (!commands || !can('work_item:edit')) return null;
+  if (!commands) return null;
   return (
     <Button
       variant="secondary"

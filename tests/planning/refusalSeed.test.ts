@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTranslator } from 'next-intl';
+import { createTranslator, type AbstractIntlMessages } from 'next-intl';
 import {
   ApprovalGateKind,
   ApprovalGateRefusalVerdict,
@@ -129,7 +129,9 @@ describe('refusalSeedAnchorsOnParent', () => {
 const t = (locale: 'en' | 'zh'): SeedTranslator =>
   createTranslator({
     locale,
-    messages: locale === 'en' ? en : zh,
+    // `AbstractIntlMessages`, because the result is widened to `SeedTranslator`
+    // anyway: a typed catalogue only makes next-intl compute every key path in it.
+    messages: (locale === 'en' ? en : zh) as unknown as AbstractIntlMessages,
     namespace: REFUSAL_SEED_NAMESPACE,
   }) as unknown as SeedTranslator;
 

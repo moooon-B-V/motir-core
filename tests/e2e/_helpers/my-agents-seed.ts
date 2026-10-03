@@ -231,3 +231,48 @@ export async function recordRunInAgent(seed: MyAgentsSeed, agentId: string): Pro
   );
   return item.identifier;
 }
+
+// ── THE BOOT'S CLONES (Story MOTIR-7393 · MOTIR-7402) ────────────────────────
+// The terminal host answers every clone exec at once unless a repository is
+// scripted in `MOTIR_E2E_CLONE_SCRIPT_PATH` (`agent-terminal/host.ts`'s
+// `runClone`): HELD, its exec stays open until released, so the step is seen in
+// progress; REFUSED, it exits 128 with the given words on stderr.
+
+interface CloneScript {
+  hold?: boolean;
+  refuse?: string;
+}
+
+function cloneScriptPath(): string {
+  const path = process.env['MOTIR_E2E_CLONE_SCRIPT_PATH'];
+  if (!path) throw new Error('MOTIR_E2E_CLONE_SCRIPT_PATH is not set — run on the acceptance lane');
+  return path;
+}
+
+function writeCloneScript(repository: string, script: CloneScript | null): void {
+  let all: Record<string, CloneScript> = {};
+  try {
+    all = JSON.parse(readFileSync(cloneScriptPath(), 'utf8')) as Record<string, CloneScript>;
+  } catch {
+    // No sidecar yet: nothing scripted.
+  }
+  if (script) all[repository] = script;
+  else delete all[repository];
+  mkdirSync(dirname(cloneScriptPath()), { recursive: true });
+  writeFileSync(cloneScriptPath(), JSON.stringify(all), 'utf8');
+}
+
+/** Keep `repository`'s (`owner/name`) clone running until {@link releaseClone}. */
+export function holdClone(repository: string): void {
+  writeCloneScript(repository, { hold: true });
+}
+
+/** Let `repository`'s clone finish (and every later one succeed). */
+export function releaseClone(repository: string): void {
+  writeCloneScript(repository, null);
+}
+
+/** Make `repository`'s clone fail with git's `words`. */
+export function refuseClone(repository: string, words: string): void {
+  writeCloneScript(repository, { refuse: words });
+}

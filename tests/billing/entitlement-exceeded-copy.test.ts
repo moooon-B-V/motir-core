@@ -66,8 +66,20 @@ describe('errors.entitlementExceeded — one sentence per EntitlementKind', () =
 
 describe('entitlementExceededMessage', () => {
   it('selects the sentence by kind through an errors-scoped translator, per locale', () => {
-    const en = createTranslator({ locale: 'en', messages: enMessages, namespace: 'errors' });
-    const zh = createTranslator({ locale: 'zh', messages: zhMessages, namespace: 'errors' });
+    // Scoped to the `errors` subtree — still the real catalogue's sentences and
+    // still key-checked, but next-intl's `NamespaceKeys<Messages>` constraint is
+    // computed over one namespace instead of the whole ~600 KB catalogue, which
+    // cost the tests project ~6 s of check time and a measurable slice of its heap.
+    const en = createTranslator({
+      locale: 'en',
+      messages: { errors: enMessages.errors },
+      namespace: 'errors',
+    });
+    const zh = createTranslator({
+      locale: 'zh',
+      messages: { errors: zhMessages.errors },
+      namespace: 'errors',
+    });
     expect(entitlementExceededMessage(en, 'workspaces')).toBe(
       "Your plan's workspaces limit has been reached.",
     );

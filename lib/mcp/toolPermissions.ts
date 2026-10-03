@@ -59,6 +59,19 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // which asserts `assertCanBrowse` on the card's project — a read-only member
   // sees the list and its progress, exactly as on the item page.
   list_work_item_todos: 'project:browse',
+  // ── page:view — the page read (MOTIR-7410) ────────────────────────────────
+  // `pagesService.getPageMarkdown` asserts `assertCanViewPages` (`page:view`,
+  // `docs/decisions/pages.md` §5), the key the page route checks. The FIRST
+  // tool to assert a `page:*` key, so it is what makes `page:view` grantable
+  // (`GRANTABLE_PERMISSIONS` is derived from this map). `CLI_TOKEN_GRANT` is NOT
+  // widened here — MOTIR-7412 adds the page keys to it.
+  get_page: 'page:view',
+  // ── page:edit — the page writes (MOTIR-7411) ──────────────────────────────
+  // `pagesService.createPageFromMarkdown` / `savePageMarkdown` assert
+  // `assertCanEditPages` (`page:edit`), the key the editor's save route checks.
+  // They make `page:edit` grantable; `CLI_TOKEN_GRANT` is widened by MOTIR-7412.
+  create_page: 'page:edit',
+  update_page: 'page:edit',
   list_ready: 'project:browse',
   next_ready: 'project:browse',
   // Reads the item and assembles text; it never claims the item or flips its
@@ -554,6 +567,33 @@ export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
   // getting not-found on reads it performs today.
   'plan:view_any',
   'run:view_any',
+  // ⚠️ `page:view` · `page:edit` — WIDENED DELIBERATELY for `get_page`,
+  // `create_page` and `update_page` (Story MOTIR-5760 · MOTIR-7412), as
+  // `docs/decisions/pages.md` §5 decides, and argued here on the terms the
+  // `lesson:*` keys above were. They sit after `run:view_any` because that is
+  // catalog order (after `instance:use`, which this set does not hold).
+  //
+  // The argument: a sandboxed `motir run` agent is THE caller those tools exist
+  // for — the agent that records a decision, a spec or a runbook as a page
+  // instead of a file in a pull request. Without these keys every one of its
+  // page calls is a permission refusal it reads as an outage, the failure that
+  // ships green (MOTIR-3058, MOTIR-3051 above). What they grant: read a page and
+  // REPLACE its body, in the token's own workspace, under the same project
+  // checks a person meets — and every replaced body stays a restorable version
+  // in the page's history. No delete, no move, no archive.
+  //
+  // `page:delete` STAYS OUT (§5; `docs/decisions/token-permissions.md` §7: an
+  // unattended credential must not be able to destroy). No tool asserts it yet,
+  // and the CLI calls nothing that would.
+  //
+  // ⚠️ NO READ-FORWARD for these keys — do not add one by analogy with the
+  // rooms' `ROOM_VIEW_FORWARD_KEYS` (AMENDMENT 2). Those keys were SPLIT OUT of a
+  // reach tokens already had; the page keys are a NEW capability. Reading them
+  // forward would hand page WRITE to every token minted before today, whose
+  // approval screen never showed it. A device token gains them at its next
+  // `motir login`; nothing rewrites a live credential's row (§5).
+  'page:view',
+  'page:edit',
   'ai:plan',
 ];
 
@@ -577,6 +617,11 @@ export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
  *
  * It holds no `ai:*` key, so a run token can neither author nor read a plan,
  * and it is a strict subset of {@link CLI_TOKEN_GRANT} (asserted by a test).
+ *
+ * It does NOT take the page keys the CLI grant took for MOTIR-5760 (MOTIR-7412):
+ * a run token never reaches `/api/mcp` (`lib/mcp/auth.ts` — "A RUN token never
+ * reaches the MCP surface"), and only the MCP page tools assert them, so they
+ * would grant it nothing.
  */
 export const HOSTED_RUN_TOKEN_GRANT: readonly PermissionKey[] = [
   // Catalog order, as the note on CLI_TOKEN_GRANT requires of a hand-ordered list.

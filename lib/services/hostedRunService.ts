@@ -1282,24 +1282,21 @@ export const hostedRunService = {
           : []),
       ];
       try {
-        await dispatchRunService.appendEvents(
-          dispatchRunId,
-          [
-            {
-              kind: 'log',
-              body: `[motir] hosted run ended (${END_LABEL[outcome]}): ${detail}${
-                failures.length > 0 ? ` — ${failures.join('; ')}` : ''
-              }\n`,
-              data: { end: outcome },
-            },
-          ],
-          ctx,
-        );
         const close = CLOSE_FOR[outcome];
+        // The closing line rides the close's own transaction (MOTIR-7489): a CLI
+        // close that commits first rolls it back, so it never lands on a run the
+        // CLI closed.
         await dispatchRunService.close(
           dispatchRunId,
           { stopReason: close.stopReason, status: close.status },
           ctx,
+          'wait',
+          {
+            data: { end: outcome },
+            body: `[motir] hosted run ended (${END_LABEL[outcome]}): ${detail}${
+              failures.length > 0 ? ` — ${failures.join('; ')}` : ''
+            }\n`,
+          },
         );
         closed = true;
       } catch (err) {

@@ -1,7 +1,15 @@
 import { defineConfig } from 'vitest/config';
 import baseConfig from './vitest.config';
 
-// STORY MOTIR-5752's `motir-core` COVERAGE FLOOR (write a page; MOTIR-7281).
+// STORY MOTIR-5752's `motir-core` COVERAGE FLOOR (write a page; MOTIR-7281), and
+// STORY MOTIR-5753's (the `/pages` tree; MOTIR-7377) and STORY MOTIR-5760's (the
+// page tools over the MCP; MOTIR-7413), each of which extends the same lane
+// rather than adding a second job: the tree's app files join `STORY_FILES` and its
+// gate (`tests/integration/pagesTreeStoryGate.test.ts`) joins `include`. The tree
+// story's other app files are gated where they already were — the folder surface
+// it moved to `components/folders/` and `folderRepository` / `foldersService` /
+// `folderMappers` by the main lane (`vitest.config.ts`), the rest by the entries
+// below — and `packages/pages/src/move.ts` by the package's own floor.
 //
 // ⚠️ WHAT A FLOOR IS FOR HERE, AND WHAT IT IS NOT. It does not decide whether the
 // assembled pages layer is correct — `tests/integration/pagesStoryGate.test.ts`
@@ -63,16 +71,34 @@ const STORY_FILES = [
   'lib/repositories/pageVersionRepository.ts',
   // The editor host.
   'components/pages/*.tsx',
+  // Story MOTIR-5753 (the `/pages` tree; MOTIR-7377): the tree, its rows, menus,
+  // Move to… picker, drag, the page route's sidebar and breadcrumb, and the two
+  // hooks — the `*.tsx` glob above stops at `components/pages/`, one level up.
+  'components/pages/tree/*.tsx',
+  'components/pages/tree/*.ts',
+  // The tree routes' `parent` parser (`?parent=` and the JSON `parent`).
+  'lib/pages/parentInput.ts',
   // `app/(authed)/pages/**` — the index, New page and the page at its address.
   'app/**/pages/page.tsx',
   'app/**/pages/*/page.tsx',
   'app/**/pages/_components/*.tsx',
   'app/**/pages/*/_components/*.tsx',
+  // Story MOTIR-5760 (agents read and write a page over the MCP; MOTIR-7413):
+  // the three page tools and the plumbing they share.
+  'lib/mcp/tools/getPage.ts',
+  'lib/mcp/tools/createPage.ts',
+  'lib/mcp/tools/updatePage.ts',
+  'lib/mcp/tools/pageRef.ts',
 ] as const;
 
 const SHARED_FILES = [
   'lib/services/attachmentsService.ts',
   'lib/repositories/attachmentRepository.ts',
+  // MOTIR-5760: `toToolError` gained the page arms (every `@motir/pages`
+  // refusal by its code, and the revision conflict as an instruction). The rest
+  // of the file is every other tool's, which this lane does not run, so it is
+  // reported, not gated; the page arms are covered by the tool suites below.
+  'lib/mcp/toolResult.ts',
 ] as const;
 
 export default defineConfig({
@@ -80,9 +106,18 @@ export default defineConfig({
   test: {
     ...baseConfig.test,
     include: [
-      // The story gate — the assembly, on the real doors.
+      // The story gates — the assembly, on the real doors (MOTIR-5752 · MOTIR-5753).
       'tests/integration/pagesStoryGate.test.ts',
+      'tests/integration/pagesTreeStoryGate.test.ts',
       'tests/integration/pageHistoryStoryGate.test.ts',
+      // Agents read and write a page over the MCP (Story MOTIR-5760 · MOTIR-7413):
+      // the story gate, the three tools' suites and the device grant.
+      'tests/integration/pagesMcpStoryGate.test.ts',
+      'tests/mcp/getPageTool.test.ts',
+      'tests/mcp/createPageTool.test.ts',
+      'tests/mcp/updatePageTool.test.ts',
+      'tests/mcp/pageRef.test.ts',
+      'tests/cli/cliDevicePageGrant.test.ts',
       // The per-card server suites (MOTIR-7276 · 7277 · 7278 · 7279 · 7300).
       'tests/page-schema-rls.test.ts',
       'tests/pages/*.test.ts',
@@ -92,6 +127,7 @@ export default defineConfig({
       'tests/jobs/attachment-gc.test.ts',
       'tests/api/pages-routes.test.ts',
       'tests/api/pages-routes-refusals.test.ts',
+      'tests/api/pages-routes-tree.test.ts',
       // A page's history (Story MOTIR-5754 · MOTIR-7385 · 7386).
       'tests/api/pages-history-routes.test.ts',
       // The client surfaces (MOTIR-7280 · 7300).

@@ -426,6 +426,303 @@ are hard-coded English today; the page editor's are not.)
 
 ---
 
+## The page tree
+
+**Story MOTIR-5753 · design subtask MOTIR-7367.** The `/pages` index becomes a TREE of the project's
+folders and pages, and the page at `/pages/<id>` gains a sidebar tree and a breadcrumb. This section
+**amends** two parts of the approved design above, by delta mock; the approved mocks are not edited:
+
+| Amends                                                     | By                             | Panels |
+| ---------------------------------------------------------- | ------------------------------ | ------ |
+| § The index — `/pages` (states 2–5), `pages.mock.html`     | `pages--tree.mock.html`        | 1–12   |
+| § The way back — "← Pages", `page.mock.html` (states 6–12) | `page--tree-sidebar.mock.html` | 1–5    |
+
+### Design system — what was read, and the verdict
+
+- **Read:** `package.json` (depends on `@motir/design-system`, `workspace:*`), `app/globals.css` (imports
+  `@motir/design-system/theme.css`), `packages/design-system/package.json` (version **0.8.0**, exports
+  `./mock`), `app/layout.tsx` (the axes are the signed-in reader's own appearance —
+  `data-style` / `data-palette` / `data-type` from `appearancePreferenceService` — so there is no single
+  project axis to pin), `packages/design-system/theme.css`.
+- **Verdict: ON MOTIR DESIGN (branch a)** — both checks hold.
+- **How the mocks are built:** composed from the shipped parts' actual markup with the theme's tokens
+  inlined, the same way the approved base (`pages.mock.html`, `page.mock.html`) is built, so the two
+  deltas read as one design with it. `renderMock` from `@motir/design-system/mock` exists at 0.8.0 but no
+  asset in `design/` uses it, and a delta drawn by a different method from its base could not be
+  compared panel to panel. The token block is the base's (base palette, default style), plus five tokens
+  copied from `theme.css` that the tree needs: `--el-tint-rose`, `--el-overlay-scrim`, `--radius-modal`,
+  `--shadow-modal`, `--spacing-tooltip-x/y`.
+- **Parts the package lacks:** none is proposed for the package. Everything drawn is the package's
+  (`Button`, `Popover`, `Modal`, `EmptyState`, `PageSkeleton`, `Sidebar` row treatment) or the
+  product's own (`TreeTable`, and `/items`' folder components, which MOTIR-7374 moves into a
+  new shared `folders` directory under `components`). `PageTree`, `PageRowMenu`, `PagePlacementPicker`, `PageTreeDnd` and
+  `PageBreadcrumb` are **product-local components** — they know pages and folders, which the package
+  does not.
+
+### What is fixed, and what it rests on
+
+- **Nothing is drawn in `/items`, and `/items` does not change.** Pages and work items share the
+  project's folders, but each surface shows its own kind (ADR `docs/decisions/pages.md` AMENDMENT 1,
+  quoting Yue, 2026-10-02).
+- **`/pages` shows every project folder**, including one that so far holds only work items: a folder is
+  where a page is filed beside the work it describes. This settles the tree-view question AMENDMENT 1
+  handed to MOTIR-5753 ("how a folder that holds only pages, or only work items, shows on the other
+  surface").
+- **A level is folders first, then pages**, each in position order (ADR §4 as amended); 50 per read,
+  at most 100, one keyset cursor across both bands (ADR §4; MOTIR-7370 `listTreeLevel`).
+
+### Access path (drawn)
+
+1. The shipped **Pages** rail row (base § The ACCESS PATH) opens `/pages`, now the tree —
+   `pages--tree.mock.html` panel 1.
+2. A **page row's title is a link** to `/pages/<id>` — the same panel; it lands on
+   `page--tree-sidebar.mock.html` panel 1.
+3. On the page, the **breadcrumb's folder segment** links to `/pages?folder=<folderId>`, which opens
+   the tree with that folder's path expanded and the folder focused — sidebar mock panel 4. The
+   **Pages** segment and the sidebar's head link to `/pages`.
+
+### `/pages` — the tree (`pages--tree.mock.html`)
+
+**Composition.**
+
+| Element                   | Primitive / source                                                                | Colour / shape                                                                                                                                                                                                                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Header                    | the base header (`font-serif text-2xl`), subtitle changed                         | `--el-text`, subtitle `--el-text-secondary`                                                                                                                                                                                                                                              |
+| New folder · New page     | `Button` secondary · `Button` primary, `FolderPlus` · `Plus` 16px                 | `--el-button-border` / `--el-accent` + `--el-accent-text`, `--radius-btn`, `--height-btn-md`, `--spacing-btn-x`                                                                                                                                                                          |
+| Tree frame                | Card frame around `role="tree"`                                                   | `--el-card`, `--el-border`, `--radius-card`; rules between rows `--el-border-soft`                                                                                                                                                                                                       |
+| Row                       | `TreeTable` row: 40px (`ROW_PX`), 22px per level (`INDENT_PX`), 16px chevron slot | ink `--el-text`; hover `--el-surface`; focus `--focus-ring-color` inset ring                                                                                                                                                                                                             |
+| Chevron                   | `ChevronRight` 12px, rotated 90° when open                                        | `--el-icon-muted`, decorative                                                                                                                                                                                                                                                            |
+| Folder row                | `/items`' folder row: `Folder` 16px + name, semibold                              | glyph `--el-text-secondary`, name `--el-text`. **Always expandable.** Its whole row toggles it.                                                                                                                                                                                          |
+| Page row                  | `NotebookText` 16px (the rail's Pages glyph) + the title as a link                | glyph `--el-icon-muted`, title `--el-text`; untitled: _Untitled_ italic `--el-text-secondary`                                                                                                                                                                                            |
+| Row menu trigger          | `FolderRowMenu`'s trigger: `Ellipsis` in a `--height-control` square              | `--el-text-secondary`, `--radius-control`, `--spacing-icon-btn`; open: `--el-border-soft` fill, `--el-text`                                                                                                                                                                              |
+| Row menu                  | `FolderRowMenu` (`Popover`, width 220, `role="menu"`)                             | items `--height-control`, `--spacing-control-x`, `--radius-control`, 13px `--el-text`; glyph `--el-text-secondary`; danger `--el-danger-on-surface` + `--el-danger` glyph; disabled `--el-text-faint` on a `disabled` item                                                               |
+| Inline name field         | `FolderNameField`, shipped                                                        | `--el-input-border`, `--radius-input`, focus ring                                                                                                                                                                                                                                        |
+| Synthetic rows            | `/items`' empty / loading / load-more rows                                        | 13px `--el-text-secondary`; sentence `--el-text`; `Loader2` / `AlertCircle` (`--el-danger`) 14px; links `--el-link`                                                                                                                                                                      |
+| Load more                 | text button, `ChevronDown` 14px                                                   | `--el-link`, count `--el-text-secondary`                                                                                                                                                                                                                                                 |
+| Skeleton                  | `PageSkeleton` `Block`s inside the tree frame                                     | `--el-muted`, `--radius-control`, `aria-hidden`                                                                                                                                                                                                                                          |
+| Empty project             | `EmptyState` (base state 3) + a second action                                     | as the base                                                                                                                                                                                                                                                                              |
+| Move to… picker           | `FolderPickerPanel` in `FolderPickerPopover`, width 320                           | title 12px semibold `--el-text-secondary`; refusal box `--el-danger` border + glyph on `--el-tint-rose`, copy `--el-text-strong`; option `--spacing-control-x/y`, `--radius-control`, active `--el-surface`; disabled `--el-text-faint` on `aria-disabled`, reason `--el-text-secondary` |
+| Drag handle               | `GripVertical` 16px in the row's left gutter                                      | `--el-icon-muted`, `aria-hidden`, out of the tab order                                                                                                                                                                                                                                   |
+| Lifted row (drag overlay) | the row on a card                                                                 | `--el-card`, `--el-border-strong`, `--radius-control`, `--shadow-elevated`                                                                                                                                                                                                               |
+| Origin slot               | dashed placeholder                                                                | `--el-border-strong` dashed on `--el-surface-soft`                                                                                                                                                                                                                                       |
+| Drop before / after       | 2px line with an 8px ring dot, at the target level's indent                       | `--el-accent`                                                                                                                                                                                                                                                                            |
+| Drop inside               | the target row tinted and ringed                                                  | `--el-tint-lavender` fill, 2px inset `--el-accent` ring                                                                                                                                                                                                                                  |
+| Refused target            | dashed outline, `not-allowed` cursor, `Tooltip`                                   | `--el-danger` 2px dashed; tooltip `--el-tooltip-bg/-text`, `--spacing-tooltip-x/y`                                                                                                                                                                                                       |
+| Root drop zone            | dashed box at the tree's foot, only while dragging                                | `--el-border-strong` dashed, `--el-text-secondary`, `--radius-control`                                                                                                                                                                                                                   |
+| Refused-drop message      | `Toast`                                                                           | `--el-card`, `--el-border`, `--radius-card`, `--shadow-elevated`; glyph `--el-danger`, copy `--el-text`                                                                                                                                                                                  |
+| Folder delete             | `FolderDeleteDialog` (`Modal`, `alertdialog`), count line changed                 | as shipped: `--el-tint-mint` box, `--el-text-strong`, `ArrowUp` `--el-success`; `Button` danger (`--el-danger` + `--el-danger-text`)                                                                                                                                                     |
+
+**Rows and order (panel 1).** Folders first, then pages, each in position order. A folder row's whole
+row expands it (as in `/items`); a page row's title opens the page, and its chevron expands its
+sub-pages. A page with no sub-pages has no chevron; **a folder always has one**, because its emptiness is
+only known after the read and is then said in words. The tree is `role="tree"` / `treeitem` with
+`aria-level`, `aria-expanded` and arrow-key movement (MOTIR-7373). Page rows carry no "Edited…" line:
+the tree is in position order, not recency, and the editor is on the page.
+
+**New (panels 1, 2, 4).** **New page** (header, and the empty state) creates at the root; **New page here**
+(folder menu, and a folder's _No pages here_ row) creates in that folder; **New sub-page** (page menu)
+creates under that page. All three POST with a `parent` and move the browser to the new page with focus
+in the title — no dialog, as the base decided. While the POST runs a pending row (_Creating page…_)
+sits where the page will appear. A failure is the shipped `pages.index.createFailed` toast. **New
+folder** (header, and the empty state) is the shipped root folder create with its inline name field.
+
+**Row menus (panel 2).**
+
+- **Page row:** New sub-page · Move to… | Move up · Move down. Move up / down reorder among **sibling
+  pages** only (folders always lead a level, so a page never passes one). On the first sibling **Move
+  up is absent**; on the last, **Move down is absent** — MOTIR-7374's acceptance criterion.
+- **Folder row:** the shipped `/items` folder menu, composed unchanged, with **New page here** put
+  first: New page here · New folder inside · Rename · Move to… | Move up · Move down | Delete…. The
+  shipped folder Move up / Move down keep their shipped behaviour (drawn **disabled** on the first / last
+  folder). See _Open questions_.
+
+**States.** Folders but no pages (panel 3) · empty project (4) · loading — first level and an expanding
+level (5) · error — first level and a level's expand, with retry on the row (6) · at scale — 50 rows then
+Load more, with a count of rows _shown_ because a keyset cursor knows no total (7) · read-only viewer — no
+New, no menu, no handle, nothing drawn disabled (8). The first-level frame is an in-page `<Suspense>`
+after the gate, never a `loading.tsx`, because `/pages` calls `notFound()` (CLAUDE.md).
+
+**Move to… (panels 9–10).** Composed from the shipped `FolderPickerPanel`: anchored to the row's menu
+button, titled with `folders.pickerTitle`, a refusal slot at the top, a `listbox` of options, picking
+commits, picking the current location writes nothing. Two differences, both because pages are many:
+the options are a **lazily expanded tree** (each option's chevron reads that level through the tree
+route), and there is **no search field** (this story has no page search). **Project root** is the first
+option. **The moving page is disabled** with its reason and has no chevron, so its sub-pages are never
+offered — the cycle is refused before anything is sent. A refusal the picker could not have known
+renders in the refusal slot and the tree is unchanged:
+
+| Refusal (route → code)                  | Key                               | Source                                        |
+| --------------------------------------- | --------------------------------- | --------------------------------------------- |
+| 422 `PAGE_CYCLE`                        | `pages.tree.refusal.cycle`        | ADR §4 · MOTIR-7368 (package) · MOTIR-7372    |
+| 422 `PAGE_DEPTH_EXCEEDED` (`limit: 10`) | `pages.tree.refusal.depth`        | ADR §4 `PAGE_DEPTH_LIMIT` · MOTIR-7368 · 7372 |
+| 422 `CROSS_PROJECT_PAGE_PARENT`         | `pages.tree.refusal.crossProject` | ADR §4 · MOTIR-7368 · MOTIR-7372              |
+| 404 (folder or page parent gone)        | `pages.tree.refusal.gone`         | MOTIR-7372                                    |
+
+**Drag (panel 11).** Only page rows are draggable, only for an editor; folder rows are drop targets and
+never draggable (folders move with Move to…, as in `/items`). On a page row the top quarter means
+**before**, the bottom quarter **after**, the middle half **inside**; a folder row is **inside** only.
+Hovering a collapsed row for 600ms expands it. While a drag is live, a root drop zone appears at the
+tree's foot (drop there → the project root, after the root's pages). A page over itself or anything inside
+it is **refused before the drop** (dashed danger outline, `not-allowed`, a tooltip). Depth and
+cross-project refusals only the server knows: the row **snaps back**, keeps focus, and a toast says the
+move's own sentence. There is **no keyboard drag** — Move up / Move down / Move to… are the keyboard
+path, so the handle is `aria-hidden` and not focusable.
+
+**Folder delete (panel 12).** The shipped dialog, unchanged except that its count names pages too and its
+last sentence says no page is deleted; deleting moves the folder's pages up with its work items and
+folders (ADR §4).
+
+### The page — sidebar and breadcrumb (`page--tree-sidebar.mock.html`)
+
+| Element               | Primitive / source                                         | Colour / shape                                                                                                                |
+| --------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Sidebar column        | `<aside>` between the rail and `<main>`, 248px             | `--el-surface-soft`, right rule `--el-border`                                                                                 |
+| Sidebar head          | "Pages" link + hide button (`PanelLeftClose`, icon button) | 13px semibold `--el-text`; button `--el-text-secondary`, `--height-btn-sm` square, `--radius-control`                         |
+| Sidebar rows          | `PageTree` at compact density: 32px rows, 14px per level   | `--el-text`, folder glyph `--el-text-secondary`, page glyph `--el-icon-muted`, `--radius-control`                             |
+| Selected page         | `Sidebar`'s active-row treatment                           | `--el-sidebar-item-bg-active`, `--el-sidebar-border`, `--shadow-subtle`, 500 weight, glyph `--el-icon-active`                 |
+| Breadcrumb            | `<nav>` of links, `ChevronRight` 14px separators           | links 13px `--el-text-secondary`; current `--el-text` 500, `aria-current="page"`; separators `--el-icon-muted`, `aria-hidden` |
+| Folder segment        | `Folder` 14px + name (+ sr-only "Folder:")                 | as a link                                                                                                                     |
+| "…" (hidden segments) | button + `Popover` menu (`FolderRowMenu` grammar)          | `--el-text-secondary`, `--radius-control`; open `--el-border-soft`; items as the row menu                                     |
+| Show page tree        | icon button (`PanelLeftOpen`) leading the breadcrumb row   | as the hide button                                                                                                            |
+| Narrow overlay        | the same `<aside>` as a drawer                             | `--el-overlay-scrim`, `--shadow-modal`                                                                                        |
+
+- **Selected and expanded (panel 1).** `PageTree` with `selectedPageId` and an `expandedPath` built from
+  the trail, so the path is open on first paint and only levels opened later load lazily. **The sidebar is
+  navigation only**: no New, no row menu, no drag — arranging the tree happens in `/pages`, and a second
+  set of actions on a 248px column would be the same actions in a worse place.
+- **Breadcrumb (panels 1–2).** Root-first: **Pages** › folders › ancestor pages › this page, from
+  `getPageTrail` (ADR §4: folders read from the topmost page's folder chain; pages from
+  `ancestor_page_ids`). It always starts with **Pages**, so a root page keeps its way back, and it
+  replaces "← Pages" and its two keys. **Middle truncation:** over five segments, keep Pages, the first
+  segment, the parent and the page; fold the rest into "…", which opens the hidden segments root-first.
+  Each segment truncates at 180px (the page at 220px) with its full text in `title`.
+- **Collapsed (panel 3).** At **1280px and wider** the sidebar shows unless the reader hid it (a
+  per-viewer `localStorage` convenience; empty storage means shown). **Below 1280px** it starts hidden and
+  **Show page tree** opens it as an overlay drawer, closed by Esc, the scrim or choosing a page.
+- **Breadcrumb → tree (panel 4).** A folder segment → `/pages?folder=<folderId>`: the tree opens with that
+  folder's path expanded and the folder focused. A page segment → that page.
+- **Sidebar states (panel 5).** The tree's own loading / failed / Load more rows at compact density. A
+  page that 404s renders no sidebar and no breadcrumb (base state 12 unchanged); read-only is unchanged
+  (base state 10) and the sidebar is the same for everyone.
+
+### Copy — the page tree
+
+New keys live under `pages.tree.*`. Shipped keys are reused where the words are the same, so the folder
+commands read identically in `/items` and `/pages`.
+
+| Key                               | en                                                                                                | zh                                                                | Built by   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------- |
+| `pages.tree.subtitle`             | Specs, runbooks and notes for this project, kept in folders and pages.                            | 此项目的规格说明、运行手册和笔记，按文件夹和页面整理。            | MOTIR-7373 |
+| `pages.tree.label`                | Folders and pages in this project                                                                 | 此项目中的文件夹和页面                                            | MOTIR-7373 |
+| `pages.tree.newPageHere`          | New page here                                                                                     | 在此新建页面                                                      | MOTIR-7373 |
+| `pages.tree.newSubPage`           | New sub-page                                                                                      | 新建子页面                                                        | MOTIR-7373 |
+| `pages.tree.pageActionsAria`      | Page actions for {title}                                                                          | “{title}”的页面操作                                               | MOTIR-7373 |
+| `pages.tree.expandAria`           | Expand {title}                                                                                    | 展开“{title}”                                                     | MOTIR-7373 |
+| `pages.tree.collapseAria`         | Collapse {title}                                                                                  | 收起“{title}”                                                     | MOTIR-7373 |
+| `pages.tree.noPagesHere`          | No pages here                                                                                     | 这里还没有页面                                                    | MOTIR-7373 |
+| `pages.tree.loadingLevel`         | Loading pages…                                                                                    | 正在加载页面…                                                     | MOTIR-7373 |
+| `pages.tree.rootFailed`           | Couldn’t load the pages.                                                                          | 无法加载页面。                                                    | MOTIR-7373 |
+| `pages.tree.levelFailed`          | Couldn’t load what’s inside.                                                                      | 无法加载其中的内容。                                              | MOTIR-7373 |
+| `pages.tree.loadMore`             | Load more                                                                                         | 加载更多                                                          | MOTIR-7373 |
+| `pages.tree.shown`                | {count} shown                                                                                     | 已显示 {count} 项                                                 | MOTIR-7373 |
+| `pages.tree.picker.listLabel`     | Folders and pages                                                                                 | 文件夹和页面                                                      | MOTIR-7374 |
+| `pages.tree.picker.loading`       | Loading folders and pages…                                                                        | 正在加载文件夹和页面…                                             | MOTIR-7374 |
+| `pages.tree.picker.isThisPage`    | It’s this page — a page can’t move into itself or its sub-pages.                                  | 就是此页面——页面不能移动到其自身或其子页面中。                    | MOTIR-7374 |
+| `pages.tree.refusal.cycle`        | A page can’t move into one of its own sub-pages. It stayed where it was.                          | 页面不能移动到其自身的子页面中。它保持在原位。                    | MOTIR-7374 |
+| `pages.tree.refusal.depth`        | Pages nest at most {limit} levels deep, and this move would go past that. It stayed where it was. | 页面最多只能嵌套 {limit} 层，此次移动会超出该限制。它保持在原位。 | MOTIR-7374 |
+| `pages.tree.refusal.crossProject` | That folder or page belongs to another project. The page stayed where it was.                     | 该文件夹或页面属于另一个项目。页面保持在原位。                    | MOTIR-7374 |
+| `pages.tree.refusal.gone`         | That folder or page no longer exists. The page stayed where it was.                               | 该文件夹或页面已不存在。页面保持在原位。                          | MOTIR-7374 |
+| `pages.tree.drop.root`            | Drop here to move it to the project root                                                          | 拖放到此处，将其移动到项目根目录                                  | MOTIR-7376 |
+| `pages.tree.drop.refusedSelf`     | Can’t drop a page into its own sub-page.                                                          | 不能将页面拖放到其自身的子页面中。                                | MOTIR-7376 |
+| `pages.tree.sidebar.label`        | Page tree                                                                                         | 页面树                                                            | MOTIR-7375 |
+| `pages.tree.sidebar.hide`         | Hide page tree                                                                                    | 隐藏页面树                                                        | MOTIR-7375 |
+| `pages.tree.sidebar.show`         | Show page tree                                                                                    | 显示页面树                                                        | MOTIR-7375 |
+| `pages.tree.breadcrumb.label`     | Where this page is                                                                                | 此页面所在位置                                                    | MOTIR-7375 |
+| `pages.tree.breadcrumb.more`      | Show {count} more levels                                                                          | 显示另外 {count} 层                                               | MOTIR-7375 |
+| `pages.tree.breadcrumb.folder`    | Folder:                                                                                           | 文件夹：                                                          | MOTIR-7375 |
+
+`{limit}` is `PAGE_DEPTH_LIMIT` (10), passed from the 422's `limit`. `pages.tree.expandAria` /
+`collapseAria` are the page row chevron's labels (a folder row keeps `folders.expandAria` /
+`collapseAria`).
+
+**Reused, unchanged:** `pages.index.title` (header, breadcrumb root, sidebar head), `pages.index.newPage`,
+`pages.index.creating`, `pages.index.createFailed`, `pages.index.empty.*`, `pages.untitled`,
+`shell.pageLoading`, `common.retry` (_Try again_ / 重试), `common.cancel`, `common.close`, and from
+`folders.*`: `newFolder`, `newFolderInside`, `rename`, `moveTo`, `moveUp`, `moveDown`, `delete`,
+`pickerTitle`, `projectRoot`, `currentLocation`, `actionsAria`, `nameLabel`, `expandAria`, `collapseAria`,
+`deleteTitle`, `deleteLead`, `deleteConfirm`.
+
+**Changed (MOTIR-7371):** `folders.deleteMoves` gains a `pages` count and its last sentence becomes
+_No work items or pages are deleted._ / _不会删除任何工作项或页面。_ — drawn with the counts filled in as
+"**2 folders, 4 work items and 3 pages** will move to **Project root**." / "**2 个文件夹、4 个工作项和 3
+个页面**将移动到**项目根目录**。".
+
+**Retired:** `pages.index.subtitle` and `pages.index.listLabel` (MOTIR-7373, replaced by
+`pages.tree.subtitle` / `pages.tree.label`); `pages.page.back` and `pages.page.backLabel` (MOTIR-7375,
+replaced by the breadcrumb).
+
+### Allocation — which card builds which element
+
+No element is built twice; where two cards touch one component, the split is stated.
+
+| Element (mock · panel)                                                                                                                      | Built by                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `PageTree`: rows, glyphs, indent, chevrons, `role="tree"`, keyboard, lazy expand, Load more (tree 1, 7)                                     | **MOTIR-7373**                             |
+| Header subtitle and **New page**; empty state with New page (tree 1, 4)                                                                     | **MOTIR-7373**                             |
+| The row Ellipsis trigger with its **New** entry only — New sub-page (page), New page here (folder) (tree 2)                                 | **MOTIR-7373**                             |
+| _No pages here_ row with New page here; the pending _Creating page…_ row (tree 2, 3)                                                        | **MOTIR-7373**                             |
+| Loading, error (with retry on the row), at-scale and read-only states (tree 5–8)                                                            | **MOTIR-7373**                             |
+| Page menu's **Move to… · Move up · Move down** appended to the page row menu (tree 2)                                                       | **MOTIR-7374**                             |
+| Folder row menu: the shared `FolderRowMenu` with the shipped folder commands after New page here (tree 2)                                   | **MOTIR-7374**                             |
+| **New folder** in the header and the empty state; inline name field (tree 1, 2, 4)                                                          | **MOTIR-7374**                             |
+| **Move to…** picker (`PagePlacementPicker`), disabled self, refusal slot and the four sentences (tree 9, 10)                                | **MOTIR-7374**                             |
+| `usePageMove`: the placement call, `beforeId`/`afterId`, refreshing both levels, error → sentence mapping                                   | **MOTIR-7374**                             |
+| Moving the five folder components to a shared `folders` directory under `components` (no visual change)                                     | **MOTIR-7374**                             |
+| Folder delete counting pages, and the delete moving pages up (tree 12)                                                                      | **MOTIR-7371**                             |
+| Drag handle, lifted row, origin slot, before/after line, inside tint, refused target + tooltip, root drop zone, snap-back + toast (tree 11) | **MOTIR-7376**                             |
+| Sidebar column, its head, selected row, pre-expanded path (sidebar 1, 5)                                                                    | **MOTIR-7375**                             |
+| Breadcrumb incl. middle truncation and "…" menu; removing "← Pages" (sidebar 1, 2)                                                          | **MOTIR-7375**                             |
+| Collapse / show, the 1280px rule, the narrow overlay (sidebar 3)                                                                            | **MOTIR-7375**                             |
+| `/pages?folder=<id>` opening the tree with that folder expanded and focused (sidebar 4)                                                     | **MOTIR-7375**                             |
+| The level read, create-with-parent, move, the trail (no element; every panel reads them)                                                    | MOTIR-7370 (service) · MOTIR-7372 (routes) |
+
+### Where each behaviour comes from
+
+| Behaviour drawn                                                     | Source                                                                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Pages in `/pages`, not `/items`; shared folders                     | ADR AMENDMENT 1 (Yue, 2026-10-02)                                                           |
+| Folders first, then pages, each by position                         | ADR §4 _Order within a level_ (as amended) · MOTIR-7370 `listTreeLevel`                     |
+| 50 per read (max 100), keyset across both bands, lazy per level     | ADR §4 _Paging per level_ · MOTIR-7370                                                      |
+| A page's parent is a page, a folder or the root — never a work item | ADR §4 · MOTIR-7370 (`PAGE_PARENT_NOT_ALLOWED`)                                             |
+| The three refusals, their codes and statuses                        | ADR §4 · MOTIR-7368 (package `movePage`) · MOTIR-7372 (route mapping)                       |
+| Depth limit of 10 levels of pages; folders do not count             | ADR §4 · `PAGE_DEPTH_LIMIT`                                                                 |
+| Self and descendants disabled in Move to…                           | MOTIR-7374 acceptance                                                                       |
+| Move up / down absent on the first / last sibling page              | MOTIR-7374 acceptance                                                                       |
+| Folder delete moves its pages up; the dialog counts pages           | ADR §4 · MOTIR-7371                                                                         |
+| No New, no menu, no drag without `page:edit`                        | ADR §5 · MOTIR-7373 / 7374 / 7376 acceptance                                                |
+| Drop bands, refused-drop snap-back, no folder drag                  | MOTIR-7376 (bands and timing fixed here)                                                    |
+| Breadcrumb folders + ancestor pages, root-first                     | ADR §4 (`ancestor_page_ids`, folder chain at render) · MOTIR-7370 `getPageTrail`            |
+| Sidebar pre-expanded to the page, breadcrumb replaces "← Pages"     | MOTIR-7375 · base § The way back                                                            |
+| No `loading.tsx`; in-page `<Suspense>` after the gate               | CLAUDE.md § A `loading.tsx` may NOT sit above a route that decides existence · base state 5 |
+| Archive / delete of a page — not drawn                              | MOTIR-5755                                                                                  |
+
+### Open questions handed to the cards
+
+- **Folder Move up / Move down are drawn disabled, page Move up / Move down absent.** The folder menu is
+  composed unchanged from `/items`, where the edge entries are disabled; MOTIR-7374's acceptance asks
+  for page entries to be absent. Both are drawn as their sources say. If the two should agree, the
+  smaller change is to make the page entries disabled too — MOTIR-7374's call, not the design's.
+- **`/pages?folder=<id>`** is a new query parameter on `/pages`; MOTIR-7375 reads it (it already gives
+  `PageTree` an `expandedPath`). A folder id that is not in the project is ignored, not a 404.
+- **Hidden-sidebar preference** is per device (`localStorage`). A synced preference is not asked for.
+
+### Not drawn here
+
+- **`/items`** — unchanged by this story.
+- **Archive, delete and restore of a page** — MOTIR-5755.
+- **A combined tree of folders, pages and work items** — deferred by ADR AMENDMENT 1.
+- **Page search** — the Move to… picker has none in this story.
+
 ## History (MOTIR-5754 · MOTIR-7381)
 
 **Story MOTIR-5754 · design subtask MOTIR-7381.** Any reader of a page (`page:view`) opens its

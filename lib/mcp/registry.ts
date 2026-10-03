@@ -4,6 +4,7 @@ import { permissionGatedServer } from './permissionGate';
 import { rateLimitedServer } from './rateLimitGate';
 import { strictInputServer } from './strictInput';
 import { annotatedServer } from './toolAnnotations';
+import { referencedServer } from './toolReference';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
 import { GET_DESIGN_TOOL_NAME, registerGetDesign } from './tools/getDesign';
 import { LIST_DESIGNS_TOOL_NAME, registerListDesigns } from './tools/listDesigns';
@@ -104,6 +105,9 @@ import { LIST_FOLDERS_TOOL_NAME, registerListFolders } from './tools/listFolders
 import { CREATE_FOLDER_TOOL_NAME, registerCreateFolder } from './tools/createFolder';
 import { UPDATE_FOLDER_TOOL_NAME, registerUpdateFolder } from './tools/updateFolder';
 import { DELETE_FOLDER_TOOL_NAME, registerDeleteFolder } from './tools/deleteFolder';
+import { GET_PAGE_TOOL_NAME, registerGetPage } from './tools/getPage';
+import { CREATE_PAGE_TOOL_NAME, registerCreatePage } from './tools/createPage';
+import { UPDATE_PAGE_TOOL_NAME, registerUpdatePage } from './tools/updatePage';
 import {
   SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
   registerSearchWorkItemsSemantic,
@@ -149,7 +153,9 @@ import { CHANGE_KIND_TOOL_NAME, registerChangeKind } from './tools/changeKind';
 // What every registered tool is guaranteed, whatever wrappers a caller opts
 // into: its input schema is STRICT (`strictInput.ts`, MOTIR-3342), and it
 // carries a title and the `annotations` row `TOOL_ANNOTATIONS` declares for it
-// (`toolAnnotations.ts`, MOTIR-6974) — a tool with neither cannot register.
+// (`toolAnnotations.ts`, MOTIR-6974) — a tool with neither cannot register —
+// and its description ends with a link to its own entry in the published tool
+// reference (`toolReference.ts`, MOTIR-7391).
 
 /** Identifying info the MCP `initialize` handshake reports to clients. */
 export const MCP_SERVER_INFO = { name: 'motir', version: '0.1.0' } as const;
@@ -218,6 +224,9 @@ export const MCP_TOOL_NAMES = [
   CREATE_FOLDER_TOOL_NAME,
   UPDATE_FOLDER_TOOL_NAME,
   DELETE_FOLDER_TOOL_NAME,
+  GET_PAGE_TOOL_NAME,
+  CREATE_PAGE_TOOL_NAME,
+  UPDATE_PAGE_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
   VALIDATE_WORK_ITEM_TOOL_NAME,
@@ -287,7 +296,11 @@ export function registerMcpTools(
   // title over 64 characters, and a tool that declares its own `annotations` —
   // so every tool `tools/list` serves carries a title and an explicit
   // read-only / destructive / idempotent / open-world verdict.
-  const strict = strictInputServer(annotatedServer(server));
+  //
+  // The REFERENCE seam (MOTIR-7391) is a third config rewrite beside them: it
+  // ends every tool's description with a link to that tool's entry in the
+  // published reference (`toolReference.ts`).
+  const strict = strictInputServer(annotatedServer(referencedServer(server)));
   // Two wrappers, and the ORDER is the policy: the permission gate runs first,
   // so a call the token was never granted is refused BEFORE it can consume any
   // of the request budget MOTIR-2610 added. Metering a refused call would let an
@@ -436,6 +449,11 @@ export function registerMcpTools(
   registerCreateFolder(target, resolveContext);
   registerUpdateFolder(target, resolveContext);
   registerDeleteFolder(target, resolveContext);
+  // Page tools (MOTIR-5760) — an agent reads and writes a page as markdown by id
+  // (`docs/decisions/pages.md` §8.2), over the same page service the editor uses.
+  registerGetPage(target, resolveContext);
+  registerCreatePage(target, resolveContext);
+  registerUpdatePage(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
   registerListSprints(target, resolveContext);
   // Sprint finishability check (7.8.15) — productizes the re-validate-the-active-

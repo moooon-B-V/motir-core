@@ -1,13 +1,16 @@
 import { PAGE_BODY_MAX_BYTES, PAGE_SAVE_MAX_BYTES, PAGE_TITLE_MAX_LENGTH } from './constants';
-import { applyUpdate, deriveFormats, emptyState } from './document/convert';
+import { applyUpdate, deriveFormats, emptyState, markdownToUpdate } from './document/convert';
 import {
   PageBodyTooLargeError,
   PageNotFoundError,
+  PageRevisionConflictError,
   PageTitleTooLongError,
   PageUpdateMalformedError,
 } from './errors';
+import { placementColumns, resolvePlacementParent } from './move';
 import { positionBetween } from './position';
-import type { Clock, PageRow, PageStore } from './store';
+import type { Clock, LockedPageRow, PageRow, PageStore } from './store';
+import { planPlacement } from './tree';
 import type { PagePlacement } from './types';
 import { recordVersion } from './versions';
 
@@ -38,12 +41,17 @@ export interface CreatePageInput {
   actorId: string;
   /** Optional; an untitled page stores `''`. */
   title?: string;
+  /** Where the page goes (§4): under a page, in a folder, or at the root (the default). */
+  parent?: PagePlacement;
 }
 
 /**
- * Create an empty page at the project root, LAST among the root's pages. The
- * root sibling set is locked before its last position is read, so two creates
- * mint distinct, creation-ordered keys.
+ * Create an empty page LAST among its parent's pages — at the project root, in a
+ * folder, or under a page. The placement lock is taken before the parent and its
+ * last position are read, so two creates mint distinct, creation-ordered keys and
+ * a parent cannot move out from under the check. A parent that is missing, in
+ * another project, or would put the page past the depth limit is refused before
+ * anything is written.
  */
 export async function createPage(
   store: PageStore,
@@ -51,8 +59,11 @@ export async function createPage(
   input: CreatePageInput,
 ): Promise<PageRow> {
   const title = normaliseTitle(input.title ?? '');
-  await store.lockSiblings(input.projectId, ROOT);
-  const last = await store.lastSiblingPosition(input.projectId, ROOT);
+  const parent = input.parent ?? ROOT;
+  await store.lockSiblings(input.projectId, parent);
+  const parentPage = await resolvePlacementParent(store, input.projectId, parent);
+  const { ancestorPageIds } = planPlacement({ placement: parent, parent: parentPage });
+  const last = await store.lastSiblingPosition(input.projectId, parent);
   const state = emptyState();
   const formats = deriveFormats(state);
   const now = clock.now();
@@ -60,10 +71,9 @@ export async function createPage(
     workspaceId: input.workspaceId,
     projectId: input.projectId,
     title,
-    parentPageId: null,
-    folderId: null,
+    ...placementColumns(parent),
     position: positionBetween(last, null),
-    ancestorPageIds: [],
+    ancestorPageIds,
     body: {
       state,
       ...formats,
@@ -132,6 +142,68 @@ export async function savePageUpdate(
   if (!page) throw new PageNotFoundError(input.pageId);
 
   const state = applyUpdate(page.bodyState, input.update);
+  return writeMergedBody(store, clock, page, input.actorId, state);
+}
+
+export interface SavePageMarkdownInput {
+  pageId: string;
+  actorId: string;
+  /** The WHOLE body, as markdown — it replaces what the page holds. */
+  markdown: string;
+  /** The `revision` the caller read; a page that has moved past it is refused. */
+  expectedRevision: number;
+}
+
+/**
+ * Replace a page's body with `markdown` (§3, §8.2): the second writer, beside the
+ * editor's. Unlike a Yjs update, a whole-body replace does not merge — written
+ * over a newer body it would delete whatever landed in between — so the caller
+ * states the revision it read, and a stale one is refused with
+ * `PageRevisionConflictError`, nothing written. Returns the new revision.
+ *
+ * The revision is compared UNDER `lockPage`, and the update is computed from the
+ * LOCKED state: a check before the lock would let an editor save slip between the
+ * read and the write, which is the exact overwrite the check exists to stop. An
+ * identical markdown still saves (revision is "every save", §3) and coalesces
+ * into the author's version like any other save (§6).
+ */
+export async function savePageMarkdown(
+  store: PageStore,
+  clock: Clock,
+  input: SavePageMarkdownInput,
+): Promise<number> {
+  const requestBytes = new TextEncoder().encode(input.markdown).byteLength;
+  if (requestBytes > PAGE_SAVE_MAX_BYTES) {
+    throw new PageBodyTooLargeError(PAGE_SAVE_MAX_BYTES, requestBytes);
+  }
+
+  const page = await store.lockPage(input.pageId);
+  if (!page) throw new PageNotFoundError(input.pageId);
+  if (page.revision !== input.expectedRevision) {
+    throw new PageRevisionConflictError(input.expectedRevision, page.revision);
+  }
+
+  const update = markdownToUpdate(page.bodyState, input.markdown);
+  if (update.byteLength > PAGE_SAVE_MAX_BYTES) {
+    throw new PageBodyTooLargeError(PAGE_SAVE_MAX_BYTES, update.byteLength);
+  }
+  const state = applyUpdate(page.bodyState, update);
+  return writeMergedBody(store, clock, page, input.actorId, state);
+}
+
+/**
+ * The ONE write both save procedures end in, on a page the caller locked: the
+ * body cap on the merged state, then the body, its formats and the revision in
+ * one `updateBody`, the version (§6) and the derived links. Nothing is written
+ * when the cap refuses.
+ */
+async function writeMergedBody(
+  store: PageStore,
+  clock: Clock,
+  page: LockedPageRow,
+  actorId: string,
+  state: Uint8Array,
+): Promise<number> {
   if (state.byteLength > PAGE_BODY_MAX_BYTES) {
     throw new PageBodyTooLargeError(PAGE_BODY_MAX_BYTES, state.byteLength);
   }
@@ -139,24 +211,24 @@ export async function savePageUpdate(
   const revision = page.revision + 1;
   const formats = deriveFormats(state);
   const now = clock.now();
-  await store.updateBody(input.pageId, {
+  await store.updateBody(page.id, {
     state,
     ...formats,
     revision,
-    updatedById: input.actorId,
+    updatedById: actorId,
     updatedAt: now,
   });
   // Every save leaves a version (§6) — extended or new, under the same lock and
   // the same instant as the body write.
   await recordVersion(store, {
     page,
-    actorId: input.actorId,
+    actorId,
     state,
     markdown: formats.markdown,
     now,
   });
   // Link extraction (§8.1) is the linking epic's; the port is called now so the
   // save path's shape is fixed when it lands.
-  await store.replaceDerivedLinks(input.pageId, []);
+  await store.replaceDerivedLinks(page.id, []);
   return revision;
 }

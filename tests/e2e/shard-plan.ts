@@ -483,6 +483,13 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // report while the spec was unreachable. This guard is what found it, which is
   // the case it exists for.
   'admin-org-lookup.spec.ts': 3.0,
+  // Story MOTIR-6905 · MOTIR-7322 — the fleet monitor's OFF-CLOUD arm: one
+  // sign-up, then two page loads asserting the disabled card and the absent Stop.
+  // ESTIMATED from its nearest neighbour by shape (`admin-org-lookup.spec.ts`,
+  // above) plus the measured local reading below, rounded UP because
+  // under-estimating unbalances the bin-packer. RE-MEASURE from the first green
+  // bulk artifact that includes it.
+  'admin-fleet-selfhost.spec.ts': 4.0,
   'app-role-surfaces.spec.ts': 1.3,
   'ai-callout-gate.spec.ts': 1.9,
   'ai-plan-generation.spec.ts': 10.0,
@@ -608,6 +615,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'epic6-journey.spec.ts': 14.4,
   'estimation.spec.ts': 14.6,
   'filter-builder.spec.ts': 23.8,
+  // Story MOTIR-5753 PROMOTED this from the acceptance lane (it was
+  // `acceptance-folders.spec.ts`, Story MOTIR-5308's receipt). ESTIMATED, not
+  // measured — two tests: the folder walk over /items, /boards and /backlog, and
+  // the viewer's look. Rounded UP; re-measure from its first green bulk leg.
+  'folders-tidy.spec.ts': 30.0,
   'github.spec.ts': 8.3,
   'general-attachment.spec.ts': 8.0,
   'gitlab.spec.ts': 6.1,
@@ -685,8 +697,22 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // and reloads, the second reads one 404. Rounded UP, because under-estimating
   // unbalances the bin-packer. RE-MEASURE from the first green CI run that
   // includes it.
+  // MOTIR-7414 — ESTIMATED, not measured: one test — a sign-up, an MCP create,
+  // three page loads, one debounced save and four tool calls. Rounded UP;
+  // re-measure from its first green bulk leg.
+  'pages-agent-mcp.spec.ts': 25.0,
   'pages-smoke.spec.ts': 20.0,
   'pages-stream.spec.ts': 12.0,
+  // MOTIR-7376 — ESTIMATED, not measured: three tests, a sign-up each; the
+  // third seeds a ten-page chain and expands nine levels before its drag. Rounded
+  // UP; re-measure from its first green bulk leg.
+  'pages-tree-drag.spec.ts': 35.0,
+  // Story MOTIR-5753 PROMOTED this from the acceptance lane (it was
+  // `acceptance-pages.spec.ts`, Story MOTIR-5752's receipt). ESTIMATED, not
+  // measured — four tests: the typed walk with ~7 debounced saves and a second
+  // session, then the 404, offline and too-large states. Rounded UP; re-measure
+  // from its first green bulk leg.
+  'pages-write.spec.ts': 45.0,
   'org-admin.spec.ts': 8.6,
   // MOTIR-6405 — measured LOCALLY in one run (47.0 s wall, which includes the
   // server's first compile of the routes it opens), so an upper bound:
