@@ -795,3 +795,88 @@ describe('the slot reservation’s defaults and its own race', () => {
     expect(error).toHaveBeenCalled();
   });
 });
+
+describe('adopt — the transition winner takes a held slot (MOTIR-7492)', () => {
+  const findSlot = (ref: string) =>
+    withSystemContext((tx) => fleetInFlightSlotRepository.findByRef('agent_instance', ref, tx));
+
+  it('RESTAMPS a slot another run reserved, so that run’s release removes nothing', async () => {
+    const fx = await seedTenant();
+    await fleetCeilingService.reserve(
+      {
+        workload: 'agent_instance',
+        ref: 'inst-1',
+        ownerRef: 'run-loser',
+        organizationId: fx.organizationId,
+        workspaceId: fx.workspaceId,
+        ttlSeconds: TTL_SECONDS,
+      },
+      NOW,
+    );
+    const later = new Date(NOW.getTime() + 60_000);
+
+    const adopted = await fleetCeilingService.adopt(
+      {
+        workload: 'agent_instance',
+        ref: 'inst-1',
+        ownerRef: 'run-winner',
+        organizationId: fx.organizationId,
+        workspaceId: fx.workspaceId,
+        ttlSeconds: TTL_SECONDS,
+      },
+      later,
+    );
+
+    expect(adopted).toBe(true);
+    const slot = await findSlot('inst-1');
+    expect(slot?.ownerRef).toBe('run-winner');
+    expect(slot?.expiresAt.getTime()).toBe(later.getTime() + TTL_SECONDS * 1_000);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await fleetCeilingService.release('agent_instance', 'inst-1', 'run-loser')).toBe(false);
+    expect(await fleetCeilingService.release('agent_instance', 'inst-1', 'run-winner')).toBe(true);
+    expect(await findSlot('inst-1')).toBeNull();
+  });
+
+  it('PUTS BACK a slot the losing run already released', async () => {
+    const fx = await seedTenant();
+
+    expect(
+      await fleetCeilingService.adopt({
+        workload: 'agent_instance',
+        ref: 'inst-2',
+        ownerRef: 'run-winner',
+        organizationId: fx.organizationId,
+        workspaceId: fx.workspaceId,
+        ttlSeconds: TTL_SECONDS,
+      }),
+    ).toBe(true);
+
+    const all = await adminDb.fleetInFlightSlot.findMany({ where: { ref: 'inst-2' } });
+    expect(all).toHaveLength(1);
+    expect(all[0]).toMatchObject({
+      workload: 'agent_instance',
+      ownerRef: 'run-winner',
+      organizationId: fx.organizationId,
+      workspaceId: fx.workspaceId,
+    });
+  });
+
+  it('fails soft: a write that throws is logged and reported, never thrown', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await seedTenant();
+    vi.spyOn(fleetInFlightSlotRepository, 'adopt').mockRejectedValue(new Error('db down'));
+
+    expect(
+      await fleetCeilingService.adopt({
+        workload: 'agent_instance',
+        ref: 'inst-3',
+        ownerRef: 'run-winner',
+        organizationId: fx.organizationId,
+      }),
+    ).toBe(false);
+    expect(error).toHaveBeenCalledWith(
+      '[fleetCeilingService] could not adopt a fleet slot',
+      expect.objectContaining({ ref: 'inst-3', detail: 'db down' }),
+    );
+  });
+});

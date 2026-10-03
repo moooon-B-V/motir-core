@@ -73,6 +73,42 @@ export const fleetInFlightSlotRepository = {
   },
 
   /**
+   * Take the slot for `(workload, ref)` AS `ownerRef`, whoever held it before —
+   * the one write that may restamp an existing row's owner (MOTIR-7492).
+   *
+   * {@link take} is `DO NOTHING` on purpose: a LOSING insert must never restamp
+   * the holder's row. This is the other case — the caller has just WON the
+   * state transition the slot stands for, so its run is the one the container
+   * will belong to, and a row stamped with a different run (a concurrent
+   * attempt that then lost, or one that leaked) would make the winner's own
+   * ownership-checked release fail to recognise it, while the loser's would
+   * delete it from under a live container. `DO UPDATE` restamps the owner and
+   * renews the safety net for the run that now holds it; the INSERT arm puts the
+   * row back when the loser's release got there first, so either order ends
+   * with exactly one row, owned by the winner.
+   */
+  async adopt(data: FleetInFlightSlotTakeInput, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$executeRaw`
+      INSERT INTO "fleet_in_flight_slot"
+        ("id", "workload", "ref", "owner_ref", "organization_id", "workspace_id",
+         "claimed_at", "expires_at", "created_at", "updated_at")
+      VALUES (
+        ${randomUUID()},
+        ${data.workload},
+        ${data.ref},
+        ${data.ownerRef ?? null},
+        ${data.organizationId},
+        ${data.workspaceId ?? null},
+        NOW(), ${data.expiresAt}, NOW(), NOW()
+      )
+      ON CONFLICT ("workload", "ref") DO UPDATE SET
+        "owner_ref" = EXCLUDED."owner_ref",
+        "expires_at" = EXCLUDED."expires_at",
+        "updated_at" = NOW()
+    `;
+  },
+
+  /**
    * Give a slot back — the release half, and the one that actually frees
    * capacity for every workload (`expires_at` is only the backstop for when this
    * never runs).

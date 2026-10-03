@@ -690,6 +690,86 @@ describe('hibernate, wake and delete', () => {
     expect(await slots()).toHaveLength(1);
   });
 
+  describe('two concurrent wakes, forced in order — the slot is the WINNER’s (MOTIR-7492)', () => {
+    /**
+     * Hold each wake right after its fleet reserve returns, so a case can decide
+     * which wake reserves the slot and which one wins the move to `waking`. The
+     * first caller RESERVES; every later one finds the slot `already_held`.
+     */
+    function gateReserves() {
+      const reserved: Array<() => void> = [];
+      const holds: Array<() => void> = [];
+      const reservedAt = [0, 1].map((i) => new Promise<void>((r) => (reserved[i] = r)));
+      const gates = [0, 1].map((i) => new Promise<void>((r) => (holds[i] = r)));
+      const original = fleetCeilingService.reserve.bind(fleetCeilingService);
+      let calls = 0;
+      vi.spyOn(fleetCeilingService, 'reserve').mockImplementation(async (req, now) => {
+        const n = calls++;
+        const verdict = await original(req, now);
+        if (n < 2) {
+          reserved[n]!();
+          await gates[n];
+        }
+        return verdict;
+      });
+      return { reservedAt, release: (i: number) => holds[i]!() };
+    }
+
+    async function expectOneSlotOwnedByTheOpenRun(): Promise<void> {
+      expect((await instances())[0]!.state).toBe('running');
+      const open = (await intervals()).filter((i) => i.endedAt === null);
+      expect(open).toHaveLength(1);
+      const held = await slots();
+      expect(held).toHaveLength(1);
+      expect(held[0]!.ownerRef).toBe(open[0]!.runId);
+    }
+
+    async function expectHibernateReleasesIt(id: string): Promise<void> {
+      const warn = vi.spyOn(console, 'warn');
+      await lifecycle.hibernate(KEY(), id, fx.ctx);
+      expect(await slots()).toEqual([]);
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes('removed no row'))).toEqual([]);
+    }
+
+    it('the wake that RESERVED loses the move: the winner adopts the slot, the loser’s release removes nothing', async () => {
+      const dto = await create();
+      await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+      const gate = gateReserves();
+
+      const a = lifecycle.wake(KEY(), dto.id, fx.ctx);
+      await gate.reservedAt[0];
+      const b = lifecycle.wake(KEY(), dto.id, fx.ctx);
+      await gate.reservedAt[1];
+      gate.release(1);
+      await expect(b).resolves.toMatchObject({ state: 'running' });
+      gate.release(0);
+      await expect(a).rejects.toThrow(AgentInstanceStateConflictError);
+
+      expect(fleet.operations.filter((o) => o.startsWith('machine:start'))).toHaveLength(1);
+      await expectOneSlotOwnedByTheOpenRun();
+      await expectHibernateReleasesIt(dto.id);
+    });
+
+    it('the wake that RESERVED also wins the move: the slot stays its own', async () => {
+      const dto = await create();
+      await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+      const gate = gateReserves();
+
+      const a = lifecycle.wake(KEY(), dto.id, fx.ctx);
+      await gate.reservedAt[0];
+      const b = lifecycle.wake(KEY(), dto.id, fx.ctx);
+      await gate.reservedAt[1];
+      gate.release(0);
+      await expect(a).resolves.toMatchObject({ state: 'running' });
+      gate.release(1);
+      await expect(b).rejects.toThrow(AgentInstanceStateConflictError);
+
+      expect(fleet.operations.filter((o) => o.startsWith('machine:start'))).toHaveLength(1);
+      await expectOneSlotOwnedByTheOpenRun();
+      await expectHibernateReleasesIt(dto.id);
+    });
+  });
+
   it('delete destroys the machine then the volume, closes the open interval, releases the slot, and drops it from the list', async () => {
     const dto = await create();
     await lifecycle.delete(KEY(), dto.id, fx.ctx);

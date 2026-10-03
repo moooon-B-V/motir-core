@@ -319,7 +319,9 @@ async function assertCredits(organizationId: string): Promise<void> {
  * limit never refuses another; Motir's own organisations (`unlimited`) have none.
  * The slot is keyed on the RUN (`runId`, the id of the run's first interval),
  * because the running charge splits one run into several intervals. Returns
- * nothing on success; throws the refusal in words otherwise.
+ * whether THIS call took the slot (`reserved`) or found it held (`already_held`
+ * — another create or wake for the instance is in flight, or a slot leaked);
+ * throws the refusal in words otherwise.
  */
 async function reserveSlot(input: {
   instanceId: string;
@@ -327,7 +329,7 @@ async function reserveSlot(input: {
   organizationId: string;
   workspaceId: string;
   unlimited: boolean;
-}): Promise<void> {
+}): Promise<'reserved' | 'already_held'> {
   const maxRunning = instanceMaxRunning();
   const verdict = await fleetCeilingService.reserve({
     workload: 'agent_instance',
@@ -348,7 +350,7 @@ async function reserveSlot(input: {
           },
         }),
   });
-  if (verdict.outcome !== 'deferred') return;
+  if (verdict.outcome !== 'deferred') return verdict.outcome;
   if (verdict.reason === 'workload_cap' && verdict.detail === ORG_RUNNING_CAP) {
     throw new AgentInstanceStartRefusedError(
       'org_running_cap',
@@ -369,6 +371,28 @@ const ORG_RUNNING_CAP = 'org_running_cap';
 
 function releaseSlot(instanceId: string, runId: string): Promise<boolean> {
   return fleetCeilingService.release('agent_instance', instanceId, runId);
+}
+
+/**
+ * Stamp the instance's slot with `runId`, the run that has just WON the move into
+ * a running state after its reserve found the slot already held (MOTIR-7492).
+ * The held slot names whichever attempt reserved it; if that attempt lost the
+ * move, its release would otherwise delete the only slot this run is using.
+ */
+function adoptSlot(input: {
+  instanceId: string;
+  runId: string;
+  organizationId: string;
+  workspaceId: string;
+}): Promise<boolean> {
+  return fleetCeilingService.adopt({
+    workload: 'agent_instance',
+    ref: input.instanceId,
+    ownerRef: input.runId,
+    organizationId: input.organizationId,
+    workspaceId: input.workspaceId,
+    ttlSeconds: INSTANCE_SLOT_TTL_SECONDS,
+  });
 }
 
 /**
@@ -1120,7 +1144,7 @@ export const agentInstanceLifecycleService = {
     if (!unlimited) await assertCredits(project.organizationId);
     const terminal = agentTerminalMachineConfig(row.id);
     const intervalId = randomUUID();
-    await reserveSlot({
+    const slot = await reserveSlot({
       instanceId,
       runId: intervalId,
       organizationId: project.organizationId,
@@ -1156,10 +1180,23 @@ export const agentInstanceLifecycleService = {
       return n;
     });
     if (moved !== 1) {
-      // A concurrent wake (or the sweep) got there first: it holds its own slot.
+      // A concurrent wake (or the sweep) got there first. Release only what this
+      // wake owns: a slot it reserved and the winner has not adopted yet. The
+      // winner's adopt puts it back if this lands first (MOTIR-7492).
       await releaseSlot(instanceId, intervalId);
       const fresh = await reload(row);
       throw new AgentInstanceStateConflictError(row.id, fresh.state, 'woken');
+    }
+    // This wake won, but its reserve found the slot held — by a concurrent wake
+    // that will lose the move and release ITS slot, or by a leak. Either way the
+    // slot is this run's now, so it is stamped with this run (MOTIR-7492).
+    if (slot === 'already_held') {
+      await adoptSlot({
+        instanceId,
+        runId: intervalId,
+        organizationId: project.organizationId,
+        workspaceId: project.workspaceId,
+      });
     }
 
     try {
