@@ -84,3 +84,20 @@ export class AttachmentEditorSourcedError extends AttachmentError {
     this.name = 'AttachmentEditorSourcedError';
   }
 }
+
+/**
+ * An attachment id that is not a panel attachment ON the named work item
+ * (Story MOTIR-7471 · MOTIR-7484): missing, in another workspace, on another
+ * card, unlinked, or lifecycle-owned. A guide turn may carry only files that are
+ * on the GUIDED card (`docs/decisions/guide-turn-files.md` A3.2). One reading
+ * for every case — which one would answer a question about somebody else's
+ * file. → 400 at the guide door (the turn is malformed, not the card missing).
+ */
+export class AttachmentNotOnWorkItemError extends AttachmentError {
+  readonly code = 'ATTACHMENT_NOT_ON_WORK_ITEM' as const;
+  readonly status = 400;
+  constructor(readonly attachmentId: string) {
+    super(`Attachment "${attachmentId}" is not on this work item.`);
+    this.name = 'AttachmentNotOnWorkItemError';
+  }
+}

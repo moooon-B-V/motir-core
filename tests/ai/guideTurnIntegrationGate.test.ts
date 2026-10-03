@@ -464,7 +464,7 @@ describe('out of credits', () => {
 });
 
 describe('the landing’s other arms, on the wire', () => {
-  it('a temporary walk records each correction, and refuses one on a ticked or unknown step', async () => {
+  it('a temporary walk records each correction — a ticked step’s too (A3.9 (b)) — and refuses one on an unknown step', async () => {
     const card = await manualCard();
     const opened = await open(card.identifier);
     turnAt(0, [
@@ -502,13 +502,14 @@ describe('the landing’s other arms, on the wire', () => {
       ['tick', 'skipped'],
       ['add_step', 'recorded'],
       ['revise_step', 'recorded'],
-      ['revise_step', 'skipped'],
+      // `guide-turn-files.md` A3.9 (b): a ticked step may be corrected.
+      ['revise_step', 'recorded'],
       ['revise_step', 'skipped'],
       ['move_step', 'recorded'],
-      ['move_step', 'skipped'],
+      ['move_step', 'recorded'],
       ['move_step', 'skipped'],
       ['remove_step', 'recorded'],
-      ['remove_step', 'skipped'],
+      ['remove_step', 'recorded'],
       ['remove_step', 'skipped'],
       ['propose_todos', 'recorded'],
     ]);

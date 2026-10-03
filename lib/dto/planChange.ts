@@ -104,6 +104,14 @@ export interface PlanChangeTurnDto {
    * Null on every other turn. Optional for the reason {@link anchorKey} is.
    */
   guide?: GuideTurnRecord | null;
+  /**
+   * The files a `guide` `user` turn carried (MOTIR-7484; `guide-turn-files.md`
+   * A3.2) — attachment ids on the guided card, in the order they were added.
+   * `[]` on every other turn. An id whose attachment has since been deleted
+   * stays here; the rail draws it as removed. Optional for the reason
+   * {@link anchorKey} is.
+   */
+  attachmentIds?: string[];
   authorId: string | null;
   createdAt: string;
 }

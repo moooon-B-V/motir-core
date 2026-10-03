@@ -20,6 +20,7 @@ import {
   TODO_NOTES_MAX_LENGTH,
   TODO_TEXT_MAX_LENGTH,
 } from '@/lib/workItemTodos/limits';
+import type { GuideContextFile, GuideContextFileNote } from '@/lib/ai/guideFiles';
 
 /** The reason a `close` is skipped on a card a linked pull request will close
  *  (A2.6). Shared so the rail can say *No status changed* from the record rather
@@ -42,6 +43,8 @@ export const GUIDE_ACTIONS_MAX = 64;
 export const GUIDE_ROWS_MAX = 100;
 /** How many turns the context carries — the latest ones. */
 export const GUIDE_CONTEXT_TURNS_MAX = 40;
+/** The longest prompt for the person's LOCAL agent (motir-ai: 2 000; A3.9 (a)). */
+export const GUIDE_AGENT_PROMPT_MAX = 2_000;
 
 // ── Out: the context core sends ────────────────────────────────────────────────
 
@@ -61,6 +64,9 @@ export interface GuideContextTurn {
   body: string;
   /** On an assistant turn, the actions it returned — how a later turn undoes one. */
   actions?: unknown[];
+  /** On a `user` turn that carried files, one note per file (A3.4). Content is
+   *  never re-sent: only the CURRENT turn's files ride, in {@link GuideContext.files}. */
+  files?: GuideContextFileNote[];
 }
 
 /** `context.guideContext` on a `guide_work_item` job (A2.3's input table). */
@@ -77,6 +83,9 @@ export interface GuideContext {
   };
   todos: { temporary: boolean; rows: GuideContextRow[] };
   turns: GuideContextTurn[];
+  /** The CURRENT (latest `user`) turn's files, resolved (`guide-turn-files.md`
+   *  A3.4). Absent when the turn carried none. */
+  files?: GuideContextFile[];
 }
 
 /** What {@link buildGuideContext} reads off the card. */
@@ -110,7 +119,7 @@ export function buildGuideContext(
   card: GuideCardInput,
   rows: readonly GuideRowInput[],
   turns: readonly GuideContextTurn[],
-  opts: { temporary?: boolean } = {},
+  opts: { temporary?: boolean; files?: readonly GuideContextFile[] } = {},
 ): GuideContext {
   return {
     card: {
@@ -140,7 +149,9 @@ export function buildGuideContext(
       ...(t.role === 'assistant' && t.actions && t.actions.length > 0
         ? { actions: t.actions }
         : {}),
+      ...(t.role === 'user' && t.files && t.files.length > 0 ? { files: t.files } : {}),
     })),
+    ...(opts.files && opts.files.length > 0 ? { files: [...opts.files] } : {}),
   };
 }
 
@@ -181,7 +192,13 @@ export type GuideAction =
       explanationMd?: string;
       previous: { title?: string; descriptionMd?: string; explanationMd?: string };
     }
-  | { type: 'cannot_do'; reason: string };
+  | { type: 'cannot_do'; reason: string }
+  // A3.9 (a): a prompt for the person's LOCAL coding agent to run an agent step.
+  // Writes nothing to the card; recorded on the conversation, like `current_step`.
+  | { type: 'local_agent_prompt'; rowId: string; prompt: string }
+  // A3.9 (b): the change asked for would alter the card's TARGET. Edits nothing;
+  // landed like `cannot_do`, as a comment on the guided card.
+  | { type: 'needs_replan'; reason: string };
 
 export type GuideActionType = GuideAction['type'];
 
@@ -200,6 +217,8 @@ export const GUIDE_ACTION_TYPES = [
   'close',
   'edit_item',
   'cannot_do',
+  'local_agent_prompt',
+  'needs_replan',
 ] as const satisfies readonly GuideActionType[];
 
 export interface GuideTurn {
@@ -401,7 +420,22 @@ function parseAction(raw: unknown, i: number): GuideAction {
       return out;
     }
     case 'cannot_do':
+    case 'needs_replan':
       return { type, reason: reason() };
+    case 'local_agent_prompt': {
+      const v = raw['prompt'];
+      if (typeof v !== 'string' || v.trim().length === 0) {
+        throw new InvalidGuideTurnError(`${where}.prompt`, 'must be a non-empty string');
+      }
+      const prompt = v.trim();
+      if (prompt.length > GUIDE_AGENT_PROMPT_MAX) {
+        throw new InvalidGuideTurnError(
+          `${where}.prompt`,
+          `exceeds ${GUIDE_AGENT_PROMPT_MAX} characters`,
+        );
+      }
+      return { type, rowId: id('rowId'), prompt };
+    }
     default:
       throw new InvalidGuideTurnError(
         `${where}.type`,

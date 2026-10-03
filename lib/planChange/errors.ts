@@ -326,3 +326,41 @@ export class GuideSessionNotPlannableError extends Error {
     this.name = 'GuideSessionNotPlannableError';
   }
 }
+
+/**
+ * A turn carrying files on a conversation that is not a GUIDE conversation
+ * (Story MOTIR-7471 · MOTIR-7484; `docs/decisions/guide-turn-files.md` A3.2 /
+ * A3.7). Only a guide conversation has one card to attach a file to; `ask`,
+ * `plan_change` and `debug` turns stay text only. Refused before anything is
+ * written or submitted. → 400 `TURN_FILES_GUIDE_ONLY`.
+ */
+export class TurnFilesGuideOnlyError extends Error {
+  readonly code = 'TURN_FILES_GUIDE_ONLY' as const;
+  constructor() {
+    super('Only a guide conversation takes files.');
+    this.name = 'TurnFilesGuideOnlyError';
+  }
+}
+
+/**
+ * A guide turn's files refused as a whole (MOTIR-7484; A3.2 / A3.3): more than
+ * four, a repeated id, or an id that is not an attachment on the guided card in
+ * the caller's workspace. Refused before the turn is written or any job runs, so
+ * no turn is sent. → 400 `GUIDE_TURN_FILES_REFUSED`, with `reason`.
+ */
+export class GuideTurnFilesRefusedError extends Error {
+  readonly code = 'GUIDE_TURN_FILES_REFUSED' as const;
+  constructor(
+    readonly reason: 'too_many' | 'duplicate' | 'not_on_card',
+    readonly attachmentId: string | null = null,
+  ) {
+    super(
+      reason === 'too_many'
+        ? 'A guide turn carries at most 4 files.'
+        : reason === 'duplicate'
+          ? 'A guide turn names each file once.'
+          : 'A file on a guide turn must be an attachment on the guided card.',
+    );
+    this.name = 'GuideTurnFilesRefusedError';
+  }
+}

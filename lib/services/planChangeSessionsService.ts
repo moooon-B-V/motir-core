@@ -274,6 +274,8 @@ interface AppendTurn {
   debugLanding?: DebugLandingDto | null;
   /** A guide reply's record (MOTIR-7470), persisted with the reply itself. */
   guideTurn?: GuideTurnRecord | null;
+  /** A guide `user` turn's files (MOTIR-7484) — ids the caller already validated. */
+  attachmentIds?: readonly string[];
 }
 
 async function appendLocked(
@@ -335,6 +337,7 @@ async function appendWithin(
         intent: turn.intent ?? null,
         citations: turn.citations ?? [],
         anchorKey: turn.anchorKey ?? null,
+        attachmentIds: turn.attachmentIds ? [...turn.attachmentIds] : [],
         // An explicit literal, not the DTO itself: Prisma's JSON input wants an
         // indexable object, and spelling the four fields keeps the column's
         // shape exactly the DTO's.
@@ -1046,10 +1049,18 @@ export const planChangeSessionsService = {
       intent?: PlanChangeTurnIntent;
       jobId?: string;
       anchorKey?: string | null;
+      /**
+       * The files a GUIDE turn carries (MOTIR-7484; `guide-turn-files.md` A3.2),
+       * already validated by `aiGuideService` against the guided card. A turn
+       * with files may carry no words, so the empty-body refusal narrows to a
+       * turn with neither.
+       */
+      attachmentIds?: readonly string[];
     } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
-    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const files = opts.attachmentIds ?? [];
+    if (!trimmed && files.length === 0) throw new EmptyPlanChangeTurnError();
     const session = await requireSession(pctx, address);
     return appendLocked(session, pctx, {
       role: 'user',
@@ -1066,6 +1077,7 @@ export const planChangeSessionsService = {
       // The anchor the ASK SERVICE resolved (MOTIR-7064) — an identifier this
       // caller can see, never the raw posted string.
       anchorKey: opts.anchorKey ?? null,
+      ...(files.length > 0 ? { attachmentIds: files } : {}),
     });
   },
 

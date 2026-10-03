@@ -4,14 +4,22 @@ import {
   withWorkspaceContext,
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
-import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
+import {
+  attachmentRepository,
+  LIFECYCLE_OWNED_SOURCES,
+} from '@/lib/repositories/attachmentRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { deleteAttachmentBlob, putPrivateAttachment, signedDownloadUrl } from '@/lib/blob/uploader';
+import {
+  deleteAttachmentBlob,
+  getPrivateBlobBytes,
+  putPrivateAttachment,
+  signedDownloadUrl,
+} from '@/lib/blob/uploader';
 import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import { MAX_UPLOAD_BYTES, isAllowedUploadType, isImageType } from '@/lib/blob/allowlist';
 import { uploadBudget } from '@/lib/rateLimit/budgets';
@@ -21,6 +29,7 @@ import {
   AttachmentEditorSourcedError,
   AttachmentForbiddenError,
   AttachmentNotFoundError,
+  AttachmentNotOnWorkItemError,
   FileTooLargeError,
   RateLimitError,
   UnsupportedFileTypeError,
@@ -434,6 +443,90 @@ export const attachmentsService = {
 
     const uploaders = await userRepository.findByIds([row.uploaderUserId]);
     return toAttachmentDto(row, new Map(uploaders.map((u) => [u.id, u])));
+  },
+
+  /**
+   * The attachments `ids` names, IN THAT ORDER, each required to be a panel-
+   * visible attachment ON `workItemId` (Story MOTIR-7471 · MOTIR-7484;
+   * `docs/decisions/guide-turn-files.md` A3.2). The work item is view-gated as
+   * every read is (a hidden / foreign card reads 404), and every id must resolve
+   * in the caller's workspace, linked to THAT card, and not lifecycle-owned —
+   * else {@link AttachmentNotOnWorkItemError} naming the first one that fails.
+   * A guide turn's files are checked here before the turn is written.
+   */
+  async listOnWorkItemByIds(
+    workItemId: string,
+    ids: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<AttachmentDTO[]> {
+    const found = await this.findOnWorkItemByIds(workItemId, ids, ctx);
+    const byId = new Map(found.map((a) => [a.id, a]));
+    return ids.map((id) => {
+      const dto = byId.get(id);
+      if (!dto) throw new AttachmentNotOnWorkItemError(id);
+      return dto;
+    });
+  },
+
+  /**
+   * The LENIENT read beside {@link listOnWorkItemByIds}: the same gate, but an id
+   * that no longer resolves on the card is simply left out (order kept). For a
+   * turn already on the thread, whose file may since have been deleted from the
+   * card — it then renders as removed, and nothing of it is read (A3.2).
+   */
+  async findOnWorkItemByIds(
+    workItemId: string,
+    ids: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<AttachmentDTO[]> {
+    await resolveGatedWorkItem(workItemId, ctx);
+    if (ids.length === 0) return [];
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      attachmentRepository.findManyByIds(ctx.workspaceId, [...new Set(ids)], tx),
+    );
+    const byId = new Map(
+      rows
+        .filter((r) => r.workItemId === workItemId && !LIFECYCLE_OWNED_SOURCES.includes(r.source))
+        .map((r) => [r.id, r]),
+    );
+    const ordered = [...new Set(ids)].flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [row] : [];
+    });
+    if (ordered.length === 0) return [];
+    const uploaders = await userRepository.findByIds([
+      ...new Set(ordered.map((r) => r.uploaderUserId)),
+    ]);
+    const uploadersById = new Map(uploaders.map((u) => [u.id, u]));
+    return ordered.map((r) => toAttachmentDto(r, uploadersById));
+  },
+
+  /**
+   * The BYTES of one attachment on `workItemId`, read on the server (MOTIR-7484):
+   * a guide turn's readable files are resolved into the job's input, because
+   * motir-ai cannot read the blob store (`guide-turn-files.md` A3.4). The same
+   * gate as {@link listOnWorkItemByIds} — the card view-gated, the row on that
+   * card in the caller's workspace — runs BEFORE `getPrivateBlobBytes`, which
+   * carries no authorization of its own. `null` when the store has no object.
+   */
+  async readOnWorkItemBytes(
+    workItemId: string,
+    attachmentId: string,
+    ctx: ServiceContext,
+  ): Promise<Uint8Array | null> {
+    await resolveGatedWorkItem(workItemId, ctx);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      attachmentRepository.findById(attachmentId, tx),
+    );
+    if (
+      !row ||
+      row.workspaceId !== ctx.workspaceId ||
+      row.workItemId !== workItemId ||
+      LIFECYCLE_OWNED_SOURCES.includes(row.source)
+    ) {
+      throw new AttachmentNotOnWorkItemError(attachmentId);
+    }
+    return getPrivateBlobBytes(row.blobPathname);
   },
 
   /**

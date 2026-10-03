@@ -10,6 +10,7 @@ import {
   GuideCardClosedError,
   GuideCardNotManualError,
   GuideSessionNotPlannableError,
+  GuideTurnFilesRefusedError,
   PlanChangeJobNotRunningError,
   PlanChangeMailboxJobMismatchError,
   PlanChangeSessionNotFoundError,
@@ -17,6 +18,7 @@ import {
   PlanChangeTurnNotFoundError,
   PlanSessionNotFoundError,
   PlanTargetLockedError,
+  TurnFilesGuideOnlyError,
 } from '@/lib/planChange/errors';
 import {
   PermissionDeniedError,
@@ -50,6 +52,23 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   }
   if (err instanceof EmptyPlanChangeTurnError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  // Files on a turn (MOTIR-7484; `guide-turn-files.md` A3.2): files on a
+  // conversation that is not a guide, or files that are not the guided card's,
+  // refuse the WHOLE turn before anything is written — a malformed request.
+  if (err instanceof TurnFilesGuideOnlyError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  if (err instanceof GuideTurnFilesRefusedError) {
+    return NextResponse.json(
+      {
+        code: err.code,
+        error: err.message,
+        reason: err.reason,
+        ...(err.attachmentId ? { attachmentId: err.attachmentId } : {}),
+      },
+      { status: 400 },
+    );
   }
   // A lost append race and a submit with nothing to send are both conflicts with
   // the thread's current state, not malformed requests.
@@ -171,6 +190,32 @@ export function readSessionId(value: unknown): string | null {
 export function missingSessionId(): NextResponse {
   return NextResponse.json(
     { code: 'BAD_REQUEST', error: '`sessionId` is required — name the conversation by its id.' },
+    { status: 400 },
+  );
+}
+
+/**
+ * A turn body's `attachmentIds` (MOTIR-7484; `guide-turn-files.md` A3.2): absent
+ * or null is no files; otherwise an array of non-empty strings, else `invalid`.
+ * The SHAPE only — the count, the card and the conversation are the service's.
+ * The bound here is far above the turn cap, so an absurd array is refused before
+ * any read.
+ */
+export function readAttachmentIds(value: unknown): string[] | 'invalid' {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 64) return 'invalid';
+  const ids: string[] = [];
+  for (const v of value) {
+    if (typeof v !== 'string' || v.trim().length === 0 || v.length > 64) return 'invalid';
+    ids.push(v.trim());
+  }
+  return ids;
+}
+
+/** The 400 a door answers when `attachmentIds` is not an array of ids. */
+export function invalidAttachmentIds(): NextResponse {
+  return NextResponse.json(
+    { code: 'BAD_REQUEST', error: '`attachmentIds` must be an array of attachment ids.' },
     { status: 400 },
   );
 }
