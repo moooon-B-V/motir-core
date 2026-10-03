@@ -620,8 +620,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   get_page: {
     summary:
-      'Read one page as markdown — its title, where it is filed, its revision and newest version — to read it or to write it back.',
-    descriptionFingerprint: '38b27a805548',
+      'Read one page as markdown — its title, where it is filed, its revision and newest version — to read it or to write it back; or read one version by number.',
+    descriptionFingerprint: '1ddf57794b56',
   },
   create_page: {
     summary:

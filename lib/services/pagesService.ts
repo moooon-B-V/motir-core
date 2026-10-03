@@ -16,6 +16,7 @@ import {
   toPageTrailDto,
   toPageTreeFolderRowDto,
   toPageTreePageRowDto,
+  toPageMarkdownAtVersionDto,
   toPageVersionDto,
   toPageVersionListItemDto,
   toPageVersionRow,
@@ -709,7 +710,16 @@ export const pagesService = {
       await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
       const page = await readPageMarkdown(input.projectId, input.pageId, tx);
       if (!page) throw new PageNotFoundError(input.pageId);
-      return page;
+      if (input.version === undefined) return page;
+      // One version's body (MOTIR-7429) — never the current body as a fallback.
+      const version = await pageVersionRepository.findByPageAndNumber(
+        input.pageId,
+        input.version,
+        tx,
+      );
+      if (!version) throw new PageVersionNotFoundError(input.pageId, input.version);
+      const [author] = await userRepository.findByIds([version.authorId], tx);
+      return toPageMarkdownAtVersionDto(page, version, author?.name);
     });
   },
 

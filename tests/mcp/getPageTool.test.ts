@@ -165,6 +165,103 @@ describe('get_page', () => {
     await client.close();
   });
 
+  describe('one version (MOTIR-7429)', () => {
+    /**
+     * A page with FIVE versions. Each save is pushed back an hour first, so the
+     * next save opens a new version rather than coalescing into it (§6).
+     */
+    async function fiveVersionPage(ctx: ServiceContext, projectId: string) {
+      const page = await pagesService.createPage(ctx, { projectId, title: 'Decision' });
+      for (let n = 1; n <= 5; n++) {
+        const current = await pagesService.getPageMarkdown(ctx, { projectId, pageId: page.id });
+        if (current.latestVersion) {
+          const back = new Date(Date.now() - 3_600_000 * (6 - n));
+          await adminDb.pageVersion.updateMany({
+            where: { pageId: page.id },
+            data: { startedAt: back, savedAt: back },
+          });
+        }
+        await pagesService.savePageMarkdown(ctx, {
+          projectId,
+          pageId: page.id,
+          markdown: `Body number ${n}`,
+          expectedRevision: current.revision,
+        });
+      }
+      const versions = await adminDb.pageVersion.findMany({
+        where: { pageId: page.id },
+        orderBy: { number: 'asc' },
+      });
+      return { page, versions };
+    }
+
+    it('returns an older version’s markdown after the page has moved on, with its marks', async () => {
+      const fx = await makeWorkItemFixture();
+      const { page, versions } = await fiveVersionPage(fx.ctx, fx.projectId);
+      const second = versions.find((v) => v.bodyMarkdown.includes('Body number 2'))!;
+      await adminDb.pageVersion.update({
+        where: { id: second.id },
+        data: { sealedAt: new Date() },
+      });
+      const client = await connectClient(fx.ctx, ['project:browse', 'page:view']);
+
+      const res = await client.callTool({
+        name: 'get_page',
+        arguments: { projectKey: 'PROD', pageId: page.id, version: second.number },
+      });
+
+      expect(res.isError, textOf(res)).toBeFalsy();
+      const dto = (res as CallToolResult).structuredContent as Record<string, unknown>;
+      expect(dto['markdown']).toContain('Body number 2');
+      expect(dto['markdown']).not.toContain('Body number 5');
+      expect(dto['version']).toMatchObject({
+        number: second.number,
+        authorId: fx.ownerId,
+        sealed: true,
+        frozen: false,
+      });
+      expect((dto['latestVersion'] as { number: number }).number).toBe(
+        versions[versions.length - 1]!.number,
+      );
+      const text = textOf(res);
+      expect(text).toContain(`version ${second.number} by`);
+      expect(text).toContain('sealed');
+      expect(text).toContain('Body number 2');
+      await client.close();
+    });
+
+    it('a number the page does not have is PAGE_VERSION_NOT_FOUND, never the current body', async () => {
+      const fx = await makeWorkItemFixture();
+      const { page } = await fiveVersionPage(fx.ctx, fx.projectId);
+      const client = await connectClient(fx.ctx);
+
+      const res = await client.callTool({
+        name: 'get_page',
+        arguments: { projectKey: 'PROD', pageId: page.id, version: 99 },
+      });
+
+      expect(res.isError).toBe(true);
+      expect(textOf(res)).toContain('PAGE_VERSION_NOT_FOUND');
+      expect(textOf(res)).toContain('99');
+      expect(textOf(res)).not.toContain('Body number 5');
+      await client.close();
+    });
+
+    it('without `version` the payload carries no `version` field — the current-body read is unchanged', async () => {
+      const fx = await makeWorkItemFixture();
+      const { page } = await fiveVersionPage(fx.ctx, fx.projectId);
+      const client = await connectClient(fx.ctx);
+      const res = await client.callTool({
+        name: 'get_page',
+        arguments: { projectKey: 'PROD', pageId: page.id },
+      });
+      const dto = (res as CallToolResult).structuredContent as Record<string, unknown>;
+      expect(dto).not.toHaveProperty('version');
+      expect(dto['markdown']).toContain('Body number 5');
+      await client.close();
+    });
+  });
+
   it('asserts `page:view`, which makes the key grantable', () => {
     expect(TOOL_PERMISSIONS.get_page).toBe('page:view');
     expect(GRANTABLE_PERMISSIONS).toContain('page:view');

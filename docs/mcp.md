@@ -2954,6 +2954,7 @@ code:
 | Code                        | Meaning                                                                                                                                                     |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PAGE_NOT_FOUND`            | No such page in that project — the same answer for an unknown id and another project's page.                                                                |
+| `PAGE_VERSION_NOT_FOUND`    | `get_page`'s `version` names a number the page has no version for. The message names the number.                                                            |
 | `PAGE_REVISION_CONFLICT`    | `update_page` sent a `revision` the page has moved past. Nothing was written; the message names both revisions. Call `get_page`, redo the edit, send again. |
 | `PAGE_BODY_TOO_LARGE`       | The markdown is over 1 MiB, or the body it makes is over 2 MiB. The message names the size and the limit. Nothing was written.                              |
 | `PAGE_TITLE_TOO_LONG`       | `create_page`'s `title` is over 255 characters.                                                                                                             |
@@ -2971,10 +2972,11 @@ Read one page as markdown. The read an agent makes before it writes: the
 key the page's own address checks. It takes no lock, so it never waits on a
 person's save.
 
-| Input        | Type   | Required | Notes                                      |
-| ------------ | ------ | -------- | ------------------------------------------ |
-| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                |
-| `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`. |
+| Input        | Type    | Required | Notes                                                                                           |
+| ------------ | ------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `projectKey` | string  | yes      | Project key, e.g. `"ACME"`.                                                                     |
+| `pageId`     | string  | yes      | The page id — the `<id>` in `/pages/<id>`.                                                      |
+| `version`    | integer | no       | A version number from the page's history. Reads that version's body instead of the current one. |
 
 **Output** — `structuredContent`: `{ id, projectId, title, placement, revision,
 latestVersion, markdown, updatedAt }`. `placement` is `{ parentPageId, folderId }`
@@ -2982,6 +2984,16 @@ latestVersion, markdown, updatedAt }`. `placement` is `{ parentPageId, folderId 
 newest entry of the page's history, `{ number, authorId, authorName, savedAt }`
 (`null` only for a page older than versions). The text summary is the title, the
 placement, `revision N`, who saved the newest version, then the markdown.
+
+**One version** (MOTIR-7429) — with `version`, `markdown` is that version's body
+and the payload adds `version: { number, authorId, authorName, savedAt, sealed,
+frozen }`. `sealed` means a decision was published at that version; `frozen`
+means a person approved it (`docs/decisions/pages.md` AMENDMENT 3). Everything
+else still describes the page as it is now, so a run told "read decision page X
+at version 3" can see both what was approved and how far the page has moved
+since. A number the page does not have is refused `PAGE_VERSION_NOT_FOUND`,
+naming the page and the number — never the current body as a fallback. Without
+`version`, the output is exactly the current-body read above.
 
 #### `create_page`
 

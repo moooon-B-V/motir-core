@@ -1321,6 +1321,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         minLength: 1,
         description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
       },
+      version: {
+        type: 'integer',
+        exclusiveMinimum: 0,
+        description:
+          'A version NUMBER (from the page’s history). Returns that version’s markdown, number, author, `savedAt`, and whether it is `sealed` (published for a decision) or `frozen` (approved). Omit to read the current body.',
+      },
     },
     required: ['projectKey', 'pageId'],
     additionalProperties: false,
