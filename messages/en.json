@@ -8525,7 +8525,10 @@
           "user": {
             "password_reset_sent": "Password reset sent",
             "suspend": "Suspended",
-            "unsuspend": "Suspension lifted"
+            "unsuspend": "Suspension lifted",
+            "impersonation_start": "Started a staff session",
+            "impersonation_end": "Ended a staff session",
+            "impersonation_action": "Acted in a staff session"
           },
           "org": {
             "internal_billing_set": "Classified internal billing",
@@ -9232,6 +9235,59 @@
       },
       "jobs": {
         "empty": "No attributed planning or agent run was recorded for this workspace."
+      }
+    },
+    "imp": {
+      "viewAs": "View as {firstName}",
+      "title": "View Motir as {name}",
+      "body": "Opens {org}’s app as {email} in a staff session. A banner stays on every page until you exit or the session expires.",
+      "access": "Access",
+      "readOnly": "Read-only",
+      "full": "Full access",
+      "length": "Ends after",
+      "minutes": "{n} min",
+      "lengthHint": "At most 60 minutes. A new session needs a new reason.",
+      "readOnlyNote": "Read-only: you see exactly what {firstName} sees, and every control that would change something is disabled.",
+      "fullWarning": "Full access acts as {firstName}. Anything you change is real and lands in {org}’s data, recorded as made by you on {firstName}’s behalf.",
+      "reasonLabel": "Reason — required, written to the audit log",
+      "reasonHint": "Recorded on the session and on every action taken in it.",
+      "start": {
+        "readOnly": "Start read-only session",
+        "full": "Start full-access session"
+      },
+      "cancel": "Cancel",
+      "failedTitle": "The staff session did not start",
+      "ineligible": {
+        "self": "You can’t view Motir as yourself.",
+        "platform_staff": "This account is platform staff. Staff never view as staff.",
+        "suspended_account": "This account is suspended, so there is nothing to see as it.",
+        "suspended_organization": "This account’s organization is suspended. Reactivate it first, or review it from the console.",
+        "no_workspace": "This account belongs to no workspace, so there is no app to open."
+      },
+      "error": {
+        "REASON_REQUIRED": "A reason is required — it is recorded on the session and on every action taken in it.",
+        "NOT_FOUND": "That account no longer exists. Reload the page.",
+        "INELIGIBLE": "This account can’t be viewed as right now. Reload the page to see why.",
+        "INVALID": "Pick an access level and a length the console offers.",
+        "NOT_PERMITTED": "Only a superadmin can start a staff session.",
+        "FAILED": "Something went wrong and no session was started. The failure has been logged."
+      },
+      "bar": {
+        "readOnly": "<b>Viewing as {name}</b> ({email}) · {org} — staff session, <b>read-only</b>, ends at {time}",
+        "full": "<b>Acting as {name}</b> ({email}) · {org} — staff session, <b>full access</b>, every change is yours, ends at {time}",
+        "exit": "Exit session"
+      },
+      "disabledTip": "Read-only staff session",
+      "ended": {
+        "title": "Your staff session ended at {time}",
+        "body": "You are no longer viewing Motir as {name}. The session and everything you opened in it are in the audit log.",
+        "back": "Back to the console",
+        "again": "Start a new session",
+        "endedBy": {
+          "operator": "You exited the session.",
+          "expiry": "Its time ran out.",
+          "revoked": "It stopped being valid before its time ran out — you signed out, your platform role changed, or the account was suspended."
+        }
       }
     }
   },

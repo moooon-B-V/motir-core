@@ -1,6 +1,7 @@
 'use server';
 
 import { getSession } from '@/lib/auth';
+import { ImpersonationReadOnlyError } from '@/lib/platform/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { visitorRecordsService } from '@/lib/services/visitorRecordsService';
 import { VisitorConsentNotApplicableError } from '@/lib/visitor/errors';
@@ -27,6 +28,9 @@ export async function recordVisitorConsentAction(
 ): Promise<RecordVisitorConsentResult> {
   const session = await getSession();
   if (!session) throw new Error('UNAUTHENTICATED');
+  // Consent is the CUSTOMER's act, never a platform operator's on their behalf —
+  // refused in every mode of a staff "View as" session (MOTIR-749).
+  if (session.impersonation) throw new ImpersonationReadOnlyError(session.impersonation.session.id);
   try {
     await visitorRecordsService.recordConsent({ identifier, userId: session.user.id });
     return { ok: true };

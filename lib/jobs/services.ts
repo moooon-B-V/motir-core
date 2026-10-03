@@ -48,6 +48,7 @@ import { planDriftService } from '@/lib/services/planDriftService';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
+import { impersonationService } from '@/lib/services/impersonationService';
 import { codeGraphDriftService } from '@/lib/services/codeGraphDriftService';
 import { codeGraphIndexCatchUpService } from '@/lib/services/codeGraphIndexCatchUpService';
 import { abandonedPlanService } from '@/lib/services/abandonedPlanService';
@@ -127,6 +128,9 @@ export const jobServices = {
   migrateOnboarding: migrateOnboardingService,
   workItemEmbeddings: workItemEmbeddingsService,
   planTargetLock: planTargetLockService,
+  // Staff "View as" sessions (MOTIR-749): the expiry sweep records the end of a
+  // session nobody came back to.
+  impersonation: impersonationService,
   abandonedPlan: abandonedPlanService,
   codeGraphDrift: codeGraphDriftService,
   codeGraphIndexCatchUp: codeGraphIndexCatchUpService,

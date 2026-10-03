@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { workspacesService } from '@/lib/services/workspacesService';
 import {
   PLATFORM_AUDIT_ACTIONS,
+  PLATFORM_AUDIT_READ_ACTIONS,
   isPlatformAuditAction,
   reasonPolicyFor,
   reasonSatisfied,
@@ -201,6 +202,14 @@ describe('the reason rule', () => {
     // MOTIR-750 — flipping a per-org kill-switch is a write.
     'org.kill_switch_off': 'required',
     'org.kill_switch_on': 'required',
+    // MOTIR-749 — staff "View as" sessions. The START is a write whose reason the
+    // operator types; the END and every mutating request inside a full-access
+    // session are writes carrying the SESSION's reason (`inherited`); a page
+    // opened inside a session is a read.
+    'user.impersonation_start': 'required',
+    'user.impersonation_end': 'inherited',
+    'user.impersonation_view': 'never',
+    'user.impersonation_action': 'inherited',
     // MOTIR-751 — reading the audit log, and verifying its chain, are platform
     // READS like any other: audited, reason-free.
     'audit.read': 'never',
@@ -221,20 +230,29 @@ describe('the reason rule', () => {
   it('every READ is reason-free and every WRITE demands one', () => {
     // The property underneath the table above, stated so it survives the table
     // growing: the ADR's rule is *"REQUIRED for every write action, NULL for a
-    // read"*, and `<domain>.<verb>` names the verb. Reads are the closed set;
-    // anything else is a write.
+    // read"*. Since MOTIR-749 the kind is explicit, so this pins the two columns
+    // together: a read is `never`, and a write is `required` or — inside a staff
+    // session — `inherited` (the session's reason, still non-blank on the row).
     const READS = [
       'console.open',
       'estate.read',
       'health.read',
       'user.read',
+      'user.impersonation_view',
       'audit.read',
       'audit.verify',
     ];
     for (const action of Object.keys(PLATFORM_AUDIT_ACTIONS)) {
       const key = action as keyof typeof PLATFORM_AUDIT_ACTIONS;
-      expect(reasonPolicyFor(key), action).toBe(READS.includes(action) ? 'never' : 'required');
+      if (READS.includes(action)) {
+        expect(PLATFORM_AUDIT_ACTIONS[key].kind, action).toBe('read');
+        expect(reasonPolicyFor(key), action).toBe('never');
+      } else {
+        expect(PLATFORM_AUDIT_ACTIONS[key].kind, action).toBe('write');
+        expect(reasonPolicyFor(key), action).not.toBe('never');
+      }
     }
+    expect([...PLATFORM_AUDIT_READ_ACTIONS].sort()).toEqual([...READS].sort());
   });
 
   it('holds in both arms', () => {
@@ -251,6 +269,11 @@ describe('the reason rule', () => {
     // A space is not a reason. The design puts it behind a confirm dialog
     // precisely so somebody has to type one.
     expect(reasonSatisfied('required', '   ')).toBe(false);
+    // `inherited` (MOTIR-749) is held to the same bar — the service copies the
+    // session's reason onto the row, and a blank one is still no reason.
+    expect(reasonSatisfied('inherited', 'reproduce ticket #4507')).toBe(true);
+    expect(reasonSatisfied('inherited', null)).toBe(false);
+    expect(reasonSatisfied('inherited', '  ')).toBe(false);
   });
 
   it('a read passes the service check with no reason', () => {

@@ -537,6 +537,64 @@ rather than introducing a second one.
 > suspended org (MOTIR-748) evaluates every switch OFF without touching its overrides. The switches
 > are not the internal-billing classification (MOTIR-4337), and MOTIR-751's log is their only log.
 
+> **⚠️ AMENDED 2026-10-03 (Story 10.3 · MOTIR-749) — staff "View as" sessions.** The
+> "Write-level impersonation (time-boxed)" row ships as `impersonationService` over one new table,
+> `impersonation_session` (the card called it a grant; it is a SESSION with a start, a box and an
+> end). The row holds the SHA-256 of a random token, the operator (`operator_user_id` → `user`) and
+> the role they held, the operator's own Better-Auth session id it is bound to, the target account,
+> its organization and the one workspace the session is pinned to (all `@relation`, `ON DELETE
+CASCADE`), the mode (`read_only` · `full`), the reason, `started_at` / `expires_at`, and
+> `ended_at` / `ended_by` (`operator` · `expiry` · `revoked`). RLS has no tenant arm:
+> `app.platform_staff` reads and writes, `app.system_admin` reads (the request gate is actorless).
+> **Both modes are `superadmin`** — a read-only session still reads a customer's data AS that
+> customer, which no `support` read does — and every start carries a REQUIRED REASON and a time-box
+> of 15 / 30 / 60 minutes (never extended; a new session asks for a new reason).
+>
+> - **How it is carried.** The operator keeps their own session; a start sets ONE more cookie,
+>   `motir_staff_session` (httpOnly, lax, expiring with the box) holding the token. Nothing is
+>   minted for the customer. `readSession` (`lib/auth`) — which every tenant door already goes
+>   through — resolves it and substitutes the TARGET's identity, attaching the session and the
+>   operator's own identity as `impersonation`. An ended / expired / revoked / unknown token makes
+>   the request signed-out (fail closed), and the `(authed)` layout sends it through
+>   `/api/staff-session/clear` to the ended page. The console never reads through it:
+>   `requirePlatformStaff` reads the operator's raw session whenever the cookie is present.
+> - **The chokepoint.** In `read_only` a MUTATING request — a Server Action on a tenant page, an
+>   unsafe method on the cookie API, or a route handler reached with a browser `Origin` — is refused
+>   with `ImpersonationReadOnlyError` (403 `IMPERSONATION_READ_ONLY`) before any service runs. In
+>   `full` it is audited first. In either mode minting a credential (PAT, device approval, OAuth
+>   consent: `IMPERSONATION_CREDENTIAL_REFUSED`) and accepting the customer's legal terms are
+>   refused, and the customer's 2FA and re-consent holds are not applied to the operator.
+> - **Four actions** join `PLATFORM_AUDIT_ACTIONS`, `targetKind: 'user'`, the target as `targetId`:
+>   **`user.impersonation_start`** (`reason: 'required'`; metadata `{ mode, durationMinutes,
+startedAt, expiresAt, targetUserId, targetEmail, organizationId, organizationName, workspaceId,
+tokenHashPrefix }`), **`user.impersonation_end`** (metadata `{ sessionId, mode, endedBy,
+startedAt, expiresAt, endedAt }`, plus `supersededBy` / `revokedBecause` when they apply),
+>   **`user.impersonation_action`** — EACH mutating request of a `full` session, written BEFORE it
+>   runs (metadata `{ sessionId, mode, method, path, serverAction }`; a failed write fails the
+>   request) — and **`user.impersonation_view`**, each tenant page rendered in either mode
+>   (metadata `{ sessionId, mode, path }`). The end and action rows carry the session's reason
+>   (`reason: 'inherited'` — required, but supplied by the session rather than typed again).
+> - **The vocabulary gains an explicit KIND.** Every action now declares `kind: 'read' | 'write'`
+>   beside its reason policy; `PLATFORM_AUDIT_READ_ACTIONS` and the operator-write test derive from
+>   it rather than from the reason policy, which `inherited` made ambiguous. `user.impersonation_view`
+>   is a read; the other three are writes.
+> - **Eligibility.** Refused (`ImpersonationTargetIneligibleError`), before the transaction and again
+>   inside it: the operator's own account, any platform staff member, a suspended account, an account
+>   with no workspace, and **an account whose organization is suspended** — a session into a
+>   suspended org would show the operator an app its members cannot reach. An org suspended
+>   MID-session shows the ordinary suspension refusal; an account suspended mid-session, an operator
+>   who loses `superadmin`, or an operator who signs out REVOKES the session at the next request.
+> - **Expiry.** The gate refuses a session from `expires_at` whatever else happens; the bar sends
+>   the browser to the ended page at that instant; and `system.impersonation-expiry-sweep`
+>   (`*/5 * * * *`, `latest`) writes the end row for a session nobody came back to.
+>
+> **Not built here**, named so it is not mistaken for done: the TWO-PERSON rule (§1's _"possibly
+> two-person"_ — no second approver exists yet; the mandatory reason, the time-box and the
+> per-action trail are the controls); Better-Auth's own `/api/auth/*` endpoints and the client
+> `useSession()` still see the operator; individual API GETs inside a session are not audited (the
+> page views are); and the app-wide "edit disabled in read-only" affordance — the server refuses
+> the write today, the UI does not yet grey the control.
+
 ---
 
 ## What this ADR deliberately does NOT decide
@@ -544,17 +602,17 @@ rather than introducing a second one.
 Named with their owner, so no deliverable leaves the plan at the moment this card goes
 done (the MOTIR-1916 rule):
 
-| Not decided here                                                                                          | Owner                                                                          |
-| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Which tables get a `platform_staff` READ arm, and each policy's SQL                                       | MOTIR-730 (10.1.3)                                                             |
-| The `PlatformUsageDTO` shape and the platform rollup table + its job                                      | MOTIR-732 (10.1.5)                                                             |
-| The console's own layout, copy and i18n namespace                                                         | `design/platform-admin/` (merged) + MOTIR-2896                                 |
-| The `PLATFORM_AUDIT_ACTIONS` vocabulary's initial members                                                 | MOTIR-2896 seeds it; each consumer extends it                                  |
-| Hash-chained tamper evidence and the audit-log viewer                                                     | MOTIR-751 (10.3.6) — shipped; §3b's amendment. The page is MOTIR-752           |
-| Write-level impersonation's time-box, two-person rule and banner                                          | MOTIR-749 (10.3.4)                                                             |
-| Whether `/admin` is reachable in a self-hosted build                                                      | open — no card; see Consequences                                               |
-| The production bootstrap of the first staff row                                                           | **MOTIR-2932** (8.5.18), filed by this ADR                                     |
-| The account-SUSPENSION **mechanism** — the `User` columns, the session revocation and the sign-in refusal | **MOTIR-1167** (8.5.11) — shipped there; added retroactively by **MOTIR-3641** |
+| Not decided here                                                                                          | Owner                                                                                       |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Which tables get a `platform_staff` READ arm, and each policy's SQL                                       | MOTIR-730 (10.1.3)                                                                          |
+| The `PlatformUsageDTO` shape and the platform rollup table + its job                                      | MOTIR-732 (10.1.5)                                                                          |
+| The console's own layout, copy and i18n namespace                                                         | `design/platform-admin/` (merged) + MOTIR-2896                                              |
+| The `PLATFORM_AUDIT_ACTIONS` vocabulary's initial members                                                 | MOTIR-2896 seeds it; each consumer extends it                                               |
+| Hash-chained tamper evidence and the audit-log viewer                                                     | MOTIR-751 (10.3.6) — shipped; §3b's amendment. The page is MOTIR-752                        |
+| Write-level impersonation's time-box, two-person rule and banner                                          | MOTIR-749 (10.3.4) — shipped (§7's amendment) except the two-person rule, which has no card |
+| Whether `/admin` is reachable in a self-hosted build                                                      | open — no card; see Consequences                                                            |
+| The production bootstrap of the first staff row                                                           | **MOTIR-2932** (8.5.18), filed by this ADR                                                  |
+| The account-SUSPENSION **mechanism** — the `User` columns, the session revocation and the sign-in refusal | **MOTIR-1167** (8.5.11) — shipped there; added retroactively by **MOTIR-3641**              |
 
 **⚠️ The row above is recorded, not deferred, and it is the one this table was missing.** §7 allocates
 _"suspend / reactivate an account"_ to MOTIR-1167 and `design/platform-admin/design-notes.md` Panel 9

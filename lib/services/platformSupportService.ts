@@ -17,7 +17,7 @@ import { withPlatformRead } from '@/lib/platform/context';
 import { PlatformSuspensionStateError, PlatformUserNotFoundError } from '@/lib/platform/errors';
 import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogRepository';
 import { platformUserRepository } from '@/lib/repositories/platformUserRepository';
-import { isPlatformAuditAction, reasonPolicyFor } from '@/lib/platform/auditActions';
+import { isPlatformAuditAction, isPlatformAuditWrite } from '@/lib/platform/auditActions';
 import { assertReasonSatisfied } from '@/lib/services/platformAuditService';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 
@@ -83,11 +83,12 @@ const PLATFORM_USER_ACTION_LOG_LIMIT = 50;
 /**
  * Is this row an operator WRITE, as Panel 9's log means the word?
  *
- * ⚠️ THE DISCRIMINATOR IS THE REASON POLICY, NOT A LIST OF ACTION NAMES. The
- * ADR requires a stated reason for every write and forbids one on every read
- * (§3b), so `reason: 'required'` IS "this action changed something" — and a
- * hard-coded list here would need editing every time Story 10.3 adds a verb,
- * with the log silently omitting the new one until somebody noticed.
+ * ⚠️ THE DISCRIMINATOR IS THE VOCABULARY'S `kind`, NOT A LIST OF ACTION NAMES.
+ * A hard-coded list here would need editing every time Story 10.3 adds a verb,
+ * with the log silently omitting the new one until somebody noticed. (It was the
+ * reason policy — `required` ⇒ write — until MOTIR-749's staff-session writes
+ * arrived carrying the SESSION's reason, `inherited`; the explicit kind is what
+ * keeps a session's end and its actions in this log.)
  *
  * A row whose action this build does not recognise is EXCLUDED. The column is a
  * `String`, so a row written by a newer deploy can carry a member this build has
@@ -96,7 +97,7 @@ const PLATFORM_USER_ACTION_LOG_LIMIT = 50;
  * of not recognising the name.
  */
 function isOperatorWrite(row: { action: string }): boolean {
-  return isPlatformAuditAction(row.action) && reasonPolicyFor(row.action) === 'required';
+  return isPlatformAuditAction(row.action) && isPlatformAuditWrite(row.action);
 }
 
 export const platformSupportService = {

@@ -31,6 +31,7 @@ import type {
   TokenScopeWorkspaceDTO,
 } from '@/lib/dto/apiTokens';
 import { projectsService } from '@/lib/services/projectsService';
+import { assertNoStaffSessionCookie } from '@/lib/platform/staffSession';
 
 // API-token service (Story 7.8 · Subtask 7.8.1) — the auth substrate every
 // other 7.8 subtask rides. Owns transactions, token generation/hashing,
@@ -186,6 +187,9 @@ export const apiTokensService = {
     workspaceId: string,
     input: CreateApiTokenInput,
   ): Promise<CreateApiTokenResult> {
+    // Never a credential minted as the customer inside a staff "View as"
+    // session (MOTIR-749) — it would outlive the time-box.
+    await assertNoStaffSessionCookie();
     const label = normalizeLabel(input.label);
     // The SHAPE first, so an illegal combination never reaches the DB.
     assertLegalBinding(input);

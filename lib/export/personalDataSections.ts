@@ -666,6 +666,14 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'record about customers they administer — the exact privilege escalation ' +
     'DECISION 1’s scope clause forbids. It is also outside every workspace, so no ' +
     'reader’s access reaches it.',
+  ImpersonationSession:
+    'A platform staff "View as" session (MOTIR-749). Its User FKs are the moooon ' +
+    'B.V. operator who opened it and the customer account it was opened AS. To the ' +
+    'operator it is a record about a tenant they administered — `PlatformAuditLog`’s ' +
+    'argument; to the customer it is an internal support record whose permanent form ' +
+    'is the hash-chained audit log (`user.impersonation_start` / `_end`), not this ' +
+    'operational row, which carries a credential hash and is written only from the ' +
+    'platform tier.',
   Organization:
     'Not a user-keyed row about the reader. Its one User FK is `suspendedByUserId` ' +
     '(MOTIR-748): the moooon B.V. operator who suspended a CUSTOMER organization. ' +

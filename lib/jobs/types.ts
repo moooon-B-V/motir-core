@@ -580,6 +580,11 @@ export interface JobEventDataMap {
    *  the ones whose producer is gone, so a dead generation can no longer pause a
    *  project's auto-plan cadence for good. Cross-tenant by design. */
   'system.abandoned-plan-sweep': SystemScheduledData;
+  /** The staff "View as" session expiry sweep (Story 10.3 · MOTIR-749) —
+   *  records `user.impersonation_end` (`endedBy: expiry`) for every session past
+   *  its time-box that nobody came back to, so the audit trail never shows a
+   *  session that began and never ended. Cross-tenant by design. */
+  'system.impersonation-expiry-sweep': SystemScheduledData;
   /** The abandoned-SUPERVISION sweep (Story MOTIR-3778 · MOTIR-3830) — settles a
    *  container supervision whose chain of self-rescheduling passes stopped, so a
    *  container Motir is no longer watching is torn down, metered and its

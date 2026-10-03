@@ -84,6 +84,32 @@ export const platformEstateRepository = {
   },
 
   /**
+   * One account's WORKSPACE memberships with each workspace's organization
+   * (MOTIR-749) — where a staff "View as" session can enter. Oldest membership
+   * first, so the default is the account's first home; capped by `take`.
+   */
+  async listWorkspaceMembershipsForUser(
+    userId: string,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.workspaceMembership.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take,
+      select: {
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            organization: { select: { id: true, name: true, suspendedAt: true } },
+          },
+        },
+      },
+    });
+  },
+
+  /**
    * One keyset page of an organization's MEMBERS (MOTIR-733), oldest first on
    * `(createdAt, id)` — the person, their organization role and when they joined.
    */

@@ -8521,7 +8521,10 @@
           "user": {
             "password_reset_sent": "已发送密码重置",
             "suspend": "已停用",
-            "unsuspend": "已解除停用"
+            "unsuspend": "已解除停用",
+            "impersonation_start": "开始了员工会话",
+            "impersonation_end": "结束了员工会话",
+            "impersonation_action": "在员工会话中执行了操作"
           },
           "org": {
             "internal_billing_set": "已标记为内部计费",
@@ -9228,6 +9231,59 @@
       },
       "jobs": {
         "empty": "该工作区没有记录任何已归属的规划或智能体运行。"
+      }
+    },
+    "imp": {
+      "viewAs": "以 {firstName} 的身份查看",
+      "title": "以 {name} 的身份查看 Motir",
+      "body": "在员工会话中以 {email} 的身份打开 {org} 的应用。在你退出或会话到期之前，每个页面都会显示横幅。",
+      "access": "访问权限",
+      "readOnly": "只读",
+      "full": "完全访问",
+      "length": "结束时间",
+      "minutes": "{n} 分钟",
+      "lengthHint": "最长 60 分钟。新会话需要新的理由。",
+      "readOnlyNote": "只读：你看到的与 {firstName} 看到的完全一致，所有会更改内容的控件都已禁用。",
+      "fullWarning": "完全访问将以 {firstName} 的身份操作。你所做的任何更改都是真实的，会写入 {org} 的数据，并记录为你代表 {firstName} 所做。",
+      "reasonLabel": "理由 — 必填，将写入审计日志",
+      "reasonHint": "记录在会话以及会话中的每个操作上。",
+      "start": {
+        "readOnly": "开始只读会话",
+        "full": "开始完全访问会话"
+      },
+      "cancel": "取消",
+      "failedTitle": "员工会话未能开始",
+      "ineligible": {
+        "self": "你不能以自己的身份查看 Motir。",
+        "platform_staff": "此账户是平台员工。员工不能以员工身份查看。",
+        "suspended_account": "此账户已被停用，因此没有可查看的内容。",
+        "suspended_organization": "此账户所在的组织已被暂停。请先重新激活，或在控制台中查看。",
+        "no_workspace": "此账户不属于任何工作区，因此没有可打开的应用。"
+      },
+      "error": {
+        "REASON_REQUIRED": "理由为必填项 — 它会记录在会话以及会话中的每个操作上。",
+        "NOT_FOUND": "该账户已不存在。请重新加载页面。",
+        "INELIGIBLE": "目前无法以此账户身份查看。请重新加载页面查看原因。",
+        "INVALID": "请选择控制台提供的访问权限和时长。",
+        "NOT_PERMITTED": "只有超级管理员可以开始员工会话。",
+        "FAILED": "出现错误，未开始任何会话。该故障已被记录。"
+      },
+      "bar": {
+        "readOnly": "<b>正在以 {name} 的身份查看</b>（{email}）· {org} — 员工会话，<b>只读</b>，结束于 {time}",
+        "full": "<b>正在以 {name} 的身份操作</b>（{email}）· {org} — 员工会话，<b>完全访问</b>，每项更改都由你负责，结束于 {time}",
+        "exit": "退出会话"
+      },
+      "disabledTip": "只读员工会话",
+      "ended": {
+        "title": "你的员工会话已于 {time} 结束",
+        "body": "你已不再以 {name} 的身份查看 Motir。该会话以及你在其中打开的所有内容都已记入审计日志。",
+        "back": "返回控制台",
+        "again": "开始新会话",
+        "endedBy": {
+          "operator": "你退出了会话。",
+          "expiry": "会话时间已用完。",
+          "revoked": "会话在到期前失效 — 你已退出登录、你的平台角色已更改，或该账户已被停用。"
+        }
       }
     }
   },

@@ -27,6 +27,8 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { AppLayout } from '@/components/ui/AppLayout';
 import { SidebarDrawer } from '@/components/ui/SidebarDrawer';
 import { TopNav } from './_components/TopNav';
+import { StaffSessionBar } from './_components/StaffSessionBar';
+import { hasStaffSessionCookie } from '@/lib/platform/staffSession';
 import { SidebarNav } from './_components/SidebarNav';
 import { HelpMenu } from './_components/HelpMenu';
 import { ShellTierNav } from './_components/ShellTierNav';
@@ -78,7 +80,17 @@ import { AI_PLANNING_REQUIREMENT, satisfiesRequirement } from '@/lib/settings/pr
 
 export default async function AuthedLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
-  if (!session) redirect('/sign-in');
+  if (!session) {
+    // A STALE staff "View as" session (MOTIR-749): the gate answers a session
+    // that is over as signed out — fail closed — and this sends the operator
+    // through the door that records its end, clears the cookie and lands them
+    // on the ended page, instead of a sign-in screen they do not need.
+    if (await hasStaffSessionCookie()) redirect('/api/staff-session/clear');
+    redirect('/sign-in');
+  }
+  // Inside a staff session the TARGET's identity is `session.user`; the
+  // operator's own is `session.impersonation.operator`.
+  const staffSession = session.impersonation ?? null;
 
   // ⚠️ THE GATE ABOVE STAYS FIRST AND STAYS SEQUENTIAL (MOTIR-3433). Everything
   // below runs only for a request that already has a session; `getSession()` is
@@ -151,8 +163,13 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
     workspacesService.listUserWorkspaces(session.user.id),
     platformStaffRepository.findStandingByUserId(session.user.id),
     cookies(),
-    resolveReconsentHold(session.user.id),
-    assertTwoFactorCompliance(session.user.id),
+    // A staff session (MOTIR-749) holds the operator to neither of the
+    // CUSTOMER's personal gates: agreeing to terms and enrolling a second
+    // factor are the customer's acts, never staff's on their behalf (and both
+    // are refused inside a session). The operator's own 2FA is enforced at the
+    // console.
+    staffSession ? null : resolveReconsentHold(session.user.id),
+    staffSession ? undefined : assertTwoFactorCompliance(session.user.id),
   ]);
 
   // ⚠️ ENFORCED AFTER THE WAVE, NOT INSIDE IT — and that placement is the
@@ -458,6 +475,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                      active organization is closing. */
                       banner={
                         <>
+                          {/* THE STAFF SESSION BAR (MOTIR-749, design Panel 5) —
+                              first, above every other banner and the TopNav, on
+                              every page of a staff "View as" session. Not
+                              dismissible: it is the operator's constant reminder
+                              that this is the customer's live app. */}
+                          {staffSession ? <StaffSessionBar session={staffSession.session} /> : null}
                           <AccountDeletionBanner userId={session.user.id} />
                           {activeOrg ? (
                             <OrganizationClosingBanner

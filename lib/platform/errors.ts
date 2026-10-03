@@ -362,3 +362,82 @@ export class PlatformCreditServiceUnavailableError extends Error {
     this.name = 'PlatformCreditServiceUnavailableError';
   }
 }
+
+/**
+ * A WRITE was attempted inside a READ-ONLY staff "View as" session (MOTIR-749).
+ *
+ * Raised at the session chokepoint (`readSession`), before the request reaches
+ * any service: a Server Action, or a non-GET API request, made while the
+ * operator is viewing a tenant read-only. Nothing ran and nothing was written.
+ * The cookie-session API doors answer it 403 `IMPERSONATION_READ_ONLY`.
+ *
+ * Not a `NotPlatformStaffError` cousin: the caller IS staff and the surface is
+ * the tenant's, so there is no existence to hide — the refusal says what it is.
+ */
+export class ImpersonationReadOnlyError extends Error {
+  readonly code = 'IMPERSONATION_READ_ONLY';
+
+  constructor(readonly sessionId: string) {
+    super('This is a read-only staff session: nothing can be changed in it.');
+    this.name = 'ImpersonationReadOnlyError';
+  }
+}
+
+/** Why an account cannot be viewed as (MOTIR-749) — each refused at START. */
+export type ImpersonationIneligibility =
+  /** The operator asked to view as themselves. */
+  | 'self'
+  /** The target holds platform standing — staff never impersonate staff. */
+  | 'platform_staff'
+  /** The account is suspended (MOTIR-1167): it cannot sign in, so there is nothing to see as it. */
+  | 'suspended_account'
+  /** The account's organization is suspended (MOTIR-748): its members are refused at the gate. */
+  | 'suspended_organization'
+  /** The account belongs to no workspace — there is no tenant to enter. */
+  | 'no_workspace';
+
+/**
+ * The account cannot be viewed as (MOTIR-749) — see
+ * {@link ImpersonationIneligibility}. Thrown inside the audited transaction, so
+ * a refused start leaves no `user.impersonation_start` row.
+ */
+export class ImpersonationTargetIneligibleError extends Error {
+  readonly code = 'IMPERSONATION_TARGET_INELIGIBLE';
+
+  constructor(readonly ineligibility: ImpersonationIneligibility) {
+    super(`This account cannot be viewed as: ${ineligibility}`);
+    this.name = 'ImpersonationTargetIneligibleError';
+  }
+}
+
+/**
+ * The requested time-box or access mode is not one the console offers
+ * (MOTIR-749, design Panel 4: Read-only | Full access, 15 / 30 / 60 minutes).
+ * Enforced in the service because a Server Action is reachable without the
+ * dialog — an "indefinite" session must be impossible, not merely undrawn.
+ */
+export class ImpersonationInvalidRequestError extends Error {
+  readonly code = 'IMPERSONATION_INVALID_REQUEST';
+
+  constructor(readonly detail: string) {
+    super(`Invalid staff session request: ${detail}`);
+    this.name = 'ImpersonationInvalidRequestError';
+  }
+}
+
+/**
+ * A new CREDENTIAL — a personal access token, a `motir login` device credential,
+ * an OAuth / MCP connection — was about to be minted while a staff session
+ * cookie was present (MOTIR-749). Refused in EVERY mode: a credential minted as
+ * the customer would outlive the time-box and leave the session, which is the
+ * one thing a staff session must never produce. Answered 403
+ * `IMPERSONATION_CREDENTIAL_REFUSED` on the cookie API doors.
+ */
+export class ImpersonationCredentialRefusedError extends Error {
+  readonly code = 'IMPERSONATION_CREDENTIAL_REFUSED';
+
+  constructor() {
+    super('A credential cannot be created inside a staff session.');
+    this.name = 'ImpersonationCredentialRefusedError';
+  }
+}
