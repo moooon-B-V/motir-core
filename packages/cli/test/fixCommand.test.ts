@@ -125,6 +125,8 @@ function setup(opts: {
   git?: CommandRunner;
   exists?: (p: string) => boolean;
   agentExit?: number;
+  /** The agent's self-reported model (MOTIR-7504); null by default. */
+  agentModel?: string | null;
 }) {
   const calls: Harness['calls'] = [];
   const claims = [...opts.claims];
@@ -182,7 +184,11 @@ function setup(opts: {
     exists: opts.exists ?? ((p: string) => !p.includes('-fix-')),
     runAgentFn: async (input: { prompt: string; cwd: string }) => {
       h.agents.push({ prompt: input.prompt, cwd: input.cwd });
-      return { exitCode: opts.agentExit ?? 0, signal: null, model: null } as never;
+      return {
+        exitCode: opts.agentExit ?? 0,
+        signal: null,
+        model: opts.agentModel ?? null,
+      } as never;
     },
     wait: async () => {},
     onInterrupt: (handler: () => void) => {
@@ -382,6 +388,26 @@ describe('motir fix — an acceptance sent back with Re-run (MOTIR-6502)', () =>
     expect(tools()).not.toContain('open_run');
   });
 
+  it.each([['m'], [null]] as const)(
+    'both turns report the agent’s model (%s) and exit code TOP-LEVEL on `agent_exited` (MOTIR-7504)',
+    async (model) => {
+      const deps = setup({
+        claims: [rerunClaim()],
+        verdicts: [[delivery('running')], [delivery('passing')]],
+        agentModel: model,
+      });
+
+      await fixCommand('PROD-60', {}, deps);
+
+      const exited = events().filter((e) => e.kind === 'agent_exited');
+      expect(exited).toHaveLength(2);
+      for (const e of exited) {
+        expect(e).toMatchObject({ exitCode: 0, model });
+        expect(e.data).toMatchObject({ exitCode: 0, model });
+      }
+    },
+  );
+
   it('a failed re-run agent stops before the CI watch, closes halted and exits non-zero', async () => {
     const deps = setup({
       claims: [rerunClaim()],
@@ -481,6 +507,24 @@ describe('motir fix — a card a REVIEW sent back (MOTIR-6822)', () => {
       pullRequests: [pr({ headRef: 'subtask/PROD-70-export', ci: 'passing', failingChecks: [] })],
       ...over,
     });
+
+  it.each([['m'], [null]] as const)(
+    'the review-fix turn reports the agent’s model (%s) and exit code TOP-LEVEL (MOTIR-7504)',
+    async (model) => {
+      const deps = setup({
+        claims: [reviewClaim()],
+        verdicts: [[delivery('running')], [delivery('passing')]],
+        agentModel: model,
+      });
+
+      await fixCommand('PROD-70', {}, deps);
+
+      const exited = events().filter((e) => e.kind === 'agent_exited');
+      expect(exited).toHaveLength(1);
+      expect(exited[0]).toMatchObject({ exitCode: 0, model });
+      expect(exited[0]!.data).toMatchObject({ step: 'review_fix', model });
+    },
+  );
 
   it('claims a GREEN card, runs the agent ONCE on the full findings before the CI watch, and ends there', async () => {
     const deps = setup({

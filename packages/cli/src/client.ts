@@ -1,6 +1,7 @@
 import { normalizeServerUrl } from './config/userConfig.js';
 import type { DesignsResponse } from './designFiles.js';
 import { V1Transport } from './transport.js';
+import type { operations } from './api/index.js';
 import { DispatchRunClosedError } from './errors.js';
 import { encodeFilterParam } from './adapters/filterParam.js';
 import {
@@ -1315,6 +1316,10 @@ export type ReportableEventKind = Exclude<
   'bug_filed' | 'plan_submitted' | 'unbuildable_reported' | 'review_verdict'
 >;
 
+/** One event as the generated contract types it (`appendDispatchRunEvents`). */
+type GeneratedDispatchRunEventInput =
+  operations['appendDispatchRunEvents']['requestBody']['content']['application/json']['events'][number];
+
 /** One event on the wire. `body` is the OPT-IN log payload — default OFF. */
 export interface DispatchRunEventInput {
   kind: ReportableEventKind;
@@ -1325,6 +1330,13 @@ export interface DispatchRunEventInput {
   skipReason?: DispatchSkipReason;
   sessionBranch?: string;
   exitCode?: number;
+  /**
+   * The agent's SELF-REPORTED model, on `agent_exited` only (MOTIR-7504) — the
+   * value `runAgent` returned, null when the agent reported none, never a guess.
+   * The server writes it onto the leg (`dispatch-run-record.md` AMENDMENT 4) and
+   * refuses it on any other kind.
+   */
+  model?: GeneratedDispatchRunEventInput['model'];
 }
 
 export interface CompleteSessionResult {

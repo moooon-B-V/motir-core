@@ -233,3 +233,41 @@ describe('checkout_ready names the BRANCH the leg’s work will be on (MOTIR-653
     expect((await checkoutEvent(null, undefined)).branch).toBeNull();
   });
 });
+
+describe('agent_exited carries the agent’s self-reported model TOP-LEVEL (MOTIR-7504)', () => {
+  async function exitedEvent(model: string | null) {
+    const events: Array<{ kind: string; model?: unknown; data?: unknown; exitCode?: number }> = [];
+    const primary = target();
+    await runDispatchLeg({
+      client: {
+        getWorkItem: async () => ({ item: { status: 'in_progress' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
+      rootDir: ROOT,
+      key: 'PROD-1',
+      dispatch: PROMPT,
+      agent: { command: 'fake-agent', binary: 'fake-agent', args: [] },
+      targets: [primary],
+      primary,
+      sessionBranch: null,
+      onMaterialization: () => undefined,
+      beforeSpawn: () => undefined,
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model }),
+      run: git(true),
+      reporter: { event: (e: (typeof events)[number]) => events.push(e) } as never,
+    });
+    return events.find((e) => e.kind === 'agent_exited')!;
+  }
+
+  it('sends the model runAgent returned, and keeps the `data` copy readers already see', async () => {
+    const exited = await exitedEvent('m');
+    expect(exited.model).toBe('m');
+    expect(exited.exitCode).toBe(0);
+    expect(exited.data).toEqual({ model: 'm', signal: null });
+  });
+
+  it('sends null — never a guess — when the agent reported none', async () => {
+    const exited = await exitedEvent(null);
+    expect(exited).toHaveProperty('model', null);
+  });
+});

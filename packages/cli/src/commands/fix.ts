@@ -826,7 +826,17 @@ async function runAgentStep(
   input.reporter.event({
     kind: 'agent_exited',
     workItemKey: input.key,
-    data: { step: input.step, exitCode: result.exitCode, signal: result.signal ?? null },
+    // Top-level `exitCode` and `model` are what the server writes onto the leg
+    // (MOTIR-7504) — a repair leg records both, like every other path. The model
+    // is the agent's self-report or null, never a guess (MOTIR-2419).
+    exitCode: result.exitCode,
+    model: result.model ?? null,
+    data: {
+      step: input.step,
+      exitCode: result.exitCode,
+      model: result.model ?? null,
+      signal: result.signal ?? null,
+    },
   });
   if (result.exitCode === 0) return { ok: true };
   return {

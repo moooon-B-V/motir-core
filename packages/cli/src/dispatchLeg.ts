@@ -235,7 +235,9 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     exitCode: result.exitCode,
     // The model only the AGENT can answer for (MOTIR-2419) — its self-report, or
     // null. Never a guess: an absent report is a null model, and the surface
-    // renders that rather than inventing one.
+    // renders that rather than inventing one. TOP-LEVEL is what the server writes
+    // onto the leg (MOTIR-7504); `data` keeps its copy so the stream reads as before.
+    model: result.model ?? null,
     data: { model: result.model ?? null, signal: result.signal ?? null },
   });
 
