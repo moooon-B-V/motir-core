@@ -32,6 +32,8 @@ import {
 import type {
   ActiveDispatchRunDto,
   AgentActionReportedDto,
+  AgentRunClosedDto,
+  AgentRunLegDto,
   AgentRunOpenedDto,
   ActiveDispatchRunsDto,
   DispatchRunListPageDto,
@@ -1182,6 +1184,18 @@ export const dispatchRunService = {
       const state = await workItemRepository.findClaimStateById(item.id, tx);
       if (!holdsClaim(state, ctx.userId)) throw new AgentRunNotClaimedError(key, key);
 
+      // A container's legs are its children; their titles name the legs in the answer.
+      const children = await workItemRepository.findChildren(item.id, tx);
+      const titles = new Map<string, string>([
+        [item.id, item.title],
+        ...children.map((c): [string, string] => [c.id, c.title]),
+      ]);
+      const legsOf = (run: DispatchRunDto): AgentRunLegDto[] =>
+        run.cards.map((c) => ({
+          key: c.key,
+          title: (c.workItemId !== null ? titles.get(c.workItemId) : undefined) ?? null,
+        }));
+
       const existing = await dispatchRunRepository.findOpenForCreatorOnWorkItem(
         ctx.userId,
         item.id,
@@ -1189,12 +1203,12 @@ export const dispatchRunService = {
       );
       if (existing) {
         const seq = (await dispatchRunEventRepository.maxSeq(existing.id, tx)) ?? 0;
-        return { outcome: 'mine', run: toDispatchRunDto(existing, seq) };
+        const run = toDispatchRunDto(existing, seq);
+        return { outcome: 'mine', run, legs: legsOf(run) };
       }
 
       // A container's legs are its children in their own order, less the ones
       // already done; every other child must be the caller's too.
-      const children = await workItemRepository.findChildren(item.id, tx);
       const childStates = new Map(
         (
           await workItemRepository.findClaimStatesByIds(
@@ -1261,7 +1275,8 @@ export const dispatchRunService = {
       const withCards = await dispatchRunRepository.findByIdWithCards(runId, tx);
       /* v8 ignore next -- the row was just written inside this transaction */
       if (!withCards) throw new DispatchRunNotFoundError(runId);
-      return { outcome: 'opened', run: toDispatchRunDto(withCards, 1) };
+      const run = toDispatchRunDto(withCards, 1);
+      return { outcome: 'opened', run, legs: legsOf(run) };
     });
   },
 
@@ -1375,14 +1390,20 @@ export const dispatchRunService = {
     if (ctx.tokenDispatchRunId !== undefined) return 0;
     const now = options.now ?? new Date();
     const reportedBy = options.reportedBy === undefined ? 'agent' : options.reportedBy;
-    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
-      dispatchRunRepository.touchHeartbeatsForCreator(
-        ctx.userId,
-        reportedBy,
-        new Date(now.getTime() - AGENT_RUN_HEARTBEAT_THROTTLE_MS),
-        now,
-        tx,
-      ),
+    const staleBefore = new Date(now.getTime() - AGENT_RUN_HEARTBEAT_THROTTLE_MS);
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        // Read first: the ordinary call has nothing stale, and issues no write.
+        const ids = await dispatchRunRepository.findStaleHeartbeatIdsForCreator(
+          ctx.userId,
+          reportedBy,
+          staleBefore,
+          tx,
+        );
+        if (ids.length === 0) return 0;
+        return dispatchRunRepository.touchHeartbeatsByIds(ids, staleBefore, now, tx);
+      },
     );
   },
 
@@ -1403,7 +1424,7 @@ export const dispatchRunService = {
    * know is left as it is on the card. Any other outcome stamps nothing, and no
    * outcome writes a card STATUS (Q3).
    */
-  async closeAgentRun(input: CloseAgentRunInput, ctx: ServiceContext): Promise<DispatchRunDto> {
+  async closeAgentRun(input: CloseAgentRunInput, ctx: ServiceContext): Promise<AgentRunClosedDto> {
     if ((input.stopReason as DispatchStopReason) === 'abandoned') {
       throw new AgentRunReportInvalidError('abandoned');
     }
@@ -1422,7 +1443,7 @@ export const dispatchRunService = {
       : [];
 
     const bound = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id };
-    return withWorkspaceContext(bound, async (tx): Promise<DispatchRunDto> => {
+    return withWorkspaceContext(bound, async (tx): Promise<AgentRunClosedDto> => {
       const item = await workItemRepository.findByIdentifier(project.id, key, tx);
       if (!item) throw new WorkItemNotFoundError(key);
       const run = await dispatchRunRepository.findByIdWithCards(input.runId, tx);
@@ -1434,14 +1455,12 @@ export const dispatchRunService = {
       }
       if (run.createdById !== ctx.userId) throw new AgentRunNotYoursError(run.id, key);
 
-      const asItStands = async (): Promise<DispatchRunDto> => {
+      const asItStands = async (): Promise<AgentRunClosedDto> => {
         const current = await dispatchRunRepository.findByIdWithCards(run.id, tx);
         /* v8 ignore next -- read a statement ago in this transaction */
         if (!current) throw new DispatchRunNotFoundError(run.id);
-        return toDispatchRunDto(
-          current,
-          (await dispatchRunEventRepository.maxSeq(run.id, tx)) ?? 0,
-        );
+        const seq = (await dispatchRunEventRepository.maxSeq(run.id, tx)) ?? 0;
+        return { run: toDispatchRunDto(current, seq), stamped: [], alreadyClosed: true };
       };
       if (run.status !== 'running') return asItStands();
 
@@ -1460,6 +1479,7 @@ export const dispatchRunService = {
         throw err;
       }
 
+      const stampedIds = new Set<string>();
       if (delivered) {
         const keys = ladderKeysFrom(statuses);
         const legIds = run.cards.map((c) => c.workItemId).filter((id): id is string => id !== null);
@@ -1476,9 +1496,13 @@ export const dispatchRunService = {
             },
             tx,
           );
+          stampedIds.add(leg.id);
         }
       }
-      return closed;
+      const stamped = closed.cards
+        .filter((c) => c.workItemId !== null && stampedIds.has(c.workItemId))
+        .flatMap((c) => (c.key !== null ? [c.key] : []));
+      return { run: closed, stamped, alreadyClosed: false };
     });
   },
 

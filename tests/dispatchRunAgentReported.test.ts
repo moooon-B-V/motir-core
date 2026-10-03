@@ -117,8 +117,12 @@ describe('openAgentRun — over a claim the caller holds (§2)', () => {
     const { story, children } = await heldStory(3);
     await adminDb.workItem.update({ where: { id: children[1]!.id }, data: { status: 'done' } });
 
-    const { run } = await start(story.identifier);
+    const { run, legs } = await start(story.identifier);
 
+    expect(legs).toEqual([
+      { key: children[0]!.identifier, title: children[0]!.title },
+      { key: children[2]!.identifier, title: children[2]!.title },
+    ]);
     expect(run.command).toBe('run_scope');
     expect(run.scopeWorkItemId).toBe(story.id);
     expect(run.cards.map((c) => c.key)).toEqual([children[0]!.identifier, children[2]!.identifier]);
@@ -154,6 +158,7 @@ describe('openAgentRun — over a claim the caller holds (§2)', () => {
 
     expect(second.outcome).toBe('mine');
     expect(second.run.id).toBe(first.run.id);
+    expect(second.legs).toEqual([{ key: leaf.identifier, title: leaf.title }]);
     expect(await adminDb.dispatchRun.count()).toBe(1);
   });
 
@@ -404,7 +409,8 @@ describe('closeAgentRun — the close and its provenance stamp (§4)', () => {
       fx.ctx,
     );
 
-    expect(closed).toMatchObject({ status: 'succeeded', stopReason: 'completed' });
+    expect(closed.run).toMatchObject({ status: 'succeeded', stopReason: 'completed' });
+    expect(closed).toMatchObject({ stamped: [children[0]!.identifier], alreadyClosed: false });
     const built = await adminDb.workItem.findUniqueOrThrow({ where: { id: children[0]!.id } });
     expect(built).toMatchObject({
       implementationSource: 'byok',
@@ -449,11 +455,13 @@ describe('closeAgentRun — the close and its provenance stamp (§4)', () => {
       fx.ctx,
     );
 
-    expect(first).toMatchObject({ status: 'failed', stopReason: 'halted' });
-    expect(second).toMatchObject({
+    expect(first).toMatchObject({ stamped: [], alreadyClosed: false });
+    expect(first.run).toMatchObject({ status: 'failed', stopReason: 'halted' });
+    expect(second).toMatchObject({ stamped: [], alreadyClosed: true });
+    expect(second.run).toMatchObject({
       status: 'failed',
       stopReason: 'halted',
-      endedAt: first.endedAt,
+      endedAt: first.run.endedAt,
     });
     const card = await adminDb.workItem.findUniqueOrThrow({ where: { id: leaf.id } });
     expect(card.implementationSource).toBeNull();

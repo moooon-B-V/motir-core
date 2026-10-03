@@ -231,6 +231,27 @@ export interface DispatchRunOpenedDto {
 export interface AgentRunOpenedDto {
   outcome: 'opened' | 'mine';
   run: DispatchRunDto;
+  /** The run's legs in order, each with its card's title (null for a card no longer in the tree). */
+  legs: AgentRunLegDto[];
+}
+
+/** One leg of an agent-reported run, as `start_work_item_run` names it. */
+export interface AgentRunLegDto {
+  /** Null only for a leg whose card has since been deleted. */
+  key: string | null;
+  title: string | null;
+}
+
+/**
+ * What `close_work_item_run` answers with (MOTIR-7451, §4): the run as it now
+ * stands, the leg cards a delivered close stamped with the run's harness and model,
+ * and whether it was ALREADY closed (a second close, or one the reap beat), in which
+ * case nothing was written and `stamped` is empty.
+ */
+export interface AgentRunClosedDto {
+  run: DispatchRunDto;
+  stamped: string[];
+  alreadyClosed: boolean;
 }
 
 /**

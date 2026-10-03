@@ -889,8 +889,9 @@ export const dispatchRunRepository = {
    * §5) — what every Motir MCP call by that caller does, in ONE statement.
    *
    * `staleBefore` is the throttle: a run beaten more recently than it is left alone,
-   * so a burst of tool calls costs one write a minute, not one per call. `reportedBy`
-   * narrows to one reporter, or `null` touches both. `tx` required — a write.
+   * so a burst of tool calls costs one write a minute, not one per call. The ids come
+   * from {@link findStaleHeartbeatIdsForCreator}; the throttle and `running` are
+   * re-checked here. `tx` required — a write.
    *
    * ⚠️ LOCAL RUNS ONLY. A HOSTED run's liveness is its supervision and its age reap
    * reads a NULL heartbeat, so a stamp here would take it off that reap for good; an
@@ -902,14 +903,40 @@ export const dispatchRunRepository = {
    * committed row before writing, so a heartbeat never lands on a run the reap or
    * the agent has just closed.
    */
-  async touchHeartbeatsForCreator(
-    createdById: string,
-    reportedBy: DispatchRun['reportedBy'] | null,
+  async touchHeartbeatsByIds(
+    ids: string[],
     staleBefore: Date,
     at: Date,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const r = await tx.dispatchRun.updateMany({
+      where: {
+        id: { in: ids },
+        status: 'running',
+        OR: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: staleBefore } }],
+      },
+      data: { lastHeartbeatAt: at },
+    });
+    return r.count;
+  },
+
+  /**
+   * The ids of a creator's open LOCAL runs whose heartbeat is older than
+   * `staleBefore` (or unset) — the READ in front of {@link touchHeartbeatsByIds}.
+   * `reportedBy` narrows to one reporter, or `null` reads both.
+   *
+   * It exists so the every-call heartbeat costs a READ on the ordinary call: most
+   * calls come from a caller with no stale run, and those must issue no write at all
+   * (a read-only tool is measured issuing zero writes,
+   * `tests/mcp/tool-hints-integration.test.ts`).
+   */
+  async findStaleHeartbeatIdsForCreator(
+    createdById: string,
+    reportedBy: DispatchRun['reportedBy'] | null,
+    staleBefore: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.dispatchRun.findMany({
       where: {
         createdById,
         status: 'running',
@@ -917,9 +944,9 @@ export const dispatchRunRepository = {
         ...(reportedBy !== null ? { reportedBy } : {}),
         OR: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: staleBefore } }],
       },
-      data: { lastHeartbeatAt: at },
+      select: { id: true },
     });
-    return r.count;
+    return rows.map((r) => r.id);
   },
 
   /**
