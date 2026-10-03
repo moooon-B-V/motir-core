@@ -11,6 +11,8 @@ import {
   systemClock,
 } from '@/lib/pages';
 import { pageRepository } from '@/lib/repositories/pageRepository';
+import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
+import { pagesService } from '@/lib/services/pagesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -230,5 +232,153 @@ describe('pageStoreFor(tx) — the package procedures on real Postgres', () => {
     ).resolves.toBeUndefined();
     expect(await inTenant(t, (tx) => pageStoreFor(tx).lockPage('missing'))).toBeNull();
     expect(await inTenant(t, (tx) => pageStoreFor(tx).findPage('missing'))).toBeNull();
+  });
+});
+
+describe('pageStoreFor(tx) — the version methods on real Postgres (MOTIR-7384)', () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 9, 2, 12, minute));
+
+  /** Insert version `number` of `pageId` through the adapter. */
+  const insertVersion = (t: Tenant, pageId: string, number: number, markdown = `v${number}`) =>
+    inTenant(t, (tx) =>
+      pageStoreFor(tx).insertVersion({
+        workspaceId: t.workspaceId,
+        projectId: t.projectId,
+        pageId,
+        number,
+        authorId: t.userId,
+        bodyState: markdownToUpdate(emptyState(), markdown),
+        bodyMarkdown: markdown,
+        startedAt: at(number),
+        savedAt: at(number),
+        restoredFromVersionId: null,
+        restoredFromNumber: null,
+      }),
+    );
+
+  it('insertVersion then latestVersion returns the inserted row; createPage wrote version 1', async () => {
+    const t = await makeTenant('vone');
+    const page = await create(t);
+    expect(await inTenant(t, (tx) => pageStoreFor(tx).latestVersion(page.id))).toMatchObject({
+      number: 1,
+      authorId: t.userId,
+    });
+
+    const inserted = await insertVersion(t, page.id, 2);
+    const latest = await inTenant(t, (tx) => pageStoreFor(tx).latestVersion(page.id));
+    expect(latest).toEqual(inserted);
+    expect(latest).toEqual({
+      id: inserted.id,
+      pageId: page.id,
+      number: 2,
+      authorId: t.userId,
+      startedAt: at(2),
+      savedAt: at(2),
+      restoredFromVersionId: null,
+      restoredFromNumber: null,
+    });
+    expect(await inTenant(t, (tx) => pageStoreFor(tx).latestVersion('missing'))).toBeNull();
+  });
+
+  it('updateVersion changes only the snapshot and saved_at', async () => {
+    const t = await makeTenant('vupd');
+    const page = await create(t);
+    const v2 = await insertVersion(t, page.id, 2, 'before');
+    const before = await adminDb.pageVersion.findUniqueOrThrow({ where: { id: v2.id } });
+
+    const state = markdownToUpdate(emptyState(), 'after');
+    await inTenant(t, (tx) =>
+      pageStoreFor(tx).updateVersion(v2.id, {
+        bodyState: state,
+        bodyMarkdown: 'after',
+        savedAt: at(30),
+      }),
+    );
+
+    const after = await adminDb.pageVersion.findUniqueOrThrow({ where: { id: v2.id } });
+    expect(after).toEqual({
+      ...before,
+      bodyState: after.bodyState,
+      bodyMarkdown: 'after',
+      savedAt: at(30),
+    });
+    expect(Buffer.from(after.bodyState).equals(Buffer.from(state))).toBe(true);
+  });
+
+  it('findVersion returns this page’s version n with its body, and null for another page’s n', async () => {
+    const t = await makeTenant('vfind');
+    const page = await create(t);
+    const other = await create(t);
+    await insertVersion(t, other.id, 2, 'other two');
+
+    const found = await inTenant(t, (tx) => pageStoreFor(tx).findVersion(other.id, 2));
+    expect(found).toMatchObject({ pageId: other.id, number: 2, bodyMarkdown: 'other two' });
+    expect(found!.bodyState).toBeInstanceOf(Uint8Array);
+    expect(stateToMarkdown(found!.bodyState)).toBe('other two');
+
+    expect(await inTenant(t, (tx) => pageStoreFor(tx).findVersion(page.id, 2))).toBeNull();
+  });
+
+  it('deleteOldestVersions(pageId, 3) on 5 versions leaves 3–5, and only touches that page', async () => {
+    const t = await makeTenant('vcap');
+    const page = await create(t);
+    const other = await create(t);
+    for (let n = 2; n <= 5; n += 1) await insertVersion(t, page.id, n);
+
+    await inTenant(t, (tx) => pageStoreFor(tx).deleteOldestVersions(page.id, 3));
+
+    const left = await adminDb.pageVersion.findMany({
+      where: { pageId: page.id },
+      orderBy: { number: 'asc' },
+      select: { number: true },
+    });
+    expect(left.map((r) => r.number)).toEqual([3, 4, 5]);
+    expect(await inTenant(t, (tx) => pageStoreFor(tx).countVersions(page.id))).toBe(3);
+    expect(await inTenant(t, (tx) => pageStoreFor(tx).countVersions(other.id))).toBe(1);
+  });
+
+  it('pagesService.savePageUpdate on a real page leaves a page_version row', async () => {
+    const t = await makeTenant('vsvc');
+    const ctx = { userId: t.userId, workspaceId: t.workspaceId };
+    const created = await pagesService.createPage(ctx, { projectId: t.projectId });
+    await pagesService.savePageUpdate(ctx, {
+      projectId: t.projectId,
+      pageId: created.id,
+      update: markdownToUpdate(emptyState(), 'saved through the service'),
+    });
+
+    const versions = await adminDb.pageVersion.findMany({ where: { pageId: created.id } });
+    // v1 is the create; the save, by the same author inside the window, extends it.
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatchObject({
+      number: 1,
+      authorId: t.userId,
+      workspaceId: t.workspaceId,
+      projectId: t.projectId,
+      bodyMarkdown: 'saved through the service',
+    });
+  });
+
+  it('listByPage pages newest first, `limit` at a time, below `beforeNumber`, without the body', async () => {
+    const t = await makeTenant('vlist');
+    const page = await create(t);
+    for (let n = 2; n <= 5; n += 1) await insertVersion(t, page.id, n);
+
+    const first = await inTenant(t, (tx) =>
+      pageVersionRepository.listByPage(page.id, { limit: 2 }, tx),
+    );
+    expect(first.map((r) => r.number)).toEqual([5, 4]);
+    const second = await inTenant(t, (tx) =>
+      pageVersionRepository.listByPage(page.id, { beforeNumber: 4, limit: 2 }, tx),
+    );
+    expect(second.map((r) => r.number)).toEqual([3, 2]);
+    const last = await inTenant(t, (tx) =>
+      pageVersionRepository.listByPage(page.id, { beforeNumber: 2, limit: 2 }, tx),
+    );
+    expect(last.map((r) => r.number)).toEqual([1]);
+    for (const row of [...first, ...second, ...last]) {
+      expect(row).not.toHaveProperty('bodyState');
+      expect(row).not.toHaveProperty('bodyMarkdown');
+    }
   });
 });

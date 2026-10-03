@@ -289,3 +289,42 @@ describe('savePageUpdate', () => {
     expect(store.called('updateBody')).toBe(0);
   });
 });
+
+describe('every write leaves a version (§6, MOTIR-5754)', () => {
+  it('createPage leaves exactly one version, number 1, by the creator, holding the empty state', async () => {
+    const page = await createPage(store, clock, scope);
+    const versions = store.versions.filter((v) => v.pageId === page.id);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatchObject({
+      number: 1,
+      authorId: 'u1',
+      bodyMarkdown: '',
+      startedAt: clock.current,
+      savedAt: clock.current,
+      restoredFromVersionId: null,
+      restoredFromNumber: null,
+    });
+    expect(stateToMarkdown(versions[0]!.bodyState)).toBe('');
+  });
+
+  // The guard against Plane's silently broken version task: a save that writes
+  // a body and no version FAILS here, whichever branch the policy took.
+  it('a save writes either a new version or an extension, every time', async () => {
+    const page = await createPage(store, clock, scope);
+    for (const [actorId, gapMs] of [
+      ['u1', 60_000],
+      ['u1', 60_000],
+      ['u2', 60_000],
+      ['u2', 11 * 60_000],
+    ] as const) {
+      clock.current = new Date(clock.current.getTime() + gapMs);
+      const before = store.called('insertVersion') + store.called('updateVersion');
+      await savePageUpdate(store, clock, {
+        pageId: page.id,
+        actorId,
+        update: markdownToUpdate(store.pages.get(page.id)!.bodyState, `by ${actorId} ${gapMs}`),
+      });
+      expect(store.called('insertVersion') + store.called('updateVersion')).toBe(before + 1);
+    }
+  });
+});

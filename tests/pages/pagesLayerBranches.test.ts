@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { pageErrorResponse } from '@/lib/pages/routeErrors';
 import { PageNotFoundError } from '@/lib/pages';
-import { toPageListItemDto } from '@/lib/mappers/pageMappers';
+import { toPageListItemDto, toPageVersionListItemDto } from '@/lib/mappers/pageMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { attachmentsService } from '@/lib/services/attachmentsService';
@@ -101,6 +101,28 @@ describe('toPageListItemDto', () => {
       updatedAt: '2026-10-01T12:00:00.000Z',
       updatedBy: { id: 'u-gone', name: '' },
     });
+  });
+});
+
+describe('toPageVersionListItemDto', () => {
+  it('labels an author the batch read did not return with an empty name (MOTIR-5754)', () => {
+    const at = new Date('2026-10-01T12:00:00Z');
+    expect(
+      toPageVersionListItemDto(
+        {
+          id: 'v1',
+          pageId: 'p1',
+          number: 1,
+          authorId: 'u-gone',
+          startedAt: at,
+          savedAt: at,
+          restoredFromVersionId: null,
+          restoredFromNumber: null,
+        },
+        undefined,
+        true,
+      ),
+    ).toMatchObject({ authorId: 'u-gone', authorName: '', isCurrent: true });
   });
 });
 

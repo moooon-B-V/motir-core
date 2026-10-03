@@ -38,46 +38,56 @@ import { PageView } from './_components/PageView';
 type Params = { params: Promise<{ pageId: string }> };
 
 /** Read the page as the signed-in member, or `null` for every not-found case. */
-const loadPage = cache(async (pageId: string): Promise<PageDto | null> => {
-  const ctx = await memberPageContext();
-  const scope = pageScope(ctx);
-  try {
-    return await pagesService.getPage(scope.service, { projectId: scope.projectId, pageId });
-  } catch (err) {
-    // ⚠️ BOTH kinds of `ProjectAccessDeniedError` are a not-found here (MOTIR-7281).
-    // `getPage` asserts `page:view`, and a reader who may BROWSE the project but
-    // does not hold it — a workspace custom role, which holds `page:view` only
-    // when an admin ticks it — is refused with kind 'edit'. Rethrowing that sent
-    // them to the error boundary, while `/pages` answers the same reader with its
-    // `notFound()`. The page they cannot read is one they cannot see.
-    if (
-      err instanceof ProjectAccessDeniedError ||
-      err instanceof PageNotFoundError ||
-      err instanceof ProjectNotFoundError
-    ) {
-      return null;
+const loadPage = cache(
+  async (pageId: string): Promise<{ page: PageDto; viewerId: string } | null> => {
+    const ctx = await memberPageContext();
+    const scope = pageScope(ctx);
+    try {
+      const page = await pagesService.getPage(scope.service, {
+        projectId: scope.projectId,
+        pageId,
+      });
+      return { page, viewerId: scope.userId };
+    } catch (err) {
+      // ⚠️ BOTH kinds of `ProjectAccessDeniedError` are a not-found here (MOTIR-7281).
+      // `getPage` asserts `page:view`, and a reader who may BROWSE the project but
+      // does not hold it — a workspace custom role, which holds `page:view` only
+      // when an admin ticks it — is refused with kind 'edit'. Rethrowing that sent
+      // them to the error boundary, while `/pages` answers the same reader with its
+      // `notFound()`. The page they cannot read is one they cannot see.
+      if (
+        err instanceof ProjectAccessDeniedError ||
+        err instanceof PageNotFoundError ||
+        err instanceof ProjectNotFoundError
+      ) {
+        return null;
+      }
+      throw err;
     }
-    throw err;
-  }
-});
+  },
+);
 
 /** The browser tab reads the page's title, or the untitled copy. */
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { pageId } = await params;
-  const page = await loadPage(pageId);
-  if (!page) return {};
+  const loaded = await loadPage(pageId);
+  if (!loaded) return {};
+  const { page } = loaded;
   const t = await getTranslations('pages');
   return { title: page.title || t('untitled') };
 }
 
 export default async function PageAtItsAddress({ params }: Params) {
   const { pageId } = await params;
-  const page = await loadPage(pageId);
-  if (!page) notFound();
+  const loaded = await loadPage(pageId);
+  if (!loaded) notFound();
+  const { page, viewerId } = loaded;
 
   const t = await getTranslations('pages.page');
   return (
-    <div className="mx-auto w-full max-w-[760px]">
+    // History open (`data-history-open`, MOTIR-7387) widens the column at `xl`, where
+    // the panel sits BESIDE the page instead of over it.
+    <div className="mx-auto w-full max-w-[760px] xl:has-[[data-history-open]]:max-w-[1180px]">
       <Link
         href="/pages"
         aria-label={t('backLabel')}
@@ -88,6 +98,8 @@ export default async function PageAtItsAddress({ params }: Params) {
       </Link>
       <Suspense fallback={<PageFrame />}>
         <PageView
+          key={page.id}
+          viewerId={viewerId}
           page={{
             id: page.id,
             title: page.title,

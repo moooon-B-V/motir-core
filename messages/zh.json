@@ -11676,6 +11676,43 @@
         "reload": "重新加载已保存版本",
         "newPageNewTab": "在新标签页中新建页面"
       }
+    },
+    "history": {
+      "open": "历史记录",
+      "title": "历史记录",
+      "close": "关闭历史记录",
+      "listLabel": "此页面的版本",
+      "version": "v{number}",
+      "versionLabel": "第 {number} 版",
+      "current": "当前",
+      "you": "你",
+      "restoredFrom": "从 v{number} 恢复",
+      "noLongerKept": "（已不再保留）",
+      "loading": "正在加载历史记录",
+      "loadFailed": "无法加载历史记录。",
+      "retry": "重试",
+      "loadMore": "加载更多",
+      "keepsLatest": "页面保留最近的 100 个版本。",
+      "onlyVersion": "这是目前唯一的版本。每次编辑会话都会新增一个版本。",
+      "compare": {
+        "label": "正在将 v{number} 与当前页面对比",
+        "current": "当前页面",
+        "close": "关闭 v{number}"
+      },
+      "restore": "恢复此版本",
+      "confirm": {
+        "title": "恢复 v{number}？",
+        "body": "页面将以新版本的形式显示 v{number} 的内容。不会删除任何内容。",
+        "action": "恢复 v{number}"
+      },
+      "restoring": "正在恢复…",
+      "restored": "已将 v{from} 恢复为 v{number}。",
+      "refusal": {
+        "tooLarge": "无法恢复 v{number}：页面将超过 2 MB 的上限。未做任何更改。",
+        "gone": "v{number} 已不再保留——页面只保留最近的 100 个版本。未做任何更改，列表已刷新。",
+        "failed": "无法恢复 v{number}。未做任何更改，请重试。"
+      },
+      "unsavedHold": "在你的编辑保存之前无法恢复。页面显示“已保存”后即可恢复。"
     }
   }
 }

@@ -146,15 +146,28 @@ function usePageEditorMessages(): PageEditorMessages {
   );
 }
 
+/** The live editor's save status, for the page around it (`@motir/pages`' `SaveStatus`). */
+export type PageSaveStatus = SaveStatus;
+
 export interface PageEditorHostProps {
   pageId: string;
   /** `PageDto.bodyState` — the stored Yjs state, base64. */
   bodyState: string;
   /** `PageDto.canEdit`. */
   canEdit: boolean;
+  /**
+   * Told every save-status change, after the leave guard records it — so the
+   * page can hold a restore while edits are unsaved (MOTIR-7388).
+   */
+  onSaveStatusChange?: (status: SaveStatus) => void;
 }
 
-export function PageEditorHost({ pageId, bodyState, canEdit }: PageEditorHostProps) {
+export function PageEditorHost({
+  pageId,
+  bodyState,
+  canEdit,
+  onSaveStatusChange: onStatus,
+}: PageEditorHostProps) {
   const messages = usePageEditorMessages();
   const theme = useOptionalTheme()?.resolvedPattern ?? 'light';
   // Read once: the editor reads `initialState` at mount and owns the doc after.
@@ -166,8 +179,13 @@ export function PageEditorHost({ pageId, bodyState, canEdit }: PageEditorHostPro
   // ── The leave guard ───────────────────────────────────────────────────────
   const statusRef = useRef<SaveStatus>('saved');
   const discardingRef = useRef(false);
+  const onStatusRef = useRef(onStatus);
+  useEffect(() => {
+    onStatusRef.current = onStatus;
+  }, [onStatus]);
   const onSaveStatusChange = useCallback((status: SaveStatus) => {
     statusRef.current = status;
+    onStatusRef.current?.(status);
   }, []);
   useEffect(() => {
     if (!canEdit) return;

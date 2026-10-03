@@ -9,7 +9,7 @@
 // It answers exactly the two routes the egress contract (motir-gateway
 // `docs/hosted-run-egress.md` §2–§3) says a hosted OpenCode calls:
 //   - `POST /v1/messages`          — an Anthropic model, Messages SSE;
-//   - `POST /v1/chat/completions`  — a DeepSeek, GLM or Qwen model, OpenAI-shaped SSE.
+//   - `POST /v1/chat/completions`  — a DeepSeek, GLM, Qwen or Kimi model, OpenAI-shaped SSE.
 // Anything else is recorded and answered 404, so a request the contract does not
 // name shows up in the record AND fails the run.
 

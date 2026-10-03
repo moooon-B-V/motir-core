@@ -215,9 +215,11 @@ describe('/pages/<id> — the page at its address', () => {
     const view = findFirst<{
       page: { id: string; title: string; bodyState: string; canEdit: boolean };
       titleMaxLength: number;
+      viewerId: string;
     }>(tree, PageView)!;
     expect(view.props.page).toMatchObject({ id: page.id, title: 'Runbook', canEdit: true });
     expect(view.props.titleMaxLength).toBe(PAGE_TITLE_MAX_LENGTH);
+    expect(view.props.viewerId).toBe(reader.current.userId);
     expect(typeof view.props.page.bodyState).toBe('string');
 
     // The frame draws the header pair and paragraph bars — and no toolbar.

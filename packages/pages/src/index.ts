@@ -21,6 +21,7 @@ export { parseMarkdown, serializeMarkdown } from './document/markdown';
 export * from './document/convert';
 export * from './store';
 export * from './save';
+export * from './versions';
 export {
   PageEditor,
   type PageEditorMessages,
