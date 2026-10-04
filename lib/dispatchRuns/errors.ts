@@ -419,3 +419,118 @@ export class RepairRunRefusedError extends Error {
     this.name = 'RepairRunRefusedError';
   }
 }
+
+// ── AGENT-REPORTED RUNS (Story MOTIR-7446 · MOTIR-7450) ────────────────────
+// `docs/decisions/agent-reported-runs.md`. MCP only — `start_work_item_run`,
+// `report_action` and `close_work_item_run` are the one door (MOTIR-7451) — so,
+// like `RepairRunRefusedError`, none of these has a row in `DOMAIN_ERROR_STATUS`.
+// Every one is raised BEFORE anything is written.
+
+/**
+ * The caller does not hold the claim a run is opened over (§2): the card, or for a
+ * container one of its children, is not In Progress and assigned to the caller.
+ * `offenderKey` names the card that failed — the container itself, or the child.
+ */
+export class AgentRunNotClaimedError extends Error {
+  readonly code = 'AGENT_RUN_NOT_CLAIMED';
+  constructor(
+    readonly workItemKey: string,
+    readonly offenderKey: string,
+  ) {
+    super(
+      offenderKey === workItemKey
+        ? `You do not hold the claim on ${workItemKey}. Claim it with \`claim_work_item\` ` +
+            'first; a run is opened only over a card that is In Progress and assigned to you. ' +
+            'Nothing was written.'
+        : `You do not hold the claim on ${offenderKey}, a child of ${workItemKey}. A parent's ` +
+            'run covers every child that is not done, so each must be In Progress and assigned ' +
+            'to you. Nothing was written.',
+    );
+    this.name = 'AgentRunNotClaimedError';
+  }
+}
+
+/** A run somebody else opened (§4): only its opener may close it. */
+export class AgentRunNotYoursError extends Error {
+  readonly code = 'AGENT_RUN_NOT_YOURS';
+  constructor(
+    readonly runId: string,
+    readonly workItemKey: string,
+  ) {
+    super(
+      `Run ${runId} on ${workItemKey} was opened by somebody else. Only the person who opened ` +
+        'a run may close it; nothing was written.',
+    );
+    this.name = 'AgentRunNotYoursError';
+  }
+}
+
+/**
+ * No open run of the caller's holds the card `report_action` named (§3). The run is
+ * found from the card and the caller, so this is also what an agent outside any run
+ * gets, and the message tells it what to call.
+ */
+export class AgentRunNoOpenRunError extends Error {
+  readonly code = 'AGENT_RUN_NO_OPEN_RUN';
+  constructor(readonly workItemKey: string) {
+    super(
+      `You have no open run on ${workItemKey}. Call \`start_work_item_run\` with this key ` +
+        'once you hold its claim, then report your steps; nothing was written.',
+    );
+    this.name = 'AgentRunNoOpenRunError';
+  }
+}
+
+/**
+ * An event kind an agent may not send (§3). Two reasons, named apart:
+ *
+ * - `kind` — only `checkout_ready`, `delivery_linked`, `leg_verdict` and
+ *   `card_settled` may be reported; every other kind is the server's or the runner's.
+ * - `cli_run` — the run is a CLI or hosted one, whose runner writes those four
+ *   itself, so the agent reports `action` only there.
+ */
+export class AgentRunEventKindNotAllowedError extends Error {
+  readonly code = 'AGENT_RUN_EVENT_KIND_NOT_ALLOWED';
+  constructor(
+    readonly kind: string,
+    readonly why: 'kind' | 'cli_run',
+  ) {
+    super(
+      why === 'kind'
+        ? `An agent may not report a \`${kind}\` event. It may send only checkout_ready, ` +
+            'delivery_linked, leg_verdict and card_settled; nothing was written.'
+        : `This run is reported by its runner, which writes \`${kind}\` itself. Report your ` +
+            'step with `action` only; nothing was written.',
+    );
+    this.name = 'AgentRunEventKindNotAllowedError';
+  }
+}
+
+/**
+ * A `report_action` or `close_work_item_run` that is malformed: an `action` that is
+ * empty or longer than {@link AGENT_ACTION_MAX_CHARS}, an `action` or `events`
+ * without the card's `key`, or a close with `abandoned`, which only the reap writes.
+ */
+export const AGENT_ACTION_MAX_CHARS = 500;
+
+export class AgentRunReportInvalidError extends Error {
+  readonly code = 'AGENT_RUN_REPORT_INVALID';
+  constructor(
+    readonly reason: 'action_empty' | 'action_too_long' | 'key_required' | 'abandoned',
+    detail?: number,
+  ) {
+    super(
+      reason === 'action_empty'
+        ? '`action` is empty. Say the step you are about to take in one line; nothing was written.'
+        : reason === 'action_too_long'
+          ? `\`action\` is ${detail ?? 'over'} characters; the limit is ${AGENT_ACTION_MAX_CHARS}. ` +
+            'Say the step in one line, never a transcript, diff or file contents; nothing was written.'
+          : reason === 'key_required'
+            ? '`key` is required with `action` or `events`: the run is found from the card. ' +
+              'Call with no arguments for a heartbeat only; nothing was written.'
+            : '`abandoned` is written only by the reap. Close with the outcome that happened; ' +
+              'nothing was written.',
+    );
+    this.name = 'AgentRunReportInvalidError';
+  }
+}

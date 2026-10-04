@@ -76,6 +76,7 @@ async function openRunWithLiveLeg(key: string): Promise<string> {
     {
       projectKey: fixture.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: [{ key, disposition: 'queued' }],
     },
     fixture.ctx,
@@ -867,6 +868,7 @@ describe('a finding never crosses a workspace boundary', () => {
       {
         projectKey: other.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: otherStory.identifier, disposition: 'queued' }],
       },
       other.ctx,

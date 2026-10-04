@@ -153,6 +153,27 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: true,
     openWorldHint: false,
   },
+  // W: workItemRun.ts → dispatchRunService.openAgentRun — opens a dispatch run and its `run_opened` event; a repeat answers `mine` and writes nothing. Additive: it records, it never overwrites the card
+  start_work_item_run: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  // W: workItemRun.ts → dispatchRunService.reportAction — appends run events and stamps the heartbeat; every call adds a step
+  report_action: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  // W: workItemRun.ts → dispatchRunService.closeAgentRun — closes the run for good and overwrites the cards' implementation provenance; an already-closed run writes nothing
+  close_work_item_run: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   // R: dispatchPrompt.ts → dispatchPromptService.getDispatchPrompt — assembled per call, never stored
   dispatch_prompt: { readOnlyHint: true, openWorldHint: false },
   // W: expandItem.ts → aiPlanEditsService.submitExpand — a motir-ai job + a new plan; may coalesce onto a pending code-graph job (overwrite)

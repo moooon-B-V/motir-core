@@ -142,6 +142,7 @@ async function openLegs(fx: WorkItemFixture, keys: string[]): Promise<void> {
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: keys.map((key) => ({ key, disposition: 'queued' as const })),
     },
     fx.ctx,

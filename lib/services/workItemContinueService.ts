@@ -380,6 +380,7 @@ async function evaluate(
         origin: run.origin,
         startedAt: run.startedAt,
         lastHeartbeatAt: run.lastHeartbeatAt,
+        reportedBy: run.reportedBy,
       },
       now,
     );
@@ -745,6 +746,7 @@ export const workItemContinueService = {
         const opened = await dispatchRunService.openWithin(
           projectId,
           {
+            reportedBy: 'cli',
             ...(parent
               ? {
                   command: 'continue' as const,
@@ -775,6 +777,7 @@ export const workItemContinueService = {
               dispatchRunId: opened.run.id,
               seq: 1,
               kind: 'run_opened',
+              reportedBy: 'cli',
               data: {
                 command: 'continue',
                 key: item.identifier,

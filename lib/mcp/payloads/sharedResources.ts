@@ -52,17 +52,18 @@ export function isSharedResourceName(value: string): value is SharedResourceName
  */
 export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, string>> = {
   DispatchRun:
-    'The DISPATCH RUN ingest (Story MOTIR-1789 · MOTIR-1792) has no MCP counterpart, and that ' +
-    'absence is a decision recorded in `tests/api/v1/work-loop-story-gate.test.ts`: MCP is the ' +
-    'AGENT’s surface, and the agent is the SUBJECT of a run rather than its reporter. A tool ' +
-    'would let the thing being observed write its own account of what it did. The reporter is ' +
-    'the process AROUND the agent, which speaks `/api/v1`. There is therefore no MCP payload to ' +
-    'compare — not a narrowing, an absence, and one that must not be closed by adding a tool. ' +
-    '(MOTIR-6807’s repair tools keep it: `touch_work_item_repair` / `close_work_item_repair` ' +
-    'let an agent that CLAIMED a repair keep its lock and say how it ended — a lock the agent ' +
-    'holds, not an account of what it did — and answer a narrow liveness shape, never this ' +
-    'resource; see their `EXEMPT_TOOLS` entries. MOTIR-7262’s continue tools keep it the same ' +
-    'way: `touch_work_item_continue` / `close_work_item_continue`.)',
+    'No MCP tool READS a dispatch run. The original ruling (Story MOTIR-1789 · MOTIR-1792) kept ' +
+    'the whole ingest off MCP because the agent was the SUBJECT of a run, never its reporter. ' +
+    'AMENDMENT 3 of `docs/decisions/dispatch-run-record.md` (`agent-reported-runs.md`, Story ' +
+    'MOTIR-7446) narrows that: an agent with no CLI around it — the Motir skill in Claude Code, ' +
+    'Codex, Kimi — may report its OWN run of a card it holds, through `start_work_item_run`, ' +
+    '`report_action` and `close_work_item_run`. Every event it writes is marked ' +
+    '`reportedBy: agent`, so its account is never mistaken for a runner’s, and it may send only ' +
+    'four milestone kinds. Those tools answer a receipt and a liveness shape (their ' +
+    '`EXEMPT_TOOLS` entries), never this resource, and the run READ stays where it was: on ' +
+    '`/api/v1` and the UI, for the people and processes that watch runs. The repair and ' +
+    'continue tools (MOTIR-6807, MOTIR-7262) keep the same boundary — a lock the agent holds and ' +
+    'a narrow liveness answer.',
   DispatchRunCloseOutPrompt:
     'The CLOSE-OUT prompt (Story MOTIR-4906 · MOTIR-5357) is assembled for the process AROUND ' +
     'the agent: the CLI fetches it over `/api/v1` and hands it to one agent before the run marks ' +

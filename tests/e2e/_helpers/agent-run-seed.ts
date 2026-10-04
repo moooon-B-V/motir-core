@@ -1,5 +1,8 @@
 import type { APIRequestContext } from '@playwright/test';
 import { expect, request } from '@playwright/test';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { adminDb } from '@/tests/helpers/adminDb';
 
 // DRIVING A RUN WITHOUT AN AGENT (Story MOTIR-1789 · MOTIR-1800).
@@ -109,5 +112,57 @@ export async function lapseRun(runId: string, minutesAgo: number): Promise<void>
   await adminDb.dispatchRun.update({
     where: { id: runId },
     data: { lastHeartbeatAt: new Date(Date.now() - minutesAgo * 60_000) },
+  });
+}
+
+// ── AN AGENT THAT REPORTS ITSELF (Story MOTIR-7446 · MOTIR-7453) ───────────
+//
+// The run above is opened by a stand-in for the CLI's reporter, over `/api/v1`.
+// An agent-reported run is opened by the AGENT, over the MCP, with the three run
+// tools (`docs/decisions/agent-reported-runs.md`). So the stand-in here is an MCP
+// client over the REAL streamable-HTTP transport, with the PAT a plugin sends —
+// no stub, for the reason `agent-authored-plan-seed.ts` gives: a stubbed transport
+// would prove the harness, not the permission map or the run record.
+
+/** An MCP session as an agent opens one. `baseURL` is Playwright's — see `ingestContext`. */
+export async function agentMcpSession(token: string, baseURL: string): Promise<Client> {
+  const client = new Client({ name: 'agent-reported-run-e2e', version: '0.0.0' });
+  const transport = new StreamableHTTPClientTransport(new URL('/api/mcp', baseURL), {
+    requestInit: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  await client.connect(transport);
+  return client;
+}
+
+/**
+ * Call one Motir tool and return its structured answer.
+ *
+ * ⚠️ THE TOOL'S OWN ANSWER IS THE AUTHORITATIVE SIGNAL. Every write here commits
+ * before the tool answers, so asserting the answer (not an error, the outcome
+ * the step expects) is what lets the page assertion that follows wait on a fact
+ * that is already stored rather than race one in flight.
+ */
+export async function callMotirTool<T>(
+  client: Client,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<T> {
+  const result = (await client.callTool({ name, arguments: args })) as CallToolResult;
+  const text = result.content
+    .map((c) => (c.type === 'text' ? c.text : ''))
+    .join(' ')
+    .slice(0, 400);
+  expect(result.isError ?? false, `${name} → ${text}`).toBe(false);
+  return result.structuredContent as T;
+}
+
+/** The events of a run, in `seq` order — what the record holds, read as the test's own admin. */
+export async function runEvents(
+  runId: string,
+): Promise<{ kind: string; body: string | null; reportedBy: string }[]> {
+  return adminDb.dispatchRunEvent.findMany({
+    where: { dispatchRunId: runId },
+    orderBy: { seq: 'asc' },
+    select: { kind: true, body: true, reportedBy: true },
   });
 }

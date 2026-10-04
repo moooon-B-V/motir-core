@@ -53,6 +53,7 @@ async function openRun(origin: 'local' | 'hosted'): Promise<{ runId: string; key
     {
       projectKey: fixture.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       origin,
       model: origin === 'hosted' ? 'claude-sonnet-5' : undefined,
       cards: [{ key: item.identifier, disposition: 'queued' }],

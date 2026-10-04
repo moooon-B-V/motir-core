@@ -240,6 +240,14 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   claim_work_item_continue: 'work_item:edit',
   touch_work_item_continue: 'work_item:edit',
   close_work_item_continue: 'work_item:edit',
+  // The RUN tools (MOTIR-7451) — an agent opens, reports into and closes its OWN
+  // run of a card it holds. `dispatchRunService.openAgentRun` / `reportAction` /
+  // `closeAgentRun` each assert `assertCanEdit` before reading anything, so a
+  // caller without edit is refused by name and nothing is written. Already in
+  // `CLI_TOKEN_GRANT`, so the grant is NOT widened.
+  start_work_item_run: 'work_item:edit',
+  report_action: 'work_item:edit',
+  close_work_item_run: 'work_item:edit',
 
   // ── comment:add ───────────────────────────────────────────────────────────
   // `commentsService` gates the add on `getCommentCapabilities().canComment`,

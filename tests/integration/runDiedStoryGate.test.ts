@@ -99,6 +99,7 @@ async function runOn(
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: [{ key: card.identifier, disposition: 'queued' }],
     },
     ctx,
@@ -389,6 +390,7 @@ async function parentRun(fx: WorkItemFixture) {
     {
       projectKey: fx.projectIdentifier,
       command: 'run_scope',
+      reportedBy: 'cli',
       scopeKey: story.identifier,
       cards: legs.map((l) => ({ key: l.identifier, disposition: 'queued' as const })),
     },
