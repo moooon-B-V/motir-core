@@ -141,6 +141,53 @@ and still one command away:
 docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
 ```
 
+<!-- sandbox-digests:release cli-v0.12.0 -->
+
+### Release `cli-v0.12.0`
+
+([run 37186256308](https://github.com/moooon-B-V/motir-core/actions/runs/37186256308)).
+The `motir` inside each image is
+[`@motir/cli@0.12.0`](https://www.npmjs.com/package/@motir/cli/v/0.12.0), the
+same build npm serves.
+
+<!-- sandbox-digests:currency start -->
+
+Each row's immutable twin — `:<profile>-0.12.0` — points at the same manifest,
+and the moving `:<profile>` tags point here too: this is the current release.
+
+<!-- sandbox-digests:currency end -->
+
+**Read from the registry, not from the run's job summary** (MOTIR-2220). Every
+digest below is the `Docker-Content-Digest` GHCR returned for that tag, fetched
+with a token minted from the anonymous endpoint — no `Authorization` on the
+token request, so it is the answer a stranger gets, not the publisher's:
+
+```sh
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+curl -sI -H "Authorization: Bearer $TOKEN" \
+  -H 'Accept: application/vnd.oci.image.index.v1+json' \
+  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.12.0 | grep -i docker-content-digest
+```
+
+Two things CHECKED rather than assumed, by the release lane that wrote this
+section (MOTIR-2699): each moving `:<profile>` tag resolves to the **same**
+manifest as its `:<profile>-0.12.0` twin (9 of 9), and **every digest below
+differs from its `cli-v0.11.1` row** (9 of 9) — an unchanged digest across a
+version bump would mean a variant did not actually rebuild, which is a finding,
+not a formatting detail.
+
+| Tag                                            | Digest                                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:f4df2b0ae90c6e2c9d34b4772008894d1b6bfd25d1b542a5e944c24ddd6fc90d` |
+| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:1710a703b7c4af579013da389a53b7304e2ac377858248b378fcf24b01f3a7b4` |
+| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:f8f6b4d1d78b6391afb62be6ae7ef04fc958d2dc869d1f542028a30957b91740` |
+| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:4210eb3d52c78a23b75c29ac36efdcc6907b49a90fd74e4cb09586df3285c797` |
+| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:e3b9dc45c11652a0df6996329f353eb8e3bdc2755097f0ba322c270d91d69d7e` |
+| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:03f1957fc4a97d4faec28ff4bfa00177edfaf3d50b5328f4c953832c91d2eeef` |
+| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:8290f433f8a9d6f2b1dc56d44ef791242cbb51876c2b24408fba0479749a88b5` |
+| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:1535285c9646ea58df4500f68300ef06dff775007a0b5986bb6bb6826459400c` |
+| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:917857420aa96932f598b03b3ce28263274e06af22af3aa1ab721489abfe283c` |
+
 <!-- sandbox-digests:release cli-v0.11.1 -->
 
 ### Release `cli-v0.11.1`
@@ -152,8 +199,10 @@ same build npm serves.
 
 <!-- sandbox-digests:currency start -->
 
-Each row's immutable twin — `:<profile>-0.11.1` — points at the same manifest,
-and the moving `:<profile>` tags point here too: this is the current release.
+Each row's immutable twin — `:<profile>-0.11.1` — points at the same manifest.
+It **was** the current release until `cli-v0.12.0`; the moving `:<profile>` tags
+have since moved on and no longer point here, which is exactly what a moving tag
+is for and why the immutable twin exists.
 
 <!-- sandbox-digests:currency end -->
 
