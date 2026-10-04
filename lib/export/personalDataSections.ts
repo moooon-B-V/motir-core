@@ -710,6 +710,12 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'moooon B.V. operator who last flipped it. A record about a customer tenant, ' +
     'written only from the platform tier — `PlatformAuditLog`’s argument; every flip ' +
     'is recorded there (`org.kill_switch_off` / `org.kill_switch_on`).',
+  PlatformRunModel:
+    'A row of the platform-wide hosted-run model list (MOTIR-7525) whose only User FK ' +
+    'is the moooon B.V. operator who added the model. Platform configuration written ' +
+    'only from the platform tier, not a record about the operator as a data subject — ' +
+    '`OrgFeatureFlag`’s argument; every add and remove is recorded in the audit log ' +
+    '(`ai.run_model_list.add` / `ai.run_model_list.remove`) with the same actor.',
   PlanTargetLock:
     'A planning lease measured in minutes, held by a session and released by a sweep. ' +
     'It carries no fact about the person beyond "a lock existed", and is gone before ' +

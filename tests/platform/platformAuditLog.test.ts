@@ -195,6 +195,13 @@ describe('the reason rule', () => {
     // The platform planning model per audience (Story MOTIR-7220 · MOTIR-7227) —
     // `superadmin` and `required`, like every billing-class row in ADR §7.
     'ai.planner_model.set': 'required',
+    // The planning-model list (Story MOTIR-7521 · MOTIR-7524) — same degree.
+    'ai.planner_model_list.add': 'required',
+    'ai.planner_model_list.remove': 'required',
+    // The hosted-run model list (Story MOTIR-7521 · MOTIR-7525).
+    'ai.run_model_list.seed': 'required',
+    'ai.run_model_list.add': 'required',
+    'ai.run_model_list.remove': 'required',
     // The planning-lesson curate acts (Story MOTIR-1408 · MOTIR-1411) — each
     // changes what a planner is told, so each carries a reason.
     'ai.lesson.edit': 'required',

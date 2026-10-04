@@ -4,7 +4,7 @@
 // failures that sit underneath it — into motir-core typed errors, so no caller
 // ever branches on a raw HTTP status or an upstream JSON shape.
 
-import type { Problem, JobStatus, ResultEnvelope } from './types';
+import type { Problem, JobStatus, PlannerModelListReason, ResultEnvelope } from './types';
 
 export abstract class MotirAiError extends Error {
   abstract readonly code: string;
@@ -148,6 +148,62 @@ export class PlannerModelUnreachableError extends MotirAiError {
   ) {
     super(`"${model}" is not reachable for the planner: ${reason}`);
     this.name = 'PlannerModelUnreachableError';
+  }
+}
+
+// A PLANNING-MODEL LIST add named a model motir-ai would not plan with right now
+// (`PUT /v1/planner-model-list` → `validation_error`, "cannot be allowed for
+// planning: …"; motir-ai MOTIR-7520 · core MOTIR-7524). `reason` is the
+// machine-readable cause when motir-ai's wording names one, else null; `detail`
+// is motir-ai's own sentence, kept whole for the page.
+export class PlannerModelNotQualifiedError extends MotirAiError {
+  readonly code = 'PLANNER_MODEL_NOT_QUALIFIED' as const;
+  constructor(
+    readonly model: string,
+    readonly reason: PlannerModelListReason | null,
+    readonly detail: string,
+  ) {
+    super(`"${model}" cannot be allowed for planning: ${detail}`);
+    this.name = 'PlannerModelNotQualifiedError';
+  }
+}
+
+// A PLANNING-MODEL LIST remove named a model an audience is set to (MOTIR-7524).
+// motir-ai refuses it under every audience row's lock; `audiences` are the ones
+// it named, so the page can say which to move first.
+export class PlannerModelListEntryInUseError extends MotirAiError {
+  readonly code = 'PLANNER_MODEL_LIST_ENTRY_IN_USE' as const;
+  constructor(
+    readonly model: string,
+    readonly audiences: readonly string[],
+  ) {
+    super(`"${model}" is the planning model of: ${audiences.join(', ')}`);
+    this.name = 'PlannerModelListEntryInUseError';
+  }
+}
+
+// A PLANNING-MODEL LIST remove named the planner's FALLBACK (`claude-opus-5-5`),
+// which motir-ai keeps listed so every audience always has a model to fall back
+// to (MOTIR-7524).
+export class PlannerModelListFallbackError extends MotirAiError {
+  readonly code = 'PLANNER_MODEL_LIST_FALLBACK' as const;
+  constructor(readonly model: string) {
+    super(`"${model}" is the planner's fallback and must stay on the planning-model list`);
+    this.name = 'PlannerModelListFallbackError';
+  }
+}
+
+// Any other `validation_error` motir-ai answers a planning-model list write with —
+// a body it could not read, an action it does not know. Its detail is kept whole
+// rather than guessed into one of the three above.
+export class PlannerModelListRefusedError extends MotirAiError {
+  readonly code = 'PLANNER_MODEL_LIST_REFUSED' as const;
+  constructor(
+    readonly model: string,
+    readonly detail: string,
+  ) {
+    super(`motir-ai refused the planning-model list change for "${model}": ${detail}`);
+    this.name = 'PlannerModelListRefusedError';
   }
 }
 

@@ -498,6 +498,24 @@ rather than introducing a second one.
 > `targetId`, and `{ audience, fromModel, toModel }` as metadata. The page's READ is covered by the
 > first row's `support` minimum; it reads no tenant row, so it writes no audit row of its own.
 
+> **⚠️ AMENDED 2026-10-04 (Story MOTIR-7521 · MOTIR-7524).** The planning-model LIST — the models
+> an audience may be set to, stored in motir-ai — is edited from the same page at the same degree:
+> `superadmin` writes, `support` and up read. Its two actions, `ai.planner_model_list.add` and
+> `ai.planner_model_list.remove`, join `PLATFORM_AUDIT_ACTIONS` as `reason: 'required'`, with
+> `targetKind: 'platform'`, the model id as `targetId`, and `{ action, model }` as metadata. motir-ai's
+> write runs inside the audited transaction, so a refusal (not qualified, the fallback, in use by an
+> audience) leaves no row.
+
+> **⚠️ AMENDED 2026-10-04 (Story MOTIR-7521 · MOTIR-7525).** The HOSTED-RUN model list — which
+> models a hosted run may use, stored in core's `platform_run_model` — is curated at the same degree:
+> `superadmin` writes, `support` and up read. `ai.run_model_list.add` and `ai.run_model_list.remove`
+> join `PLATFORM_AUDIT_ACTIONS` as `reason: 'required'` (`targetKind: 'platform'`, the model id as
+> `targetId`). A third, `ai.run_model_list.seed`, records the one-time initialisation the first
+> console read performs: it is a write whose reason the service supplies, because the operator whose
+> read triggered it chose nothing — only motir-ai's offer is ever seeded. The page's read names the
+> projects that use each model, so it crosses every tenant's `project` row and is audited as
+> `estate.read`.
+
 > **⚠️ AMENDED 2026-10-02 (Story MOTIR-1408 · MOTIR-1411).** The planning-lessons page adds four
 > writes from outside Epic 10: `ai.lesson.edit`, `ai.lesson.enable`, `ai.lesson.disable` and
 > `ai.lesson.promote`, all `reason: 'required'`. Edit and enable/disable take `operator`, because

@@ -1029,6 +1029,41 @@ export interface PlannerModelWriteResult {
   updatedAt: string;
 }
 
+// The PLANNING-MODEL LIST — Story MOTIR-7521 · MOTIR-7524, over motir-ai's
+// `GET` / `PUT /v1/planner-model-list` (motir-ai MOTIR-7520). Which models an
+// audience MAY be set to. The list stores only the selection; whether a listed
+// model is usable right now is recomputed by motir-ai on every read.
+
+/** Why a listed model is not offered for planning right now, in motir-ai's precedence order. */
+export const PLANNER_MODEL_LIST_REASONS = ['not_servable', 'not_chat', 'unrated'] as const;
+export type PlannerModelListReason = (typeof PLANNER_MODEL_LIST_REASONS)[number];
+
+/** One listed model as motir-ai serves it. */
+export interface PlannerModelListEntryRead {
+  model: string;
+  /** Null when the catalog has no row for the model. */
+  provider: string | null;
+  offered: boolean;
+  /** Null when `offered`. */
+  reason: PlannerModelListReason | null;
+  /** Null for a row the migration seeded. */
+  addedByCoreUserId: string | null;
+  createdAt: string;
+}
+
+/** The raw `GET /v1/planner-model-list` body, and the `PUT` answer. */
+export interface PlannerModelListRead {
+  entries: PlannerModelListEntryRead[];
+}
+
+/** The `PUT /v1/planner-model-list` body. */
+export interface PlannerModelListWriteInput {
+  action: 'add' | 'remove';
+  model: string;
+  /** The core user making the change — motir-ai stores it as `addedByCoreUserId` on an add. */
+  actorCoreUserId: string;
+}
+
 // ── Platform-staff credit ops (MOTIR-747 · 10.3.2) ──────────────────────────
 //
 // The EXACT mirror of motir-ai's `POST /v1/admin/credits`, `POST /v1/admin/tier`

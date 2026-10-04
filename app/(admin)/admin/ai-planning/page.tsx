@@ -3,12 +3,17 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Info } from 'lucide-react';
 import { MotirAiError } from '@/lib/ai/errors';
-import type { PlatformPlannerModelSettingsDTO } from '@/lib/dto/platformPlannerModel';
+import type {
+  PlatformPlannerModelListDTO,
+  PlatformPlannerModelSettingsDTO,
+} from '@/lib/dto/platformPlannerModel';
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import { platformPlannerModelService } from '@/lib/services/platformPlannerModelService';
 import { PlannerModelRows } from './_components/PlannerModelRows';
 import { PlannerModelsSkeleton } from '@/components/ai/PlannerModelsSkeleton';
 import { PlannerModelsUnavailable } from './_components/PlannerModelsUnavailable';
+import { PlannerModelList } from './_components/PlannerModelList';
+import { PlannerModelListUnavailable } from './_components/PlannerModelListUnavailable';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 
 /**
@@ -32,6 +37,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminAiPlanningPage() {
   const principal = await requirePlatformStaff('support');
   const t = await getTranslations('platformAdmin.aiPlanning');
+  const tAdmin = await getTranslations('platformAdmin');
 
   return (
     <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
@@ -61,6 +67,12 @@ export default async function AdminAiPlanningPage() {
       <Suspense fallback={<PlannerModelsSkeleton title={t('card.title')} />}>
         <PlannerModelsSection principal={principal} />
       </Suspense>
+
+      {/* Model lists Panel 1: the list the audience pickers above draw from,
+          on the same page (MOTIR-7527). */}
+      <Suspense fallback={<PlannerModelsSkeleton title={tAdmin('planningList.title')} />}>
+        <PlannerModelListSection principal={principal} />
+      </Suspense>
     </div>
   );
 }
@@ -77,4 +89,17 @@ async function PlannerModelsSection({ principal }: { principal: PlatformPrincipa
     return <PlannerModelsUnavailable />;
   }
   return <PlannerModelRows settings={settings} />;
+}
+
+async function PlannerModelListSection({ principal }: { principal: PlatformPrincipal }) {
+  let list: PlatformPlannerModelListDTO;
+  try {
+    list = await platformPlannerModelService.listModels(principal);
+  } catch (err) {
+    // The same rule as the audience rows: any motir-ai failure is Panel 11.
+    if (!(err instanceof MotirAiError)) throw err;
+    console.error('[admin] planning-model list could not be read', err);
+    return <PlannerModelListUnavailable />;
+  }
+  return <PlannerModelList list={list} />;
 }

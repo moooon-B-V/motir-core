@@ -83,6 +83,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         navMonitoring: t('nav.monitoring'),
         navAiPlanning: t('shell.navAiPlanning'),
         navPlanningLessons: t('shell.navPlanningLessons'),
+        navRunModels: t('shell.navRunModels'),
         navAuditLog: t('nav.auditLog'),
         staffMarkTitle: t('topBar.staffMark'),
         staffMarkSubtitle: t('topBar.allReadsAudited'),

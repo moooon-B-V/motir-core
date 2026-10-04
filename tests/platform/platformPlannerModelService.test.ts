@@ -335,4 +335,42 @@ describe('setModel — superadmin writes, and every write is audited', () => {
       toModel: 'claude-sonnet-5-5',
     });
   });
+
+  it('an audience motir-ai has no row for saves from null, reporting the model it replaced', async () => {
+    stored = stored.filter((s) => s.audience !== 'meta');
+    putAnswer = { kind: 'ok', previousModel: 'claude-opus-5-5' };
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await platformPlannerModelService.setModel(
+      currentPrincipal!,
+      'meta',
+      'glm-5.2',
+      'try GLM',
+    );
+    expect(result.fromModel).toBe('claude-opus-5-5');
+    expect(result.toModel).toBe('glm-5.2');
+    const rows = await auditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.metadata).toEqual({ audience: 'meta', fromModel: null, toModel: 'glm-5.2' });
+  });
+
+  it('motir-ai applied but the audit row did not commit: logged as the residual case, and rethrown', async () => {
+    // motir-ai answers only after the interactive transaction's 5s deadline, so
+    // the setting moves remotely while core's commit — and its row — does not.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        if (init.method !== 'GET') await new Promise((r) => setTimeout(r, 5_500));
+        return fetchStub(url, init);
+      }),
+    );
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(
+      platformPlannerModelService.setModel(currentPrincipal!, 'meta', 'glm-5.2', 'try GLM'),
+    ).rejects.toThrow();
+    expect(logged).toHaveBeenCalledWith(
+      expect.stringContaining('but the audit row did not commit'),
+      expect.anything(),
+    );
+    expect(await auditRows()).toHaveLength(0);
+  }, 20_000);
 });

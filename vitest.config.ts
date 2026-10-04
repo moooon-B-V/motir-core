@@ -227,6 +227,26 @@ export default defineConfig({
         'lib/mappers/platformPlannerModelMappers.ts',
         'lib/plans/redactNativeModel.ts',
         'app/**/admin/ai-planning/actions.ts',
+        // Story MOTIR-7521 · MOTIR-7529 — the model-lists story's motir-core gate:
+        // the run-model list (service, repository, mapper), the narrowed hosted-run
+        // offer, both lists' console cards and the run list's Server Action.
+        // MEASURED on this branch against the story's specs
+        // (`modelListsStoryGate.test.ts` plus each unit's suite), lines / branches /
+        // functions / statements: run service 100 / 95 / 100 / 98.43, repository
+        // 100 / 100 / 100 / 100, mapper 100 / 100 / 100 / 100, offer service
+        // 100 / 90.9 / 100 / 93.33, run action 100 / 100 / 100 / 100, run card
+        // 98.88 / 90.41 / 97.05 / 96.96, planning card 100 / 94.28 / 100 / 97.87,
+        // both unavailable cards 100. The two `page.tsx` Server Components are
+        // not pinned: they are the acceptance spec's (MOTIR-7530) to walk.
+        'lib/services/platformRunModelService.ts',
+        'lib/repositories/platformRunModelRepository.ts',
+        'lib/mappers/platformRunModelMappers.ts',
+        'lib/services/hostedRunModelService.ts',
+        'app/**/admin/run-models/actions.ts',
+        'app/**/admin/run-models/_components/RunModelList.tsx',
+        'app/**/admin/run-models/_components/RunModelListUnavailable.tsx',
+        'app/**/admin/ai-planning/_components/PlannerModelList.tsx',
+        'app/**/admin/ai-planning/_components/PlannerModelListUnavailable.tsx',
         // Story MOTIR-6574 · MOTIR-6584 — the OBSOLESCENCE story's two NEW modules
         // (the scale's one list, and the MCP write fields + text-block lines) and
         // the relationship model it widened with the `supersedes` pair, which had
@@ -3185,6 +3205,61 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/admin/ai-planning/actions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-7521 · MOTIR-7529 — measured above, pinned at the floor.
+        'lib/services/platformRunModelService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/platformRunModelRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/platformRunModelMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/hostedRunModelService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/run-models/actions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/run-models/_components/RunModelList.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/run-models/_components/RunModelListUnavailable.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ai-planning/_components/PlannerModelList.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ai-planning/_components/PlannerModelListUnavailable.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

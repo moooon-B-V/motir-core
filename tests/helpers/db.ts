@@ -48,9 +48,14 @@ export type ResetExecutor = Pick<typeof db, '$executeRawUnsafe'>;
 // `oauth_client` (MOTIR-6984) is named for the same reason: a dynamically
 // registered client carries no user, so no cascade from `user` reaches it, and a
 // client left behind would decide the next OAuth sweep suite's counts.
+//
+// `platform_run_model` / `platform_run_model_list` (MOTIR-7525) are platform-wide:
+// a seeded row has no user, and an added one only NULLs its adder when the user
+// goes, so neither is reached by the cascade — and a marker left behind would
+// stop the next suite's first read from seeding.
 export async function truncateAuthTables(executor: ResetExecutor = db): Promise<void> {
   await executor.$executeRawUnsafe(
-    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "user" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "platform_run_model", "platform_run_model_list", "user" RESTART IDENTITY CASCADE',
   );
 }
 

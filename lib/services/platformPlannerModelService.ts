@@ -1,12 +1,19 @@
 import 'server-only';
 
-import { getPlannerModelSettings, setPlannerModel } from '@/lib/ai/motirAiClient';
-import { PLANNER_AUDIENCES, type PlannerAudience } from '@/lib/ai/types';
+import {
+  getPlannerModelList,
+  getPlannerModelSettings,
+  setPlannerModel,
+  updatePlannerModelList,
+} from '@/lib/ai/motirAiClient';
+import { PLANNER_AUDIENCES, type PlannerAudience, type PlannerModelListRead } from '@/lib/ai/types';
 import type {
+  PlatformPlannerModelListDTO,
   PlatformPlannerModelSettingsDTO,
   PlatformPlannerModelWriteDTO,
 } from '@/lib/dto/platformPlannerModel';
 import {
+  toPlatformPlannerModelListDTO,
   toPlatformPlannerModelSettingsDTO,
   toPlatformPlannerModelWriteDTO,
 } from '@/lib/mappers/platformPlannerModelMappers';
@@ -16,7 +23,11 @@ import {
   type PlatformPrincipal,
 } from '@/lib/platform/auth';
 import { withPlatformRead, type PlatformAuditEntry } from '@/lib/platform/context';
-import { PlannerAudienceUnknownError, PlannerModelUnchangedError } from '@/lib/platform/errors';
+import {
+  PlannerAudienceUnknownError,
+  PlannerModelListModelMissingError,
+  PlannerModelUnchangedError,
+} from '@/lib/platform/errors';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { assertReasonSatisfied } from '@/lib/services/platformAuditService';
 
@@ -168,4 +179,118 @@ export const platformPlannerModelService = {
       throw err;
     }
   },
+
+  /**
+   * The PLANNING-MODEL LIST card (Story MOTIR-7521 · MOTIR-7524): every listed
+   * model with its offered state and reason, which audiences use it, and whether
+   * this principal may edit. Any staff role reads; not audited, for
+   * `getSettings`' reason.
+   *
+   * The settings are read beside the list so each entry can say which audiences
+   * are set to it — the thing a remove is refused for.
+   *
+   * @throws NotPlatformStaffError for a non-staff caller.
+   * @throws MotirAiUnavailableError when motir-ai cannot answer — never an empty list.
+   */
+  async listModels(principal: PlatformPrincipal): Promise<PlatformPlannerModelListDTO> {
+    await requirePlatformStaff('support');
+    const [list, settings] = await Promise.all([getPlannerModelList(), getPlannerModelSettings()]);
+    const adders = [
+      ...new Set(list.entries.map((e) => e.addedByCoreUserId).filter((id): id is string => !!id)),
+    ];
+    const users = await userRepository.findByIds(adders);
+    return toPlatformPlannerModelListDTO(
+      list,
+      settings,
+      users,
+      platformRoleAtLeast(principal.role, 'superadmin'),
+    );
+  },
+
+  /**
+   * Add a model to the planning list. `setModel`'s order, for its reasons:
+   * superadmin, then the reason, then the audited transaction with motir-ai's
+   * write inside it, so a refusal rolls the row back.
+   *
+   * @throws NotPlatformStaffError below `superadmin`.
+   * @throws MissingAuditReasonError for a blank reason.
+   * @throws PlannerModelNotQualifiedError when motir-ai would not plan with it.
+   */
+  async addModel(
+    principal: PlatformPrincipal,
+    model: string,
+    reason: string,
+  ): Promise<PlatformPlannerModelListDTO> {
+    return changeList(principal, 'add', model, reason);
+  },
+
+  /**
+   * Remove a model from the planning list, on `addModel`'s pattern.
+   *
+   * @throws NotPlatformStaffError below `superadmin`.
+   * @throws MissingAuditReasonError for a blank reason.
+   * @throws PlannerModelListFallbackError for the planner's fallback.
+   * @throws PlannerModelListEntryInUseError for a model an audience is set to.
+   */
+  async removeModel(
+    principal: PlatformPrincipal,
+    model: string,
+    reason: string,
+  ): Promise<PlatformPlannerModelListDTO> {
+    return changeList(principal, 'remove', model, reason);
+  },
 };
+
+/** One audited planning-list write — the body `addModel` and `removeModel` share. */
+async function changeList(
+  principal: PlatformPrincipal,
+  action: 'add' | 'remove',
+  rawModel: string,
+  reason: string,
+): Promise<PlatformPlannerModelListDTO> {
+  await requirePlatformStaff('superadmin');
+  const model = rawModel.trim();
+  const entry: PlatformAuditEntry = {
+    action: action === 'add' ? 'ai.planner_model_list.add' : 'ai.planner_model_list.remove',
+    targetKind: 'platform',
+    targetId: model,
+    reason,
+    metadata: { action, model },
+  };
+  assertReasonSatisfied(entry);
+  if (!model) throw new PlannerModelListModelMissingError();
+
+  let applied = false;
+  let list: PlannerModelListRead;
+  try {
+    list = await withPlatformRead(principal, entry, async () => {
+      const written = await updatePlannerModelList({
+        action,
+        model,
+        actorCoreUserId: principal.userId,
+      });
+      applied = true;
+      return written;
+    });
+  } catch (err) {
+    if (applied) {
+      // The residual case in this file's header, for the list.
+      // A constant format string: the model id is operator input (CodeQL).
+      console.error(
+        '[platform-planner-model] motir-ai applied a planning-list change, but the audit row did not commit',
+        { action, model, actorCoreUserId: principal.userId },
+        err,
+      );
+    }
+    throw err;
+  }
+  // The settings and the adders' names are reference reads after the commit, so
+  // a failure here is not the residual case above: the change and its row landed.
+  const [settings, users] = await Promise.all([
+    getPlannerModelSettings(),
+    userRepository.findByIds([
+      ...new Set(list.entries.map((e) => e.addedByCoreUserId).filter((id): id is string => !!id)),
+    ]),
+  ]);
+  return toPlatformPlannerModelListDTO(list, settings, users, true);
+}

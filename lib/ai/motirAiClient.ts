@@ -29,7 +29,11 @@ import {
   MotirAiInsufficientBalanceError,
   MotirAiUnavailableError,
   PlatformLessonNotFoundError,
+  PlannerModelListEntryInUseError,
+  PlannerModelListFallbackError,
+  PlannerModelListRefusedError,
   PlannerModelNotOfferedError,
+  PlannerModelNotQualifiedError,
   PlannerModelUnreachableError,
   errorFromProblem,
   type JobView,
@@ -45,6 +49,9 @@ import type {
   JobContextBag,
   JobKind,
   JobStreamEvent,
+  PlannerModelListEntryRead,
+  PlannerModelListRead,
+  PlannerModelListWriteInput,
   PlannerModelSettingsRead,
   PlannerModelWriteInput,
   PlannerModelWriteResult,
@@ -63,6 +70,7 @@ import type {
   Tenant,
   UsageQuery,
 } from './types';
+import { PLANNER_MODEL_LIST_REASONS, type PlannerModelListReason } from './types';
 import type { CategoryFigures, SpendCategory } from '@/lib/platform/spend';
 
 // The actor a job runs on behalf of — the read-back token is minted for them, so
@@ -2288,6 +2296,129 @@ export async function setPlannerModel(
     throw new MotirAiUnavailableError('motir-ai answered a body that is not a planner-model write');
   }
   return body;
+}
+
+// ── The planning-model list (Story MOTIR-7521 · MOTIR-7524) ───────────────
+//
+// Which models an audience MAY be set to, curated in the operator console and
+// stored in motir-ai (`GET` / `PUT /v1/planner-model-list`, motir-ai MOTIR-7520).
+// Like the settings pair above these THROW rather than degrade: an unanswered
+// read is `MotirAiUnavailableError`, never an empty list.
+
+function isPlannerModelListEntry(value: unknown): value is PlannerModelListEntryRead {
+  if (!value || typeof value !== 'object') return false;
+  const e = value as Record<string, unknown>;
+  return (
+    typeof e['model'] === 'string' &&
+    (e['provider'] === null || typeof e['provider'] === 'string') &&
+    typeof e['offered'] === 'boolean' &&
+    (e['reason'] === null ||
+      (PLANNER_MODEL_LIST_REASONS as readonly unknown[]).includes(e['reason'])) &&
+    (e['addedByCoreUserId'] === null || typeof e['addedByCoreUserId'] === 'string') &&
+    typeof e['createdAt'] === 'string'
+  );
+}
+
+function parsePlannerModelList(body: unknown): PlannerModelListRead | null {
+  if (!body || typeof body !== 'object') return null;
+  const { entries } = body as { entries?: unknown };
+  if (!Array.isArray(entries) || !entries.every(isPlannerModelListEntry)) return null;
+  return { entries };
+}
+
+/**
+ * GET /v1/planner-model-list — every listed model, each with whether motir-ai
+ * offers it for planning right now and, when it does not, why.
+ *
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a body that is
+ *   not the list shape; the §5 typed error for any other non-2xx.
+ */
+export async function getPlannerModelList(): Promise<PlannerModelListRead> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/planner-model-list`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const parsed = parsePlannerModelList(await res.json().catch(() => null));
+  if (!parsed) {
+    throw new MotirAiUnavailableError('motir-ai answered a body that is not a planning-model list');
+  }
+  return parsed;
+}
+
+/** motir-ai's `REASON_TEXT`, read back into the reason it was written from. */
+const NOT_QUALIFIED_TEXT: Record<PlannerModelListReason, string> = {
+  not_servable: 'the gateway does not serve it',
+  not_chat: 'it is not a chat model',
+  unrated: 'it has no planning-lane rate in force',
+};
+
+/**
+ * A planning-model list `validation_error` → its typed refusal. motir-ai has one
+ * wire code for all of them and names the cause in `detail`, so the detail's
+ * fixed wording is what tells them apart (motir-ai `plannerModelService.ts`,
+ * `addToPlannerModelList` / `removeFromPlannerModelList`). A wording this does
+ * not recognise is `PlannerModelListRefusedError` with the detail kept whole —
+ * never a guess at which refusal it was.
+ */
+function plannerModelListRefusal(input: PlannerModelListWriteInput, detail: string): Error {
+  const { model } = input;
+  const notQualified = 'cannot be allowed for planning: ';
+  const at = detail.indexOf(notQualified);
+  if (input.action === 'add' && at !== -1) {
+    const why = detail.slice(at + notQualified.length);
+    const reason =
+      PLANNER_MODEL_LIST_REASONS.find((r) => NOT_QUALIFIED_TEXT[r] === why.trim()) ?? null;
+    return new PlannerModelNotQualifiedError(model, reason, why);
+  }
+  if (input.action === 'remove' && detail.includes("is the planner's fallback")) {
+    return new PlannerModelListFallbackError(model);
+  }
+  const inUse = /is the planning model of: (.+?) — /.exec(detail);
+  if (input.action === 'remove' && inUse) {
+    const audiences = inUse[1]!
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean);
+    return new PlannerModelListEntryInUseError(model, audiences);
+  }
+  return new PlannerModelListRefusedError(model, detail);
+}
+
+/**
+ * PUT /v1/planner-model-list — add or remove one model, answered with the list
+ * as it stands after the change. Adding a listed model and removing an unlisted
+ * one are motir-ai no-ops, so both answer the list unchanged.
+ *
+ * @throws PlannerModelNotQualifiedError for an add motir-ai would not plan with.
+ * @throws PlannerModelListFallbackError for a remove of the planner's fallback.
+ * @throws PlannerModelListEntryInUseError for a remove of a model an audience uses.
+ * @throws PlannerModelListRefusedError for any other `validation_error`.
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a body that is
+ *   not the list shape; the §5 typed error for any other non-2xx.
+ */
+export async function updatePlannerModelList(
+  input: PlannerModelListWriteInput,
+): Promise<PlannerModelListRead> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/planner-model-list`, {
+    method: 'PUT',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const problem = await readProblem(res);
+    if (problem.code === 'validation_error') {
+      throw plannerModelListRefusal(input, problem.detail ?? problem.title);
+    }
+    throw errorFromProblem(problem);
+  }
+  const parsed = parsePlannerModelList(await res.json().catch(() => null));
+  if (!parsed) {
+    throw new MotirAiUnavailableError('motir-ai answered a body that is not a planning-model list');
+  }
+  return parsed;
 }
 
 // ── Platform-staff credit ops (MOTIR-747 · 10.3.2) ──────────────────────────

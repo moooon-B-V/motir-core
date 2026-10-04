@@ -3,8 +3,10 @@ import 'server-only';
 import {
   getAgentModels,
   type AgentModel,
+  type AgentModelsRead,
   type AgentModelDefaultsByDifficulty,
 } from '@/lib/ai/motirAiClient';
+import { platformRunModelRepository } from '@/lib/repositories/platformRunModelRepository';
 import {
   HostedModelNotOfferedError,
   HostedModelsUnavailableError,
@@ -12,18 +14,21 @@ import {
 } from '@/lib/hostedRuns/errors';
 
 // THE ONE ANSWER TO "WHICH MODELS MAY A HOSTED RUN USE?" (MOTIR-6483;
-// `docs/decisions/hosted-agent-run.md` §7).
+// `docs/decisions/hosted-agent-run.md` §7, as amended by MOTIR-7522).
 //
 // The Run hosted picker reads it through `GET /api/hosted-runs/models`, and the
 // start path (MOTIR-690) calls `assertOffered` before it opens, mints or boots
 // anything. Both go through here, so a model can never appear in the picker and
 // then be refused by a second, differently-built check — or the reverse.
 //
-// ⚠️ THE LIST IS motir-ai's, AND NOTHING HERE KEEPS A COPY. A hard-coded copy is
-// the counter-example §7 names: the retired project planning picker kept one, and
-// it went stale (it was removed with the setting, MOTIR-7228). So there is no constant list and NO CACHE —
-// the start path must refuse a model withdrawn a minute ago, and a list stale
-// for even one TTL is exactly the window that would let it through.
+// ⚠️ THE OFFER IS THE RUN-MODEL LIST ∩ motir-ai's ANSWER, READ FRESH EVERY TIME
+// (§7's amendment, MOTIR-7526). motir-ai says which models EXIST; motir-core's
+// run-model list (`platform_run_model`, curated in the operator console) says
+// which of them MAY be used. Neither is cached: the start path must refuse a
+// model withdrawn — or delisted — a minute ago. The list can only NARROW
+// motir-ai's answer, so a listed model motir-ai drops is simply not offered.
+// A list never initialised narrows nothing: its first read seeds it with the
+// whole offer, so the two answers are the same.
 //
 // ⚠️ "motir-ai IS DOWN" NEVER READS AS "NO MODELS EXIST". The client returns a
 // typed `unavailable` for every failure, and it is carried through here as its
@@ -55,10 +60,36 @@ export function toOpenCodeModel(model: Pick<AgentModel, 'id' | 'provider'>): str
   return `${model.provider}/${model.id}`;
 }
 
+/** motir-ai's answer narrowed to the run-model list — the one place the two meet. */
+async function readOffer(): Promise<AgentModelsRead> {
+  const [read, listed] = await Promise.all([
+    getAgentModels(),
+    platformRunModelRepository.findListedModelsForOffer(),
+  ]);
+  if (read.state === 'unavailable' || listed === null) return read;
+  const allowed = new Set(listed);
+  const keep = (id: string | null) => (id !== null && allowed.has(id) ? id : null);
+  return {
+    ...read,
+    models: read.models.filter((m) => allowed.has(m.id)),
+    default: keep(read.default),
+    defaultsByDifficulty: {
+      trivial: keep(read.defaultsByDifficulty.trivial),
+      low: keep(read.defaultsByDifficulty.low),
+      medium: keep(read.defaultsByDifficulty.medium),
+      high: keep(read.defaultsByDifficulty.high),
+    },
+  };
+}
+
 export const hostedRunModelService = {
-  /** The offered list, exactly as motir-ai answered it, or `unavailable`. */
+  /**
+   * The offered list — motir-ai's answer narrowed to the run-model list — or
+   * `unavailable`. A default that names an unlisted model reads `null`, exactly
+   * as an unoffered one does.
+   */
   async listOfferedModels(): Promise<OfferedModels> {
-    const read = await getAgentModels();
+    const read = await readOffer();
     if (read.state === 'unavailable') return { state: 'unavailable' };
     return {
       state: 'ok',
@@ -70,13 +101,13 @@ export const hostedRunModelService = {
 
   /**
    * Resolves to the OFFERED ENTRY when `model` (a bare gateway id) is on the
-   * offered list right now, so the start path has its provider without a second
+   * offered list right now — listed AND offered by motir-ai — so the start path has its provider without a second
    * read of motir-ai. Throws `HostedModelNotOfferedError` when it is not, and
    * `HostedModelsUnavailableError` when motir-ai cannot answer — an unanswered
    * question is never an acceptance.
    */
   async assertOffered(model: string): Promise<AgentModel> {
-    const read = await getAgentModels();
+    const read = await readOffer();
     if (read.state === 'unavailable') throw new HostedModelsUnavailableError(read.reason);
     const offered = read.models.find((m) => m.id === model);
     if (!offered) throw new HostedModelNotOfferedError(model);
@@ -92,7 +123,7 @@ export const hostedRunModelService = {
    * could not run, reason _no model_.
    */
   async defaultOffered(): Promise<AgentModel> {
-    const read = await getAgentModels();
+    const read = await readOffer();
     if (read.state === 'unavailable') throw new HostedModelsUnavailableError(read.reason);
     const chosen =
       (read.default ? read.models.find((m) => m.id === read.default) : undefined) ?? read.models[0];

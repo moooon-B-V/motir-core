@@ -378,6 +378,10 @@ model User {
   // must outlive their account. Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
   platformAuditEntries             PlatformAuditLog[]            @relation("PlatformAuditLogActor")
+  // Models this platform superadmin added to the hosted-run model list
+  // (Story MOTIR-7521 · MOTIR-7525). SetNull: the entry outlives the account,
+  // and the hash-chained audit log keeps WHO for ever.
+  platformRunModelsAdded           PlatformRunModel[]            @relation("PlatformRunModelAddedBy")
   // Organizations this platform operator SUSPENDED and that are still suspended
   // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
   // role must not block, or cascade into, a tenant's suspension state — the
@@ -472,6 +476,43 @@ enum PlatformAuditTargetKind {
   platform
 
   @@map("platform_audit_target_kind")
+}
+
+/// The platform RUN-MODEL LIST (Story MOTIR-7521 · MOTIR-7525;
+/// `docs/decisions/hosted-agent-run.md` §7 as amended by MOTIR-7522): which
+/// models a hosted run MAY use. motir-ai still owns what EXISTS — whether a
+/// model is servable and rated is read live from `GET /v1/agent-models`, never
+/// copied here — and this table holds only the platform's SELECTION, so the
+/// offer is listed ∩ offered, read fresh. One row per model id (the gateway's
+/// BARE id, the same spelling `DispatchRun.model` holds).
+///
+/// Curated in the operator console by a superadmin; every write appends a
+/// `PlatformAuditLog` row. Seeded with motir-ai's offer on the first console
+/// read after deploy (`PlatformRunModelList` marks that it happened), so no
+/// project loses its model on deploy and no migration calls motir-ai.
+model PlatformRunModel {
+  id        String   @id @default(cuid())
+  model     String   @unique
+  /// The superadmin who added it; NULL for a row the first-read seed wrote.
+  addedById String?  @map("added_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  addedBy User? @relation("PlatformRunModelAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@index([addedById])
+  @@map("platform_run_model")
+}
+
+/// The run-model list's INITIALISATION MARKER (MOTIR-7525): one row, id
+/// `platform`, written in the same transaction as the seed. Its absence is what
+/// tells "never initialised" (offer everything motir-ai offers) from "initialised
+/// and emptied by an operator" (offer nothing) — a distinction an empty
+/// `platform_run_model` alone cannot make.
+model PlatformRunModelList {
+  id            String   @id
+  initializedAt DateTime @default(now()) @map("initialized_at")
+
+  @@map("platform_run_model_list")
 }
 
 /// Every platform-staff action against the estate: the cross-tenant READS the

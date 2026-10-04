@@ -201,6 +201,27 @@ describe('projectHostedAgentSettingsService.update', () => {
     expect(row.hostedModelLow).toBeNull();
   });
 
+  it('refuses an override to a model motir-ai offers but the run-model list does not hold (MOTIR-7526)', async () => {
+    const fx = await makeWorkItemFixture();
+    await adminDb.platformRunModelList.create({ data: { id: 'platform' } });
+    await adminDb.platformRunModel.createMany({
+      data: [{ model: 'claude-opus-5-5' }, { model: 'claude-sonnet-5-5' }],
+    });
+    await expect(
+      service.update(fx.projectIdentifier, { high: 'claude-opus-5' }, ctxFor(fx)),
+    ).rejects.toBeInstanceOf(HostedModelNotOfferedError);
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(row.hostedModelHigh).toBeNull();
+    // The room offers the listed models only, and still accepts one of them.
+    const dto = await service.update(
+      fx.projectIdentifier,
+      { high: 'claude-sonnet-5-5' },
+      ctxFor(fx),
+    );
+    expect(dto.offeredModels).toEqual(['claude-opus-5-5', 'claude-sonnet-5-5']);
+    expect(levelOf(dto, 'high').effective).toBe('claude-sonnet-5-5');
+  });
+
   it('lets a member READ but not CHANGE the settings (ai:configure)', async () => {
     const fx = await makeWorkItemFixture();
     const member = await addMember(fx);

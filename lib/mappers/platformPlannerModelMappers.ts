@@ -1,10 +1,13 @@
 import type { User } from '@/generated/prisma/client';
 import {
   PLANNER_AUDIENCES,
+  PLANNER_MODEL_FALLBACK,
+  type PlannerModelListRead,
   type PlannerModelSettingsRead,
   type PlannerModelWriteResult,
 } from '@/lib/ai/types';
 import type {
+  PlatformPlannerModelListDTO,
   PlatformPlannerModelRowDTO,
   PlatformPlannerModelSettingsDTO,
   PlatformPlannerModelWriteDTO,
@@ -57,5 +60,39 @@ export function toPlatformPlannerModelWriteDTO(
     fromModel,
     toModel: result.model,
     updatedAt: result.updatedAt,
+  };
+}
+
+/**
+ * motir-ai's planning-model list + the audience settings → the list card's DTO
+ * (MOTIR-7524).
+ *
+ * `inUseBy` is computed HERE from the settings read, because it is what the page
+ * needs to say why a remove would be refused before anyone presses it; motir-ai
+ * still re-checks it under its row lock on the write. The entries keep motir-ai's
+ * order.
+ */
+export function toPlatformPlannerModelListDTO(
+  list: PlannerModelListRead,
+  settings: PlannerModelSettingsRead,
+  users: readonly Pick<User, 'id' | 'name' | 'email'>[],
+  canEdit: boolean,
+): PlatformPlannerModelListDTO {
+  const nameById = new Map(users.map((u) => [u.id, u.name?.trim() || u.email]));
+  return {
+    entries: list.entries.map((e) => ({
+      model: e.model,
+      provider: e.provider,
+      offered: e.offered,
+      reason: e.offered ? null : e.reason,
+      inUseBy: PLANNER_AUDIENCES.filter((audience) =>
+        settings.settings.some((s) => s.audience === audience && s.model === e.model),
+      ),
+      fallback: e.model === PLANNER_MODEL_FALLBACK,
+      createdAt: e.createdAt,
+      addedBy: e.addedByCoreUserId ? (nameById.get(e.addedByCoreUserId) ?? null) : null,
+      seeded: !e.addedByCoreUserId,
+    })),
+    canEdit,
   };
 }

@@ -289,6 +289,15 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public',
     'project_public_read + workspace_public_project_read + organization_public_project_read (20260811230000, 20260815200000) · projectSquare suite (directory, ranking, search, guarantees)',
   ],
+  // ── the HOSTED-RUN OFFER (Story MOTIR-7521 · MOTIR-7526) ─────────────────
+  // The run-model list narrows every tenant's hosted-run offer, so it is read
+  // on customer paths with no platform flag bound. Both tables' SELECT arm is
+  // `USING (true)` — platform reference data — and their writes stay behind
+  // `app.platform_staff`.
+  'platformRunModelRepository.ts#findListedModelsForOffer': [
+    'public',
+    'platform_run_model_read + platform_run_model_list_read (20261004120000) · platformRunModelOfferRead.test "the offer read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
 };
 
 /**

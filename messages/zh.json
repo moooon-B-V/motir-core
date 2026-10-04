@@ -8481,7 +8481,8 @@
       "footerStaff": "平台员工",
       "exitToApp": "返回应用",
       "navAiPlanning": "AI 规划",
-      "navPlanningLessons": "规划经验"
+      "navPlanningLessons": "规划经验",
+      "navRunModels": "托管运行模型"
     },
     "nav": {
       "overview": "总览",
@@ -8642,6 +8643,15 @@
           "ai": {
             "planner_model": {
               "set": "已更改规划模型"
+            },
+            "planner_model_list": {
+              "add": "向规划模型列表添加了模型",
+              "remove": "从规划模型列表移除了模型"
+            },
+            "run_model_list": {
+              "seed": "初始化了托管运行模型列表",
+              "add": "向托管运行模型列表添加了模型",
+              "remove": "从托管运行模型列表移除了模型"
             },
             "lesson": {
               "edit": "编辑了规划经验",
@@ -10096,6 +10106,133 @@
           "noReason": "未记录原因",
           "counts": "{runs} 个 CI 运行 · {containers} 个 CI 容器 · {hosted} 个托管运行 · {instances} 个智能体实例"
         }
+      }
+    },
+    "modelLists": {
+      "col": {
+        "model": "模型",
+        "offered": "当前是否提供",
+        "inUse": "使用方",
+        "added": "添加",
+        "action": "操作"
+      },
+      "count": "已列入 {n} 个",
+      "add": "添加模型",
+      "remove": "移除",
+      "removeAria": "移除 {model}",
+      "offered": "已提供",
+      "notOffered": "未提供",
+      "notInCatalog": "不在模型目录中",
+      "inUse": {
+        "nothing": "无"
+      },
+      "added": {
+        "seeded": "首次读取时初始化",
+        "by": "{who} 于 {when} 添加",
+        "byUnknown": "于 {when} 添加",
+        "justNowByYou": "你刚刚添加"
+      },
+      "readOnly": "只有超级管理员可以更改这些列表。",
+      "reasonLabel": "原因（必填，将写入审计日志）",
+      "reasonPlaceholder": "为什么要更改这个列表？",
+      "reasonHint": "之后查看这次更改的运维人员都会看到。",
+      "cancel": "取消",
+      "retry": "重试",
+      "error": {
+        "reasonRequired": "必须填写原因。",
+        "notPermitted": "只有超级管理员可以更改这个列表。",
+        "failed": "出了点问题，没有做任何更改。请重试。",
+        "unavailable": "motir-ai 没有响应，没有做任何更改。请重试。"
+      }
+    },
+    "planningList": {
+      "title": "规划可使用的模型",
+      "subtitle": "受众只能设置为已列入、且 motir-ai 当前为规划提供的模型。每次读取都会重新检查每个条目。",
+      "reason": {
+        "not_servable": "网关已不再提供这个模型。",
+        "not_chat": "不是对话模型，无法用于规划。",
+        "unrated": "它没有生效的规划费率。"
+      },
+      "fallback": "所有受众的后备模型",
+      "add": {
+        "title": "添加一个规划可使用的模型",
+        "body": "添加后，只要 motir-ai 提供它，超级管理员就可以把任何受众设置为它。",
+        "modelLabel": "模型 ID",
+        "modelHint": "只有网关提供、属于对话模型且有规划费率的模型，motir-ai 才会添加。",
+        "confirm": "添加模型",
+        "refused": "未添加：{detail}",
+        "modelRequired": "请输入模型 ID。"
+      },
+      "remove": {
+        "title": "要从规划列表中移除 {model} 吗？",
+        "body": "没有受众设置为它，所以不会改变任何规划任务。之后可以再添加回来。",
+        "confirm": "移除模型",
+        "inUse": "未移除：{audiences} 正在用 {model} 规划。请先把该受众切换到其他模型。",
+        "fallback": "未移除：{model} 是每个受众在自身模型被撤下时使用的后备模型，因此始终保留在列表中。",
+        "refused": "未移除：{detail}"
+      },
+      "removed": "已从规划列表中移除 {model}。",
+      "added": "已添加 {model}。现在可以把任何受众设置为它。",
+      "unavailable": {
+        "title": "无法加载规划模型列表",
+        "body": "规划服务（motir-ai）没有响应，因此不显示列表。没有任何更改，也不会猜测任何值。"
+      }
+    },
+    "runModels": {
+      "breadcrumb": "运维 · 托管运行模型",
+      "title": "托管运行模型",
+      "subtitle": "托管运行可以使用哪些模型，适用于所有项目。项目从已列入、且 motir-ai 当前提供的模型中选择。",
+      "lineLive": "motir-ai 不再提供的已列入模型会立即从所有选择器中消失。未列入的模型永远不会出现。",
+      "lineProjectsLead": "项目看不到这个列表。",
+      "lineProjectsBody": "它们看到的是结果：“托管运行”选择器和项目的托管智能体设置只提供这些模型。",
+      "card": {
+        "title": "托管运行可使用的模型",
+        "subtitle": "列表首次读取时，用 motir-ai 当时为托管运行提供的所有模型初始化，因此没有项目失去它已选择的模型。"
+      },
+      "notOffered": "当前不在 motir-ai 的托管运行可用模型中：它可能已撤下、没有费率、不是对话模型，或其提供方未为托管运行配置。",
+      "level": {
+        "trivial": "极简",
+        "low": "低",
+        "medium": "中",
+        "high": "高"
+      },
+      "inUse": {
+        "platformDefault": "平台默认 · {levels}",
+        "projects": "{n} 个项目"
+      },
+      "add": {
+        "title": "添加一个托管运行模型",
+        "body": "添加后，项目就可以在“托管运行”和按难度的设置中选择它。",
+        "modelLabel": "模型",
+        "placeholder": "选择一个模型",
+        "pickerFoot": "motir-ai 为托管运行提供、但尚未列入的模型。",
+        "nothing": "motir-ai 为托管运行提供的模型都已列入。",
+        "confirm": "添加模型",
+        "notOffered": "未添加：motir-ai 已不再为托管运行提供 {model}。",
+        "alreadyListed": "未添加：{model} 已在列表中。"
+      },
+      "remove": {
+        "title": "要从托管运行模型中移除 {model} 吗？",
+        "body": "从现在起，任何项目都不能为托管运行选择它。没有项目或平台默认值在使用它。",
+        "confirm": "移除模型",
+        "inUse": "未移除：{model} 正在使用中。{platformDefaultClause}{projectsClause}请先更改这些设置。",
+        "inUseParts": {
+          "platformDefault": "它是 Motir 在 {levels} 难度上的平台默认模型。",
+          "projects": "{n} 个项目在使用它：{list}。",
+          "projectEntry": "{name}（{key}）用于 {levels}"
+        },
+        "notListed": "未移除：{model} 已不在列表中。"
+      },
+      "added": "已添加 {model}。项目现在可以为托管运行选择它。",
+      "removed": "已从托管运行模型中移除 {model}。",
+      "empty": {
+        "title": "没有列入任何模型",
+        "body": "在添加模型之前，任何托管运行都无法启动。请从 motir-ai 提供的模型中添加。",
+        "bodyReadOnly": "在超级管理员添加模型之前，任何托管运行都无法启动。"
+      },
+      "unavailable": {
+        "title": "无法加载托管运行模型",
+        "body": "motir-ai 没有响应，因此无法确定每个已列入模型是否可用，不显示列表。没有任何更改。"
       }
     }
   },
