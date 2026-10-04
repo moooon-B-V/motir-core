@@ -109,6 +109,11 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  // An initialised list narrows every hosted-run offer (MOTIR-7526), so it is
+  // not left behind for a later file that never asked for one.
+  await adminDb.$executeRawUnsafe(
+    'TRUNCATE TABLE "platform_run_model", "platform_run_model_list" CASCADE',
+  );
   await db.$disconnect();
   await adminDb.$disconnect();
 });

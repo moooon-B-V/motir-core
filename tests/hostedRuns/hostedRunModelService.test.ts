@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAgentModels } from '@/lib/ai/motirAiClient';
 import { hostedRunModelService, toOpenCodeModel } from '@/lib/services/hostedRunModelService';
 import { HostedModelNotOfferedError, HostedModelsUnavailableError } from '@/lib/hostedRuns/errors';
+import { adminDb } from '../helpers/adminDb';
 
 // THE MODELS A HOSTED RUN MAY USE (MOTIR-6483; `docs/decisions/hosted-agent-run.md`
 // §7), over the real client with only `fetch` stubbed — the HTTP seam to motir-ai.
@@ -29,7 +30,21 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-beforeEach(() => {
+/** Leave the run-model list uninitialised — it narrows nothing (MOTIR-7526). */
+async function clearRunModelList() {
+  await adminDb.$executeRawUnsafe(
+    'TRUNCATE TABLE "platform_run_model", "platform_run_model_list" CASCADE',
+  );
+}
+
+/** Initialise the run-model list holding exactly `models`. */
+async function listRunModels(models: string[]) {
+  await adminDb.platformRunModelList.create({ data: { id: 'platform' } });
+  await adminDb.platformRunModel.createMany({ data: models.map((model) => ({ model })) });
+}
+
+beforeEach(async () => {
+  await clearRunModelList();
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.test/');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
 });
@@ -37,6 +52,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+});
+
+afterAll(async () => {
+  await clearRunModelList();
+  await adminDb.$disconnect();
 });
 
 describe('getAgentModels (the client read)', () => {
@@ -289,6 +309,105 @@ describe('toOpenCodeModel', () => {
   it('prefixes a Kimi entry with the catalog provider `moonshotai` (MOTIR-7361)', () => {
     expect(toOpenCodeModel({ id: 'kimi-k2.6', provider: 'moonshotai' })).toBe(
       'moonshotai/kimi-k2.6',
+    );
+  });
+});
+
+describe('the run-model list narrows the offer (MOTIR-7526; hosted-agent-run.md §7 as amended)', () => {
+  const OFFER = {
+    models: [
+      { id: 'claude-opus-5-5', provider: 'anthropic' },
+      { id: 'deepseek-v4-pro', provider: 'deepseek' },
+    ],
+    default: 'deepseek-v4-pro',
+    defaultsByDifficulty: {
+      trivial: 'deepseek-v4-pro',
+      low: 'deepseek-v4-pro',
+      medium: 'claude-opus-5-5',
+      high: 'claude-opus-5-5',
+    },
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(OFFER)),
+    );
+  });
+
+  it('offers only models that are BOTH listed and offered by motir-ai', async () => {
+    await listRunModels(['claude-opus-5-5']);
+    const offered = await hostedRunModelService.listOfferedModels();
+    expect(offered).toMatchObject({
+      state: 'ok',
+      models: [{ id: 'claude-opus-5-5', provider: 'anthropic' }],
+    });
+  });
+
+  it('a default naming an unlisted model reads null, exactly as an unoffered one does', async () => {
+    await listRunModels(['claude-opus-5-5']);
+    expect(await hostedRunModelService.listOfferedModels()).toMatchObject({
+      default: null,
+      defaultsByDifficulty: {
+        trivial: null,
+        low: null,
+        medium: 'claude-opus-5-5',
+        high: 'claude-opus-5-5',
+      },
+    });
+  });
+
+  it('a listed model motir-ai stops offering is absent on the next read', async () => {
+    await listRunModels(['claude-opus-5-5', 'claude-sonnet-5-5']);
+    const offered = await hostedRunModelService.listOfferedModels();
+    expect(offered.state === 'ok' && offered.models.map((m) => m.id)).toEqual(['claude-opus-5-5']);
+    await expect(hostedRunModelService.assertOffered('claude-sonnet-5-5')).rejects.toBeInstanceOf(
+      HostedModelNotOfferedError,
+    );
+  });
+
+  it('assertOffered refuses an offered but unlisted model, and accepts a listed one', async () => {
+    await listRunModels(['claude-opus-5-5']);
+    await expect(hostedRunModelService.assertOffered('deepseek-v4-pro')).rejects.toBeInstanceOf(
+      HostedModelNotOfferedError,
+    );
+    await expect(hostedRunModelService.assertOffered('claude-opus-5-5')).resolves.toEqual({
+      id: 'claude-opus-5-5',
+      provider: 'anthropic',
+    });
+  });
+
+  it('a review run with nobody to choose takes the first LISTED model when the default is unlisted', async () => {
+    await listRunModels(['claude-opus-5-5']);
+    await expect(hostedRunModelService.defaultOffered()).resolves.toEqual({
+      id: 'claude-opus-5-5',
+      provider: 'anthropic',
+    });
+  });
+
+  it('an initialised but EMPTY list offers nothing — an operator held every model back', async () => {
+    await listRunModels([]);
+    expect(await hostedRunModelService.listOfferedModels()).toMatchObject({
+      state: 'ok',
+      models: [],
+      default: null,
+    });
+  });
+
+  it('a list never initialised narrows nothing — its first read seeds it with the whole offer', async () => {
+    const offered = await hostedRunModelService.listOfferedModels();
+    expect(offered).toEqual({ state: 'ok', ...OFFER });
+  });
+
+  it('motir-ai unavailable still reads unavailable, never an empty list', async () => {
+    await listRunModels(['claude-opus-5-5']);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ error: 'boom' }, 500)),
+    );
+    expect(await hostedRunModelService.listOfferedModels()).toEqual({ state: 'unavailable' });
+    await expect(hostedRunModelService.assertOffered('claude-opus-5-5')).rejects.toBeInstanceOf(
+      HostedModelsUnavailableError,
     );
   });
 });
