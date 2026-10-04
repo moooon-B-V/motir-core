@@ -87,9 +87,11 @@ test('platform staff read the system-health board with its Errors, Hosting and G
     // the same `Reachable · {ms} ms` message from a REAL ping against CI Postgres,
     // so on the run where that ping also measures 42 ms a board-wide `getByText`
     // matches both cards and fails strict mode (MOTIR-7557).
+    // The card is found by text that STARTS with its title: the title span carries
+    // no role to scope on, and a page-rooted `getByText` is refused by the guard.
     const gateway = board
       .locator('[data-surface="card"]')
-      .filter({ has: page.getByText(mon.signal.gateway.title, { exact: true }) });
+      .filter({ hasText: new RegExp(`^${mon.signal.gateway.title}`) });
     await expect(gateway.getByText('Reachable · 42 ms', { exact: true })).toBeVisible();
     await expect(gateway.getByText(/motir-gateway v0\.0\.0-e2e/)).toBeVisible();
     await beat();
