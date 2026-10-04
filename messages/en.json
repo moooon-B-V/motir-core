@@ -8644,6 +8644,15 @@
             "planner_model": {
               "set": "Changed the planning model"
             },
+            "planner_model_list": {
+              "add": "Added a model to the planning list",
+              "remove": "Removed a model from the planning list"
+            },
+            "run_model_list": {
+              "seed": "Set up the hosted-run model list",
+              "add": "Added a model to the hosted-run list",
+              "remove": "Removed a model from the hosted-run list"
+            },
             "lesson": {
               "edit": "Edited a planning lesson",
               "enable": "Switched a planning lesson on",

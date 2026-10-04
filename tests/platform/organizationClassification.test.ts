@@ -115,7 +115,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     expect(rows[1]?.with_check).toContain('app.platform_staff');
   });
 
-  it('arms exactly the gate table, `organization`, and the four estate tiers MOTIR-730 added', async () => {
+  it('arms exactly the gate table, `organization`, the four estate tiers MOTIR-730 added, and the hosted-run model list', async () => {
     const rows = await adminDb.$queryRaw<{ tablename: string }[]>`
       SELECT DISTINCT "tablename"
       FROM pg_policies
@@ -129,13 +129,17 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // `platform_audit_log` is MOTIR-2896's own table — the gate's, not a tenant
     // table. The four estate tiers are MOTIR-730's SELECT-only arms
     // (`20261001200000_platform_staff_estate_read_arms`, asserted in
-    // `platformReadService.test.ts`).
+    // `platformReadService.test.ts`). `platform_run_model` and its
+    // `platform_run_model_list` marker are MOTIR-7525's hosted-run model list —
+    // platform configuration, written solely from this tier.
     expect(rows.map((r) => r.tablename)).toEqual([
       'impersonation_session',
       'org_feature_flag',
       'organization',
       'organization_membership',
       'platform_audit_log',
+      'platform_run_model',
+      'platform_run_model_list',
       'project',
       'workspace',
       'workspace_membership',

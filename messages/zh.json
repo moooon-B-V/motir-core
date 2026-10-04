@@ -8640,6 +8640,15 @@
             "planner_model": {
               "set": "已更改规划模型"
             },
+            "planner_model_list": {
+              "add": "向规划模型列表添加了模型",
+              "remove": "从规划模型列表移除了模型"
+            },
+            "run_model_list": {
+              "seed": "初始化了托管运行模型列表",
+              "add": "向托管运行模型列表添加了模型",
+              "remove": "从托管运行模型列表移除了模型"
+            },
             "lesson": {
               "edit": "编辑了规划经验",
               "enable": "开启了规划经验",
