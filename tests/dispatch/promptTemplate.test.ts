@@ -270,172 +270,116 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
     expect(prompt).toContain(marker);
   });
 
-  // ── MOTIR-5682: the DECISION lane names what the decision gate reads
+  // ── MOTIR-7437: the DECISION lane writes a PAGE and publishes it
   //
-  // The gate asks a person about the ONE `docs/decisions/*.md` file the card's pull
-  // request carries (`approval-gates.md` §8's FIFTH AMENDMENT). A lane that only
-  // said "a decision document in the repository docs" let an honest run write it
-  // anywhere, or twice, and leave a gate nobody could approve.
-  describe('WHAT_TO_DO.decision teaches the decision gate’s four rules (MOTIR-5682)', () => {
+  // The gate asks a person about the published page VERSION (`approval-gates.md`
+  // §8's NINTH AMENDMENT), not a `docs/decisions/*.md` file at a pull request's head
+  // (MOTIR-5682, retired). The lane names both tools literally and leaves no
+  // instruction that could send an agent to a branch.
+  describe('WHAT_TO_DO.decision writes a page and publishes it (MOTIR-7437)', () => {
     const RULES = [
-      'EXACTLY ONE markdown file at docs/decisions/<kebab-slug>.md',
-      'the gate reads exactly one, and two cannot be approved',
-      'The pull request is REQUIRED',
-      'The decision is NOT final when your run ends. A person reads the document in',
-      'Stop at the',
+      "3. Record it as ONE PAGE in this card's project, written with the create_page",
+      'tool (or update_page, per 3a)',
+      '4. When the page is COMPLETE, call the publish_decision_page tool ONCE with key',
+      '5. Open NO branch, make NO commit, open NO pull request, and link nothing.',
+      'Stop after the publish.',
     ];
-    const agentPrompt = () =>
-      assembleDispatchPrompt(source({ type: 'decision', executor: 'coding_agent' })).prompt;
+    const agent = () =>
+      assembleDispatchPrompt(source({ type: 'decision', executor: 'coding_agent' }));
+    const agentPrompt = () => agent().prompt;
 
     it.each(RULES)('an agent’s decision card is told: %s', (rule) => {
       expect(agentPrompt()).toContain(rule);
     });
 
-    // ── MOTIR-6194: the record's SUBJECT and its SCOPE, which the count cannot reach
-    //
-    // Clause 3 makes the FILE the gate's subject, so WHICH file decides what the
-    // person is asked to approve. The lane used to say only "EXACTLY ONE" and
-    // "Change no other file": a COUNT. Both are satisfied by rewriting one wrong
-    // file without limit, which is how MOTIR-6157's decision landed in the record
-    // it CONTRADICTS and settled a question its card never asked, under 13 green
-    // lanes. `motir-meta` `prompts/run.md` step 5b carries the same two rules for
-    // the runbook — neither side can detect the other's absence, so both are
-    // asserted where they live.
-    describe('the record’s SUBJECT and SCOPE are bounded, not just its count (MOTIR-6194)', () => {
-      it('names the file from the decision’s SUBJECT, not from the text it contradicts', () => {
+    it('carries no docs/decisions file, no pull request to open, and no repository STOP', () => {
+      const prompt = agentPrompt();
+      expect(prompt).not.toContain('docs/decisions/');
+      expect(prompt).not.toMatch(/open (a|the) pull request/i);
+      expect(prompt).not.toContain('link_pull_request');
+      expect(prompt).not.toContain('If this card pins NO repository');
+    });
+
+    it('renders no GIT WORKFLOW and names no branch', () => {
+      const out = agent();
+      expect(out.prompt).not.toContain('GIT WORKFLOW');
+      expect(out.prompt).not.toContain('git worktree add');
+      expect(out.prompt).not.toContain('git push');
+      expect(out.branch).toBeNull();
+      expect(out.workBranch).toBeNull();
+      expect(out.workflowMode).toBe('per_item_pr');
+    });
+
+    it('its FINISHED is the publish: no status write and no How to test', () => {
+      const prompt = agentPrompt();
+      expect(prompt).toContain('FINISHED — the decision page is written and published:');
+      expect(prompt).toContain('publish_decision_page has returned for PROD-7, with a gateId');
+      expect(prompt).toContain('Do NOT move PROD-7 with transition_status.');
+      expect(prompt).not.toContain("4b. publish this run's HOW TO TEST");
+      expect(prompt).toContain('PUBLISH NOTHING.');
+    });
+
+    // ── MOTIR-6194, restated for pages: the record's SUBJECT and its SCOPE.
+    // `motir-meta` `prompts/run.md` step 5b carries the same rules for the runbook.
+    describe('the record’s SUBJECT and SCOPE are bounded (MOTIR-6194)', () => {
+      it('names the page from the decision’s SUBJECT, not from the text it contradicts', () => {
         const prompt = agentPrompt();
-        expect(prompt).toContain('3a. WHICH file — the record goes where its SUBJECT lives');
+        expect(prompt).toContain('3a. WHICH page — the record goes where its SUBJECT lives');
         expect(prompt).toContain('Name it from the thing being DECIDED, not');
-        expect(prompt).toContain('from the text the decision contradicts');
-        // The default is a NEW record; an existing one is the exception, and the
-        // test for it is OWNERSHIP of the subject rather than proximity to it.
-        expect(prompt).toContain('DEFAULT to a new');
-        expect(prompt).toContain('record only when that record already OWNS this subject');
-        expect(prompt).toContain('does not belong in that record');
+        expect(prompt).toContain('DEFAULT to a new page named for the');
+        expect(prompt).toContain('update an EXISTING page only when it already OWNS this subject');
+        expect(prompt).toContain('does not belong in');
       });
 
-      // The gate's subject is `<owner/name>:<path>@<blobSha>` (§8's FIFTH AMENDMENT
-      // clause 4) — the WHOLE file, not the diff. There is no publish call for a
-      // decision document, so the pull-request head is the only lever. MOTIR-6157's
-      // second rewrite put the decision in the ADR that genuinely owns it and made
-      // the subject a 3,581-line file with the amendment at line 3,495; the review
-      // came back "did you republish?". Unreadable is indistinguishable from absent.
-      it('requires an amended record to be READABLE AS ONE QUESTION, not merely correct', () => {
+      it('requires an updated page to be READABLE AS ONE QUESTION', () => {
         const prompt = agentPrompt();
         expect(prompt).toContain('small enough to be READ AS ONE QUESTION');
-        expect(prompt).toContain('The gate hands the reviewer the');
-        expect(prompt).toContain('WHOLE file, not your diff');
-        expect(prompt).toContain('<owner/name>:<path>@<blobSha>');
-        expect(prompt).toContain('a decision document has no publish call');
+        expect(prompt).toContain('WHOLE published version, not your edit');
         expect(prompt).toContain('unreadable and absent look the same');
       });
 
-      it('bounds the record to the card’s own decision — the count rule does not', () => {
+      it('bounds the record to the card’s own decision', () => {
         const prompt = agentPrompt();
         expect(prompt).toContain(
           "3b. HOW MUCH — the record is BOUNDED by this card's own decision",
         );
         expect(prompt).toContain('Do not settle a neighbouring question');
-        expect(prompt).toContain('do not retire copy, keys or clauses the card did not name');
-        expect(prompt).toContain('do not repair');
-        expect(prompt).toContain('what is merely wrong AROUND the part you came to write');
-        expect(prompt).toContain('Something else wrong in that file is a bug to log');
+        expect(prompt).toContain('Something else wrong in');
       });
 
       it('asks for a “What this does NOT decide” fence, so the scope is checkable at the gate', () => {
         const prompt = agentPrompt();
         expect(prompt).toContain('3c. End the record with a "What this does NOT decide" section');
-        expect(prompt).toContain('questions a reader could think it settled and it does not');
-      });
-
-      // MOTIR-6157 carried NO targetRepo, and step 3 says "in this card's target
-      // repository". An unpinned card dispatches to `unpinned_root` — the workspace
-      // root, which is not a repository at all — so the presupposition fails and the
-      // agent must stop rather than pick a repository, which is a planning decision.
-      it('tells an agent to STOP when the card pins no repository', () => {
-        expect(agentPrompt()).toContain(
-          'If this card pins NO repository, STOP and say so in a comment',
-        );
-        expect(agentPrompt()).toContain('picking one is a planning decision, not yours');
       });
     });
 
-    // Design review 2026-09-19 (MOTIR-5673): the decision port shows NO How to test, so the
-    // agent is not asked to write one — neither the record nor the pull request's section.
-    it('an agent’s decision card writes NO How to test — not the record, not the PR section', () => {
-      const prompt = agentPrompt();
-      expect(prompt).toContain(
-        'do NOT publish How to test for PROD-7. A decision card ships a document',
-      );
-      expect(prompt).toContain('It carries NO "## How to test" section');
-      expect(prompt).not.toContain("4b. publish this run's HOW TO TEST");
-      expect(prompt).not.toContain('Its body carries a "## How to test" section');
-    });
-
-    it('a CODE card still publishes How to test — the decision rule is the decision type’s alone', () => {
+    it('a CODE card still publishes How to test and opens its pull request', () => {
       const { prompt } = assembleDispatchPrompt(source({ type: 'code', executor: 'coding_agent' }));
       expect(prompt).toContain("4b. publish this run's HOW TO TEST");
       expect(prompt).toContain('Its body carries a "## How to test" section');
+      expect(prompt).toContain('GIT WORKFLOW');
     });
 
-    it('an agent’s decision card is told its pull request is its OWN, linked to it alone', () => {
-      expect(agentPrompt()).toContain(
-        'It is a pull request of its OWN, off main, and this work item is the ONLY one',
-      );
-      expect(agentPrompt()).toContain(
-        "a session branch's pull request to this work item: approving the decision",
-      );
-    });
-
-    // ── MOTIR-6094: a decision is NEVER dispatched onto a session branch
-    //
-    // Approving a decision authorises the merge of the pull request linked to it
-    // (§8's FIFTH AMENDMENT, clause 5). On a session branch that is the SESSION
-    // pull request, which carries every other card of the run, so the assembler
-    // forces the card off the lineage exactly as it forces a manual one — whether
-    // the lineage was SEEDED by the run or INHERITED from a blocker.
-    describe('a decision offered a session lineage ships on its own pull request (MOTIR-6094)', () => {
+    // ── MOTIR-6094: a decision is NEVER dispatched onto a session branch — now
+    // because it takes no branch at all.
+    describe('a decision offered a session lineage still takes none (MOTIR-6094)', () => {
       const offered = () =>
         assembleDispatchPrompt(
           source({ type: 'decision', executor: 'coding_agent', sessionBranch: 'motir/auto-1' }),
         );
 
-      it('is per_item_pr and reports no session branch, so no lane integrates it', () => {
+      it('is per_item_pr, reports no session branch, and names no branch', () => {
         expect(offered().workflowMode).toBe('per_item_pr');
         expect(offered().sessionBranch).toBeNull();
-      });
-
-      it('branches off main, links ITS OWN pull request under its own key, and never touches the session', () => {
-        const { prompt } = offered();
-        expect(prompt).toContain('-b docs/PROD-7-add-the-ready-set-filter-bar origin/main');
-        expect(prompt).toContain(
-          '6. LINK it: call the link_pull_request tool with key PROD-7 and the',
-        );
-        expect(prompt).toContain('plus headRef docs/PROD-7-add-the-ready-set-filter-bar');
-        expect(prompt).not.toContain('origin/motir/auto-1');
-        expect(prompt).not.toContain('call the mark_integrated tool');
-        expect(prompt).not.toContain('gh pr list --head motir/auto-1');
-      });
-
-      it('is told WHY, naming the branch it must not touch', () => {
-        const { prompt } = offered();
-        expect(prompt).toContain(
-          'This run integrates its other work items into motir/auto-1, but a DECISION',
-        );
-        expect(prompt).toContain(
-          'from motir/auto-1, do NOT integrate into it, do NOT call mark_integrated, and',
-        );
-      });
-
-      it('a decision with NO lineage gets no note — the per-item prompt is unchanged', () => {
-        expect(agentPrompt()).not.toContain('but a DECISION');
+        expect(offered().branch).toBeNull();
+        expect(offered().prompt).not.toContain('motir/auto-1');
+        expect(offered().prompt).not.toContain('call the mark_integrated tool');
       });
 
       it('a CODE card offered the same lineage still joins it', () => {
         const code = assembleDispatchPrompt(source({ sessionBranch: 'motir/auto-1' }));
         expect(code.workflowMode).toBe('session_lineage');
         expect(code.sessionBranch).toBe('motir/auto-1');
-        expect(code.prompt).not.toContain('but a DECISION');
       });
     });
 
@@ -806,7 +750,8 @@ describe('assembleDispatchPrompt — the GIT WORKFLOW variants', () => {
     expect(branchOf('code')).toMatch(/^subtask\//);
     expect(branchOf('chore')).toMatch(/^subtask\//);
     expect(branchOf('design')).toMatch(/^design\//);
-    expect(branchOf('decision')).toMatch(/^docs\//);
+    // A decision takes no branch at all (MOTIR-7437).
+    expect(branchOf('decision')).toBeUndefined();
     expect(branchOf('research')).toMatch(/^docs\//);
   });
 

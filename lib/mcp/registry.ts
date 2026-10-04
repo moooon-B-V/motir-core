@@ -109,6 +109,10 @@ import { GET_PAGE_TOOL_NAME, registerGetPage } from './tools/getPage';
 import { CREATE_PAGE_TOOL_NAME, registerCreatePage } from './tools/createPage';
 import { UPDATE_PAGE_TOOL_NAME, registerUpdatePage } from './tools/updatePage';
 import {
+  PUBLISH_DECISION_PAGE_TOOL_NAME,
+  registerPublishDecisionPage,
+} from './tools/publishDecisionPage';
+import {
   SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
   registerSearchWorkItemsSemantic,
 } from './tools/searchWorkItemsSemantic';
@@ -227,6 +231,7 @@ export const MCP_TOOL_NAMES = [
   GET_PAGE_TOOL_NAME,
   CREATE_PAGE_TOOL_NAME,
   UPDATE_PAGE_TOOL_NAME,
+  PUBLISH_DECISION_PAGE_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
   VALIDATE_WORK_ITEM_TOOL_NAME,
@@ -454,6 +459,8 @@ export function registerMcpTools(
   registerGetPage(target, resolveContext);
   registerCreatePage(target, resolveContext);
   registerUpdatePage(target, resolveContext);
+  // A page as a decision card's decision (MOTIR-7434; approval-gates.md §8 NINTH AMENDMENT).
+  registerPublishDecisionPage(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
   registerListSprints(target, resolveContext);
   // Sprint finishability check (7.8.15) — productizes the re-validate-the-active-

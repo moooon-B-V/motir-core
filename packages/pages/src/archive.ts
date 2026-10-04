@@ -5,6 +5,7 @@ import {
   PageNotArchivedError,
   PageNotFoundError,
 } from './errors';
+import { assertPageDeletable } from './delete';
 import { placementColumns, sitsAt, subtreeHeight, writePlacement } from './move';
 import { positionBetween } from './position';
 import type { Clock, PageRow, PageStore, SubtreePage } from './store';
@@ -314,6 +315,8 @@ export async function deletePage(
   assertArchiveRoot(root);
   const set = await store.findArchiveSet(root.id);
   const deletedIds = orderedSet(root.id, set);
+  // A frozen version anywhere in the set refuses the whole delete (AMENDMENT 3).
+  await assertPageDeletable(store, deletedIds);
   const doomed = new Set(deletedIds);
 
   const descendants = await store.findSubtree(root.id);

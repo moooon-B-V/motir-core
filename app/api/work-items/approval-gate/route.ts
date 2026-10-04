@@ -216,7 +216,15 @@ async function readSubject(
         ),
         decisionDocumentService.readViewForWorkItem(item.id, ctx).catch(() => null),
       ]);
-      const block = await readDevelopmentBlock(gate, item, ctx, merge.gate);
+      // A PAGE DECISION HAS NO DELIVERY SET (Story MOTIR-5761): its subject is the published
+      // page version, so the port resolves over an empty set rather than reading `gone`.
+      const block = await readDevelopmentBlock(
+        gate,
+        item,
+        ctx,
+        merge.gate,
+        document?.outcome === 'page',
+      );
       return block.state === 'resolved' && block.kind === 'pull_request_approval'
         ? { ...block, decision: { document } }
         : block;
@@ -282,6 +290,8 @@ async function readDevelopmentBlock(
   item: { id: string; type: string | null; targetRepos: readonly string[] },
   ctx: ServiceContext,
   merge: ApprovalGateDTO | null = null,
+  /** A decision published as a PAGE (MOTIR-5761) delivers nothing, so an empty set is its normal shape. */
+  emptySetResolves = false,
 ): Promise<ApprovalGateOverlaySubjectDTO> {
   const membersGate = merge ?? gate;
   // THE DEVELOPMENT BLOCK as the port (Story MOTIR-5437 · MOTIR-5439). The subject
@@ -321,7 +331,7 @@ async function readDevelopmentBlock(
     acceptanceEvidenceService.getCurrentForStory(item.id, ctx),
     approvalGatesService.getForWorkItem({ workItemId: item.id, kind: 'acceptance_result' }, ctx),
   ]);
-  if (deliveryView.deliveries.length === 0) return { state: 'gone' };
+  if (deliveryView.deliveries.length === 0 && !emptySetResolves) return { state: 'gone' };
   return {
     state: 'resolved',
     kind: 'pull_request_approval',

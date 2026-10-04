@@ -425,6 +425,9 @@ model User {
   // Page versions this person authored (Story MOTIR-5754). Restrict, as
   // `Page.updatedBy`: authorship is durable attribution.
   pageVersions                     PageVersion[]                 @relation("PageVersionAuthor")
+  // Decision pages this person published (Story MOTIR-5761). Restrict, as
+  // `PageVersion.author`: publishing is durable attribution.
+  decisionPagePublications         DecisionPagePublication[]     @relation("DecisionPagePublisher")
   // Monitor connections this person BOUND (Story MOTIR-4926 · MOTIR-4929 ·
   // MOTIR-5576) — whose identity the reconciler files each monitor bug as.
   // SetNull, NOT Cascade: removing the person must not remove the binding; the
@@ -1636,6 +1639,7 @@ model Workspace {
   folders                     Folder[]
   pages                       Page[]
   pageVersions                PageVersion[]
+  decisionPagePublications    DecisionPagePublication[]
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
@@ -2121,9 +2125,9 @@ model Project {
   /// `SetNull` on the primary, `Cascade` on the list: removing the address a
   /// project is canonical at must NOT delete the project, it must fall back to
   /// the default; deleting the project takes its addresses with it.
-  primaryAddressId              String?         @map("primary_address_id")
-  primaryAddress                PublicAddress?  @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
-  publicAddresses               PublicAddress[] @relation("ProjectPublicAddresses")
+  primaryAddressId              String?                   @map("primary_address_id")
+  primaryAddress                PublicAddress?            @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
+  publicAddresses               PublicAddress[]           @relation("ProjectPublicAddresses")
   /// Approval gates scoped to this project (a gate is `workspaceId` + `projectId`,
   /// per the ADR §7 tier — `prMergeMode` lives at the project, not the workspace).
   approvalGates                 ApprovalGate[]
@@ -2132,6 +2136,7 @@ model Project {
   folders                       Folder[]
   pages                         Page[]
   pageVersions                  PageVersion[]
+  decisionPagePublications      DecisionPagePublication[]
   /// The folder this project's filed bugs land in (Story MOTIR-4927 · MOTIR-4934).
   /// NULL MEANS THE PROJECT ROOT, CHOSEN — nullable with no default, and never to
   /// be made required. `NoAction`, the `Folder.parentFolder` idiom: a folder this
@@ -2139,8 +2144,8 @@ model Project {
   /// the destination to the folder's parent first (MOTIR-5537); `SetNull` would
   /// turn a deleted nested folder into a root nobody chose. Same-project is
   /// enforced by `trg_project_bug_destination_folder_tenancy`.
-  bugDestinationFolderId        String?         @map("bug_destination_folder_id")
-  bugDestinationFolder          Folder?         @relation("ProjectBugDestinationFolder", fields: [bugDestinationFolderId], references: [id], onDelete: NoAction)
+  bugDestinationFolderId        String?                   @map("bug_destination_folder_id")
+  bugDestinationFolder          Folder?                   @relation("ProjectBugDestinationFolder", fields: [bugDestinationFolderId], references: [id], onDelete: NoAction)
   /// The folder this project's PLANNER bugs are filed into (Story MOTIR-5818 ·
   /// MOTIR-5820) — the `@planner-bug-home` marker's destination. A SECOND
   /// pointer, mirroring `bugDestinationFolderId` field for field, because the two
@@ -2150,8 +2155,8 @@ model Project {
   /// deliberately set it. `NoAction` for the same reason as the product pointer:
   /// `foldersService.deleteFolder` carries it up first (MOTIR-5821). Same-project
   /// is enforced by `trg_project_planner_bug_destination_folder_tenancy`.
-  plannerBugDestinationFolderId String?         @map("planner_bug_destination_folder_id")
-  plannerBugDestinationFolder   Folder?         @relation("ProjectPlannerBugDestinationFolder", fields: [plannerBugDestinationFolderId], references: [id], onDelete: NoAction)
+  plannerBugDestinationFolderId String?                   @map("planner_bug_destination_folder_id")
+  plannerBugDestinationFolder   Folder?                   @relation("ProjectPlannerBugDestinationFolder", fields: [plannerBugDestinationFolderId], references: [id], onDelete: NoAction)
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3012,91 +3017,93 @@ model WorkItem {
   createdAt             DateTime                      @default(now())
   updatedAt             DateTime                      @updatedAt
 
-  workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent               WorkItem?                 @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
-  children             WorkItem[]                @relation("WorkItemParent")
+  workspace                Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project                  Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent                   WorkItem?                 @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
+  children                 WorkItem[]                @relation("WorkItemParent")
   // NoAction, as `parent` is: a folder still holding filed items cannot be
   // deleted; the service files them up first, in the same transaction.
-  folder               Folder?                   @relation("WorkItemFolder", fields: [folderId], references: [id], onDelete: NoAction)
-  assignee             User?                     @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  reporter             User                      @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  folder                   Folder?                   @relation("WorkItemFolder", fields: [folderId], references: [id], onDelete: NoAction)
+  assignee                 User?                     @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter                 User                      @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
   // Triage submitter (Subtask 6.11.4) — the real human who submitted a triage
   // item (member or, via 6.12, a signed-in non-member). SetNull so a departed
   // submitter never deletes the work item (the reporter is the durable owner).
-  submittedBy          User?                     @relation("WorkItemTriageSubmitter", fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  submittedBy              User?                     @relation("WorkItemTriageSubmitter", fields: [submittedByUserId], references: [id], onDelete: SetNull)
   // The sprint side of the association. Modelled on BOTH sides (Sprint.workItems
   // back-relation) with the SetNull action the migration uses, so `migrate dev`
   // reports "No difference detected" — the FK-drift rule (bug-attachment-fk-migration-drift).
-  sprint               Sprint?                   @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  sprint                   Sprint?                   @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   // At-completion sprint-report snapshot rows (bug-sprint-report-incomplete-
   // list-zero-after-carry-over). One row per sprint this issue was a member of
   // at the moment that sprint completed; Cascade so hard-deleting an issue
   // removes its frozen report rows with it (the FK is modelled here + on
   // SprintReportEntry to keep `migrate dev` drift-free).
-  sprintReportEntries  SprintReportEntry[]
+  sprintReportEntries      SprintReportEntry[]
   // Back-relations for WorkItemLink (Subtask 1.4.3). Two named relations
   // because there are two distinct WorkItem↔WorkItemLink edges (from/to).
   // Cascading delete on both sides: removing an issue removes its links.
-  linksFrom            WorkItemLink[]            @relation("LinksFrom")
-  linksTo              WorkItemLink[]            @relation("LinksTo")
+  linksFrom                WorkItemLink[]            @relation("LinksFrom")
+  linksTo                  WorkItemLink[]            @relation("LinksTo")
   // Audit trail (Subtask 1.4.6). A work item accrues many revision rows; the
   // FK cascades so hard-deleting an issue removes its history with it.
-  revisions            WorkItemRevision[]
+  revisions                WorkItemRevision[]
   // Comment thread (Subtask 5.1.1). Comments die with the issue (Cascade) —
   // the rare hard-delete path; issues are soft-archived in practice.
-  comments             Comment[]
+  comments                 Comment[]
   // Issue attachments (Subtask 5.2.1). SetNull — NOT cascade: hard-deleting an
   // issue must leave the attachment rows behind (unlinked) so the orphan-GC
   // (5.2.7) can remove their blobs too; a cascade would strand the blobs.
-  attachments          Attachment[]
+  attachments              Attachment[]
   // Story-acceptance videos (Story MOTIR-1627 · MOTIR-1629) — evidence rows for
   // a STORY. Cascade with the story: deleting the story removes its evidence
   // rows (the underlying video Attachment is unlinked/GC-reclaimed separately).
-  acceptanceEvidences  AcceptanceEvidence[]
+  acceptanceEvidences      AcceptanceEvidence[]
   // Published design results (Story MOTIR-2664 · MOTIR-2666) — evidence rows
   // for THIS work item. Unlike acceptance evidence, which rolls a subtask key
   // UP to its parent story, a design result belongs to the card that produced
   // it (docs/decisions/design-result.md §3), so this relation hangs off every
   // leaf, not only stories. Cascade with the item.
-  designEvidences      DesignEvidence[]
+  designEvidences          DesignEvidence[]
   /// How-to-test records, one current per repository (MOTIR-5328). Cascade.
-  testInstructions     TestInstructions[]
+  testInstructions         TestInstructions[]
   /// Approval gates hanging off this card (the per-card read).
-  approvalGates        ApprovalGate[]
+  approvalGates            ApprovalGate[]
+  /// Decision pages this work item published (Story MOTIR-5761). Cascade.
+  decisionPagePublications DecisionPagePublication[]
   /// What each Revise on this design card did about an automatic hosted re-run
   /// (MOTIR-700) — the "re-running" / "skipped" line.
-  designAutoReruns     DesignAutoRerun[]
+  designAutoReruns         DesignAutoRerun[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
   // the issue: label/component joins are pure association rows, watcher rows
   // are notification substrate.
-  labels               WorkItemLabel[]
-  components           WorkItemComponent[]
-  watchers             Watcher[]
+  labels                   WorkItemLabel[]
+  components               WorkItemComponent[]
+  watchers                 Watcher[]
   // Custom-field values (Story 5.3). One row per (issue, field) pair; the FK
   // cascades so deleting an issue takes its custom values with it.
-  customFieldValues    CustomFieldValue[]
+  customFieldValues        CustomFieldValue[]
   // Automation execution audit rows that name this issue as the trigger
   // (Story 6.6). SetNull, not Cascade: the audit log outlives the work item
   // (the rule's history is kept; the deleted item renders a tombstone), so the
   // FK nulls rather than deleting the execution row.
-  automationExecutions AutomationRuleExecution[]
+  automationExecutions     AutomationRuleExecution[]
   // In-app notifications that deep-link to this issue (Story 5.7 · Subtask
   // 5.7.2). Cascade — a hard-deleted issue takes its notification rows with
   // it (the deep-link target would 404 otherwise), the comments pattern. The
   // FK is nullable on the notification side (non-item notifications stay
   // modellable), so this back-relation lists only the rows that name the issue.
-  notifications        Notification[]
+  notifications            Notification[]
   // Public-request upvotes (Story 6.12 · Subtask 6.12.3). A public request IS a
   // triage `work_item`; cross-org accounts upvote it (the demand signal the
   // 6.11.3 queue sorts by, wired in 6.12.6). Cascade — votes die with the item
   // (the comments / notifications pattern). Modelled on both sides per the
   // FK-`@relation` rule.
-  publicRequestVotes   PublicRequestVote[]
+  publicRequestVotes       PublicRequestVote[]
   // Plan proposals targeting this work item (Story 7.21): a `modify`/`remove`
   // points at the live row; SetNull on the FK so archiving the target leaves the
   // PlanItem (history) intact. Modelled both sides per the FK-`@relation` rule.
-  planItems            PlanItem[]                @relation("PlanItemWorkItem")
+  planItems                PlanItem[]                @relation("PlanItemWorkItem")
   // GitHub pull requests linked to this work item (Story 7.10 · MOTIR-891) — the
   // PR→work-item link the status sync (MOTIR-892) + CI loop (MOTIR-894) drive.
   // SetNull on delete (PR history survives). Modelled both sides per the
@@ -3106,18 +3113,18 @@ model WorkItem {
   // resolves through. CASCADE on delete — if the work item is deleted its
   // mapping row goes too, so a re-import re-creates it. Modelled both sides per
   // the FK-`@relation` rule.
-  importedIssues       ImportedIssue[]
+  importedIssues           ImportedIssue[]
   // The semantic-search SIDECAR (Story MOTIR-2694 · MOTIR-2696, per
   // docs/decisions/plan-tree-embeddings.md §4) — at most ONE row per item,
   // holding the vector derived from this item's title + description. Cascade:
   // the derivation dies with the row it describes. A MISSING row is the honest
   // representation of "not a candidate yet" — see WorkItemEmbedding's header.
-  embedding            WorkItemEmbedding?
+  embedding                WorkItemEmbedding?
   // The planning-target LEASE (Story MOTIR-2786 · MOTIR-2787) — at most ONE, the
   // exclusion that stops two planning sessions expanding the same item. Cascade:
   // a deleted item cannot be held. Modelled both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
-  planTargetLock       PlanTargetLock?
+  planTargetLock           PlanTargetLock?
   // WHERE this item's work ships, as REFERENCES to the project's repository rows
   // (Story MOTIR-2732 · MOTIR-3039, ADR `docs/decisions/work-item-repository-set.md`
   // "Amendment 2026-08-18"). Ordered by `WorkItemRepo.position`; position 0 is the
@@ -3126,21 +3133,21 @@ model WorkItem {
   // the expand -> contract sequence the columns retire through. Cascade: a deleted
   // item's references are not a fact about anything. Modelled both sides per the
   // FK-`@relation` rule.
-  repositories         WorkItemRepo[]
-  deliveries           WorkItemDelivery[]
+  repositories             WorkItemRepo[]
+  deliveries               WorkItemDelivery[]
   // The CI feedback comment this card carries per (change request, head commit)
   // — MOTIR-3770. Cascade: a deleted card's feedback rows are not a fact.
-  ciFeedbackComments   GithubCiFeedbackComment[]
+  ciFeedbackComments       GithubCiFeedbackComment[]
   // The card's own TO-DO LIST (Story MOTIR-3808 · MOTIR-3813) — the ordered
   // steps of its work, each one operation. Cascade with the card, exactly as
   // `comments` does: a deleted card's steps are not a fact about anything.
-  todos                WorkItemTodo[]
+  todos                    WorkItemTodo[]
   /// The LEGS naming this card across every run that worked it (Story
   /// MOTIR-1789). `SetNull` on the leg, not cascade: a run's history outlives a
   /// deleted card, and the leg still says which key it was.
-  dispatchRunCards     DispatchRunCard[]
+  dispatchRunCards         DispatchRunCard[]
   /// Runs that were pointed AT this card as their scope. Also `SetNull`.
-  dispatchRunScopes    DispatchRun[]             @relation("DispatchRunScope")
+  dispatchRunScopes        DispatchRun[]             @relation("DispatchRunScope")
 
   // The monitor issues this bug was filed for (MOTIR-4929 · MOTIR-5576). MANY
   // issues may point at one work item (MOTIR-4932's manual link), one issue at
@@ -5545,7 +5552,10 @@ model ApprovalGate {
   /// MOTIR-2920's "what is on me across everything" surface, which is the
   /// caller it was added for.
   /// The automatic hosted re-run a Revise on this gate caused or skipped (MOTIR-700).
-  designAutoRerun DesignAutoRerun?
+  designAutoRerun    DesignAutoRerun?
+  /// The page versions this gate FROZE at its approval (Story MOTIR-5761 ·
+  /// MOTIR-7428). SetNull on the version side: the freeze outlives the row.
+  frozenPageVersions PageVersion[]    @relation("PageVersionFrozenByGate")
 
   @@index([workspaceId, state])
   /// THE ROUTING READ's index (MOTIR-4791) — the Approvals tab asks for one
@@ -11875,19 +11885,21 @@ model Page {
   archiveRootId   String?   @map("archive_root_id")
   archivedById    String?   @map("archived_by_id")
 
-  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parentPage  Page?         @relation("PageParent", fields: [parentPageId], references: [id], onDelete: NoAction)
-  childPages  Page[]        @relation("PageParent")
+  workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentPage           Page?                     @relation("PageParent", fields: [parentPageId], references: [id], onDelete: NoAction)
+  childPages           Page[]                    @relation("PageParent")
   // The page's images (MOTIR-7279) — attachments it owns from upload.
-  attachments Attachment[]
-  folder      Folder?       @relation("PageFolder", fields: [folderId], references: [id], onDelete: NoAction)
-  createdBy   User          @relation("PageCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy   User          @relation("PageUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  attachments          Attachment[]
+  folder               Folder?                   @relation("PageFolder", fields: [folderId], references: [id], onDelete: NoAction)
+  createdBy            User                      @relation("PageCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy            User                      @relation("PageUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
   // SET NULL: deleting the user forgets who archived the page, never that it is.
-  archivedBy  User?         @relation("PageArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
+  archivedBy           User?                     @relation("PageArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
   // The page's history (Story MOTIR-5754). Cascade: deleting a page takes them.
-  versions    PageVersion[]
+  versions             PageVersion[]
+  // Decision publications of this page (Story MOTIR-5761). Cascade.
+  decisionPublications DecisionPagePublication[]
 
   @@index([projectId, parentPageId, position, id])
   @@index([projectId, folderId, position, id])
@@ -11908,29 +11920,74 @@ model Page {
 // number present whenever the id is. Cotenancy of the page and the restore
 // source is a SECURITY DEFINER trigger; RLS is the `page` pair.
 model PageVersion {
-  id                    String   @id @default(cuid())
-  workspaceId           String   @map("workspace_id")
-  projectId             String   @map("project_id")
-  pageId                String   @map("page_id")
+  id                    String    @id @default(cuid())
+  workspaceId           String    @map("workspace_id")
+  projectId             String    @map("project_id")
+  pageId                String    @map("page_id")
   number                Int
-  authorId              String   @map("author_id")
-  bodyState             Bytes    @map("body_state")
-  bodyMarkdown          String   @map("body_markdown") @db.Text
-  startedAt             DateTime @map("started_at")
-  savedAt               DateTime @map("saved_at")
-  restoredFromVersionId String?  @map("restored_from_version_id")
-  restoredFromNumber    Int?     @map("restored_from_number")
+  authorId              String    @map("author_id")
+  bodyState             Bytes     @map("body_state")
+  bodyMarkdown          String    @map("body_markdown") @db.Text
+  startedAt             DateTime  @map("started_at")
+  savedAt               DateTime  @map("saved_at")
+  restoredFromVersionId String?   @map("restored_from_version_id")
+  restoredFromNumber    Int?      @map("restored_from_number")
+  // THE MARKS (Story MOTIR-5761 · MOTIR-7428, `docs/decisions/pages.md`
+  // AMENDMENT 3). SEALED by a decision publish: no save extends it, the cap never
+  // prunes it. FROZEN by the gate that approved it (`frozenByGateId`): also its
+  // page cannot be deleted while it holds one. The CHECK
+  // `page_version_frozen_requires_sealed` keeps a frozen version sealed.
+  sealedAt              DateTime? @map("sealed_at")
+  frozenAt              DateTime? @map("frozen_at")
+  frozenByGateId        String?   @map("frozen_by_gate_id")
 
-  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  page         Page          @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  author       User          @relation("PageVersionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
-  restoredFrom PageVersion?  @relation("PageVersionRestore", fields: [restoredFromVersionId], references: [id], onDelete: SetNull)
-  restoredInto PageVersion[] @relation("PageVersionRestore")
+  workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  page                 Page                      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  author               User                      @relation("PageVersionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  restoredFrom         PageVersion?              @relation("PageVersionRestore", fields: [restoredFromVersionId], references: [id], onDelete: SetNull)
+  restoredInto         PageVersion[]             @relation("PageVersionRestore")
+  frozenByGate         ApprovalGate?             @relation("PageVersionFrozenByGate", fields: [frozenByGateId], references: [id], onDelete: SetNull)
+  // The decision publications that name this version (MOTIR-7428).
+  decisionPublications DecisionPagePublication[]
 
   @@unique([pageId, number])
   @@index([workspaceId])
   @@map("page_version")
+}
+
+// DECISION PAGE PUBLICATIONS (Story MOTIR-5761 · MOTIR-7428).
+//
+// `docs/decisions/approval-gates.md` §8 NINTH AMENDMENT, clause 1: one row per
+// `publish_decision_page` — which version of which page a work item published,
+// by whom and when. Append-only; the NEWEST row for a work item is its published
+// page. Cotenancy (page, version and work item in the row's project, the version
+// of the row's page) is a SECURITY DEFINER trigger; RLS is the `page` pair.
+//
+// `pageVersion` is NoAction, not Restrict: it refuses deleting a published
+// version on its own, but is checked at the end of the statement, so a page,
+// project or workspace delete that cascades through both rows still succeeds.
+model DecisionPagePublication {
+  id            String   @id @default(cuid())
+  workspaceId   String   @map("workspace_id")
+  projectId     String   @map("project_id")
+  workItemId    String   @map("work_item_id")
+  pageId        String   @map("page_id")
+  pageVersionId String   @map("page_version_id")
+  publishedById String   @map("published_by_id")
+  publishedAt   DateTime @default(now()) @map("published_at")
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem    WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  page        Page        @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  pageVersion PageVersion @relation(fields: [pageVersionId], references: [id], onDelete: NoAction)
+  publishedBy User        @relation("DecisionPagePublisher", fields: [publishedById], references: [id], onDelete: Restrict)
+
+  @@index([workItemId, publishedAt(sort: Desc)])
+  @@index([pageVersionId])
+  @@index([workspaceId])
+  @@map("decision_page_publication")
 }
 
 model MonitorInstallation {

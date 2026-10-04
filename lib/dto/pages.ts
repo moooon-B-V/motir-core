@@ -300,6 +300,12 @@ export interface PageVersionListItemDto {
   restoredFromKept: boolean;
   /** Whether this is the page's newest version — its current content. */
   isCurrent: boolean;
+  /**
+   * The version's DECISION TAG (MOTIR-7436): `frozen` — an approval froze it; `published`
+   * — an awaiting decision asks about it. The card's key either way; null for every other
+   * version, including one whose decision was sent back.
+   */
+  decisionTag?: { kind: 'frozen' | 'published'; key: string } | null;
 }
 
 /** One page of a page's history, newest first. */
@@ -371,11 +377,34 @@ export interface PageMarkdownDto {
   markdown: string;
   /** ISO-8601. */
   updatedAt: string;
+  /**
+   * Present ONLY on a read of one version (`get_page { version }`, MOTIR-7429):
+   * the version whose body `markdown` then carries, with its decision marks
+   * (`pages.md` AMENDMENT 3). Absent on a read of the current body, so that
+   * read stays exactly what it was.
+   */
+  version?: PageMarkdownVersionDto;
+}
+
+/** The version a `get_page { version }` read returned. */
+export interface PageMarkdownVersionDto {
+  number: number;
+  authorId: string;
+  /** The author's display name; `''` only if the batch read did not return them. */
+  authorName: string;
+  /** ISO-8601. */
+  savedAt: string;
+  /** A decision publish sealed it: no save extends it and the cap never prunes it. */
+  sealed: boolean;
+  /** An approval froze it: it is the text a person approved. */
+  frozen: boolean;
 }
 
 export interface GetPageMarkdownInput {
   projectId: string;
   pageId: string;
+  /** A version NUMBER: read that version's body instead of the current one. */
+  version?: number;
 }
 
 export interface SavePageMarkdownInput {

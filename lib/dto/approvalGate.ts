@@ -552,8 +552,9 @@ export interface AcceptanceResultSubjectSummaryDTO {
  */
 export interface DecisionApprovalSubjectSummaryDTO {
   kind: 'decision_approval';
-  /** `one` — a single document; anything else, the gate cannot be approved. */
-  outcome: 'one' | 'none' | 'several' | 'unreadable';
+  /** `one` — a single document; `page` — a published page version (MOTIR-7436); anything
+   *  else, the gate cannot be approved. */
+  outcome: 'one' | 'page' | 'none' | 'several' | 'unreadable';
   /** `owner/name#number` of the pull request the answer was read off. */
   repo: string;
   number: number;
@@ -565,6 +566,8 @@ export interface DecisionApprovalSubjectSummaryDTO {
   blobSha: string | null;
   /** How many documents the head writes — what a `several` row counts (MOTIR-5679). */
   documentCount: number;
+  /** For `page`: the published version's number (the row reads *title · page, version N*). */
+  versionNumber?: number;
 }
 
 /**

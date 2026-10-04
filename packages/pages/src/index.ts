@@ -24,6 +24,7 @@ export * from './save';
 export * from './move';
 export * from './versions';
 export * from './archive';
+export * from './delete';
 export {
   PageEditor,
   type PageEditorMessages,

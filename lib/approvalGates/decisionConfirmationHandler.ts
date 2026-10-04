@@ -9,6 +9,8 @@ import { parseDecisionRecord, type ParsedDecision } from '@/lib/approvalGates/de
 import { ApprovalGateStaleSubjectError } from '@/lib/approvalGates/errors';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
+import { pageStoreFor } from '@/lib/pages';
 import { requireArgsCard, requireGateCard } from './gateCard';
 
 // THE `decision_confirmation` HANDLER (Story MOTIR-5871 · Subtask MOTIR-5954; ADR
@@ -89,6 +91,13 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
       requireGateCard(gate, 'decisionConfirmationHandler'),
       tx,
     );
+    // A PAGE record is frozen in the deciding write (MOTIR-7435), under the page's
+    // lock — the one every save takes — so a racing save lands before the freeze
+    // or starts the next version; "confirmed" and "frozen" cannot diverge.
+    if (confirmedRecord.kind === 'page') {
+      await pageStoreFor(tx).lockPage(confirmedRecord.pageId);
+      await pageVersionRepository.freezeVersion(confirmedRecord.versionId, gate.id, new Date(), tx);
+    }
     if (resolvedStatusKey === null) {
       return {
         statusWritten: null,

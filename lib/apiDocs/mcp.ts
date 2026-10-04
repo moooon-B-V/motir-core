@@ -620,8 +620,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   get_page: {
     summary:
-      'Read one page as markdown — its title, where it is filed, its revision and newest version — to read it or to write it back.',
-    descriptionFingerprint: '38b27a805548',
+      'Read one page as markdown — its title, where it is filed, its revision and newest version — to read it or to write it back; or read one version by number.',
+    descriptionFingerprint: '1ddf57794b56',
   },
   create_page: {
     summary:
@@ -632,6 +632,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary:
       'Replace a page’s whole body with markdown at the revision you read; a page saved since is refused, not merged.',
     descriptionFingerprint: 'aac141bef380',
+  },
+  publish_decision_page: {
+    summary:
+      'Publish a page as a decision card’s decision: seals its newest version and, on an agent card, asks a person to approve it.',
+    descriptionFingerprint: 'bdaf778081be',
   },
   search_work_items_semantic: {
     summary:

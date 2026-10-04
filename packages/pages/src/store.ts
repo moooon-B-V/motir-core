@@ -128,6 +128,13 @@ export interface PageVersionRow {
   readonly restoredFromVersionId: string | null;
   /** The source's number, kept when the source is pruned; `null` unless a restore. */
   readonly restoredFromNumber: number | null;
+  /**
+   * When a decision publish SEALED it (`pages.md` AMENDMENT 3): no save extends
+   * a sealed version and the cap never prunes it. `null` while unsealed.
+   */
+  readonly sealedAt: Date | null;
+  /** When an approval FROZE it — always after `sealedAt`. `null` while unfrozen. */
+  readonly frozenAt: Date | null;
 }
 
 /** A version with its snapshot, as a restore reads it. */
@@ -226,8 +233,18 @@ export interface PageStore {
   findVersion(pageId: string, number: number): Promise<PageVersionWithBody | null>;
   /** How many versions a page keeps. */
   countVersions(pageId: string): Promise<number>;
-  /** Deletes a page's oldest versions until `keep` remain. */
-  deleteOldestVersions(pageId: string, keep: number): Promise<void>;
+  /**
+   * Deletes a page's oldest UNMARKED versions (neither sealed nor frozen) until
+   * `keep` remain or only marked ones and the NEWEST are left — the newest is
+   * the version a save just wrote, never a candidate — so a page may keep more than
+   * `keep` when more than `keep` are marked (`pages.md` AMENDMENT 3).
+   */
+  deleteOldestUnmarkedVersions(pageId: string, keep: number): Promise<void>;
+  /**
+   * The first of `pageIds` holding a FROZEN version (an approved decision,
+   * `pages.md` AMENDMENT 3); `null` when none does.
+   */
+  findPageWithFrozenVersion(pageIds: readonly string[]): Promise<string | null>;
   /** Rewrites a page's derived link rows (§8.1); a no-op until the linking epic lands. */
   replaceDerivedLinks(pageId: string, links: readonly DerivedPageLink[]): Promise<void>;
   /**

@@ -9,8 +9,10 @@ import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 
 // PageView's own ⋯ and the archived banner read the router (MOTIR-7423).
+const nav = vi.hoisted(() => ({ search: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => nav.search,
 }));
 
 // The page's HISTORY PANEL (Story MOTIR-5754 · MOTIR-7387) —
@@ -94,6 +96,7 @@ const historyButton = () => screen.getByRole('button', { name: 'History' });
 const list = () => screen.findByRole('list', { name: 'Versions of this page' });
 
 beforeEach(() => {
+  nav.search = new URLSearchParams();
   for (const key of Object.keys(answers)) delete answers[key];
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
@@ -180,7 +183,7 @@ describe('paging', () => {
     await mount();
     fireEvent.click(historyButton());
     await list();
-    expect(screen.getByText('A page keeps its latest 100 versions.')).toBeTruthy();
+    expect(screen.getByText(en.pages.history.keepsLatest)).toBeTruthy();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
@@ -395,6 +398,45 @@ describe('edges', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     await act(async () => releaseVersion(json({ ...THREE.items[1], bodyState: BODY_STATE })));
     expect(screen.queryByTestId('page-version-view')).toBeNull();
+  });
+});
+
+describe('decisions (Story MOTIR-5761 · MOTIR-7436, delta 5)', () => {
+  it('a version a decision holds carries a tag linking to its card; frozen and published read apart', async () => {
+    answer(
+      '/api/pages/page-1/versions',
+      json({
+        items: [
+          version(3, { isCurrent: true }),
+          version(2, { decisionTag: { kind: 'frozen', key: 'ACME-12' } }),
+          version(1, { decisionTag: { kind: 'published', key: 'ACME-9' } }),
+        ],
+        nextBefore: null,
+      }),
+    );
+    await mount();
+    fireEvent.click(historyButton());
+    await list();
+    const frozen = screen.getByRole('link', {
+      name: en.pages.history.tag.frozenLabel.replace(/\{key\}/g, 'ACME-12'),
+    });
+    expect(frozen.getAttribute('href')).toBe('/items/ACME-12');
+    expect(frozen.textContent).toContain(en.pages.history.tag.frozen);
+    const published = screen.getByRole('link', {
+      name: en.pages.history.tag.publishedLabel.replace(/\{key\}/g, 'ACME-9'),
+    });
+    expect(published.getAttribute('href')).toBe('/items/ACME-9');
+    expect(screen.getAllByTestId(/^page-version-tag-/)).toHaveLength(2);
+  });
+
+  it('a ?version= link opens History on that version beside the page', async () => {
+    nav.search = new URLSearchParams('version=1');
+    answer('/api/pages/page-1/versions', json(THREE));
+    answer('/api/pages/page-1/versions/1', json({ ...THREE.items[2], bodyState: BODY_STATE }));
+    await mount({ bodyState: EMPTY_STATE });
+    expect(historyButton()?.getAttribute('aria-expanded')).toBe('true');
+    const view = await screen.findByTestId('page-version-view');
+    await within(view).findByText('Tag the commit, then push the tag.');
   });
 });
 
