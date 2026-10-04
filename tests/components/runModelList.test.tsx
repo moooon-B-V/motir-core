@@ -251,6 +251,33 @@ describe('RunModelList', () => {
     expect(rowOf('kimi-k2.6').textContent).toContain('Added just now by you');
   });
 
+  it('Cancel and Escape close each dialog without calling an action', async () => {
+    renderList(list());
+    let dialog = await openAdd();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    fireEvent.click(within(rowOf('glm-5.2')).getByRole('button', { name: 'Remove glm-5.2' }));
+    dialog = await screen.findByRole('alertdialog');
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    fireEvent.click(within(rowOf('glm-5.2')).getByRole('button', { name: 'Remove glm-5.2' }));
+    dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(addRunModelAction).not.toHaveBeenCalled();
+    expect(removeRunModelAction).not.toHaveBeenCalled();
+  });
+
+  it('Panel 9: the empty state’s Add opens the picker and adds', async () => {
+    renderList(list({ entries: [] }));
+    fireEvent.click(
+      within(screen.getByTestId('run-model-list-empty')).getByRole('button', { name: 'Add model' }),
+    );
+    const dialog = await screen.findByRole('alertdialog');
+    await pickAndAdd(dialog, 'kimi-k2.6', 'first');
+    expect(addRunModelAction).toHaveBeenCalledWith('kimi-k2.6', 'first');
+  });
+
   it('Panel 11: unavailable — the error card with Retry re-reads', async () => {
     render(<RunModelListUnavailable />);
     expect(screen.getByText('Couldn’t load hosted-run models')).toBeTruthy();

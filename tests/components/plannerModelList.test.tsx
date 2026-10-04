@@ -264,6 +264,88 @@ describe('PlannerModelList', () => {
     expect(rowOf('kimi-k2.6').textContent).toContain('Added just now by you');
   });
 
+  it('Cancel and Escape close each dialog without calling an action', async () => {
+    renderList(list());
+    let dialog = await openAdd();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    dialog = await openAdd();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    fireEvent.click(within(rowOf('glm-5.2')).getByRole('button', { name: 'Remove glm-5.2' }));
+    dialog = await screen.findByRole('alertdialog');
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    fireEvent.click(within(rowOf('glm-5.2')).getByRole('button', { name: 'Remove glm-5.2' }));
+    dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(addPlannerListModelAction).not.toHaveBeenCalled();
+    expect(removePlannerListModelAction).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['UNAVAILABLE', 'motir-ai didn’t respond, so nothing was changed. Try again.'],
+    ['NOT_PERMITTED', 'Only a superadmin can change this list.'],
+  ])('a %s add keeps the dialog open with its line', async (code, text) => {
+    addPlannerListModelAction.mockResolvedValueOnce({ ok: false, code });
+    renderList(list());
+    const dialog = await openAdd();
+    fireEvent.change(within(dialog).getByLabelText('Model id'), { target: { value: 'x' } });
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'r' } });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Add model' }));
+    });
+    expect(screen.getByRole('alert').textContent).toBe(text);
+  });
+
+  it('an IN_USE audience motir-ai names that the console does not know is shown as sent', async () => {
+    removePlannerListModelAction.mockResolvedValueOnce({
+      ok: false,
+      code: 'IN_USE',
+      audiences: ['partner'],
+    });
+    renderList(list());
+    await removeWith('glm-5.2', 'r');
+    expect(within(rowOf('glm-5.2')).getByRole('alert').textContent).toContain('partner plan on');
+  });
+
+  it('an unknown adder, a not-offered entry with no reason, and a fallback no audience uses', () => {
+    renderList(
+      list({
+        entries: [
+          entry('claude-opus-5-5', { fallback: true }),
+          entry('mystery-1', { offered: false, reason: null, seeded: false, addedBy: null }),
+        ],
+      }),
+    );
+    const opus = rowOf('claude-opus-5-5');
+    expect(opus.textContent).toContain('Fallback for every audience');
+    expect(opus.textContent).not.toContain('Nothing');
+    const mystery = rowOf('mystery-1');
+    expect(mystery.textContent).toContain('Not offered');
+    expect(mystery.textContent).toMatch(/Added [^b]*$/);
+  });
+
+  it('a NOT_QUALIFIED add with an unrecognised reason shows motir-ai’s detail', async () => {
+    addPlannerListModelAction.mockResolvedValueOnce({
+      ok: false,
+      code: 'NOT_QUALIFIED',
+      reason: null,
+      detail: 'a reason this console has no copy for',
+    });
+    renderList(list());
+    const dialog = await openAdd();
+    fireEvent.change(within(dialog).getByLabelText('Model id'), { target: { value: 'x' } });
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'r' } });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Add model' }));
+    });
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Not added: a reason this console has no copy for',
+    );
+  });
+
   it('Panel 11: unavailable — the error card with Retry re-reads', async () => {
     render(<PlannerModelListUnavailable />);
     expect(screen.getByText('Couldn’t load the planning-model list')).toBeTruthy();
