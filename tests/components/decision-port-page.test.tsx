@@ -103,6 +103,14 @@ describe('a published page version, awaiting (delta 1)', () => {
       plain(fill(dec.consequencePage, { number: 3, key: 'ACME-12' })),
     );
   });
+
+  it('draws no pull-request group and no "No linked pull request" prompt', () => {
+    renderPort();
+    expect(
+      screen.queryByRole('group', { name: en.github.development.pullRequestsGroup }),
+    ).toBeNull();
+    expect(screen.queryByText(en.github.development.emptyTitle)).toBeNull();
+  });
 });
 
 describe('band 3 over a page (delta 1)', () => {

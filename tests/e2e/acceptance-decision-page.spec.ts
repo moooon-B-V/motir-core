@@ -188,12 +188,14 @@ test('an agent’s decision published as a page waits for a person; Approve free
       `/pages/${s.pageId}?version=1`,
     );
     await expect(dev.getByText(fill(dec.headMeta.pageNoRun, { number: 1 }))).toBeVisible();
-    // No pull request anywhere: the group says so, and the band asks about the page.
+    // No pull request anywhere, and none is expected: no pull-request group and no "No
+    // linked pull request" prompt under the page. The band asks about the page.
     await expect(
-      dev
-        .getByRole('group', { name: en.github.development.pullRequestsGroup })
-        .getByRole('heading', { name: en.github.development.emptyTitle }),
-    ).toBeVisible();
+      dev.getByRole('group', { name: en.github.development.pullRequestsGroup }),
+    ).toHaveCount(0);
+    await expect(dev.getByRole('heading', { name: en.github.development.emptyTitle })).toHaveCount(
+      0,
+    );
     await expect(
       dev.getByText(en.approvalGate.pullRequestApproval.cta.bodyDecisionPage),
     ).toBeVisible();
