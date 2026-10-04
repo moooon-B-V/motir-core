@@ -77,6 +77,8 @@ describe('every production mount of the approval frame NAMES who it is waiting o
       'components/approvals/ChoiceGate.tsx',
       // The decision's confirm kind frame (MOTIR-5960) — mounted by the overlay and the page.
       'components/approvals/DecisionConfirmGate.tsx',
+      // The manual-work kind frame (MOTIR-7478) — mounted by the overlay and the page.
+      'components/approvals/ManualWorkGate.tsx',
       'components/github/DevelopmentGateFrame.tsx',
     ]);
   });

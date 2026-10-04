@@ -8,8 +8,9 @@ import { createTestPerson } from './testPerson';
 import { seedGithubInstallation } from './github-seed';
 import { E2E_PROVISIONING_ORG } from './github-const';
 
-// THE APPROVE-AND-MERGE E2E SEED (Story MOTIR-4909 · Subtask MOTIR-5487), for the acceptance
-// receipt `acceptance-approve-and-merge.spec.ts` records.
+// THE APPROVE-AND-MERGE E2E SEED (Story MOTIR-4909 · Subtask MOTIR-5487), for the walk
+// `cloud-approve-and-merge.spec.ts` drives (the story's receipt, promoted to the cloud lane by
+// Story MOTIR-7460 — docs/acceptance-lane-triage.md § MOTIR-7460).
 //
 // WHAT GOES THROUGH A SERVICE, AND WHAT IS LEFT TO THE SPEC:
 //   * the people, workspace, project, membership and cards — their services;

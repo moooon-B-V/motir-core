@@ -40,11 +40,12 @@ import {
   DISPOSITION_TONE,
   EVENT_STEP,
   RUN_STATUS_TONE,
-  SKIP_REASON_KEY,
   isLiveRun,
+  skipReasonMessage,
   type CardStep,
 } from '@/lib/runs/timeline';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { workbenchTabHref } from '@/lib/workbench/tab';
 import type { ReaderRoutes } from '@/lib/visitor/routes';
 
 // THE RUN SECTION on a work item (Story MOTIR-1789 · MOTIR-1796) — what the
@@ -372,9 +373,7 @@ export function RunSection({
       </div>
 
       {leg?.disposition === 'skipped' && leg.skipReason ? (
-        <p className="font-sans text-sm text-(--el-text-secondary)">
-          {t(`skipReason.${SKIP_REASON_KEY[leg.skipReason]}`)}
-        </p>
+        <SkipLine leg={leg} skipReason={leg.skipReason} t={t} />
       ) : null}
 
       {/* ⚠️ THE LINE THAT SAYS THIS CARD IS ONE OF N — the fact a person opening
@@ -734,6 +733,40 @@ function ScopeBlock({
         {t('scope.door', { key: itemKey })}
       </Link>
     </section>
+  );
+}
+
+/**
+ * The skipped leg's line. A manual leg names who it waits on (MOTIR-7477), and
+ * when that is the READER the sentence is the way to the gate's row — their
+ * Workbench's **Waiting on you** (`?tab=approvals`). It links only then: another
+ * person's gate is on THEIR list, which a link to the reader's own would not show.
+ */
+function SkipLine({
+  leg,
+  skipReason,
+  t,
+}: {
+  leg: DispatchRunCardDto;
+  skipReason: NonNullable<DispatchRunCardDto['skipReason']>;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const message = skipReasonMessage({ skipReason, manualGate: leg.manualGate });
+  const text = t(message.key, message.values);
+  const toWaitingOnYou =
+    skipReason === 'needs_human' &&
+    leg.manualGate?.state === 'awaiting' &&
+    leg.manualGate.routedToReader;
+  return (
+    <p className="font-sans text-sm text-(--el-text-secondary)">
+      {toWaitingOnYou ? (
+        <Link className="text-(--el-link) underline" href={workbenchTabHref('approvals')}>
+          {text}
+        </Link>
+      ) : (
+        text
+      )}
+    </p>
   );
 }
 

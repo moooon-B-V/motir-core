@@ -253,3 +253,35 @@ describe('a DRILL leaves the run’s set', () => {
     expect(level.nodes.every((n) => n.parentId !== '__run-level__')).toBe(true);
   });
 });
+
+describe('a manual leg’s badge names who it waits on (MOTIR-7477)', () => {
+  const badgeText = (level: RoadmapLevel) => JSON.stringify(level.nodes);
+
+  it('waiting on you / waiting on {name} / marked done — never “needs a human”', async () => {
+    const level = await levelFor([
+      leg({
+        disposition: 'skipped',
+        skipReason: 'needs_human',
+        manualGate: { state: 'awaiting', name: 'Yue Zhu', routedToReader: true },
+      }),
+      leg({
+        id: 'leg_b',
+        key: 'MOTIR-1793',
+        workItemId: 'wi_b',
+        position: 1,
+        disposition: 'skipped',
+        skipReason: 'needs_human',
+        manualGate: { state: 'approved', name: 'Mara S.', routedToReader: false },
+      }),
+    ]);
+    const text = badgeText(level);
+    expect(text).toContain('Skipped — waiting on you.');
+    expect(text).toContain('Skipped — marked done by Mara S..');
+    expect(text).not.toContain('needs a human');
+  });
+
+  it('a leg with no gate reads as manual work', async () => {
+    const level = await levelFor([leg({ disposition: 'skipped', skipReason: 'needs_human' })]);
+    expect(badgeText(level)).toContain('Skipped — manual work.');
+  });
+});

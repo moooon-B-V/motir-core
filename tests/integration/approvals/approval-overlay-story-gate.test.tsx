@@ -412,6 +412,10 @@ function sourceFiles(dir: string): string[] {
 }
 
 const OVERLAY = 'components/approvals/ApprovalOverlay.tsx';
+// THE ONE NAMED EXCEPTION (MOTIR-7473 § 33.2; ADR `manual-work-gate.md` §5): a manual-work
+// gate's *Mark done* decides FROM THE ROW. It is held tight below — one call, inside
+// `MarkDoneButton`, sending `approve` only, drawn only for a manual-work subject.
+const ROW = 'components/approvals/ApprovalRow.tsx';
 
 describe('GUARD · ONE close seam', () => {
   // Esc, the scrim, the exit row's Close and the not-available arm's Close all
@@ -458,7 +462,7 @@ describe('GUARD · ONE decide path — no second approve control', () => {
       .filter((f) => codeOf(f).includes('decideApprovalGateAction('))
       .filter((f) => !f.endsWith('approvalGateActions.ts'))
       .sort();
-    expect(callers).toEqual([OVERLAY]);
+    expect(callers).toEqual([OVERLAY, ROW]);
   });
 
   // ⚠️ THE CHECK ABOVE READS A CALL, AND A DOOR IS ALSO PASSED AS A REFERENCE (Bug
@@ -480,7 +484,22 @@ describe('GUARD · ONE decide path — no second approve control', () => {
         ),
       )
       .sort();
-    expect(holders).toEqual([OVERLAY]);
+    expect(holders).toEqual([OVERLAY, ROW]);
+  });
+
+  it('the row holds the door for Mark done alone — one approve, drawn only for manual work (MOTIR-7473)', () => {
+    const row = codeOf(ROW);
+    expect(row.match(/decideApprovalGateAction\(/g)).toHaveLength(1);
+    const start = row.indexOf('function MarkDoneButton(');
+    expect(start).toBeGreaterThan(-1);
+    const body = row.slice(start, row.indexOf('\n}\n', start));
+    expect(body).toContain('decideApprovalGateAction(');
+    expect(body).toMatch(/decision: 'approve'/);
+    expect(body).not.toMatch(/request_changes|approveAndMergeAction/);
+    expect(row.match(/<MarkDoneButton\b/g)).toHaveLength(1);
+    expect(row).toMatch(
+      /manualPressable && manualSubject !== null \? \(\s*(\/\*[\s\S]*?\*\/\s*)?<MarkDoneButton/,
+    );
   });
 
   it('the Approvals list composes no frame of its own any more', () => {

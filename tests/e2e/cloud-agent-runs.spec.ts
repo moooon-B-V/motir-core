@@ -177,8 +177,10 @@ test('a run claims a story, and you can watch the whole set advance', async ({
     const canvas = page.getByRole('region', { name: 'The set' });
     await expect(canvas.getByText('Implemented').first()).toBeVisible();
     // The skipped member carries its REASON, not merely its state — a skip
-    // shown without one says nothing.
-    await expect(canvas.getByText('Skipped — needs a human.').first()).toBeVisible();
+    // shown without one says nothing. A manual leg names WHO it waits on
+    // (MOTIR-7477): the open raised its `manual_work` gate and assigned the
+    // unassigned card to the run's starter, who is the reader here.
+    await expect(canvas.getByText('Skipped — waiting on you.').first()).toBeVisible();
     await beat();
   });
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useId, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Bot, Copy, GripVertical, Pencil, Plus, Trash2, User } from 'lucide-react';
+import { Bot, Check, Copy, GripVertical, Pencil, Plus, Trash2, User } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
@@ -605,20 +605,48 @@ export function TodoRowBody({
  * control at all. `--el-input-readonly-bg` dims it, because a control that looks
  * tickable and is not is worse than no control.
  */
-export function TodoRowReadOnly({ row }: { row: TodoRowContent }) {
+export function TodoRowReadOnly({
+  row,
+  drawDone = false,
+}: {
+  row: TodoRowContent;
+  /**
+   * DRAW THE BOX BY STATE (Story MOTIR-7460 · MOTIR-7478; design § 33.3) — a REAL card's
+   * list read in a decision frame, where a ticked row is a fact the reader needs:
+   * `GuideTodoCanvas`'s static idiom, still not a control. A proposal never ticks, so
+   * its rows keep the plain inert box (the default).
+   */
+  drawDone?: boolean;
+}) {
   const [isExpanded, setExpanded] = useState(false);
   const notesId = useId();
+  const ticked = drawDone && row.done === true;
 
   return (
     <li
       data-testid="todo-row-readonly"
       className="grid grid-cols-[auto_1fr] items-start gap-2.5 border-t border-(--el-border) py-2.5 first:border-t-0"
     >
-      <span
-        aria-hidden
-        data-testid="todo-checkbox-inert"
-        className="mt-0.5 size-4 rounded-(--radius-control) border border-(--el-border-strong) bg-(--el-input-readonly-bg)"
-      />
+      {drawDone ? (
+        <span
+          aria-hidden
+          data-testid="todo-checkbox-inert"
+          data-todo-done={ticked ? 'true' : 'false'}
+          className={`mt-0.5 inline-flex size-4 items-center justify-center rounded-(--radius-control) border ${
+            ticked
+              ? 'border-(--el-accent) bg-(--el-accent) text-(--el-accent-text)'
+              : 'border-(--el-border-strong) bg-(--el-input-readonly-bg)'
+          }`}
+        >
+          {ticked ? <Check className="size-3" strokeWidth={3} aria-hidden /> : null}
+        </span>
+      ) : (
+        <span
+          aria-hidden
+          data-testid="todo-checkbox-inert"
+          className="mt-0.5 size-4 rounded-(--radius-control) border border-(--el-border-strong) bg-(--el-input-readonly-bg)"
+        />
+      )}
       <div className="min-w-0">
         <TodoRowBody
           row={row}

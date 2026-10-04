@@ -343,6 +343,10 @@ export type VerbNotOfferedReason =
   /** `request_changes` sent to a `plan_approval` gate (ADR §11.4, MOTIR-6035): a plan is
    *  changed by TALKING to the planner, never by a gate verb. */
   | 'request_changes_on_plan'
+  /** `request_changes` sent to a `manual_work` gate (MOTIR-7474;
+   *  `docs/decisions/manual-work-gate.md` §4): manual work is done or not done, and a
+   *  person who cannot do it says so on the card or in the guide. */
+  | 'request_changes_on_manual_work'
   /** `decline` sent to any kind but `plan_approval`, the one kind that offers it
    *  (ADR §11.4, MOTIR-6035). */
   | 'decline_on_other_kind'
@@ -378,6 +382,8 @@ export type VerbNotOfferedReason =
  *     gate without a verdict (MOTIR-6421, ADR §10d). Never raised for `source: github`.
  *   · `request_changes_on_plan` — `request_changes` sent to a `plan_approval` gate
  *     (MOTIR-6035, ADR §11.4): a plan is changed by a conversation, not a verb;
+ *   · `request_changes_on_manual_work` — `request_changes` sent to a `manual_work`
+ *     gate (MOTIR-7474): the work is done or not done, so there is nothing to refuse;
  *   · `decline_on_other_kind` — `decline` sent to any kind but `plan_approval`.
  *   · `request_changes_on_agent_review` — a PERSON's `request_changes` on an
  *     `agent_review` gate (ADR §12.3): only the review agent refuses one;

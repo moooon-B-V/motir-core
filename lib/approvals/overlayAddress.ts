@@ -53,6 +53,9 @@ export const APPROVAL_GATE_KINDS = [
   // *Continue without the review* hands over here, where the one decision on the kind is
   // made (§12.3; MOTIR-6323's rule that every decision is the overlay's).
   'agent_review',
+  // The manual-work question a run raised (MOTIR-7474): its Waiting on you row opens
+  // here, where Mark done is pressed (`manual-work-gate.md` §5).
+  'manual_work',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 
 // Exhaustiveness: a member added to `ApprovalGateKindDTO` and not to the tuple

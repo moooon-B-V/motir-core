@@ -63,6 +63,8 @@ export function isRefusalSeedGate(gate: RefusalSeedGateFacts): boolean {
     case 'plan_approval':
     // The review agent's findings are repaired by `motir fix`, never re-planned (ADR §12.8).
     case 'agent_review':
+    // Manual work is never refused (`manual-work-gate.md` §4), so it seeds nothing.
+    case 'manual_work':
       return false;
     default: {
       // A compile-time exhaustiveness check; at runtime an unknown value (a
@@ -195,6 +197,7 @@ export function anchorOf(
     case 'acceptance_result':
     case 'plan_approval':
     case 'agent_review':
+    case 'manual_work':
       return itemKey;
     default: {
       const unreachable: never = kind;

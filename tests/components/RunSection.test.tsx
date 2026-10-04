@@ -451,3 +451,101 @@ describe('a REVIEW run is never the card’s current run (MOTIR-1626)', () => {
     expect(screen.getByRole('link', { name: 'motir run' })).toBeTruthy();
   });
 });
+
+// ── WAITING ON YOU (Story MOTIR-7460 · MOTIR-7477; `design/runs/design-notes.md`
+// § _Waiting on you_) — a manual leg names who it waits on, never *needs a human*.
+
+function manualLeg(manualGate: DispatchRunDto['cards'][number]['manualGate']): DispatchRunDto {
+  return run({
+    cards: [
+      {
+        ...run().cards[0]!,
+        disposition: 'skipped',
+        skipReason: 'needs_human',
+        endedAt: null,
+        manualGate,
+      },
+    ],
+  });
+}
+
+describe('a manual leg says who it is waiting on', () => {
+  it('waiting on the READER: the line is the way to their Waiting on you', () => {
+    mount([manualLeg({ state: 'awaiting', name: 'Yue Zhu', routedToReader: true })]);
+    const link = screen.getByRole('link', { name: 'Skipped — waiting on you.' });
+    expect(link.getAttribute('href')).toBe('/workbench?tab=approvals');
+    expect(screen.queryByText(/needs a human/)).toBeNull();
+  });
+
+  it('waiting on somebody else: named, and not a link to the reader’s own list', () => {
+    mount([manualLeg({ state: 'awaiting', name: 'Mara S.', routedToReader: false })]);
+    expect(screen.getByText('Skipped — waiting on Mara S..')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /waiting on/ })).toBeNull();
+  });
+
+  it('marked done: names who marked it', () => {
+    mount([manualLeg({ state: 'approved', name: 'Yue Zhu', routedToReader: false })]);
+    expect(screen.getByText('Skipped — marked done by Yue Zhu.')).toBeTruthy();
+  });
+
+  it('no gate (withdrawn, or a leg older than the kind): manual work', () => {
+    mount([manualLeg(null)]);
+    expect(screen.getByText('Skipped — manual work.')).toBeTruthy();
+    mount([manualLeg(undefined)]);
+    expect(screen.getAllByText('Skipped — manual work.').length).toBeGreaterThan(0);
+  });
+
+  it('zh: 已跳过 — 等你处理。 / 等 {name} 处理。', async () => {
+    const zh = (await import('@/messages/zh.json')).default as Record<string, unknown>;
+    render(
+      <RunSection
+        initialRuns={[manualLeg({ state: 'awaiting', name: 'Yue Zhu', routedToReader: true })]}
+        initialCursor={null}
+        itemKey="PROD-42"
+        formattedTimes={times([run()])}
+      />,
+      { locale: 'zh', messages: zh },
+    );
+    expect(screen.getByText('已跳过 — 等你处理。')).toBeTruthy();
+    cleanup();
+    render(
+      <RunSection
+        initialRuns={[manualLeg({ state: 'awaiting', name: 'Mara S.', routedToReader: false })]}
+        initialCursor={null}
+        itemKey="PROD-42"
+        formattedTimes={times([run()])}
+      />,
+      { locale: 'zh', messages: zh },
+    );
+    expect(screen.getByText('已跳过 — 等 Mara S. 处理。')).toBeTruthy();
+  });
+});
+
+describe('the summary takes waiting legs OUT of skipped', () => {
+  it('done, then waiting on you, then waiting on others, then skipped', () => {
+    mountWithScope(
+      [],
+      scoped({
+        cardCount: 6,
+        legs: { ...scoped().legs, implemented: 3, skipped: 3 },
+        waiting: { you: 1, others: 1 },
+      }),
+    );
+    expect(
+      screen.getByText(/3 of 6 done · 1 waiting on you · 1 waiting on others · 1 skipped/),
+    ).toBeTruthy();
+  });
+
+  it('omits each waiting segment at zero, and a row without the read counts every leg skipped', () => {
+    mountWithScope(
+      [],
+      scoped({
+        cardCount: 6,
+        legs: { ...scoped().legs, implemented: 3, skipped: 3 },
+        waiting: { you: 2, others: 0 },
+      }),
+    );
+    expect(screen.getByText(/3 of 6 done · 2 waiting on you · 1 skipped/)).toBeTruthy();
+    expect(screen.queryByText(/waiting on others/)).toBeNull();
+  });
+});

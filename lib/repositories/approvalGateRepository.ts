@@ -388,6 +388,45 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The LATEST gate of one kind on MANY work items, with who it waits on and who
+   * decided it (Story MOTIR-7460 · MOTIR-7477) — the run surfaces' read of each
+   * manual leg's `manual_work` gate, so a skipped leg can say *waiting on you*,
+   * *waiting on {name}* or *marked done by {name}*.
+   *
+   * The head per work item is {@link findLatestByWorkItem}'s, for MANY: the live
+   * question first (the OLDEST awaiting row), else the most recent row. ONE query
+   * for the whole set; the head is taken in memory, because the rows per card are
+   * the number of times a run reached it.
+   *
+   * The card's assignee and reporter ride along because an awaiting gate's
+   * recipient is RE-DERIVED from the live card (`awaitingRoutedToWhere`, §2), never
+   * read off `routedToId` — so the run page names the person Waiting on you lists
+   * it for.
+   */
+  async findLatestWithPeopleByWorkItems(
+    workItemIds: string[],
+    kind: ApprovalGateKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Map<string, GateWithPeople>> {
+    if (workItemIds.length === 0) return new Map();
+    const client = tx ?? dbRead;
+    const rows = await client.approvalGate.findMany({
+      where: { workItemId: { in: workItemIds }, kind },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: GATE_WITH_PEOPLE_SELECT,
+    });
+    const head = new Map<string, GateWithPeople>();
+    for (const row of rows) {
+      if (row.workItemId === null) continue;
+      const held = head.get(row.workItemId);
+      // The oldest awaiting row is kept once found; otherwise the later row wins.
+      if (held?.state === 'awaiting') continue;
+      head.set(row.workItemId, row);
+    }
+    return head;
+  },
+
+  /**
    * How many design refusals a PERSON sent back with **Revise** on this card, up to
    * and including `decidedAt` (MOTIR-700; `hosted-design-rerun-and-design-approval-
    * switch.md` §1e) — the automatic re-run's cap counts these. A GitHub-synced
@@ -1542,6 +1581,34 @@ export type RecordGateRow = Prisma.ApprovalGateGetPayload<{
 /** One row of the routing read, as Prisma returns it. */
 export type AwaitingGateRow = Prisma.ApprovalGateGetPayload<{
   select: typeof AWAITING_GATE_SELECT;
+}>;
+
+const PERSON_SELECT = { id: true, name: true, email: true } as const;
+
+/**
+ * The run surfaces' read of a leg's gate (MOTIR-7477): its state, the card's
+ * live routing (§2's `assigneeId ?? reporterId`, with the people to name) and who
+ * decided it.
+ */
+const GATE_WITH_PEOPLE_SELECT = {
+  id: true,
+  workItemId: true,
+  state: true,
+  decidedByLabel: true,
+  decidedBy: { select: PERSON_SELECT },
+  workItem: {
+    select: {
+      assigneeId: true,
+      reporterId: true,
+      assignee: { select: PERSON_SELECT },
+      reporter: { select: PERSON_SELECT },
+    },
+  },
+} as const satisfies Prisma.ApprovalGateSelect;
+
+/** One row of {@link approvalGateRepository.findLatestWithPeopleByWorkItems}. */
+export type GateWithPeople = Prisma.ApprovalGateGetPayload<{
+  select: typeof GATE_WITH_PEOPLE_SELECT;
 }>;
 
 /**
