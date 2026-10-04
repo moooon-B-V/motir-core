@@ -1,15 +1,14 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { dbRead } from '@/lib/db';
 
 /**
  * The platform RUN-MODEL LIST (Story MOTIR-7521 · MOTIR-7525) — which models a
  * hosted run may use, and the marker that says the list was initialised.
  *
- * The WRITES take `tx` and run inside `withPlatformRead` (the
- * `app.platform_staff` arm the tables' write policies read); the reads that
- * guard a write run in the same transaction. The tables' SELECT policy is
- * unconditional (the list is platform reference data every tenant's offer is
- * narrowed by), so `isInitialized` may also read with no transaction at all.
+ * Every method takes `tx`: the WRITES run inside `withPlatformRead` (the
+ * `app.platform_staff` arm the tables' write policies read), and the reads run
+ * in the transaction whose write they guard or whose page they draw. The
+ * tables' SELECT policy is unconditional (the list is platform reference data
+ * every tenant's offer is narrowed by).
  */
 
 /** The marker's one id — the list is platform-wide, so there is exactly one. */
@@ -26,9 +25,8 @@ const ROW = { model: true, addedById: true, createdAt: true } as const;
 
 export const platformRunModelRepository = {
   /** Whether the list was ever initialised — the marker row exists. */
-  async isInitialized(tx?: Prisma.TransactionClient): Promise<boolean> {
-    const client = tx ?? dbRead;
-    const marker = await client.platformRunModelList.findUnique({
+  async isInitialized(tx: Prisma.TransactionClient): Promise<boolean> {
+    const marker = await tx.platformRunModelList.findUnique({
       where: { id: PLATFORM_RUN_MODEL_LIST_ID },
       select: { id: true },
     });

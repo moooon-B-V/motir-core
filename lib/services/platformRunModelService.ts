@@ -61,6 +61,9 @@ const SEED_REASON =
 /** Rolls back a seed that another first read already performed. */
 class AlreadySeeded extends Error {}
 
+/** Rolls back a list transaction that found the list never initialised. */
+class NotSeeded extends Error {}
+
 /** motir-ai's offer, or `HostedModelsUnavailableError` — never an empty list. */
 async function readOffer(): Promise<Extract<AgentModelsRead, { state: 'ok' }>> {
   const read = await getAgentModels();
@@ -69,15 +72,14 @@ async function readOffer(): Promise<Extract<AgentModelsRead, { state: 'ok' }>> {
 }
 
 /**
- * Seed the list from `offer` unless it was already initialised. Its own audited
- * transaction, opened BEFORE any other: `withPlatformRead` locks the audit
- * chain's head, so one opened inside another would wait on itself.
+ * Seed the list from `offer`, in its own audited transaction. A concurrent first
+ * read that seeded already makes the marker insert a no-op, and this rolls back
+ * with no row.
  */
-async function seedIfUninitialised(
+async function seed(
   principal: PlatformPrincipal,
   offer: Extract<AgentModelsRead, { state: 'ok' }>,
 ): Promise<void> {
-  if (await platformRunModelRepository.isInitialized()) return;
   const models = offer.models.map((m) => m.id);
   const entry: PlatformAuditEntry = {
     action: 'ai.run_model_list.seed',
@@ -87,15 +89,42 @@ async function seedIfUninitialised(
     metadata: { models },
   };
   try {
-    await withPlatformRead(principal, entry, async (seedTx) => {
-      if (!(await platformRunModelRepository.insertMarkerIfAbsent(seedTx))) {
+    await withPlatformRead(principal, entry, async (tx) => {
+      if (!(await platformRunModelRepository.insertMarkerIfAbsent(tx))) {
         throw new AlreadySeeded();
       }
-      await platformRunModelRepository.createSeeded(models, seedTx);
+      await platformRunModelRepository.createSeeded(models, tx);
     });
   } catch (err) {
     if (!(err instanceof AlreadySeeded)) throw err;
   }
+}
+
+/**
+ * Run `fn` in an audited transaction over an INITIALISED list. When the list was
+ * never initialised, that transaction rolls back (leaving no row), the list is
+ * seeded in a transaction of its own, and `fn` runs once more. The two are kept
+ * apart because `withPlatformRead` locks the audit chain's head, so one opened
+ * inside another would wait on itself.
+ */
+async function onSeededList<T>(
+  principal: PlatformPrincipal,
+  offer: Extract<AgentModelsRead, { state: 'ok' }>,
+  entry: PlatformAuditEntry,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  const attempt = () =>
+    withPlatformRead(principal, entry, async (tx) => {
+      if (!(await platformRunModelRepository.isInitialized(tx))) throw new NotSeeded();
+      return fn(tx);
+    });
+  try {
+    return await attempt();
+  } catch (err) {
+    if (!(err instanceof NotSeeded)) throw err;
+  }
+  await seed(principal, offer);
+  return attempt();
 }
 
 /** The estate's override rows and the adders' users — the page's joined reads. */
@@ -138,8 +167,7 @@ export const platformRunModelService = {
   async listModels(principal: PlatformPrincipal): Promise<PlatformRunModelListDTO> {
     await requirePlatformStaff('support');
     const offer = await readOffer();
-    await seedIfUninitialised(principal, offer);
-    return withPlatformRead(principal, LIST_READ, (tx) =>
+    return onSeededList(principal, offer, LIST_READ, (tx) =>
       readPage(offer, tx, platformRoleAtLeast(principal.role, 'superadmin')),
     );
   },
@@ -172,11 +200,9 @@ export const platformRunModelService = {
     assertReasonSatisfied(entry);
     const offer = await readOffer();
     if (!offer.models.some((m) => m.id === model)) throw new RunModelNotOfferedError(model);
-    // An add before the first read would otherwise leave the rest of the offer
-    // unlisted for ever: seed first, then add.
-    await seedIfUninitialised(principal, offer);
-
-    return withPlatformRead(principal, entry, async (tx) => {
+    // An add before the first read seeds first, so the rest of the offer is
+    // not left unlisted for ever.
+    return onSeededList(principal, offer, entry, async (tx) => {
       if (await platformRunModelRepository.findByModel(model, tx)) {
         throw new RunModelAlreadyListedError(model);
       }
@@ -214,7 +240,7 @@ export const platformRunModelService = {
     assertReasonSatisfied(entry);
     const offer = await readOffer();
 
-    return withPlatformRead(principal, entry, async (tx) => {
+    return onSeededList(principal, offer, entry, async (tx) => {
       if (!(await platformRunModelRepository.findByModel(model, tx))) {
         throw new RunModelNotListedError(model);
       }
