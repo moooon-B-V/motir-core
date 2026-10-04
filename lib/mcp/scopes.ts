@@ -278,6 +278,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   set_work_item_todo_done: 'work_items:write',
   update_work_item_todo: 'work_items:write',
   delete_work_item_todo: 'work_items:write',
+  move_work_item_todo: 'work_items:write',
   // The repair tools (MOTIR-6807) — three writes, in the legacy write bucket; the
   // real gate is `work_item:edit` in `toolPermissions.ts`.
   claim_work_item_repair: 'work_items:write',

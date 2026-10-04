@@ -1754,6 +1754,31 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  move_work_item_todo: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      todoId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The step’s id, as `list_work_item_todos` or `add_work_item_todo` returned it. A step on another work item is refused as not found.',
+      },
+      toIndex: {
+        type: 'integer',
+        description:
+          'Where the step goes: its 0-based position in the list as it reads AFTER the move (0 is first). Read against the current list, not the one you last listed; an index past either end is clamped to that end.',
+      },
+    },
+    required: ['key', 'todoId', 'toIndex'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   next_ready: {
     type: 'object',
     properties: {
@@ -3524,6 +3549,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   move_to_backlog: 'Move work items to backlog',
   move_to_parent: 'Move work item to a new parent',
   move_to_sprint: 'Move work items to sprint',
+  move_work_item_todo: 'Move a to-do step',
   next_ready: 'Next ready work item',
   open_plan_session: 'Open plan conversation',
   publish_acceptance_result: 'Publish acceptance result',
@@ -3841,6 +3867,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: false,
+    openWorldHint: false,
+  },
+  move_work_item_todo: {
+    title: 'Move a to-do step',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
     openWorldHint: false,
   },
   next_ready: { title: 'Next ready work item', readOnlyHint: true, openWorldHint: false },

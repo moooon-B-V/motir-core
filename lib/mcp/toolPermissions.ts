@@ -224,6 +224,7 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // door's one key is the service's whole decision (cf. MOTIR-5298).
   update_work_item_todo: 'work_item:edit',
   delete_work_item_todo: 'work_item:edit',
+  move_work_item_todo: 'work_item:edit',
   // The REPAIR tools (MOTIR-6807) — the key the REST repair route
   // (`claimWorkItemRepair`) and the dispatch-run heartbeat / close routes assert.
   // `workItemRepairService.claimRepair` asserts `assertCanEdit` up front, and

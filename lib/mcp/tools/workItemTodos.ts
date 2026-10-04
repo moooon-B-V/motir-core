@@ -31,8 +31,13 @@ import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 // EDIT and DELETE joined the first three in MOTIR-7306: a card whose steps
 // change after they were written (a re-plan removes one, a step turns out to
 // be wrong) otherwise left an agent two bad choices — leave a step the card can
-// never close on, or tick one nobody performed. REORDER is still not exposed;
-// nothing asks for it.
+// never close on, or tick one nobody performed.
+//
+// MOVE joined them in MOTIR-7556: the CLI guide corrects a card's list on the
+// person's word (Story MOTIR-7552), and a step in the wrong place could only be
+// fixed by rewriting several rows' text. The tool takes an INDEX, as
+// `moveTodo` does, never neighbour ids — the service resolves it against the
+// list it has just locked.
 //
 // ⚠️ AND TICKING THE LAST STEP DOES NOT MOVE THE CARD (ADR §3). The service
 // never touches `work_item.status`, and neither does this door.
@@ -46,6 +51,7 @@ export const ADD_WORK_ITEM_TODO_TOOL_NAME = 'add_work_item_todo';
 export const SET_WORK_ITEM_TODO_DONE_TOOL_NAME = 'set_work_item_todo_done';
 export const UPDATE_WORK_ITEM_TODO_TOOL_NAME = 'update_work_item_todo';
 export const DELETE_WORK_ITEM_TODO_TOOL_NAME = 'delete_work_item_todo';
+export const MOVE_WORK_ITEM_TODO_TOOL_NAME = 'move_work_item_todo';
 
 const executorField = z
   .enum(['coding_agent', 'human'])
@@ -138,6 +144,19 @@ const updateInputSchema = {
 const deleteInputSchema = {
   key: workItemKeyField,
   todoId: todoIdField,
+};
+
+const moveInputSchema = {
+  key: workItemKeyField,
+  todoId: todoIdField,
+  toIndex: z
+    .number()
+    .int()
+    .describe(
+      'Where the step goes: its 0-based position in the list as it reads AFTER the move (0 is ' +
+        'first). Read against the current list, not the one you last listed; an index past either ' +
+        'end is clamped to that end.',
+    ),
 };
 
 /** One step as the tool returns it — the service DTO's fields, named explicitly. */
@@ -329,6 +348,28 @@ export async function runDeleteWorkItemTodo(
   }
 }
 
+/** `move_work_item_todo` — move one step of THIS card to a new position. */
+export async function runMoveWorkItemTodo(
+  args: { key: string; todoId: string; toIndex: number },
+  ctx: ServiceContext,
+): Promise<CallToolResult> {
+  try {
+    const item = await resolveWorkItemByKey(args.key, ctx);
+    await findTodoOnWorkItem(item.id, args.todoId, ctx);
+    const { todo, progress } = await workItemTodosService.moveTodo(args.todoId, args.toIndex, ctx);
+    return toolOk(
+      `Moved a step on ${item.identifier}: ${todo.text} (${todo.id}) — ` + progressLine(progress),
+      exempt(MOVE_WORK_ITEM_TODO_TOOL_NAME, {
+        workItemKey: item.identifier,
+        todo: presentTodo(todo),
+        progress,
+      }),
+    );
+  } catch (err) {
+    return toToolError(err);
+  }
+}
+
 export function registerWorkItemTodos(server: McpServer, resolveContext: McpContextResolver): void {
   server.registerTool(
     LIST_WORK_ITEM_TODOS_TOOL_NAME,
@@ -399,5 +440,20 @@ export function registerWorkItemTodos(server: McpServer, resolveContext: McpCont
       inputSchema: deleteInputSchema,
     },
     async (args, extra) => runDeleteWorkItemTodo(args, resolveContext(extra)),
+  );
+  server.registerTool(
+    MOVE_WORK_ITEM_TODO_TOOL_NAME,
+    {
+      title: 'Move a to-do step',
+      description:
+        'Move one step of a work item’s to-do list to a new position, by the work item’s ' +
+        'identifier, the step’s `todoId` and `toIndex` — its 0-based place in the list after the ' +
+        'move, clamped to either end. A `todoId` that is not on that work item is refused as not ' +
+        'found; a step deleted while it was being moved is refused as a conflict. Records a ' +
+        'revision on the work item. Returns the step and the list’s progress. Needs permission ' +
+        'to edit the work item. Honors the same access checks as the UI.',
+      inputSchema: moveInputSchema,
+    },
+    async (args, extra) => runMoveWorkItemTodo(args, resolveContext(extra)),
   );
 }

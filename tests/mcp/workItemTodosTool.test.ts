@@ -5,11 +5,13 @@ import {
   ADD_WORK_ITEM_TODO_TOOL_NAME,
   DELETE_WORK_ITEM_TODO_TOOL_NAME,
   LIST_WORK_ITEM_TODOS_TOOL_NAME,
+  MOVE_WORK_ITEM_TODO_TOOL_NAME,
   SET_WORK_ITEM_TODO_DONE_TOOL_NAME,
   UPDATE_WORK_ITEM_TODO_TOOL_NAME,
   runAddWorkItemTodo,
   runDeleteWorkItemTodo,
   runListWorkItemTodos,
+  runMoveWorkItemTodo,
   runSetWorkItemTodoDone,
   runUpdateWorkItemTodo,
 } from '@/lib/mcp/tools/workItemTodos';
@@ -18,6 +20,8 @@ import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { EXEMPT_TOOLS } from '@/lib/mcp/payloads/exemptions';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { TODO_TEXT_MAX_LENGTH } from '@/lib/workItemTodos/limits';
+import { TodoReorderConflictError } from '@/lib/workItemTodos/errors';
+import { toToolError } from '@/lib/mcp/toolResult';
 import { makeWorkItemFixture } from '../fixtures';
 import { truncateAuthTables } from '../helpers/db';
 import { adminDb } from '../helpers/adminDb';
@@ -95,26 +99,29 @@ async function add(key: string, text: string): Promise<TodoOut> {
 }
 
 describe('the tools are registered, gated and exempt as documented', () => {
-  it('registers all five', () => {
+  it('registers all six', () => {
     expect(MCP_TOOL_NAMES).toContain(LIST_WORK_ITEM_TODOS_TOOL_NAME);
     expect(MCP_TOOL_NAMES).toContain(ADD_WORK_ITEM_TODO_TOOL_NAME);
     expect(MCP_TOOL_NAMES).toContain(SET_WORK_ITEM_TODO_DONE_TOOL_NAME);
     expect(MCP_TOOL_NAMES).toContain(UPDATE_WORK_ITEM_TODO_TOOL_NAME);
     expect(MCP_TOOL_NAMES).toContain(DELETE_WORK_ITEM_TODO_TOOL_NAME);
+    expect(MCP_TOOL_NAMES).toContain(MOVE_WORK_ITEM_TODO_TOOL_NAME);
   });
 
-  it('the read is browse, the writes are work_item:edit — all five in the CLI grant', () => {
+  it('the read is browse, the writes are work_item:edit — all six in the CLI grant', () => {
     expect(TOOL_PERMISSIONS[LIST_WORK_ITEM_TODOS_TOOL_NAME]).toBe('project:browse');
     expect(TOOL_PERMISSIONS[ADD_WORK_ITEM_TODO_TOOL_NAME]).toBe('work_item:edit');
     expect(TOOL_PERMISSIONS[SET_WORK_ITEM_TODO_DONE_TOOL_NAME]).toBe('work_item:edit');
     expect(TOOL_PERMISSIONS[UPDATE_WORK_ITEM_TODO_TOOL_NAME]).toBe('work_item:edit');
     expect(TOOL_PERMISSIONS[DELETE_WORK_ITEM_TODO_TOOL_NAME]).toBe('work_item:edit');
+    expect(TOOL_PERMISSIONS[MOVE_WORK_ITEM_TODO_TOOL_NAME]).toBe('work_item:edit');
     for (const name of [
       LIST_WORK_ITEM_TODOS_TOOL_NAME,
       ADD_WORK_ITEM_TODO_TOOL_NAME,
       SET_WORK_ITEM_TODO_DONE_TOOL_NAME,
       UPDATE_WORK_ITEM_TODO_TOOL_NAME,
       DELETE_WORK_ITEM_TODO_TOOL_NAME,
+      MOVE_WORK_ITEM_TODO_TOOL_NAME,
     ] as const) {
       expect(CLI_TOKEN_GRANT).toContain(TOOL_PERMISSIONS[name]);
       expect(Object.keys(EXEMPT_TOOLS)).toContain(name);
@@ -360,5 +367,67 @@ describe('delete_work_item_todo', () => {
     expect(
       errorText(await runDeleteWorkItemTodo({ key: 'PROD-99999', todoId: 'tdo_nope' }, fx.ctx)),
     ).toContain('NOT_FOUND');
+  });
+});
+
+// MOTIR-7556 — the move door. The order is read back through `list`, so a tool
+// that answered the right step but wrote nothing (or wrote the wrong slot)
+// fails here, and the clamp is asserted at BOTH ends.
+describe('move_work_item_todo', () => {
+  it('moves step 4 of 5 to index 1, and list reads it second', async () => {
+    const key = await makeItem('Reorder me');
+    const steps = [];
+    for (const text of ['One', 'Two', 'Three', 'Four', 'Five']) steps.push(await add(key, text));
+    const four = steps[3]!;
+    const out = ok<WriteOut>(
+      await runMoveWorkItemTodo({ key, todoId: four.id, toIndex: 1 }, fx.ctx),
+    );
+    expect(out.workItemKey).toBe(key);
+    expect(out.todo.id).toBe(four.id);
+    expect(out.progress).toEqual({ done: 0, total: 5 });
+    const list = ok<ListOut>(await runListWorkItemTodos({ key }, fx.ctx));
+    expect(list.items.map((t) => t.text)).toEqual(['One', 'Four', 'Two', 'Three', 'Five']);
+  });
+
+  it('clamps an index past either end to that end', async () => {
+    const key = await makeItem('Clamp me');
+    const a = await add(key, 'A');
+    await add(key, 'B');
+    const c = await add(key, 'C');
+    ok(await runMoveWorkItemTodo({ key, todoId: a.id, toIndex: 99 }, fx.ctx));
+    ok(await runMoveWorkItemTodo({ key, todoId: c.id, toIndex: -5 }, fx.ctx));
+    const list = ok<ListOut>(await runListWorkItemTodos({ key }, fx.ctx));
+    expect(list.items.map((t) => t.text)).toEqual(['C', 'B', 'A']);
+  });
+
+  it('refuses a step that belongs to ANOTHER card, and leaves both lists as they were', async () => {
+    const mine = await makeItem('Mine');
+    const other = await makeItem('Other');
+    await add(other, 'First');
+    const foreign = await add(other, 'Second');
+    const text = errorText(
+      await runMoveWorkItemTodo({ key: mine, todoId: foreign.id, toIndex: 0 }, fx.ctx),
+    );
+    expect(text).toContain('WORK_ITEM_TODO_NOT_FOUND');
+    const list = ok<ListOut>(await runListWorkItemTodos({ key: other }, fx.ctx));
+    expect(list.items.map((t) => t.text)).toEqual(['First', 'Second']);
+  });
+
+  it('refuses a step id that names nothing, and an unknown key', async () => {
+    const key = await makeItem('Ghost');
+    expect(
+      errorText(await runMoveWorkItemTodo({ key, todoId: 'tdo_nope', toIndex: 0 }, fx.ctx)),
+    ).toContain('WORK_ITEM_TODO_NOT_FOUND');
+    expect(
+      errorText(
+        await runMoveWorkItemTodo({ key: 'PROD-99999', todoId: 'tdo_nope', toIndex: 0 }, fx.ctx),
+      ),
+    ).toContain('NOT_FOUND');
+  });
+
+  it('the conflict a concurrent delete raises reaches the agent as its typed code, not an internal error', () => {
+    const res = toToolError(new TodoReorderConflictError());
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.content)).toContain('TODO_REORDER_CONFLICT');
   });
 });

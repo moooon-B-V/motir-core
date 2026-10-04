@@ -655,6 +655,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // MOTIR-7306 — edit and delete are `work_item:edit` too: REFUSED at the gate.
         update_work_item_todo: { key: item1, todoId: 'tdo_scoped', text: 'scoped edit' },
         delete_work_item_todo: { key: item1, todoId: 'tdo_scoped' },
+        // MOTIR-7556 — move is `work_item:edit` too: REFUSED at the gate.
+        move_work_item_todo: { key: item1, todoId: 'tdo_scoped', toIndex: 0 },
         // MOTIR-6807 — the caller's OWN card; all three are `work_item:edit`, so
         // the read-only-token loop asserts each is REFUSED at the gate.
         claim_work_item_repair: { key: item1 },

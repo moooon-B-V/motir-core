@@ -144,6 +144,10 @@ export const EXEMPT_TOOLS = {
     'Returns WHAT WAS REMOVED and the list’s new progress — `{ workItemKey, removed: { id, text ' +
     '}, progress }`. Same boundary as its siblings. `progress` is load-bearing: removing a step ' +
     'moves the denominator a caller renders (MOTIR-7306).',
+  move_work_item_todo:
+    'Returns the moved step and the list’s progress — `{ workItemKey, todo, progress }`, the shape ' +
+    '`update_work_item_todo` returns. Same boundary as its siblings: the item page moves a step ' +
+    'through its own Server Action and no `/api/v1` operation does (MOTIR-7556).',
   touch_work_item_repair:
     'Returns a REPAIR RUN’s liveness — `{ key, runId, open, status, stopReason, startedAt, ' +
     'endedAt, lastHeartbeatAt }` — the answer an agent holding a repair acts on (stop when ' +
