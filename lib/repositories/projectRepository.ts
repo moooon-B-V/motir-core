@@ -1158,6 +1158,38 @@ export const projectRepository = {
   },
 
   /**
+   * Every LIVE (unarchived) project that overrides its hosted model at ANY
+   * level, across the estate (Story MOTIR-7521 · MOTIR-7525) — what the
+   * run-model list says each model is used by, and what a remove is refused
+   * for. A cross-tenant read: `tx` REQUIRED, and it is a `withPlatformRead`
+   * transaction, whose `app.platform_staff` arm on `project` admits every row.
+   */
+  async findLiveWithHostedModelOverrides(
+    tx: Prisma.TransactionClient,
+  ): Promise<({ identifier: string; name: string } & ProjectHostedModelOverridesRow)[]> {
+    return tx.project.findMany({
+      where: {
+        archivedAt: null,
+        OR: [
+          { hostedModelTrivial: { not: null } },
+          { hostedModelLow: { not: null } },
+          { hostedModelMedium: { not: null } },
+          { hostedModelHigh: { not: null } },
+        ],
+      },
+      select: {
+        identifier: true,
+        name: true,
+        hostedModelTrivial: true,
+        hostedModelLow: true,
+        hostedModelMedium: true,
+        hostedModelHigh: true,
+      },
+      orderBy: { identifier: 'asc' },
+    });
+  },
+
+  /**
    * Write any subset of the four hosted-agent model overrides (MOTIR-6993); an
    * absent field is untouched and `null` resets that level to the platform
    * default. `tx` REQUIRED — the service validates against motir-ai's offered

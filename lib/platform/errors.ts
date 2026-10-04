@@ -226,6 +226,69 @@ export class PlannerModelListModelMissingError extends Error {
   }
 }
 
+/** One project whose hosted-model override names a model, and at which levels (MOTIR-7525). */
+export interface RunModelProjectUse {
+  projectKey: string;
+  projectName: string;
+  levels: ('trivial' | 'low' | 'medium' | 'high')[];
+}
+
+/**
+ * A run-model list REMOVE named a model still in use (Story MOTIR-7521 ·
+ * MOTIR-7525): a live project overrides a level to it, or motir-ai's platform
+ * default for a level is it. Removing it would leave those runs on a model the
+ * list no longer allows, so it is refused, naming every use, before the audited
+ * transaction commits.
+ */
+export class RunModelInUseError extends Error {
+  readonly code = 'RUN_MODEL_IN_USE';
+
+  constructor(
+    readonly model: string,
+    readonly projects: readonly RunModelProjectUse[],
+    readonly platformLevels: readonly ('trivial' | 'low' | 'medium' | 'high')[],
+  ) {
+    const uses = [
+      ...(platformLevels.length > 0
+        ? [`the platform default for ${platformLevels.join(', ')}`]
+        : []),
+      ...projects.map((p) => `${p.projectKey} for ${p.levels.join(', ')}`),
+    ];
+    super(`"${model}" is in use: ${uses.join('; ')}`);
+    this.name = 'RunModelInUseError';
+  }
+}
+
+/** A run-model list ADD named a model motir-ai does not offer for hosted runs right now (MOTIR-7525). */
+export class RunModelNotOfferedError extends Error {
+  readonly code = 'RUN_MODEL_NOT_OFFERED';
+
+  constructor(readonly model: string) {
+    super(`"${model}" is not offered for hosted runs by motir-ai right now`);
+    this.name = 'RunModelNotOfferedError';
+  }
+}
+
+/** A run-model list ADD named a model already listed — refused so the trail never records a non-change (MOTIR-7525). */
+export class RunModelAlreadyListedError extends Error {
+  readonly code = 'RUN_MODEL_ALREADY_LISTED';
+
+  constructor(readonly model: string) {
+    super(`"${model}" is already on the hosted-run model list`);
+    this.name = 'RunModelAlreadyListedError';
+  }
+}
+
+/** A run-model list REMOVE named a model that is not listed (MOTIR-7525). */
+export class RunModelNotListedError extends Error {
+  readonly code = 'RUN_MODEL_NOT_LISTED';
+
+  constructor(readonly model: string) {
+    super(`"${model}" is not on the hosted-run model list`);
+    this.name = 'RunModelNotListedError';
+  }
+}
+
 /**
  * The workspace page's pair (MOTIR-7295) names no workspace OF THAT ORGANIZATION —
  * a missing workspace, or one belonging to another org. Thrown inside the audited
