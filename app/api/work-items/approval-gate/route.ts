@@ -16,8 +16,8 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { agentReviewViewService } from '@/lib/services/agentReviewViewService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { isManualWork } from '@/lib/approvalGates/manualWorkHandler';
-import type { WorkItem } from '@/generated/prisma/client';
+import { isManualReadyItem } from '@/lib/dto/ready';
+import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   APPROVAL_GATE_HANDLERS,
@@ -107,7 +107,12 @@ function isNotAvailable(err: unknown): boolean {
 async function readSubject(
   kind: ApprovalGateKindDTO,
   gate: ApprovalGateDTO | null,
-  item: { id: string; targetRepos: readonly string[] } & Pick<WorkItem, 'type' | 'executor'>,
+  item: {
+    id: string;
+    type: WorkItemTypeDto | null;
+    executor: ExecutorDto | null;
+    targetRepos: readonly string[];
+  },
   ctx: ServiceContext,
 ): Promise<ApprovalGateOverlaySubjectDTO> {
   // ⚠️ A PLAN GATE IS NEVER PORTED HERE, registered or not (Story MOTIR-6012 ·
@@ -266,7 +271,7 @@ async function readSubject(
     // is `gone` — the same answer `manualWorkHandler.resolveSubject` gives, which is what
     // lets the open withdraw it (MOTIR-7146) rather than draw Mark done over it.
     case 'manual_work': {
-      if (gate.state === 'awaiting' && !isManualWork(item)) return { state: 'gone' };
+      if (gate.state === 'awaiting' && !isManualReadyItem(item)) return { state: 'gone' };
       const [todoList, deliveries] = await Promise.all([
         workItemTodosService.listTodos(item.id, ctx),
         workItemsService.listDeliverySet(item.id, ctx),
