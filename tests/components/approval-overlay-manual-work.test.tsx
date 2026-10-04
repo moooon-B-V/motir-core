@@ -275,6 +275,33 @@ describe('MARK DONE in the overlay', () => {
   });
 });
 
+describe('a STALE Mark done', () => {
+  // The manual-work arm mounts its own frame, as the choice and confirm arms do — so its
+  // stale refusal's *Show the current version* is asserted here, not assumed to follow
+  // from theirs. Its moved notice is in `approval-overlay-subject-moved.test.tsx`.
+  it('a stale press draws the refusal with its one control, and the control re-reads', async () => {
+    fetchApprovalGateOverlay.mockResolvedValue(readOf());
+    decideApprovalGateAction.mockResolvedValue({
+      ok: false,
+      refusal: { tag: 'APPROVAL_GATE_STALE_SUBJECT', moved: ['subject'] },
+    });
+    await renderOverlay();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: en.workbench.approvals.markDone }));
+    });
+    const alert = await screen.findByRole('alert');
+    const before = fetchApprovalGateOverlay.mock.calls.length;
+    await act(async () => {
+      fireEvent.click(
+        within(alert).getByRole('button', { name: en.approvalGate.refusal.stale.control }),
+      );
+    });
+    expect(fetchApprovalGateOverlay.mock.calls.length).toBeGreaterThan(before);
+    expect(announceGateDecided).not.toHaveBeenCalled();
+  });
+});
+
 describe('READ-ONLY and WITHDRAWN', () => {
   it('a reader it is not routed to sees the list and who it waits on — no control at all', async () => {
     fetchApprovalGateOverlay.mockResolvedValue(readOf(WITH_LIST, { canDecide: false }));
