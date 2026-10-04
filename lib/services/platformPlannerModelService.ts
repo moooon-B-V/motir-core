@@ -275,9 +275,10 @@ async function changeList(
   } catch (err) {
     if (applied) {
       // The residual case in this file's header, for the list.
+      // A constant format string: the model id is operator input (CodeQL).
       console.error(
-        `[platform-planner-model] motir-ai applied a planning-list ${action} of "${model}" by ` +
-          `${principal.userId}, but the audit row did not commit`,
+        '[platform-planner-model] motir-ai applied a planning-list change, but the audit row did not commit',
+        { action, model, actorCoreUserId: principal.userId },
         err,
       );
     }

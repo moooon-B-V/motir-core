@@ -373,6 +373,7 @@ describe('addModel / removeModel — superadmin writes, and every write is audit
     expect(puts).toHaveLength(1);
     expect(logged).toHaveBeenCalledWith(
       expect.stringContaining('but the audit row did not commit'),
+      { action: 'add', model: 'glm-5.2', actorCoreUserId: currentPrincipal!.userId },
       expect.anything(),
     );
     expect(await auditRows()).toHaveLength(0);
