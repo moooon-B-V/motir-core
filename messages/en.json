@@ -8485,7 +8485,8 @@
       "footerStaff": "Platform staff",
       "exitToApp": "Exit to app",
       "navAiPlanning": "AI planning",
-      "navPlanningLessons": "Planning lessons"
+      "navPlanningLessons": "Planning lessons",
+      "navRunModels": "Hosted-run models"
     },
     "nav": {
       "overview": "Overview",
@@ -10109,6 +10110,133 @@
           "noReason": "No reason recorded",
           "counts": "{runs} CI runs · {containers} CI containers · {hosted} hosted runs · {instances} agent instances"
         }
+      }
+    },
+    "modelLists": {
+      "col": {
+        "model": "Model",
+        "offered": "Offered now",
+        "inUse": "In use by",
+        "added": "Added",
+        "action": "Action"
+      },
+      "count": "{n} listed",
+      "add": "Add model",
+      "remove": "Remove",
+      "removeAria": "Remove {model}",
+      "offered": "Offered",
+      "notOffered": "Not offered",
+      "notInCatalog": "not in the catalog",
+      "inUse": {
+        "nothing": "Nothing"
+      },
+      "added": {
+        "seeded": "Seeded on first read",
+        "by": "Added {when} by {who}",
+        "byUnknown": "Added {when}",
+        "justNowByYou": "Added just now by you"
+      },
+      "readOnly": "Only a superadmin can change these lists.",
+      "reasonLabel": "Reason — required, written to the audit log",
+      "reasonPlaceholder": "Why are you changing the list?",
+      "reasonHint": "Shown to any operator reading this change later.",
+      "cancel": "Cancel",
+      "retry": "Retry",
+      "error": {
+        "reasonRequired": "A reason is required.",
+        "notPermitted": "Only a superadmin can change this list.",
+        "failed": "Something went wrong, and nothing was changed. Try again.",
+        "unavailable": "motir-ai didn’t respond, so nothing was changed. Try again."
+      }
+    },
+    "planningList": {
+      "title": "Models planning may use",
+      "subtitle": "An audience can be set only to a listed model that motir-ai offers for planning right now. Each entry is checked on every read.",
+      "reason": {
+        "not_servable": "The gateway no longer serves this model.",
+        "not_chat": "Not a chat model, so it cannot plan.",
+        "unrated": "No planning rate is in force for it."
+      },
+      "fallback": "Fallback for every audience",
+      "add": {
+        "title": "Add a model planning may use",
+        "body": "Once added, a superadmin can set any audience to it while motir-ai offers it.",
+        "modelLabel": "Model id",
+        "modelHint": "motir-ai adds a model only if the gateway serves it, it is a chat model and it has a planning rate.",
+        "confirm": "Add model",
+        "refused": "Not added: {detail}",
+        "modelRequired": "Enter a model id."
+      },
+      "remove": {
+        "title": "Remove {model} from the planning list?",
+        "body": "No audience is set to it, so no planning job changes. It can be added back later.",
+        "confirm": "Remove model",
+        "inUse": "Not removed: {audiences} plan on {model}. Move that audience to another model first.",
+        "fallback": "Not removed: {model} is the fallback every audience plans on when its own model is withdrawn, so it always stays listed.",
+        "refused": "Not removed: {detail}"
+      },
+      "removed": "{model} removed from the planning list.",
+      "added": "{model} added. Any audience can be set to it now.",
+      "unavailable": {
+        "title": "Couldn’t load the planning-model list",
+        "body": "The planning service (motir-ai) didn’t respond, so no list is shown. Nothing has changed, and no value is guessed."
+      }
+    },
+    "runModels": {
+      "breadcrumb": "Operations · Hosted-run models",
+      "title": "Hosted-run models",
+      "subtitle": "Which models a hosted run may use, for every project. A project chooses from the listed models that motir-ai offers right now.",
+      "lineLive": "A listed model that motir-ai stops offering disappears from every picker at once. An unlisted model never appears.",
+      "lineProjectsLead": "Projects never see this list.",
+      "lineProjectsBody": "They see its result: the Run hosted picker and their hosted-agent settings offer only these models.",
+      "card": {
+        "title": "Models a hosted run may use",
+        "subtitle": "Seeded with every model motir-ai offered for hosted runs when the list was first read, so no project lost the model it had chosen."
+      },
+      "notOffered": "Not in motir-ai’s hosted-run offer right now: it is withdrawn, unrated, not a chat model, or its provider is not configured for hosted runs.",
+      "level": {
+        "trivial": "trivial",
+        "low": "low",
+        "medium": "medium",
+        "high": "high"
+      },
+      "inUse": {
+        "platformDefault": "Platform default · {levels}",
+        "projects": "{n, plural, one {# project} other {# projects}}"
+      },
+      "add": {
+        "title": "Add a model for hosted runs",
+        "body": "Projects can choose it for Run hosted and their per-difficulty settings as soon as it is added.",
+        "modelLabel": "Model",
+        "placeholder": "Choose a model",
+        "pickerFoot": "Models motir-ai offers for hosted runs that are not on the list yet.",
+        "nothing": "Every model motir-ai offers for hosted runs is already listed.",
+        "confirm": "Add model",
+        "notOffered": "Not added: motir-ai no longer offers {model} for hosted runs.",
+        "alreadyListed": "Not added: {model} is already listed."
+      },
+      "remove": {
+        "title": "Remove {model} from hosted-run models?",
+        "body": "No project can choose it for a hosted run from now on. No project and no platform default uses it.",
+        "confirm": "Remove model",
+        "inUse": "Not removed: {model} is in use. {platformDefaultClause}{projectsClause} Change those first.",
+        "inUseParts": {
+          "platformDefault": "It is Motir’s platform default for {levels}. ",
+          "projects": "{n, plural, one {# project uses it} other {# projects use it}}: {list}.",
+          "projectEntry": "{name} ({key}) for {levels}"
+        },
+        "notListed": "Not removed: {model} is no longer listed."
+      },
+      "added": "{model} added. Projects can choose it for hosted runs now.",
+      "removed": "{model} removed from hosted-run models.",
+      "empty": {
+        "title": "No model is listed",
+        "body": "No hosted run can start until a model is added. Add one from motir-ai’s offer.",
+        "bodyReadOnly": "No hosted run can start until a superadmin adds a model."
+      },
+      "unavailable": {
+        "title": "Couldn’t load hosted-run models",
+        "body": "motir-ai didn’t respond, so whether each listed model is offered is unknown and no list is shown. Nothing has changed."
       }
     }
   },

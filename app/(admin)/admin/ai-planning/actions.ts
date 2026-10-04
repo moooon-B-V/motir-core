@@ -3,14 +3,20 @@
 import { revalidatePath } from 'next/cache';
 import {
   MotirAiUnavailableError,
+  PlannerModelListEntryInUseError,
+  PlannerModelListFallbackError,
+  PlannerModelListRefusedError,
   PlannerModelNotOfferedError,
+  PlannerModelNotQualifiedError,
   PlannerModelUnreachableError,
 } from '@/lib/ai/errors';
+import type { PlannerModelListReason } from '@/lib/ai/types';
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import {
   MissingAuditReasonError,
   NotPlatformStaffError,
   PlannerAudienceUnknownError,
+  PlannerModelListModelMissingError,
   PlannerModelUnchangedError,
 } from '@/lib/platform/errors';
 import { platformPlannerModelService } from '@/lib/services/platformPlannerModelService';
@@ -76,6 +82,75 @@ export async function setPlannerModelAction(
       return { ok: false, code: 'FAILED' };
     }
     console.error('[admin] planner-model action failed', { audience }, err);
+    return { ok: false, code: 'FAILED' };
+  }
+}
+
+/**
+ * The PLANNING-MODEL LIST writes — design `platform-admin/design-notes.md`
+ * § AMENDMENT 2026-10-04 (Model lists) Panels 1–4 and 12, card MOTIR-7527.
+ * The same transport shape as `setPlannerModelAction`, and the same gate twice.
+ */
+export type PlannerListActionResult =
+  | { ok: true }
+  | { ok: false; code: 'NOT_QUALIFIED'; reason: PlannerModelListReason | null; detail: string }
+  | { ok: false; code: 'IN_USE'; audiences: string[] }
+  | { ok: false; code: 'REFUSED'; detail: string }
+  | {
+      ok: false;
+      code:
+        | 'FALLBACK'
+        | 'MODEL_REQUIRED'
+        | 'UNAVAILABLE'
+        | 'REASON_REQUIRED'
+        | 'NOT_PERMITTED'
+        | 'FAILED';
+    };
+
+export async function addPlannerListModelAction(
+  model: string,
+  reason: string,
+): Promise<PlannerListActionResult> {
+  return changePlannerList('add', model, reason);
+}
+
+export async function removePlannerListModelAction(
+  model: string,
+  reason: string,
+): Promise<PlannerListActionResult> {
+  return changePlannerList('remove', model, reason);
+}
+
+async function changePlannerList(
+  action: 'add' | 'remove',
+  model: string,
+  reason: string,
+): Promise<PlannerListActionResult> {
+  try {
+    const principal = await requirePlatformStaff('superadmin');
+    if (action === 'add') await platformPlannerModelService.addModel(principal, model, reason);
+    else await platformPlannerModelService.removeModel(principal, model, reason);
+    // The list and the audience pickers beside it are server-rendered props.
+    revalidatePath('/admin/ai-planning');
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof PlannerModelNotQualifiedError) {
+      return { ok: false, code: 'NOT_QUALIFIED', reason: err.reason, detail: err.detail };
+    }
+    if (err instanceof PlannerModelListEntryInUseError) {
+      return { ok: false, code: 'IN_USE', audiences: [...err.audiences] };
+    }
+    if (err instanceof PlannerModelListFallbackError) return { ok: false, code: 'FALLBACK' };
+    if (err instanceof PlannerModelListRefusedError) {
+      return { ok: false, code: 'REFUSED', detail: err.detail };
+    }
+    if (err instanceof PlannerModelListModelMissingError) {
+      return { ok: false, code: 'MODEL_REQUIRED' };
+    }
+    if (err instanceof MotirAiUnavailableError) return { ok: false, code: 'UNAVAILABLE' };
+    if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };
+    if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
+    console.error('[admin] planner-list action failed', { action, model }, err);
     return { ok: false, code: 'FAILED' };
   }
 }
