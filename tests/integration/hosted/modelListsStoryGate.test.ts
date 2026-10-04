@@ -235,8 +235,8 @@ describe('every list write is gated and audited, both lists', () => {
     await truncateAudit();
 
     const steps: [string, () => Promise<{ ok: boolean }>][] = [
-      ['ai.platform_run_model.add', () => addRunModelAction('claude-sonnet-5-5', 'r1')],
-      ['ai.platform_run_model.remove', () => removeRunModelAction('glm-5.2', 'r2')],
+      ['ai.run_model_list.add', () => addRunModelAction('claude-sonnet-5-5', 'r1')],
+      ['ai.run_model_list.remove', () => removeRunModelAction('glm-5.2', 'r2')],
       ['ai.planner_model_list.add', () => addPlannerListModelAction('kimi-k2.6', 'r3')],
       ['ai.planner_model_list.remove', () => removePlannerListModelAction('kimi-k2.6', 'r4')],
     ];
@@ -245,10 +245,11 @@ describe('every list write is gated and audited, both lists', () => {
       expect(await step()).toEqual({ ok: true });
       expect((await auditRows()).length).toBe(before + 1);
     }
-    const reasons = (await adminDb.platformAuditLog.findMany({ orderBy: { seq: 'asc' } })).map(
-      (r) => r.reason,
-    );
-    expect(reasons).toEqual(['r1', 'r2', 'r3', 'r4']);
+    const rows = (await adminDb.platformAuditLog.findMany({ orderBy: { seq: 'asc' } })).map((r) => [
+      r.action,
+      r.reason,
+    ]);
+    expect(rows).toEqual(steps.map(([action], i) => [action, `r${i + 1}`]));
   });
 });
 

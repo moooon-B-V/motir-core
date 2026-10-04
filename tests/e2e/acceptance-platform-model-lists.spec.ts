@@ -198,7 +198,7 @@ test('a superadmin curates both model lists, and a project’s Run hosted picker
     await expect(runRow(OPUS)).toBeVisible();
     const listed = await adminDb.platformRunModel.findMany({ orderBy: { model: 'asc' } });
     expect(listed.map((r) => r.model)).toEqual([OPUS, SONNET]);
-    expect(await auditOf('ai.platform_run_model.remove')).toHaveLength(1);
+    expect(await auditOf('ai.run_model_list.remove')).toHaveLength(1);
     await beat();
   });
 
