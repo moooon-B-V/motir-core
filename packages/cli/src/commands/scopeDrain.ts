@@ -276,12 +276,12 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
           continue;
         }
 
-        // ⚠️ A DECISION NEVER JOINS THE SESSION (MOTIR-6094). Its approval is also
-        // the merge of whatever pull request it is linked to, so it ships on a pull
-        // request of its OWN, off `main`: no seed, no session branch ensured for it,
-        // and therefore no session pull request opened or linked on its account.
-        // The server's prompt makes the same call on its side, which is what covers
-        // a lineage the card INHERITS from a blocker rather than being seeded.
+        // ⚠️ A DECISION NEVER JOINS THE SESSION (MOTIR-6094). It writes a page and
+        // publishes it (MOTIR-7437) — no commit, no pull request — so there is
+        // nothing to seed: no session branch ensured for it, and no session pull
+        // request opened or linked on its account. The server's prompt makes the
+        // same call on its side, which is what covers a lineage the card INHERITS
+        // from a blocker rather than being seeded.
         const decision = isAgentDecisionItem(item);
 
         // ⚠️ SEED FIRST, THEN RESOLVE (MOTIR-2398), exactly as `auto` does: the

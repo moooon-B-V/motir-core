@@ -1,6 +1,17 @@
 import type { ReactNode } from 'react';
-import { Check, ExternalLink, FileQuestionMark, FileX, Files } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import Link from 'next/link';
+import {
+  ArrowUpRight,
+  Check,
+  ExternalLink,
+  FileQuestionMark,
+  FileX,
+  Files,
+  History,
+  Notebook,
+} from 'lucide-react';
+import { useFormatter, useTranslations } from 'next-intl';
+import { FrozenPill } from '@/components/pages/FrozenPill';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import type {
   DecisionDocumentViewDTO,
@@ -45,7 +56,7 @@ function reasonCopyKey(
 
 /** Is there a document on screen to approve? The frame disables Approve whenever not. */
 export function decisionDocumentShown(document: DecisionDocumentViewDTO | null): boolean {
-  return document?.outcome === 'resolved';
+  return document?.outcome === 'resolved' || document?.outcome === 'page';
 }
 
 export function DecisionDocumentSlot({
@@ -77,7 +88,9 @@ export function DecisionDocumentSlot({
           <span>{acceptedLine}</span>
         </span>
       ) : null}
-      {document?.outcome === 'resolved' ? (
+      {document?.outcome === 'page' ? (
+        <PageDocument document={document} />
+      ) : document?.outcome === 'resolved' ? (
         <>
           <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-(--el-text-secondary)">
             <span className="font-mono text-xs">{document.path}</span>
@@ -102,6 +115,75 @@ export function DecisionDocumentSlot({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * A PUBLISHED PAGE VERSION (Story MOTIR-5761 · MOTIR-7436; `decision-port--page.mock.html`
+ * deltas 1–3): the meta line — the page's title, *Version N · author · time*, the Frozen
+ * chip once approved, *Open page* to that VERSION — then the changed-since notice when the
+ * page has moved on, then the version's own stored text. Never the live page.
+ */
+function PageDocument({
+  document,
+}: {
+  document: Extract<DecisionDocumentViewDTO, { outcome: 'page' }>;
+}) {
+  const t = useTranslations('approvalGate.decision.page');
+  const format = useFormatter();
+  const when = document.savedAt
+    ? format.dateTime(new Date(document.savedAt), { dateStyle: 'medium', timeStyle: 'short' })
+    : '';
+  return (
+    <>
+      <span
+        data-testid="decision-page-meta"
+        className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-(--el-text-secondary)"
+      >
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <Notebook className="h-3.5 w-3.5 flex-none" aria-hidden />
+          <span className="font-semibold text-(--el-text)">{document.title}</span>
+        </span>
+        <span>
+          {t('meta', {
+            number: document.versionNumber,
+            author: document.authorName ?? '',
+            when,
+          })}
+        </span>
+        {document.frozen ? <FrozenPill>{t('frozen')}</FrozenPill> : null}
+        <Link
+          href={document.versionUrl}
+          className="inline-flex items-center gap-1 font-semibold text-(--el-link) hover:text-(--el-link-pressed)"
+        >
+          {t('open')}
+          <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+        </Link>
+      </span>
+      {document.changedSince ? (
+        <div
+          role="status"
+          data-testid="decision-page-changed"
+          className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-warning-surface) px-3 py-2.5 text-[13px] leading-normal text-(--el-text-strong)"
+        >
+          <History className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <span>
+            {t.rich(document.frozen ? 'changedSinceApproved' : 'changedSince', {
+              number: document.versionNumber,
+              b: bold,
+            })}{' '}
+            <Link
+              href={document.compareUrl}
+              className="inline-flex items-center gap-1 font-semibold text-(--el-link) hover:text-(--el-link-pressed)"
+            >
+              {t('compareWithCurrent')}
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </span>
+        </div>
+      ) : null}
+      <MarkdownView value={document.markdown} className="motir-how-to-test min-w-0" />
+    </>
   );
 }
 

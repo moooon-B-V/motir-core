@@ -1,5 +1,7 @@
 import type {
   DecisionIdentity,
+  PageDecisionIdentity,
+  RepoFileDecisionIdentity,
   DecisionUnresolvableReason,
 } from '@/lib/approvalGates/decisionSubject';
 import type { RepoFileServiceResult } from '@/lib/services/repoFileReadService';
@@ -34,6 +36,24 @@ export type DecisionDocumentReadReason =
 
 export type DecisionDocumentContent =
   | { outcome: 'resolved'; repo: string; path: string; blobSha: string; markdown: string }
+  /** A published page version's text (MOTIR-7433) — the second resolver's answer. */
+  | {
+      outcome: 'page';
+      pageId: string;
+      versionId: string;
+      versionNumber: number;
+      title: string;
+      markdown: string;
+      /** The version's author and when it was last saved (ISO-8601) — the port's meta line
+       *  (MOTIR-7436). Null when the read does not say. */
+      authorName: string | null;
+      savedAt: string | null;
+      /** Frozen by an approval — the port's Frozen chip. */
+      frozen: boolean;
+      /** The page's NEWEST version number now; above `versionNumber` means the page
+       *  changed after it was published (the port's changed-since notice). */
+      latestVersionNumber: number | null;
+    }
   | { outcome: 'unresolvable'; reason: DecisionDocumentReadReason };
 
 /** Who is reading — the tenancy the core-owned read enforces. */
@@ -65,7 +85,7 @@ export type RepoFileRead = (
  * grows a member nobody has mapped.
  */
 export function contentFromRead(
-  identity: Extract<DecisionIdentity, { resolvable: true }>,
+  identity: Extract<RepoFileDecisionIdentity, { resolvable: true }>,
   result: RepoFileServiceResult,
 ): DecisionDocumentContent {
   switch (result.outcome) {
@@ -108,6 +128,9 @@ export function contentFromRead(
 export function repoFileDecisionResolver(read: RepoFileRead): DecisionDocumentResolver {
   return {
     async resolve(identity, ctx) {
+      // A page is the page resolver's (`decisionPageResolver.ts`); the service picks by
+      // `source`, so this arm is a guard for a direct caller, never a read.
+      if (identity.source === 'page') return { outcome: 'unresolvable', reason: 'unreadable' };
       if (!identity.resolvable) return { outcome: 'unresolvable', reason: identity.reason };
       if (!identity.headSha) return { outcome: 'unresolvable', reason: 'unreadable' };
       return contentFromRead(
@@ -115,5 +138,57 @@ export function repoFileDecisionResolver(read: RepoFileRead): DecisionDocumentRe
         await read(ctx, identity.repo, identity.path, identity.headSha),
       );
     },
+  };
+}
+
+/** What the page read answers: the version's text, plus what the port's meta line and
+ *  notices draw (MOTIR-7436) — optional, so a read that knows only the text still works. */
+export interface PageVersionReadResult {
+  markdown: string;
+  authorName?: string | null;
+  savedAt?: string | null;
+  frozen?: boolean;
+  latestVersionNumber?: number | null;
+}
+
+/** The read the page resolver makes — injected, as the file one's is. `null` when the
+ *  version row is gone. */
+export type PageVersionRead = (
+  ctx: DecisionDocumentReadContext,
+  versionId: string,
+) => Promise<PageVersionReadResult | null>;
+
+/**
+ * The SECOND resolver — a published page version's markdown (Story MOTIR-5761 ·
+ * MOTIR-7433). The version is sealed, so what it reads is exactly what was published;
+ * a row that is gone (only a project delete takes it, past the publication's FK) is
+ * `gone_at_head`, the file arm's own "not there any more".
+ */
+export function pageDecisionResolver(read: PageVersionRead): DecisionDocumentResolver {
+  return {
+    async resolve(identity, ctx) {
+      if (identity.source !== 'page') return { outcome: 'unresolvable', reason: 'unreadable' };
+      return contentFromPage(identity, await read(ctx, identity.versionId));
+    },
+  };
+}
+
+/** A page version's read → a document's content. */
+export function contentFromPage(
+  identity: PageDecisionIdentity,
+  version: PageVersionReadResult | null,
+): DecisionDocumentContent {
+  if (!version) return { outcome: 'unresolvable', reason: 'gone_at_head' };
+  return {
+    outcome: 'page',
+    pageId: identity.pageId,
+    versionId: identity.versionId,
+    versionNumber: identity.versionNumber,
+    title: identity.title,
+    markdown: version.markdown,
+    authorName: version.authorName ?? null,
+    savedAt: version.savedAt ?? null,
+    frozen: version.frozen ?? false,
+    latestVersionNumber: version.latestVersionNumber ?? null,
   };
 }

@@ -51,15 +51,17 @@ export function classifyReadyItem(item: {
 }
 
 /**
- * A `decision` card an AGENT runs — dispatched like any other, but on a pull
- * request of its OWN and never onto a session branch (MOTIR-6094).
+ * A `decision` card an AGENT runs — dispatched like any other, but never onto a
+ * session branch (MOTIR-6094), and since MOTIR-7437 onto no branch at all: the
+ * agent writes its decision as a PAGE and publishes it with
+ * `publish_decision_page`, making no commit and opening no pull request.
  *
- * Approving a decision also authorises the merge of the pull request linked to
- * it, so a decision linked to a session pull request would carry every other
- * card of the run into `main` on one press. The server's prompt already keeps
- * such a card off the lineage (`isAgentDecisionItem`, restated here for the
- * reason {@link classifyReadyItem} gives); a scoped drain additionally holds the
- * decision's dependents until its gate is approved, because nothing else in
+ * The server's prompt renders no git workflow for such a card and names no
+ * branch (`isAgentDecisionItem`, restated here for the reason
+ * {@link classifyReadyItem} gives). Keeping it off the session still matters: a
+ * decision makes no commits to integrate, and seeding a lineage for it would open
+ * a session pull request with nothing on it. A scoped drain additionally holds
+ * the decision's dependents until its gate is approved, because nothing else in
  * that loop would.
  */
 export function isAgentDecisionItem(item: {

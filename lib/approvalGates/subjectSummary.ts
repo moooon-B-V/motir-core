@@ -16,6 +16,7 @@ import { isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { decisionPagePublicationRepository } from '@/lib/repositories/decisionPagePublicationRepository';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
 import { isManualWork } from '@/lib/approvalGates/manualWorkHandler';
 import { computeGateStamp } from '@/lib/approvalGates/stamp';
@@ -315,8 +316,12 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
   // requests: `subjectId` is the card, so one batched delivery read answers every
   // decision gate on the page, and no host is called. A card with no captured open pull
   // request is absent, and its row says the subject no longer resolves.
-  async decision_approval(subjectIds, _tx, shared) {
+  async decision_approval(subjectIds, tx, shared) {
+    // A PUBLISHED PAGE wins the subject (MOTIR-7433), so it wins the row too (MOTIR-7436):
+    // the page's title and the version asked about, read for every item at once.
     const deliveries = await shared.deliveries(subjectIds);
+    const publications = await decisionPagePublicationRepository.latestForWorkItems(subjectIds, tx);
+    const pageByItem = new Map(publications.map((row) => [row.workItemId, row]));
     const membersByItem = new Map<string, Parameters<typeof decisionIdentityOf>[0][number][]>();
     for (const delivery of deliveries) {
       const pr = delivery.pullRequest;
@@ -335,7 +340,21 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
       else membersByItem.set(delivery.workItemId, [member]);
     }
     const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const [workItemId, page] of pageByItem) {
+      out.set(workItemId, {
+        kind: 'decision_approval',
+        outcome: 'page',
+        repo: '',
+        number: 0,
+        path: null,
+        title: page.pageTitle,
+        blobSha: null,
+        documentCount: 1,
+        versionNumber: page.versionNumber,
+      });
+    }
     for (const [workItemId, members] of membersByItem) {
+      if (pageByItem.has(workItemId)) continue;
       const identity = decisionIdentityOf(members);
       if (!identity) continue;
       const summary: DecisionApprovalSubjectSummaryDTO = identity.resolvable

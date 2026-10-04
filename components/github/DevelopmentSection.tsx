@@ -761,7 +761,9 @@ export function DevelopmentSectionBody({
     // to test between them, whatever the run wrote.
     <>
       <DecisionDocumentSlot document={decision.document} acceptedLine={decisionStands} />
-      {pullRequestsGroup}
+      {/* A page decision ships no pull request (MOTIR-5761), so nothing linked is the
+          expected state: no "No linked pull request" prompt under it. */}
+      {decision.document?.outcome === 'page' && nothingLinked ? null : pullRequestsGroup}
     </>
   ) : designResult ? (
     // THE DESIGN CARD'S ORDER (Q8, revised on review 2026-09-14): design result,

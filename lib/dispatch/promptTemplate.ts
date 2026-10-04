@@ -288,6 +288,12 @@ export interface ConfirmedDecisionForPrompt {
   decisionMd: string;
   /** The body's `## Resulting direction` section — the epic's direction in full. */
   resultingDirectionMd: string;
+  /**
+   * An AGENT decision approved over a PAGE (MOTIR-7438): the page and the version
+   * the approval froze. Its text lives there, not in the card's body, so the two
+   * sections above are empty and the prompt names the `get_page` call instead.
+   */
+  page?: { pageId: string; versionNumber: number };
 }
 
 /**
@@ -679,73 +685,61 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '4. If the claim is false, say so plainly and log what is actually true. A',
     '   verification that cannot fail has verified nothing.',
   ],
-  // ⚠️ THE PATH, THE COUNT AND THE PULL REQUEST ARE WHAT THE DECISION GATE READS
-  // (Story MOTIR-4907 · MOTIR-5682; `approval-gates.md` §8's FIFTH AMENDMENT). The
-  // gate asks a person about the ONE `docs/decisions/*.md` file the card's pull
-  // request adds or modifies, captured at its head (MOTIR-5674). A document written
-  // anywhere else, or two of them, leaves a gate nobody can approve and a merge
-  // held — on a run that did everything else right. A `human` decision card never
-  // reaches this lane: `isManualReadyItem` sends it to the manual steps.
+  // ⚠️ THE PUBLISHED PAGE VERSION IS WHAT THE DECISION GATE READS (Story MOTIR-5761 ·
+  // MOTIR-7437; `approval-gates.md` §8's NINTH AMENDMENT). It used to be the ONE
+  // `docs/decisions/*.md` file the card's pull request carried, captured at its head
+  // (MOTIR-5682). Now the record is a PAGE in the card's project: the agent writes
+  // it with `create_page` / `update_page`, then `publish_decision_page` SEALS that
+  // version and asks the person about exactly it. No branch, no commit, no pull
+  // request: the gate has nothing at a PR head to read, and approving it writes
+  // `done` itself. A `human` decision card never reaches this lane:
+  // `isManualReadyItem` sends it to the manual steps.
   //
-  // ⚠️ AND THE COUNT IS NOT THE SUBJECT, NOR THE SCOPE (MOTIR-6194). Clause 3 makes
-  // the FILE the gate's subject, so WHICH file is what the person is being asked to
-  // approve — and steps 3a/3b are the two rules this lane shipped without. The arm
-  // *"or modified if the decision amends an existing record"* said an existing
-  // record MAY be the target and never said which one, and *"Change no other file"*
-  // bounds the COUNT while leaving one file rewritable without limit. Both holes are
-  // satisfied completely by a run that does everything else right: MOTIR-6157's
-  // decision about MCP-authored plans was written into `approval-gates.md` — the
-  // record whose clause it CONTRADICTS — rather than `agent-authored-plans.md`, the
-  // record that OWNS its subject, and went on to settle a question the card never
-  // asked. Thirteen CI lanes were green and the one-file rule held, because it WAS
-  // one file. The runbook's own half of this rule is `motir-meta` `prompts/run.md`
-  // step 5b; the two are kept in step because neither side can detect the other's
-  // absence.
+  // ⚠️ AND THE PAGE IS THE SUBJECT, NOT THE SCOPE (MOTIR-6194, restated for pages).
+  // WHICH page is what the person is asked to approve, so steps 3a/3b are kept:
+  // MOTIR-6157's decision was written into the record whose clause it CONTRADICTS
+  // rather than the one that OWNS its subject, and then settled a question the card
+  // never asked. The runbook's own half of this rule is `motir-meta`
+  // `prompts/run.md` step 5b; the two are kept in step because neither side can
+  // detect the other's absence.
   decision: [
     '1. Read the card description above for the decision to be made and its',
     '   constraints, and verify each constraint against the shipped code.',
     '2. Lay out the real options with their trade-offs, then DECIDE — a decision card',
     '   ships a decision, not a survey.',
-    '3. Record it as EXACTLY ONE markdown file at docs/decisions/<kebab-slug>.md in',
-    "   this card's target repository — added, or modified if the decision amends an",
-    '   existing record. Follow the shape the records there already use (Status →',
-    '   Context → Decision → Consequences), capturing the context, the choice, the',
-    '   alternatives rejected, and the consequences. Change no other file under',
-    '   docs/decisions/: the gate reads exactly one, and two cannot be approved.',
-    '   If this card pins NO repository, STOP and say so in a comment on it: the',
-    '   record has no home, and picking one is a planning decision, not yours.',
-    '3a. WHICH file — the record goes where its SUBJECT lives, and the file IS what',
+    "3. Record it as ONE PAGE in this card's project, written with the create_page",
+    '   tool (or update_page, per 3a). Follow the shape a decision record uses',
+    '   (Status → Context → Decision → Consequences), capturing the context, the',
+    '   choice, the alternatives rejected, and the consequences. Any repository this',
+    '   card pins is CONTEXT for step 1, not the home of the record.',
+    '3a. WHICH page — the record goes where its SUBJECT lives, and the page IS what',
     '   the gate asks a person to approve. Name it from the thing being DECIDED, not',
-    '   from the text the decision contradicts. DEFAULT to a new',
-    '   docs/decisions/<kebab-slug>.md named for the decision; modify an EXISTING',
-    '   record only when that record already OWNS this subject — when a reader with',
-    '   this question would open that file to answer it — AND only when that file is',
-    '   small enough to be READ AS ONE QUESTION. The gate hands the reviewer the',
-    '   WHOLE file, not your diff: its subject is <owner/name>:<path>@<blobSha>, and',
-    '   a decision document has no publish call, so the pull request head is the',
-    '   only lever you have. A decision buried at line 3,495 of an ADR is reported',
-    '   as MISSING, because unreadable and absent look the same. A decision that',
-    '   contradicts a clause in some OTHER record does not belong in that record: it',
-    '   is written where it belongs, and the clause it falsifies is cited by name.',
+    '   from the text the decision contradicts. DEFAULT to a new page named for the',
+    '   decision; update an EXISTING page only when it already OWNS this subject —',
+    '   when a reader with this question would open that page to answer it — AND',
+    '   only when it is small enough to be READ AS ONE QUESTION. The gate hands the',
+    '   reviewer the WHOLE published version, not your edit: a decision buried deep',
+    '   in a long page reads as MISSING, because unreadable and absent look the same.',
+    '   A decision that contradicts a clause in some OTHER record does not belong in',
+    '   that record: it is written where it belongs, and the clause it falsifies is',
+    '   cited by name.',
     "3b. HOW MUCH — the record is BOUNDED by this card's own decision. Write what",
     '   this card decided and nothing else. Do not settle a neighbouring question,',
     '   do not retire copy, keys or clauses the card did not name, and do not repair',
     '   what is merely wrong AROUND the part you came to write. Every one of those',
-    '   reads as diligence, none of them was approved, and all of them are invisible',
-    '   to the one-file rule. Something else wrong in that file is a bug to log.',
+    '   reads as diligence and none of them was approved. Something else wrong in',
+    '   that page is a bug to log.',
     '3c. End the record with a "What this does NOT decide" section naming the',
     '   questions a reader could think it settled and it does not. That section is',
     "   what makes the record's scope checkable at the gate instead of inferable.",
-    '4. Open a pull request carrying that file and link it to this work item, as',
-    '   every lane does. The pull request is REQUIRED — it is how the decision reaches',
-    '   the person who accepts it.',
-    '   It is a pull request of its OWN, off main, and this work item is the ONLY one',
-    '   linked to it. Never integrate the file into a session branch, and never link',
-    "   a session branch's pull request to this work item: approving the decision",
-    '   authorises the merge of every pull request linked to it.',
-    '5. The decision is NOT final when your run ends. A person reads the document in',
-    '   Motir and approves it; only then does the pull request merge. Stop at the',
-    '   pull request.',
+    '4. When the page is COMPLETE, call the publish_decision_page tool ONCE with key',
+    '   set to this card and pageId set to that page. It seals the version you wrote',
+    '   and asks a person to approve exactly it. Do not edit the page afterwards: an',
+    '   edit starts a new version, and publishing again replaces the question.',
+    '5. Open NO branch, make NO commit, open NO pull request, and link nothing. The',
+    '   decision is NOT final when your run ends: a person reads the published',
+    '   version in Motir and approves it, and that approval completes the card.',
+    '   Stop after the publish.',
   ],
   // A `choice` is a PERSON's pick among options the planner declined to choose
   // between (taxonomy ADR Amendment 3) — its executor defaults to `human`, so
@@ -1032,7 +1026,8 @@ export function branchSlug(title: string): string {
  */
 function branchPrefix(type: WorkItemTypeDto | null): string {
   if (type === 'design') return 'design';
-  if (type === 'decision' || type === 'research') return 'docs';
+  // A `decision` card takes no branch at all (MOTIR-7437): it writes a page.
+  if (type === 'research') return 'docs';
   return 'subtask';
 }
 
@@ -1629,6 +1624,20 @@ function confirmedDecisionsSection(decisions: readonly ConfirmedDecisionForPromp
     'CONFIRMED DECISIONS ON THIS EPIC — the direction a person agreed, oldest first',
   ];
   for (const decision of decisions) {
+    if (decision.page) {
+      // An agent decision approved over a PAGE (MOTIR-7438): the approved text is
+      // the FROZEN version, read by number — never the live page, which may since
+      // have moved on.
+      const projectKey = decision.key.replace(/-\d+$/, '');
+      lines.push(
+        '',
+        `  ${decision.key} — ${decision.title}`,
+        `    approved ${decision.decidedAt}`,
+        '    Read the approved text — that version, not the page as it is now:',
+        `      get_page { projectKey: "${projectKey}", pageId: "${decision.page.pageId}", version: ${decision.page.versionNumber} }`,
+      );
+      continue;
+    }
     lines.push(
       '',
       `  ${decision.key} — ${decision.title}`,
@@ -2096,6 +2105,44 @@ function modelSelfReport(): string[] {
  * is not silence: the agent is told what to do INSTEAD, because an agent with a
  * finding and no instruction improvises.
  */
+/**
+ * THE OUTCOME PROTOCOL OF AN AGENT'S DECISION CARD (Story MOTIR-5761 · MOTIR-7437).
+ * The same two outcomes as {@link outcomeProtocol}, with the FINISHED order a page
+ * takes: the publish is the hand-over, and it moves the card to review itself, so
+ * the agent writes no status. There is nothing to commit, push, link or test.
+ */
+function decisionOutcomeProtocol(src: DispatchPromptSource): string[] {
+  const policy = src.findingsPolicy ?? FULL_FINDINGS_POLICY;
+  return [
+    'Two outcomes end this work, and the loop can only tell them apart if you SAY',
+    'which one happened. A process that exits 0 proves the process ended, nothing',
+    'more.',
+    '',
+    ...modelSelfReport(),
+    '',
+    'FINISHED — the decision page is written and published:',
+    '',
+    '    1. the page is complete (WHAT TO DO step 3)',
+    `    2. publish_decision_page has returned for ${src.key}, with a gateId: that`,
+    '       is the question now waiting on a person',
+    '    3. say in your report which page and version you published, and that the',
+    '       decision is AWAITING APPROVAL, not finished',
+    '',
+    `  Do NOT move ${src.key} with transition_status. The publish moved it to review,`,
+    '  and the approval moves it to done; any status you write asserts a decision',
+    '  nobody has made. Do NOT publish How to test: a decision has nothing to run.',
+    '',
+    'THE CARD IS WRONG — its premise is false, a precondition it names has not',
+    'shipped, or an acceptance criterion cannot be satisfied. Do NOT find the',
+    'nearest thing that works and decide that. In order:',
+    '',
+    '  1. PUBLISH NOTHING. A page you have started may stay as a draft, but do not',
+    '     call publish_decision_page: the publish is what asks a person to approve.',
+    ...cardIsWrongSteps(src, policy),
+    ...foundADefect(src, policy),
+  ];
+}
+
 function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null): string[] {
   const policy = src.findingsPolicy ?? FULL_FINDINGS_POLICY;
   // ⚠️ THIS BLOCK USED TO CONTRADICT THE SESSION-LINEAGE GRAMMAR, IN ONE PROMPT
@@ -2115,7 +2162,7 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
         `       (\`gh pr list --head ${sessionBranch}\`), or open it from that branch if`,
         '       you are the first item to reach this point in it',
       ]
-    : openPullRequestStep(src);
+    : openPullRequestStep();
   return [
     'Two outcomes end this work, and the loop can only tell them apart if you SAY',
     'which one happened. A process that exits 0 proves the process ended, nothing',
@@ -2208,18 +2255,6 @@ function howToTestStep(src: DispatchPromptSource): string[] {
       `        once, onto ${src.runTargetKey}, by the run's close-out step.`,
     ];
   }
-  // ⚠️ A DECISION CARD HAS NOTHING TO RUN (Story MOTIR-4907; design review 2026-09-19,
-  // `design/github/design-notes.md` § 27 *Revised on review*). Its deliverable is the
-  // document, and the decision gate's port draws the document with the pull request
-  // beneath it and NO How-to-test part — so a record written here would be one nobody
-  // is ever shown.
-  if (src.type === 'decision') {
-    return [
-      `    4b. do NOT publish How to test for ${src.key}. A decision card ships a document,`,
-      '        not something to run: the person approving reads the decision document',
-      '        itself, and the decision gate shows no How to test.',
-    ];
-  }
   return [
     `    4b. publish this run's HOW TO TEST with the ${HOW_TO_TEST_TOOL_NAME} tool —`,
     `        ONCE, on ${src.key} (this item is the run's target). "bodyMd" is RICH TEXT`,
@@ -2250,16 +2285,7 @@ function howToTestStep(src: DispatchPromptSource): string[] {
  * record on the work item is what Motir renders; the body is what a reviewer on
  * the host reads, and §9's amendment keeps both.
  */
-function openPullRequestStep(src: DispatchPromptSource): string[] {
-  // A decision card's pull request carries the document and nothing to run (see
-  // `howToTestStep`), so its body names the document instead of a How to test.
-  if (src.type === 'decision') {
-    return [
-      "    3. open the pull request. Its body names the decision document's path and",
-      '       says in one line what it decides. It carries NO "## How to test" section:',
-      '       there is nothing to run.',
-    ];
-  }
+function openPullRequestStep(): string[] {
   return [
     '    3. open the pull request. Its body carries a "## How to test" section with',
     '       the SAME Markdown step 4b publishes on the run target — its sections and',
@@ -2939,28 +2965,7 @@ function gitWorkflow(src: DispatchPromptSource, sessionBranch: string | null): s
       ? multiRepoSessionLineageWorkflow(src, repos, sessionBranch)
       : sessionLineageWorkflow(src, sessionBranch);
   }
-  const own = repos ? multiRepoPerItemPrWorkflow(src, repos) : perItemPrWorkflow(src);
-  // A decision card taken OFF the lineage it was offered (MOTIR-6094) is told
-  // why, and told the branch it must not touch — without the note, the agent
-  // sees a run integrating everything else and reads its own prompt as a slip.
-  return isAgentDecisionItem(src) && src.sessionBranch !== null
-    ? [...decisionOffLineageNote(src.sessionBranch), '', ...own]
-    : own;
-}
-
-/**
- * Why a DECISION card ships on its own pull request while the run it belongs to
- * integrates into a session branch (MOTIR-6094). See {@link isAgentDecisionItem}.
- */
-function decisionOffLineageNote(sessionBranch: string): string[] {
-  return [
-    `This run integrates its other work items into ${sessionBranch}, but a DECISION`,
-    'work item never joins it. Approving a decision also authorises the merge of the',
-    'pull request linked to it, and the session pull request carries every other work',
-    'item of the run, so one approval would merge code nobody reviewed. Do NOT branch',
-    `from ${sessionBranch}, do NOT integrate into it, do NOT call mark_integrated, and`,
-    'do NOT link its pull request to this work item.',
-  ];
+  return repos ? multiRepoPerItemPrWorkflow(src, repos) : perItemPrWorkflow(src);
 }
 
 /** The ERROR EVIDENCE section with its trailing separator, or nothing at all. */
@@ -2977,12 +2982,13 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   const manual = isManualReadyItem({ type: src.type, executor: src.executor });
   // The lineage the prompt instructs. A manual item is forced to `per_item_pr`
   // with no branch — it renders no GIT WORKFLOW at all (see the interface doc).
-  // So is an agent's DECISION card, which renders the per-item workflow: its
-  // approval is a merge, so it must never be linked to a session pull request
-  // (MOTIR-6094, {@link isAgentDecisionItem}). Decided HERE, not by the CLI,
-  // because a lineage can be inherited from a blocker as well as seeded, and
-  // every lane that dispatches reads this answer.
-  const sessionBranch = manual || isAgentDecisionItem(src) ? null : src.sessionBranch;
+  // So is an agent's DECISION card, which renders no GIT WORKFLOW either: it
+  // writes a page and publishes it, with no branch (MOTIR-7437, superseding
+  // MOTIR-6094's own-pull-request rule; {@link isAgentDecisionItem}). Decided
+  // HERE, not by the CLI, because a lineage can be inherited from a blocker as
+  // well as seeded, and every lane that dispatches reads this answer.
+  const agentDecision = !manual && isAgentDecisionItem(src);
+  const sessionBranch = manual || agentDecision ? null : src.sessionBranch;
   const workflowMode: DispatchWorkflowMode =
     sessionBranch !== null ? 'session_lineage' : 'per_item_pr';
 
@@ -3026,7 +3032,16 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   // human work with no branch, no commit and no MCP session, and `motir auto`
   // skips it entirely. Its closing note already says how to report completion.
   let closing = MANUAL_CLOSING;
-  if (!manual) {
+  if (agentDecision) {
+    // An agent's DECISION card (MOTIR-7437) writes a page and publishes it: no
+    // branch, no commit and no pull request, so no GIT WORKFLOW — a block that would
+    // contradict WHAT TO DO step 5 — and an outcome protocol whose FINISHED is the
+    // publish.
+    closing = section(
+      'REPORTING THE OUTCOME — say which one happened',
+      decisionOutcomeProtocol(src),
+    );
+  } else if (!manual) {
     closing = [
       // Every prompt that builds something tells the agent to report its steps
       // (MOTIR-7501). A MANUAL item builds nothing an agent runs, so it is absent.
@@ -3062,12 +3077,13 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
     ...closing,
   ];
 
-  const branch = manual ? null : (src.continueFrom?.branch ?? sessionBranch ?? cardBranch(src));
+  const branchless = manual || agentDecision;
+  const branch = branchless ? null : (src.continueFrom?.branch ?? sessionBranch ?? cardBranch(src));
   return {
     prompt: lines.join('\n') + '\n',
     workflowMode,
     sessionBranch,
-    workBranch: manual ? null : cardBranch(src),
+    workBranch: branchless ? null : cardBranch(src),
     branch,
   };
 }

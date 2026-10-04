@@ -253,6 +253,9 @@ A new **`page`** domain in `PERMISSION_DOMAINS`, and three keys:
 - **The retention cap is 100 versions per page.** Writing the 101st deletes the oldest, in the
   same transaction. The page's current body is never a version that can be pruned, because it
   lives on `page`.
+- **A version may be SEALED or FROZEN** — [AMENDMENT 3](#amendment-3-2026-10-03--two-marks-on-a-version-sealed-and-frozen):
+  a sealed version is never extended or pruned, and a page holding a frozen one cannot be
+  deleted.
 - **Restore creates a new version.** Restoring version N computes one Yjs update that replaces
   the current fragment with version N's content and applies it as a save, then records a new
   version with `restored_from_version_id = N`. The Yjs history is never rewound: a client
@@ -273,6 +276,7 @@ A new **`page`** domain in `PERMISSION_DOMAINS`, and three keys:
   meanwhile has already moved the page up (§4), so its stored placement is still a real one.
   The position is kept when it still sorts among the new siblings, and appended otherwise.
 - **Delete is permanent** and takes the same set, versions included. It needs `page:delete`.
+  It is refused for a page holding a FROZEN version (AMENDMENT 3).
 - [AMENDMENT 2](#amendment-2-2026-10-03--what-7-left-open-about-archive-restore-and-delete) records the
   depth-skip rung, delete's re-homing, root-only restore and delete, and the four refusals.
 
@@ -423,6 +427,53 @@ a restore re-checks the key with `positionTaken`. Leaving them behind would fail
 `page.folder_id NO ACTION`, and §7's "a folder deleted meanwhile has already moved the page up"
 depends on it.
 
+### AMENDMENT 3 (2026-10-03) — Two marks on a version: SEALED and FROZEN
+
+- **Decided by:** MOTIR-7427 (Story MOTIR-5761, _Decisions become pages_), for
+  `approval-gates.md` §8's NINTH AMENDMENT.
+- **Amends:** §6 _Versions_ (the coalescing window, the retention cap, restore) and §7 _Archive and
+  delete_ (what a delete must check). Every §6 and §7 rule stands for an unmarked version.
+
+A decision can now be a page: an agent publishes a page version to a decision work item, and a
+person approves it. An approval must keep meaning what the person read, and a version as §6
+defines it cannot promise that — a same-author save within 10 minutes rewrites it in place, and
+the cap deletes the oldest past 100. So a version can carry two marks.
+
+1. **SEALED** — `page_version.sealed_at`, set by `publish_decision_page`, in the publish's
+   transaction, on the version that is latest at that moment.
+   - **A save never extends a sealed version.** §6's coalescing rule gains a fourth condition:
+     the latest version must not be sealed. A save after a publish therefore starts version
+     `latest.number + 1`, whoever saves and however soon.
+   - **The cap never deletes a sealed version.**
+   - A seal is set once and never cleared. It keeps nothing else alive: a sealed version may
+     still be deleted with its page.
+2. **FROZEN** — `page_version.frozen_at` and `page_version.frozen_by_gate_id`, set by the gate
+   that approved it (a `decision_approval` Approve, or a `decision_confirmation` Confirm), in
+   that gate's deciding transaction. A frozen version is always sealed first.
+   - **Never extended, never pruned** — everything a seal forbids.
+   - **Its page cannot be hard-deleted while it holds one.** The refusal is the domain's:
+     `assertPageDeletable` in `@motir/pages` refuses by name (`PAGE_HOLDS_FROZEN_VERSION`, 409),
+     and §7's delete calls it for every page in the set before the one-statement delete.
+     Archiving is unaffected: an archived page keeps its versions, and the approval with them.
+   - Only an approval freezes. **Request changes** and **Overturn** freeze nothing.
+3. **Why the delete refusal is not a database trigger.** A project or workspace delete
+   cascades through `page_version`, and must not be refused by a page's approval history: the
+   tenant owns its data, and deleting a project is a decision about all of it. A trigger cannot
+   tell a page delete from a cascade it is part of. The domain call can, because it is made
+   only by the page delete.
+4. **The cap counts every version but deletes only unmarked ones.** Writing a version past
+   `PAGE_VERSION_CAP` deletes the oldest UNMARKED versions until the page holds 100, or until
+   only marked versions remain. **So a page may hold more than 100 versions when more than 100
+   of them are marked**, and that is correct: each marked version is a decision somebody made.
+5. **Restore makes a NEW version, which carries no marks.** Restoring a frozen version copies its
+   content into a new version (§6), with `restored_from_version_id` naming it. The frozen
+   version itself is untouched, and the new one is not approved by anyone.
+
+**What this does NOT decide.** Page ↔ work-item mention links (MOTIR-5747); archive and delete
+themselves (§7, AMENDMENT 2); migrating historical `docs/decisions/` files into pages; read-only
+pages — the page stays editable, and only the approved version is fixed. Which gate kinds may
+freeze, and when, is `approval-gates.md` §8's NINTH AMENDMENT.
+
 ---
 
 ## Consequences
@@ -456,5 +507,8 @@ depends on it.
 - **The co-editing server's hosting, presence or cursor protocol.** §8.4 fixes only how it saves.
 - **Page templates, blog posts, workspace-level pages, moving a page between projects, and
   page-level restrictions.** The epic rules all of them out, and nothing here reopens them.
-- **Anything about the decision gate.** Whether it ever resolves a page is MOTIR-5748's question
-  (its story MOTIR-5761); this record changes nothing about how decisions are gated today.
+- ~~**Anything about the decision gate.** Whether it ever resolves a page is MOTIR-5748's question
+  (its story MOTIR-5761); this record changes nothing about how decisions are gated today.~~
+  **AMENDED (MOTIR-7427, 2026-10-03):** the decision gate now resolves a page —
+  `approval-gates.md` §8's NINTH AMENDMENT. This record decides only the two marks a version can
+  carry (AMENDMENT 3); how a gate raises, routes and decides stays that record's.

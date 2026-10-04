@@ -65,6 +65,8 @@ vi.mock('@/lib/navigation/shallowUrl', () => ({
 
 const { GET: gateRoute } = await import('@/app/api/work-items/approval-gate/route');
 const { workItemsService } = await import('@/lib/services/workItemsService');
+const { pagesService } = await import('@/lib/services/pagesService');
+const { decisionPageService } = await import('@/lib/services/decisionPageService');
 const { ApprovalOverlay } = await import('@/components/approvals/ApprovalOverlay');
 
 const SLOW = { timeout: 15_000 };
@@ -150,7 +152,9 @@ describe('Confirm, from the overlay', () => {
     const dialog = await open(decision.identifier);
     expect(within(dialog).getByText('Exports move to managed object storage.')).toBeTruthy();
     expect(within(dialog).getByRole('link', { name: new RegExp(story.identifier) })).toBeTruthy();
-    expect(within(dialog).getByText(t.record.none)).toBeTruthy();
+    // No record yet, and the reader can edit the card: the record line is the page picker
+    // (MOTIR-7444), which replaces the read-only "No written record" line.
+    expect(within(dialog).getByTestId('decision-record-picker')).toBeTruthy();
 
     fireEvent.click(within(dialog).getByRole('button', { name: t.verb.confirm }));
     fireEvent.click(within(dialog).getByRole('button', { name: t.confirmStep.proceed }));
@@ -233,5 +237,42 @@ describe('a body edited under the reader', () => {
     fireEvent.click(await within(dialog).findByRole('button', { name: t.verb.confirm }, SLOW));
     fireEvent.click(within(dialog).getByRole('button', { name: t.confirmStep.proceed }));
     await waitFor(async () => expect(await statusOf(decision.id)).toBe('done'), SLOW);
+  });
+});
+
+describe('choosing a page as the written record, from the overlay', () => {
+  it('publishes the page and re-reads the subject, so the record names its version', async () => {
+    const { decision } = await scene();
+    const page = await pagesService.createPageFromMarkdown(fx.ctx, {
+      projectId: fx.projectId,
+      title: 'Exports direction',
+      markdown: '# Exports direction\n\nExports move to the bucket.',
+    });
+    // The picker's two calls are answered by the services their routes are thin over;
+    // the overlay's own read stays the real route.
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      if (url.pathname === '/api/work-items/approval-gate') return gateRoute(new Request(url));
+      if (url.pathname === '/api/pages') {
+        const items = await pagesService.listPages(fx.ctx, { projectId: fx.projectId });
+        return Response.json({ items });
+      }
+      if (url.pathname === `/api/work-items/${decision.identifier}/decision-page`) {
+        const { pageId } = JSON.parse(String(init?.body)) as { pageId: string };
+        const dto = await decisionPageService.publish({ workItemId: decision.id, pageId }, fx.ctx);
+        return Response.json(dto, { status: 201 });
+      }
+      throw new Error(`unexpected ${url}`);
+    });
+    const dialog = await open(decision.identifier);
+
+    fireEvent.click(await within(dialog).findByRole('combobox', { name: t.record.link }, SLOW));
+    fireEvent.click(await within(document.body).findByRole('option', { name: page.title }, SLOW));
+
+    const record = await within(dialog).findByTestId('decision-record-page', {}, SLOW);
+    expect(record.textContent).toContain(page.title);
+    expect(within(record).getByRole('link', { name: t.record.open }).getAttribute('href')).toBe(
+      `/pages/${page.id}?version=1`,
+    );
   });
 });

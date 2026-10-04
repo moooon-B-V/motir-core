@@ -34,6 +34,31 @@ export type DecisionDocumentViewDTO =
       /** The file on the host, at the head it was read at — a page link, not an API. */
       hostUrl: string;
     }
+  /**
+   * A published PAGE version (Story MOTIR-5761 · MOTIR-7433): its text, number and
+   * title, and the page's address. The port draws it per the delta mocks (MOTIR-7436).
+   */
+  | {
+      outcome: 'page';
+      pageId: string;
+      versionId: string;
+      versionNumber: number;
+      title: string;
+      markdown: string;
+      /** The page in Motir — `/pages/<id>`. */
+      pageUrl: string;
+      /** The published VERSION's view — `/pages/<id>?version=<n>` (Open page). */
+      versionUrl: string;
+      /** The History compare view for that version (Compare with current). */
+      compareUrl: string;
+      authorName: string | null;
+      /** ISO-8601 — when the version was last saved. */
+      savedAt: string | null;
+      /** Frozen by an approval (the Frozen chip). */
+      frozen: boolean;
+      /** The page has versions after the published one (the changed-since notice). */
+      changedSince: boolean;
+    }
   | {
       outcome: 'unresolvable';
       reason: DecisionDocumentViewReason;

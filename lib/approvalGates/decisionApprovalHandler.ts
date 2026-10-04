@@ -12,10 +12,16 @@ import {
   decisionSubjectVersion,
   type DecisionIdentity,
   type DecisionMember,
+  type PageDecisionIdentity,
 } from '@/lib/approvalGates/decisionSubject';
 import { ApprovalGateDecisionUnresolvableError } from '@/lib/approvalGates/errors';
 import { decisionApprovalStandsForMerge } from '@/lib/approvalGates/gateSet';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { decisionPagePublicationRepository } from '@/lib/repositories/decisionPagePublicationRepository';
+import { pageRepository } from '@/lib/repositories/pageRepository';
+import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { pageStoreFor } from '@/lib/pages';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import {
   workItemDeliveryRepository,
@@ -41,6 +47,17 @@ import {
 // an opaque `subjectId` (the card) and a version string (the blob) — so moving
 // decision documents into a pages domain later is a resolver change, never a
 // migration on the audit table.
+//
+// ⚠️ AND NOW IT DOES ASK ABOUT A PAGE (Story MOTIR-5761 · MOTIR-7433; §8 NINTH
+// AMENDMENT). A card that PUBLISHED a page version (`decisionPageService.publish`)
+// is asked about that version, and the page WINS over any file its pull requests
+// carry. The version string is `page:<pageId>@<versionId>`, still opaque to the
+// gate table; Approve FREEZES that version in the door's transaction and, with no
+// pull request open, writes `done` — so "approved" and "frozen" cannot diverge.
+
+/** The `done` the page arm writes — the design gate's intent, for the same reason:
+ *  a project may have renamed its statuses, so this is an INTENT, never a key. */
+export const DECISION_APPROVAL_TARGET = { key: 'done', category: 'done' } as const;
 
 /**
  * The card's OPEN delivering pull requests, as the subject reads them. A merged or
@@ -72,9 +89,42 @@ export async function loadDecisionIdentity(
   workItemId: string,
   tx: Prisma.TransactionClient,
 ): Promise<DecisionIdentity | null> {
-  return decisionIdentityOf(
-    decisionMembersOf(await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx)),
+  // A PUBLISHED PAGE WINS (§8 NINTH AMENDMENT clause 2): read first, and only a
+  // card with no publication falls through to the capture on its pull requests.
+  return (
+    (await loadPageDecisionIdentity(workItemId, tx)) ??
+    decisionIdentityOf(
+      decisionMembersOf(await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx)),
+    )
   );
+}
+
+/**
+ * The card's PUBLISHED PAGE as a decision identity, or `null` when it has none — the
+ * half of {@link loadDecisionIdentity} the gate set (which reads the deliveries itself)
+ * calls directly, so both answer "a page wins" from one read.
+ */
+export async function loadPageDecisionIdentity(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<PageDecisionIdentity | null> {
+  const publication = await decisionPagePublicationRepository.latestForWorkItem(workItemId, tx);
+  if (!publication) return null;
+  const [version, page] = await Promise.all([
+    pageVersionRepository.findVersionById(publication.pageVersionId, tx),
+    pageRepository.findById(publication.pageId, tx),
+  ]);
+  // The version cannot go while the publication stands (its FK refuses it), so a
+  // miss is a page invisible to this reader — read on as if unpublished.
+  if (!version || !page) return null;
+  return {
+    source: 'page',
+    resolvable: true,
+    pageId: page.id,
+    versionId: version.id,
+    versionNumber: version.number,
+    title: page.title,
+  };
 }
 
 /**
@@ -97,10 +147,13 @@ export async function decisionHoldsMerge(
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
   if (!asksTheDecisionQuestion(item)) return false;
-  const [identity, latestDecisionGate] = await Promise.all([
+  const [identity, latestDecisionGate, openPullRequests] = await Promise.all([
     loadDecisionIdentity(item.id, tx),
     approvalGateRepository.findLatestByWorkItem(item.id, 'decision_approval', tx),
+    workItemDeliveryRepository.countOpenByWorkItem(item.id, tx),
   ]);
+  // A PAGE decision with no pull request open holds no merge — there is none.
+  if (identity?.source === 'page' && openPullRequests === 0) return false;
   return !decisionApprovalStandsForMerge(identity, latestDecisionGate);
 }
 
@@ -117,7 +170,8 @@ export const decisionApprovalGateHandler: GateHandler<DecisionIdentity> = {
     return loadDecisionIdentity(gate.subjectId, tx);
   },
 
-  /** `owner/name:path@blobSha`, or the unresolvable form — clause 4. */
+  /** `owner/name:path@blobSha`, the unresolvable form (clause 4), or
+   *  `page:<pageId>@<versionId>` for a published page (NINTH AMENDMENT clause 2). */
   async subjectVersion(args: GateEffectArgs): Promise<string | null> {
     const identity = await this.resolveSubject(args);
     return identity ? decisionSubjectVersion(identity) : null;
@@ -147,17 +201,22 @@ export const decisionApprovalGateHandler: GateHandler<DecisionIdentity> = {
   permission: 'work_item:edit',
 
   /**
-   * NONE (clause 5). The decision press writes no status: `approved` is written by
-   * the COMPANION approve-to-merge gate the same press decides, and `done` only by the
-   * merge webhook. Owning a transition here would make a second writer of a status
-   * the companion already owns.
+   * `done` — written ONLY by the page arm with no pull request open (§8 NINTH
+   * AMENDMENT clause 4, §3's first row), where nothing will ever merge and so
+   * nothing else would write it. A FILE decision always has a pull request open
+   * (clause 2), so its press still writes no status (clause 5): `approved` is the
+   * COMPANION approve-to-merge gate's, and `done` the merge webhook's. The intent
+   * is also what holds a hand move to `done` while a page decision awaits — with
+   * a pull request open the merge already held it, so a file decision's holds are
+   * unchanged.
    */
-  statusIntent: null,
+  statusIntent: DECISION_APPROVAL_TARGET,
 
   /**
-   * APPROVE — record the decision (the door does that) and move nothing, exactly as
-   * `designResultGateHandler.approve` does while a pull request is open — and for this
-   * kind one always is (clause 2). The merge that follows is carried by the press
+   * APPROVE — for a FILE decision, record the decision (the door does that) and move
+   * nothing, exactly as `designResultGateHandler.approve` does while a pull request is
+   * open — and for a file one always is (clause 2). A PAGE decision freezes its
+   * version and, with no pull request open, writes `done` (the page arm below). The merge that follows is carried by the press
    * (`pullRequestMergeService`) and, when the set is not green yet, by the next green
    * verdict (MOTIR-5677).
    *
@@ -169,7 +228,35 @@ export const decisionApprovalGateHandler: GateHandler<DecisionIdentity> = {
     const identity = await this.resolveSubject(args);
     if (!identity) throw new ApprovalGateDecisionUnresolvableError('none');
     if (!identity.resolvable) throw new ApprovalGateDecisionUnresolvableError(identity.reason);
-    return { statusWritten: null, statusDeferredReason: 'merge_writes_done' };
+    if (identity.source !== 'page') {
+      return { statusWritten: null, statusDeferredReason: 'merge_writes_done' };
+    }
+
+    // THE PAGE ARM. Lock the card, then the page — the publish's order after the
+    // gate this door already holds — so a racing save serialises behind the
+    // freeze and starts a new version rather than extending the frozen one.
+    const { gate, ctx, tx, resolvedStatusKey } = args;
+    const workItemId = gate.subjectId;
+    await workItemRepository.lockById(workItemId, tx);
+    await pageStoreFor(tx).lockPage(identity.pageId);
+    await pageVersionRepository.freezeVersion(identity.versionId, gate.id, new Date(), tx);
+
+    if ((await workItemDeliveryRepository.countOpenByWorkItem(workItemId, tx)) > 0) {
+      // The merge writes `done`; `approved` is the companion merge gate's (clause 5).
+      return { statusWritten: null, statusDeferredReason: 'merge_writes_done' };
+    }
+    if (resolvedStatusKey === null) {
+      return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
+    }
+    // `decidingGateId` exempts THIS gate from the approval-gate guard: it is still
+    // `awaiting` here, the door writing the decision after the effect. LAZY: the
+    // status funnel reaches back into the gate registry this handler is part of,
+    // and a static import closes that cycle at module load.
+    const { workItemsService } = await import('@/lib/services/workItemsService');
+    await workItemsService.applyStatusTransition(workItemId, resolvedStatusKey, ctx, tx, {
+      decidingGateId: gate.id,
+    });
+    return { statusWritten: resolvedStatusKey };
   },
 
   /**
