@@ -83,8 +83,15 @@ test('platform staff read the system-health board with its Errors, Hosting and G
   });
 
   await chapter('Gateway: reachable, with its latency and version', async () => {
-    await expect(board.getByText('Reachable · 42 ms', { exact: true })).toBeVisible();
-    await expect(board.getByText(/motir-gateway v0\.0\.0-e2e/)).toBeVisible();
+    // Scoped to the Gateway card, never the whole board: the Database card renders
+    // the same `Reachable · {ms} ms` message from a REAL ping against CI Postgres,
+    // so on the run where that ping also measures 42 ms a board-wide `getByText`
+    // matches both cards and fails strict mode (MOTIR-7557).
+    const gateway = board
+      .locator('[data-surface="card"]')
+      .filter({ has: page.getByText(mon.signal.gateway.title, { exact: true }) });
+    await expect(gateway.getByText('Reachable · 42 ms', { exact: true })).toBeVisible();
+    await expect(gateway.getByText(/motir-gateway v0\.0\.0-e2e/)).toBeVisible();
     await beat();
   });
 
