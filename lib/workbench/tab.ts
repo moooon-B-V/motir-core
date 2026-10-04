@@ -6,14 +6,14 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 //
 // The selection lives in the URL (`design/workbench/design-notes.md` §"The tab
 // strip", amended by § 21). The rule is ONE CANONICAL URL PER TAB, and since
-// MOTIR-5218 it is TOTAL: every tab — To do and To approve included — is
+// MOTIR-5218 it is TOTAL: every tab — To do and Waiting on you included — is
 // spelled `?tab=<slug>`, and no tab is spelled as the bare path.
 //
 // ⚠️ IT USED TO BE SPECIAL-CASED, AND WHY THAT HAD TO GO. The default tab (To
 // do) was spelled as the ABSENCE of the param, so a link to the Workbench and a
 // link to To do were the same link. That implementation assumed the default was
 // FIXED. The landing now CASCADES (§ 21) — a bare `/workbench` resolves to
-// To approve, else In progress, else To do, per reader and per day — so the bare
+// Waiting on you, else In progress, else To do, per reader and per day — so the bare
 // path cannot be any one tab's spelling: it would name a different view for
 // every reader, the very ambiguity the one-URL rule forbids. So the rule is kept
 // by making it total, and the bare path is an ENTRANCE, not a view: it resolves
@@ -22,7 +22,7 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 // ⚠️ THE LABEL AND THE SLUG ARE DIFFERENT WORDS ON PURPOSE, on two of the five.
 // A slug names the SET and a label says what the tab is FOR: `finished` is
 // addressed by the noun and read as *Recently finished*, and `approvals` is
-// addressed by the noun and read as **To approve** — the other four tabs name a
+// addressed by the noun and read as **Waiting on you** — the other four tabs name a
 // state a work item is IN, and that one names something the READER must do,
 // which is the whole reason it sits apart from them. An address is a noun
 // somebody pastes; a label is what they read on the strip; neither owes the

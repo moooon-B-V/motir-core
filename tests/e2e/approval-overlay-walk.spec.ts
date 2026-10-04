@@ -318,7 +318,7 @@ test.describe('an approval, decided full screen over the page you are on', () =>
     // The suite's own locale switch (`workbench.spec.ts`).
     await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: page.url() }]);
 
-    await test.step('待审批 — the row opens the design full screen', async () => {
+    await test.step('等你处理 — the row opens the design full screen', async () => {
       await page.goto('/workbench?tab=approvals');
       await expect(page.getByRole('link', { name: toApprove })).toHaveAttribute(
         'aria-current',

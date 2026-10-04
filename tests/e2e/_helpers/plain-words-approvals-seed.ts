@@ -7,8 +7,9 @@ import { seedApprovalsTab, type ApprovalsTabSeed } from './approvals-tab-seed';
 import { choiceBody } from './choice-gate-seed';
 import { decisionBody } from './decision-confirm-gate-seed';
 
-// THE PLAIN-WORDS SEED (Story MOTIR-5996 · Subtask MOTIR-6003), for the receipt
-// `acceptance-plain-words-approvals.spec.ts` records.
+// THE PLAIN-WORDS SEED (Story MOTIR-5996 · Subtask MOTIR-6003), for the walk
+// `plain-words-approvals.spec.ts` drives (the story's receipt, promoted to the main
+// lane by Story MOTIR-7460 — docs/acceptance-lane-triage.md § MOTIR-7460).
 //
 // It COMPOSES `approvals-tab-seed.ts` (the reviewer, the project, the design card
 // whose result the spec publishes for real) and adds the rest of a reviewer's

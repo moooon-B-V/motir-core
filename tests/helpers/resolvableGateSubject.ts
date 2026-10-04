@@ -102,6 +102,15 @@ export async function resolvableGateSubject(
     }
     return workItemId;
   }
+  // A manual-work gate's subject is the card while it is still MANUAL (MOTIR-7478 · ADR
+  // `manual-work-gate.md`): a card off manual has no manual-work question to ask.
+  if (kind === 'manual_work') {
+    await adminDb.workItem.update({
+      where: { id: workItemId },
+      data: { type: 'manual', executor: 'human' },
+    });
+    return workItemId;
+  }
   if (kind === 'decision_choice' || kind === 'decision_confirmation') {
     await adminDb.workItem.update({
       where: { id: workItemId },

@@ -5189,6 +5189,11 @@ enum ApprovalGateKind {
   /// when `Project.reviewAgentEnabled`; decided by the review run (`review_agent`) or
   /// by the routed person continuing without it (§12.3).
   agent_review
+  /// MANUAL WORK a run reached and could not do (Story MOTIR-7460 · MOTIR-7474;
+  /// `docs/decisions/manual-work-gate.md`). The subject is the work item itself;
+  /// the decision is the card reaching Done through a person's door (Mark done).
+  /// No pull request — Mark done is TERMINAL and writes `done` (Workflow A).
+  manual_work
 
   @@map("approval_gate_kind")
 }
@@ -5290,6 +5295,14 @@ enum ApprovalGateSupersedeCause {
   /// (MOTIR-7146). Written when a read observes it, after the handler re-reads the subject
   /// under the gate's lock, so the question nobody can answer leaves To approve.
   subject_gone
+  /// A `manual_work` gate's card stopped being manual — its executor or type was
+  /// edited so a person no longer owes the work (MOTIR-7474;
+  /// `docs/decisions/manual-work-gate.md` §6).
+  no_longer_manual
+  /// A `manual_work` gate's card reached a done status by a write nobody decided — the
+  /// parent cascade, the rollup — so the question closes without being recorded as
+  /// approved (MOTIR-7474; `docs/decisions/manual-work-gate.md` §6).
+  closed_without_decision
 
   @@map("approval_gate_supersede_cause")
 }

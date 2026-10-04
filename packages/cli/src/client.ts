@@ -331,6 +331,12 @@ export interface DispatchItem {
    */
   assigneeId: string | null;
   /**
+   * The assignee's display name, when the row names one (MOTIR-7477) — what a run
+   * report says a manual card it skipped is waiting on (`manualWaitingOn`).
+   * Optional: an item not read off a ready row carries none.
+   */
+  assigneeName?: string | null;
+  /**
    * READY RELATIVE TO WHAT — the branch this item's dependencies are integrated
    * on, or `null` when it is ready from the trunk (ADR Amendment 17).
    *

@@ -113,14 +113,14 @@ function publish(client: Client, key: string): Promise<CallToolResult> {
 }
 
 /**
- * The strip's **To approve** badge, as a number, read in the CURRENT page state.
+ * The strip's **Waiting on you** badge, as a number, read in the CURRENT page state.
  *
  * The strip SUPPRESSES a zero badge (`design/workbench/design-notes.md` § the
  * tab strip — *"a `0` beside a tab is noise a new user has to parse"*), so an
  * absent number IS zero rather than an element to wait for.
  */
 async function badgeCount(page: Page): Promise<number> {
-  const text = (await page.getByRole('link', { name: /To approve/ }).textContent()) ?? '';
+  const text = (await page.getByRole('link', { name: /Waiting on you/ }).textContent()) ?? '';
   const digits = text.replace(/[^0-9]/g, '');
   return digits === '' ? 0 : Number(digits);
 }
@@ -135,7 +135,7 @@ async function badgeCount(page: Page): Promise<number> {
 // keep their test id, scoped to the live table rather than the page: the
 // `row` role alone would also count the header row and each open disclosure.
 const rows = (page: Page) =>
-  page.getByRole('table', { name: 'To approve' }).getByTestId(/^approval-row-/);
+  page.getByRole('table', { name: 'Waiting on you' }).getByTestId(/^approval-row-/);
 
 /** The empty state's heading — an `<h2>`, so it has a role and a name. */
 const emptyHeading = (page: Page, name: string) => page.getByRole('heading', { name });
@@ -167,13 +167,13 @@ test.describe('every decision waiting on you, in one place', () => {
       await signIn(page, seed.reviewerEmail, seed.password);
       // The strip says there is something waiting BEFORE anybody navigates to
       // it — which is the whole difference between a queue and a folder.
-      await expect(page.getByRole('link', { name: /To approve/ })).toBeVisible();
+      await expect(page.getByRole('link', { name: /Waiting on you/ })).toBeVisible();
       expect(await badgeCount(page)).toBe(1);
     });
 
     await test.step('The tab says what is waiting, and which design it is about', async () => {
       await page.goto('/workbench?tab=approvals');
-      await expect(page.getByRole('link', { name: /To approve/ })).toHaveAttribute(
+      await expect(page.getByRole('link', { name: /Waiting on you/ })).toHaveAttribute(
         'aria-current',
         'page',
       );
@@ -230,7 +230,7 @@ test.describe('every decision waiting on you, in one place', () => {
       // AUTHORITATIVE: the badge drops once the refreshed read has landed. ⚠️ The
       // queue is back in the accessibility tree first — a role-rooted count taken
       // while the dialog's hide settles reads VACUOUSLY.
-      await expect(page.getByRole('table', { name: 'To approve' })).toBeVisible();
+      await expect(page.getByRole('table', { name: 'Waiting on you' })).toBeVisible();
       await expect.poll(() => badgeCount(page), { timeout: 30_000 }).toBe(0);
       // The decided row SETTLES IN PLACE (design-notes § 20, kept through
       // live-ness by § 26 — MOTIR-5238): still there, carrying its state, with
@@ -245,7 +245,7 @@ test.describe('every decision waiting on you, in one place', () => {
 
     await test.step('The next load drops the settled row, and the tab is empty', async () => {
       await page.reload();
-      await expect(emptyHeading(page, 'Nothing is waiting on your approval')).toBeVisible();
+      await expect(emptyHeading(page, 'Nothing is waiting on you')).toBeVisible();
       await expect(rows(page)).toHaveCount(0);
       expect(await badgeCount(page)).toBe(0);
     });
@@ -274,7 +274,7 @@ test.describe('every decision waiting on you, in one place', () => {
     await signIn(page, seed.readerEmail, seed.password);
     await page.goto('/workbench?tab=approvals');
 
-    await expect(emptyHeading(page, 'Nothing is waiting on your approval')).toBeVisible();
+    await expect(emptyHeading(page, 'Nothing is waiting on you')).toBeVisible();
     await expect(rows(page)).toHaveCount(0);
     // The badge is SUPPRESSED at zero rather than reading `0`.
     expect(await badgeCount(page)).toBe(0);
@@ -284,18 +284,20 @@ test.describe('every decision waiting on you, in one place', () => {
     // `NEXT_LOCALE` cookie is the suite's own switch (`workbench.spec.ts`).
     await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: page.url() }]);
     await page.goto('/workbench?tab=approvals');
-    await expect(page.getByRole('link', { name: /待审批/ })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: /等你处理/ })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    await expect(emptyHeading(page, '没有等待你审批的工作')).toBeVisible();
+    await expect(emptyHeading(page, '没有等你处理的事项')).toBeVisible();
     // The body is a `<p>`: the `paragraph` role carries no accessible name, so
     // it is narrowed by its text — still inside the accessibility tree.
     await expect(
-      page.getByRole('paragraph').filter({ hasText: '需要你签字确认才能继续的工作会显示在这里。' }),
+      page
+        .getByRole('paragraph')
+        .filter({ hasText: '需要你决定的审批，以及运行交给你完成的工作，都会显示在这里。' }),
     ).toBeVisible();
     // Negatively too: the English literal must not be reachable on a `zh` page.
-    await expect(page.getByText('Nothing is waiting on your approval')).toHaveCount(0);
+    await expect(page.getByText('Nothing is waiting on you')).toHaveCount(0);
   });
 
   test('a reader who may SEE a decision but not make it gets its state and no verbs', async ({

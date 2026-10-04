@@ -343,6 +343,39 @@ describe('the DISCRIMINATION — a tab moving is not this gate moving', () => {
     expect(h.gateReadCount()).toBeGreaterThan(before);
   });
 
+  it('a MANUAL-WORK question draws the same notice, and its own Show the current version re-reads (MOTIR-7478)', async () => {
+    params = new URLSearchParams('approval=MOTIR-5147&approvalKind=manual_work');
+    const manual = (over: Partial<ApprovalGateOverlayReadDTO> = {}) => {
+      const base = read(over);
+      return {
+        ...base,
+        gate: { ...base.gate, kind: 'manual_work', subjectId: 'wi-1', subjectVersion: null },
+        subject: {
+          state: 'resolved',
+          kind: 'manual_work',
+          manualWork: {
+            todos: [],
+            progress: { done: 0, total: 0 },
+            mergeWritesDone: false,
+          },
+        },
+      } as ApprovalGateOverlayReadDTO;
+    };
+    const h = harness([manual(), manual({ movedSince: ['subject'] })]);
+    await mount();
+
+    await h.nudge(['approvals']);
+
+    const notice = screen.getByTestId('approval-subject-moved');
+    expect(notice.textContent).toContain('changed since you opened this');
+
+    const before = h.gateReadCount();
+    await act(async () => {
+      fireEvent.click(within(notice).getByRole('button', { name: 'Show the current version' }));
+    });
+    expect(h.gateReadCount()).toBeGreaterThan(before);
+  });
+
   it('names SEVERAL things when several moved', async () => {
     const h = harness([read(), read({ movedSince: ['subject', 'criteria'] })]);
     await mount();

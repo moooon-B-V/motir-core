@@ -928,5 +928,16 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.61.0` after MOTIR-7023's
  *   `1.60.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
  *   MEMBER.
+ *
+ * - `1.62.0` — MOTIR-7474 (Story MOTIR-7460) adds `manual_work` to the approval-gate
+ *   KIND — a manual card a run reached, waiting on a person
+ *   (`docs/decisions/manual-work-gate.md`) — and `no_longer_manual` and
+ *   `closed_without_decision` to its supersede cause.
+ *
+ *   Additive: new members of enums every client must tolerate (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.62.0` after MOTIR-7146's
+ *   `1.61.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
+ *   MEMBERS.
  */
-export const V1_CONTRACT_VERSION = '1.61.0';
+export const V1_CONTRACT_VERSION = '1.62.0';

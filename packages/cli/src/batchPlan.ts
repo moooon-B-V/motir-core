@@ -1,5 +1,5 @@
 import { formatTable, truncate } from './render.js';
-import { classifyReadyItem, formatDuration } from './autoLoop.js';
+import { classifyReadyItem, formatDuration, renderManualSkipGroups } from './autoLoop.js';
 
 // The PURE half of `motir batch` (Story 7.9 · Subtask 7.9.10 · MOTIR-888): what
 // the SNAPSHOT contains, what is left out of it and why, and what the run
@@ -114,6 +114,9 @@ export interface SnapshotSkip {
   key: string;
   title: string | null;
   reason: SnapshotSkipReason;
+  /** For `needs_human`: who the card waits on when it is not the run's starter
+   *  (`manualWaitingOn`). Absent means the starter — *you*. */
+  waitingOn?: string;
 }
 
 /** The frozen plan of the run: what will be implemented, and what will not. */
@@ -232,9 +235,8 @@ const STOP_LABEL: Record<BatchStopReason, string> = {
   gated: 'stopped between items — the item just finished is not ready to build on',
 };
 
-const SKIP_LABEL: Record<SnapshotSkipReason, string> = {
+const SKIP_LABEL: Record<Exclude<SnapshotSkipReason, 'needs_human'>, string> = {
   needs_planning: 'needs planning',
-  needs_human: 'needs a human',
   integrated_dep: 'ready only via an integrated dependency (not on main)',
   claim_refused: 'claimed by somebody else, or no longer claimable',
   // ⚠️ Phrased as an OUTCOME, not as a shortfall. The other four say what the
@@ -297,6 +299,11 @@ function renderSkipGroups(skipped: SnapshotSkip[], titleWidth: number): string[]
   for (const reason of SKIP_ORDER) {
     const group = skipped.filter((s) => s.reason === reason);
     if (group.length === 0) continue;
+    if (reason === 'needs_human') {
+      // §8's words (MOTIR-7477): the card waits on its person in Motir's Waiting on you.
+      blocks.push(...renderManualSkipGroups('Not in the snapshot', group, titleWidth));
+      continue;
+    }
     const lines = [
       `Not in the snapshot — ${SKIP_LABEL[reason]} (${group.length}):`,
       ...group.map((s) => `  ${s.key} — ${truncate(s.title ?? '', titleWidth)}`),

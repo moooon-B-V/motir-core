@@ -14,7 +14,8 @@
 // straight through and the plan still waits in To approve. Every other
 // assertion is unchanged. The guard's own arms (asked · written · unasked) are
 // pinned in `tests/components/plan-approval-surface.test.tsx`; closing during
-// generation in `tests/e2e/acceptance-plan-approval-gate.spec.ts`.
+// generation in `tests/e2e/cloud-plan-approval-gate.spec.ts` (promoted from the
+// acceptance lane by Story MOTIR-7460).
 //
 // Runs under playwright.cloud.config.ts (MOTIR_CLOUD + MOTIR_AI_URL), NOT the
 // main lane: the overlay mounts only where `isMotirAiConfigured()` is true — in

@@ -86,8 +86,12 @@ function pressFor(kind: ApprovalGateKind, decision: GateDecision) {
       return kind === 'decision_choice' ? { decision, optionId: 'no-such-option' } : null;
     case 'request_changes':
       // Only the review agent refuses an `agent_review` gate — a person's is
-      // `request_changes_on_agent_review` (ADR §12.3).
-      return kind === 'decision_confirmation' || kind === 'plan_approval' || kind === 'agent_review'
+      // `request_changes_on_agent_review` (ADR §12.3). Manual work offers no refusal at
+      // all — `request_changes_on_manual_work` (MOTIR-7474).
+      return kind === 'decision_confirmation' ||
+        kind === 'plan_approval' ||
+        kind === 'agent_review' ||
+        kind === 'manual_work'
         ? null
         : { decision, noteMd };
     case 'overturn':

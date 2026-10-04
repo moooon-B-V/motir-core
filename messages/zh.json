@@ -8267,7 +8267,7 @@
       "toFix": "待修复",
       "recentlyFinished": "最近完成",
       "watching": "关注中",
-      "toApprove": "待审批"
+      "toApprove": "等你处理"
     },
     "columns": {
       "title": "标题",
@@ -8310,8 +8310,8 @@
         "body": "在工作项详情页点击关注，即可跟进但不承担它。"
       },
       "approvals": {
-        "title": "没有等待你审批的工作",
-        "body": "需要你签字确认才能继续的工作会显示在这里。"
+        "title": "没有等你处理的事项",
+        "body": "需要你决定的审批，以及运行交给你完成的工作，都会显示在这里。"
       }
     },
     "approvals": {
@@ -8333,7 +8333,8 @@
         "decision_choice": "此项针对的选项已不存在",
         "decision_confirmation": "此项针对的决策已不存在",
         "plan_approval": "此项针对的计划已不存在",
-        "agent_review": "此项审查针对的已完成工作已不存在"
+        "agent_review": "此项审查针对的已完成工作已不存在",
+        "manual_work": "此问题要求的工作已不存在"
       },
       "notRenderable": "Motir 暂不支持展示此类型",
       "notBuiltYet": "尚未实现",
@@ -8345,6 +8346,10 @@
         "decision_approval": "<title>{name}</title>的决策文档",
         "decision_choice": "<title>{name}</title>的选项",
         "decision_confirmation": "<title>{name}</title>已作出决定",
+        "manual_work": "<title>{name}</title>等你处理",
+        "manual_work_other": "<title>{name}</title>等人处理",
+        "manual_work_done": "<title>{name}</title>已标记完成",
+        "manual_work_held": "<title>{name}</title>的人工工作",
         "other": "<title>{name}</title>的审批"
       },
       "kind": {
@@ -8356,7 +8361,8 @@
         "decision_choice": "选择",
         "decision_confirmation": "确认决策",
         "plan_approval": "计划审批",
-        "agent_review": "代理审查"
+        "agent_review": "代理审查",
+        "manual_work": "人工工作"
       },
       "reviewRow": "查看 {key} — {sentence}",
       "pullRequest": {
@@ -8379,6 +8385,10 @@
       "choiceDecided": "选择了「<label>{label}</label>」· {bestFor}",
       "choiceNoneChosen": "{count} 个选项 · 未选择",
       "ceiling": "仅显示前 {shown} 项，共 {total} 项。<link>审批</link>中列出了全部。",
+      "manualSteps": "{done}/{total} 步",
+      "manualNoList": "无待办清单",
+      "markDone": "标记完成",
+      "marking": "正在标记…",
       "row": {
         "decisionPage": "{title} · 页面第 {number} 版"
       }
@@ -10586,7 +10596,10 @@
     },
     "skipReason": {
       "needsPlanning": "已跳过 — 需要规划。",
-      "needsHuman": "已跳过 — 需要人工处理。",
+      "needsHuman": "已跳过 — 人工工作。",
+      "waitingOnYou": "已跳过 — 等你处理。",
+      "waitingOn": "已跳过 — 等 {name} 处理。",
+      "markedDone": "已跳过 — 已由 {name} 标记完成。",
       "integratedDep": "已跳过 — 仅通过已集成的依赖才就绪（尚未合入 main）。",
       "claimRefused": "已跳过 — 已被他人认领，或不再可认领。",
       "replanSubmitted": "被其代理拒绝 — 重新规划正在 Motir 中等待你处理。",
@@ -10613,6 +10626,8 @@
     "scopeNone": "—",
     "tookNone": "未纳入任何工作项",
     "summaryDone": "{total} 项中已完成 {done} 项",
+    "summaryWaitingYou": "等你处理 {n} 项",
+    "summaryWaitingOthers": "等他人处理 {n} 项",
     "summarySkipped": "跳过 {n} 项",
     "summaryFailed": "失败 {n} 项",
     "summaryNotReached": "未处理 {n} 项",
@@ -11131,11 +11146,16 @@
         "plan_discarded": "计划中的所有建议都已撤回，计划随之结束，该问题也一并撤回。",
         "queue_failed": "合并队列未能合并这些提交，因此该问题已撤回。",
         "subject_gone": "此问题针对的内容已不存在，因此该问题已撤回。",
+        "no_longer_manual": "该工作项已不再是人工工作，因此该问题已撤回。",
+        "closed_without_decision": "该工作项在无人标记完成的情况下被关闭，因此该问题已撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
       },
       "causeByKind": {
         "decision_approval": {
           "head_moved": "推送修改了决策文档，因此该问题已撤回。"
+        },
+        "manual_work": {
+          "pulled_back": "该工作项已被取消或归档，因此该问题已撤回。"
         }
       }
     },
@@ -11504,7 +11524,8 @@
         "acceptance_result": "验收审批",
         "decision_choice": "选择",
         "decision_confirmation": "决策",
-        "agent_review": "代理审查"
+        "agent_review": "代理审查",
+        "manual_work": "人工任务"
       },
       "reviewAndApprove": "审阅并批准",
       "needsApproval": "需要审批",
@@ -11801,23 +11822,23 @@
         "approve": "批准",
         "decline": "拒绝",
         "consequence": "批准后，这些内容会加入你的待办列表。拒绝会结束此计划，不做任何改动。",
-        "reopened": "从“待审批”重新打开 · 发起人 {name} · 最近活动 {when}",
-        "reopenedYours": "从“待审批”重新打开 · 由你发起 · 最近活动 {when}",
-        "held": "Motir AI 正在编写此计划的新版本。完成后即可批准或拒绝——在此期间它会一直留在“待审批”中。",
-        "heldBy": "{harness} 正在编写此计划的新版本。完成后即可批准或拒绝——在此期间它会一直留在“待审批”中。",
+        "reopened": "从“等你处理”重新打开 · 发起人 {name} · 最近活动 {when}",
+        "reopenedYours": "从“等你处理”重新打开 · 由你发起 · 最近活动 {when}",
+        "held": "Motir AI 正在编写此计划的新版本。完成后即可批准或拒绝——在此期间它会一直留在“等你处理”中。",
+        "heldBy": "{harness} 正在编写此计划的新版本。完成后即可批准或拒绝——在此期间它会一直留在“等你处理”中。",
         "stale": {
           "title": "你阅读期间，此计划已被修改。",
           "next": "没有批准或拒绝任何内容。画布现在显示的是新版本——请查看后重新决定。"
         },
         "seeOnly": "等待 {name} 批准或拒绝此计划。",
         "seeOnlyWhy": "决定计划需要“决定计划”的权限。",
-        "declined": "你拒绝了此计划。待办列表没有任何改动，它也已离开“待审批”。"
+        "declined": "你拒绝了此计划。待办列表没有任何改动，它也已离开“等你处理”。"
       },
       "declineConfirm": {
         "title": "拒绝此计划将会：",
         "end": "结束它——之后无法再批准。",
         "untouched": "你的待办列表保持原样。",
-        "leaves": "将它移出“待审批”。",
+        "leaves": "将它移出“等你处理”。",
         "label": "为什么拒绝它？",
         "helper": "选填。会与这项决定一起保存。",
         "proceed": "确认拒绝"
@@ -11827,8 +11848,8 @@
         "next": "可以在这里批准或拒绝它——也可以在下方请 Motir 修改它。"
       },
       "handoff": {
-        "writing": "信息已经足够——我现在开始编写计划。你不必在这里等待：随时可以关闭，计划完成后会在<link>待审批</link>中等你。",
-        "rewriting": "我正在编写此计划的新版本。你可以关闭这里——它会一直留在<link>待审批</link>中，等我完成后你就可以决定。"
+        "writing": "信息已经足够——我现在开始编写计划。你不必在这里等待：随时可以关闭，计划完成后会在<link>等你处理</link>中等你。",
+        "rewriting": "我正在编写此计划的新版本。你可以关闭这里——它会一直留在<link>等你处理</link>中，等我完成后你就可以决定。"
       }
     },
     "planAsk": {
@@ -11931,6 +11952,22 @@
         "credits_unavailable": "在托管代理上运行",
         "repository_not_writable": "仓库"
       }
+    },
+    "manualWork": {
+      "state": {
+        "markedDone": "已标记完成"
+      },
+      "meta": "由一次运行交给你 · 已完成 {done}/{total} 步",
+      "metaNoList": "由一次运行交给你 · 无待办清单",
+      "lead": "这是需要人来完成的工作，所以运行在这里停下，把它交给了你。完成这些步骤，然后标记完成。“带我完成”会一步一步带你做。",
+      "leadNoList": "这是需要人来完成的工作，所以运行在这里停下，把它交给了你。它没有待办清单：描述里写明了要做什么，“带我完成”也可以为你提出步骤。",
+      "leadDone": "这项工作已标记完成。等待它的工作项可以开始了。",
+      "noList": {
+        "title": "无待办清单",
+        "body": "打开工作项阅读它的描述，或让“带我完成”为你提出步骤。"
+      },
+      "consequence": "标记完成后 {key} 将移至“已完成”。",
+      "consequenceMerges": "标记完成会在此记录。{key} 会在其拉取请求合并后移至“已完成”。"
     }
   },
   "approvalOverlay": {
@@ -11954,7 +11991,8 @@
       "decision_choice": "工作项中已不再列出可选的选项，这里已没有可选择的内容。打开工作项查看它现在的内容。",
       "decision_confirmation": "工作项已不再是一项待确认的决策，这里已没有可确认的内容。打开工作项查看它现在的内容。",
       "plan_approval": "此计划在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。",
-      "agent_review": "这些合并请求在发起审查后已被取消关联，这里已没有可审查的内容。打开工作项查看它现在的内容。"
+      "agent_review": "这些合并请求在发起审查后已被取消关联，这里已没有可审查的内容。打开工作项查看它现在的内容。",
+      "manual_work": "此工作项已不再需要人工完成，这里已没有可标记完成的内容。打开工作项查看它现在的内容。"
     },
     "withdrawn": {
       "conflict": "{pr} 现在与 {base} 冲突，因此该问题已撤回。",

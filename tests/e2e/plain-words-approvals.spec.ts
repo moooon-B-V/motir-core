@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { servePrivateObjectStore } from './_helpers/object-store';
@@ -17,8 +17,16 @@ import {
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 
-// TO APPROVE SAYS WHAT IS WAITING IN PLAIN WORDS — END TO END, AND THE ACCEPTANCE
-// RECEIPT FOR IT (Story MOTIR-5996 · Subtask MOTIR-6003).
+// TO APPROVE SAYS WHAT IS WAITING IN PLAIN WORDS — Story MOTIR-5996's walk, as a
+// REGRESSION spec. It was that story's acceptance receipt
+// (`acceptance-plain-words-approvals.spec.ts`, Subtask MOTIR-6003); Story
+// MOTIR-7460 PROMOTED it into the main lane (docs/acceptance-lane-triage.md
+// § MOTIR-7460) when the To approve tab was renamed Waiting on you. The import swap
+// to `_helpers/promoted-regression` keeps every `chapter()` as a step and drops the
+// pacing; the one assertion restated is the tab badge, read by the tab's new name
+// (design `design/workbench/design-notes.md` § 33). The table is named from the
+// catalogue (`workbench.tabs.toApprove`), so it follows the rename by itself. The
+// header below is the receipt's, kept as it was written.
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //
@@ -129,7 +137,9 @@ test.describe('To approve, in plain words', () => {
       await signIn(page, seed.reviewerEmail, seed.password);
       await page.goto('/workbench?tab=approvals');
       await expect(rowsIn(table)).toHaveCount(TOTAL);
-      expect(await badgeCount(page, /To approve/)).toBe(TOTAL);
+      // ⚠️ RESTATED AFTER PROMOTION (Story MOTIR-7460, design
+      // `design/workbench/design-notes.md` § 33): the tab is Waiting on you now.
+      expect(await badgeCount(page, /Waiting on you/)).toBe(TOTAL);
       // No pager, and no ceiling line: thirty is far under the stated ceiling.
       await expect(page.getByRole('button', { name: 'Page 2' })).toHaveCount(0);
       await expect(page.getByRole('main').getByText(/^Showing the first /)).toHaveCount(0);

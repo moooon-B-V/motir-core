@@ -56,6 +56,7 @@ const GATE_KINDS = [
   'decision_confirmation',
   'plan_approval',
   'pull_request_merge',
+  'manual_work',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 
 const inputSchema = {
@@ -76,7 +77,9 @@ const inputSchema = {
         'approve-and-merge question over a run’s whole delivery set; `decision_choice` ' +
         'and `decision_confirmation` the two decision kinds a person answers directly. ' +
         '`plan_approval` belongs to a PLAN rather than to a card, so no card has one. ' +
-        '`pull_request_merge` is built and withdrawn — only historical rows exist.',
+        '`pull_request_merge` is built and withdrawn — only historical rows exist. ' +
+        '`manual_work` is a manual card a run reached, waiting on a person to do the work ' +
+        'and mark it done.',
     ),
 };
 

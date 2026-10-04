@@ -265,7 +265,7 @@ test.describe('the Workbench journey', () => {
 
     await page.getByTestId('workbench-tab-approvals').click();
     await expect(page).toHaveURL(/\?tab=approvals$/);
-    await expect(page.getByText('Nothing is waiting on your approval')).toBeVisible();
+    await expect(page.getByText('Nothing is waiting on you')).toBeVisible();
 
     // 5. WATCHING — a different audience, and the tab lives in the URL.
     await page.getByTestId('workbench-tab-watching').click();
