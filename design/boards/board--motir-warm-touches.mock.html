@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Warm touches in the default Motir palette — board (MOTIR-7583)</title>
+    <!--
+      DELTA MOCK — Subtask MOTIR-7583 (Story MOTIR-7582). Spec:
+      design/boards/design-notes.md § "Warm touches in the default Motir palette (MOTIR-7583)".
+
+      IT EDITS NO EXISTING MOCK. It amends design/boards/board.mock.html's COLOURS only:
+      no layout, copy or component changes. Every panel pairs today's motir palette
+      (left) with the proposal (right) by toggling ONE attribute, data-proposal, whose
+      block is the only set of values this design adds. Everything else is read from
+      packages/design-system/theme.css on origin/main.
+    -->
+    <style>
+      /* ── TOKEN LAYER — read from packages/design-system/theme.css on origin/main ──
+         Tier-0 values: the motir light block, its dark companion, and the @theme
+         base for the few names the motir blocks leave alone. Tier-3: the base
+         element block, verbatim (var() references only). Shape: @theme. */
+      :root {
+        --font-sans: var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+      }
+      .wt-scope {
+        --color-accent: #2563c9;
+        --color-accent-green: #18804a;
+        --color-accent-orange: #c2410c;
+        --color-accent-teal: #0e8f86;
+        --color-background: #ffffff;
+        --color-border: #e2e4e9;
+        --color-canvas: #e6e8ed;
+        --color-charcoal: #20242a;
+        --color-destructive: #c92a2a;
+        --color-foreground: #16191d;
+        --color-hairline-strong: #c8ccd3;
+        --color-info: #155bc4;
+        --color-link: #155bc4;
+        --color-muted: #eef0f3;
+        --color-primary: #155bc4;
+        --color-primary-fill: #1a1d21;
+        --color-primary-foreground: #ffffff;
+        --color-slate: #565c64;
+        --color-stone: #8a8f98;
+        --color-success: #18804a;
+        --color-surface: #eef0f3;
+        --color-surface-soft: #f8f9fa;
+        --color-tint-lavender: #e4e6f3;
+        --color-tint-mint: #d9efe1;
+        --color-tint-peach: #f7e6d6;
+        --color-tint-rose: #f6dfe8;
+        --color-tint-sky: #dde9f6;
+        --color-tint-yellow: #f6f1d6;
+        --color-warning: #c2410c;
+        --focus-ring-color: var(--color-primary);
+      }
+      .wt-scope[data-theme='dark'] {
+        --color-accent: #5b9dff;
+        --color-accent-green: #34b86e;
+        --color-accent-orange: #f08a4b;
+        --color-accent-teal: #2db6a8;
+        --color-background: #0c0d0f;
+        --color-border: #282a2e;
+        --color-canvas: #08090b;
+        --color-charcoal: #d7d9dd;
+        --color-destructive: #d83847;
+        --color-foreground: #edeef0;
+        --color-hairline-strong: #3a3d42;
+        --color-info: #7db1ff;
+        --color-link: #7db1ff;
+        --color-muted: #18191c;
+        --color-primary: #7db1ff;
+        --color-primary-fill: #edeef0;
+        --color-primary-foreground: #0c0d0f;
+        --color-slate: #a9adb5;
+        --color-stone: #696e77;
+        --color-success: #34b86e;
+        --color-surface: #18191c;
+        --color-surface-soft: #141517;
+        --color-tint-lavender: #1f2236;
+        --color-tint-mint: #15271e;
+        --color-tint-peach: #2e2418;
+        --color-tint-rose: #2f1c26;
+        --color-tint-sky: #15233a;
+        --color-tint-yellow: #2a2716;
+        --color-warning: #f08a4b;
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── THE PROPOSAL — the only values this design adds. Recommended: subtle. ── */
+      .wt-scope[data-proposal] {
+        --color-accent: #d66000;
+        --color-tint-peach: #fde0c8;
+        --color-tint-yellow: #fdf0c6;
+      }
+      .wt-scope[data-theme='dark'][data-proposal] {
+        --color-accent: #fa5500;
+        --color-tint-peach: #36230f;
+        --color-tint-yellow: #302a12;
+      }
+      .wt-scope {
+        --el-accent: var(--color-primary-fill);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-avatar-fallback: var(--color-info);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-canvas: var(--color-canvas);
+        --el-card: var(--color-background);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-danger: var(--color-destructive);
+        --el-epic-accent: var(--color-accent);
+        --el-highlight: var(--color-accent);
+        --el-info: var(--color-info);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-link: var(--color-link);
+        --el-muted: var(--color-muted);
+        --el-page-bg: var(--color-background);
+        --el-priority-high: #ab6400;
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-low: var(--color-info);
+        --el-priority-medium: var(--color-slate);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-role-custom: var(--color-tint-peach);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-status-blocked: var(--color-warning);
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-implemented: var(--color-charcoal);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: #113264;
+        --el-status-todo: var(--color-stone);
+        --el-success: var(--color-success);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-text: var(--color-foreground);
+        --el-text-inverted: var(--color-background);
+        --el-text-secondary: var(--color-slate);
+        --el-text-strong: var(--color-charcoal);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-bug: var(--color-destructive);
+        --el-type-choice: var(--color-charcoal);
+        --el-type-chore: var(--color-slate);
+        --el-type-code: var(--color-info);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-design: var(--color-accent);
+        --el-type-epic: var(--color-accent);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-story: var(--color-accent-green);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-task: var(--color-info);
+        --el-type-test: var(--color-success);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-warning: var(--color-warning);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-progress-fill: var(--color-primary-fill);
+        --focus-ring-color: var(--color-primary);
+      }
+      .wt-scope[data-theme='dark'] {
+        --el-priority-high: var(--color-warning);
+        --el-status-in-review: #c2e6ff;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+      }
+      /* the NEW role the code card adds: progress takes the warm accent in motir only */
+      .wt-scope[data-proposal] {
+        --el-progress-fill: var(--color-accent);
+      }
+      /* the REJECTED "a bit more colourful" intensity — drawn for comparison only */
+      .wt-scope[data-proposal='colourful'] {
+        --el-type-design: #e0533f;
+        --wt-chip-mix: 22%;
+      }
+      .wt-scope[data-theme='dark'][data-proposal='colourful'] {
+        --el-type-design: #ff6b5a;
+      }
+
+      *, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; border: 0 solid; }
+      body { font-family: var(--font-sans); background: var(--el-page-bg); color: var(--el-text); }
+      body.wt-sheet { background: var(--el-surface-soft); padding: 32px; }
+      .wt-scope { --wt-chip-mix: 14%; background: var(--el-page-bg); color: var(--el-text); font-family: var(--font-sans); }
+      .wt-sheet-head { max-width: 1240px; margin: 0 auto 28px; }
+      .wt-sheet-title { font-size: 22px; font-weight: 600; color: var(--el-text); }
+      .wt-sheet-lede { margin-top: 6px; max-width: 92ch; font-size: 13.5px; line-height: 1.55; color: var(--el-text-secondary); }
+      .wt-panel { max-width: 1240px; margin: 0 auto 36px; }
+      .wt-panel-title { font-size: 15px; font-weight: 600; color: var(--el-text); margin-bottom: 4px; }
+      .wt-panel-note { font-size: 12.5px; line-height: 1.5; color: var(--el-text-secondary); margin-bottom: 12px; max-width: 110ch; }
+      .wt-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .wt-stack { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      .wt-quad { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .wt-frame { border: 1px solid var(--el-border); border-radius: var(--radius-card); overflow: hidden; }
+      .wt-frame-cap { display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 12px; font-weight: 600;
+        color: var(--el-text-secondary); background: var(--el-page-bg); border-bottom: 1px solid var(--el-border); }
+      .wt-frame-body { padding: 16px; }
+      .wt-tag { display: inline-flex; align-items: center; border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x); font-size: 11px; font-weight: 600; color: var(--el-text-strong);
+        background: var(--el-muted); }
+      .wt-tag-rec { background: var(--el-tint-mint); }
+      .wt-tag-no { background: var(--el-tint-rose); }
+      .wt-topbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--el-page-bg);
+        border-bottom: 1px solid var(--el-border); }
+      .wt-brand { display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--radius-control);
+        background: var(--el-accent); color: var(--el-accent-text); font-size: 13px; font-weight: 700; }
+      .wt-brand-name { font-size: 13px; font-weight: 600; color: var(--el-text); }
+      .wt-spacer { flex: 1; }
+      .wt-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-btn);
+        padding: 6px var(--spacing-btn-x); font-size: 13px; font-weight: 600; background: var(--el-accent); color: var(--el-accent-text); }
+      .wt-link { font-size: 13px; font-weight: 500; color: var(--el-link); text-decoration: underline; }
+      .wt-board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; padding: 12px; background: var(--el-canvas); }
+      .wt-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+      .wt-col-head { display: flex; align-items: center; gap: 6px; padding: 2px 4px; font-size: 12px; font-weight: 600; color: var(--el-text); }
+      .wt-dot { width: 8px; height: 8px; border-radius: 9999px; flex: none; }
+      .wt-count { margin-left: auto; border-radius: var(--radius-badge); padding: 0 7px; font-size: 11px; font-weight: 600;
+        color: var(--el-text-secondary); background: var(--el-muted); }
+      .wt-count-tinted { color: var(--el-text-strong); background: color-mix(in srgb, var(--wt-hue) 14%, var(--el-page-bg)); }
+      .wt-card { display: flex; flex-direction: column; gap: 8px; background: var(--el-page-bg); border: 1px solid var(--el-border);
+        border-radius: var(--radius-card); box-shadow: var(--shadow-subtle); padding: 12px; min-width: 0; }
+      .wt-card-focus { box-shadow: 0 0 0 2px var(--el-page-bg), 0 0 0 4px var(--focus-ring-color); }
+      .wt-card-row { display: flex; align-items: center; gap: 6px; }
+      .wt-ico { width: 16px; height: 16px; flex: none; }
+      .wt-ico-sm { width: 12px; height: 12px; flex: none; }
+      .wt-ico-chip { width: 14px; height: 14px; flex: none; }
+      .wt-key { font-family: var(--font-mono); font-size: 12px; color: var(--el-text-secondary); white-space: nowrap; }
+      .wt-title { font-size: 13px; line-height: 1.35; color: var(--el-text); }
+      .wt-pts { margin-left: auto; font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--el-text-secondary); }
+      .wt-avatar { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 9999px; flex: none;
+        background: var(--el-text); color: var(--el-text-inverted); font-size: 10px; font-weight: 600; }
+      .wt-pill { display: inline-flex; align-items: center; gap: 4px; border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x); font-size: 11.5px; font-weight: 500; color: var(--el-text-strong); }
+      .wt-pill-warning { background: var(--el-tint-peach); }
+      .wt-pill-prio { background: color-mix(in srgb, var(--wt-hue) 14%, var(--el-surface)); }
+      .wt-pill-custom { background: var(--el-role-custom); }
+      .wt-typechip { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x); font-size: 12px; font-weight: 500; color: var(--el-text-strong);
+        background: color-mix(in srgb, var(--wt-hue) var(--wt-chip-mix), var(--el-page-bg)); }
+      .wt-typechip-grey { background: color-mix(in srgb, var(--wt-hue) 18%, var(--el-page-bg)); }
+      .wt-hue { color: var(--wt-hue); }
+      .wt-rows { display: flex; flex-direction: column; gap: 4px; }
+      .wt-row { display: flex; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x); background: var(--el-page-bg); }
+      .wt-row-selected { border-color: var(--el-accent); background: var(--el-selection-bg); }
+      .wt-row-focus { box-shadow: 0 0 0 2px var(--focus-ring-color); }
+      .wt-row-title { flex: 1; min-width: 0; font-size: 13px; color: var(--el-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .wt-chipgrid { display: flex; flex-wrap: wrap; gap: 8px; }
+      .wt-prog { display: flex; flex-direction: column; gap: 10px; }
+      .wt-prog-row { display: grid; grid-template-columns: 150px 1fr 56px; align-items: center; gap: 10px; font-size: 12px; color: var(--el-text-secondary); }
+      .wt-track { height: 6px; border-radius: var(--radius-badge); background: var(--el-muted); overflow: hidden; }
+      .wt-fill-done { height: 100%; border-radius: var(--radius-badge); background: var(--el-success); }
+      .wt-fill-progress { height: 100%; border-radius: var(--radius-badge); background: var(--el-progress-fill); }
+      .wt-w0 { width: 0%; }
+      .wt-w40 { width: 40%; }
+      .wt-w100 { width: 100%; }
+      .wt-avatars { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .wt-tavatar { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 9999px;
+        font-size: 11px; font-weight: 600; color: var(--el-text-strong); }
+      .wt-tavatar-fallback { color: var(--el-text-inverted); }
+      .wt-bg-avatar-peach { background: var(--el-avatar-peach); }
+      .wt-bg-avatar-rose { background: var(--el-avatar-rose); }
+      .wt-bg-avatar-mint { background: var(--el-avatar-mint); }
+      .wt-bg-avatar-lavender { background: var(--el-avatar-lavender); }
+      .wt-bg-avatar-sky { background: var(--el-avatar-sky); }
+      .wt-bg-avatar-yellow { background: var(--el-avatar-yellow); }
+      .wt-bg-avatar-fallback { background: var(--el-avatar-fallback); }
+      .wt-bg-label-1 { background: var(--el-label-1); }
+      .wt-bg-label-2 { background: var(--el-label-2); }
+      .wt-bg-label-3 { background: var(--el-label-3); }
+      .wt-bg-label-4 { background: var(--el-label-4); }
+      .wt-bg-label-5 { background: var(--el-label-5); }
+      .wt-bg-label-6 { background: var(--el-label-6); }
+      .wt-callout { display: flex; gap: 8px; align-items: flex-start; border-radius: var(--radius-card);
+        padding: 10px 12px; font-size: 12.5px; line-height: 1.45; background: var(--el-warning-surface); color: var(--el-warning-text); }
+      .wt-launch { display: inline-flex; align-items: center; gap: 8px; border-radius: var(--radius-btn); padding: 10px 18px;
+        font-size: 13px; font-weight: 600; color: var(--el-accent-text);
+        background: linear-gradient(135deg, var(--el-accent), color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight)));
+        box-shadow: 0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent); }
+      .wt-target { display: inline-flex; flex-direction: column; gap: 6px; border: 1px solid var(--el-border); border-radius: var(--radius-card);
+        background: var(--el-page-bg); padding: 12px 14px; min-width: 220px;
+        box-shadow: 0 0 14px color-mix(in srgb, var(--el-accent) 24%, transparent), 0 0 28px -4px color-mix(in srgb, var(--el-highlight) 30%, transparent); }
+      .wt-glowrow { display: flex; gap: 28px; align-items: center; padding: 22px; background: var(--el-canvas); }
+      .wt-radios { display: flex; gap: 8px; flex-wrap: wrap; }
+      .wt-radio { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--el-border); border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x); font-size: 13px; font-weight: 500; color: var(--el-text-secondary); background: var(--el-page-bg); }
+      .wt-radio-on { border-color: var(--el-accent); background: var(--el-tint-lavender); color: var(--el-accent-on-surface); }
+      .wt-swatch { width: 11px; height: 11px; border-radius: 9999px; flex: none; }
+      .wt-swatch-motir { background: var(--color-primary-fill); }
+      .wt-label { font-size: 12px; font-weight: 600; color: var(--el-text); margin-bottom: 8px; }
+      .wt-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--el-text-secondary); }
+      .wt-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+      .wt-sq { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+    </style>
+  </head>
+  <body class="wt-sheet">
+    <header class="wt-sheet-head">
+      <h1 class="wt-sheet-title">Warm touches in the default Motir palette — the board and its neighbours</h1>
+      <p class="wt-sheet-lede">Left of every pair is what ships today; right is the recommended proposal. Only the highlight, the Epic and Design hues, progress and two tints change. The ink Create button, the ink brand tile, the blue links, focus ring and in-progress column, and the slate surfaces are identical on both sides.</p>
+    </header>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">1 · Board — light</h2>
+      <p class="wt-panel-note">The Epic card in To Do sits beside the burnt-orange Blocked pill and, one column over, the amber High chip — the two hues the new orange had to clear (ΔE 11.0 from each). The focus ring on that card stays blue.</p>
+      <div class="wt-stack">
+      <div class="wt-scope wt-frame" data-theme="light">
+        <div class="wt-frame-cap">Light · today (shipped)</div>
+        <div class="wt-topbar"><span class="wt-brand" role="img" aria-label="Motir">M</span><span class="wt-brand-name">Sprint 14 board</span><span class="wt-spacer"></span><span class="wt-link">Board settings</span><span class="wt-btn"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create</span></div>
+        <div class="wt-board">
+          <div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-todo)"></span>To Do<span class="wt-count">2</span></div>
+            <div class="wt-card wt-card-focus">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div>
+              <div class="wt-title">Onboarding revamp</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pts">13</span><span class="wt-avatar">A</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">MOTIR-118</span></div>
+              <div class="wt-title">Import drops labels</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-highest)">Highest</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-progress)"></span>In Progress<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span></div>
+              <div class="wt-title">Invite a teammate from the board</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">5</span><span class="wt-avatar">M</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span></div>
+              <div class="wt-title">Paginate the member list</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">3</span><span class="wt-avatar">J</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-review)"></span>In Review<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span></div>
+              <div class="wt-title">Public roadmap</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">21</span><span class="wt-avatar">Y</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">MOTIR-111</span></div>
+              <div class="wt-title">Copy for the empty state</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-low)">Low</span><span class="wt-pts">1</span><span class="wt-avatar">A</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-implemented)"></span>Implemented<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-097</span></div>
+              <div class="wt-title">Seed demo workspace</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-done)"></span>Done<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-090</span></div>
+              <div class="wt-title">Sign in with a passkey</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">8</span><span class="wt-avatar">M</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+        <div class="wt-frame-cap">Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-topbar"><span class="wt-brand" role="img" aria-label="Motir">M</span><span class="wt-brand-name">Sprint 14 board</span><span class="wt-spacer"></span><span class="wt-link">Board settings</span><span class="wt-btn"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create</span></div>
+        <div class="wt-board">
+          <div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-todo)"></span>To Do<span class="wt-count">2</span></div>
+            <div class="wt-card wt-card-focus">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div>
+              <div class="wt-title">Onboarding revamp</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pts">13</span><span class="wt-avatar">A</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">MOTIR-118</span></div>
+              <div class="wt-title">Import drops labels</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-highest)">Highest</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-progress)"></span>In Progress<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span></div>
+              <div class="wt-title">Invite a teammate from the board</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">5</span><span class="wt-avatar">M</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span></div>
+              <div class="wt-title">Paginate the member list</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">3</span><span class="wt-avatar">J</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-review)"></span>In Review<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span></div>
+              <div class="wt-title">Public roadmap</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">21</span><span class="wt-avatar">Y</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">MOTIR-111</span></div>
+              <div class="wt-title">Copy for the empty state</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-low)">Low</span><span class="wt-pts">1</span><span class="wt-avatar">A</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-implemented)"></span>Implemented<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-097</span></div>
+              <div class="wt-title">Seed demo workspace</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-done)"></span>Done<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-090</span></div>
+              <div class="wt-title">Sign in with a passkey</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">8</span><span class="wt-avatar">M</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">2 · Board — dark</h2>
+      <p class="wt-panel-note">The same roles brightened for the near-black canvas: #fa5500, ΔE 11.5 from the dark warning orange and 4.77:1 or better on every dark surface.</p>
+      <div class="wt-stack">
+      <div class="wt-scope wt-frame" data-theme="dark">
+        <div class="wt-frame-cap">Dark · today (shipped)</div>
+        <div class="wt-topbar"><span class="wt-brand" role="img" aria-label="Motir">M</span><span class="wt-brand-name">Sprint 14 board</span><span class="wt-spacer"></span><span class="wt-link">Board settings</span><span class="wt-btn"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create</span></div>
+        <div class="wt-board">
+          <div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-todo)"></span>To Do<span class="wt-count">2</span></div>
+            <div class="wt-card wt-card-focus">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div>
+              <div class="wt-title">Onboarding revamp</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pts">13</span><span class="wt-avatar">A</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">MOTIR-118</span></div>
+              <div class="wt-title">Import drops labels</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-highest)">Highest</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-progress)"></span>In Progress<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span></div>
+              <div class="wt-title">Invite a teammate from the board</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">5</span><span class="wt-avatar">M</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span></div>
+              <div class="wt-title">Paginate the member list</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">3</span><span class="wt-avatar">J</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-review)"></span>In Review<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span></div>
+              <div class="wt-title">Public roadmap</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">21</span><span class="wt-avatar">Y</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">MOTIR-111</span></div>
+              <div class="wt-title">Copy for the empty state</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-low)">Low</span><span class="wt-pts">1</span><span class="wt-avatar">A</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-implemented)"></span>Implemented<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-097</span></div>
+              <div class="wt-title">Seed demo workspace</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-done)"></span>Done<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-090</span></div>
+              <div class="wt-title">Sign in with a passkey</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">8</span><span class="wt-avatar">M</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+        <div class="wt-frame-cap">Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-topbar"><span class="wt-brand" role="img" aria-label="Motir">M</span><span class="wt-brand-name">Sprint 14 board</span><span class="wt-spacer"></span><span class="wt-link">Board settings</span><span class="wt-btn"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create</span></div>
+        <div class="wt-board">
+          <div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-todo)"></span>To Do<span class="wt-count">2</span></div>
+            <div class="wt-card wt-card-focus">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div>
+              <div class="wt-title">Onboarding revamp</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pts">13</span><span class="wt-avatar">A</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">MOTIR-118</span></div>
+              <div class="wt-title">Import drops labels</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-highest)">Highest</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-progress)"></span>In Progress<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span></div>
+              <div class="wt-title">Invite a teammate from the board</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">5</span><span class="wt-avatar">M</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span></div>
+              <div class="wt-title">Paginate the member list</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">3</span><span class="wt-avatar">J</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-review)"></span>In Review<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span></div>
+              <div class="wt-title">Public roadmap</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">21</span><span class="wt-avatar">Y</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">MOTIR-111</span></div>
+              <div class="wt-title">Copy for the empty state</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-low)">Low</span><span class="wt-pts">1</span><span class="wt-avatar">A</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-implemented)"></span>Implemented<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-097</span></div>
+              <div class="wt-title">Seed demo workspace</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-done)"></span>Done<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-090</span></div>
+              <div class="wt-title">Sign in with a passkey</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">8</span><span class="wt-avatar">M</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">3 · Rows, type chips and kind icons — light</h2>
+      <p class="wt-panel-note">Row 1 is SELECTED (ink border on the blue selection wash), row 2 carries the blue keyboard focus ring: the two places the warm and the cool accent meet. The Design chip warms; Review and Verification keep the burnt orange; every other chip is unchanged.</p>
+      <div class="wt-pair">
+      <div class="wt-scope wt-frame" data-theme="light">
+        <div class="wt-frame-cap">Light · today (shipped)</div>
+        <div class="wt-frame-body">
+          <div class="wt-rows"><div class="wt-row wt-row-selected"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span><span class="wt-row-title">Onboarding revamp</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span></div><div class="wt-row wt-row-focus"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span><span class="wt-row-title">Public roadmap</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span></div><div class="wt-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span><span class="wt-row-title">Invite a teammate from the board</span><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span></div><div class="wt-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span><span class="wt-row-title">Paginate the member list</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span></div></div>
+          <div class="wt-label" style="margin-top: 14px">Every work-item type chip</div>
+          <div class="wt-chipgrid"><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span><span class="wt-typechip" style="--wt-hue: var(--el-type-content)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>Content</span><span class="wt-typechip" style="--wt-hue: var(--el-type-copy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></svg></span>Copy</span><span class="wt-typechip" style="--wt-hue: var(--el-type-translate)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></span>Translate</span><span class="wt-typechip" style="--wt-hue: var(--el-type-research)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></span>Research</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span><span class="wt-typechip" style="--wt-hue: var(--el-type-verification)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verification</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-decision)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="m19 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"/><path d="m5 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M7 21h10"/></svg></span>Decision</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-choice)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13v8"/><path d="M12 3v3"/><path d="M2.354 10.354a1.207 1.207 0 0 1 0-1.708l2.06-2.06A2 2 0 0 1 5.828 6h12.344a2 2 0 0 1 1.414.586l2.06 2.06a1.207 1.207 0 0 1 0 1.708l-2.06 2.06a2 2 0 0 1-1.414.586H5.828a2 2 0 0 1-1.414-.586z"/></svg></span>Choice</span><span class="wt-typechip" style="--wt-hue: var(--el-type-deploy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg></span>Deploy</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-manual)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></span>Manual</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-legal)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg></span>Legal</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-chore)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></svg></span>Chore</span></div>
+          <div class="wt-label" style="margin-top: 14px">Every kind icon</div>
+          <div class="wt-chipgrid"><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">epic</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">story</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">task</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">bug</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">subtask</span></span></div>
+        </div>
+      </div>
+      <div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+        <div class="wt-frame-cap">Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-frame-body">
+          <div class="wt-rows"><div class="wt-row wt-row-selected"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span><span class="wt-row-title">Onboarding revamp</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span></div><div class="wt-row wt-row-focus"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span><span class="wt-row-title">Public roadmap</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span></div><div class="wt-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span><span class="wt-row-title">Invite a teammate from the board</span><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span></div><div class="wt-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span><span class="wt-row-title">Paginate the member list</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span></div></div>
+          <div class="wt-label" style="margin-top: 14px">Every work-item type chip</div>
+          <div class="wt-chipgrid"><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span><span class="wt-typechip" style="--wt-hue: var(--el-type-content)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>Content</span><span class="wt-typechip" style="--wt-hue: var(--el-type-copy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></svg></span>Copy</span><span class="wt-typechip" style="--wt-hue: var(--el-type-translate)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></span>Translate</span><span class="wt-typechip" style="--wt-hue: var(--el-type-research)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></span>Research</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span><span class="wt-typechip" style="--wt-hue: var(--el-type-verification)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verification</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-decision)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="m19 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"/><path d="m5 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M7 21h10"/></svg></span>Decision</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-choice)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13v8"/><path d="M12 3v3"/><path d="M2.354 10.354a1.207 1.207 0 0 1 0-1.708l2.06-2.06A2 2 0 0 1 5.828 6h12.344a2 2 0 0 1 1.414.586l2.06 2.06a1.207 1.207 0 0 1 0 1.708l-2.06 2.06a2 2 0 0 1-1.414.586H5.828a2 2 0 0 1-1.414-.586z"/></svg></span>Choice</span><span class="wt-typechip" style="--wt-hue: var(--el-type-deploy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg></span>Deploy</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-manual)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></span>Manual</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-legal)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg></span>Legal</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-chore)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></svg></span>Chore</span></div>
+          <div class="wt-label" style="margin-top: 14px">Every kind icon</div>
+          <div class="wt-chipgrid"><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">epic</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">story</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">task</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">bug</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">subtask</span></span></div>
+        </div>
+      </div>
+    </div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">4 · Rows, type chips and kind icons — dark</h2>
+      <p class="wt-panel-note">Same rows on the dark canvas.</p>
+      <div class="wt-pair">
+      <div class="wt-scope wt-frame" data-theme="dark">
+        <div class="wt-frame-cap">Dark · today (shipped)</div>
+        <div class="wt-frame-body">
+          <div class="wt-rows"><div class="wt-row wt-row-selected"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span><span class="wt-row-title">Onboarding revamp</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span></div><div class="wt-row wt-row-focus"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span><span class="wt-row-title">Public roadmap</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span></div><div class="wt-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span><span class="wt-row-title">Invite a teammate from the board</span><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span></div><div class="wt-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span><span class="wt-row-title">Paginate the member list</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span></div></div>
+          <div class="wt-label" style="margin-top: 14px">Every work-item type chip</div>
+          <div class="wt-chipgrid"><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span><span class="wt-typechip" style="--wt-hue: var(--el-type-content)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>Content</span><span class="wt-typechip" style="--wt-hue: var(--el-type-copy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></svg></span>Copy</span><span class="wt-typechip" style="--wt-hue: var(--el-type-translate)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></span>Translate</span><span class="wt-typechip" style="--wt-hue: var(--el-type-research)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></span>Research</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span><span class="wt-typechip" style="--wt-hue: var(--el-type-verification)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verification</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-decision)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="m19 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"/><path d="m5 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M7 21h10"/></svg></span>Decision</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-choice)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13v8"/><path d="M12 3v3"/><path d="M2.354 10.354a1.207 1.207 0 0 1 0-1.708l2.06-2.06A2 2 0 0 1 5.828 6h12.344a2 2 0 0 1 1.414.586l2.06 2.06a1.207 1.207 0 0 1 0 1.708l-2.06 2.06a2 2 0 0 1-1.414.586H5.828a2 2 0 0 1-1.414-.586z"/></svg></span>Choice</span><span class="wt-typechip" style="--wt-hue: var(--el-type-deploy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg></span>Deploy</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-manual)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></span>Manual</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-legal)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg></span>Legal</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-chore)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></svg></span>Chore</span></div>
+          <div class="wt-label" style="margin-top: 14px">Every kind icon</div>
+          <div class="wt-chipgrid"><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">epic</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">story</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">task</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">bug</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">subtask</span></span></div>
+        </div>
+      </div>
+      <div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+        <div class="wt-frame-cap">Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-frame-body">
+          <div class="wt-rows"><div class="wt-row wt-row-selected"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span><span class="wt-row-title">Onboarding revamp</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span></div><div class="wt-row wt-row-focus"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span><span class="wt-row-title">Public roadmap</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span></div><div class="wt-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span><span class="wt-row-title">Invite a teammate from the board</span><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span></div><div class="wt-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span><span class="wt-row-title">Paginate the member list</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span></div></div>
+          <div class="wt-label" style="margin-top: 14px">Every work-item type chip</div>
+          <div class="wt-chipgrid"><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span><span class="wt-typechip" style="--wt-hue: var(--el-type-content)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>Content</span><span class="wt-typechip" style="--wt-hue: var(--el-type-copy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></svg></span>Copy</span><span class="wt-typechip" style="--wt-hue: var(--el-type-translate)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></span>Translate</span><span class="wt-typechip" style="--wt-hue: var(--el-type-research)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></span>Research</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span><span class="wt-typechip" style="--wt-hue: var(--el-type-verification)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verification</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-decision)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="m19 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"/><path d="m5 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M7 21h10"/></svg></span>Decision</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-choice)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13v8"/><path d="M12 3v3"/><path d="M2.354 10.354a1.207 1.207 0 0 1 0-1.708l2.06-2.06A2 2 0 0 1 5.828 6h12.344a2 2 0 0 1 1.414.586l2.06 2.06a1.207 1.207 0 0 1 0 1.708l-2.06 2.06a2 2 0 0 1-1.414.586H5.828a2 2 0 0 1-1.414-.586z"/></svg></span>Choice</span><span class="wt-typechip" style="--wt-hue: var(--el-type-deploy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg></span>Deploy</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-manual)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></span>Manual</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-legal)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg></span>Legal</span><span class="wt-typechip wt-typechip-grey" style="--wt-hue: var(--el-type-chore)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></svg></span>Chore</span></div>
+          <div class="wt-label" style="margin-top: 14px">Every kind icon</div>
+          <div class="wt-chipgrid"><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">epic</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">story</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">task</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">bug</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">subtask</span></span></div>
+        </div>
+      </div>
+    </div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">5 · Progress — light and dark, at 0, partial and complete</h2>
+      <p class="wt-panel-note">The subtree meter on a planning node means DONE and keeps the green success fill. Upload and import bars stop borrowing the ink CTA fill and take a new role, --el-progress-fill, which is the warm accent in Motir and the old ink in every other palette.</p>
+      <div class="wt-quad"><div class="wt-scope wt-frame" data-theme="light">
+        <div class="wt-frame-cap">Light · today (shipped)</div>
+        <div class="wt-frame-body"><div class="wt-prog"><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 0%"><div class="wt-fill-done wt-w0"></div></div><span>0%</span></div><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 40%"><div class="wt-fill-done wt-w40"></div></div><span>40%</span></div><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 100%"><div class="wt-fill-done wt-w100"></div></div><span>100%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 0%"><div class="wt-fill-progress wt-w0"></div></div><span>0%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 40%"><div class="wt-fill-progress wt-w40"></div></div><span>40%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 100%"><div class="wt-fill-progress wt-w100"></div></div><span>100%</span></div></div></div>
+      </div><div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+        <div class="wt-frame-cap">Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-frame-body"><div class="wt-prog"><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 0%"><div class="wt-fill-done wt-w0"></div></div><span>0%</span></div><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 40%"><div class="wt-fill-done wt-w40"></div></div><span>40%</span></div><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 100%"><div class="wt-fill-done wt-w100"></div></div><span>100%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 0%"><div class="wt-fill-progress wt-w0"></div></div><span>0%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 40%"><div class="wt-fill-progress wt-w40"></div></div><span>40%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 100%"><div class="wt-fill-progress wt-w100"></div></div><span>100%</span></div></div></div>
+      </div><div class="wt-scope wt-frame" data-theme="dark">
+        <div class="wt-frame-cap">Dark · today (shipped)</div>
+        <div class="wt-frame-body"><div class="wt-prog"><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 0%"><div class="wt-fill-done wt-w0"></div></div><span>0%</span></div><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 40%"><div class="wt-fill-done wt-w40"></div></div><span>40%</span></div><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 100%"><div class="wt-fill-done wt-w100"></div></div><span>100%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 0%"><div class="wt-fill-progress wt-w0"></div></div><span>0%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 40%"><div class="wt-fill-progress wt-w40"></div></div><span>40%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 100%"><div class="wt-fill-progress wt-w100"></div></div><span>100%</span></div></div></div>
+      </div><div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+        <div class="wt-frame-cap">Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-frame-body"><div class="wt-prog"><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 0%"><div class="wt-fill-done wt-w0"></div></div><span>0%</span></div><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 40%"><div class="wt-fill-done wt-w40"></div></div><span>40%</span></div><div class="wt-prog-row"><span>Subtree done / total</span><div class="wt-track" role="progressbar" aria-label="Subtree done / total 100%"><div class="wt-fill-done wt-w100"></div></div><span>100%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 0%"><div class="wt-fill-progress wt-w0"></div></div><span>0%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 40%"><div class="wt-fill-progress wt-w40"></div></div><span>40%</span></div><div class="wt-prog-row"><span>Upload · import</span><div class="wt-track" role="progressbar" aria-label="Upload · import 100%"><div class="wt-fill-progress wt-w100"></div></div><span>100%</span></div></div></div>
+      </div></div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">6 · Avatars, labels and the warning surface</h2>
+      <p class="wt-panel-note">Peach and yellow warm a little; the fallback avatar tile stays the blue info hue. The Blocked pill and the warning callout ride --el-tint-peach, so they warm with it — ink on them stays 12.4:1 light / 10.6:1 dark.</p>
+      <div class="wt-quad"><div class="wt-scope wt-frame" data-theme="light">
+        <div class="wt-frame-cap">Light · today (shipped)</div>
+        <div class="wt-frame-body">
+          <div class="wt-label">Triage avatars (initials) + the fallback tile</div>
+          <div class="wt-avatars"><span class="wt-tavatar wt-bg-avatar-peach">AK</span><span class="wt-tavatar wt-bg-avatar-rose">BL</span><span class="wt-tavatar wt-bg-avatar-mint">CM</span><span class="wt-tavatar wt-bg-avatar-lavender">DN</span><span class="wt-tavatar wt-bg-avatar-sky">EO</span><span class="wt-tavatar wt-bg-avatar-yellow">FP</span><span class="wt-tavatar wt-tavatar-fallback wt-bg-avatar-fallback">?</span></div>
+          <div class="wt-label" style="margin-top: 14px">Label tints · Blocked pill · custom role</div>
+          <div class="wt-chipgrid"><span class="wt-pill wt-bg-label-1">frontend</span><span class="wt-pill wt-bg-label-2">billing</span><span class="wt-pill wt-bg-label-3">infra</span><span class="wt-pill wt-bg-label-4">docs</span><span class="wt-pill wt-bg-label-5">growth</span><span class="wt-pill wt-bg-label-6">mobile</span><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pill wt-pill-custom">Release manager</span></div>
+          <div class="wt-label" style="margin-top: 14px">Warning surface</div>
+          <div class="wt-callout"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg><span>This sprint is over capacity by 6 points. Move items to the backlog or raise the capacity.</span></div>
+        </div>
+      </div><div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+        <div class="wt-frame-cap">Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-frame-body">
+          <div class="wt-label">Triage avatars (initials) + the fallback tile</div>
+          <div class="wt-avatars"><span class="wt-tavatar wt-bg-avatar-peach">AK</span><span class="wt-tavatar wt-bg-avatar-rose">BL</span><span class="wt-tavatar wt-bg-avatar-mint">CM</span><span class="wt-tavatar wt-bg-avatar-lavender">DN</span><span class="wt-tavatar wt-bg-avatar-sky">EO</span><span class="wt-tavatar wt-bg-avatar-yellow">FP</span><span class="wt-tavatar wt-tavatar-fallback wt-bg-avatar-fallback">?</span></div>
+          <div class="wt-label" style="margin-top: 14px">Label tints · Blocked pill · custom role</div>
+          <div class="wt-chipgrid"><span class="wt-pill wt-bg-label-1">frontend</span><span class="wt-pill wt-bg-label-2">billing</span><span class="wt-pill wt-bg-label-3">infra</span><span class="wt-pill wt-bg-label-4">docs</span><span class="wt-pill wt-bg-label-5">growth</span><span class="wt-pill wt-bg-label-6">mobile</span><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pill wt-pill-custom">Release manager</span></div>
+          <div class="wt-label" style="margin-top: 14px">Warning surface</div>
+          <div class="wt-callout"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg><span>This sprint is over capacity by 6 points. Move items to the backlog or raise the capacity.</span></div>
+        </div>
+      </div><div class="wt-scope wt-frame" data-theme="dark">
+        <div class="wt-frame-cap">Dark · today (shipped)</div>
+        <div class="wt-frame-body">
+          <div class="wt-label">Triage avatars (initials) + the fallback tile</div>
+          <div class="wt-avatars"><span class="wt-tavatar wt-bg-avatar-peach">AK</span><span class="wt-tavatar wt-bg-avatar-rose">BL</span><span class="wt-tavatar wt-bg-avatar-mint">CM</span><span class="wt-tavatar wt-bg-avatar-lavender">DN</span><span class="wt-tavatar wt-bg-avatar-sky">EO</span><span class="wt-tavatar wt-bg-avatar-yellow">FP</span><span class="wt-tavatar wt-tavatar-fallback wt-bg-avatar-fallback">?</span></div>
+          <div class="wt-label" style="margin-top: 14px">Label tints · Blocked pill · custom role</div>
+          <div class="wt-chipgrid"><span class="wt-pill wt-bg-label-1">frontend</span><span class="wt-pill wt-bg-label-2">billing</span><span class="wt-pill wt-bg-label-3">infra</span><span class="wt-pill wt-bg-label-4">docs</span><span class="wt-pill wt-bg-label-5">growth</span><span class="wt-pill wt-bg-label-6">mobile</span><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pill wt-pill-custom">Release manager</span></div>
+          <div class="wt-label" style="margin-top: 14px">Warning surface</div>
+          <div class="wt-callout"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg><span>This sprint is over capacity by 6 points. Move items to the backlog or raise the capacity.</span></div>
+        </div>
+      </div><div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+        <div class="wt-frame-cap">Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-frame-body">
+          <div class="wt-label">Triage avatars (initials) + the fallback tile</div>
+          <div class="wt-avatars"><span class="wt-tavatar wt-bg-avatar-peach">AK</span><span class="wt-tavatar wt-bg-avatar-rose">BL</span><span class="wt-tavatar wt-bg-avatar-mint">CM</span><span class="wt-tavatar wt-bg-avatar-lavender">DN</span><span class="wt-tavatar wt-bg-avatar-sky">EO</span><span class="wt-tavatar wt-bg-avatar-yellow">FP</span><span class="wt-tavatar wt-tavatar-fallback wt-bg-avatar-fallback">?</span></div>
+          <div class="wt-label" style="margin-top: 14px">Label tints · Blocked pill · custom role</div>
+          <div class="wt-chipgrid"><span class="wt-pill wt-bg-label-1">frontend</span><span class="wt-pill wt-bg-label-2">billing</span><span class="wt-pill wt-bg-label-3">infra</span><span class="wt-pill wt-bg-label-4">docs</span><span class="wt-pill wt-bg-label-5">growth</span><span class="wt-pill wt-bg-label-6">mobile</span><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pill wt-pill-custom">Release manager</span></div>
+          <div class="wt-label" style="margin-top: 14px">Warning surface</div>
+          <div class="wt-callout"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg><span>This sprint is over capacity by 6 points. Move items to the backlog or raise the capacity.</span></div>
+        </div>
+      </div></div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">7 · Planning canvas highlight and the chart ramp</h2>
+      <p class="wt-panel-note">The Plan-with-AI launcher and the target-node glow mix the ink accent with --el-highlight, so the glow turns warm while the fill stays ink. Chart segment 6 is the highlight.</p>
+      <div class="wt-quad"><div class="wt-scope wt-frame" data-theme="light">
+        <div class="wt-frame-cap">Light · today (shipped)</div>
+        <div class="wt-glowrow">
+          <span class="wt-launch"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>Plan with AI</span>
+          <div class="wt-target"><div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div><div class="wt-title">Onboarding revamp</div></div>
+        </div>
+        <div class="wt-frame-body"><div class="wt-legend"><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-1)"></span>Segment 1</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-2)"></span>Segment 2</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-3)"></span>Segment 3</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-4)"></span>Segment 4</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-5)"></span>Segment 5</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-6)"></span>Segment 6</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-7)"></span>Segment 7</span></div></div>
+      </div><div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+        <div class="wt-frame-cap">Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-glowrow">
+          <span class="wt-launch"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>Plan with AI</span>
+          <div class="wt-target"><div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div><div class="wt-title">Onboarding revamp</div></div>
+        </div>
+        <div class="wt-frame-body"><div class="wt-legend"><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-1)"></span>Segment 1</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-2)"></span>Segment 2</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-3)"></span>Segment 3</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-4)"></span>Segment 4</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-5)"></span>Segment 5</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-6)"></span>Segment 6</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-7)"></span>Segment 7</span></div></div>
+      </div><div class="wt-scope wt-frame" data-theme="dark">
+        <div class="wt-frame-cap">Dark · today (shipped)</div>
+        <div class="wt-glowrow">
+          <span class="wt-launch"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>Plan with AI</span>
+          <div class="wt-target"><div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div><div class="wt-title">Onboarding revamp</div></div>
+        </div>
+        <div class="wt-frame-body"><div class="wt-legend"><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-1)"></span>Segment 1</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-2)"></span>Segment 2</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-3)"></span>Segment 3</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-4)"></span>Segment 4</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-5)"></span>Segment 5</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-6)"></span>Segment 6</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-7)"></span>Segment 7</span></div></div>
+      </div><div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+        <div class="wt-frame-cap">Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-glowrow">
+          <span class="wt-launch"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>Plan with AI</span>
+          <div class="wt-target"><div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div><div class="wt-title">Onboarding revamp</div></div>
+        </div>
+        <div class="wt-frame-body"><div class="wt-legend"><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-1)"></span>Segment 1</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-2)"></span>Segment 2</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-3)"></span>Segment 3</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-4)"></span>Segment 4</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-5)"></span>Segment 5</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-6)"></span>Segment 6</span><span class="wt-legend-item"><span class="wt-sq" style="background: var(--el-chart-cat-7)"></span>Segment 7</span></div></div>
+      </div></div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">8 · Settings › Appearance › Palette — Motir selected</h2>
+      <p class="wt-panel-note">Unchanged: the Motir swatch is the ink CTA fill, the selected chip is the lavender wash with an ink border, and Motir stays first.</p>
+      <div class="wt-quad"><div class="wt-scope wt-frame" data-theme="light">
+        <div class="wt-frame-cap">Light · today (shipped)</div>
+        <div class="wt-frame-body"><div class="wt-label">Palette</div><div class="wt-radios" role="radiogroup" aria-label="Palette"><span class="wt-radio wt-radio-on" role="radio" aria-checked="true"><span class="wt-swatch wt-swatch-motir"></span>Motir<svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="wt-radio" role="radio" aria-checked="false">Amethyst</span><span class="wt-radio" role="radio" aria-checked="false">Cobalt</span><span class="wt-radio" role="radio" aria-checked="false">Evergreen</span><span class="wt-radio" role="radio" aria-checked="false">Spectrum</span></div></div>
+      </div><div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+        <div class="wt-frame-cap">Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-frame-body"><div class="wt-label">Palette</div><div class="wt-radios" role="radiogroup" aria-label="Palette"><span class="wt-radio wt-radio-on" role="radio" aria-checked="true"><span class="wt-swatch wt-swatch-motir"></span>Motir<svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="wt-radio" role="radio" aria-checked="false">Amethyst</span><span class="wt-radio" role="radio" aria-checked="false">Cobalt</span><span class="wt-radio" role="radio" aria-checked="false">Evergreen</span><span class="wt-radio" role="radio" aria-checked="false">Spectrum</span></div></div>
+      </div><div class="wt-scope wt-frame" data-theme="dark">
+        <div class="wt-frame-cap">Dark · today (shipped)</div>
+        <div class="wt-frame-body"><div class="wt-label">Palette</div><div class="wt-radios" role="radiogroup" aria-label="Palette"><span class="wt-radio wt-radio-on" role="radio" aria-checked="true"><span class="wt-swatch wt-swatch-motir"></span>Motir<svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="wt-radio" role="radio" aria-checked="false">Amethyst</span><span class="wt-radio" role="radio" aria-checked="false">Cobalt</span><span class="wt-radio" role="radio" aria-checked="false">Evergreen</span><span class="wt-radio" role="radio" aria-checked="false">Spectrum</span></div></div>
+      </div><div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+        <div class="wt-frame-cap">Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-frame-body"><div class="wt-label">Palette</div><div class="wt-radios" role="radiogroup" aria-label="Palette"><span class="wt-radio wt-radio-on" role="radio" aria-checked="true"><span class="wt-swatch wt-swatch-motir"></span>Motir<svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="wt-radio" role="radio" aria-checked="false">Amethyst</span><span class="wt-radio" role="radio" aria-checked="false">Cobalt</span><span class="wt-radio" role="radio" aria-checked="false">Evergreen</span><span class="wt-radio" role="radio" aria-checked="false">Spectrum</span></div></div>
+      </div></div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">9 · Two intensities, one decision — light</h2>
+      <p class="wt-panel-note">Subtle (left) is recommended. The colourful variant gives Design its own coral, which lands ΔE 10.2 from the danger red that Bug and Deploy wear — at the floor, not clear of it — and its tinted counts and 22% chips change component recipes the palette layer cannot own.</p>
+      <div class="wt-stack">
+      <div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+        <div class="wt-frame-cap">Light · subtle — accent + tints<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-frame-body"><div class="wt-chipgrid"><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">epic</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">bug</span></span><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span><span class="wt-typechip" style="--wt-hue: var(--el-type-deploy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg></span>Deploy</span></div></div>
+        <div class="wt-topbar"><span class="wt-brand" role="img" aria-label="Motir">M</span><span class="wt-brand-name">Sprint 14 board</span><span class="wt-spacer"></span><span class="wt-link">Board settings</span><span class="wt-btn"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create</span></div>
+        <div class="wt-board">
+          <div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-todo)"></span>To Do<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div>
+              <div class="wt-title">Onboarding revamp</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pts">13</span><span class="wt-avatar">A</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">MOTIR-118</span></div>
+              <div class="wt-title">Import drops labels</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-highest)">Highest</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-progress)"></span>In Progress<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span></div>
+              <div class="wt-title">Invite a teammate from the board</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">5</span><span class="wt-avatar">M</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span></div>
+              <div class="wt-title">Paginate the member list</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">3</span><span class="wt-avatar">J</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-review)"></span>In Review<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span></div>
+              <div class="wt-title">Public roadmap</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">21</span><span class="wt-avatar">Y</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">MOTIR-111</span></div>
+              <div class="wt-title">Copy for the empty state</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-low)">Low</span><span class="wt-pts">1</span><span class="wt-avatar">A</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-implemented)"></span>Implemented<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-097</span></div>
+              <div class="wt-title">Seed demo workspace</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-done)"></span>Done<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-090</span></div>
+              <div class="wt-title">Sign in with a passkey</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">8</span><span class="wt-avatar">M</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="wt-scope wt-frame" data-theme="light" data-proposal="colourful">
+        <div class="wt-frame-cap">Light · a bit more colourful — coral Design, 22% chips, tinted counts<span class="wt-tag wt-tag-no">Not recommended</span></div>
+        <div class="wt-frame-body"><div class="wt-chipgrid"><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">epic</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">bug</span></span><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span><span class="wt-typechip" style="--wt-hue: var(--el-type-deploy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg></span>Deploy</span></div></div>
+        <div class="wt-topbar"><span class="wt-brand" role="img" aria-label="Motir">M</span><span class="wt-brand-name">Sprint 14 board</span><span class="wt-spacer"></span><span class="wt-link">Board settings</span><span class="wt-btn"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create</span></div>
+        <div class="wt-board">
+          <div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-todo)"></span>To Do<span class="wt-count wt-count-tinted" style="--wt-hue: var(--el-status-todo)">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div>
+              <div class="wt-title">Onboarding revamp</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pts">13</span><span class="wt-avatar">A</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">MOTIR-118</span></div>
+              <div class="wt-title">Import drops labels</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-highest)">Highest</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-progress)"></span>In Progress<span class="wt-count wt-count-tinted" style="--wt-hue: var(--el-status-in-progress)">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span></div>
+              <div class="wt-title">Invite a teammate from the board</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">5</span><span class="wt-avatar">M</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span></div>
+              <div class="wt-title">Paginate the member list</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">3</span><span class="wt-avatar">J</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-review)"></span>In Review<span class="wt-count wt-count-tinted" style="--wt-hue: var(--el-status-in-review)">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span></div>
+              <div class="wt-title">Public roadmap</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">21</span><span class="wt-avatar">Y</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">MOTIR-111</span></div>
+              <div class="wt-title">Copy for the empty state</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-low)">Low</span><span class="wt-pts">1</span><span class="wt-avatar">A</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-implemented)"></span>Implemented<span class="wt-count wt-count-tinted" style="--wt-hue: var(--el-status-implemented)">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-097</span></div>
+              <div class="wt-title">Seed demo workspace</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-done)"></span>Done<span class="wt-count wt-count-tinted" style="--wt-hue: var(--el-status-done)">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-090</span></div>
+              <div class="wt-title">Sign in with a passkey</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">8</span><span class="wt-avatar">M</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">10 · Two intensities, one decision — dark</h2>
+      <p class="wt-panel-note">In dark the coral clears its neighbours (ΔE 12.7 or more), but the decision is one table for both themes.</p>
+      <div class="wt-stack">
+      <div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+        <div class="wt-frame-cap">Dark · subtle — accent + tints<span class="wt-tag wt-tag-rec">Recommended</span></div>
+        <div class="wt-frame-body"><div class="wt-chipgrid"><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">epic</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">bug</span></span><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span><span class="wt-typechip" style="--wt-hue: var(--el-type-deploy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg></span>Deploy</span></div></div>
+        <div class="wt-topbar"><span class="wt-brand" role="img" aria-label="Motir">M</span><span class="wt-brand-name">Sprint 14 board</span><span class="wt-spacer"></span><span class="wt-link">Board settings</span><span class="wt-btn"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create</span></div>
+        <div class="wt-board">
+          <div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-todo)"></span>To Do<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div>
+              <div class="wt-title">Onboarding revamp</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pts">13</span><span class="wt-avatar">A</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">MOTIR-118</span></div>
+              <div class="wt-title">Import drops labels</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-highest)">Highest</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-progress)"></span>In Progress<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span></div>
+              <div class="wt-title">Invite a teammate from the board</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">5</span><span class="wt-avatar">M</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span></div>
+              <div class="wt-title">Paginate the member list</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">3</span><span class="wt-avatar">J</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-review)"></span>In Review<span class="wt-count">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span></div>
+              <div class="wt-title">Public roadmap</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">21</span><span class="wt-avatar">Y</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">MOTIR-111</span></div>
+              <div class="wt-title">Copy for the empty state</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-low)">Low</span><span class="wt-pts">1</span><span class="wt-avatar">A</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-implemented)"></span>Implemented<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-097</span></div>
+              <div class="wt-title">Seed demo workspace</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-done)"></span>Done<span class="wt-count">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-090</span></div>
+              <div class="wt-title">Sign in with a passkey</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">8</span><span class="wt-avatar">M</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="wt-scope wt-frame" data-theme="dark" data-proposal="colourful">
+        <div class="wt-frame-cap">Dark · a bit more colourful — coral Design, 22% chips, tinted counts<span class="wt-tag wt-tag-no">Not recommended</span></div>
+        <div class="wt-frame-body"><div class="wt-chipgrid"><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">epic</span></span><span class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">bug</span></span><span class="wt-typechip" style="--wt-hue: var(--el-type-code)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>Code</span><span class="wt-typechip" style="--wt-hue: var(--el-type-design)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>Design</span><span class="wt-typechip" style="--wt-hue: var(--el-type-test)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>Test</span><span class="wt-typechip" style="--wt-hue: var(--el-type-review)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>Review</span><span class="wt-typechip" style="--wt-hue: var(--el-type-deploy)"><span class="wt-hue"><svg class="wt-ico-chip" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg></span>Deploy</span></div></div>
+        <div class="wt-topbar"><span class="wt-brand" role="img" aria-label="Motir">M</span><span class="wt-brand-name">Sprint 14 board</span><span class="wt-spacer"></span><span class="wt-link">Board settings</span><span class="wt-btn"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create</span></div>
+        <div class="wt-board">
+          <div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-todo)"></span>To Do<span class="wt-count wt-count-tinted" style="--wt-hue: var(--el-status-todo)">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-101</span></div>
+              <div class="wt-title">Onboarding revamp</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-warning"><svg class="wt-ico-sm" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Blocked</span><span class="wt-pts">13</span><span class="wt-avatar">A</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg></span><span class="wt-key">MOTIR-118</span></div>
+              <div class="wt-title">Import drops labels</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-highest)">Highest</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-progress)"></span>In Progress<span class="wt-count wt-count-tinted" style="--wt-hue: var(--el-status-in-progress)">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-104</span></div>
+              <div class="wt-title">Invite a teammate from the board</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">5</span><span class="wt-avatar">M</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-109</span></div>
+              <div class="wt-title">Paginate the member list</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">3</span><span class="wt-avatar">J</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-in-review)"></span>In Review<span class="wt-count wt-count-tinted" style="--wt-hue: var(--el-status-in-review)">2</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="wt-key">MOTIR-099</span></div>
+              <div class="wt-title">Public roadmap</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-high)">High</span><span class="wt-pts">21</span><span class="wt-avatar">Y</span></div>
+            </div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg></span><span class="wt-key">MOTIR-111</span></div>
+              <div class="wt-title">Copy for the empty state</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-low)">Low</span><span class="wt-pts">1</span><span class="wt-avatar">A</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-implemented)"></span>Implemented<span class="wt-count wt-count-tinted" style="--wt-hue: var(--el-status-implemented)">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-task)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg></span><span class="wt-key">MOTIR-097</span></div>
+              <div class="wt-title">Seed demo workspace</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">2</span><span class="wt-avatar">S</span></div>
+            </div>
+          </div><div class="wt-col">
+            <div class="wt-col-head"><span class="wt-dot" style="background: var(--el-status-done)"></span>Done<span class="wt-count wt-count-tinted" style="--wt-hue: var(--el-status-done)">1</span></div>
+            <div class="wt-card">
+              <div class="wt-card-row"><span class="wt-hue" style="--wt-hue: var(--el-type-story)"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="wt-key">MOTIR-090</span></div>
+              <div class="wt-title">Sign in with a passkey</div>
+              <div class="wt-card-row"><span class="wt-pill wt-pill-prio" style="--wt-hue: var(--el-priority-medium)">Medium</span><span class="wt-pts">8</span><span class="wt-avatar">M</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </section>
+  </body>
+</html>
