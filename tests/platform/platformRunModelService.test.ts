@@ -10,6 +10,7 @@ import {
   RunModelNotOfferedError,
 } from '@/lib/platform/errors';
 import { HostedModelsUnavailableError } from '@/lib/hostedRuns/errors';
+import { platformRunModelRepository } from '@/lib/repositories/platformRunModelRepository';
 import { platformRunModelService } from '@/lib/services/platformRunModelService';
 import { createTestUser } from '../fixtures/userFixtures';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
@@ -152,6 +153,29 @@ describe('the first read seeds the list from motir-ai, exactly once', () => {
     expect(await listed()).toEqual(['claude-opus-5-5', 'claude-sonnet-5-5', 'glm-5.2']);
     expect(await auditRows('ai.run_model_list.seed')).toHaveLength(1);
     expect(await adminDb.platformRunModelList.count()).toBe(1);
+  });
+
+  // The concurrent case above reaches the losing seed only when the scheduler
+  // interleaves the two reads that way; these two pin both of its exits.
+  it('a seed that finds the list already seeded rolls back with no row and reads the list', async () => {
+    await platformRunModelService.listModels(currentPrincipal!);
+    // As a concurrent first read sees it: not yet initialised, then seeded by the time it seeds.
+    vi.spyOn(platformRunModelRepository, 'isInitialized').mockResolvedValueOnce(false);
+    const dto = await platformRunModelService.listModels(currentPrincipal!);
+    expect(dto.entries).toHaveLength(3);
+    expect(await auditRows('ai.run_model_list.seed')).toHaveLength(1);
+    expect(await adminDb.platformRunModelList.count()).toBe(1);
+  });
+
+  it('a seed that fails for any other reason propagates and initialises nothing', async () => {
+    vi.spyOn(platformRunModelRepository, 'createSeeded').mockRejectedValueOnce(
+      new RangeError('boom'),
+    );
+    await expect(platformRunModelService.listModels(currentPrincipal!)).rejects.toBeInstanceOf(
+      RangeError,
+    );
+    expect(await adminDb.platformRunModelList.count()).toBe(0);
+    expect(await auditRows('ai.run_model_list.seed')).toHaveLength(0);
   });
 
   it('motir-ai down on the first read raises and leaves the list UNINITIALISED, not empty', async () => {
