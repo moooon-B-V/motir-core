@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { Locator, Page } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
@@ -20,8 +20,16 @@ import type { GithubMergeCall, GithubMergeControl } from '@/lib/test-github-merg
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 
-// APPROVE AND MERGE THE PULL REQUESTS IN MOTIR — THE ACCEPTANCE RECEIPT (Story MOTIR-4909 ·
-// Subtask MOTIR-5487).
+// APPROVE AND MERGE THE PULL REQUESTS IN MOTIR — Story MOTIR-4909's walk, as a REGRESSION
+// spec (Subtask MOTIR-5487). It was that story's acceptance receipt
+// (`acceptance-approve-and-merge.spec.ts`); Story MOTIR-7460 PROMOTED it into the CLOUD lane
+// (docs/acceptance-lane-triage.md § MOTIR-7460) when the To approve tab was renamed Waiting
+// on you. The import swap to `_helpers/promoted-regression` keeps every `chapter()` as a step
+// and drops the pacing; the one assertion restated is the tab's table, now named Waiting on
+// you (design `design/workbench/design-notes.md` § 33). Cloud, not main: the GitHub MERGE
+// seam it drives is wired only there and in the acceptance lane — `playwright.cloud.config.ts`
+// gained it for this spec. Where the header below says `playwright.acceptance.config.ts`,
+// read `playwright.cloud.config.ts`; the rest is the receipt's, kept as it was written.
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //
@@ -276,12 +284,16 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
       'Both pull requests are green: the question is waiting on To approve',
       async () => {
         await page.goto('/workbench?tab=approvals');
+        // ⚠️ RESTATED AFTER PROMOTION (Story MOTIR-7460, design
+        // `design/workbench/design-notes.md` § 33): the tab, and so the table it
+        // names, is Waiting on you now — To approve when this was recorded.
+        //
         // ONE row per card, FULL STOP (Bug MOTIR-5603 · MOTIR-5615; the delta mock
         // `design/workbench/approvals-row--one-gate.mock.html`, panels 1-2). § 23 used to
         // promise a *Not built yet* row per pull request beside this one; § 25 struck that,
         // and the merge kind now raises nothing. So the count is taken over EVERY row on
         // the tab, not filtered to one kind — filtering is what would hide a regression.
-        const table = page.getByRole('table', { name: 'To approve' });
+        const table = page.getByRole('table', { name: 'Waiting on you' });
         const rows = table.getByTestId(/^approval-row-/);
         await expect(rows).toHaveCount(4, { timeout: 60_000 });
         const row = rows.filter({ hasText: seed.merged.identifier });
@@ -319,7 +331,7 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
       // and the chapter reaches the card by its address.
       await expect(
         page
-          .getByRole('table', { name: 'To approve' })
+          .getByRole('table', { name: 'Waiting on you' })
           .getByTestId(/^approval-row-/)
           .filter({ hasText: seed.merged.identifier })
           .getByText(approvalSentence(en, 'pull_request_approval', seed.merged.title), {

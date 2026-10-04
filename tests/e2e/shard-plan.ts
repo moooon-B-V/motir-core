@@ -596,6 +596,21 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // between a local reading and the CI cost: **43.0**. RE-MEASURE from the first green
   // `playwright-report-bulk-*` artifact that includes it.
   'refusal-reason.spec.ts': 43.0,
+  // Story MOTIR-7460 — three receipts PROMOTED out of the acceptance lane when the
+  // Workbench's To approve tab was renamed Waiting on you (they were
+  // `acceptance-approvals-room.spec.ts`, `acceptance-plain-words-approvals.spec.ts`
+  // and `acceptance-workbench.spec.ts`; the dispositions are in
+  // docs/acceptance-lane-triage.md § MOTIR-7460). MEASURED locally on 2026-10-04
+  // against a production build in THIS lane (list reporter, `6 passed`):
+  //   approvals-room          18.4 + 7.0  = 25.4 s over two tests
+  //   plain-words-approvals   18.4 + 11.6 = 30.0 s over two
+  //   workbench-lifecycle     10.7 + 3.6  = 14.3 s over two
+  // Recorded at the ~1.5x this file's calibration note puts between a local reading
+  // and the CI cost. RE-MEASURE from the first green `playwright-report-bulk-*`
+  // artifact that includes them.
+  'approvals-room.spec.ts': 38.0,
+  'plain-words-approvals.spec.ts': 45.0,
+  'workbench-lifecycle.spec.ts': 21.5,
   // MOTIR-5306. Promoted from the acceptance lane (it was
   // `acceptance-design-approval.spec.ts`). Measured LOCALLY (4.2 s, one test,
   // against a production build), not from a green CI run — there is none in this

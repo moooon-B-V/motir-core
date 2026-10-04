@@ -1,5 +1,15 @@
-// Acceptance E2E — approving a plan is an APPROVAL GATE (Subtask MOTIR-6041,
-// Story MOTIR-6012; `docs/decisions/approval-gates.md` §11.3–§11.5c).
+// Approving a plan is an APPROVAL GATE — Story MOTIR-6012's walk, as a REGRESSION
+// spec (Subtask MOTIR-6041; `docs/decisions/approval-gates.md` §11.3–§11.5c). It was
+// that story's acceptance receipt (`acceptance-plan-approval-gate.spec.ts`); Story
+// MOTIR-7460 PROMOTED it into the CLOUD lane (docs/acceptance-lane-triage.md
+// § MOTIR-7460) when the To approve tab was renamed Waiting on you. The import swap
+// to `_helpers/promoted-regression` keeps every `chapter()` as a step and drops the
+// pacing; the assertions restated are the tab's link (now named Waiting on you) and
+// the surface's "Reopened from Waiting on you" line (design
+// `design/workbench/design-notes.md` § 33). Cloud, not main: the planning surface
+// mounts only where Motir AI is configured, and the motir-ai JOBS mock is this
+// lane's. The header below is the receipt's, kept as it was written.
+//
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //
@@ -35,7 +45,7 @@
 // the state.
 import { writeFileSync } from 'node:fs';
 import type { Locator, Page } from '@playwright/test';
-import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
+import { test, expect, FIRST_PAINT_MS } from './_helpers/promoted-regression';
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanningAnchorTree, PLANNING_ANCHOR_PASSWORD } from './_helpers/planning-anchor-seed';
@@ -134,9 +144,11 @@ async function closeSurface(page: Page): Promise<void> {
   await expect(workspace(page)).toHaveCount(0);
 }
 
+/** The Workbench's Waiting on you tab — To approve until Story MOTIR-7460 renamed
+ *  it (design `design/workbench/design-notes.md` § 33); the slug is unchanged. */
 async function openToApprove(page: Page): Promise<void> {
   await page.goto('/workbench?tab=approvals');
-  await expect(page.getByRole('link', { name: /To approve/ })).toBeVisible({
+  await expect(page.getByRole('link', { name: /Waiting on you/ })).toBeVisible({
     timeout: FIRST_PAINT_MS,
   });
 }
@@ -270,7 +282,7 @@ test('a finished plan waits in To approve, is held while it is rewritten, and Ap
     rowTestId = (await row.getAttribute('data-testid'))!;
     await expect(row).toContainText(new RegExp(`Plan for\\s*${seed.storyTitle}`));
     await expect(row).toContainText('1 proposed item · written by Motir AI');
-    await expect(page.getByRole('link', { name: /To approve/ })).toContainText('1');
+    await expect(page.getByRole('link', { name: /Waiting on you/ })).toContainText('1');
     await beat();
   });
 
@@ -279,7 +291,7 @@ test('a finished plan waits in To approve, is held while it is rewritten, and Ap
     await landOnSurface(page, sessionId);
     await planRendered(page, 1);
     await expect(rail(page).getByTestId('planning-reopened-from-approvals')).toContainText(
-      'Reopened from To approve',
+      'Reopened from Waiting on you',
     );
     await expect(bar(page)).toContainText(surface.consequence);
     await expect(verb(bar(page), surface.decline)).toBeEnabled();
@@ -297,7 +309,7 @@ test('a finished plan waits in To approve, is held while it is rewritten, and Ap
     await expect(row).toHaveAttribute('data-testid', rowTestId);
     await expect(row).toContainText(gate.row.rewriting);
     await expect(reviewButton(row)).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /To approve/ })).toContainText('1');
+    await expect(page.getByRole('link', { name: /Waiting on you/ })).toContainText('1');
     await beat();
 
     // The row still opens the surface — to watch, not to decide.

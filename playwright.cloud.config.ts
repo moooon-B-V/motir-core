@@ -7,6 +7,7 @@ import {
   E2E_GITHUB_CLIENT_ID,
   E2E_GITHUB_CLIENT_SECRET,
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  E2E_GITHUB_WEBHOOK_SECRET,
   E2E_PROVISIONING_ORG,
 } from './tests/e2e/_helpers/github-const';
 import { E2E_LEGAL_DOCUMENTS_JSON } from './tests/e2e/_helpers/legal-manifest';
@@ -92,6 +93,20 @@ const MOTIR_GITHUB_CONTROL_PATH = path.resolve('/tmp/motir-cloud-github-control.
 const MOTIR_GITHUB_JOURNAL_PATH = path.resolve('/tmp/motir-cloud-github-journal.jsonl');
 process.env['MOTIR_GITHUB_CONTROL_PATH'] ??= MOTIR_GITHUB_CONTROL_PATH;
 process.env['MOTIR_GITHUB_JOURNAL_PATH'] ??= MOTIR_GITHUB_JOURNAL_PATH;
+// ── The GitHub MERGE seam (MOTIR-5572), carried here by Story MOTIR-7460 ─────
+// `cloud-approve-and-merge.spec.ts` (promoted from the acceptance lane) presses
+// *Approve and merge*, which merges SERVER-side, so the fake GitHub merge lives in
+// the Next process (lib/test-github-merge-mock.ts, behind E2E_TEST_GITHUB_MERGE=1)
+// exactly as `playwright.acceptance.config.ts` wires it. The spec WRITES the control
+// file and READS the journal, so both paths are set on the runner as well as the
+// server. The seam claims a path only for a repository its control file names, so
+// no other spec in this lane meets it. The worker half travels with it
+// (`githubMergeSeamEnv`, MOTIR-5837), so a job that reads the host is faked too.
+const MOTIR_GITHUB_MERGE_CONTROL_PATH = path.resolve('/tmp/motir-cloud-github-merge-control.json');
+const MOTIR_GITHUB_MERGE_JOURNAL_PATH = path.resolve('/tmp/motir-cloud-github-merge-journal.jsonl');
+process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH'] ??= MOTIR_GITHUB_MERGE_CONTROL_PATH;
+process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'] ??= MOTIR_GITHUB_MERGE_JOURNAL_PATH;
+process.env['E2E_JOB_WORKER_GITHUB_MERGE_SEAM'] ??= '1';
 
 /** The Studio App's credentials. The private key is GENERATED per run rather
  *  than committed: `createAppJwt` really signs RS256 with it (the shipped path
@@ -262,6 +277,12 @@ export default defineConfig({
         E2E_TEST_GITHUB_REPOS: '1',
         MOTIR_GITHUB_CONTROL_PATH,
         MOTIR_GITHUB_JOURNAL_PATH,
+        // The merge seam (see its block above) and the signed-webhook secret the
+        // promoted approve-and-merge walk delivers its pull requests through.
+        E2E_TEST_GITHUB_MERGE: '1',
+        MOTIR_GITHUB_MERGE_CONTROL_PATH,
+        MOTIR_GITHUB_MERGE_JOURNAL_PATH,
+        GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
         GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
         GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
         GITHUB_STUDIO_APP_PRIVATE_KEY: E2E_STUDIO_APP_PRIVATE_KEY,

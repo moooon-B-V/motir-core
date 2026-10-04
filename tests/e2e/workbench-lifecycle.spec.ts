@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn, POST_AUTH_LANDING } from './_helpers/shell-session';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -13,8 +13,15 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { HOME_FINISHED_WINDOW_DAYS } from '@/lib/services/homeService';
 import { LANDED_WORKBENCH_URL } from './_helpers/workbench-landing';
 
-// THE WORKBENCH, END TO END — AND THE ACCEPTANCE RECEIPT FOR IT
-// (Story MOTIR-4777 · MOTIR-4785).
+// THE WORKBENCH, END TO END — Story MOTIR-4777's walk, as a REGRESSION spec.
+// It was that story's acceptance receipt (`acceptance-workbench.spec.ts`, Subtask
+// MOTIR-4785); Story MOTIR-7460 PROMOTED it into the main lane
+// (docs/acceptance-lane-triage.md § MOTIR-7460) when the To approve tab was
+// renamed Waiting on you. The import swap to `_helpers/promoted-regression` keeps
+// every `chapter()` as a step and drops the pacing; the one assertion restated is
+// the tab's empty state, now "Nothing is waiting on you" (design
+// `design/workbench/design-notes.md` § 33). The header below is the receipt's,
+// kept as it was written.
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //
@@ -395,12 +402,16 @@ test('the landing surface splits by LIFECYCLE — to do, in flight, just landed,
     await beat();
   });
 
-  await chapter('To approve has its slot, and says so plainly until it is filled', async () => {
+  await chapter('Waiting on you has its slot, and says so plainly until it is filled', async () => {
     // The tab's PRESENCE is this story's; its rows, its gates and its approve
     // control are the sibling story's (MOTIR-4778). Nothing here asserts a gate.
+    // ⚠️ RESTATED AFTER PROMOTION (Story MOTIR-7460, design `design/workbench/
+    // design-notes.md` § 33): the tab was renamed from To approve to Waiting on
+    // you, and its empty state from "Nothing is waiting on your approval" to
+    // "Nothing is waiting on you". The slug `approvals` is unchanged.
     await openTab(page, 'approvals');
     await expect(page).toHaveURL(/\?tab=approvals$/);
-    await expect(page.getByText('Nothing is waiting on your approval')).toBeVisible();
+    await expect(page.getByText('Nothing is waiting on you')).toBeVisible();
     await holdsExactly(page, every, []);
     await beat();
   });
