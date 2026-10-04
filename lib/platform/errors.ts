@@ -216,6 +216,16 @@ export class PlannerAudienceUnknownError extends Error {
   }
 }
 
+/** A planning-model list add or remove named no model (MOTIR-7524) — refused before motir-ai is asked. */
+export class PlannerModelListModelMissingError extends Error {
+  readonly code = 'PLANNER_MODEL_LIST_MODEL_MISSING';
+
+  constructor() {
+    super('Name the model to add to or remove from the planning-model list.');
+    this.name = 'PlannerModelListModelMissingError';
+  }
+}
+
 /**
  * The workspace page's pair (MOTIR-7295) names no workspace OF THAT ORGANIZATION —
  * a missing workspace, or one belonging to another org. Thrown inside the audited

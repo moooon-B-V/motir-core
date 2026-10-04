@@ -107,6 +107,19 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'ai.planner_model.set': { kind: 'write', reason: 'required' },
   /**
+   * A model was ADDED to, or REMOVED from, the platform PLANNING-MODEL LIST
+   * (Story MOTIR-7521 · MOTIR-7524) — the set of models an audience may be set
+   * to, stored in motir-ai.
+   *
+   * `required`, at `superadmin`, for `ai.planner_model.set`'s reason: the list
+   * bounds what every audience can be planned with, and so what every
+   * organization can be charged per turn. Target is `platform` with the model
+   * id as `targetId` (the list belongs to no tenant); `metadata` carries
+   * `{ action, model }`.
+   */
+  'ai.planner_model_list.add': { kind: 'write', reason: 'required' },
+  'ai.planner_model_list.remove': { kind: 'write', reason: 'required' },
+  /**
    * Credits were GRANTED to an organization (MOTIR-747 · 10.3.2, design Panel
    * 2a/2b) — a positive `grant` row appended to its motir-ai ledger, the
    * support / goodwill path. Never a `top_up` (that is the customer's checkout,

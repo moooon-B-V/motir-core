@@ -14,6 +14,14 @@
 // not offer answers `validation_error`, and a model listed in `unreachable`
 // answers `model_unreachable` with the probe's reason — so the page's refused
 // and unreachable states are reachable from a browser.
+//
+// The same file carries the PLANNING-MODEL LIST (Story MOTIR-7521 · MOTIR-7524),
+// served on `GET` / `PUT /v1/planner-model-list` with motir-ai's three refusals
+// in its exact wording (not qualified, the fallback, in use by an audience). As
+// in motir-ai, the settings' `offered` is narrowed to the list. A fixture with no
+// `list` reads as motir-ai's migration seed: every offered model, every
+// audience's model and the fallback — so a spec written before the list existed
+// sees the page it always saw.
 
 import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
@@ -38,7 +46,30 @@ export interface PlannerModelFixture {
   unreachable?: Record<string, string>;
   /** motir-ai is down: every request answers 503, the page's unavailable state. */
   unavailable?: boolean;
+  /** The planning-model list; absent reads as the migration seed (see the header). */
+  list?: PlannerModelListFixtureEntry[];
+  /** Why a model that is NOT in `offered` is not plannable; absent reads as `not_servable`. */
+  notQualified?: Record<string, PlannerModelListFixtureReason>;
 }
+
+type PlannerModelListFixtureReason = 'not_servable' | 'not_chat' | 'unrated';
+
+/** One listed model, as the fixture stores it. */
+export interface PlannerModelListFixtureEntry {
+  model: string;
+  addedByCoreUserId?: string | null;
+  createdAt?: string;
+}
+
+/** motir-ai's fallback, which its list always keeps (`PLANNER_MODEL_FALLBACK`). */
+const FALLBACK = 'claude-opus-5-5';
+
+/** motir-ai's `REASON_TEXT`, word for word — the client reads the refusal back from it. */
+const REASON_TEXT: Record<PlannerModelListFixtureReason, string> = {
+  not_servable: 'the gateway does not serve it',
+  not_chat: 'it is not a chat model',
+  unrated: 'it has no planning-lane rate in force',
+};
 
 const SEEDED_AT = '2026-10-01T00:00:00.000Z';
 
@@ -76,8 +107,42 @@ function writeFixture(fixture: PlannerModelFixture): void {
   if (p) writeFixtureFileSync(p, JSON.stringify(fixture, null, 2));
 }
 
+/** The list as stored, or the migration seed for a fixture that has none. */
+function listOf(fixture: PlannerModelFixture): PlannerModelListFixtureEntry[] {
+  if (fixture.list) return fixture.list;
+  const models = new Set([
+    ...fixture.offered.map((m) => m.id),
+    ...fixture.settings.map((s) => s.model),
+    FALLBACK,
+  ]);
+  return [...models].map((model) => ({ model }));
+}
+
+/** The planner offer: offered ∩ listed, as motir-ai narrows it. */
+function plannable(fixture: PlannerModelFixture) {
+  const listed = new Set(listOf(fixture).map((e) => e.model));
+  return fixture.offered.filter((m) => listed.has(m.id));
+}
+
+function listToWire(fixture: PlannerModelFixture) {
+  return {
+    entries: listOf(fixture).map((e) => {
+      const offered = fixture.offered.find((m) => m.id === e.model);
+      return {
+        model: e.model,
+        provider: offered?.provider ?? null,
+        offered: !!offered,
+        reason: offered ? null : (fixture.notQualified?.[e.model] ?? 'not_servable'),
+        addedByCoreUserId: e.addedByCoreUserId ?? null,
+        createdAt: e.createdAt ?? SEEDED_AT,
+      };
+    }),
+  };
+}
+
 function toWire(fixture: PlannerModelFixture) {
-  const offeredIds = new Set(fixture.offered.map((m) => m.id));
+  const offered = plannable(fixture);
+  const offeredIds = new Set(offered.map((m) => m.id));
   return {
     settings: fixture.settings.map((s) => ({
       audience: s.audience,
@@ -89,7 +154,7 @@ function toWire(fixture: PlannerModelFixture) {
       lastProbeAt: s.lastProbeAt ?? null,
       lastProbeError: s.lastProbeError ?? null,
     })),
-    offered: fixture.offered,
+    offered,
   };
 }
 
@@ -104,6 +169,7 @@ function problem(status: number, code: string, detail: string): Reply {
 type Reply = { statusCode: number; data: object; responseOptions: typeof json };
 
 const isPath = (p: string) => p.split('?')[0] === '/v1/planner-model-settings';
+const isListPath = (p: string) => p.split('?')[0] === '/v1/planner-model-list';
 
 export function installPlannerModelBoundaryMock(agent: MockAgent): void {
   const origin = (process.env['MOTIR_AI_URL'] ?? '').replace(/\/+$/, '');
@@ -134,7 +200,7 @@ export function installPlannerModelBoundaryMock(agent: MockAgent): void {
       if (!row || typeof body.model !== 'string') {
         return problem(400, 'validation_error', 'unknown audience or missing model');
       }
-      if (!fixture.offered.some((m) => m.id === body.model)) {
+      if (!plannable(fixture).some((m) => m.id === body.model)) {
         return problem(400, 'validation_error', `"${body.model}" is not offered for planning`);
       }
       const reason = fixture.unreachable?.[body.model];
@@ -159,6 +225,72 @@ export function installPlannerModelBoundaryMock(agent: MockAgent): void {
         data: { audience: row.audience, previousModel, model: row.model, updatedAt: now },
         responseOptions: json,
       };
+    })
+    .persist();
+
+  pool
+    .intercept({ path: isListPath, method: 'GET' })
+    .reply<object>(() => {
+      const fixture = readFixture();
+      if (fixture.unavailable) return problem(503, 'upstream_unavailable', 'motir-ai is down');
+      return { statusCode: 200, data: listToWire(fixture), responseOptions: json };
+    })
+    .persist();
+
+  pool
+    .intercept({ path: isListPath, method: 'PUT' })
+    .reply<object>((req) => {
+      const fixture = readFixture();
+      if (fixture.unavailable) return problem(503, 'upstream_unavailable', 'motir-ai is down');
+      let body: { action?: string; model?: string; actorCoreUserId?: string } = {};
+      try {
+        body = JSON.parse(String(req.body ?? '{}')) as typeof body;
+      } catch {
+        return problem(400, 'validation_error', 'body is not JSON');
+      }
+      const { action, model, actorCoreUserId } = body;
+      if ((action !== 'add' && action !== 'remove') || !model || !actorCoreUserId) {
+        return problem(400, 'validation_error', 'expected { action, model, actorCoreUserId }');
+      }
+      const list = listOf(fixture);
+      if (action === 'add') {
+        if (!fixture.offered.some((m) => m.id === model)) {
+          const why = REASON_TEXT[fixture.notQualified?.[model] ?? 'not_servable'];
+          return problem(
+            400,
+            'validation_error',
+            `model "${model}" cannot be allowed for planning: ${why}`,
+          );
+        }
+        if (!list.some((e) => e.model === model)) {
+          list.push({
+            model,
+            addedByCoreUserId: actorCoreUserId,
+            createdAt: new Date().toISOString(),
+          });
+        }
+      } else {
+        if (model === FALLBACK) {
+          return problem(
+            400,
+            'validation_error',
+            `model "${model}" is the planner's fallback and must stay on the planning-model list`,
+          );
+        }
+        const inUse = fixture.settings.filter((s) => s.model === model).map((s) => s.audience);
+        if (inUse.length > 0) {
+          return problem(
+            400,
+            'validation_error',
+            `model "${model}" is the planning model of: ${inUse.join(', ')} — set those audiences to another model first`,
+          );
+        }
+        const at = list.findIndex((e) => e.model === model);
+        if (at !== -1) list.splice(at, 1);
+      }
+      fixture.list = list;
+      writeFixture(fixture);
+      return { statusCode: 200, data: listToWire(fixture), responseOptions: json };
     })
     .persist();
 }

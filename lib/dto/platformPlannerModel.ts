@@ -3,7 +3,7 @@
 // Which model Motir plans with, one row per AUDIENCE. Staff-facing only: no
 // tenant DTO carries any of this, and the console is the one reader.
 
-import type { PlannerAudience } from '@/lib/ai/types';
+import type { PlannerAudience, PlannerModelListReason } from '@/lib/ai/types';
 
 /** One audience's row, as the page renders it. */
 export interface PlatformPlannerModelRowDTO {
@@ -42,4 +42,35 @@ export interface PlatformPlannerModelWriteDTO {
   fromModel: string;
   toModel: string;
   updatedAt: string;
+}
+
+// The PLANNING-MODEL LIST — Story MOTIR-7521 · MOTIR-7524. Which models an
+// audience may be set to; the list is motir-ai's, read and edited here only for
+// the console.
+
+/** One listed model, as the page renders it. */
+export interface PlatformPlannerModelListEntryDTO {
+  model: string;
+  /** Null when motir-ai's catalog has no row for it. */
+  provider: string | null;
+  /** Whether motir-ai offers it for planning right now. */
+  offered: boolean;
+  /** Why it is not offered; null when it is. */
+  reason: PlannerModelListReason | null;
+  /** The audiences set to it, in `customer`, `meta`, `internal` order — what blocks a remove. */
+  inUseBy: PlannerAudience[];
+  /** True for the planner's fallback, which motir-ai keeps listed. */
+  fallback: boolean;
+  createdAt: string;
+  /** The adder's display name; null for a seeded row (and an account since removed). */
+  addedBy: string | null;
+  /** True for a row motir-ai's migration seeded rather than an operator added. */
+  seeded: boolean;
+}
+
+/** The planning-list card: every listed model, and whether this principal may edit. */
+export interface PlatformPlannerModelListDTO {
+  entries: PlatformPlannerModelListEntryDTO[];
+  /** True only for a `superadmin`; every other staff role reads. */
+  canEdit: boolean;
 }
