@@ -378,6 +378,16 @@ model User {
   // must outlive their account. Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
   platformAuditEntries             PlatformAuditLog[]            @relation("PlatformAuditLogActor")
+  // Organizations this platform operator SUSPENDED and that are still suspended
+  // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
+  // role must not block, or cascade into, a tenant's suspension state — the
+  // hash-chained audit log keeps WHO for ever.
+  suspendedOrganizations           Organization[]                @relation("OrganizationSuspendedBy")
+  updatedOrgFeatureFlags           OrgFeatureFlag[]              @relation("OrgFeatureFlagUpdatedBy")
+  // Staff "View as" sessions (Story 10.3 · MOTIR-749): the ones this account
+  // OPENED as a platform operator, and the ones opened AS this account.
+  impersonationSessionsOperated    ImpersonationSession[]        @relation("ImpersonationSessionOperator")
+  impersonationSessionsTargeted    ImpersonationSession[]        @relation("ImpersonationSessionTarget")
   // What this account has agreed to, and when (Story 8.4 · MOTIR-1135). A LIST
   // and append-only: the row set IS the evidence, so an acceptance is never
   // overwritten by the next one. Cascade — the record is about a person's
@@ -466,9 +476,24 @@ enum PlatformAuditTargetKind {
 /// Story 10.3's governance actions (MOTIR-747/748/749/750). One shape, because
 /// "who touched this tenant, and when?" cannot be answered by three tables.
 /// APPEND-ONLY: `platformAuditLogRepository` exposes create + reads and nothing
-/// else. Tamper-EVIDENCE (the hash chain) is MOTIR-751's, not this model's.
+/// else. TAMPER-EVIDENT since MOTIR-751: every row is a link in a SHA-256 hash
+/// chain (`seq` / `prevHash` / `entryHash`, below), so a row changed or removed
+/// after it was written is DETECTED by `platformAuditService.verifyChain` — the
+/// chain breaks at that entry and stays broken after it. The canonical form the
+/// hash covers is `lib/platform/auditChain.ts`'s, mirrored in SQL by
+/// `platform_audit_entry_hash()` (migration `20261003000000_platform_audit_hash_chain`).
 model PlatformAuditLog {
   id             String                  @id @default(cuid())
+  /// The entry's position in the chain: 1, 2, 3, … with NO gaps. Assigned by
+  /// the append path as `head.seq + 1` under the chain lock (NOT a sequence — a
+  /// rolled-back transaction would burn a value and leave a gap the verifier
+  /// could not tell from a deleted row). The design's "entry #n".
+  seq            Int                     @unique
+  /// The previous entry's `entryHash`; NULL only for entry #1 (the genesis).
+  prevHash       String?                 @map("prev_hash")
+  /// SHA-256 (lowercase hex) over this row's canonical form, which includes
+  /// `prevHash` — so altering any earlier row invalidates every later link.
+  entryHash      String                  @map("entry_hash")
   /// The operator. Restrict on the FK (see `User.platformAuditEntries`).
   actorUserId    String                  @map("actor_user_id")
   /// The operator's role AT THE TIME. Snapshotted, not joined — a later grant
@@ -495,6 +520,9 @@ model PlatformAuditLog {
   /// have none.
   reason         String?
   metadata       Json?
+  /// Part of the hashed content, so the append path sets it explicitly (to the
+  /// millisecond, which is what TIMESTAMP(3) stores) rather than leaving it to
+  /// the default — the hash must cover exactly the value that is stored.
   createdAt      DateTime                @default(now()) @map("created_at")
 
   actor User @relation("PlatformAuditLogActor", fields: [actorUserId], references: [id], onDelete: Restrict)
@@ -1341,17 +1369,44 @@ model Organization {
   /// resolver asks on every request (MOTIR-6396), which is why it lives on the
   /// org row rather than being joined from the request: a join on the hot path
   /// for a state almost no org is ever in. Non-null ⇔ an OPEN request exists.
-  closingSince                DateTime?                     @map("closing_since")
+  closingSince          DateTime?                     @map("closing_since")
   /// When the erasure sweep scrubbed this org to a TOMBSTONE (DECISION §6 step
   /// 4, §7): name and slug replaced, memberships gone, only `CiPeriodCharge`
   /// kept. Non-null marks a tombstone; the seven-year purge (MOTIR-6401) keys on
   /// it. Null for every live org.
-  erasedAt                    DateTime?                     @map("erased_at")
+  erasedAt              DateTime?                     @map("erased_at")
   // Deletion requests against this org — a LIST: at most one OPEN at a time
   // (the partial unique index), but a cancelled one stays on record and a new
   // one may follow it. `Restrict` on the request's side: an org row may not
   // vanish under its own deletion record (the purge deletes the requests first).
-  deletionRequests            OrganizationDeletionRequest[]
+  deletionRequests      OrganizationDeletionRequest[]
+  /// Per-org kill-switch OVERRIDES (MOTIR-750); absence = the registry default.
+  featureFlags          OrgFeatureFlag[]
+  /// Staff "View as" sessions opened inside this organization (MOTIR-749).
+  impersonationSessions ImpersonationSession[]
+
+  // ── Organization SUSPENSION (Story 10.3 · MOTIR-748) ───────────────────────
+  /// When a platform `superadmin` SUSPENDED this organization — the account-level
+  /// lever for non-payment or abuse. NULL for every open org. While set, every
+  /// member of every workspace under the org is refused at their next request
+  /// (`OrganizationSuspendedError`, read off the org row the access gate already
+  /// reads — `organizationsService.resolveWorkspaceAccess`, the PAT verify), and
+  /// nothing is deleted. Platform staff still inspect it through the console.
+  ///
+  /// A timestamp on the row rather than a history table: this is the ENFORCED
+  /// state, and the history of every suspend and reactivate — who, when, why —
+  /// is the hash-chained `PlatformAuditLog` (`org.suspend` / `org.reactivate`),
+  /// written in the same transaction as this column. A second history table would
+  /// be a second record of the same facts that the chain does not protect.
+  suspendedAt                 DateTime?                    @map("suspended_at")
+  /// The operator's stated reason for the CURRENT suspension, snapshotted so the
+  /// console's status card answers "why?" without a log read. Cleared with
+  /// `suspendedAt` on reactivate; the audit log keeps every reason ever given.
+  suspendedReason             String?                      @map("suspended_reason")
+  /// Who suspended it. SetNull: the record of who did it lives in the audit log,
+  /// and an operator's account must never be held by, or cascade into, a tenant.
+  suspendedByUserId           String?                      @map("suspended_by_user_id")
+  suspendedBy                 User?                        @relation("OrganizationSuspendedBy", fields: [suspendedByUserId], references: [id], onDelete: SetNull)
   /// Agent instances billed to this organisation (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
@@ -1422,6 +1477,8 @@ model Workspace {
   organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships                 WorkspaceMembership[]
   projects                    Project[]
+  /// Staff "View as" sessions pinned to this workspace (MOTIR-749).
+  impersonationSessions       ImpersonationSession[]
   workItems                   WorkItem[]
   workItemLinks               WorkItemLink[]
   jobRuns                     JobRun[]
@@ -8770,6 +8827,16 @@ model PlanChangeTurn {
   /// unresolvable key is dropped rather than persisted as a chip that renders
   /// broken. Queryable without a join (`citations @> ARRAY['MOTIR-812']`).
   citations             String[]              @default([])
+  /// The files a `guide` `user` turn carried (Story MOTIR-7471 · MOTIR-7484;
+  /// `docs/decisions/guide-turn-files.md` A3.2) — `attachment` ids, in the order
+  /// the person added them, each an attachment on the GUIDED card at the moment
+  /// the turn was sent. Empty on every other turn and role.
+  ///
+  /// IDS, NOT FKs — the `citations` call, for the same reason: the attachment can
+  /// be deleted from the card later, and the turn must survive it unchanged; the
+  /// rail then draws that id as a removed chip. Validated at WRITE time (the card,
+  /// the workspace, the caller's view) by `aiGuideService`, never trusted as sent.
+  attachmentIds         String[]              @default([]) @map("attachment_ids")
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).
@@ -11201,6 +11268,12 @@ model DispatchRunCard {
   endedAt   DateTime? @map("ended_at")
   /// The agent process's exit code, when one ran.
   exitCode  Int?      @map("exit_code")
+  /// The agent's SELF-REPORTED model for this leg (MOTIR-7502), taken from the
+  /// leg's `agent_exited` event under `normalizeReportedModel`
+  /// (`lib/dispatchRuns/reportedModel.ts`). Null when the agent reported none —
+  /// NEVER inferred from the agent name, the run's `model` or anything else.
+  /// Readers take THE LEG'S model, else the run's (`dispatch-run-record.md`).
+  model     String?   @map("model")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -12578,6 +12651,127 @@ model AgentInstanceStorageCharge {
   @@index([chargeOutcome, day])
   @@index([workspaceId])
   @@map("agent_instance_storage_charge")
+}
+
+/// A per-organization KILL-SWITCH override (Story 10.3 · MOTIR-750) — a durable
+/// ops flag a platform superadmin flips without a deploy (disable AI planning
+/// for one abusive org, turn off hosted runs for one tenant). NOT an experiment
+/// flag: the set of keys is CLOSED, registered in `lib/featureFlags/registry.ts`
+/// with a safe platform default each (every one ON today). Evaluation is "this
+/// org's row, else the registry default", so ABSENCE IS THE DEFAULT and a fresh
+/// org needs no rows.
+///
+/// Written only from the platform tier (`app.platform_staff`, audited
+/// `org.kill_switch_off` / `org.kill_switch_on`); read on the hot path under the
+/// system context. No tenant arm: a customer never reads or writes its own
+/// switches.
+model OrgFeatureFlag {
+  id              String       @id @default(cuid())
+  organizationId  String       @map("organization_id")
+  /// Cascade: a switch means nothing once its organization is gone.
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// A registry key (`ai_planning` · `hosted_runs` · `web_search`). A String,
+  /// not an enum, so a later key is a code change and no migration; the SERVICE
+  /// refuses an unknown key on write, and an unknown stored key is ignored on read.
+  key             String
+  enabled         Boolean
+  /// The operator's stated reason for the CURRENT state — the same text the
+  /// audit row holds; the history is the audit log's, not this row's.
+  reason          String?
+  /// The operator who last flipped it. SetNull: the switch outlives the account.
+  updatedByUserId String?      @map("updated_by_user_id")
+  updatedBy       User?        @relation("OrgFeatureFlagUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@unique([organizationId, key])
+  @@index([updatedByUserId])
+  @@map("org_feature_flag")
+}
+
+/// How a staff "View as" session may act (Story 10.3 · MOTIR-749).
+enum ImpersonationMode {
+  /// Reads as the target; every write is refused server-side
+  /// (`ImpersonationReadOnlyError`). The default in the dialog.
+  read_only
+  /// Acts as the target. Every mutating request is audited
+  /// `user.impersonation_action` before it runs.
+  full
+
+  @@map("impersonation_mode")
+}
+
+/// Why a staff "View as" session ended (MOTIR-749) — `user.impersonation_end`'s
+/// `metadata.endedBy`.
+enum ImpersonationEndedBy {
+  /// The operator pressed Exit session, or started a new session (which ends
+  /// the previous one).
+  operator
+  /// The time-box ran out (`expires_at`), noticed at the gate or by the sweep.
+  expiry
+  /// The session stopped being valid before its time-box: the operator lost
+  /// `superadmin`, signed out (a different sign-in session), or the target
+  /// account / organization was suspended.
+  revoked
+
+  @@map("impersonation_ended_by")
+}
+
+/// A platform staff "View as" session (Story 10.3 · MOTIR-749) — a superadmin
+/// seeing, or acting in, a tenant AS one of its users, time-boxed, reason-gated
+/// and fully audited (`docs/decisions/platform-staff-auth.md` §7 amendment).
+///
+/// It is NOT a sign-in as the customer: no Better-Auth session is minted for the
+/// target. The operator keeps their own session; a separate httpOnly cookie
+/// carries a random token whose SHA-256 is `token_hash`, and `readSession`
+/// layers the target identity over the operator's session only while this row
+/// is live, bound to `operator_session_id`, and before `expires_at`.
+///
+/// Written only from the platform tier (`app.platform_staff`, inside the audited
+/// transaction that appends `user.impersonation_start` / `_end`); read on the
+/// request path under the system context. No tenant arm: a customer never sees
+/// that a session was opened as them except through support.
+model ImpersonationSession {
+  id                String                @id @default(cuid())
+  /// SHA-256 (hex) of the cookie's random token — the token itself is never stored.
+  tokenHash         String                @unique @map("token_hash")
+  /// The superadmin who opened it. Cascade: an operational row, not the record —
+  /// the hash-chained audit log keeps who did what for ever.
+  operatorUserId    String                @map("operator_user_id")
+  operator          User                  @relation("ImpersonationSessionOperator", fields: [operatorUserId], references: [id], onDelete: Cascade)
+  /// The operator's platform role when the session started (the audit rows'
+  /// `actorRole` for the system-closed end).
+  operatorRole      PlatformRole          @map("operator_role")
+  /// The operator's own Better-Auth session the staff session is bound to. NOT a
+  /// foreign key on purpose: signing out deletes that row, and this one must
+  /// outlive it so its end can still be recorded; a mismatch revokes it.
+  operatorSessionId String                @map("operator_session_id")
+  /// The account viewed as.
+  targetUserId      String                @map("target_user_id")
+  target            User                  @relation("ImpersonationSessionTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  organizationId    String                @map("organization_id")
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// The workspace the session is pinned to — the target's active workspace for
+  /// every request of the session, whatever the operator's own cookie says.
+  workspaceId       String                @map("workspace_id")
+  workspace         Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mode              ImpersonationMode
+  /// The operator's stated reason — required, copied onto every write row of the
+  /// session (`user.impersonation_end` / `user.impersonation_action`).
+  reason            String
+  startedAt         DateTime              @default(now()) @map("started_at")
+  /// The time-box. Never more than 60 minutes after `started_at`; the gate
+  /// refuses the session from this instant whether or not it has been closed.
+  expiresAt         DateTime              @map("expires_at")
+  endedAt           DateTime?             @map("ended_at")
+  endedBy           ImpersonationEndedBy? @map("ended_by")
+
+  @@index([operatorUserId, endedAt])
+  @@index([targetUserId])
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([endedAt, expiresAt])
+  @@map("impersonation_session")
 }
 
 /// Whether a boot attempt was opened by a create or a wake (`agent-instances.md`

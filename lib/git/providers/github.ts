@@ -234,14 +234,32 @@ async function githubMergeFetch(url: string, init: RequestInit): Promise<Respons
 
 /** The repository URL and the installation-token headers every merge-side call uses.
  *  The App is chosen by PROVENANCE (decision 7): a hosted repository mints through the
- *  provisioning App, an imported one through the user-facing App. */
+ *  provisioning App, an imported one through the user-facing App.
+ *
+ *  ⚠️ A FAILED MINT IS THE MERGE'S NON-ANSWER (MOTIR-7508). The seam promises that
+ *  only `MergeChangeRequestError` throws out of a merge, and every caller maps exactly
+ *  that one — the press to its UNEXPECTED arm with the approval standing, the
+ *  auto-merge to its unreachable comment. A token endpoint answering 503 used to escape
+ *  as `GithubAppTokenError`, which none of them maps, so an Approve-and-merge press
+ *  crashed with a 500 AFTER its approval had committed. */
 async function githubMergeContext(input: {
   installationId: string;
   owner: string;
   name: string;
 }): Promise<{ repoUrl: string; headers: Record<string, string> }> {
   const role = githubAppRoleForRepo({ owner: input.owner }, provisioningOrgLogin());
-  const { token } = await mintInstallationToken(input.installationId, role);
+  let token: string;
+  try {
+    ({ token } = await mintInstallationToken(input.installationId, role));
+  } catch (err) {
+    if (!(err instanceof GithubAppTokenError)) throw err;
+    throw err.status === undefined
+      ? new MergeChangeRequestError('github', 'unreachable', { message: err.message })
+      : new MergeChangeRequestError('github', 'unexpected_status', {
+          status: err.status,
+          message: err.message,
+        });
+  }
   return {
     repoUrl: `${GITHUB_API}/repos/${input.owner}/${input.name}`,
     headers: {

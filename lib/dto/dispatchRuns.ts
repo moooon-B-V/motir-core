@@ -58,6 +58,11 @@ export interface DispatchRunCardDto {
   endedAt: string | null;
   exitCode: number | null;
   /**
+   * The agent's SELF-REPORTED model for this leg (MOTIR-7502), null when it
+   * reported none — never inferred. Readers take the leg's model, else the run's.
+   */
+  model: string | null;
+  /**
    * A `needs_human` leg's `manual_work` gate (Story MOTIR-7460 · MOTIR-7477), so
    * the leg can say WHO it waits on rather than *needs a human*. Filled only by
    * the BROWSER's reads (the run detail and a card's run history); absent on the

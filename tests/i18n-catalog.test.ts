@@ -4,7 +4,7 @@ import { createTranslator } from 'next-intl';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import { locales } from '@/lib/i18n/locales';
-import { PLATFORM_AUDIT_ACTION_KEYS, reasonPolicyFor } from '@/lib/platform/auditActions';
+import { PLATFORM_AUDIT_ACTION_KEYS, isPlatformAuditWrite } from '@/lib/platform/auditActions';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 
 // Collect EVERY key path that appears more than once at the same object level in
@@ -261,14 +261,14 @@ describe('catalog keys are resolvable (no `.` inside a key name)', () => {
 // The specific consequence the rule above prevents, asserted at the call site
 // that suffers it. `/admin/users/[userId]` renders each audit row as
 // `t(`users.log.action.${row.action}`)`, and `platformSupportService` filters
-// that log to the OPERATOR WRITES — `reasonPolicyFor(action) === 'required'`.
-// So the population that must carry a label is exactly the `required` members of
+// that log to the OPERATOR WRITES — `isPlatformAuditWrite(action)` (the explicit
+// `kind`, since MOTIR-749). So the population that must carry a label is exactly the WRITE members of
 // `PLATFORM_AUDIT_ACTIONS`, and it GROWS: Story 10.3's governance actions each
 // add one. Deriving the expected set from the vocabulary rather than listing it
 // here is what makes a fourth support action unable to ship unlabelled.
 describe('platform support-action labels resolve for every operator write', () => {
-  const operatorWrites = PLATFORM_AUDIT_ACTION_KEYS.filter(
-    (action) => reasonPolicyFor(action) === 'required',
+  const operatorWrites = PLATFORM_AUDIT_ACTION_KEYS.filter((action) =>
+    isPlatformAuditWrite(action),
   );
 
   it('has at least one operator write to check (the derivation is not vacuous)', () => {

@@ -143,6 +143,15 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // tenant's data. 403 answers "your token may not do this KIND of thing";
   // 404 answers "there is no such resource *for you*". (ADR §4.)
   NOT_A_MEMBER: 404,
+  // 403 — the token is valid but its workspace's ORGANIZATION is suspended by
+  // Motir staff (MOTIR-748). Raised by `apiTokensService.verify` only after the
+  // credential is proven, so it is no existence oracle: the holder's own token
+  // already names the org. Distinct from the 404 so a CLI can say why.
+  ORGANIZATION_SUSPENDED: 403,
+  // 403 — a per-org KILL-SWITCH is off for the token's organization (MOTIR-750):
+  // `ai_planning`, `hosted_runs` or `web_search`. The body names the switch via
+  // the message; the holder's own org, so no existence oracle.
+  ORG_FEATURE_DISABLED: 403,
 
   // ── Story MOTIR-1789, the DISPATCH RUN ingest (MOTIR-1792) ────────────────
   // Every row is driven through the wrapper by a real service error in
@@ -194,6 +203,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // card to add: the SET is the plan the run published, and letting it grow
   // behind that plan would defeat the record.
   UNKNOWN_DISPATCH_RUN_CARD: 422,
+  // 422 — `model` on an event that is not `agent_exited` (MOTIR-7502). The leg's
+  // model has one producer, the agent's exit; refused by name, never dropped.
+  DISPATCH_RUN_EVENT_MODEL_NOT_ALLOWED: 422,
   // 413 — an over-sized opt-in log body. REFUSED rather than truncated: a
   // silently shortened log reads as the whole tail, and the line that mattered is
   // the one that was cut.

@@ -68,6 +68,38 @@ describe('buildGuideContext', () => {
     ]);
   });
 
+  it('carries the CURRENT turn’s files beside the turns, and an earlier turn’s notes on it', () => {
+    const files = [
+      {
+        attachmentId: 'a1',
+        name: 'shot.png',
+        mime: 'image/png',
+        kind: 'image' as const,
+        dataUrl: 'data:image/png;base64,AAAA',
+      },
+    ];
+    const ctx = buildGuideContext(
+      card,
+      [],
+      [
+        { role: 'user', body: 'see log', files: [{ name: 'run.log', kind: 'text' }] },
+        { role: 'assistant', body: 'Read it.', files: [{ name: 'ignored', kind: 'text' }] },
+        { role: 'user', body: '', files: [] },
+      ],
+      { files },
+    );
+    expect(ctx.files).toEqual(files);
+    expect(ctx.turns[0]).toEqual({
+      role: 'user',
+      body: 'see log',
+      files: [{ name: 'run.log', kind: 'text' }],
+    });
+    // Notes ride `user` turns only, and an empty list rides as nothing.
+    expect(ctx.turns[1]).not.toHaveProperty('files');
+    expect(ctx.turns[2]).not.toHaveProperty('files');
+    expect(buildGuideContext(card, [], [], { files: [] })).not.toHaveProperty('files');
+  });
+
   it('marks a temporary list only when it has rows, and drops an unknown executor', () => {
     expect(buildGuideContext(card, [], [], { temporary: true }).todos.temporary).toBe(false);
     const ctx = buildGuideContext(card, [{ ...row('t1'), executor: 'robot' }], [], {
@@ -119,6 +151,13 @@ const VALID: Record<GuideActionType, Record<string, unknown>> = {
     previous: { title: 'Rotate the signing key' },
   },
   cannot_do: { type: 'cannot_do', reason: 'Needs an admin you do not have' },
+  // A3.9 (`guide-turn-files.md`): the two actions the amendment adds.
+  local_agent_prompt: {
+    type: 'local_agent_prompt',
+    rowId: 'r2',
+    prompt: '  Rotate the signing key with the CLI. Read the key from your keychain.  ',
+  },
+  needs_replan: { type: 'needs_replan', reason: 'A different provider is a different card' },
 };
 
 describe('parseGuideTurn', () => {
@@ -166,6 +205,21 @@ describe('parseGuideTurn', () => {
     expect(turn.actions[3]).toMatchObject({ type: 'add_step', afterRowId: null, executor: null });
   });
 
+  it('reads the A3.9 actions: a trimmed local-agent prompt, and a re-plan reason', () => {
+    const turn = parseGuideTurn({
+      messageMd: 'ok',
+      actions: [VALID.local_agent_prompt, VALID.needs_replan],
+    });
+    expect(turn.actions).toEqual([
+      {
+        type: 'local_agent_prompt',
+        rowId: 'r2',
+        prompt: 'Rotate the signing key with the CLI. Read the key from your keychain.',
+      },
+      { type: 'needs_replan', reason: 'A different provider is a different card' },
+    ]);
+  });
+
   it('accepts a turn with no actions at all', () => {
     expect(parseGuideTurn({ messageMd: 'Hello.' }).actions).toEqual([]);
   });
@@ -192,6 +246,22 @@ describe('parseGuideTurn', () => {
     ['an edit that changes nothing', { type: 'edit_item', reason: 'x' }, 'actions[0]'],
     ['a move with a bad anchor', { ...VALID.move_step, afterRowId: 7 }, 'actions[0].afterRowId'],
     ['a cannot_do with no reason', { type: 'cannot_do' }, 'actions[0].reason'],
+    ['a needs_replan with no reason', { type: 'needs_replan' }, 'actions[0].reason'],
+    [
+      'a local-agent prompt with no row',
+      { type: 'local_agent_prompt', prompt: 'x' },
+      'actions[0].rowId',
+    ],
+    [
+      'an empty local-agent prompt',
+      { type: 'local_agent_prompt', rowId: 'r1', prompt: '  ' },
+      'actions[0].prompt',
+    ],
+    [
+      'a local-agent prompt over 2,000 characters',
+      { type: 'local_agent_prompt', rowId: 'r1', prompt: 'x'.repeat(2_001) },
+      'actions[0].prompt',
+    ],
     ['a non-string step', { ...VALID.add_step, text: 7 }, 'actions[0].text'],
     ['a step too long', { ...VALID.add_step, text: 'x'.repeat(5_000) }, 'actions[0].text'],
     ['non-string notes', { ...VALID.add_step, notesMd: 3 }, 'actions[0].notesMd'],

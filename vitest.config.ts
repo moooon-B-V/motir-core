@@ -2947,6 +2947,25 @@ export default defineConfig({
         'lib/auth/lazyResourceSeed.ts',
         'lib/oauth/clientMetadataDocument.ts',
         'lib/oauth/discoveredClient.ts',
+        // ── Story MOTIR-7471 · FILES ON A GUIDE TURN (Subtask MOTIR-7487) ─────
+        // The three modules this story CREATED, measured on the parent branch
+        // over the story's suites (tests/ai/guideFiles, guideTurnFilesIntegration,
+        // tests/components/guide-turn-files): guideFiles 100 on every axis;
+        // useGuideTurnFiles 98.07 / 91.3 / 100 / 100; GuideTurnFiles 94 / 95 /
+        // 93.75 / 95.55 (stmts / branches / funcs / lines). GATED at the project
+        // floor in `thresholds`.
+        //
+        // The guide files the story WIDENED are not gated here, the
+        // `PlanChangeComposer` note's reasoning: their new lines are walked by
+        // the same suites, and gating them whole would gate this story on the
+        // earlier guide story's defensive branches. Measured over every guide
+        // suite: aiGuideService 97.27 / 84.33 / 100 / 97.89, guideLandingService
+        // 93.53 / 81 / 100 / 96.7, app/api/ai/guide/route 90.24 / 86.66 / 100 /
+        // 97.22. `PlanChangeComposer` (widened with the attach slot) keeps its
+        // own floor above and measured 97.67 / 93.93 / 95.45 / 98.66.
+        'lib/ai/guideFiles.ts',
+        'lib/hooks/useGuideTurnFiles.ts',
+        'components/planning/GuideTurnFiles.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -6581,6 +6600,20 @@ export default defineConfig({
           statements: 90,
         },
         'lib/services/oauthSweepService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-7471 · MOTIR-7487 — measured above, pinned at the floor.
+        'lib/ai/guideFiles.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/hooks/useGuideTurnFiles.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/GuideTurnFiles.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

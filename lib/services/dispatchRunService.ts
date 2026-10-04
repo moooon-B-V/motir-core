@@ -14,6 +14,7 @@ import {
   DispatchRunAgentInstanceMismatchError,
   DispatchRunCardsBusyError,
   DispatchRunEventBodyTooLargeError,
+  DispatchRunEventModelNotAllowedError,
   DispatchRunEventLimitError,
   DispatchRunNoTargetError,
   DispatchRunNotFoundError,
@@ -58,6 +59,7 @@ import { approvalGateRepository } from '@/lib/repositories/approvalGateRepositor
 import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
 import { getAgentRunUsage } from '@/lib/ai/motirAiClient';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
+import { reportedModelOf } from '@/lib/dispatchRuns/reportedModel';
 import { standingMergeRefusals, standingQueueFailures } from './deliveryVerdict';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
@@ -213,6 +215,12 @@ export interface AppendDispatchRunEventInput {
   skipReason?: DispatchSkipReason | undefined;
   sessionBranch?: string | undefined;
   exitCode?: number | undefined;
+  /**
+   * The agent's SELF-REPORTED model (MOTIR-7502). Accepted only on
+   * `agent_exited`; written onto the leg under `normalizeReportedModel`, and
+   * when absent the event's `data.model` is read instead.
+   */
+  model?: unknown;
 }
 
 export interface CloseDispatchRunInput {
@@ -840,6 +848,9 @@ export const dispatchRunService = {
           throw new DispatchRunEventBodyTooLargeError(DISPATCH_RUN_EVENT_BODY_LIMIT_BYTES, bytes);
         }
       }
+      if (event.model !== undefined && event.kind !== 'agent_exited') {
+        throw new DispatchRunEventModelNotAllowedError(event.kind);
+      }
     }
 
     const { appended, agentInstanceId } = await withWorkspaceContext(
@@ -884,6 +895,12 @@ export const dispatchRunService = {
             ...(event.body !== undefined ? { body: event.body } : {}),
           });
 
+          // The agent's self-reported model (MOTIR-7502): the top-level `model`,
+          // else the `data.model` every installed CLI already sends. A null
+          // answer writes NOTHING — an exit with no report never erases a model
+          // the leg already carries.
+          const model = event.kind === 'agent_exited' ? reportedModelOf(event) : null;
+
           // The leg's own move, in this same transaction. Applied event by event
           // rather than folded at the end, so a batch that moves one card twice
           // leaves it where its LAST event says — the order the reporter sent.
@@ -891,7 +908,8 @@ export const dispatchRunService = {
             leg &&
             (event.disposition !== undefined ||
               event.sessionBranch !== undefined ||
-              event.exitCode !== undefined)
+              event.exitCode !== undefined ||
+              model !== null)
           ) {
             const now = new Date();
             const disposition = event.disposition;
@@ -915,6 +933,7 @@ export const dispatchRunService = {
                   ? { sessionBranch: event.sessionBranch }
                   : {}),
                 ...(event.exitCode !== undefined ? { exitCode: event.exitCode } : {}),
+                ...(model !== null ? { model } : {}),
               },
               tx,
             );

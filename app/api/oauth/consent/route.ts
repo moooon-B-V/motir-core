@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
+import { ImpersonationCredentialRefusedError } from '@/lib/platform/errors';
 import { oauthConnectionsService } from '@/lib/services/oauthConnectionsService';
 import { OAuthConsentRequestInvalidError } from '@/lib/oauth/errors';
 import { InvalidTokenGrantError } from '@/lib/apiTokens/errors';
@@ -78,6 +79,10 @@ export async function POST(req: Request): Promise<Response> {
     });
     return NextResponse.json(result);
   } catch (err) {
+    // A credential cannot be minted inside a staff "View as" session (MOTIR-749).
+    if (err instanceof ImpersonationCredentialRefusedError) {
+      return NextResponse.json({ code: err.code }, { status: 403 });
+    }
     if (err instanceof OAuthConsentRequestInvalidError) {
       return NextResponse.json({ code: err.code, reason: err.reason }, { status: 400 });
     }

@@ -239,21 +239,74 @@ describe('corrections on a saved list', () => {
     expect((await rows(card.id)).map((r) => r.text)).toEqual(['A2', 'B!', 'A']);
   });
 
-  it('a correction naming a TICKED row changes nothing', async () => {
+  // A3.9 (b) — `guide-turn-files.md` amends A2.4: while the card's target holds,
+  // a ticked row may be corrected, and a revised ticked row KEEPS its tick.
+  it('a correction naming a TICKED row lands, and the revised row keeps its tick', async () => {
     const card = await manualCard();
-    const [a] = await addRows(card.id, ['A', 'B']);
+    const [a, b, c] = await addRows(card.id, ['A', 'B', 'C']);
+    await workItemTodosService.setTodoDone(a!, true, fx.ctx);
+    await workItemTodosService.setTodoDone(c!, true, fx.ctx);
+    const opened = await open(card.identifier);
+    const settled = await settleWith(opened, [
+      { type: 'revise_step', rowId: a, reason: 'Clearer', text: 'A!' },
+      { type: 'move_step', rowId: a, afterRowId: b, reason: 'Order' },
+      { type: 'remove_step', rowId: c, reason: 'Not needed' },
+    ]);
+    expect(outcomesOf(settled).map((o) => o[1])).toEqual(['landed', 'landed', 'landed']);
+    expect((await rows(card.id)).map((r) => [r.text, r.done])).toEqual([
+      ['B', false],
+      ['A!', true],
+    ]);
+  });
+
+  it('an untick before a revision re-opens the ticked row, then revises it', async () => {
+    const card = await manualCard();
+    const [a] = await addRows(card.id, ['Rotate on the old console', 'B']);
     await workItemTodosService.setTodoDone(a!, true, fx.ctx);
     const opened = await open(card.identifier);
     const settled = await settleWith(opened, [
-      { type: 'revise_step', rowId: a, reason: 'x', text: 'Changed' },
-      { type: 'remove_step', rowId: a, reason: 'x' },
-      { type: 'move_step', rowId: a, afterRowId: null, reason: 'x' },
+      { type: 'untick', rowId: a },
+      {
+        type: 'revise_step',
+        rowId: a,
+        reason: 'The console moved',
+        text: 'Rotate in the new console',
+      },
     ]);
-    expect(outcomesOf(settled).map((o) => o[1])).toEqual(['skipped', 'skipped', 'skipped']);
+    expect(outcomesOf(settled)).toEqual([
+      ['untick', 'landed'],
+      ['revise_step', 'landed'],
+    ]);
     expect((await rows(card.id)).map((r) => [r.text, r.done])).toEqual([
-      ['A', true],
+      ['Rotate in the new console', false],
       ['B', false],
     ]);
+  });
+
+  it('on a TEMPORARY walk, a correction to a ticked step is recorded too', async () => {
+    const card = await manualCard();
+    const opened = await open(card.identifier);
+    await settleWith(opened, [
+      {
+        type: 'propose_todos',
+        rows: [
+          { id: 'tmp-1', text: 'One' },
+          { id: 'tmp-2', text: 'Two' },
+        ],
+      },
+    ]);
+    const second = await next(opened.session.id, 'walk it');
+    await settleWith(second, [{ type: 'tick', rowId: 'tmp-1' }]);
+    const third = await next(opened.session.id, 'reword the first');
+    const settled = await settleWith(third, [
+      { type: 'revise_step', rowId: 'tmp-1', reason: 'Clearer', text: 'One!' },
+      { type: 'remove_step', rowId: 'nope', reason: 'x' },
+    ]);
+    expect(outcomesOf(settled)).toEqual([
+      ['revise_step', 'recorded'],
+      ['remove_step', 'skipped'],
+    ]);
+    expect(await rows(card.id)).toEqual([]);
   });
 });
 
@@ -325,6 +378,53 @@ describe('cannot_do', () => {
     expect(bodies).toContain('Log in to the vault');
     expect(bodies).toContain('Needs an admin you do not have');
     expect(await adminDb.comment.count({ where: { workItemId: card.id } })).toBe(1);
+  });
+});
+
+describe('needs_replan (A3.9 (b))', () => {
+  it('edits nothing and leaves ONE comment carrying the reason', async () => {
+    const card = await manualCard();
+    await addRows(card.id, ['A']);
+    const opened = await open(card.identifier);
+    const settled = await settleWith(opened, [
+      { type: 'needs_replan', reason: 'Switching providers changes what the card delivers' },
+    ]);
+    expect(outcomesOf(settled)).toEqual([['needs_replan', 'landed']]);
+    const comments = await adminDb.comment.findMany({ where: { workItemId: card.id } });
+    expect(comments).toHaveLength(1);
+    expect(comments[0]!.bodyMd).toContain('needs a re-plan');
+    expect(comments[0]!.bodyMd).toContain('Switching providers changes what the card delivers');
+    expect((await rows(card.id)).map((r) => r.text)).toEqual(['A']);
+    expect((await workItemsService.getWorkItem(card.id, fx.ctx)).title).toBe(
+      'Rotate the signing key',
+    );
+  });
+});
+
+describe('local_agent_prompt (A3.9 (a))', () => {
+  it('is recorded on the conversation and writes nothing to the card', async () => {
+    const card = await manualCard();
+    const [a] = await addRows(card.id, ['Rotate the key']);
+    const opened = await open(card.identifier);
+    const before = await adminDb.workItemRevision.count({ where: { workItemId: card.id } });
+    const settled = await settleWith(opened, [
+      { type: 'current_step', rowId: a },
+      { type: 'local_agent_prompt', rowId: a, prompt: 'Rotate the signing key using the CLI.' },
+      { type: 'local_agent_prompt', rowId: 'not-a-row', prompt: 'x' },
+    ]);
+    expect(outcomesOf(settled)).toEqual([
+      ['current_step', 'recorded'],
+      ['local_agent_prompt', 'recorded'],
+      ['local_agent_prompt', 'skipped'],
+    ]);
+    expect(await adminDb.workItemRevision.count({ where: { workItemId: card.id } })).toBe(before);
+    expect(await adminDb.comment.count({ where: { workItemId: card.id } })).toBe(0);
+    const reply = settled.session.turns.at(-1)!;
+    expect(reply.guide?.actions[1]).toEqual({
+      type: 'local_agent_prompt',
+      rowId: a,
+      prompt: 'Rotate the signing key using the CLI.',
+    });
   });
 });
 

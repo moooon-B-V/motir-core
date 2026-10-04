@@ -1,5 +1,6 @@
 import { APIError } from 'better-auth/api';
 import { db } from '@/lib/db';
+import { assertNoStaffSessionCookie } from '@/lib/platform/staffSession';
 import { auth } from '@/lib/auth';
 import { deviceCodeRepository } from '@/lib/repositories/deviceCodeRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -232,6 +233,9 @@ export const cliDeviceService = {
     actorUserId: string;
     headers: Headers;
   }): Promise<void> {
+    // A `motir login` credential minted as the customer inside a staff "View as"
+    // session would outlive it (MOTIR-749) — refused before anything is claimed.
+    await assertNoStaffSessionCookie();
     // The token BINDS to this workspace, so the approver must be a member of it.
     // `apiTokensService.create` re-asserts this at mint time — the check here is what
     // makes the refusal visible on the approval screen (403) instead of surfacing as

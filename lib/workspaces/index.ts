@@ -39,8 +39,11 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   const session = await getSession();
   if (!session) return null;
 
-  const cookieStore = await cookies();
-  const cookieWorkspaceId = cookieStore.get(WORKSPACE_COOKIE_NAME)?.value ?? null;
+  // A staff "View as" session (MOTIR-749) is pinned to its own workspace — the
+  // operator's `workspace_id` cookie names THEIR workspace, not the customer's.
+  const pinned = session.impersonation?.session.workspaceId ?? null;
+  const cookieStore = pinned ? null : await cookies();
+  const cookieWorkspaceId = pinned ?? cookieStore?.get(WORKSPACE_COOKIE_NAME)?.value ?? null;
 
   const userId = session.user.id;
   const workspaceId = await resolveWorkspaceFromIds(userId, cookieWorkspaceId, session.user.name);

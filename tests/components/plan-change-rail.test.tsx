@@ -190,7 +190,7 @@ describe('PlanChangeRail — empty', () => {
 });
 
 describe('PlanChangeRail — MULTI-TURN refinement', () => {
-  it('numbers the turns and marks the second one a REFINEMENT of the first', () => {
+  it('shows each turn as just the message — no turn number, no refine label (MOTIR-7497)', () => {
     renderRail({
       session: session([
         turn(0, 'Add recurring invoices to Billing.'),
@@ -198,10 +198,13 @@ describe('PlanChangeRail — MULTI-TURN refinement', () => {
       ]),
     });
 
-    expect(screen.getByText('turn 1')).toBeTruthy();
-    expect(screen.getByText('turn 2 · refine')).toBeTruthy();
-    expect(screen.getByText('Add recurring invoices to Billing.')).toBeTruthy();
-    expect(screen.getByText('Split it into monthly and yearly.')).toBeTruthy();
+    const bubbles = screen.getAllByTestId('conversation-user-turn');
+    expect(bubbles.map((b) => b.lastElementChild?.textContent)).toEqual([
+      'Add recurring invoices to Billing.',
+      'Split it into monthly and yearly.',
+    ]);
+    expect(screen.queryByText(/turn \d/i)).toBeNull();
+    expect(screen.queryByText(/refine/i)).toBeNull();
   });
 
   it('renders a submission marker as a thread divider, not as a chat bubble', () => {

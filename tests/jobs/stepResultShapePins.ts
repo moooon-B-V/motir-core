@@ -416,6 +416,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/publicAddressCertificateRefresh.ts',
     shape: '{ changed: number; failed: number; scanned: number; skipped: "not-configured" | null }',
   },
+  'close-expired-staff-sessions': {
+    file: 'lib/jobs/definitions/impersonationExpirySweep.ts',
+    shape: '{ closed: number; scanned: number }',
+  },
   'release-expired-planning-locks': {
     file: 'lib/jobs/definitions/planTargetLockSweep.ts',
     // `plan_awaiting_review` added by MOTIR-5647: a lock held by a plan that has

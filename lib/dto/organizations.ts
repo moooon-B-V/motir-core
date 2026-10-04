@@ -8,6 +8,20 @@ export interface OrganizationDTO {
   slug: string;
 }
 
+/**
+ * What the member-side SUSPENDED notice renders (`/organization-suspended`,
+ * MOTIR-752; design `platform-admin` AMENDMENT 2026-10-03 Panel 3d).
+ * `organization` is null unless the reader is a member of that organization AND
+ * it is suspended — the page names nothing it would not already admit to.
+ * `alternatives` are the reader's OTHER organizations that are not suspended,
+ * which the page offers to switch to (the pinned cookie would otherwise keep
+ * sending them back here).
+ */
+export interface OrganizationSuspensionNoticeDTO {
+  organization: OrganizationDTO | null;
+  alternatives: OrganizationDTO[];
+}
+
 // A workspace the member belongs to within the org, for the cross-workspace
 // roster's "which workspaces" column (6.10.5 panel 3).
 export interface OrgMemberWorkspaceDTO {

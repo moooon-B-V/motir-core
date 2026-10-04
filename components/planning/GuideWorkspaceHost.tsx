@@ -121,7 +121,7 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
           errorCode={state.errorCode}
           outOfCredits={state.outOfCredits}
           markers={state.markers}
-          onSend={(text) => void send(text)}
+          onSend={(text, attachmentIds) => void send(text, attachmentIds)}
           onRetry={() => void retry()}
           onReload={() => void reloadRows()}
         />

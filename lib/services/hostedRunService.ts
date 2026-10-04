@@ -1,4 +1,5 @@
 import { FLEET_CONTAINER_SIZE, type TeardownReason } from '@motir/orchestrator';
+import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import { checkAgentRunCredits, type AgentModel } from '@/lib/ai/motirAiClient';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { DispatchRunTerminalError } from '@/lib/dispatchRuns/errors';
@@ -826,6 +827,9 @@ async function startReview(
     dispatchRunRepository.findByIdempotencyKey(ctx.workspaceId, input.idempotencyKey, tx),
   );
   if (already) return { dispatchRunId: already.id, created: false };
+  // The `hosted_runs` kill-switch (MOTIR-750) refuses a review run too — it is a
+  // hosted container like any other.
+  await assertWorkspaceFeatureEnabled(ctx.workspaceId, 'hosted_runs');
 
   // The caller read the card under its gate a moment ago; only a delete in between
   // finds it gone.
@@ -968,6 +972,9 @@ export const hostedRunService = {
       dispatchRunRepository.findByIdempotencyKey(ctx.workspaceId, input.idempotencyKey, tx),
     );
     if (already) return { dispatchRunId: already.id, created: false };
+    // ── The `hosted_runs` kill-switch (MOTIR-750) — after the idempotent replay,
+    // so a retried press still learns the run it started; before anything opens.
+    await assertWorkspaceFeatureEnabled(ctx.workspaceId, 'hosted_runs');
 
     // A CONTINUE of a dead run (MOTIR-6792) — the card is In Progress by design,
     // so it takes the continue claim's path instead of the readiness below.

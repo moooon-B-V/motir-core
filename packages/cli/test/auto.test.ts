@@ -30,6 +30,7 @@ import { CLI_VERSION } from '../src/version.js';
 import type { DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
 import { resolveFakeClaim } from './helpers/fakeClaim.js';
+import { nullDispatchRunReporter } from '../src/dispatchRunReporter.js';
 
 // `motir auto` — the sequential WHILE loop (Subtask 7.9.4 · MOTIR-882).
 //
@@ -422,6 +423,8 @@ interface DriveOptions {
   agentCommand?: string;
   /** The token owner this run claims for (MOTIR-2427). */
   ownerId?: string;
+  /** Receives every event the loop reports (MOTIR-7504). */
+  onEvent?: (event: Record<string, unknown>) => void;
 }
 
 async function drive(
@@ -453,6 +456,14 @@ async function drive(
       return { model: null, ...result };
     },
     ownerId: drives.ownerId ?? OWNER,
+    ...(drives.onEvent
+      ? {
+          reporter: {
+            ...nullDispatchRunReporter,
+            event: (e: Record<string, unknown>) => drives.onEvent!(e),
+          } as never,
+        }
+      : {}),
   };
   const summary = await runAutoLoop(input);
   closeOutRepos(summary, git.runner);
@@ -827,6 +838,23 @@ describe('motir auto — failure policy', () => {
       { key: 'PROD-2', harness: 'claude', model: 'claude-opus-5' },
     ]);
   });
+
+  it.each([['m'], [null]] as const)(
+    'reports the agent’s model (%s) TOP-LEVEL on `agent_exited`, the field the leg records (MOTIR-7504)',
+    async (model) => {
+      const server = new FakeServer([leaf('idA', 'PROD-1')]);
+      const events: Record<string, unknown>[] = [];
+      await drive(server, new FakeGit(), {
+        agentResults: () => ({ exitCode: 0, signal: null, model }),
+        onEvent: (e) => events.push(e),
+      });
+
+      const exited = events.filter((e) => e['kind'] === 'agent_exited');
+      expect(exited).toHaveLength(1);
+      expect(exited[0]).toMatchObject({ workItemKey: 'PROD-1', exitCode: 0, model });
+      expect(exited[0]!['data']).toMatchObject({ model });
+    },
+  );
 
   it('leaves the model NULL when the agent reports none — and still names the agent', async () => {
     // The version of this bug that would survive the fix: a defaulted model is

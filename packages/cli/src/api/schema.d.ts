@@ -2647,6 +2647,7 @@ export interface components {
                 startedAt: string | null;
                 endedAt: string | null;
                 exitCode: number | null;
+                model: string | null;
             }[];
             seq: number;
             continues?: {
@@ -2699,6 +2700,7 @@ export interface components {
             startedAt: string | null;
             endedAt: string | null;
             exitCode: number | null;
+            model: string | null;
         };
         DispatchRunOpened: {
             run: {
@@ -2738,6 +2740,7 @@ export interface components {
                     startedAt: string | null;
                     endedAt: string | null;
                     exitCode: number | null;
+                    model: string | null;
                 }[];
                 seq: number;
                 continues?: {
@@ -2796,6 +2799,7 @@ export interface components {
                 startedAt: string | null;
                 endedAt: string | null;
                 exitCode: number | null;
+                model: string | null;
             }[];
         };
         DispatchRunCloseOutPrompt: {
@@ -11798,6 +11802,7 @@ export interface operations {
                         skipReason?: "needs_planning" | "needs_human" | "claim_refused" | "blocked_in_scope" | "integrated_dep" | "replan_submitted" | "checkout_unavailable";
                         sessionBranch?: string;
                         exitCode?: number;
+                        model?: string | null;
                     }[];
                 };
             };

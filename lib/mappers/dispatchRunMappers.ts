@@ -47,6 +47,7 @@ export function toDispatchRunCardDto(row: DispatchRunCard): DispatchRunCardDto {
     startedAt: row.startedAt?.toISOString() ?? null,
     endedAt: row.endedAt?.toISOString() ?? null,
     exitCode: row.exitCode,
+    model: row.model,
   };
 }
 

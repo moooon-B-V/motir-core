@@ -304,7 +304,7 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
 
     // BOTH turn kinds are on the one thread, in order — the answer above, the
     // proposal below it.
-    await expect(rail(page).getByText('turn 1')).toBeVisible();
+    await expect(rail(page).getByTestId('conversation-user-turn').first()).toBeVisible();
     await expect(answers(page).first()).toContainText('Two are waiting');
     await beat();
   });

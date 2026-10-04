@@ -172,6 +172,41 @@ export class OrganizationClosingError extends Error {
 }
 
 /**
+ * The organization is SUSPENDED by Motir's platform staff (Story 10.3 ·
+ * MOTIR-748) — the non-payment / abuse lever. Every member of every workspace
+ * under it is refused at the access gate, on every door: pages (redirected to
+ * {@link ORGANIZATION_SUSPENDED_PATH}), the cookie API (`requireCompliantWorkspaceContext`
+ * → 403), `/api/v1` and the CLI (`apiTokensService.verify` → 403), MCP (403) and
+ * server actions.
+ *
+ * → **403 with this code**, deliberately distinct from the no-leak 404: it is
+ * raised only for a principal ALREADY established as a member of the org (the
+ * org membership row was found first), so the org's existence is not news to
+ * them, and the remedy — talk to the org's owner or to Motir support — differs
+ * from "you have no access". NOT a 500 and NOT a misleading 404 (the card's own
+ * words). Carries the org's id and name so a surface can say "{org} is
+ * suspended" without a second read.
+ */
+export class OrganizationSuspendedError extends Error {
+  readonly code = 'ORGANIZATION_SUSPENDED' as const;
+  constructor(
+    readonly organizationId: string,
+    readonly organizationName: string,
+  ) {
+    super(`Organization ${organizationName} is suspended.`);
+    this.name = 'OrganizationSuspendedError';
+  }
+}
+
+/**
+ * Where a suspended org's member is sent from any PAGE (the design's
+ * `member.suspended.*` refusal, Panel 3d). Outside the `(authed)` group, so the
+ * group's own layout gate cannot redirect it to itself. The page that renders
+ * there is MOTIR-752's; the organization is named by `?org=<id>`.
+ */
+export const ORGANIZATION_SUSPENDED_PATH = '/organization-suspended';
+
+/**
  * The typed confirmation is not the organization's current name, exactly
  * (MOTIR-6399; `organization-deletion.md` §1). → 422: a client-correctable input.
  */

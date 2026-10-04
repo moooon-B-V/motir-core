@@ -1371,7 +1371,8 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
     workItemKey: item.key,
     exitCode: result.exitCode,
     // The model only the AGENT can answer for (MOTIR-2419) — its self-report, or
-    // null. Never a guess.
+    // null. Never a guess. Top-level is what lands on the leg (MOTIR-7504).
+    model: result.model ?? null,
     data: { model: result.model ?? null, signal: result.signal ?? null, durationMs },
   });
 

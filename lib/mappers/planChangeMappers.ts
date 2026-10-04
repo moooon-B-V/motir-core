@@ -52,6 +52,7 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     anchorKey: row.anchorKey,
     debugLanding: toDebugLandingDto(row.debugLanding),
     guide: readGuideTurnRecord(row.guideTurn),
+    attachmentIds: row.attachmentIds,
     authorId: row.authorId,
     createdAt: row.createdAt.toISOString(),
   };

@@ -264,13 +264,17 @@ describe('state B — the question changes the composer', () => {
 });
 
 describe('state C — the answer, and resumption', () => {
-  it('labels the reply as the ANSWER and marks planning resumed', () => {
+  it('shows the reply as just the message and marks planning resumed', () => {
     renderRail([
       turn('assistant', 'Which direction?', { question: 'in, or out?' }),
       turn('user', 'Taking money from customers.', { isAnswer: true }),
     ]);
 
-    expect(screen.getByText('turn 1 · answer')).toBeTruthy();
+    // No label on the bubble (MOTIR-7497) — the disposition marker below it is
+    // what says this was the answer.
+    expect(screen.getByTestId('conversation-user-turn').lastElementChild?.textContent).toBe(
+      'Taking money from customers.',
+    );
     expect(screen.getByTestId('plan-change-answered').textContent).toBe(
       'Answered — planning resumed',
     );
@@ -332,10 +336,12 @@ describe('state E — a question nobody answered', () => {
     expect(screen.queryByTestId('plan-change-awaiting')).toBeNull();
     expect(screen.getByPlaceholderText('Reply, or refine further…')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
-    // The superseding turn is numbered as the ordinary turn it is — NOT labelled
-    // an answer, which is the whole difference from state C.
-    expect(screen.getByText('turn 1')).toBeTruthy();
-    expect(screen.queryByText('turn 1 · answer')).toBeNull();
+    // The superseding turn is the ordinary turn it is — NOT marked answered,
+    // which is the whole difference from state C.
+    expect(screen.getByTestId('conversation-user-turn').lastElementChild?.textContent).toBe(
+      'Actually — re-sequence the Billing epic first.',
+    );
+    expect(screen.queryByTestId('plan-change-answered')).toBeNull();
   });
 });
 
@@ -349,7 +355,9 @@ describe('the roles remain distinguishable', () => {
 
     expect(screen.getByTestId('plan-change-marker').textContent).toBe('Sent to Motir AI');
     expect(screen.getByTestId('plan-change-report')).toBeTruthy();
-    expect(screen.getByText('turn 1')).toBeTruthy();
+    expect(screen.getByTestId('conversation-user-turn').lastElementChild?.textContent).toBe(
+      'add payments',
+    );
     // One assistant turn on screen besides the opener + no user bubble claiming
     // the planner's words.
     expect(screen.queryByText('I searched the plan.')?.closest('[data-testid]')).toBeTruthy();

@@ -8,7 +8,9 @@ import { Pill } from '@/components/ui/Pill';
 import { platformRoleAtLeast, requirePlatformStaff } from '@/lib/platform/auth';
 import { PlatformUserNotFoundError } from '@/lib/platform/errors';
 import { platformSupportService } from '@/lib/services/platformSupportService';
+import { impersonationService } from '@/lib/services/impersonationService';
 import { SupportActionsBar } from './_components/SupportActionsBar';
+import { ViewAsDialog } from './_components/ViewAsDialog';
 
 /**
  * The operator ACCOUNT drill-down — design
@@ -75,6 +77,15 @@ export default async function AdminUserPage({ params }: { params: Promise<{ user
   }
 
   const { user, actions } = page;
+
+  // THE "VIEW AS" DOOR (MOTIR-749, design Panel 4) — `superadmin` only, so the
+  // dialog's data (where the session would land, whether it can start) is read
+  // only for that degree; it is its own audited `estate.read`. Absent for
+  // `operator` / `support` (the asset's roles table). Presentation again: the
+  // service re-gates every start at `superadmin`.
+  const viewAs = platformRoleAtLeast(principal.role, 'superadmin')
+    ? await impersonationService.getStartOptions(principal, userId)
+    : null;
 
   return (
     <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
@@ -145,17 +156,27 @@ export default async function AdminUserPage({ params }: { params: Promise<{ user
             in the Server Action AND again in the service (§2's two-layer rule) —
             this is presentation, and it is stated here so nobody later reads the
             absence of a button as the whole of the check. */}
-        {platformRoleAtLeast(principal.role, 'operator') ? (
-          <SupportActionsBar
-            userId={user.id}
-            name={user.name}
-            suspended={user.suspendedAt !== null}
-          />
-        ) : (
-          <p className="max-w-[20rem] font-sans text-xs text-(--el-text-secondary)">
-            {t('users.action.readOnlyNotice')}
-          </p>
-        )}
+        <div className="flex flex-wrap items-start justify-end gap-2">
+          {viewAs && viewAs.ineligibility === null ? <ViewAsDialog options={viewAs} /> : null}
+          {viewAs?.ineligibility &&
+          viewAs.ineligibility !== 'platform_staff' &&
+          viewAs.ineligibility !== 'self' ? (
+            <p className="max-w-[20rem] font-sans text-xs text-(--el-text-secondary)">
+              {t(`imp.ineligible.${viewAs.ineligibility}`)}
+            </p>
+          ) : null}
+          {platformRoleAtLeast(principal.role, 'operator') ? (
+            <SupportActionsBar
+              userId={user.id}
+              name={user.name}
+              suspended={user.suspendedAt !== null}
+            />
+          ) : (
+            <p className="max-w-[20rem] font-sans text-xs text-(--el-text-secondary)">
+              {t('users.action.readOnlyNotice')}
+            </p>
+          )}
+        </div>
       </div>
 
       {user.suspendedAt ? (

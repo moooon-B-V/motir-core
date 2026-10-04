@@ -31,6 +31,116 @@ export interface PlatformAuditLogDTO {
   createdAt: string;
 }
 
+/** A JSON value as stored in an audit row's `metadata`. */
+export type PlatformAuditJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | PlatformAuditJsonValue[]
+  | { [key: string]: PlatformAuditJsonValue };
+
+/**
+ * One entry of the AUDIT LOG view (MOTIR-751; the page is MOTIR-752, design
+ * `platform-admin` AMENDMENT 2026-10-03 Panels 6/7) — the table row AND its
+ * open detail: "the entry number, exact time, actor, action, target with id,
+ * full reason, the metadata payload, and its hash chained to the previous
+ * entry's".
+ */
+export interface PlatformAuditEntryDTO {
+  /** The chain position — the design's "entry #n". */
+  seq: number;
+  id: string;
+  /** ISO-8601, millisecond precision (the hashed value). */
+  createdAt: string;
+  actor: {
+    userId: string;
+    name: string;
+    email: string;
+    /** The role AT THE TIME — snapshotted on the row, never re-derived. */
+    role: PlatformRole;
+  };
+  action: string;
+  /** False for the READ verbs (`PLATFORM_AUDIT_READ_ACTIONS`) — the "Writes" filter's line. */
+  isWrite: boolean;
+  targetKind: PlatformAuditTargetKind;
+  targetId: string | null;
+  targetLabel: string | null;
+  organizationId: string | null;
+  reason: string | null;
+  metadata: PlatformAuditJsonValue | null;
+  /** SHA-256 hex of this entry. The design abbreviates it (`9f3c…a41e`). */
+  entryHash: string;
+  /** The previous entry's hash, or `null` for entry #1. */
+  prevHash: string | null;
+  /** The entry this one is chained to — "chained to #n" — or `null` for entry #1. */
+  chainedToSeq: number | null;
+}
+
+/** The search filters (all optional; they AND together). */
+export interface PlatformAuditSearchFiltersDTO {
+  /** The operator — a user id. */
+  actorUserId?: string | null;
+  /** The tenant — an organization id. */
+  organizationId?: string | null;
+  /** One exact action key. */
+  action?: string | null;
+  /** ISO date or date-time, inclusive. */
+  dateFrom?: string | null;
+  /** ISO date or date-time, EXCLUSIVE (pass the day after the last day wanted). */
+  dateTo?: string | null;
+  /** "Writes" (the design's default) when true or omitted; "Writes & reads" when false. */
+  writesOnly?: boolean;
+  /** Free text over the reason and the target (label substring, or exact id). */
+  text?: string | null;
+}
+
+/** One page of the audit log, newest first. */
+export interface PlatformAuditSearchPageDTO {
+  entries: PlatformAuditEntryDTO[];
+  /** Pass back as `cursor` for the next (older) page; `null` on the last page. */
+  nextCursor: string | null;
+  /** The page size the service used (50). */
+  pageSize: number;
+}
+
+/** Why the chain stopped verifying — see `AuditChainBreakReason` in `lib/platform/auditChain.ts`. */
+export type PlatformAuditChainBreakReason = 'hash_mismatch' | 'link_mismatch' | 'seq_gap';
+
+/**
+ * The integrity line (design Panels 6/7). `ok`: "Chain verified — all
+ * {checkedCount} entries hash-chain intact, checked through #{throughSeq} at
+ * {checkedAt}". `broken`: "The chain is broken at entry #{brokenAtSeq}
+ * ({brokenAtTime}) … it and the {entriesAfter} entries after it can't be
+ * trusted as written." Feed it to `auditEntryChainStatus` per row for the
+ * Hash mismatch / Unverified markers.
+ */
+export type PlatformAuditChainVerificationDTO =
+  | {
+      status: 'ok';
+      /** The first entry checked (1 for a full check). */
+      fromSeq: number;
+      /** The last entry checked, or `null` when there was nothing to check. */
+      throughSeq: number | null;
+      checkedCount: number;
+      /** ISO-8601. */
+      checkedAt: string;
+    }
+  | {
+      status: 'broken';
+      fromSeq: number;
+      throughSeq: number | null;
+      /** Entries that verified before the break. */
+      checkedCount: number;
+      checkedAt: string;
+      brokenAtSeq: number;
+      /** ISO-8601 — the broken entry's stored time, shown as stored. */
+      brokenAtTime: string;
+      reason: PlatformAuditChainBreakReason;
+      /** How many entries follow the broken one (within the range checked). */
+      entriesAfter: number;
+    };
+
 /**
  * The acting operator, as a page renders it. NOT the full `PlatformPrincipal`:
  * that is a server-side identity assertion and must not be handed to a client
@@ -132,6 +242,24 @@ export interface PlatformOrganizationSummaryDTO {
   isMeta: boolean;
   /** Charged exactly like a customer, then made whole by a paired offset. */
   internalBilling: boolean;
+  /** Suspended by platform staff (MOTIR-748) — every member is refused. The
+   *  "Suspended" pill the design puts on every row that names the org. */
+  suspended: boolean;
+}
+
+/**
+ * An organization's suspension as the console's status card renders it
+ * (design `ops.status.suspendedSince`: *Since {at} · by {operator} · “{reason}”*).
+ * `suspendedByUserId` is the operator's user id; their label is on the audit row
+ * the suspension wrote (`org.suspend`), which the org page's trail already shows.
+ */
+export interface PlatformOrganizationSuspensionDTO {
+  /** ISO-8601 — when the suspension took effect. */
+  suspendedAt: string;
+  /** The reason the operator gave — the same text the `org.suspend` audit row holds. */
+  reason: string | null;
+  /** The operator who suspended it; null once that account is deleted. */
+  suspendedByUserId: string | null;
 }
 
 /**
@@ -152,6 +280,8 @@ export interface PlatformOrganizationDetailDTO extends PlatformOrganizationSumma
   aiIncludedSeat: boolean;
   /** Whether a scaled-tracker (per-seat PM) subscription is on record. */
   hasScaledTrackerSubscription: boolean;
+  /** The suspension in force, or null for an active organization (MOTIR-748). */
+  suspension: PlatformOrganizationSuspensionDTO | null;
 }
 
 /**
@@ -297,6 +427,26 @@ export interface PlatformOrgMemberDTO {
   email: string;
   role: 'owner' | 'admin' | 'member';
   joinedAt: string;
+}
+
+/**
+ * The org page's OPERATIONS tab (MOTIR-752, design `platform-admin` AMENDMENT
+ * 2026-10-03 Panel 1) — what motir-core itself holds for the tab, read as ONE
+ * audited `estate.read`: the organization (its suspension included), the
+ * counts the status line quotes, and the operator writes on it. The credit
+ * ledger (motir-ai) and the kill-switches are separate reads the tab streams in.
+ */
+export interface PlatformOrgOperationsDTO {
+  organization: PlatformOrganizationDetailDTO;
+  memberCount: number;
+  workspaceCount: number;
+  /**
+   * Who suspended it — the status line's "by {operator}". Null for an active
+   * organization, or once that operator's account is gone.
+   */
+  suspendedBy: { userId: string; email: string; name: string | null } | null;
+  /** Every operator WRITE on this organization, newest first (capped). */
+  actions: PlatformAuditLogDTO[];
 }
 
 /** The org page's Overview tab (MOTIR-733, design D5) — one audited read. */
