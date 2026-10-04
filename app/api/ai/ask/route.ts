@@ -3,7 +3,13 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiAskService } from '@/lib/services/aiAskService';
-import { mapPlanChangeError, noActiveProject, readSessionId } from '../plan-change/_errors';
+import {
+  invalidAttachmentIds,
+  mapPlanChangeError,
+  noActiveProject,
+  readAttachmentIds,
+  readSessionId,
+} from '../plan-change/_errors';
 import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 import { PlanSeedNotApplicableError } from '@/lib/planChange/errors';
 
@@ -33,6 +39,10 @@ import { PlanSeedNotApplicableError } from '@/lib/planChange/errors';
 //   thread, the key is resolved through the keyed read (triage included) and
 //   browse-gated in the service, and an unknown / foreign / hidden key is the
 //   planning-anchor route's no-existence-leak 404. A non-string is a 400.
+//   A new turn may carry `attachmentIds` (MOTIR-7484; `guide-turn-files.md`
+//   A3.2): DATA like `anchorKey`, legal only on a GUIDE conversation named by
+//   `sessionId` — anywhere else the whole turn is a 400 before anything is
+//   written. With files, `body` may be empty.
 //   { turnId, flip? }            — RE-RUN a turn already on the thread: the retry
 //                                  after a failed submit (`flip` absent) and the
 //                                  correction affordance (`flip: true`). The
@@ -70,11 +80,14 @@ export async function POST(req: Request): Promise<Response> {
     sessionId?: unknown;
     seedGateId?: unknown;
     anchorKey?: unknown;
+    attachmentIds?: unknown;
   };
   // The conversation the client holds (MOTIR-6023; AMENDMENT 17 §2). Optional
   // here: with none, the caller's resumable project-wide session is used, and a
   // new turn with none STARTS one — the ask door stays self-sufficient.
   const sessionId = readSessionId(body.sessionId) ?? undefined;
+  const attachmentIds = readAttachmentIds(body.attachmentIds);
+  if (attachmentIds === 'invalid') return invalidAttachmentIds();
   if (
     body.anchorKey !== undefined &&
     body.anchorKey !== null &&
@@ -114,6 +127,7 @@ export async function POST(req: Request): Promise<Response> {
       ...(sessionId ? { sessionId } : {}),
       ...(seedGateId && !sessionId ? { seedGateId } : {}),
       ...(anchorKey ? { anchorKey } : {}),
+      ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {

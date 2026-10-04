@@ -289,6 +289,10 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   claim_work_item_continue: 'work_items:write',
   touch_work_item_continue: 'work_items:write',
   close_work_item_continue: 'work_items:write',
+  // The run tools (MOTIR-7451) — three writes, the same legacy write bucket.
+  start_work_item_run: 'work_items:write',
+  report_action: 'work_items:write',
+  close_work_item_run: 'work_items:write',
   // `add_lesson` (MOTIR-3361). This legacy table records the 7.7.16 vocabulary,
   // which has no lesson axis at all — the real gate is the PERMISSION
   // (`lesson:manage`, in `toolPermissions.ts`). Filed under `work_items:write`

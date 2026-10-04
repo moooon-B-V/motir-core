@@ -18,6 +18,7 @@ import { twoFactorService } from '@/lib/services/twoFactorService';
 import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
+import { applyStaffSession, type StaffSessionContext } from '@/lib/platform/staffSession';
 import {
   CLI_CLIENT_ID,
   DEVICE_CODE_EXPIRES_IN,
@@ -847,7 +848,7 @@ const SESSION_READ_RETRY_DELAY_MS = 100;
  *   · anything else is not a session-read failure this knows how to name, and
  *     is re-thrown untouched.
  */
-export async function readSession(requestHeaders: Headers) {
+export async function readOperatorSession(requestHeaders: Headers) {
   let lastError: unknown;
   for (let attempt = 1; attempt <= SESSION_READ_ATTEMPTS; attempt++) {
     try {
@@ -863,4 +864,43 @@ export async function readSession(requestHeaders: Headers) {
     }
   }
   throw new SessionUnavailableError(lastError);
+}
+
+/** Better-Auth's session for the current config, signed in. */
+type SignedInSession = NonNullable<Awaited<ReturnType<typeof readOperatorSession>>>;
+
+/**
+ * The session the app acts as. Ordinarily Better-Auth's own; inside a staff
+ * "View as" session (MOTIR-749) it is the TARGET's identity in the same shape,
+ * with `impersonation` carrying the session and the operator's own identity
+ * (who is really there, for attribution and for the banner).
+ */
+export type AppSession = SignedInSession & { impersonation?: StaffSessionContext };
+
+/**
+ * ⚠️ STAFF SESSIONS ARE LAYERED HERE (Story 10.3 · MOTIR-749). This is the one
+ * function every session read passes through, so it is where a platform
+ * superadmin's "View as" session is honoured and enforced: when the
+ * staff-session cookie is present, `applyStaffSession`
+ * (`lib/platform/staffSession.ts`) resolves it against the operator's own
+ * session read above and answers the TARGET's identity (active), or `null`
+ * (ended, expired, revoked — fail closed until the cookie is cleared). A
+ * mutating request in a READ-ONLY session throws `ImpersonationReadOnlyError`
+ * from here, before any service runs; one in a FULL session is audited before
+ * it runs. `readOperatorSession` above is the raw read, for the console and the
+ * staff-session doors only.
+ *
+ * @param options.method the request's HTTP method, when the caller holds the
+ *   `Request` — the strongest "is this a write?" signal the gate has.
+ */
+export async function readSession(
+  requestHeaders: Headers,
+  options: { method?: string } = {},
+): Promise<AppSession | null> {
+  const raw = await readOperatorSession(requestHeaders);
+  if (!raw) return null;
+  const gate = await applyStaffSession(raw, requestHeaders, options.method ?? null);
+  if (gate.kind === 'none') return gate.session;
+  if (gate.kind === 'ended') return null;
+  return { ...gate.session, impersonation: gate.context };
 }

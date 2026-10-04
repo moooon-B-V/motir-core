@@ -49,6 +49,7 @@ async function openRun(keys: string[]): Promise<string> {
     {
       projectKey: fixture.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: keys.map((key) => ({ key, disposition: 'queued' as const })),
     },
     fixture.ctx,
@@ -64,6 +65,7 @@ describe('a scope the project does not have is a TYPED refusal, not a silent run
         {
           projectKey: fixture.projectIdentifier,
           command: 'run',
+          reportedBy: 'cli',
           // A key shaped correctly and belonging to nothing — the shape a stale
           // script or a typo produces.
           scopeKey: `${fixture.projectIdentifier}-99999`,
@@ -80,6 +82,7 @@ describe('a scope the project does not have is a TYPED refusal, not a silent run
         {
           projectKey: fixture.projectIdentifier,
           command: 'run',
+          reportedBy: 'cli',
           cards: [{ key: `${fixture.projectIdentifier}-99999`, disposition: 'queued' }],
         },
         fixture.ctx,

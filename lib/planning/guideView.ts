@@ -371,6 +371,9 @@ export function guideOutcomeLines(
         return;
       }
       case 'cannot_do':
+      // A re-plan is landed as a comment too (`guide-turn-files.md` A3.9 (b);
+      // design MOTIR-7482 panel 13): the same line, the comment glyph, no tag.
+      case 'needs_replan':
         if (outcome?.outcome === 'landed') lines.push({ kind: 'commented', reason: action.reason });
         return;
       case 'close':

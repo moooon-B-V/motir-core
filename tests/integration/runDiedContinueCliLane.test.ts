@@ -158,6 +158,7 @@ async function deadRun(
     {
       projectKey: fx.projectIdentifier,
       command: opts.scopeKey ? 'run_scope' : 'run',
+      reportedBy: 'cli',
       ...(opts.scopeKey ? { scopeKey: opts.scopeKey } : {}),
       cards: opts.legs.map((l) => ({ key: l.key, disposition: 'queued' as const })),
     },

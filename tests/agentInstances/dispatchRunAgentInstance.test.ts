@@ -68,6 +68,7 @@ async function openIn(agentInstanceId: string, key?: string) {
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       origin: 'instance',
       agentInstanceId,
       agent: 'claude',
@@ -143,6 +144,7 @@ describe('the record holds a run in an agent', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: await seedCard(), disposition: 'queued' }],
       },
       fx.ctx,
@@ -151,6 +153,7 @@ describe('the record holds a run in an agent', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         origin: 'hosted',
         cards: [{ key: await seedCard(), disposition: 'queued' }],
       },
@@ -182,6 +185,7 @@ describe('an `instance` open names its agent, and only it does', () => {
         {
           projectKey: fx.projectIdentifier,
           command: 'run',
+          reportedBy: 'cli',
           origin: 'instance',
           cards: [{ key, disposition: 'queued' }],
         },
@@ -193,6 +197,7 @@ describe('an `instance` open names its agent, and only it does', () => {
         {
           projectKey: fx.projectIdentifier,
           command: 'run',
+          reportedBy: 'cli',
           agentInstanceId: agentId,
           cards: [{ key, disposition: 'queued' }],
         },
@@ -273,6 +278,7 @@ describe('at most one RUNNING run per agent — enforced by the database', () =>
         fx.projectId,
         {
           command: 'run',
+          reportedBy: 'cli',
           origin: 'instance',
           agentInstanceId: agentId,
           cards: [{ key: a, disposition: 'queued' }],
@@ -421,6 +427,7 @@ describe('the DTO, the liveness rule and the refusal’s status', () => {
         startedAt: now,
         endedAt: null,
         lastHeartbeatAt: null,
+        reportedBy: 'cli',
         createdById: null,
         idempotencyKey: null,
         agentInstanceId: null,

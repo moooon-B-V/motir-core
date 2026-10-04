@@ -203,12 +203,12 @@ function setup(over: {
 }
 
 /** An agent that writes `verdict` (a string, verbatim) to the file its env names. */
-function agentWriting(verdict: string | null, exitCode = 0) {
+function agentWriting(verdict: string | null, exitCode = 0, model: string | null = null) {
   return async (opts: RunAgentOptions) => {
     h.agentRuns.push(opts);
     const file = opts.command.env?.MOTIR_REVIEW_VERDICT_FILE;
     if (verdict !== null && file) writeFileSync(file, verdict);
-    return { exitCode, signal: null, model: null };
+    return { exitCode, signal: null, model };
   };
 }
 
@@ -797,5 +797,26 @@ describe('the client — the review prompt, and the verdict (a late one typed)',
     } finally {
       await server.close();
     }
+  });
+});
+
+describe('agent_exited carries the reviewer’s self-reported model TOP-LEVEL (MOTIR-7504)', () => {
+  it.each([['m'], [null]] as const)('model %s', async (model) => {
+    setup({});
+    await reviewCommand(
+      KEY,
+      deps({
+        runAgentFn: agentWriting(
+          JSON.stringify({ subjectVersion: VERSION, verdict: 'pass', summaryMd: 'Meets it.' }),
+          0,
+          model,
+        ),
+      }),
+    );
+
+    const exited = h.events.filter((e) => e.kind === 'agent_exited');
+    expect(exited).toHaveLength(1);
+    expect(exited[0]).toMatchObject({ exitCode: 0, model });
+    expect(exited[0]!.data).toMatchObject({ step: 'review', model });
   });
 });

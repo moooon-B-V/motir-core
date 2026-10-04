@@ -749,7 +749,15 @@ async function repair(input: {
       checkouts: prepared.checkouts,
       report: (line) => info(line),
       ...(deps.wait ? { wait: deps.wait } : {}),
-      ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
+      // Each FIXING attempt is reported as a started / exited pair, like every other
+      // agent turn here (MOTIR-7506): a `ci` repair runs no agent outside this loop,
+      // so without it the leg would never learn which model answered.
+      runAgentFn: async (agentInput) => {
+        reporter.event({ kind: 'agent_started', workItemKey: key, data: { step: 'ci_fix' } });
+        const result = await runAgentFn(agentInput);
+        reportAgentExited(reporter, key, 'ci_fix', result);
+        return result;
+      },
       ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
     });
     reporter.event({ kind: CI_WATCH_EVENT[watch.kind], workItemKey: key, data: watch });
@@ -823,14 +831,35 @@ async function runAgentStep(
     data: { step: input.step },
   });
   const result = await runAgentFn({ command: input.command, prompt: input.prompt, cwd: input.cwd });
-  input.reporter.event({
-    kind: 'agent_exited',
-    workItemKey: input.key,
-    data: { step: input.step, exitCode: result.exitCode, signal: result.signal ?? null },
-  });
+  reportAgentExited(input.reporter, input.key, input.step, result);
   if (result.exitCode === 0) return { ok: true };
   return {
     ok: false,
     detail: result.signal ? `killed by ${result.signal}` : `exit ${result.exitCode}`,
   };
+}
+
+/** The `agent_exited` every repair turn reports — the review, re-run and record
+ *  steps, and each fixing attempt of the CI loop. */
+function reportAgentExited(
+  reporter: ReturnType<typeof createDispatchRunReporter>,
+  key: string,
+  step: 'acceptance_rerun' | 'acceptance_record' | 'review_fix' | 'ci_fix',
+  result: AgentRunResult,
+): void {
+  reporter.event({
+    kind: 'agent_exited',
+    workItemKey: key,
+    // Top-level `exitCode` and `model` are what the server writes onto the leg
+    // (MOTIR-7504) — a repair leg records both, like every other path. The model
+    // is the agent's self-report or null, never a guess (MOTIR-2419).
+    exitCode: result.exitCode,
+    model: result.model ?? null,
+    data: {
+      step,
+      exitCode: result.exitCode,
+      model: result.model ?? null,
+      signal: result.signal ?? null,
+    },
+  });
 }

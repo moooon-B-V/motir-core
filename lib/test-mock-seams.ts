@@ -183,6 +183,18 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
       installPlannerModelBoundaryMock(agent);
     },
   },
+  {
+    // MOTIR-1413 — the console's planning-lessons pages: the cross-tenant list,
+    // a lesson's detail, the three curate acts and the retirement window. All
+    // server rendered or Server Actions, so `page.route` reaches none of them.
+    flag: 'E2E_TEST_PLATFORM_LESSONS',
+    message: 'motir-ai platform planning-lessons seam mocked.',
+    install: async (agent) => {
+      const { installPlatformLessonsBoundaryMock } =
+        await import('@/lib/test-platform-lessons-mock');
+      installPlatformLessonsBoundaryMock(agent);
+    },
+  },
 ];
 
 /**

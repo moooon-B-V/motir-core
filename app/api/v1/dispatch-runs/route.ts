@@ -38,6 +38,8 @@ export const POST = withV1Route({ permission: 'work_item:edit' }, async (ctx) =>
       projectKey: body.projectKey,
       command: body.command,
       origin: body.origin,
+      // The CLI's ingest: a runner observes this run (`agent-reported-runs.md` §1).
+      reportedBy: 'cli',
       ...(body.scopeKey !== undefined ? { scopeKey: body.scopeKey } : {}),
       ...(body.scopeLabel !== undefined ? { scopeLabel: body.scopeLabel } : {}),
       ...(body.agent !== undefined ? { agent: body.agent } : {}),

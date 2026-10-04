@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
+import { redirectIfOrganizationSuspended } from '@/lib/organizations/suspensionRedirect';
 import { oauthConnectionsService } from '@/lib/services/oauthConnectionsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { oauthAuthorizeNext } from '@/lib/oauth/authorizeReturn';
@@ -63,7 +64,7 @@ export default async function OAuthConsentPage({
 
   // The pickers open on what the person is working in (MOTIR-4876's rule, one
   // tier down): the active workspace, then its active project.
-  const ctx = await getWorkspaceContext();
+  const ctx = await redirectIfOrganizationSuspended(getWorkspaceContext());
   const activeProject = ctx
     ? await projectsService.getActiveProject(ctx.userId, ctx.workspaceId)
     : null;

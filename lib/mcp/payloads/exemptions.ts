@@ -167,6 +167,25 @@ export const EXEMPT_TOOLS = {
     'close returns the whole `DispatchRun` with its legs, which the agent surface does not ' +
     'carry, for the reason `MCP_UNREACHABLE_RESOURCES.DispatchRun` records; the agent needs ' +
     'only that its continue is closed and how (MOTIR-7262).',
+  start_work_item_run:
+    'Returns a RUN RECEIPT — `{ outcome, key, runId, reportedBy, legs: [{ key, title }] }`, or ' +
+    '`not_claimed` naming the card the caller does not hold. v1’s open answers the whole ' +
+    '`DispatchRunOpened` envelope for the CLI that reports a run; an agent reporting its OWN ' +
+    'run (`agent-reported-runs.md`, AMENDMENT 3 of `dispatch-run-record.md`) needs only the id ' +
+    'to report into and the cards it covers. The run READ stays unreachable from MCP ' +
+    '(`MCP_UNREACHABLE_RESOURCES.DispatchRun`), so this narrow shape must not grow into it ' +
+    '(MOTIR-7451).',
+  report_action:
+    'Returns an APPEND RECEIPT — `{ outcome, runId, accepted, refused: [{ kind, reason }] }`, ' +
+    'plus `seq` and the run’s reporter when it wrote, or `touched` for the no-argument ' +
+    'heartbeat. v1’s append answers `DispatchRunAppended` with every leg for the CLI’s cursor; ' +
+    'the agent needs to know what was stored and what was refused, by kind (MOTIR-7451).',
+  close_work_item_run:
+    'Returns a CLOSE RECEIPT — `{ closed, alreadyClosed, runId, status, stopReason, endedAt, ' +
+    'stamped }`. v1’s close returns the whole `DispatchRun` with its legs, which the agent ' +
+    'surface does not carry for the reason `MCP_UNREACHABLE_RESOURCES.DispatchRun` records; ' +
+    'the agent needs how its run ended and which cards it is now recorded as the implementer ' +
+    'of (MOTIR-7451).',
   delete_work_item:
     'Returns a cascade-delete summary (`totalCount`, `descendantCount`, `byKind`). ADR §3 ' +
     'leaves the irreversible cascade delete OUT of v1 entirely, and `tests/helpers/v1RouteAudit.ts` ' +

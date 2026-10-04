@@ -2019,6 +2019,39 @@ function sessionLineageWorkflow(src: DispatchPromptSource, sessionBranch: string
  * into a directory the launcher created for this one dispatch and deletes when
  * it ends, so a report can only ever describe the run it came from.
  */
+/**
+ * REPORTING YOUR STEPS (Story MOTIR-7446 · MOTIR-7501,
+ * `docs/decisions/agent-reported-runs.md` §3) — the agent's own step-by-step
+ * account of the run, through `report_action`.
+ *
+ * The runner around the agent — `motir run`, a hosted run — already reports the
+ * milestones (the checkout, the pull request, the verdict) and keeps the run
+ * alive; what it cannot see is what the agent does BETWEEN them. `report_action`
+ * finds the caller's open run from the card's key, so the same call a skill-driven
+ * agent makes lands in the CLI's run too, and every run carries the same steps
+ * whoever started it.
+ *
+ * Milestones are refused here (`events` in a runner's run), so the block says not
+ * to send them; it says what an action may never contain, because the line is
+ * stored and shown on the run.
+ */
+function stepReporting(key: string): string[] {
+  return [
+    `Before EACH step you take, call the report_action tool with key ${key} and`,
+    'the step you are about to take, in one line — for example:',
+    '',
+    `         report_action { key: "${key}", action: "Run the changed tests" }`,
+    '',
+    '  - One line, at most 500 characters, said BEFORE the step, not after it.',
+    '  - Never a transcript, file contents, a diff, a prompt or a secret: the line',
+    '    is stored on the run and shown to the people who watch it.',
+    '  - Do not send `events`. The runner around you reports the milestones itself,',
+    '    and report_action refuses them in its run.',
+    '  - If report_action answers `no_open_run`, carry on with the work: there is no',
+    '    run to report into, and nothing else depends on the call.',
+  ];
+}
+
 function modelSelfReport(): string[] {
   return [
     'FIRST, one line of bookkeeping that applies to BOTH outcomes below. If the',
@@ -3010,6 +3043,10 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
     );
   } else if (!manual) {
     closing = [
+      // Every prompt that builds something tells the agent to report its steps
+      // (MOTIR-7501). A MANUAL item builds nothing an agent runs, so it is absent.
+      ...section('REPORTING YOUR STEPS', stepReporting(src.key)),
+      '',
       ...section('GIT WORKFLOW', [...gitWorkflow(src, sessionBranch), ...commitContract(src)]),
       '',
       // LAST, deliberately. The protocol is what the agent does at the end of

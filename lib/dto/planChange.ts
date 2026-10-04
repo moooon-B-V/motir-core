@@ -1,3 +1,4 @@
+import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 
@@ -104,6 +105,14 @@ export interface PlanChangeTurnDto {
    * Null on every other turn. Optional for the reason {@link anchorKey} is.
    */
   guide?: GuideTurnRecord | null;
+  /**
+   * The files a `guide` `user` turn carried (MOTIR-7484; `guide-turn-files.md`
+   * A3.2) — attachment ids on the guided card, in the order they were added.
+   * `[]` on every other turn. An id whose attachment has since been deleted
+   * stays here; the rail draws it as removed. Optional for the reason
+   * {@link anchorKey} is.
+   */
+  attachmentIds?: string[];
   authorId: string | null;
   createdAt: string;
 }
@@ -161,6 +170,14 @@ export interface PlanChangeSessionDto {
    * second inline treatment. Empty when nothing resolved.
    */
   workItemRefs: WorkItemRefMap;
+  /**
+   * The files the thread's turns carry (MOTIR-7486; `guide-turn-files.md` A3.2),
+   * keyed by attachment id — resolved once for the whole thread, as the caller
+   * may see them, so the rail draws each turn's chips and opens the shipped
+   * preview. An id a turn names that is absent here was deleted (or is no longer
+   * visible) and renders as removed. Optional: absent on a thread with no files.
+   */
+  attachments?: Record<string, AttachmentDTO>;
   /**
    * The REOPEN read's extras (MOTIR-6024) — filled by `getById` only, which is
    * how a Plans row reopens a conversation: who started it (the reopened line),

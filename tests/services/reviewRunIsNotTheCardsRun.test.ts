@@ -43,6 +43,7 @@ async function open(fx: WorkItemFixture, key: string, command: 'run' | 'review')
     {
       projectKey: fx.projectIdentifier,
       command,
+      reportedBy: 'cli',
       origin: 'hosted',
       agent: 'opencode',
       model: 'm',

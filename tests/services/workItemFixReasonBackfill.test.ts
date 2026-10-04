@@ -49,6 +49,7 @@ async function scenario(fx: WorkItemFixture) {
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: [{ key: died.identifier, disposition: 'queued' }],
     },
     fx.ctx,

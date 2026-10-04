@@ -8,6 +8,7 @@ import { enforceMcpRateLimit } from '@/lib/rateLimit/mcpGuard';
 import { stampRateLimitHeaders } from '@/lib/rateLimit/guard';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { PROTECTED_RESOURCE_METADATA_PATH } from '@/lib/oauth/config';
+import { OrganizationSuspendedError } from '@/lib/organizations/errors';
 
 // The Motir MCP server (Story 7.8 · Subtask 7.8.4) — one streamable-HTTP
 // endpoint exposing the PM core to AI agents and the CLI (7.9), all of which
@@ -107,12 +108,43 @@ async function limitedHandler(req: Request): Promise<Response> {
 // request because the origin is read at request time, as every derived URL is.
 const innerHandler = answerClientAbort(limitedHandler);
 
-function handler(req: Request): Promise<Response> {
-  return withMcpAuth(innerHandler, verifyMcpToken, {
+/**
+ * A SUSPENDED organization's credential (MOTIR-748) is refused with the
+ * dedicated 403 `ORGANIZATION_SUSPENDED`, not the 401 `withMcpAuth` turns every
+ * verify throw into: a 401 would send an MCP client into a re-authentication
+ * loop for a credential that is valid. The verifier still THROWS the typed error
+ * (both arms reach it — the PAT through `apiTokensService.verify`, an OAuth
+ * connection through the workspace access gate); this wrapper catches it, lets
+ * `withMcpAuth` see a refusal, and answers 403 in place of its 401.
+ */
+async function handler(req: Request): Promise<Response> {
+  let suspended: OrganizationSuspendedError | null = null;
+  const verify: typeof verifyMcpToken = async (r, bearer) => {
+    try {
+      return await verifyMcpToken(r, bearer);
+    } catch (err) {
+      if (!(err instanceof OrganizationSuspendedError)) throw err;
+      suspended = err;
+      return undefined;
+    }
+  };
+  const res = await withMcpAuth(innerHandler, verify, {
     required: true,
     resourceUrl: resolveBaseUrlTrimmed(),
     resourceMetadataPath: PROTECTED_RESOURCE_METADATA_PATH,
   })(req);
+  const refused = suspended as OrganizationSuspendedError | null;
+  if (refused) {
+    return Response.json(
+      {
+        code: refused.code,
+        error: refused.message,
+        organizationId: refused.organizationId,
+      },
+      { status: 403 },
+    );
+  }
+  return res;
 }
 
 export { handler as GET, handler as POST, handler as DELETE };

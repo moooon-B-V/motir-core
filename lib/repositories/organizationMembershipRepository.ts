@@ -14,6 +14,12 @@ export type OrgMembershipWithUser = OrganizationMembership & {
   user: Pick<User, 'id' | 'name' | 'email'>;
 };
 
+// A membership row joined with the organization state the access gate reads
+// (MOTIR-748 — a suspended org refuses its members on every door).
+export type OrgMembershipWithOrgState = OrganizationMembership & {
+  organization: Pick<Organization, 'id' | 'name' | 'suspendedAt'>;
+};
+
 // OrganizationMembership repository — single Prisma operations on the
 // `organization_membership` join table (Story 6.10). Owns its own file (not
 // nested under organizationRepository) because the primary entity it operates on
@@ -75,6 +81,23 @@ export const organizationMembershipRepository = {
   ): Promise<OrganizationMembership | null> {
     return tx.organizationMembership.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
+    });
+  },
+
+  /**
+   * {@link findByOrgAndUserInTx} with the slice of the ORGANIZATION the access
+   * gate decides on — its suspension (MOTIR-748). One query: the org is visible
+   * to its own member under `organization_membership_visible`, so the join costs
+   * the gate no extra round trip and no extra RLS arm.
+   */
+  async findByOrgAndUserWithOrgStateInTx(
+    organizationId: string,
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<OrgMembershipWithOrgState | null> {
+    return tx.organizationMembership.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+      include: { organization: { select: { id: true, name: true, suspendedAt: true } } },
     });
   },
 

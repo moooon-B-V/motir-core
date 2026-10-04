@@ -49,10 +49,10 @@ import { CommentForbiddenError } from '@/lib/comments/errors';
 //   | `add_step` / `revise_step` /             | `addTodo` (+`moveTodo`) / `updateTodo` /     | recorded       |
 //   | `remove_step` / `move_step`              | `deleteTodo` / `moveTodo`                    |                |
 //   | `edit_item`                              | `workItemsService.updateWorkItem`            | same           |
-//   | `cannot_do`                              | `commentsService.addComment`                 | same           |
+//   | `cannot_do` / `needs_replan`             | `commentsService.addComment`                 | same           |
 //   | `close`                                  | `workItemsService.updateStatus`, walked      | same           |
 //   | `propose_todos` / `current_step` /       | recorded on the conversation                 | recorded       |
-//   | `offer_close`                            |                                              |                |
+//   | `offer_close` / `local_agent_prompt`     |                                              |                |
 //
 // Every write goes through the gated path the person would use by hand, so the
 // turn can do nothing they could not, and the card's own events, revisions and
@@ -60,9 +60,17 @@ import { CommentForbiddenError } from '@/lib/comments/errors';
 //
 // ── AGAINST THE CARD AS IT STANDS AT LANDING (A2.4) ──────────────────────────
 // A person may tick, untick or edit rows while a turn runs. An action naming a
-// row that is gone, or already in the state it asks for, or a correction aimed
-// at a row that is now ticked, is SKIPPED and recorded with its reason. It does
-// not fail the turn: the turn's other actions still land.
+// row that is gone, or already in the state it asks for, is SKIPPED and recorded
+// with its reason. It does not fail the turn: the turn's other actions still land.
+//
+// ── A TICKED ROW MAY BE CORRECTED (`guide-turn-files.md` A3.9 (b)) ───────────
+// This amends A2.4's "a correction aimed at a ticked row is skipped". While the
+// card's target holds, `revise_step` / `remove_step` / `move_step` land on any
+// row, ticked or not, and a revised ticked row KEEPS its tick. When the revision
+// means the done work no longer satisfies it, motir-ai sends an `untick` for the
+// row just before the `revise_step`, which lands through the ordinary untick. A
+// change that would alter the target is `needs_replan`, which edits nothing and
+// leaves a comment, exactly as `cannot_do` does.
 //
 // ── EXACTLY ONCE: A CLAIM BEFORE THE WRITES ──────────────────────────────────
 // `debugLandingService`'s shape. The settle is replayable (a reload, a retried
@@ -172,12 +180,6 @@ function savedRow(card: LandingCard, rowId: string): WorkItemTodoDto {
   return row;
 }
 
-function unticked(card: LandingCard, rowId: string): WorkItemTodoDto {
-  const row = savedRow(card, rowId);
-  if (row.done) throw new Skip('that step is ticked, and a ticked step is never changed');
-  return row;
-}
-
 /** The comment `cannot_do` leaves on the card. */
 export function guideCannotDoComment(reason: string, step: string | null): string {
   return [
@@ -188,6 +190,17 @@ export function guideCannotDoComment(reason: string, step: string | null): strin
   ]
     .filter((l): l is string => l !== null)
     .join('\n');
+}
+
+/** The comment `needs_replan` leaves on the card (A3.9 (b)): the change asked for
+ *  would alter what the card is for, so nothing was changed and the walk stopped. */
+export function guideNeedsReplanComment(reason: string): string {
+  return [
+    '**Motir AI stopped: this card needs a re-plan.**',
+    '',
+    'The change asked for in the guided walk would alter what this card is for, so nothing on the card was changed.',
+    `Reason: ${reason}`,
+  ].join('\n');
 }
 
 /** The comment `close` leaves on the card — the turn's own summary. */
@@ -217,6 +230,10 @@ async function landOne(
   });
   const tempHas = (id: string) => temporary.rows.some((r) => r.id === id);
   const tempTicked = (id: string) => temporary.rows.find((r) => r.id === id)?.done === true;
+  /** A correction's row on the temporary list — ticked or not (A3.9 (b)). */
+  const tempRow = (id: string) => {
+    if (!tempHas(id)) throw new Skip('that step is not on the list');
+  };
 
   switch (action.type) {
     case 'propose_todos':
@@ -226,6 +243,14 @@ async function landOne(
     case 'current_step':
     case 'offer_close':
       return recorded;
+
+    case 'local_agent_prompt': {
+      // A prompt for the person's LOCAL agent writes nothing to the card (A3.9 (a)):
+      // it is recorded on the conversation. It still names a step on the list.
+      if (temporary.active) tempRow(action.rowId);
+      else savedRow(card, action.rowId);
+      return recorded;
+    }
 
     case 'write_todos': {
       // A proposal never overwrites a list.
@@ -291,12 +316,10 @@ async function landOne(
 
     case 'revise_step': {
       if (temporary.active) {
-        if (!tempHas(action.rowId)) throw new Skip('that step is not on the list');
-        if (tempTicked(action.rowId))
-          throw new Skip('that step is ticked, and a ticked step is never changed');
+        tempRow(action.rowId);
         return recorded;
       }
-      const row = unticked(card, action.rowId);
+      const row = savedRow(card, action.rowId);
       await workItemTodosService.updateTodo(
         row.id,
         {
@@ -313,12 +336,10 @@ async function landOne(
 
     case 'remove_step': {
       if (temporary.active) {
-        if (!tempHas(action.rowId)) throw new Skip('that step is not on the list');
-        if (tempTicked(action.rowId))
-          throw new Skip('that step is ticked, and a ticked step is never changed');
+        tempRow(action.rowId);
         return recorded;
       }
-      const row = unticked(card, action.rowId);
+      const row = savedRow(card, action.rowId);
       await workItemTodosService.deleteTodo(row.id, actor);
       card.rows = card.rows.filter((r) => r.id !== row.id);
       return landed(row.id);
@@ -326,12 +347,10 @@ async function landOne(
 
     case 'move_step': {
       if (temporary.active) {
-        if (!tempHas(action.rowId)) throw new Skip('that step is not on the list');
-        if (tempTicked(action.rowId))
-          throw new Skip('that step is ticked, and a ticked step is never changed');
+        tempRow(action.rowId);
         return recorded;
       }
-      const row = unticked(card, action.rowId);
+      const row = savedRow(card, action.rowId);
       await workItemTodosService.moveTodo(
         row.id,
         indexAfter(card.rows, row.id, action.afterRowId),
@@ -370,6 +389,15 @@ async function landOne(
       await commentsService.addComment(
         card.item.id,
         { bodyMd: guideCannotDoComment(action.reason, step) },
+        actor,
+      );
+      return landed();
+    }
+
+    case 'needs_replan': {
+      await commentsService.addComment(
+        card.item.id,
+        { bodyMd: guideNeedsReplanComment(action.reason) },
         actor,
       );
       return landed();

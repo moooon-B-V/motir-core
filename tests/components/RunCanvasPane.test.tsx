@@ -94,6 +94,7 @@ function leg(over: Partial<DispatchRunCardDto> = {}): DispatchRunCardDto {
     startedAt: null,
     endedAt: null,
     exitCode: null,
+    model: null,
     ...over,
   };
 }
@@ -114,6 +115,7 @@ function run(cards: DispatchRunCardDto[]): DispatchRunDto {
     endedAt: null,
     createdById: null,
     lastHeartbeatAt: null,
+    reportedBy: 'cli',
     agentInstance: null,
     cards,
     seq: 3,

@@ -1,3 +1,4 @@
+import { OrgFeatureDisabledError } from '@/lib/featureFlags/errors';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   AssigneeNotInWorkspaceError,
@@ -94,8 +95,14 @@ import {
 import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
 import {
+  AgentRunEventKindNotAllowedError,
+  AgentRunNoOpenRunError,
+  AgentRunNotClaimedError,
+  AgentRunNotYoursError,
+  AgentRunReportInvalidError,
   ContinueFromInvalidError,
   ContinueRunRefusedError,
+  DispatchRunNotFoundError,
   RepairRunRefusedError,
   RunFoundReportReasonInvalidError,
 } from '@/lib/dispatchRuns/errors';
@@ -252,6 +259,9 @@ export function toFilterDecodeToolError(
  * 404-not-403 cross-tenant rule) carries to the MCP surface unchanged.
  */
 export function toToolError(err: unknown): CallToolResult {
+  // A per-org kill-switch (MOTIR-750) — the message names the switch, so an
+  // agent reports "planning is paused for this organization" rather than retrying.
+  if (err instanceof OrgFeatureDisabledError) return toolError(err.code, err.message);
   // 404-not-403: identical message whether the row is absent or cross-tenant.
   if (err instanceof WorkItemNotFoundError || err instanceof ProjectNotFoundError) {
     return toolError(err.code, err.message);
@@ -623,6 +633,18 @@ export function toToolError(err: unknown): CallToolResult {
     // CONTINUE_RUN_NOT_FOUND / CONTINUE_RUN_NOT_YOURS (MOTIR-7262) — the same
     // refusal for `touch_work_item_continue` / `close_work_item_continue`.
     err instanceof ContinueRunRefusedError ||
+    // The RUN tools' refusals (MOTIR-7451) — a close of somebody else's run, an
+    // event kind an agent may not send in a runner's run, a malformed action, and
+    // a run id that is not the caller's agent run on that key. Each is raised
+    // before anything is written and names the caller's next move. (A start
+    // without the claim and a report with no open run are RESULTS, answered by
+    // the tools themselves.)
+    err instanceof AgentRunNotYoursError ||
+    err instanceof AgentRunEventKindNotAllowedError ||
+    err instanceof AgentRunReportInvalidError ||
+    err instanceof AgentRunNotClaimedError ||
+    err instanceof AgentRunNoOpenRunError ||
+    err instanceof DispatchRunNotFoundError ||
     // CONTINUE_FROM_INVALID (MOTIR-7262) — `dispatch_prompt`'s `continueFrom`
     // names a run that cannot be continued: the same code the REST route answers
     // with a 422, so the two doors refuse a bad run identically.

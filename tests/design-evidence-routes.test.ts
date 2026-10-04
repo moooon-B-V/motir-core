@@ -397,6 +397,66 @@ describe('POST /design-evidence — auth', () => {
     expect(res.status).toBe(403);
   });
 
+  it('403s a VALID token of a SUSPENDED organization with ORGANIZATION_SUSPENDED (MOTIR-748)', async () => {
+    // Never a 500 and never a misleading 401: the credential is real, its
+    // organization is what is refused. Nothing is written.
+    const token = await integrationToken(fx);
+    const ws = await adminDb.workspace.findUniqueOrThrow({
+      where: { id: fx.workspaceId },
+      select: { organizationId: true },
+    });
+    await adminDb.organization.update({
+      where: { id: ws.organizationId },
+      data: { suspendedAt: new Date(), suspendedReason: 'Unpaid' },
+    });
+
+    const res = await REGISTER(
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'a.mock.html', 'text/html'),
+            seed('note_file', 'a.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        card.identifier,
+      ),
+      params(card.identifier),
+    );
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      code: 'ORGANIZATION_SUSPENDED',
+      error: expect.any(String),
+    });
+    expect(await adminDb.designEvidence.count()).toBe(0);
+  });
+
+  it('re-throws an unexpected token-verification failure instead of answering 401 or 403', async () => {
+    const token = await integrationToken(fx);
+    const spy = vi.spyOn(apiTokensService, 'verify').mockRejectedValueOnce(new Error('db down'));
+
+    await expect(
+      REGISTER(
+        req(
+          '',
+          token,
+          {
+            assets: [
+              seed('mock', 'a.mock.html', 'text/html'),
+              seed('note_file', 'a.mock.html.design-notes.md', 'text/markdown'),
+            ],
+          },
+          card.identifier,
+        ),
+        params(card.identifier),
+      ),
+    ).rejects.toThrow('db down');
+
+    spy.mockRestore();
+  });
+
   it('404s a target in ANOTHER workspace — never 403, never a leak, nothing written', async () => {
     const other = await makeWorkItemFixture();
     const otherStory = await createTestWorkItem(other, { kind: 'story', title: 'Theirs' });

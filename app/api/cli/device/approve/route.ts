@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
+import { ImpersonationCredentialRefusedError } from '@/lib/platform/errors';
 import { cliDeviceService } from '@/lib/services/cliDeviceService';
 import {
   DeviceGrantExpiredError,
@@ -73,6 +74,10 @@ export async function POST(req: Request): Promise<Response> {
     // A workspace the approver is not a member of (or a forged id). 403, matching the
     // token-create surface: the picker only offers the user's own workspaces, so a
     // mismatch is a forbidden action rather than a hidden resource.
+    // A credential cannot be minted inside a staff "View as" session (MOTIR-749).
+    if (err instanceof ImpersonationCredentialRefusedError) {
+      return NextResponse.json({ code: err.code }, { status: 403 });
+    }
     if (err instanceof NotAMemberError) {
       return NextResponse.json({ code: 'WORKSPACE_FORBIDDEN' }, { status: 403 });
     }

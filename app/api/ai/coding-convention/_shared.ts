@@ -1,3 +1,4 @@
+import { orgFeatureDisabledResponse } from '@/lib/featureFlags/errorResponse';
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
@@ -48,6 +49,8 @@ export async function resolveActiveProjectContext(): Promise<
 // `projectErrorResponse` already draws between 422 and 400 — a body that is not
 // parseable at all is answered 400 by the route, before the service is reached.
 export function mapCodeHealthError(err: unknown): NextResponse {
+  const switchedOff = orgFeatureDisabledResponse(err);
+  if (switchedOff) return switchedOff;
   const mapped = projectErrorResponse(err);
   if (mapped) return mapped;
   if (err instanceof CodeHealthError) {

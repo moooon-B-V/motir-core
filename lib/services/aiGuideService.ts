@@ -12,6 +12,16 @@ import {
   type GuideRowInput,
 } from '@/lib/ai/guideWorkItem';
 import type { JobContextBag } from '@/lib/ai/types';
+import {
+  GUIDE_FILES_MAX,
+  guideFileNotes,
+  resolveGuideFiles,
+  type GuideContextFile,
+  type GuideFileMeta,
+} from '@/lib/ai/guideFiles';
+import type { AttachmentDTO } from '@/lib/dto/attachments';
+import { AttachmentNotOnWorkItemError } from '@/lib/blob/errors';
+import { attachmentsService } from '@/lib/services/attachmentsService';
 import { isManualReadyItem } from '@/lib/dto/ready';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
@@ -30,6 +40,7 @@ import {
   EmptyPlanChangeTurnError,
   GuideCardClosedError,
   GuideCardNotManualError,
+  GuideTurnFilesRefusedError,
   PlanChangeTurnNotFoundError,
 } from '@/lib/planChange/errors';
 import { buildScope } from '@/lib/planChange/scope';
@@ -66,6 +77,17 @@ import { buildScope } from '@/lib/planChange/scope';
 // thread with no job, and {@link aiGuideService.resubmit} re-runs that SAME
 // turn. A turn that already HAS a job is never submitted again — a replayed
 // resubmit returns its job — which is what makes the door replay-safe.
+//
+// ── FILES ON A TURN (MOTIR-7484; `docs/decisions/guide-turn-files.md`) ───────
+// A turn may carry up to four files (A3.3), each an attachment ALREADY on the
+// guided card — the composer uploads them through the shipped attachment route
+// (`attachToWorkItem`, `source: 'panel'`) before it sends the turn (A3.1). The
+// ids are checked against the card, the workspace and the caller's view BEFORE
+// the turn is written (A3.2); any failure refuses the whole turn. The turn keeps
+// the ids; when its job is submitted, the CURRENT turn's readable files are
+// resolved into `guideContext.files` (`lib/ai/guideFiles.ts`, A3.4) and every
+// earlier turn's files ride as one-line notes. A temporary walk attaches too —
+// a file is the card's evidence, not the list's (A3.1).
 //
 // ── WHAT THIS DOES NOT DO ────────────────────────────────────────────────────
 // It ends at the job submitted and the turn persisted. Landing the result —
@@ -175,15 +197,38 @@ async function readGuideCard(item: WorkItemDto, ctx: ProjectContext): Promise<Gu
   };
 }
 
+/** An attachment as the file resolver reads it. */
+function fileMetaOf(a: AttachmentDTO): GuideFileMeta {
+  return { attachmentId: a.id, name: a.filename, mime: a.mimeType, sizeBytes: a.sizeBytes };
+}
+
 /** The conversation so far, as the job reads it — `user` and `assistant` turns
  *  in `seq` order, up to and including `throughTurnId`. A `system` marker is not
- *  conversation and is left out. */
-function contextTurns(session: PlanChangeSessionDto, throughTurnId: string): GuideContextTurn[] {
+ *  conversation and is left out. An EARLIER `user` turn's files ride as one-line
+ *  notes (A3.4); the turn the job runs for carries its files resolved, beside. */
+function contextTurns(
+  session: PlanChangeSessionDto,
+  throughTurnId: string,
+  files: ReadonlyMap<string, GuideFileMeta> = new Map(),
+): GuideContextTurn[] {
   const out: GuideContextTurn[] = [];
   for (const t of session.turns) {
     // An assistant turn carries the actions it returned, which is how a later
     // turn undoes one (A2.3: an undo is the inverse action).
-    if (t.role === 'user') out.push({ role: 'user', body: t.body });
+    if (t.role === 'user') {
+      const metas =
+        t.id === throughTurnId
+          ? []
+          : (t.attachmentIds ?? []).flatMap((id) => {
+              const m = files.get(id);
+              return m ? [m] : [];
+            });
+      out.push({
+        role: 'user',
+        body: t.body,
+        ...(metas.length > 0 ? { files: guideFileNotes(metas) } : {}),
+      });
+    }
     if (t.role === 'assistant') {
       out.push({
         role: 'assistant',
@@ -217,11 +262,31 @@ async function submitGuideJob(
             .map((t) => ({ seq: t.seq, record: t.guide ?? null })),
         )
       : [];
+  // Every file the thread names, read once — LENIENTLY: a file deleted from the
+  // card since its turn is simply not there to note or to read (A3.2).
+  const allIds = [
+    ...new Set(
+      session.turns.filter((t) => t.role === 'user').flatMap((t) => t.attachmentIds ?? []),
+    ),
+  ];
+  const actor = actorOf(ctx);
+  const onCard =
+    allIds.length > 0
+      ? await attachmentsService.findOnWorkItemByIds(guided.item.id, allIds, actor)
+      : [];
+  const metas = new Map(onCard.map((a) => [a.id, fileMetaOf(a)]));
+  const currentFiles: GuideContextFile[] = await resolveGuideFiles(
+    (turn.attachmentIds ?? []).flatMap((id) => {
+      const m = metas.get(id);
+      return m ? [m] : [];
+    }),
+    (attachmentId) => attachmentsService.readOnWorkItemBytes(guided.item.id, attachmentId, actor),
+  );
   const guideContext = buildGuideContext(
     card,
     temporary.length > 0 ? temporary : guided.rows,
-    contextTurns(session, turn.id),
-    { temporary: temporary.length > 0 },
+    contextTurns(session, turn.id, metas),
+    { temporary: temporary.length > 0, files: currentFiles },
   );
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
@@ -313,16 +378,35 @@ export const aiGuideService = {
   async submitTurn(
     body: string,
     ctx: ProjectContext,
-    opts: { sessionId: string },
+    opts: { sessionId: string; attachmentIds?: readonly string[] },
   ): Promise<GuideTurnResult> {
     const trimmed = body.trim();
-    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const attachmentIds = opts.attachmentIds ?? [];
+    // A turn may carry files and no words (A3.2); a turn with neither is empty.
+    if (!trimmed && attachmentIds.length === 0) throw new EmptyPlanChangeTurnError();
+    if (attachmentIds.length > GUIDE_FILES_MAX) throw new GuideTurnFilesRefusedError('too_many');
+    if (new Set(attachmentIds).size !== attachmentIds.length) {
+      throw new GuideTurnFilesRefusedError('duplicate');
+    }
     const current = await planChangeSessionsService.getById(ctx, opts.sessionId);
     const guided = await requireGuidableCard(guidedKeyOf(current), ctx);
+    if (attachmentIds.length > 0) {
+      // Each id must be an attachment ON the guided card, in this workspace, that
+      // the caller can see — checked before the turn is written (A3.2).
+      try {
+        await attachmentsService.listOnWorkItemByIds(guided.item.id, attachmentIds, actorOf(ctx));
+      } catch (err) {
+        if (err instanceof AttachmentNotOnWorkItemError) {
+          throw new GuideTurnFilesRefusedError('not_on_card', err.attachmentId);
+        }
+        throw err;
+      }
+    }
     const address = { sessionId: current.id };
     const appended = await planChangeSessionsService.appendTurn(trimmed, ctx, address, {
       intent: 'guide',
       anchorKey: guided.item.identifier,
+      ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     });
     const turn = appended.turns.at(-1);
     if (!turn) throw new PlanChangeTurnNotFoundError('(the turn just appended)');

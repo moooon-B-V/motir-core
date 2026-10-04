@@ -142,6 +142,13 @@ export interface Tenant {
   // non-optionally, so a site that has the org has the flag. The optionality is
   // about what a RECEIVER must tolerate, not about what a producer may skip.
   internalBilling?: boolean;
+  // Whether the planner may use WEB SEARCH for this org — the `web_search`
+  // per-org kill-switch (MOTIR-750). Set by `submitJob` to `false` ONLY when the
+  // switch is off; ABSENT means allowed, the same additive wire contract as
+  // `internalBilling` above, so merge order with motir-ai is free. A motir-ai that
+  // does not yet read it simply keeps searching — the switch is then recorded and
+  // sent, and takes effect when the far side honours it.
+  webSearch?: boolean;
   workspaceId: string;
   projectId: string;
   projectKey: string;
@@ -1020,4 +1027,112 @@ export interface PlannerModelWriteResult {
   previousModel: string;
   model: string;
   updatedAt: string;
+}
+
+// ── Platform-staff credit ops (MOTIR-747 · 10.3.2) ──────────────────────────
+//
+// The EXACT mirror of motir-ai's `POST /v1/admin/credits`, `POST /v1/admin/tier`
+// and `GET /v1/admin/ledger` (motir-ai `docs/contract.md`, the MOTIR-747 entry).
+// The ledger lives only in motir-ai; motir-core holds these shapes and no table.
+
+/** The two STAFF credit kinds. `top_up` is the customer's checkout (Epic 8), never staff. */
+export type AdminCreditKind = 'grant' | 'adjustment';
+
+/** Who did it, as motir-ai stores it on the row it writes. */
+export interface AdminActor {
+  /** The motir-core platform-staff user id. */
+  userId: string;
+  /** A display label captured at the time (`Name <email>`). */
+  label: string;
+}
+
+/** One `CreditTransaction`, as motir-ai answers it. `kind` is ANY ledger kind, not only the staff two. */
+export interface AdminLedgerEntry {
+  id: string;
+  at: string;
+  kind: string;
+  credits: number;
+  balanceAfter: number;
+  reason: string | null;
+  actor: AdminActor | null;
+  externalRef: string | null;
+}
+
+/** A `PlanTier`, as motir-ai answers it. */
+export interface AdminPlanTier {
+  key: string;
+  name: string;
+  cadence: string;
+  allotmentCredits: number;
+}
+
+/** One STAFF tier assignment (`PlanTierAssignment`). */
+export interface AdminTierAssignment {
+  id: string;
+  at: string;
+  fromTierKey: string | null;
+  toTierKey: string;
+  reason: string;
+  actor: AdminActor;
+}
+
+/** The `POST /v1/admin/credits` body. */
+export interface AdminCreditWriteInput {
+  coreOrganizationId: string;
+  kind: AdminCreditKind;
+  credits: number;
+  reason: string;
+  /** The idempotency key — one per staff action, reused on a retry of that action. */
+  requestId: string;
+  actor: AdminActor;
+}
+
+/** The `POST /v1/admin/credits` answer. */
+export interface AdminCreditWriteResult {
+  coreOrganizationId: string;
+  transaction: AdminLedgerEntry;
+  /** The balance NOW (on a replay: as it stands, not as it was). */
+  balanceCredits: number;
+  idempotent: boolean;
+}
+
+/** The `POST /v1/admin/tier` body. */
+export interface AdminTierWriteInput {
+  coreOrganizationId: string;
+  tierKey: string;
+  reason: string;
+  requestId: string;
+  actor: AdminActor;
+}
+
+/** The `POST /v1/admin/tier` answer. */
+export interface AdminTierWriteResult {
+  coreOrganizationId: string;
+  assignment: AdminTierAssignment;
+  tier: AdminPlanTier;
+  /** False when the org was already on that tier (still recorded). */
+  changed: boolean;
+  idempotent: boolean;
+}
+
+/** The `GET /v1/admin/ledger` query. */
+export interface AdminLedgerQuery {
+  coreOrganizationId: string;
+  /** 1..200; motir-ai's default is 50. */
+  limit?: number;
+  /** Opaque, from the previous page's `nextCursor`. */
+  cursor?: string | null;
+}
+
+/** The `GET /v1/admin/ledger` answer. `known: false` — motir-ai has never seen the org. */
+export interface AdminLedgerRead {
+  known: boolean;
+  coreOrganizationId: string;
+  balanceCredits: number;
+  tier: AdminPlanTier | null;
+  /** The latest STAFF assignment — Stripe also sets tiers, so compare with `tier.key`. */
+  lastTierAssignment: AdminTierAssignment | null;
+  /** Newest first. */
+  entries: AdminLedgerEntry[];
+  nextCursor: string | null;
 }

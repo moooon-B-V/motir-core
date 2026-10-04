@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **87 tools**.
+`initialize` handshake and registers **90 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1899,6 +1899,103 @@ itself, or the parent whose continue it is a leg of):
 | ------------------------ | -------------------------------------------------------------------------------- |
 | `CONTINUE_RUN_NOT_FOUND` | `runId` is not a continue run of this card (or not in your workspace). Claim it. |
 | `CONTINUE_RUN_NOT_YOURS` | The card's continue run, opened by somebody else. Nothing was written.           |
+
+#### Reporting your own run — `start_work_item_run` · `report_action` · `close_work_item_run`
+
+An agent that runs a card **without** `motir run` around it — the Motir skill in
+Claude Code, Codex, Kimi, any agent that speaks MCP — reports its own run with
+these three tools (Story MOTIR-7446, `docs/decisions/agent-reported-runs.md`). The
+run shows on **Runs**, in the run modal and in the card's run section exactly as a
+`motir run` does: who ran it, the harness and model, each step, and how long it
+took. A delivered close records the harness and model as the card's implementer.
+
+| Tool                  | Permission       | What it does                                                        |
+| --------------------- | ---------------- | ------------------------------------------------------------------- |
+| `start_work_item_run` | `work_item:edit` | Open your run of a card you hold, naming your harness and model.    |
+| `report_action`       | `work_item:edit` | Say the step you are about to take; send a milestone; or heartbeat. |
+| `close_work_item_run` | `work_item:edit` | End your run with how it went, on every exit, delivered or not.     |
+
+**The order is claim → start → report before every step → close.** A run is
+opened **over a claim, never instead of one**: claim the card with
+`claim_work_item` first. Then call `report_action` with the card's `key` and a
+one-line `action` **before every step** — "Reading the run service", "Running the
+targeted tests" — and `close_work_item_run` on **every** exit path, including a
+failure or an interruption. An action is one line of at most 500 characters:
+**never a transcript, a diff, file contents, a prompt or a secret.**
+
+**Liveness — every Motir call is a heartbeat.** An agent-reported run is alive
+while its agent is heard from, and **a run silent for 60 minutes is closed** for
+it (`stopReason: abandoned`, ended at its **last** heartbeat, so its duration is
+the time it actually worked). The agent does not have to remember a heartbeat:
+**every Motir MCP tool call it makes** — reading its card, linking a pull request,
+moving a status — refreshes its open agent-reported runs after the call is
+answered. A call never fails because of it. `report_action` with **no arguments**
+is an explicit heartbeat. (A `motir run` keeps its own 5-minute window and beats
+from its own timer.)
+
+##### `start_work_item_run`
+
+| Input     | Type   | Required | Notes                                                               |
+| --------- | ------ | -------- | ------------------------------------------------------------------- |
+| `key`     | string | yes      | The card you hold.                                                  |
+| `harness` | string | yes      | The agent harness you are, as its makers name it (`"Claude Code"`). |
+| `model`   | string | no       | The model id you run on. Omit it when you do not know it.           |
+
+A **leaf** opens one run with one leg. A **parent** opens ONE run whose legs are
+its children that are not done, and you must hold every one of them. **Output** —
+`{ outcome, key, runId, reportedBy, legs: [{ key, title }] }`. `outcome` is
+`started`, or `mine` when you already have an open run on this card (a retried
+call, a resumed session, or the `motir run` you are inside) — that run is
+answered, never a second one. **`not_claimed` is a result, not an error:** it
+names the card you do not hold in `offenderKey` and writes nothing.
+
+##### `report_action`
+
+| Input    | Type   | Required             | Notes                                                                     |
+| -------- | ------ | -------------------- | ------------------------------------------------------------------------- |
+| `key`    | string | with `action`/events | The card the step is on: the run's card, or a child in a parent run.      |
+| `action` | string | no                   | The step you are about to take, one line, ≤ 500 characters.               |
+| `events` | array  | no                   | Milestones: `{ kind, data?, disposition?, skipReason?, sessionBranch? }`. |
+
+The run is found from the card and you, so the same call works in a run you
+started and **inside a `motir run` or hosted run** (where it records the step and
+the runner writes everything else). In a run you started you may send four
+milestone kinds: `checkout_ready` (put `{ branch }` in `data`), `delivery_linked`,
+`leg_verdict` and `card_settled`. **Any other kind is refused by name while the
+rest of the batch is stored.** Every event is stored as reported by the agent.
+**A milestone's `disposition` is what moves your card's leg** on the run: send
+`running` with `checkout_ready`, and the leg's end (`implemented`, or `failed`)
+with `card_settled` before you close. A leg nobody moved reads _Not reached_ once
+the run closes, whatever the card's own status says.
+**Output** — `{ outcome, runId, accepted, refused: [{ kind, reason }] }` (plus
+`seq` when it wrote, and `touched` for a heartbeat). `outcome` is `reported`,
+`heartbeat`, `refused` (every event was refused and there was no step), or
+**`no_open_run`** — a result telling you to call `start_work_item_run`, which
+writes nothing.
+
+##### `close_work_item_run`
+
+| Input     | Type   | Required | Notes                                                                         |
+| --------- | ------ | -------- | ----------------------------------------------------------------------------- |
+| `key`     | string | yes      | The card you started the run on.                                              |
+| `runId`   | string | yes      | The `runId` `start_work_item_run` answered.                                   |
+| `outcome` | enum   | yes      | `completed`, `drained`, `max`, `halted`, `interrupted`, `replanned`, `gated`. |
+
+`abandoned` is refused: only the 60-minute reap writes it. A **`completed`** or
+**`drained`** close records your harness and model as the implementer of every
+leg card the run took to Implemented or later, and answers those keys in
+`stamped`; any other outcome stamps nothing. **No outcome changes a card's
+status** — your pull request and `transition_status` do that. **Output** —
+`{ closed: true, alreadyClosed, runId, status, stopReason, endedAt, stamped }`.
+**Idempotent:** closing a run that is already closed, by you or by the reap,
+answers it as it stands with `alreadyClosed: true` and writes nothing.
+
+| Code                               | Meaning                                                                             |
+| ---------------------------------- | ----------------------------------------------------------------------------------- |
+| `AGENT_RUN_NOT_YOURS`              | Somebody else opened this run; only its opener may close it.                        |
+| `DISPATCH_RUN_NOT_FOUND`           | `runId` is not your agent-reported run on this card.                                |
+| `AGENT_RUN_EVENT_KIND_NOT_ALLOWED` | A milestone sent into a runner's run — the runner writes those; send `action` only. |
+| `AGENT_RUN_REPORT_INVALID`         | An empty or over-long `action`, `action`/`events` without `key`, or `abandoned`.    |
 
 #### `add_lesson`
 

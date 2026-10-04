@@ -206,6 +206,26 @@ describe('motir continue — the pipeline', () => {
     expect(h.stderr).toContain(`Continuing on ${BRANCH}.`);
   });
 
+  it.each([['m'], [null]] as const)(
+    'reports the agent’s self-reported model (%s) top-level on `agent_exited` — through the shared leg (MOTIR-7504)',
+    async (model) => {
+      setup(claim());
+      runAgentMock.mockImplementation(async () => ({ exitCode: 0, signal: null, model }));
+      await continueCommand(
+        'PROD-7',
+        { agent: 'fake-agent' },
+        { run: fakeGit(), maxCiPolls: 1, wait: async () => {} },
+      );
+
+      const events = h.calls
+        .filter((c) => c.tool === 'append')
+        .flatMap((c) => (c.args as { events: Array<Record<string, unknown>> }).events);
+      const exited = events.filter((e) => e['kind'] === 'agent_exited');
+      expect(exited).toHaveLength(1);
+      expect(exited[0]).toHaveProperty('model', model);
+    },
+  );
+
   it('every refusal prints its sentence, exits non-zero, and touches neither git nor the agent', async () => {
     for (const reason of [
       'run_alive',

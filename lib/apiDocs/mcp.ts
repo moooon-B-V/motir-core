@@ -990,6 +990,21 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'End your continue of a work item with how it went, so the page shows it and the card can be continued again.',
     descriptionFingerprint: '5065a62ce4e3',
   },
+  start_work_item_run: {
+    summary:
+      'Open your own run of a card you hold, naming your harness and model, so it shows on Runs and on the card.',
+    descriptionFingerprint: 'e52fc38024a8',
+  },
+  report_action: {
+    summary:
+      'Say the step you are about to take on a card, record a milestone, or send a heartbeat for your open runs.',
+    descriptionFingerprint: '8ca2af76044a',
+  },
+  close_work_item_run: {
+    summary:
+      'End your run of a card with how it went; a delivered close records you as the implementer.',
+    descriptionFingerprint: '3a01cd1a9f43',
+  },
   add_comment: {
     summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
     descriptionFingerprint: '81d096a6d087',

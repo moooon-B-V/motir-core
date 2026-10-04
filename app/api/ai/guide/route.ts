@@ -3,7 +3,13 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiGuideService } from '@/lib/services/aiGuideService';
-import { mapPlanChangeError, noActiveProject, readSessionId } from '../plan-change/_errors';
+import {
+  invalidAttachmentIds,
+  mapPlanChangeError,
+  noActiveProject,
+  readAttachmentIds,
+  readSessionId,
+} from '../plan-change/_errors';
 import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 
 // POST /api/ai/guide — the GUIDE ME THROUGH door (Story MOTIR-7459 · MOTIR-7464;
@@ -17,8 +23,13 @@ import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 //                                       new one starts with the opening turn
 //                                       (`text`, or "Guide me through <KEY>."),
 //                                       and its `guide_work_item` job runs.
-//   { sessionId, text }               — the person's next turn in that
-//                                       conversation. (The overlay may equally
+//   { sessionId, text, attachmentIds? } — the person's next turn in that
+//                                       conversation. `attachmentIds` (MOTIR-7484;
+//                                       `guide-turn-files.md` A3.2) are up to four
+//                                       attachments ALREADY on the guided card —
+//                                       uploaded first through the shipped
+//                                       attachment route — and `text` may then be
+//                                       empty. (The overlay may equally
 //                                       post it to `POST /api/ai/ask` with the
 //                                       `sessionId`: the server reads the
 //                                       session's origin and lands it here.)
@@ -55,6 +66,7 @@ export async function POST(req: Request): Promise<Response> {
     text?: unknown;
     turnId?: unknown;
     sessionId?: unknown;
+    attachmentIds?: unknown;
   };
   if (body.text !== undefined && body.text !== null && typeof body.text !== 'string') {
     return NextResponse.json(
@@ -64,6 +76,8 @@ export async function POST(req: Request): Promise<Response> {
   }
   const text = typeof body.text === 'string' ? body.text : undefined;
   const sessionId = readSessionId(body.sessionId) ?? undefined;
+  const attachmentIds = readAttachmentIds(body.attachmentIds);
+  if (attachmentIds === 'invalid') return invalidAttachmentIds();
 
   try {
     if (typeof body.turnId === 'string' && body.turnId.length > 0) {
@@ -77,14 +91,24 @@ export async function POST(req: Request): Promise<Response> {
       return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
     }
     if (sessionId) {
-      if (text === undefined) {
+      if (text === undefined && attachmentIds.length === 0) {
         return NextResponse.json(
           { code: 'BAD_REQUEST', error: '`text` is required with `sessionId`.' },
           { status: 400 },
         );
       }
-      const result = await aiGuideService.submitTurn(text, ctx, { sessionId });
+      const result = await aiGuideService.submitTurn(text ?? '', ctx, {
+        sessionId,
+        ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
+      });
       return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+    // Files ride a turn on an open conversation, never the door's opening turn.
+    if (attachmentIds.length > 0) {
+      return NextResponse.json(
+        { code: 'BAD_REQUEST', error: '`attachmentIds` needs a `sessionId`.' },
+        { status: 400 },
+      );
     }
     if (typeof body.itemKey !== 'string' || body.itemKey.trim().length === 0) {
       return NextResponse.json(

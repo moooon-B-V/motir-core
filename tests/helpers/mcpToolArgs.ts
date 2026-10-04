@@ -148,6 +148,11 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     claim_work_item_continue: { key: t.item1 },
     touch_work_item_continue: { key: t.item1, runId: 'run_whatever' },
     close_work_item_continue: { key: t.item1, runId: 'run_whatever', outcome: 'completed' },
+    // MOTIR-7451 — the run tools, item-keyed the same way: a non-member reads A's
+    // card as not-found, so no run opens, reports or closes.
+    start_work_item_run: { key: t.item1, harness: 'Rogue Agent' },
+    report_action: { key: t.item1, action: 'rogue step' },
+    close_work_item_run: { key: t.item1, runId: 'run_whatever', outcome: 'completed' },
     // MOTIR-3361 — aimed at tenant A's PROJECT: a non-member must read the
     // key as not-found rather than write a standing planner instruction
     // into somebody else's project.

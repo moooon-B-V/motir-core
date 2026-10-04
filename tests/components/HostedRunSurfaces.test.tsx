@@ -61,6 +61,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     status: 'succeeded',
     stopReason: 'completed',
     lastHeartbeatAt: null,
+    reportedBy: 'cli',
     agentInstance: null,
     agent: 'opencode',
     model: 'claude-sonnet-5',
@@ -80,6 +81,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
         startedAt: '2026-09-26T14:00:00.000Z',
         endedAt: '2026-09-26T14:26:32.000Z',
         exitCode: 0,
+        model: null,
       },
     ],
     ...over,
@@ -295,6 +297,7 @@ describe('the run modal — a HOSTED run', () => {
             cardId: null,
             body: 'opencode: reading the card',
             data: null,
+            reportedBy: 'cli',
             createdAt: '2026-09-26T14:01:00.000Z',
           } satisfies DispatchRunEventDto,
         ]}

@@ -116,6 +116,7 @@ async function recordVerdict(
           dispatchRunCardId: leg?.id ?? null,
           seq,
           kind: 'review_verdict',
+          reportedBy: 'cli',
           data,
         },
       ],

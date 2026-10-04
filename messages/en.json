@@ -7227,9 +7227,6 @@
     "railLabel": "Motir AI",
     "conversation": {
       "opener": "What should change — or what would you like to know?",
-      "turn": "turn {n}",
-      "turnRefine": "turn {n} · refine",
-      "turnAnswer": "turn {n} · answer",
       "asking": "asking",
       "answeredMarker": "Answered — planning resumed",
       "supersededMarker": "Not answered — Motir AI carried on with what you asked",
@@ -7534,6 +7531,28 @@
         "edited": "Edited the {fields} of <chip>{key}</chip>.",
         "commented": "Commented on <chip>{key}</chip>: “{reason}”",
         "closed": "Moved <chip>{key}</chip> to Done, and added this summary as a comment."
+      },
+      "files": {
+        "attach": "Attach files",
+        "attachTip": "Attach files or a screenshot",
+        "cap": "Up to 4 files a turn",
+        "trayAria": "Files on this turn",
+        "removeAria": "Remove {name}",
+        "pastedName": "Pasted image",
+        "dropTitle": "Drop to add to this turn",
+        "dropSub": "They go on {key} when you send. Up to 4 files.",
+        "waiting": "Waiting",
+        "uploadingPct": "Uploading… {pct}%",
+        "uploading": "Uploading…",
+        "onCard": "On {key}",
+        "attaching": "Attaching {count, plural, one {# file} other {# files}} to {key}… the turn sends when they are on it.",
+        "notSent": "<b>Not sent.</b> One file didn't upload, so Motir AI hasn't seen this turn. Your words are kept, and the files already on {key} stay there.",
+        "retry": "Retry",
+        "reading": "Reading your {count, plural, one {# file} other {# files}} and {key}…",
+        "removed": "Removed",
+        "typeText": "Text",
+        "typeMarkdown": "Markdown",
+        "typeFile": "File"
       }
     }
   },
@@ -8455,7 +8474,8 @@
       "groupOperations": "Operations",
       "footerStaff": "Platform staff",
       "exitToApp": "Exit to app",
-      "navAiPlanning": "AI planning"
+      "navAiPlanning": "AI planning",
+      "navPlanningLessons": "Planning lessons"
     },
     "nav": {
       "overview": "Overview",
@@ -8463,8 +8483,7 @@
       "tenants": "Tenants",
       "users": "Users",
       "monitoring": "Monitoring",
-      "governance": "Governance",
-      "soonGovernance": "10.3"
+      "auditLog": "Audit log"
     },
     "topBar": {
       "staffMark": "Platform staff",
@@ -8598,15 +8617,32 @@
           "user": {
             "password_reset_sent": "Password reset sent",
             "suspend": "Suspended",
-            "unsuspend": "Suspension lifted"
+            "unsuspend": "Suspension lifted",
+            "impersonation_start": "Started a staff session",
+            "impersonation_end": "Ended a staff session",
+            "impersonation_action": "Acted in a staff session"
           },
           "org": {
             "internal_billing_set": "Classified internal billing",
-            "internal_billing_unset": "Internal classification removed"
+            "internal_billing_unset": "Internal classification removed",
+            "credit_grant": "Granted credits",
+            "credit_adjust": "Adjusted the credit balance",
+            "plan_set": "Changed the AI plan",
+            "suspend": "Suspended the organization",
+            "reactivate": "Reactivated the organization",
+            "kill_switch_off": "Turned a kill-switch off",
+            "kill_switch_on": "Turned a kill-switch back on"
           },
           "ai": {
             "planner_model": {
               "set": "Changed the planning model"
+            },
+            "lesson": {
+              "edit": "Edited a planning lesson",
+              "enable": "Switched a planning lesson on",
+              "disable": "Switched a planning lesson off",
+              "promote": "Promoted a planning lesson",
+              "retention_set": "Changed the lesson retirement window"
             }
           },
           "fleet": {
@@ -9166,6 +9202,203 @@
         "failed": "The change could not be saved. Nothing was changed."
       }
     },
+    "lessons": {
+      "breadcrumb": "Operations · Planning lessons",
+      "title": "Planning lessons",
+      "subtitle": "What the planner has learned from its own mistakes, across every organisation, beside the global corpus every planner reads. Edit a lesson, switch it off, or promote it so every planner learns it.",
+      "readAuditedLead": "Tenant lessons are customer text.",
+      "readAuditedBody": "Opening one is a cross-tenant read and is written to the audit log.",
+      "card": {
+        "title": "Lessons",
+        "subtitle": "Every organisation’s lessons and the global corpus, newest first."
+      },
+      "filter": {
+        "label": "Filter lessons",
+        "search": "Search",
+        "searchPlaceholder": "Search lesson titles",
+        "scope": "Scope",
+        "scopeAll": "All",
+        "scopeGlobal": "Global",
+        "scopeTenant": "Tenant",
+        "type": "Type",
+        "typeAny": "Any type",
+        "category": "Category",
+        "categoryAny": "Any category",
+        "org": "Organisation",
+        "orgAny": "Any organisation",
+        "state": "State",
+        "stateAll": "All",
+        "stateOn": "On",
+        "stateOff": "Off",
+        "apply": "Apply",
+        "count": "{n, plural, one {# filter} other {# filters}}",
+        "clearAll": "Clear all",
+        "remove": "Remove {filter}"
+      },
+      "col": {
+        "lesson": "Lesson",
+        "type": "Type",
+        "owner": "Owner",
+        "injection": "Injection",
+        "recurred": "Recurred"
+      },
+      "type": {
+        "regular_planning": "Regular planning",
+        "onboarding_planning": "Onboarding planning",
+        "planning_craft": "Planning craft",
+        "coding": "Coding"
+      },
+      "owner": {
+        "global": "Global",
+        "unknownOrg": "Unknown organisation"
+      },
+      "inj": {
+        "on": "Injected",
+        "off": "Off",
+        "offSub": "Switched off by staff",
+        "resting": "Resting",
+        "restSub": "Not seen in {days} days"
+      },
+      "recur": "{n}×",
+      "recurLast": "last {when}",
+      "pager": {
+        "label": "Newest first · 50 a page",
+        "page": "Page {n}",
+        "previous": "Previous",
+        "next": "Next"
+      },
+      "noMatch": {
+        "title": "No lessons match these filters",
+        "body": "Nothing is hidden by your role. Remove a filter, or clear them all.",
+        "action": "Clear filters"
+      },
+      "empty": {
+        "title": "No lessons yet",
+        "body": "The planner writes a lesson when it notices it made a mistake. None has been captured on this platform yet, and no global lesson has been seeded."
+      },
+      "unavailable": {
+        "title": "Couldn’t load the lessons",
+        "body": "The planning service (motir-ai) didn’t respond, so no lesson is shown. This is a fetch error — nothing has changed.",
+        "retry": "Retry"
+      },
+      "detail": {
+        "back": "Planning lessons",
+        "why": "Why it matters",
+        "how": "How to apply",
+        "what": "What happened",
+        "categories": "Categories",
+        "noCategories": "None",
+        "provenance": "Provenance",
+        "organisation": "Organisation",
+        "workspaceProject": "Workspace · project",
+        "source": "Source",
+        "captured": "Captured",
+        "recurred": "Recurred",
+        "occurrences": "Recent occurrences",
+        "occurrencesSub": "newest 20",
+        "noOccurrences": "No occurrence recorded.",
+        "history": "Changes by staff",
+        "noHistory": "No staff change yet.",
+        "historyBy": "{who} · {when}",
+        "readOnly": "Only an operator or superadmin can change lessons.",
+        "switchLabel": "Inject this lesson",
+        "unknownUser": "A former staff member"
+      },
+      "edit": {
+        "open": "Edit",
+        "review": "Review change",
+        "save": "Save edit",
+        "cancel": "Cancel",
+        "title": "Title",
+        "why": "Why it matters",
+        "how": "How to apply",
+        "categories": "Categories",
+        "categoriesHint": "Comma-separated.",
+        "blank": "This field can’t be blank.",
+        "confirmTitle": "Save your edit to this lesson?",
+        "confirmBody": "The planner reads the new wording from its next planning job. Changing the title or how-to-apply also changes which tasks it is matched to."
+      },
+      "off": {
+        "title": "Stop injecting this lesson?",
+        "body": "{owner} stops reading it from its next planning job. Nothing is deleted, its occurrences keep counting, and you can switch it back on at any time.",
+        "confirm": "Switch off"
+      },
+      "on": {
+        "title": "Inject this lesson again?",
+        "body": "{owner} reads it again from its next planning job, as long as it has recurred in the last {days} days.",
+        "confirm": "Switch on"
+      },
+      "ownerOne": "The planner for {owner}",
+      "ownerAll": "Every organisation’s planner",
+      "promote": {
+        "open": "Promote",
+        "toGlobal": "Make global",
+        "toCraft": "Make global planning craft",
+        "globalHint": "Every organisation’s planner reads it. Its type stays {type}.",
+        "craftHint": "Every planner reads it, during onboarding and regular planning alike.",
+        "globalTitle": "Make this lesson global?",
+        "globalBody": "It stops belonging to {owner}, and every organisation’s planner reads it from its next planning job. This cannot be undone from this page.",
+        "craftTitle": "Make this lesson global planning craft?",
+        "craftBody": "Every planner reads it, during onboarding and regular planning alike, from its next planning job. Its type changes from {type} to Planning craft, and it stops belonging to {owner}. This cannot be undone from this page.",
+        "craftBodyGlobal": "Every planner reads it, during onboarding and regular planning alike, from its next planning job. Its type changes from {type} to Planning craft. This cannot be undone from this page.",
+        "warning": "This is {org}’s text. Edit out anything that names their product, people, code or customers BEFORE you promote it — other organisations will be planned with it.",
+        "confirm": "Promote"
+      },
+      "reasonLabel": "Reason — required, written to the audit log",
+      "reasonPlaceholder": "Why are you making this change?",
+      "cancel": "Cancel",
+      "saved": {
+        "off": "Lesson switched off.",
+        "on": "Lesson switched on.",
+        "edit": "Lesson edited.",
+        "promote": "Lesson promoted.",
+        "reads": "The planner reads it from its next planning job.",
+        "stops": "The planner stops reading it from its next planning job."
+      },
+      "refused": {
+        "gone": "Not saved — this lesson no longer exists. It was removed while you had it open. Nothing was written.",
+        "unavailable": "Not saved — the planning service didn’t answer. Nothing was written and no audit row exists. Your edit is still in the form; try again.",
+        "notPermitted": "Not saved — your staff role can’t make this change.",
+        "reasonRequired": "Not saved — a reason is required.",
+        "invalid": "Not saved — the planning service refused this change.",
+        "failed": "Not saved — something went wrong. Nothing was written."
+      },
+      "noop": "Already up to date. Someone changed this lesson a moment ago, so there was nothing to change and nothing was logged.",
+      "historyAction": {
+        "edit": "Edited",
+        "enable": "Switched on",
+        "disable": "Switched off",
+        "promote": "Promoted"
+      },
+      "field": {
+        "title": "Title",
+        "why": "Why it matters",
+        "howToApply": "How to apply",
+        "categories": "Categories",
+        "enabled": "Injected",
+        "scope": "Scope",
+        "mistakeType": "Type",
+        "aiProjectId": "Owner"
+      },
+      "window": {
+        "title": "Retirement window",
+        "line": "Retirement window: {days} days. A lesson that has not recurred in {days} days stops being injected. It is kept, and comes back the next time it recurs.",
+        "subDefault": "Default {days} · set by nobody yet",
+        "subBy": "Set by {who} on {when}",
+        "subByUnknown": "Set on {when}",
+        "change": "Change",
+        "readOnly": "Only a superadmin can change this.",
+        "confirmTitle": "Change the retirement window?",
+        "confirmBody": "Lessons that have not recurred within the window stop being injected for every organisation, from the next planning job. Nothing is deleted: a resting lesson comes back the next time it recurs.",
+        "daysLabel": "Window, in days",
+        "bounds": "Between {min} and {max} days.",
+        "impact": "At {days} days, {n, plural, one {# lesson that is injected today will rest} other {# lessons that are injected today will rest}}.",
+        "impactCounting": "Counting the lessons this would rest…",
+        "confirm": "Change window",
+        "saved": "Retirement window changed.",
+        "savedBody": "Planners use {days} days from their next planning job."
+      }
+    },
     "usage": {
       "title": "Usage & cost",
       "subtitle": "What the whole estate used, what it was charged and what it cost Motir — by spending category and by model, for any month or all time. Each organization's figures are on Tenants.",
@@ -9258,7 +9491,8 @@
       "tabs": {
         "overview": "Overview",
         "usage": "Usage & cost",
-        "billing": "Billing & plans"
+        "billing": "Billing & plans",
+        "operations": "Operations"
       },
       "month": {
         "title": "Usage & cost · {month}",
@@ -9464,6 +9698,316 @@
       },
       "jobs": {
         "empty": "No attributed planning or agent run was recorded for this workspace."
+      }
+    },
+    "imp": {
+      "viewAs": "View as {firstName}",
+      "title": "View Motir as {name}",
+      "body": "Opens {org}’s app as {email} in a staff session. A banner stays on every page until you exit or the session expires.",
+      "access": "Access",
+      "readOnly": "Read-only",
+      "full": "Full access",
+      "length": "Ends after",
+      "minutes": "{n} min",
+      "lengthHint": "At most 60 minutes. A new session needs a new reason.",
+      "readOnlyNote": "Read-only: you see exactly what {firstName} sees, and every control that would change something is disabled.",
+      "fullWarning": "Full access acts as {firstName}. Anything you change is real and lands in {org}’s data, recorded as made by you on {firstName}’s behalf.",
+      "reasonLabel": "Reason — required, written to the audit log",
+      "reasonHint": "Recorded on the session and on every action taken in it.",
+      "start": {
+        "readOnly": "Start read-only session",
+        "full": "Start full-access session"
+      },
+      "cancel": "Cancel",
+      "failedTitle": "The staff session did not start",
+      "ineligible": {
+        "self": "You can’t view Motir as yourself.",
+        "platform_staff": "This account is platform staff. Staff never view as staff.",
+        "suspended_account": "This account is suspended, so there is nothing to see as it.",
+        "suspended_organization": "This account’s organization is suspended. Reactivate it first, or review it from the console.",
+        "no_workspace": "This account belongs to no workspace, so there is no app to open."
+      },
+      "error": {
+        "REASON_REQUIRED": "A reason is required — it is recorded on the session and on every action taken in it.",
+        "NOT_FOUND": "That account no longer exists. Reload the page.",
+        "INELIGIBLE": "This account can’t be viewed as right now. Reload the page to see why.",
+        "INVALID": "Pick an access level and a length the console offers.",
+        "NOT_PERMITTED": "Only a superadmin can start a staff session.",
+        "FAILED": "Something went wrong and no session was started. The failure has been logged."
+      },
+      "bar": {
+        "readOnly": "<b>Viewing as {name}</b> ({email}) · {org} — staff session, <b>read-only</b>, ends at {time}",
+        "full": "<b>Acting as {name}</b> ({email}) · {org} — staff session, <b>full access</b>, every change is yours, ends at {time}",
+        "exit": "Exit session"
+      },
+      "disabledTip": "Read-only staff session",
+      "ended": {
+        "title": "Your staff session ended at {time}",
+        "body": "You are no longer viewing Motir as {name}. The session and everything you opened in it are in the audit log.",
+        "back": "Back to the console",
+        "again": "Start a new session",
+        "endedBy": {
+          "operator": "You exited the session.",
+          "expiry": "Its time ran out.",
+          "revoked": "It stopped being valid before its time ran out — you signed out, your platform role changed, or the account was suspended."
+        }
+      }
+    },
+    "ops": {
+      "status": {
+        "title": "Organization status",
+        "subtitle": "Suspending an organization refuses every member of every workspace under it.",
+        "active": "{members, plural, one {# member} other {# members}} across {workspaces, plural, one {# workspace} other {# workspaces}} can sign in and work.",
+        "activePill": "Active",
+        "suspendedPill": "Suspended",
+        "suspendedSince": "Since {at} · by {operator} · “{reason}”",
+        "suspendedSinceNoReason": "Since {at} · by {operator}",
+        "suspendedEffect": "Every member is refused at their next request. Nothing has been deleted.",
+        "operatorUnknown": "a former operator"
+      },
+      "suspend": {
+        "button": "Suspend organization",
+        "title": "Suspend {org}?",
+        "lead": "Suspension is the lever for non-payment or abuse. From the moment you confirm:",
+        "c1": "All {members} members of all {workspaces} workspaces are refused at their next request and see that the organization is suspended.",
+        "c2": "New planning jobs and agent runs are refused; running ones are stopped.",
+        "c3": "Nothing is deleted. Work items, repositories and the ledger stay exactly as they are, and another superadmin can reactivate it.",
+        "confirm": "Suspend {org}"
+      },
+      "reactivate": {
+        "button": "Reactivate organization",
+        "title": "Reactivate {org}?",
+        "body": "All {members} members can sign in and work again from their next request. Kill-switches keep their own state — a switch you turned off stays off.",
+        "confirm": "Reactivate {org}"
+      },
+      "typeToConfirm": "Type {slug} to confirm",
+      "reason": {
+        "label": "Reason — required, written to the audit log",
+        "placeholder": "Why are you doing this? Name the ticket if there is one.",
+        "hint": "Shown to any operator reading this organization later. “Support” on its own answers nothing."
+      },
+      "cancel": "Cancel",
+      "failedTitle": "Nothing was changed",
+      "result": {
+        "suspended": "Suspended {org}. Its members are refused from their next request.",
+        "reactivated": "Reactivated {org}. Its members can work again.",
+        "granted": "Granted {n} credits to {org}. The ledger and the audit log both carry it.",
+        "adjusted": "Adjusted {org}’s balance by {n} credits. The ledger and the audit log both carry it.",
+        "planSet": "{org} is now on {tier}.",
+        "planUnchanged": "{org} was already on {tier}. The assignment is recorded.",
+        "replayed": "That action had already landed — nothing new was written.",
+        "switchOff": "Turned {switch} off for {org}.",
+        "switchOn": "Turned {switch} back on for {org}.",
+        "creditUnreachable": "Couldn’t reach the credit service. Nothing was granted and nothing was recorded. Try again in a moment."
+      },
+      "error": {
+        "REASON_REQUIRED": "A reason is required — it is written to the audit log.",
+        "NOT_FOUND": "This organization no longer exists. Reload the page.",
+        "ALREADY_IN_STATE": "Someone else changed this first. Reload the page to see where it stands.",
+        "NOT_PERMITTED": "Only a superadmin can do this.",
+        "FAILED": "Something went wrong and nothing was changed. The failure has been logged.",
+        "AMOUNT_INVALID": "Enter a whole number of credits the ledger can hold.",
+        "LARGE_GRANT_UNCONFIRMED": "A grant this large needs the organization’s slug typed to confirm.",
+        "INSUFFICIENT_BALANCE": "That would take the balance below zero.",
+        "CONFLICT": "The credit service refused it as a conflict with an earlier action. Reload and try again.",
+        "REJECTED": "The credit service refused it. Check the amount or the plan and try again.",
+        "CREDIT_SERVICE_UNREACHABLE": "Couldn’t reach the credit service. Nothing was granted and nothing was recorded. Try again in a moment.",
+        "UNKNOWN_KEY": "That switch no longer exists. Reload the page."
+      },
+      "credits": {
+        "title": "Credits & plan",
+        "subtitle": "Credits are Motir’s internal unit, never a currency. Read from the credit service; every write is recorded.",
+        "balance": "Balance",
+        "plan": "AI plan",
+        "noPlan": "No plan",
+        "amount": "{n} credits",
+        "lastPlanChange": "Set by {operator} on {at} · “{reason}”",
+        "grant": "Grant credits",
+        "adjust": "Adjust balance",
+        "changePlan": "Change plan",
+        "error": {
+          "title": "Couldn’t load credits",
+          "body": "The credit service didn’t answer, so the balance, plan and ledger aren’t shown. Nothing is zero — the figures simply aren’t loaded. Status and kill-switches above still work."
+        }
+      },
+      "grant": {
+        "title": "Grant credits to {org}",
+        "body": "Adds credits to the org’s balance as a grant row in its ledger. It changes no plan and touches no Stripe object.",
+        "amount": "Credits to grant",
+        "confirm": "Grant {n} credits",
+        "large": "This is a large grant — {threshold} credits or more. Type the org’s slug to confirm."
+      },
+      "adjust": {
+        "title": "Adjust {org}’s balance",
+        "body": "Corrects the balance with an adjustment row — for a billing mistake. A goodwill credit is a grant, not an adjustment.",
+        "amount": "Change in credits",
+        "hint": "Use − to remove credits. The balance may not go below zero.",
+        "confirm": "Adjust by {n} credits"
+      },
+      "balanceAfter": "Balance after: {after} credits (now {now})",
+      "plan": {
+        "title": "Change {org}’s AI plan",
+        "body": "Sets the tier the org’s credit allotment is read from.",
+        "current": "Currently {tier}.",
+        "currentNone": "Currently on no plan.",
+        "tier": "Plan",
+        "choose": "Choose a plan",
+        "allotmentMonthly": "{name} · {credits} credits a month",
+        "allotmentOnce": "{name} · {credits} credits once",
+        "allotmentCustom": "{name} · custom allotment",
+        "stripe": "{org} pays for its plan through Stripe. This changes the tier Motir reads; it does not change or cancel the Stripe subscription, and the subscription’s next event sets the tier from Stripe again.",
+        "confirm": "Change plan to {tier}"
+      },
+      "ledger": {
+        "col": {
+          "when": "When",
+          "kind": "Kind",
+          "credits": "Credits",
+          "balanceAfter": "Balance after",
+          "by": "By",
+          "reason": "Reason"
+        },
+        "kind": {
+          "grant": "Grant",
+          "adjustment": "Adjustment",
+          "top_up": "Top-up",
+          "debit": "Debit",
+          "internal_offset": "Internal offset",
+          "allotment": "Allotment"
+        },
+        "newer": "Newer",
+        "older": "Older",
+        "empty": {
+          "title": "No credit transactions yet",
+          "body": "{org} has not been charged, topped up or granted anything. Its balance is 0 credits."
+        }
+      },
+      "switches": {
+        "title": "Kill-switches",
+        "subtitle": "Durable per-organization switches, ON by default. A change takes effect on the org’s next request — no deploy.",
+        "col": {
+          "switch": "Switch",
+          "whenOff": "When OFF",
+          "state": "State",
+          "lastChanged": "Last changed"
+        },
+        "on": "On",
+        "off": "Off — disabled",
+        "turnOff": "Turn off",
+        "turnOn": "Turn on",
+        "never": "Never changed",
+        "lastChange": "{at} · {operator} · “{reason}”",
+        "suspendedNote": "This organization is suspended, so every switch evaluates OFF whatever is set here.",
+        "unavailable": "The kill-switches couldn’t be loaded. Reload the page to try again.",
+        "confirmOff": {
+          "title": "Turn off {switch} for {org}?"
+        },
+        "confirmOn": {
+          "title": "Turn {switch} back on for {org}?",
+          "body": "{switch} works again for every member of {org} from their next request."
+        }
+      },
+      "switch": {
+        "ai_planning": {
+          "name": "AI planning",
+          "whenOff": "New planning jobs are refused with “planning is paused for your organization”. Jobs already running finish."
+        },
+        "hosted_runs": {
+          "name": "Hosted agent runs",
+          "whenOff": "New agent runs and agent instances are refused. Running containers are stopped."
+        },
+        "web_search": {
+          "name": "Web search",
+          "whenOff": "Planning and agents run without web search; a search call returns “not available”."
+        }
+      },
+      "readOnlyRole": "Only a superadmin can change these. You can see them with the {role} role.",
+      "role": {
+        "support": "support",
+        "operator": "operator",
+        "superadmin": "superadmin"
+      },
+      "audit": {
+        "title": "Platform actions on this organization",
+        "subtitle": "Every operator write on this org, newest first. Append-only.",
+        "open": "Open in the audit log",
+        "empty": "No operator has changed anything on this organization yet.",
+        "noReason": "No reason recorded"
+      }
+    },
+    "audit": {
+      "title": "Audit log",
+      "subtitle": "Every platform-staff action, newest first. Append-only and hash-chained: an entry changed after it was written breaks the chain from that entry on.",
+      "chain": {
+        "ok": "Chain verified",
+        "okDetail": "All {count} entries hash-chain intact, checked through #{last} at {time}.",
+        "okEmpty": "No entries to check yet.",
+        "verify": "Verify again",
+        "brokenTitle": "Chain broken",
+        "broken": "The chain is broken at entry #{n} ({at}). That entry no longer matches the hash recorded for it, so it and the {after} entries after it can’t be trusted as written. This check changed nothing; the entries are shown as stored.",
+        "show": "Show #{n}",
+        "verified": "Verified",
+        "mismatch": "Hash mismatch",
+        "unverified": "Unverified",
+        "label": "Chain integrity"
+      },
+      "filter": {
+        "label": "Filter the audit log",
+        "text": "Search reasons and targets",
+        "operator": "Operator",
+        "operatorPlaceholder": "Anyone — paste a user id",
+        "tenant": "Tenant",
+        "tenantPlaceholder": "Any organization — paste an org id",
+        "action": "Action",
+        "anyAction": "Any action",
+        "from": "From",
+        "to": "Through",
+        "scope": "Show",
+        "writes": "Writes",
+        "writesReads": "Writes & reads",
+        "apply": "Apply filters",
+        "invalid": "Those filters can’t be read. Check the dates and clear the page position."
+      },
+      "col": {
+        "when": "When (UTC)",
+        "operator": "Operator",
+        "action": "Action",
+        "target": "Target",
+        "reason": "Reason",
+        "chain": "Chain"
+      },
+      "detail": {
+        "entry": "Entry",
+        "actor": "Actor",
+        "action": "Action",
+        "target": "Target",
+        "reason": "Reason",
+        "payload": "Payload",
+        "hash": "Hash",
+        "chainedTo": "chained to #{prev}",
+        "genesis": "the first entry — chained to nothing",
+        "none": "—",
+        "toggle": "Show entry #{n}"
+      },
+      "empty": {
+        "title": "No entries match these filters",
+        "body": "Nothing was recorded that matches. Widen the dates, or switch to Writes & reads."
+      },
+      "clear": "Clear filters",
+      "newer": "Newer",
+      "older": "Older",
+      "tableLabel": "Audit log entries"
+    },
+    "member": {
+      "suspended": {
+        "title": "{org} is suspended",
+        "body": "Your organization’s access to Motir is paused. Nothing has been deleted. Contact your organization’s owner, or write to support@motir.co.",
+        "unknownTitle": "This organization isn’t available",
+        "unknownBody": "You can’t open it right now. If you believe this is a mistake, write to support@motir.co.",
+        "switchTitle": "Work in another organization",
+        "switchTo": "Switch to {org}",
+        "switchFailed": "That organization couldn’t be opened. Reload the page.",
+        "signOut": "Sign out"
       }
     },
     "tenant": {

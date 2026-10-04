@@ -185,6 +185,7 @@ describe('THE CONVENTION — asserted against the SHIPPED route, not against a l
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         cards: [{ key: item.identifier, disposition: 'queued' as const }],
       },
       fx.ctx,

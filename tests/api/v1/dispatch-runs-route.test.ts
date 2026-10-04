@@ -264,6 +264,58 @@ describe('the dispatch-run ingest routes', () => {
     expect(await res.json()).toMatchObject({ code: 'DISPATCH_RUN_BODY_TOO_LARGE' });
   });
 
+  it('422 — DISPATCH_RUN_EVENT_MODEL_NOT_ALLOWED: `model` rides `agent_exited` only, and the batch is refused whole', async () => {
+    // MOTIR-7502: the leg's model has ONE producer. A `model` on any other kind
+    // is refused by name, never silently dropped — and nothing in the batch lands.
+    const { id, key } = await seedRun(caller);
+
+    const res = await appendEvents(caller, id, {
+      events: [
+        { kind: 'agent_exited', workItemKey: key, exitCode: 0, model: 'claude-opus-5-5' },
+        { kind: 'card_settled', workItemKey: key, model: 'claude-opus-5-5' },
+      ],
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string; error: string };
+    expect(body.code).toBe('DISPATCH_RUN_EVENT_MODEL_NOT_ALLOWED');
+    expect(body.error).toContain('`model`');
+    expect(await adminDb.dispatchRunEvent.count({ where: { dispatchRunId: id } })).toBe(0);
+    const leg = await adminDb.dispatchRunCard.findFirstOrThrow({ where: { dispatchRunId: id } });
+    expect(leg.model).toBeNull();
+  });
+
+  it('writes `agent_exited`’s model onto the leg, and `GET /dispatch-runs/{id}` returns it on every card', async () => {
+    const { id, key } = await seedRun(caller);
+
+    const res = await appendEvents(caller, id, {
+      events: [{ kind: 'agent_exited', workItemKey: key, exitCode: 0, model: 'claude-opus-5-5' }],
+    });
+    expect(res.status).toBe(200);
+    const appended = dispatchRunAppendedSchema.parse(await res.json());
+    expect(appended.cards[0]).toMatchObject({ key, exitCode: 0, model: 'claude-opus-5-5' });
+
+    const { GET } = await import('@/app/api/v1/dispatch-runs/[id]/route');
+    const read = await GET(
+      new Request(`${BASE}/dispatch-runs/${id}`, { method: 'GET', headers: caller.headers }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(read.status).toBe(200);
+    const run = dispatchRunSchema.parse(await read.json());
+    expect(run.cards.map((c) => c.model)).toEqual(['claude-opus-5-5']);
+  });
+
+  it('422 — a top-level `model` over 200 characters is refused at the edge, as the wire schema says', async () => {
+    const { id, key } = await seedRun(caller);
+
+    const res = await appendEvents(caller, id, {
+      events: [{ kind: 'agent_exited', workItemKey: key, model: 'm'.repeat(201) }],
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ code: 'INVALID_BODY' });
+    const leg = await adminDb.dispatchRunCard.findFirstOrThrow({ where: { dispatchRunId: id } });
+    expect(leg.model).toBeNull();
+  });
+
   it('422 — a malformed body, including the skip-reason pairing', async () => {
     const key = await seedCard(caller, 'a card');
 

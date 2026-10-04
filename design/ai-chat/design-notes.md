@@ -4572,3 +4572,31 @@ stays on the thread.
 
 No composer intent control, no debug mode, no new panel: the chrome follows the latest turn (ADR
 Consequence 1), and after a debug turn the canvas footer rests, because nothing is proposed.
+
+## ⭐ The user bubble carries NO label — `turn N`, `· refine` and `· answer` are retired (MOTIR-7497, 2026-10-03)
+
+**Amends** every section above that draws or specifies a label on a user bubble: §_The conversation_
+(panel 3, `turn 1` → `turn 2 · refine`), the planner-speaks section's note that the `label` slot is
+"used only by user turns today (`turn 1`, `turn 2 · refine`)", the multi-line composer section
+(`turn 1`, pre-wrapped), and the debug-turn section's user bubble (label "turn 1"). It also amends
+`design/triage/design-notes.md` § _Panel 4 — the hand-off_ and the guide conversation drawn in
+`design/workbench/workbench--live.mock.html`. Those mocks stay as the record of when they were drawn;
+this section is the specification.
+
+**The rule.** A user bubble shows **just the message**: no turn number, no `refine`, no `answer`, in
+every mode — plan change, ask, debug and guide. The numbering was the thread's own bookkeeping shown
+to the person (Yue, 2026-10-03: _"should show no label, just show the message"_).
+
+- **What stays inside the bubble:** the planning-target row (`Targeting N items` +
+  `PlanningTargetKeyChip` tone `on-accent`) and the line-broken body, both unchanged.
+- **An answer is still legible as an answer** — by the centred disposition line under it
+  (_"Answered — planning resumed"_), never by a caption on the bubble.
+- **The `label` slot on `Bubble` stays.** The assistant's question bubble still uses it for `asking`;
+  only the user turn stopped passing one.
+
+No new mock: the change removes one line from an existing bubble and adds nothing to draw.
+
+### Copy index (retired strings)
+
+- `planningWorkspace.conversation.turn` "turn {n}" · `.turnRefine` "turn {n} · refine" ·
+  `.turnAnswer` "turn {n} · answer" — removed from `en` and `zh`.

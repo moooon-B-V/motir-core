@@ -329,6 +329,7 @@ describe('touch_work_item_repair', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: card.identifier, disposition: 'queued' }],
       },
       fx.ctx,
