@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   Activity,
   BookOpen,
+  Bot,
   Building2,
   Coins,
   LogOut,
@@ -55,6 +56,8 @@ export interface AdminShellLabels {
   /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
   navAiPlanning: string;
   navPlanningLessons: string;
+  /** Operations → Hosted-run models (MOTIR-7528), visible to every staff role. */
+  navRunModels: string;
   /** Operations → Audit log (MOTIR-752), superadmin only. */
   navAuditLog: string;
   staffMarkTitle: string;
@@ -152,6 +155,14 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           label: labels.navAiPlanning,
           href: '/admin/ai-planning',
           active: pathname === '/admin/ai-planning',
+        },
+        // The platform's hosted-run model list (MOTIR-7528), directly after
+        // AI planning (design `platform-admin` AMENDMENT 2026-10-04, Panel 5).
+        {
+          icon: <Bot />,
+          label: labels.navRunModels,
+          href: '/admin/run-models',
+          active: pathname === '/admin/run-models',
         },
         // The planner's captured lessons across every organisation (MOTIR-1411,
         // design MOTIR-1409). `startsWith` so a lesson's detail keeps it lit.
