@@ -603,3 +603,145 @@ describe('edit and delete — permissions and tenancy (MOTIR-7306)', () => {
     await outsider.close();
   });
 });
+
+describe('move a step through the transport (MOTIR-7556)', () => {
+  it('moves step 4 of 5 to index 1: list reads it second, and ONE moved revision is recorded', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Reorder');
+    const client = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    const steps: WriteOut[] = [];
+    for (const text of ['One', 'Two', 'Three', 'Four', 'Five']) {
+      steps.push(ok<WriteOut>(await call(client, 'add_work_item_todo', { key, text })));
+    }
+    const four = steps[3]!.todo;
+    const before = await revisionCount(key);
+
+    const out = ok<WriteOut & { workItemKey: string }>(
+      await call(client, 'move_work_item_todo', { key, todoId: four.id, toIndex: 1 }),
+    );
+    expect(out.workItemKey).toBe(key);
+    expect(out.todo.id).toBe(four.id);
+    expect(out.progress).toEqual({ done: 0, total: 5 });
+
+    const list = ok<ListOut>(await call(client, 'list_work_item_todos', { key }));
+    expect(list.items.map((t) => t.text)).toEqual(['One', 'Four', 'Two', 'Three', 'Five']);
+    expect(await revisionCount(key)).toBe(before + 1);
+    expect(await latestRevisionDiff(key)).toEqual({
+      todos: { moved: [{ id: four.id, text: 'Four', toIndex: 1 }] },
+    });
+    await client.close();
+  });
+
+  it('a token WITHOUT work_item:edit is refused at the gate by name, and nothing moves', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Grant narrowed');
+    const owner = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    ok(await call(owner, 'add_work_item_todo', { key, text: 'First' }));
+    const second = ok<WriteOut>(await call(owner, 'add_work_item_todo', { key, text: 'Second' }));
+    await owner.close();
+    const before = await revisionCount(key);
+
+    const narrowed = await connect(fx.ctx, ['project:browse']);
+    const text = refusal(
+      await call(narrowed, 'move_work_item_todo', { key, todoId: second.todo.id, toIndex: 0 }),
+    );
+    expect(text).toContain(PERMISSION_NOT_GRANTED_CODE);
+    expect(text).toContain('work_item:edit');
+    expect((await todoRows(key)).map((r) => r.text)).toEqual(['First', 'Second']);
+    expect(await revisionCount(key)).toBe(before);
+    await narrowed.close();
+  });
+
+  it('a BROWSE-ONLY role is refused by the role, and nothing moves', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Read only');
+    const owner = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    ok(await call(owner, 'add_work_item_todo', { key, text: 'First' }));
+    const second = ok<WriteOut>(await call(owner, 'add_work_item_todo', { key, text: 'Second' }));
+    await owner.close();
+
+    const viewer = await connect(await viewerOf(fx), GRANTABLE_PERMISSIONS);
+    ok(await call(viewer, 'list_work_item_todos', { key }));
+    expect(
+      refusal(
+        await call(viewer, 'move_work_item_todo', { key, todoId: second.todo.id, toIndex: 0 }),
+      ),
+    ).toContain('PROJECT_ACCESS_DENIED');
+    expect((await todoRows(key)).map((r) => r.text)).toEqual(['First', 'Second']);
+    await viewer.close();
+  });
+
+  it('a step from another card — same project or another workspace — is not found, and is untouched', async () => {
+    const fx = await makeWorkItemFixture();
+    const mine = await makeCard(fx, 'Mine');
+    const other = await makeCard(fx, 'Other');
+    const client = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    ok(await call(client, 'add_work_item_todo', { key: other, text: 'Theirs 1' }));
+    const foreign = ok<WriteOut>(
+      await call(client, 'add_work_item_todo', { key: other, text: 'Theirs 2' }),
+    );
+    const before = await revisionCount(other);
+    expect(
+      refusal(
+        await call(client, 'move_work_item_todo', {
+          key: mine,
+          todoId: foreign.todo.id,
+          toIndex: 0,
+        }),
+      ),
+    ).toContain('WORK_ITEM_TODO_NOT_FOUND');
+    await client.close();
+
+    const b = await makeWorkItemFixture({ name: 'Other Co', identifier: 'OTHER' });
+    const outsider = await connect(b.ctx, GRANTABLE_PERMISSIONS);
+    const ownKey = await makeCard(b, 'Tenant B card');
+    for (const [args, code] of [
+      [{ key: other, todoId: foreign.todo.id, toIndex: 0 }, 'NOT_FOUND'],
+      [{ key: ownKey, todoId: foreign.todo.id, toIndex: 0 }, 'WORK_ITEM_TODO_NOT_FOUND'],
+    ] as const) {
+      const text = refusal(await call(outsider, 'move_work_item_todo', args));
+      expect(text).toContain(code);
+      expect(text).not.toContain('Theirs 2');
+    }
+    await outsider.close();
+
+    expect((await todoRows(other)).map((r) => r.text)).toEqual(['Theirs 1', 'Theirs 2']);
+    expect(await revisionCount(other)).toBe(before);
+  });
+
+  it('a move racing a delete of the same step ends in a legitimate outcome, never an internal error', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Race');
+    const client = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    ok(await call(client, 'add_work_item_todo', { key, text: 'Stays' }));
+    const doomed = ok<WriteOut>(await call(client, 'add_work_item_todo', { key, text: 'Doomed' }));
+
+    const [moved, deleted] = await Promise.all([
+      call(client, 'move_work_item_todo', { key, todoId: doomed.todo.id, toIndex: 0 }),
+      call(client, 'delete_work_item_todo', { key, todoId: doomed.todo.id }),
+    ]);
+    ok(deleted);
+    // Every order the two transactions can commit in is a real outcome: the move
+    // won (then the delete removed the moved row), the delete won before the
+    // move's gate read (not found), or between its gate read and its lock (the
+    // typed conflict). An untyped failure is the one wrong answer.
+    if (moved.isError) {
+      expect(JSON.stringify(moved.content)).toMatch(
+        /WORK_ITEM_TODO_NOT_FOUND|TODO_REORDER_CONFLICT/,
+      );
+    }
+    expect((await todoRows(key)).map((r) => r.text)).toEqual(['Stays']);
+    await client.close();
+  });
+
+  it('a CLI-grant token (a dispatched agent) moves a step', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Dispatched');
+    const agent = await connect(fx.ctx, CLI_TOKEN_GRANT);
+    ok(await call(agent, 'add_work_item_todo', { key, text: 'A' }));
+    const b = ok<WriteOut>(await call(agent, 'add_work_item_todo', { key, text: 'B' }));
+    ok(await call(agent, 'move_work_item_todo', { key, todoId: b.todo.id, toIndex: 0 }));
+    expect((await todoRows(key)).map((r) => r.text)).toEqual(['B', 'A']);
+    await agent.close();
+  });
+});

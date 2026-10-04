@@ -139,6 +139,8 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // MOTIR-7306 — edit and delete are item-keyed too: no edited or removed step.
     update_work_item_todo: { key: t.item1, todoId: 'tdo_whatever', text: 'leak?' },
     delete_work_item_todo: { key: t.item1, todoId: 'tdo_whatever' },
+    // MOTIR-7556 — move is item-keyed the same way: no moved step.
+    move_work_item_todo: { key: t.item1, todoId: 'tdo_whatever', toIndex: 0 },
     // MOTIR-6807 — the repair tools are item-keyed too: a non-member reads
     // A's card as not-found, so no run opens, beats or closes.
     claim_work_item_repair: { key: t.item1 },

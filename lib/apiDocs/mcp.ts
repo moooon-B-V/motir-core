@@ -1040,6 +1040,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary: 'Permanently delete one step of a work item’s to-do list.',
     descriptionFingerprint: '9857d5a3fee8',
   },
+  move_work_item_todo: {
+    summary: 'Move one step of a work item’s to-do list to a new position.',
+    descriptionFingerprint: 'f5ab1f9c59d1',
+  },
   add_lesson: {
     summary:
       'Record a lesson for this project, so later plans for it are given the lesson. This project only.',

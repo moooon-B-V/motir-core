@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **90 tools**.
+`initialize` handshake and registers **91 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1583,14 +1583,14 @@ cannot be undone. Author only, for the reason `edit_comment` gives; gated on
 replyCount }` — `replyCount` is how many replies went with a deleted root (always
 `0` for a reply).
 
-#### To-do lists — `list_work_item_todos` · `add_work_item_todo` · `set_work_item_todo_done` · `update_work_item_todo` · `delete_work_item_todo`
+#### To-do lists — `list_work_item_todos` · `add_work_item_todo` · `set_work_item_todo_done` · `update_work_item_todo` · `delete_work_item_todo` · `move_work_item_todo`
 
 A work item's **to-do list** is the ordered steps of its own work — each step
 ONE operation, with who it is for (`executor`), optional Markdown instructions
 (`notesMd`) and an optional command to copy (`commandText`), ticked off as it is
 done ([`docs/decisions/work-item-todo-list.md`](decisions/work-item-todo-list.md)).
-These five tools read a card's list, append a step, tick or untick one, edit
-one and delete one, over the same service the **To-do list** section of the item
+These six tools read a card's list, append a step, tick or untick one, edit
+one, delete one and move one, over the same service the **To-do list** section of the item
 page uses — so a step an agent writes appears there exactly as a person's would,
 and every rule the page enforces applies here unchanged.
 
@@ -1601,6 +1601,7 @@ and every rule the page enforces applies here unchanged.
 | `set_work_item_todo_done` | `work_item:edit` | Tick (`done: true`) or untick (`done: false`) one step. |
 | `update_work_item_todo`   | `work_item:edit` | Edit one step — only the fields sent change.            |
 | `delete_work_item_todo`   | `work_item:edit` | Delete one step.                                        |
+| `move_work_item_todo`     | `work_item:edit` | Move one step to a new position in the list.            |
 
 Every write needs permission to **edit the card** — the same key the item page's
 to-do controls need. A token whose grant omits `work_item:edit` is refused every
@@ -1608,21 +1609,23 @@ write before anything runs (`PERMISSION_NOT_GRANTED`); a token whose owner can
 only browse the card reads its list and is refused every write by the role
 (`PROJECT_ACCESS_DENIED`). A card the token cannot see at
 all, including one in another workspace, is `WORK_ITEM_NOT_FOUND` on every tool.
-The write key is in the CLI grant, so a dispatched agent can append, tick, edit
-and delete the steps of the card it was handed.
+The write key is in the CLI grant, so a dispatched agent can append, tick, edit,
+delete and move the steps of the card it was handed.
 
 **Ticking the LAST step does not move the card.** The to-do list never writes
 the card's status (ADR §3): a card whose every step is ticked stays where it is
 until its own workflow moves it. **A tick is not a revision** either — it stamps
 the step with who ticked it and when (`doneAt`, `doneBy`) and writes nothing to
-the card's history, while an append, an edit and a delete each record one (ADR §4). **Ticking is
+the card's history, while an append, an edit, a delete and a move each record one (ADR §4). **Ticking is
 idempotent:** ticking a step that is already ticked changes nothing and keeps the
 original `doneAt` / `doneBy`, so a retried call never re-attributes a step.
 
-**Deliberately absent:** reordering a step. It stays on the item page. Editing
-and deleting were absent too until a re-planned card needed its list brought in
-line with its new steps (MOTIR-7306): without them an agent could only leave a
-step the card can never close on, or tick one nobody performed.
+Editing and deleting were absent until a re-planned card needed its list
+brought in line with its new steps (MOTIR-7306): without them an agent could
+only leave a step the card can never close on, or tick one nobody performed.
+Moving was absent until the CLI guide began correcting a card's list on the
+person's word (MOTIR-7556): without it a step in the wrong place could only be
+fixed by rewriting the text of every row between.
 
 ##### `list_work_item_todos`
 
@@ -1706,6 +1709,30 @@ progress }` — what was removed, and the list's progress after it, whose
 naming the removed step, as the item page's delete does. Deleting the same step
 again is `WORK_ITEM_TODO_NOT_FOUND` and changes nothing; so is a `todoId` that
 is not a step of **that** card.
+
+##### `move_work_item_todo`
+
+| Input     | Type    | Required | Notes                                                                 |
+| --------- | ------- | -------- | --------------------------------------------------------------------- |
+| `key`     | string  | yes      | Work item identifier.                                                 |
+| `todoId`  | string  | yes      | The step's `id`, from `list_work_item_todos` or `add_work_item_todo`. |
+| `toIndex` | integer | yes      | Where the step goes: its 0-based position in the list after the move. |
+
+**The destination is an INDEX, not a pair of neighbour ids.** It is read against
+the list as the service has just locked it, in the order the step will land in
+(the list without the moving step), and an index past either end is clamped to
+that end, so `0` always means first and a large number always means last. That
+is the same call the item page's drag makes. **Output** — `structuredContent`:
+`{ workItemKey, todo, progress }` — the moved step (its `position` is the new
+key) and the list's progress, which a move does not change. A move writes ONE
+row and records a revision naming the step and its new index; moving a step to
+where it already is records one too. A `todoId` that is not a step of **that**
+card is `WORK_ITEM_TODO_NOT_FOUND`, and nothing changes.
+
+| Code                       | Meaning                                                                    |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `WORK_ITEM_TODO_NOT_FOUND` | The step is not on that card, or does not exist.                           |
+| `TODO_REORDER_CONFLICT`    | The step was deleted while it was being moved. Re-read the list and retry. |
 
 #### Repairing a red card — `claim_work_item_repair` · `touch_work_item_repair` · `close_work_item_repair`
 

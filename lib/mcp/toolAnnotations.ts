@@ -366,6 +366,13 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: true,
     openWorldHint: false,
   },
+  // W: workItemTodos.ts → workItemTodosService.moveTodo — overwrites the step's position (a `move_` verb, so destructive like `move_to_parent`); the same index again lands it where it already is
+  move_work_item_todo: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   // W: addLesson.ts → projectLessonsService.addLesson → motir-ai POST /v1/lessons — additive; a near-duplicate is refused
   add_lesson: {
     readOnlyHint: false,
