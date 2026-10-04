@@ -466,3 +466,26 @@ describe('what the port and the page History draw (MOTIR-7436)', () => {
     });
   });
 });
+
+describe('the production page read', () => {
+  it('answers a version row that is gone with gone_at_head', async () => {
+    const production = setPageDecisionDocumentResolver({
+      async resolve() {
+        throw new Error('placeholder');
+      },
+    });
+    setPageDecisionDocumentResolver(production);
+    const content = await production.resolve(
+      {
+        source: 'page',
+        resolvable: true,
+        pageId: 'no-such-page',
+        versionId: 'no-such-version',
+        versionNumber: 1,
+        title: 'Gone',
+      },
+      fx.ctx,
+    );
+    expect(content).toEqual({ outcome: 'unresolvable', reason: 'gone_at_head' });
+  });
+});

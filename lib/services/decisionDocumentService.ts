@@ -48,14 +48,16 @@ let activePageResolver: DecisionDocumentResolver = pageDecisionResolver(async (c
     if (!version) return null;
     // What the port's meta line and notices draw (MOTIR-7436): the author, the save time,
     // the freeze, and the page's newest version — above this one means it changed since.
-    const latest = await pageVersionRepository.findLatest(version.pageId, tx);
+    // Both rows exist whenever the version does: the page's newest version is at least
+    // this one, and the author's FK is `Restrict`, so neither read can come back empty.
+    const latest = (await pageVersionRepository.findLatest(version.pageId, tx))!;
     const [author] = await userRepository.findByIds([version.authorId], tx);
     return {
       markdown: version.bodyMarkdown,
-      authorName: author?.name ?? null,
+      authorName: author!.name,
       savedAt: version.savedAt.toISOString(),
       frozen: version.frozenAt !== null,
-      latestVersionNumber: latest?.number ?? null,
+      latestVersionNumber: latest.number,
     };
   }),
 );
