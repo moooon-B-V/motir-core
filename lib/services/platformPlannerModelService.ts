@@ -6,7 +6,7 @@ import {
   setPlannerModel,
   updatePlannerModelList,
 } from '@/lib/ai/motirAiClient';
-import { PLANNER_AUDIENCES, type PlannerAudience } from '@/lib/ai/types';
+import { PLANNER_AUDIENCES, type PlannerAudience, type PlannerModelListRead } from '@/lib/ai/types';
 import type {
   PlatformPlannerModelListDTO,
   PlatformPlannerModelSettingsDTO,
@@ -261,8 +261,9 @@ async function changeList(
   if (!model) throw new PlannerModelListModelMissingError();
 
   let applied = false;
+  let list: PlannerModelListRead;
   try {
-    const list = await withPlatformRead(principal, entry, async () => {
+    list = await withPlatformRead(principal, entry, async () => {
       const written = await updatePlannerModelList({
         action,
         model,
@@ -271,14 +272,6 @@ async function changeList(
       applied = true;
       return written;
     });
-    // The settings and the adders' names are reference reads after the commit.
-    const [settings, users] = await Promise.all([
-      getPlannerModelSettings(),
-      userRepository.findByIds([
-        ...new Set(list.entries.map((e) => e.addedByCoreUserId).filter((id): id is string => !!id)),
-      ]),
-    ]);
-    return toPlatformPlannerModelListDTO(list, settings, users, true);
   } catch (err) {
     if (applied) {
       // The residual case in this file's header, for the list.
@@ -290,4 +283,13 @@ async function changeList(
     }
     throw err;
   }
+  // The settings and the adders' names are reference reads after the commit, so
+  // a failure here is not the residual case above: the change and its row landed.
+  const [settings, users] = await Promise.all([
+    getPlannerModelSettings(),
+    userRepository.findByIds([
+      ...new Set(list.entries.map((e) => e.addedByCoreUserId).filter((id): id is string => !!id)),
+    ]),
+  ]);
+  return toPlatformPlannerModelListDTO(list, settings, users, true);
 }

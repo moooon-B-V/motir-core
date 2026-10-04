@@ -355,4 +355,26 @@ describe('addModel / removeModel — superadmin writes, and every write is audit
     ).rejects.toBeInstanceOf(MotirAiUnavailableError);
     expect(await auditRows()).toHaveLength(0);
   });
+
+  it('motir-ai applied but the audit row did not commit: logged as the residual case, and rethrown', async () => {
+    // motir-ai answers only after the interactive transaction's 5s deadline, so
+    // the change lands remotely while core's commit — and its row — does not.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        if (init.method !== 'GET') await new Promise((r) => setTimeout(r, 5_500));
+        return fetchStub(url, init);
+      }),
+    );
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(
+      platformPlannerModelService.addModel(currentPrincipal!, 'glm-5.2', 'try GLM'),
+    ).rejects.toThrow();
+    expect(puts).toHaveLength(1);
+    expect(logged).toHaveBeenCalledWith(
+      expect.stringContaining('but the audit row did not commit'),
+      expect.anything(),
+    );
+    expect(await auditRows()).toHaveLength(0);
+  }, 20_000);
 });
