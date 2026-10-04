@@ -34,9 +34,34 @@ export interface DecisionMember {
 /** Why a card's decision cannot be approved (clause 3). */
 export type DecisionUnresolvableReason = Exclude<DecisionDocOutcome, 'one'>;
 
-/** What the decision gate is asking about. */
-export type DecisionIdentity =
+/**
+ * A PAGE decision (Story MOTIR-5761 · MOTIR-7433; `approval-gates.md` §8 NINTH
+ * AMENDMENT clause 2): the version of a page the card PUBLISHED. Always
+ * resolvable — the publish refused an empty page, and the version is sealed, so
+ * it cannot change or be pruned under the question.
+ */
+export interface PageDecisionIdentity {
+  source: 'page';
+  resolvable: true;
+  pageId: string;
+  versionId: string;
+  versionNumber: number;
+  /** The page's title as it is now; `''` for an untitled page. */
+  title: string;
+}
+
+/**
+ * What the decision gate is asking about: a PAGE the card published, which wins
+ * whenever it exists, or the FILE its pull requests carry. The file arms carry
+ * an optional `source: 'repo_file'` — optional so the capture's identities keep
+ * their exact shape — and a reader tells the two apart by `source === 'page'`.
+ */
+export type DecisionIdentity = PageDecisionIdentity | RepoFileDecisionIdentity;
+
+/** The decision as a FILE in the card's pull requests (clauses 1–4). */
+export type RepoFileDecisionIdentity =
   | {
+      source?: 'repo_file';
       resolvable: true;
       repo: string;
       number: number;
@@ -45,6 +70,7 @@ export type DecisionIdentity =
       headSha: string | null;
     }
   | {
+      source?: 'repo_file';
       resolvable: false;
       reason: DecisionUnresolvableReason;
       /** The member the reason was read off — the first in canonical order. */
@@ -84,7 +110,9 @@ function documentsAcross(members: readonly DecisionMember[]): string[] {
   return [...new Set(paths)].sort();
 }
 
-export function decisionIdentityOf(members: readonly DecisionMember[]): DecisionIdentity | null {
+export function decisionIdentityOf(
+  members: readonly DecisionMember[],
+): RepoFileDecisionIdentity | null {
   const sorted = [...members].sort((a, b) => (memberKey(a) < memberKey(b) ? -1 : 1));
   const captured = sorted.filter((member) => member.outcome !== null);
   if (captured.length === 0) return null;
@@ -92,7 +120,7 @@ export function decisionIdentityOf(members: readonly DecisionMember[]): Decision
   const unresolvable = (
     reason: DecisionUnresolvableReason,
     at: DecisionMember = captured[0]!,
-  ): DecisionIdentity => ({
+  ): RepoFileDecisionIdentity => ({
     resolvable: false,
     reason,
     repo: at.repo,
@@ -129,7 +157,16 @@ export function decisionIdentityOf(members: readonly DecisionMember[]): Decision
 }
 
 /**
- * The gate's `subjectVersion` (clause 4).
+ * A page decision's `subjectVersion` — `page:<pageId>@<versionId>` (§8 NINTH
+ * AMENDMENT clause 2). The VERSION id, not its number: an id names exactly one
+ * sealed snapshot for ever.
+ */
+export function pageDecisionSubjectVersion(pageId: string, versionId: string): string {
+  return `page:${pageId}@${versionId}`;
+}
+
+/**
+ * The gate's `subjectVersion` (clause 4, and the NINTH AMENDMENT's page form).
  *
  * - resolvable → `owner/name:path@blobSha`. The BLOB, not the head: a push that
  *   leaves the document's bytes alone keeps the same version, so an accepted
@@ -139,6 +176,8 @@ export function decisionIdentityOf(members: readonly DecisionMember[]): Decision
  *   resolvable one.
  */
 export function decisionSubjectVersion(identity: DecisionIdentity): string {
+  if (identity.source === 'page')
+    return pageDecisionSubjectVersion(identity.pageId, identity.versionId);
   if (identity.resolvable) return `${identity.repo}:${identity.path}@${identity.blobSha}`;
   return `${identity.repo}:unresolvable:${identity.reason}@${identity.headSha ?? 'unknown'}`;
 }

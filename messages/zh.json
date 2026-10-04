@@ -8388,7 +8388,10 @@
       "manualSteps": "{done}/{total} 步",
       "manualNoList": "无待办清单",
       "markDone": "标记完成",
-      "marking": "正在标记…"
+      "marking": "正在标记…",
+      "row": {
+        "decisionPage": "{title} · 页面第 {number} 版"
+      }
     },
     "live": {
       "new": "新增",
@@ -11513,7 +11516,8 @@
         "body": "全屏审阅拉取请求后，再批准并合并，或要求修改。",
         "bodyDesign": "全屏审阅设计及其拉取请求后，再批准并合并，或要求修改。",
         "bodyDecision": "全屏审阅决策及其拉取请求后，再批准并合并，或要求修改。",
-        "bodyAcceptance": "全屏观看录像并审阅拉取请求后，再批准并合并，或要求修改。"
+        "bodyAcceptance": "全屏观看录像并审阅拉取请求后，再批准并合并，或要求修改。",
+        "bodyDecisionPage": "全屏阅读决策页面的已发布版本，然后批准或要求修改。"
       }
     },
     "statusHeld": {
@@ -11558,7 +11562,10 @@
         "noneNoRun": "无决策文档 · {count} 个拉取请求",
         "several": "{docs} 份决策文档 · {count} 个拉取请求 · 由 {run} 交付",
         "severalNoRun": "{docs} 份决策文档 · {count} 个拉取请求",
-        "withdrawn": "{path} · 文件版本 {blob}"
+        "withdrawn": "{path} · 文件版本 {blob}",
+        "page": "页面 · 第 {number} 版 · 无拉取请求 · 由 {run} 交付",
+        "pageNoRun": "页面 · 第 {number} 版 · 无拉取请求",
+        "pageWithdrawn": "页面 · 第 {number} 版"
       },
       "consequence": "批准即接受此决策并合并 <b>{prs}</b>，随后将 <b>{key}</b> 移至“已批准”。",
       "consequenceNoPrs": "批准即接受此决策；其拉取请求在检查通过后合并，随后 <b>{key}</b> 移至“已批准”。",
@@ -11578,7 +11585,20 @@
       "withdrawnNext": "没有人对它做出决定。新版本已取而代之。",
       "confirm": {
         "records": "记录你接受此决策",
-        "moves": "将 {key} 移至“已批准”"
+        "moves": "将 {key} 移至“已批准”",
+        "freezesPage": "冻结此页面的第 {number} 版——之后的编辑会生成新版本",
+        "movesDone": "将 {key} 移至“已完成”"
+      },
+      "consequencePage": "批准即接受此页面的第 {number} 版，并将 <b>{key}</b> 移至“已完成”。不涉及拉取请求。",
+      "page": {
+        "meta": "第 {number} 版 · {author} · {when}",
+        "open": "打开页面",
+        "frozen": "已冻结",
+        "changedSince": "<b>第 {number} 版发布后，此页面已有改动。</b>你正在决定的是第 {number} 版。",
+        "changedSinceApproved": "<b>第 {number} 版获批后，此页面已有改动。</b>这里显示的是获批时的第 {number} 版。",
+        "compareWithCurrent": "与当前版本对比",
+        "approvedVersion": "已批准：第 {number} 版",
+        "approvedTail": "<b>{key}</b> 已移至“已完成”。第 {number} 版已冻结——之后对页面的编辑会生成新版本。"
       }
     },
     "choice": {
@@ -11657,7 +11677,22 @@
       "record": {
         "link": "书面记录",
         "detail": "{size} · {count} 个 Markdown 附件中最新的一个",
-        "none": "没有书面记录。你确认的就是上面的决策。"
+        "none": "没有书面记录。你确认的就是上面的决策。",
+        "choose": "选择页面",
+        "chooseHelper": "可选。页面的最新版本将作为记录保留；之后的编辑会生成新版本。",
+        "search": "搜索页面",
+        "loading": "正在加载页面…",
+        "loadFailed": "无法加载此项目的页面。",
+        "empty": "此项目还没有页面。",
+        "page": "记录：<b>{title}</b>，第 {number} 版",
+        "open": "打开页面",
+        "change": "更换",
+        "refusal": {
+          "empty": "<b>{title} 为空，不能作为记录。</b>请先写好内容再选择。",
+          "otherProject": "<b>{title} 属于其他项目。</b>记录必须是本项目的页面。",
+          "archived": "<b>{title} 已归档。</b>请先恢复，或选择其他页面。",
+          "noAccess": "<b>你无法打开该页面。</b>请选择你能查看的页面。"
+        }
       },
       "consequence": "如果这是你们达成的一致，请确认。确认后 {key} 将变为已完成。",
       "verb": {
@@ -11670,7 +11705,9 @@
         "recordWithout": "记录你已确认此决策。",
         "done": "将 {key} 变为已完成。",
         "nothingElse": "不改变其他任何内容——被取代的工作项已体现重新规划后的样子。",
-        "proceed": "确认"
+        "proceed": "确认",
+        "recordWithPage": "记录你已确认此决策，并附上书面记录 <b>{title}（第 {number} 版）</b>。",
+        "freeze": "冻结 <b>{title}</b> 的第 {number} 版。之后对页面的编辑会生成新版本。"
       },
       "overturnStep": {
         "title": "推翻后将：",
@@ -11695,7 +11732,9 @@
         "recordRemoved": "记录已移除——确认后该文件被删除",
         "overturnedBy": "{name} 已推翻 · {when}",
         "replanOwed": "待重新规划",
-        "replanOwedDetail": "针对此决策取代的工作——目前尚未改变任何内容"
+        "replanOwedDetail": "针对此决策取代的工作——目前尚未改变任何内容",
+        "pageRecord": "{title}，第 {number} 版",
+        "frozen": "已冻结"
       },
       "cta": {
         "body": "全屏查看此决策，然后确认或推翻。",
@@ -12670,7 +12709,7 @@
       "loadFailed": "无法加载历史记录。",
       "retry": "重试",
       "loadMore": "加载更多",
-      "keepsLatest": "页面保留最近的 100 个版本。",
+      "keepsLatest": "页面保留最近的 100 个版本，以及决策所持有的每个版本。",
       "onlyVersion": "这是目前唯一的版本。每次编辑会话都会新增一个版本。",
       "compare": {
         "label": "正在将 v{number} 与当前页面对比",
@@ -12690,7 +12729,13 @@
         "gone": "v{number} 已不再保留——页面只保留最近的 100 个版本。未做任何更改，列表已刷新。",
         "failed": "无法恢复 v{number}。未做任何更改，请重试。"
       },
-      "unsavedHold": "在你的编辑保存之前无法恢复。页面显示“已保存”后即可恢复。"
+      "unsavedHold": "在你的编辑保存之前无法恢复。页面显示“已保存”后即可恢复。",
+      "tag": {
+        "frozen": "已冻结 · 已批准",
+        "frozenLabel": "已冻结 · 由 {key} 批准。打开 {key}",
+        "published": "已发布待决策",
+        "publishedLabel": "已发布待 {key} 决策。打开 {key}"
+      }
     },
     "archive": {
       "menuItem": "归档…",

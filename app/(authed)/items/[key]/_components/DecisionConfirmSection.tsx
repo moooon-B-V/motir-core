@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Pill } from '@/components/ui/Pill';
 import { GateCallToActionBand } from '@/components/approvals/GateCallToActionBand';
@@ -8,6 +9,7 @@ import {
   DecisionConfirmGateFrame,
   DecisionPortBody,
   type DecisionPortView,
+  type DecisionRecordPicker,
 } from '@/components/approvals/DecisionConfirmGate';
 import type { ApprovalGateDTO, DecisionConfirmationBodyDTO } from '@/lib/dto/approvalGate';
 
@@ -40,6 +42,7 @@ export function DecisionConfirmSection({
   routedToViewer,
   itemIdentifier,
   canReplan = false,
+  canEditRecord = false,
 }: {
   body: DecisionConfirmationBodyDTO;
   gate: ApprovalGateDTO | null;
@@ -51,8 +54,17 @@ export function DecisionConfirmSection({
    *  (MOTIR-6211). The decided refusal's record carries Re-plan with AI when true;
    *  omitted, it carries none. */
   canReplan?: boolean;
+  /** May this reader edit the card — then the open port offers *Choose page* as the
+   *  written record (MOTIR-7444). Omitted: the record is read-only. */
+  canEditRecord?: boolean;
 }) {
   const t = useTranslations('approvalGate.decisionConfirm');
+  const router = useRouter();
+  // A chosen page is a publication: the record is a server read, so the page re-reads.
+  const recordPicker: DecisionRecordPicker | undefined =
+    canEditRecord && gate?.state === 'awaiting'
+      ? { itemIdentifier, onChosen: () => router.refresh() }
+      : undefined;
   const decided = gate !== null && (gate.state === 'approved' || gate.state === 'overturned');
 
   if (!body.ok && !decided) {
@@ -83,7 +95,12 @@ export function DecisionConfirmSection({
   if (gate.state === 'awaiting' && canDecide) {
     return (
       <div className="flex flex-col gap-3">
-        <DecisionPortBody view={view} record={shared.record} recordCount={shared.recordCount} />
+        <DecisionPortBody
+          view={view}
+          record={shared.record}
+          recordCount={shared.recordCount}
+          recordPicker={recordPicker}
+        />
         <GateCallToActionBand
           kind="decision_confirmation"
           subjectLabel={t('kindLabel')}
@@ -109,6 +126,7 @@ export function DecisionConfirmSection({
       // Nothing is pressed on the page: a decided or withdrawn gate is pressable by
       // nobody, and a reader who may not decide sees who it waits on (state B).
       canDecide={false}
+      recordPicker={recordPicker}
       routedToLabel={routedToLabel}
       identifier={itemIdentifier}
       onDecide={decideNothing}

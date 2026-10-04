@@ -9,7 +9,10 @@ import {
 } from '@/lib/approvalGates/gateSet';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
-import { decisionMembersOf } from '@/lib/approvalGates/decisionApprovalHandler';
+import {
+  decisionMembersOf,
+  loadPageDecisionIdentity,
+} from '@/lib/approvalGates/decisionApprovalHandler';
 import { decisionIdentityOf } from '@/lib/approvalGates/decisionSubject';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
@@ -118,6 +121,7 @@ export async function gateSetFor(
     deliveries,
     mode,
     terminalByProject,
+    pageDecision,
   ] = await Promise.all([
     designEvidenceRepository.findCurrentByWorkItem(item.id, tx),
     approvalGateRepository.findLatestByWorkItem(item.id, 'design_result', tx),
@@ -139,6 +143,9 @@ export async function gateSetFor(
     // The merge mode AND the review agent's switch, in one read (§12.2a).
     projectRepository.findMergeSettings(item.projectId, tx),
     workflowsService.getTerminalStatusKeysByProjects([item.projectId], item.workspaceId, tx),
+    // A PUBLISHED PAGE (MOTIR-7433) — read only when the card asks the question, like
+    // its gate above, and preferred over the capture below.
+    asksDecision ? loadPageDecisionIdentity(item.id, tx) : Promise.resolve(null),
   ]);
 
   const members: GateSetMember[] = [];
@@ -273,7 +280,8 @@ export async function gateSetFor(
     ...(asksDecision
       ? {
           decision: {
-            identity: decisionIdentityOf(decisionMembersOf(deliveries)),
+            // A published page wins over the capture (MOTIR-7433).
+            identity: pageDecision ?? decisionIdentityOf(decisionMembersOf(deliveries)),
             latestGate: latestDecisionGate,
           },
         }

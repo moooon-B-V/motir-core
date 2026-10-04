@@ -4,6 +4,7 @@ import { folderRepository } from '@/lib/repositories/folderRepository';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { decisionPagePublicationRepository } from '@/lib/repositories/decisionPagePublicationRepository';
 import {
   toBase64,
   toLockedPageRow,
@@ -16,6 +17,7 @@ import {
   toPageTrailDto,
   toPageTreeFolderRowDto,
   toPageTreePageRowDto,
+  toPageMarkdownAtVersionDto,
   toPageVersionDto,
   toPageVersionListItemDto,
   toPageVersionRow,
@@ -709,7 +711,16 @@ export const pagesService = {
       await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
       const page = await readPageMarkdown(input.projectId, input.pageId, tx);
       if (!page) throw new PageNotFoundError(input.pageId);
-      return page;
+      if (input.version === undefined) return page;
+      // One version's body (MOTIR-7429) — never the current body as a fallback.
+      const version = await pageVersionRepository.findByPageAndNumber(
+        input.pageId,
+        input.version,
+        tx,
+      );
+      if (!version) throw new PageVersionNotFoundError(input.pageId, input.version);
+      const [author] = await userRepository.findByIds([version.authorId], tx);
+      return toPageMarkdownAtVersionDto(page, version, author?.name);
     });
   },
 
@@ -829,12 +840,25 @@ export const pagesService = {
         tx,
       );
       const rows = records.slice(0, limit).map(toPageVersionRow);
+      // Only a sealed version can carry a decision tag (MOTIR-7436), so most pages ask nothing.
+      const marked = rows.filter((r) => r.sealedAt !== null).map((r) => r.id);
       const authors = await userRepository.findByIds([...new Set(rows.map((r) => r.authorId))], tx);
+      const tags = await decisionPagePublicationRepository.decisionTagsForVersions(marked, tx);
       const nameById = new Map(authors.map((u) => [u.id, u.name]));
+      const tagById = new Map(tags.map((tag) => [tag.versionId, tag]));
       return {
-        items: rows.map((r) =>
-          toPageVersionListItemDto(r, nameById.get(r.authorId), r.number === latest?.number),
-        ),
+        items: rows.map((r) => {
+          const tag = tagById.get(r.id);
+          return {
+            ...toPageVersionListItemDto(r, nameById.get(r.authorId), r.number === latest?.number),
+            // Frozen wins over published (delta 5).
+            decisionTag: tag?.frozenKey
+              ? { kind: 'frozen' as const, key: tag.frozenKey }
+              : tag?.publishedKey
+                ? { kind: 'published' as const, key: tag.publishedKey }
+                : null,
+          };
+        }),
         nextBefore: records.length > limit ? rows.at(-1)!.number : null,
       };
     });

@@ -286,6 +286,12 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         // a moved stamp, a broken body, an executor flipped off `human`.
         'lib/services/decisionConfirmationGateService.ts',
         'lib/services/decisionDocumentCaptureService.ts',
+        // MOTIR-7432 (`approval-gates.md` §8 NINTH AMENDMENT, clause 3): publishing a NEW
+        // page version as a card's decision retires the awaiting decision question, cause
+        // `republished` — the design republish's write, product-written, no actor. The
+        // new question is then raised by the predicate (`reconcileGatesFor`), so the
+        // publish adds no `create` caller.
+        'lib/services/decisionPageService.ts',
         'lib/services/designEvidenceService.ts',
         // MOTIR-6595 (`approval-gates.md` §4 FIFTH AMENDMENT, point 4): the operator
         // convergence withdraws a gate the OLD rule re-asked from a queue failure, with

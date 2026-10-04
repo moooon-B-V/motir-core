@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **89 tools**.
+`initialize` handshake and registers **90 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3051,6 +3051,7 @@ code:
 | Code                        | Meaning                                                                                                                                                     |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PAGE_NOT_FOUND`            | No such page in that project — the same answer for an unknown id and another project's page.                                                                |
+| `PAGE_VERSION_NOT_FOUND`    | `get_page`'s `version` names a number the page has no version for. The message names the number.                                                            |
 | `PAGE_REVISION_CONFLICT`    | `update_page` sent a `revision` the page has moved past. Nothing was written; the message names both revisions. Call `get_page`, redo the edit, send again. |
 | `PAGE_BODY_TOO_LARGE`       | The markdown is over 1 MiB, or the body it makes is over 2 MiB. The message names the size and the limit. Nothing was written.                              |
 | `PAGE_TITLE_TOO_LONG`       | `create_page`'s `title` is over 255 characters.                                                                                                             |
@@ -3068,10 +3069,11 @@ Read one page as markdown. The read an agent makes before it writes: the
 key the page's own address checks. It takes no lock, so it never waits on a
 person's save.
 
-| Input        | Type   | Required | Notes                                      |
-| ------------ | ------ | -------- | ------------------------------------------ |
-| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                |
-| `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`. |
+| Input        | Type    | Required | Notes                                                                                           |
+| ------------ | ------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `projectKey` | string  | yes      | Project key, e.g. `"ACME"`.                                                                     |
+| `pageId`     | string  | yes      | The page id — the `<id>` in `/pages/<id>`.                                                      |
+| `version`    | integer | no       | A version number from the page's history. Reads that version's body instead of the current one. |
 
 **Output** — `structuredContent`: `{ id, projectId, title, placement, revision,
 latestVersion, markdown, updatedAt }`. `placement` is `{ parentPageId, folderId }`
@@ -3079,6 +3081,16 @@ latestVersion, markdown, updatedAt }`. `placement` is `{ parentPageId, folderId 
 newest entry of the page's history, `{ number, authorId, authorName, savedAt }`
 (`null` only for a page older than versions). The text summary is the title, the
 placement, `revision N`, who saved the newest version, then the markdown.
+
+**One version** (MOTIR-7429) — with `version`, `markdown` is that version's body
+and the payload adds `version: { number, authorId, authorName, savedAt, sealed,
+frozen }`. `sealed` means a decision was published at that version; `frozen`
+means a person approved it (`docs/decisions/pages.md` AMENDMENT 3). Everything
+else still describes the page as it is now, so a run told "read decision page X
+at version 3" can see both what was approved and how far the page has moved
+since. A number the page does not have is refused `PAGE_VERSION_NOT_FOUND`,
+naming the page and the number — never the current body as a fallback. Without
+`version`, the output is exactly the current-body read above.
 
 #### `create_page`
 
@@ -3120,6 +3132,48 @@ restorable version in the page's history, which is why the tool is annotated
 | `revision`   | integer | yes      | The `revision` `get_page` or `create_page` returned (≥ 1). |
 
 **Output** — the saved page, in `get_page`'s shape, at its new `revision`.
+
+#### `publish_decision_page`
+
+Publish a page as a **`decision` card's decision** (Story MOTIR-5761). Call it
+**once**, after `create_page` / `update_page` have written the decision, in the
+same run. Gated on `work_item:edit` on the card — a key `CLI_TOKEN_GRANT` already
+carries, so a dispatched agent's token can call it — and the service also
+requires `page:view` on the page.
+
+It **seals** the page's newest version: later edits start a new version, so the
+text the card names can no longer change underneath it. On a card an agent runs
+it then raises `decision_approval` about exactly that version and moves the card
+to review — the card is **waiting on a person**, not finished. On a card a person
+runs it raises nothing and moves nothing: the publication is that card's
+candidate record.
+
+Publishing the version that is already the card's decision writes nothing and
+returns the same publication with `replayed: true`, so retrying an unclear result
+is safe. Publishing after an edit seals the new version and **supersedes** the
+awaiting question with one about it.
+
+| Input    | Type   | Required | Notes                                                    |
+| -------- | ------ | -------- | -------------------------------------------------------- |
+| `key`    | string | yes      | The decision card's key, e.g. `"ACME-42"`.               |
+| `pageId` | string | yes      | The page id — the `<id>` in `/pages/<id>`, same project. |
+
+**Output** — the publication: `pageId`, `pageTitle`, `versionId`,
+`versionNumber`, `sealedAt`, `publishedAt`, the publisher, `gateId` (the awaiting
+`decision_approval`, or `null` on a human card or a replay) and `replayed`.
+
+| Code                      | Meaning                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `NOT_A_DECISION_CARD`     | The card's type is not `decision`.                                           |
+| `PAGE_NOT_FOUND`          | No such page, or one the caller cannot read — one answer, no existence leak. |
+| `PAGE_IN_ANOTHER_PROJECT` | The page is readable but filed in another project than the card's.           |
+| `PAGE_IS_EMPTY`           | The page's newest version has no text.                                       |
+| `PAGE_ARCHIVED`           | The page is archived.                                                        |
+| `CARD_IS_FINISHED`        | The card is already in a done-category status.                               |
+
+The confirm port's _Choose page_ reaches the same service through
+`POST /api/work-items/{key}/decision-page` with `{ "pageId" }` (201 for a new
+publication, 200 for a replay, the codes above with their own statuses).
 
 ### Search
 

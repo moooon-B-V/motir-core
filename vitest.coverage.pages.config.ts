@@ -95,6 +95,17 @@ const STORY_FILES = [
   'lib/mcp/tools/createPage.ts',
   'lib/mcp/tools/updatePage.ts',
   'lib/mcp/tools/pageRef.ts',
+  // Story MOTIR-5761 (a decision may be a page; MOTIR-7441): the publish service, its
+  // publication repository, mapper and refusals, the MCP tool and REST door an agent and
+  // the confirm port use, and the confirm port's page picker. `components/pages/FrozenPill`
+  // is gated by the `components/pages/*.tsx` glob above.
+  'lib/services/decisionPageService.ts',
+  'lib/repositories/decisionPagePublicationRepository.ts',
+  'lib/mappers/decisionPageMappers.ts',
+  'lib/decisionPages/errors.ts',
+  'lib/mcp/tools/publishDecisionPage.ts',
+  'app/api/work-items/*/decision-page/route.ts',
+  'components/approvals/DecisionRecordPagePicker.tsx',
 ] as const;
 
 const SHARED_FILES = [
@@ -145,6 +156,16 @@ export default defineConfig({
       'tests/components/page-view.test.tsx',
       'tests/components/page-view-edges.test.tsx',
       'tests/components/pages-index.test.tsx',
+      // A decision may be a page (Story MOTIR-5761 · MOTIR-7441): the story gate, then each
+      // card's own suite over the files above.
+      'tests/integration/decisionPageStoryGate.test.ts',
+      'tests/services/decisionPageService.integration.test.ts',
+      'tests/mcp/publishDecisionPageTool.test.ts',
+      'tests/api/decisionPageRoute.test.ts',
+      'tests/approvalGates/decisionPageGate.test.ts',
+      'tests/approvalGates/decisionConfirmationPageRecord.test.ts',
+      'tests/components/decision-port-page.test.tsx',
+      'tests/components/decision-confirm-page-record.test.tsx',
     ],
     coverage: {
       provider: 'v8',

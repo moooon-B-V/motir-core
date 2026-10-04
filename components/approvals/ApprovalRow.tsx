@@ -364,6 +364,19 @@ function PullRequestSetLine({ subject }: { subject: PullRequestApprovalSubjectSu
  */
 function DecisionSubjectLine({ subject }: { subject: DecisionApprovalSubjectSummaryDTO }) {
   const t = useTranslations('workbench.approvals.decisionSubject');
+  const tRow = useTranslations('workbench.approvals.row');
+  // A published PAGE (MOTIR-7436, Panel 9a): the page's title and the version asked about.
+  if (subject.outcome === 'page') {
+    const line = tRow('decisionPage', {
+      title: subject.title ?? '',
+      number: subject.versionNumber ?? 0,
+    });
+    return (
+      <span className="truncate text-xs text-(--el-text-secondary)" title={line}>
+        {line}
+      </span>
+    );
+  }
   const pr = `${subject.repo} · #${subject.number}`;
   if (subject.outcome === 'one' && subject.path) {
     return (
@@ -475,7 +488,7 @@ function SubjectMeta({
       decided?.state === 'overturned'
         ? tConfirm('row.overturned', { count })
         : decided?.state === 'approved'
-          ? decided.confirmedRecord?.kind === 'attachment'
+          ? decided.confirmedRecord && decided.confirmedRecord.kind !== 'none'
             ? tConfirm('row.confirmedWith', { count })
             : tConfirm('row.confirmedWithout', { count })
           : tConfirm('row.awaiting', {

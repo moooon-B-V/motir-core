@@ -5,8 +5,12 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestPerson } from './testPerson';
 import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
-// THE DECISION-CONFIRM GATE E2E SEED (Story MOTIR-5871 · Subtask MOTIR-5964), for the
-// acceptance receipt `acceptance-decision-confirm-gate.spec.ts` records.
+// THE DECISION-CONFIRM GATE E2E SEED (Story MOTIR-5871 · Subtask MOTIR-5964), written for
+// the acceptance receipt `acceptance-decision-confirm-gate.spec.ts` recorded. That spec was
+// RETIRED by MOTIR-7444 (`acceptance-receipt-lifecycle.md` §3) once an editor's confirm port
+// grew the page-record picker; its flows stay covered by
+// `tests/integration/approvals/decision-confirm-overlay.test.tsx` and
+// `tests/components/decision-confirm-gate.test.tsx`. `decisionBody` still seeds other specs.
 //
 // WHAT GOES THROUGH A SERVICE, AND WHAT IS LEFT TO THE SPEC. The people, the workspace,
 // the project, the epic, its approved story and the decisions are created through their

@@ -10,6 +10,7 @@ import { sendPageUpdate } from '@/components/pages/PageEditorHost';
 // PageView's own ⋯ and the archived banner read the router (MOTIR-7423).
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 // `PageView` loads the host LAZILY. Importing it here puts the editor's module
 // graph in the cache before the first mount, so `findByRole` waits on the render

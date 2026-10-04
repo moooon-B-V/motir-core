@@ -11,11 +11,13 @@ import type { Clock, PageRow, PageStore, PageVersionRow } from './store';
 // A page's VERSIONS (Story MOTIR-5754 · MOTIR-7383), `docs/decisions/pages.md`
 // §6, decided here and persisted through the `PageStore`:
 //   * a save EXTENDS the latest version when that version has the same author,
-//     was saved at most `PAGE_VERSION_WINDOW_MS` ago and is not a restore;
-//     otherwise it starts version `latest.number + 1`;
-//   * past `PAGE_VERSION_CAP` the oldest versions are deleted, in the same
-//     transaction — the page's current body lives on `page`, so it is never one
-//     that can be pruned;
+//     was saved at most `PAGE_VERSION_WINDOW_MS` ago, is not a restore and is
+//     not SEALED (a decision was published at it, MOTIR-7431); otherwise it
+//     starts version `latest.number + 1`;
+//   * past `PAGE_VERSION_CAP` the oldest UNMARKED versions are deleted, in the
+//     same transaction — a sealed or frozen one never is, so a page may keep more
+//     than the cap (`pages.md` AMENDMENT 3); the page's current body lives on
+//     `page`, so it is never one that can be pruned;
 //   * a restore makes an earlier version's content current AS A SAVE and records
 //     a NEW version that is never coalesced, so "restored from vN" stays true of
 //     exactly that snapshot.
@@ -38,6 +40,7 @@ export function decideVersionWrite(
     latest !== null &&
     latest.authorId === actorId &&
     latest.restoredFromNumber === null &&
+    latest.sealedAt === null &&
     now.getTime() - latest.savedAt.getTime() <= PAGE_VERSION_WINDOW_MS
   ) {
     return { kind: 'extend', versionId: latest.id };
@@ -45,10 +48,10 @@ export function decideVersionWrite(
   return { kind: 'new', number: (latest?.number ?? 0) + 1 };
 }
 
-/** Deletes the oldest versions past the cap. */
+/** Deletes the oldest unmarked versions past the cap. */
 async function applyCap(store: PageStore, pageId: string): Promise<void> {
   if ((await store.countVersions(pageId)) > PAGE_VERSION_CAP) {
-    await store.deleteOldestVersions(pageId, PAGE_VERSION_CAP);
+    await store.deleteOldestUnmarkedVersions(pageId, PAGE_VERSION_CAP);
   }
 }
 

@@ -172,6 +172,18 @@
   again at `in_review`. It reverses MOTIR-5652's parent-run case and narrows §6d's
   rule 6 for the merge question; both carry a note. Nothing is struck.
 
+- **AMENDED 2026-10-03 (MOTIR-7427, for Story MOTIR-5761), at §1 and §8 — a
+  decision may be a PAGE.** §8's NINTH AMENDMENT: `publish_decision_page` seals a
+  page's latest version, records the publication and raises `decision_approval`
+  about that version; Approve FREEZES it and writes `done`, because no pull
+  request will ever merge. A card with a published page takes the page as its
+  subject; a card with none keeps the FIFTH AMENDMENT's file in a pull request,
+  unchanged. A `decision_confirmation` card's record may be a page too, frozen at
+  Confirm (§1's MOTIR-5952 amendment, point 8). The FIFTH AMENDMENT's clauses 2,
+  8 and 9 and point 8's interim sentence carry pointers; the one struck sentence
+  is point 8's _interim home_. `pages.md` AMENDMENT 3 defines the SEALED and
+  FROZEN marks.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -269,6 +281,11 @@ first two are unchanged. The fourth is added by §1's MOTIR-5887 amendment
 amendment (2026-09-21), below the MOTIR-5887 one, whose points it cites._
 
 _The sixth — `plan_approval` — is added by §11 (MOTIR-6031, 2026-09-23), whose points it cites; it is the first kind whose gate belongs to NO work item._
+
+_The third column's SUBJECT may also be a published PAGE VERSION, read by a
+second resolver and frozen at Approve — §8's NINTH AMENDMENT (MOTIR-7427,
+2026-10-03). Its retention row then reads: the FROZEN mark on that version is the
+pin (clause 6)._
 
 _The seventh — `agent_review` — is added by §12 (MOTIR-6815, 2026-09-29), whose registry row and KIND-table row are stated there (12.1): a question the review AGENT answers, in front of the merge question._
 
@@ -1077,9 +1094,14 @@ executor === 'coding_agent'`, and its subject is a `docs/decisions/*.md`
 > The gate's subject is the body. A longer written record is welcome and is never
 > a precondition: **a decision is confirmable with no record at all.**
 >
-> **The record's interim home is an ATTACHMENT on the decision work item — a
+> ~~**The record's interim home is an ATTACHMENT on the decision work item — a
 > TEMPORARY solution by requester decision (2026-09-21), until the pages epic
-> ships and a PAGE replaces it through MOTIR-5761's resolver.** A page is the
+> ships and a PAGE replaces it through MOTIR-5761's resolver.**~~
+> **⚠️ AMENDED by §8's NINTH AMENDMENT, clause 7 (MOTIR-7427, 2026-10-03): a NEW
+> record is a published PAGE VERSION, named through `publish_decision_page` and
+> FROZEN at Confirm.** The attachment rules below keep governing every record
+> made as an attachment: those records keep rendering and are not migrated, and a
+> card with both a publication and an attachment takes the page. A page is the
 > long-term home because an epic can span repositories and a `docs/decisions/*.md`
 > file must pick one; a `human` decision is never dispatched, so no run or pull
 > request writes one either. **The pull-request / `docs/decisions/` path is not a
@@ -4307,6 +4329,11 @@ ApprovalGateAuthority` is `assignee | reporter | admin`,
 > the gate row. What Motir stores is only the file's IDENTITY at the head
 > (clause 7), which is a fact about the host, not a copy of the document.
 >
+> **⚠️ NARROWED by §8's NINTH AMENDMENT (MOTIR-7427, 2026-10-03):** clause 2
+> holds for a card whose subject is the FILE. A card with a published decision
+> PAGE needs no pull request, and its approval writes `done` (NINTH, clauses 2,
+> 4 and 8).
+>
 > **2. THE PULL REQUEST IS MANDATORY — there is no Workflow A for a decision**
 > (rung 3). A decision card with no delivering pull request has nothing to
 > accept, and raises no decision gate. It reaches `done` **only by a merge**,
@@ -4484,6 +4511,11 @@ ApprovalGateAuthority` is `assignee | reporter | admin`,
 > extends `lib/github/pullRequestFiles.ts` to return each file's `sha` and
 > `status`.
 >
+> **⚠️ EXTENDED by §8's NINTH AMENDMENT (MOTIR-7427, 2026-10-03):** the seam
+> now has its SECOND implementation, a page resolver reading a `page_version` by
+> id (NINTH, clause 5). _"Its one production implementation"_ below is true of
+> the file subject only.
+>
 > **8. THE RESOLVER — content is read through an interface, and its one
 > implementation reads the host** (rung 3: the requester decision; rung 2: §1's
 > MOTIR-4911 amendment, _the subject is a document with a resolver_). The handler
@@ -4500,6 +4532,10 @@ ApprovalGateAuthority` is `assignee | reporter | admin`,
 > the whole reason §1's amendment made the subject opaque. **No Motir-side
 > document store exists until then**, by the requester decision above. Built by
 > MOTIR-5676, whose second-resolver test is what proves the seam.
+>
+> **⚠️ For a PAGE subject, §8's NINTH AMENDMENT clause 6 applies instead
+> (MOTIR-7427, 2026-10-03):** a page version is not durable by itself, so the
+> approval FREEZES it. Clause 9 below stays true of the file subject.
 >
 > **9. RETENTION — NOTHING is pinned** (rung 2: §6c; the retired merge kind's
 > answer). The approved version is the blob sha on the decided gate's
@@ -4794,6 +4830,158 @@ repositories produce no preview has two paths rather than three, and says so.
 > `in_review`; `→ in_progress` and `→ blocked` withdraw and nothing re-asks; a stray
 > gate withdrawn; one fresh gate on coming back; the `approved` re-ask at
 > `in_review`) and `tests/approvalGates/gateSet.test.ts` (the predicate's cases).
+
+> ### §8 — NINTH AMENDMENT (MOTIR-7427, for Story MOTIR-5761, 2026-10-03): the decision's subject may be a PAGE VERSION — `publish_decision_page` seals it, approval FREEZES it and writes `done`, and a published page wins over the file
+>
+> **What changed, and why now.** The FIFTH AMENDMENT put a `coding_agent`
+> decision in a file in a MANDATORY pull request because nothing else could hold
+> a document Motir could show a person — _"the lasting home for documents is a
+> pages domain (Epic MOTIR-5746), and a document API built now would be thrown
+> away."_ That domain now exists: pages, their versions (`pages.md` §6) and the
+> MCP doors `get_page` / `create_page` / `update_page` a dispatched agent's grant
+> can use (MOTIR-5760). Story MOTIR-5761 lets a decision be a PAGE. A pull
+> request costs a branch, a CI run and a merge for a document nobody builds, and
+> it forces a decision to pick one repository even when its direction spans
+> several. **This block adds the page path; it removes nothing.** The file path of
+> the FIFTH AMENDMENT keeps working, for records already merged and for pull
+> requests in flight. Its affected clauses carry a pointer here; none is struck.
+>
+> **1. THE PUBLICATION.** `publish_decision_page { key, pageId }` (MCP, and the
+> REST route the confirm port calls) records ONE `decision_page_publication` row:
+> the work item, the page, the page VERSION that was latest at the moment of the
+> publish, the publisher and the time. **The newest row for a work item is its
+> published page.** Earlier rows stay as history; nothing updates a row. In the
+> same transaction the publish SEALS that version (`pages.md` AMENDMENT 3), so no later save can extend it. Each refusal is NAMED: a work
+> item whose `type` is not `decision`; a page from another project; a page with
+> an empty body; a page the caller cannot read (`page:view`); an archived page;
+> a card already in the `done` category.
+> The publish needs `work_item:edit` on the card, the same key the design and
+> acceptance publishes need.
+>
+> **2. THE SUBJECT, AND WHICH ONE WINS.** For a `decision` + `coding_agent` card
+> with a publication, the subject is that page VERSION, and **`subjectVersion` is
+> `page:<pageId>@<versionId>`**. `subjectId` stays the work item's own id (the
+> FIFTH AMENDMENT's clause 4), so the partial unique index still allows one
+> awaiting decision gate per card whichever path raised it.
+>
+> **The precedence rule, in one sentence: a card with a published decision page
+> takes the page as its subject, and a card with NO publication takes the
+> `docs/decisions/*.md` file in its pull request exactly as the FIFTH AMENDMENT
+> says.** A card that has both — a publication AND an open pull request carrying a
+> decision file — takes the PAGE; the file is then an ordinary file in an ordinary
+> pull request, and the gate set stops raising the file subject for that card.
+>
+> **3. RAISE, AND RE-ASK.** A page subject is raised by the PUBLISH, not by green
+> CI: there is no pull request whose checks could go green. The publish raises an
+> `awaiting` `decision_approval` over the published version and moves the card to
+> `in_review` — forward only, through `applyStatusTransition`, exactly as
+> `publish_design_result` does (`designEvidenceService`, MOTIR-6009).
+>
+> - **A new publication SUPERSEDES an awaiting gate** and raises a fresh one over
+>   the new version. The supersede records the EXISTING cause `republished` (§6b's
+>   AMENDMENT): the writing path is a newer published version, which is what that
+>   value already means for a design, so no enum value is added. A publication of
+>   the SAME version an awaiting gate already asks about changes nothing.
+> - **An edit to the page that nobody publishes re-asks NOTHING.** The version the
+>   gate asks about is sealed, so the edit lands in a new version; the port SAYS
+>   the page has changed since it was published, and the question stays what it
+>   was. A person decides on what the agent submitted, never on a moving document.
+> - **An approved decision is closed.** Approval writes `done` (clause 4), and a
+>   publish on a `done` card is refused by name, as §6c's SECOND AMENDMENT refuses
+>   a new version on a done design card. After **Request changes**, a new
+>   publication raises a new question, as a revised design does (§10e).
+>
+> **4. APPROVE — freeze, then `done`.** In the decide transaction, under the
+> gate's row lock, Approve:
+>
+> 1. **FREEZES the subject version** — `frozen_at` and `frozen_by_gate_id` on that
+>    `page_version` row (`pages.md` AMENDMENT 3). The version is
+>    re-read by id under the lock; a version that no longer exists refuses the
+>    press by name rather than approving nothing.
+> 2. **Applies §3's AMENDMENT row _no linked OPEN pull request ⇒ `done`_.** A page
+>    decision has no pull request, so nothing will ever merge and the approval is
+>    TERMINAL: it writes `done` through `applyStatusTransition` and returns
+>    `statusWritten: 'done'`. There is no companion approve-to-merge gate and
+>    nothing to carry.
+>
+> **Request changes freezes nothing** and moves nothing (§3; §10's verdicts
+> apply unchanged). The version stays SEALED, which is harmless: a seal only stops
+> a save from extending that one version.
+>
+> **A page card that ALSO carries an open linked pull request** (an agent that
+> published a page and opened one anyway) is the second row of §3's table: the
+> press freezes and writes `approved`, and the merge writes `done`. The rule is
+> §3's discriminator, read at decision time, never a special case of this block.
+>
+> **5. THE RESOLVER — the seam's second implementation.** `DecisionDocumentResolver`
+> (`lib/approvalGates/decisionDocumentResolver.ts`) gains a page resolver beside
+> the file resolver. It reads `page_version.body_markdown` by the version id the
+> subject names, plus the version's number, author and save time and the page's
+> title. **That read is a database read**, so — unlike the file resolver, which
+> must stay outside every transaction because it calls the host — the page
+> resolver MAY run inside one, and the decide door may read the subject under the
+> gate's lock. Its unresolvable reasons are named: the version is gone, the page
+> is gone, the reader cannot see the page. **This is the replacement the FIFTH
+> AMENDMENT's clause 8 promised: a new resolver and a new renderer, never a
+> migration on the gate table.**
+>
+> **6. RETENTION — the FROZEN mark is the pin.** The FIFTH AMENDMENT's clause 9
+> pinned nothing because a merged blob is durable on the host. A page version is
+> not durable by itself — a same-author save within ten minutes rewrites it, and
+> the cap prunes the oldest past 100 (`pages.md` §6). So for this subject the
+> approval's retention IS the freeze: a frozen version is never extended, never
+> pruned, and its page cannot be hard-deleted while it holds it (`pages.md`
+> AMENDMENT 3). §6c's principle
+> holds exactly — only a _yes_ keeps its bytes — and a version sent back is merely
+> sealed, which keeps nothing alive past the cap.
+>
+> **7. THE HUMAN RECORD — §1's MOTIR-5952 amendment, point 8.** A
+> `decision_confirmation` card's optional written record MAY be a published page
+> version: the card names the page through the same publication (clause 1), the
+> confirm port shows it, and **Confirm FREEZES that version** in the deciding
+> write, stamping `{ kind: 'page', pageId, versionId, versionNumber, title }` into
+> the gate's record column — a new arm of the discriminated union point 8 built
+> for exactly this. **It replaces the attachment for NEW records.** Attachment
+> records keep rendering as they are and are NOT migrated; a gate stamped
+> `{ kind: 'attachment', … }` reads as one forever. When a card has both a
+> publication and a markdown attachment, the publication wins, by the same rule as
+> clause 2. Overturn freezes nothing. The publish on a `human` decision card raises
+> NO `decision_approval` — that kind is keyed on `coding_agent` (the FIFTH
+> AMENDMENT's clause 10) — and moves no status; it only names the record.
+>
+> **8. WHAT THE RUN DELIVERS.** For a `decision` + `coding_agent` card, a run
+> writes the decision as a page (`create_page` / `update_page`) in the card's
+> project and calls `publish_decision_page`. **It opens no branch and no pull
+> request.** The card's repository pin is CONTEXT the run reads — the code the
+> decision is about — and is no longer the record's home. The FIFTH AMENDMENT's
+> clause 2 (_the pull request is MANDATORY_) is therefore narrowed: it stays true
+> for a card that takes the file subject, and a card with a publication needs no
+> pull request at all.
+>
+> **Which card builds which clause:**
+>
+> | clauses                   | card                                                                                  |
+> | ------------------------- | ------------------------------------------------------------------------------------- |
+> | 1's columns, 4's columns  | MOTIR-7428 — the schema                                                               |
+> | 6, `pages.md` AMENDMENT 3 | MOTIR-7431 — the version policy                                                       |
+> | 1, 3                      | MOTIR-7432 — `decisionPageService.publish`                                            |
+> | 2, 4, 5                   | MOTIR-7433 — the page subject and the freeze at Approve                               |
+> | 1's doors                 | MOTIR-7434 — `publish_decision_page` and the REST route                               |
+> | 7                         | MOTIR-7435 — the human record                                                         |
+> | 8                         | MOTIR-7437 (the dispatch prompt) · MOTIR-7439 / MOTIR-7440 (the runbook) · MOTIR-7442 |
+> | the surfaces              | MOTIR-7430 (design) · MOTIR-7436 (the port) · MOTIR-7444 (the confirm port)           |
+>
+> **What this does NOT decide.**
+>
+> - **Page ↔ work-item mention links**, and a card's _pages that mention this_ list
+>   (Epic MOTIR-5747). The decision page is held by the PUBLICATION, not by a link
+>   row.
+> - **Archive and delete themselves** (Story MOTIR-5755). This block only adds the
+>   refusal to hard-delete a page holding a frozen version (`pages.md` AMENDMENT 3).
+> - **Migrating historical `docs/decisions/` records** into pages. They stay files;
+>   the file resolver stays.
+> - **Read-only pages.** Only the approved version is frozen; the page stays
+>   editable.
 
 > ### 9 — AMENDMENT: HOW TO TEST is per RUN (MOTIR-4906 re-plan, 2026-09-13), DECIDED BY THE REQUESTER (Yue, 2026-09-13)
 >
@@ -6155,6 +6343,11 @@ owed there.
   §1's MOTIR-5887 amendment.** **AMENDED (MOTIR-5952, 2026-09-21): and the
   DECISION work item's own gate — `decision_confirmation`, keyed on `type:
 decision` + `executor: human` — is decided in §1's MOTIR-5952 amendment.**
+  **AMENDED (MOTIR-7427, 2026-10-03): and the decision document's move into the
+  `pages` domain is decided — §8's NINTH AMENDMENT.** A published page version is
+  the subject when a card has one; the file in a pull request remains the subject
+  when it has none. Migrating historical `docs/decisions/` files into pages, and
+  page ↔ work-item mention links, are still not decided here.
 - **Re-homing the ACCEPTANCE gate.** `AcceptancePanel` is the language §1
   generalises from and is deliberately left where it is; folding it onto the
   Approvals tab is its own story.

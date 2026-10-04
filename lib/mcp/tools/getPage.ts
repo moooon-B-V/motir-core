@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { pagesService } from '@/lib/services/pagesService';
@@ -21,14 +22,28 @@ import { pageIdField, pageProjectKeyField, renderPageText, resolvePageProject } 
 
 export const GET_PAGE_TOOL_NAME = 'get_page';
 
+// `version` (MOTIR-7429) reads ONE version's body instead of the current one —
+// an argument on this door, not a second tool, the way `get_work_item` takes
+// `planId`. A number the page does not have is `PAGE_VERSION_NOT_FOUND`, never
+// the current body as a fallback.
 const inputSchema = {
   projectKey: pageProjectKeyField,
   pageId: pageIdField,
+  version: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'A version NUMBER (from the page’s history). Returns that version’s markdown, number, ' +
+        'author, `savedAt`, and whether it is `sealed` (published for a decision) or `frozen` ' +
+        '(approved). Omit to read the current body.',
+    ),
 };
 
 /** The adapter: resolve the project by key, then read the page as markdown. */
 export async function runGetPage(
-  args: { projectKey: string; pageId: string },
+  args: { projectKey: string; pageId: string; version?: number },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   try {
@@ -36,6 +51,7 @@ export async function runGetPage(
     const page = await pagesService.getPageMarkdown(ctx, {
       projectId: project.id,
       pageId: args.pageId,
+      ...(args.version !== undefined ? { version: args.version } : {}),
     });
     return toolOk(renderPageText(page), exempt(GET_PAGE_TOOL_NAME, { ...page }));
   } catch (err) {
@@ -54,7 +70,10 @@ export function registerGetPage(server: McpServer, resolveContext: McpContextRes
         '(`latestVersion`: number, author, when) and its body as `markdown`. The page id is the ' +
         '`<id>` in the page’s address `/pages/<id>`. Read before you write: `update_page` must ' +
         'send back the `revision` this returns, and is refused `PAGE_REVISION_CONFLICT` when ' +
-        'someone has saved since. Read-only. Honors the same access checks as the UI.',
+        'someone has saved since. Pass `version` to read one version of the page instead — the ' +
+        'text a decision was published or approved at — and get `version` (number, author, ' +
+        '`savedAt`, `sealed`, `frozen`) beside the markdown; a number the page does not have is ' +
+        'refused `PAGE_VERSION_NOT_FOUND`. Read-only. Honors the same access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runGetPage(args, resolveContext(extra)),
