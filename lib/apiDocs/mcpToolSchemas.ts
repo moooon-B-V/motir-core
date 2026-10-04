@@ -1283,9 +1283,10 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           'decision_confirmation',
           'plan_approval',
           'pull_request_merge',
+          'manual_work',
         ],
         description:
-          'Which decision to read. `decision_approval` is the gate on a `type: decision` card you authored; `design_result` the one your published design raised; `acceptance_result` a story run’s receipt; `pull_request_approval` the approve-and-merge question over a run’s whole delivery set; `decision_choice` and `decision_confirmation` the two decision kinds a person answers directly. `plan_approval` belongs to a PLAN rather than to a card, so no card has one. `pull_request_merge` is built and withdrawn — only historical rows exist.',
+          'Which decision to read. `decision_approval` is the gate on a `type: decision` card you authored; `design_result` the one your published design raised; `acceptance_result` a story run’s receipt; `pull_request_approval` the approve-and-merge question over a run’s whole delivery set; `decision_choice` and `decision_confirmation` the two decision kinds a person answers directly. `plan_approval` belongs to a PLAN rather than to a card, so no card has one. `pull_request_merge` is built and withdrawn — only historical rows exist. `manual_work` is a manual card a run reached, waiting on a person to do the work and mark it done.',
       },
     },
     required: ['key', 'kind'],
@@ -1345,6 +1346,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      version: {
+        type: 'integer',
+        exclusiveMinimum: 0,
+        description:
+          'A version NUMBER (from the page’s history). Returns that version’s markdown, number, author, `savedAt`, and whether it is `sealed` (published for a decision) or `frozen` (approved). Omit to read the current body.',
       },
     },
     required: ['projectKey', 'pageId'],
@@ -1899,6 +1906,25 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['key', 'videoPathname'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  publish_decision_page: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+    },
+    required: ['key', 'pageId'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -3553,6 +3579,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   next_ready: 'Next ready work item',
   open_plan_session: 'Open plan conversation',
   publish_acceptance_result: 'Publish acceptance result',
+  publish_decision_page: 'Publish decision page',
   publish_design_result: 'Publish design result',
   publish_test_instructions: 'Publish How to test',
   record_plan_revision_reason: 'Record WHY a plan had to change',
@@ -3889,6 +3916,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: false,
+    openWorldHint: false,
+  },
+  publish_decision_page: {
+    title: 'Publish decision page',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
     openWorldHint: false,
   },
   publish_design_result: {

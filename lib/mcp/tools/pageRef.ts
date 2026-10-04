@@ -43,6 +43,18 @@ function renderPlacement(page: PageMarkdownDto): string {
  * revision to write against, who saved the newest version, then the markdown.
  */
 export function renderPageText(page: PageMarkdownDto): string {
+  if (page.version) {
+    const v = page.version;
+    const marks = [v.sealed ? 'sealed' : null, v.frozen ? 'frozen' : null].filter(Boolean);
+    return [
+      `# ${page.title || 'Untitled'} (${page.id})`,
+      `${renderPlacement(page)} · version ${v.number} by ${v.authorName || v.authorId}, saved ${v.savedAt}` +
+        (marks.length ? ` · ${marks.join(', ')}` : '') +
+        ` · the page is now at version ${page.latestVersion?.number ?? v.number}, revision ${page.revision}`,
+      '',
+      page.markdown,
+    ].join('\n');
+  }
   const version = page.latestVersion
     ? `last saved by ${page.latestVersion.authorName || page.latestVersion.authorId} in version ${page.latestVersion.number}`
     : 'no version history';

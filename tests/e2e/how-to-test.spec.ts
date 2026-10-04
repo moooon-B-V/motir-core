@@ -43,7 +43,7 @@ import {
 //
 // No overlay is opened (MOTIR-5214 / 5215), and nothing is pressed: the frame's
 // verbs are asserted present, never used. Approving and merging from the frame
-// is `acceptance-approve-and-merge.spec.ts` (MOTIR-4909). The gate row is still
+// is `cloud-approve-and-merge.spec.ts` (MOTIR-4909). The gate row is still
 // seeded — see `how-to-test-seed.ts` for the full ledger of what is a service
 // call and what is a row.
 //

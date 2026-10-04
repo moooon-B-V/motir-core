@@ -3236,3 +3236,210 @@ acceptance Re-run keeps `fix` and the approve-and-merge refusal moves from `run`
 | MOTIR-6817 | this card                                                                                                                                 |
 
 Fixture items use `ACME-n` keys, so they link to nothing.
+
+## 33 · WAITING ON YOU — the manual-work gate's row and overlay port, with Guide me through and Mark done, and the tab renamed from To approve — MOTIR-7473
+
+**Design system — read first.** `package.json` depends on `@motir/design-system` (`workspace:*`) AND
+`app/globals.css` imports `@motir/design-system/theme.css` → **on Motir Design (branch a)**, at the
+workspace version, on the project's own axes (`app/layout.tsx` applies the persisted `data-style` /
+`data-palette`; the mocks render the base axes, as every mock in this area does). Every part used is the
+package's or a shipped motir-core component: `Pill`, `Button` (incl. `loading` + `Spinner`), `Card`,
+`EmptyState`, `@motir/brand`'s `BrandMark` (`mark`), `ApprovalRow`, `ApprovalGateControl`'s bands,
+`WorkbenchTabs`, `ContentSectionCard`, `TodoRowReadOnly` + `GuideTodoCanvas`'s static box, `RunTonePill`,
+`WorkItemNode`, the `RunsIndex` row. **No part is missing; nothing is proposed to the package.**
+
+**Assets (four NEW delta mocks, DATED 2026-10-03; no existing mock is edited):**
+
+| Surface                                   | Asset                                                          | Amends                                                                                                                |
+| ----------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| The Waiting on you ROW (+ Approvals room) | **`design/workbench/approvals-row--manual-work.mock.html`**    | § 20 `approvals-row.mock.html`, as amended by § 26 (live) and § 28 (the row as a sentence)                            |
+| The approval overlay's PORT               | **`design/workbench/approval-overlay--manual-work.mock.html`** | § 22 `approval-overlay.mock.html`, with § 28's exit row                                                               |
+| The STRIP, renamed                        | **`design/workbench/workbench--waiting-on-you.mock.html`**     | `workbench.mock.html` as amended by § 21 (MOTIR-5216, the order and the cascade) and § 30 (To fix)                    |
+| The RUN's wording                         | **`design/runs/run-section--waiting-on-you.mock.html`**        | `design/runs/run-section.mock.html` and the run modal / runs index — `design/runs/design-notes.md` § _Waiting on you_ |
+
+Story [MOTIR-7460](motir:cmurr45v6007ahwoij3o3p3fg), card MOTIR-7473, built on
+`docs/decisions/manual-work-gate.md` (MOTIR-7472: the kind, its verbs §4, its listing §7 and run wording
+§8) and MOTIR-7458's rename. It is the layout source of truth for **MOTIR-7476** (the rename),
+**MOTIR-7477** (the run wording) and **MOTIR-7478** (the row and the port), which carry it in
+`blocked_by`. **All copy for the four surfaces is in this section**, including the run page's (the runs
+area's notes carry its rules and point here).
+
+Rendered against `origin/main` `99299c22`: every class string is copied from the shipped component it
+names; each mock's stylesheet is Tailwind v4.3.0 compiled over exactly the classes its elements carry,
+with `packages/design-system/theme.css` and `packages/brand/brand.css`. Only review chrome is
+hand-written. Fixture keys are `ACME-n`.
+
+### 33.1 The tab: **To approve → Waiting on you / 等你处理** (strip mock, Panels 1–4)
+
+- **Only the label moves.** Slug `?tab=approvals`, the `Inbox` glyph, first place in the strip, the count
+  chip, the active recipe, the all-zero suppression rule and the landing cascade (§ 21 rung 1) are
+  unchanged. The count now includes awaiting `manual_work` gates, because they are awaiting gates routed
+  to the reader (`listAwaitingMe`) — so a person a run handed work to LANDS on this tab.
+- **Width.** en grows ≈ 26px; zh one character (待审批 → 等你处理). The `< md` strip already scrolls.
+- **The empty state follows the name** (Panel 2c): the old body said _sign-off_, which is no longer the
+  whole set.
+- **Every other string that names the tab** moves with it (MOTIR-7476). The two zh strings that use 待审批
+  as a plain phrase (_awaiting approval_), not as the tab's name — `acceptance.off.adminBody` and
+  `approvalGate.statusHeld.planState.planned` — are NOT renamed.
+
+| key                                               | en                                                                                                                                      | zh                                                                                         |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `workbench.tabs.toApprove` (key may be renamed)   | Waiting on you                                                                                                                          | 等你处理                                                                                   |
+| `workbench.empty.approvals.title`                 | Nothing is waiting on you                                                                                                               | 没有等你处理的事项                                                                         |
+| `workbench.empty.approvals.body`                  | Approvals that need your decision, and work a run handed to you to do, show up here.                                                    | 需要你决定的审批，以及运行交给你完成的工作，都会显示在这里。                               |
+| `approvalGate.planApproval.surface.reopened`      | Reopened from Waiting on you · started by {name} · last active {when}                                                                   | 从“等你处理”重新打开 · 发起人 {name} · 最近活动 {when}                                     |
+| `approvalGate.planApproval.surface.reopenedYours` | Reopened from Waiting on you · started by you · last active {when}                                                                      | 从“等你处理”重新打开 · 由你发起 · 最近活动 {when}                                          |
+| `approvalGate.planApproval.surface.held`          | Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in Waiting on you meanwhile.  | Motir AI 正在编写此计划的新版本。完成后即可批准或拒绝——在此期间它会一直留在“等你处理”中。  |
+| `approvalGate.planApproval.surface.heldBy`        | {harness} is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in Waiting on you meanwhile. | {harness} 正在编写此计划的新版本。完成后即可批准或拒绝——在此期间它会一直留在“等你处理”中。 |
+| `approvalGate.planApproval.surface.declined`      | You declined this plan. Nothing in your backlog changed, and it has left Waiting on you.                                                | 你拒绝了此计划。待办列表没有任何改动，它也已离开“等你处理”。                               |
+| `approvalGate.planApproval.declineConfirm.leaves` | Take it out of Waiting on you.                                                                                                          | 将它移出“等你处理”。                                                                       |
+| `approvalGate.planApproval.handoff.writing`       | … and the plan will be waiting for you in `<link>`Waiting on you`</link>`.                                                              | ……计划完成后会在`<link>`等你处理`</link>`中等你。                                          |
+| `approvalGate.planApproval.handoff.rewriting`     | … it stays in `<link>`Waiting on you`</link>`, and you can decide once I'm done.                                                        | ……它会一直留在`<link>`等你处理`</link>`中，等我完成后你就可以决定。                        |
+
+The two `handoff.*` rows change only the link's text; the rest of each sentence is the shipped string.
+`docs/approval-gates.md`'s _To approve_ mentions are MOTIR-7476's to sweep.
+
+### 33.2 The ROW (row mock, Panels 1–6)
+
+**The sentence**, title-FIRST (as § 28's _{title} is finished_), one ICU message per form with the
+shipped `<title>` tag, so the order is the catalogue's:
+
+| form — when                                                                  | en                                             | zh                                |
+| ---------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------- |
+| awaiting, routed to the reader (the tab)                                     | `<title>{name}</title> is waiting on you`      | `<title>{name}</title>等你处理`   |
+| awaiting, for a reader it is NOT routed to (the room)                        | `<title>{name}</title> is waiting on a person` | `<title>{name}</title>等人处理`   |
+| decided — settled in place, and the room's record                            | `<title>{name}</title> was marked done`        | `<title>{name}</title>已标记完成` |
+| held (§ 26 — left the awaiting set; the surface does not know where it went) | `Manual work on <title>{name}</title>`         | `<title>{name}</title>的人工工作` |
+
+**Why this kind's sentence changes with state when no other kind's does.** § 28 made every kind a NOUN
+PHRASE so it stays true after the decision. ADR §7 fixes this kind's words as a STATE (_is waiting on
+you_), so it is said only while true: the settled form says what happened, and the held form falls back
+to a neutral noun phrase, because a held row does not know whether it was marked done elsewhere or
+withdrawn.
+
+| cell              | content                                                                                                                                                                                  | tokens / shape                                                                                                                                                                                                                           |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| glyph             | lucide `hand` — `workItemTypeMeta`'s mark for `type: manual`                                                                                                                             | `--el-type-manual`, `h-4 w-4`, `aria-hidden`                                                                                                                                                                                             |
+| sentence          | as above; the title is § 28's quick-view door                                                                                                                                            | frame words `--el-text-secondary`; title `--el-text` `font-medium` (settled / held: `--el-text-secondary`)                                                                                                                               |
+| key               | shipped                                                                                                                                                                                  | `font-mono text-xs --el-text-secondary`                                                                                                                                                                                                  |
+| details           | to-do progress _{done}/{total} steps_ · zh _{done}/{total} 步_ (rows from the card; _No to-do list_ · _无待办清单_ when none) · then, while pending, **Guide me through** / **带我完成** | progress `text-xs --el-text-secondary`; the `·` `aria-hidden`; the door: `text-xs font-medium --el-link`, `hover:` / `focus-visible:underline`, the `BrandMark` mark at 12px (`.brand-glyph`, `--el-accent-on-surface`), `relative z-10` |
+| Waited            | the shipped relative age, from the RAISE (`waitingSince`)                                                                                                                                | shipped                                                                                                                                                                                                                                  |
+| Decide — pending  | **Mark done** / **标记完成** — `Button variant="secondary" size="sm"`, `relative z-10`, in the place `Review` holds for every other kind                                                 | shipped Button recipe (`--radius-btn`, `--height-btn-sm`)                                                                                                                                                                                |
+| Decide — deciding | `Button loading`: Spinner + **Marking…** / **正在标记…**, disabled, `aria-busy`                                                                                                          | shipped                                                                                                                                                                                                                                  |
+| Decide — decided  | `Pill severity="success"` **Marked done** / **已标记完成**, `whitespace-nowrap`                                                                                                          | `--el-tint-mint` + `--el-text-strong`                                                                                                                                                                                                    |
+| Decide — held     | the shipped colourless **Decided elsewhere** / **已由他人决定**                                                                                                                          | `Pill tone="neutral"`                                                                                                                                                                                                                    |
+| Decide — see only | the shipped **Awaiting** / **等待处理**                                                                                                                                                  | `Pill tone="awaiting"`                                                                                                                                                                                                                   |
+
+- **The grid is unchanged** (`APPROVALS_GRID_TEMPLATE`). Two buttons do not fit the 132px Decide track,
+  and they do not need to: **Guide me through is a DOOR, not a verb** (ADR §4) — it navigates — so it is
+  a LINK in the details track, and the one VERB takes the Decide cell. It is a real
+  `<a href="/items/{key}?plan=guide&planFrom=guide&planItem={key}">`: plain click opens the guide overlay
+  over the Workbench (`useOpenGuide`), modified click the item page in a new tab.
+- **Mark done DECIDES FROM THE ROW** (ADR §5) — new for the row grammar, where every other kind only
+  opens. No confirm: the press is the decision, the consequence is a status move the person asked for,
+  and the overlay states it for anyone who opens first. The row settles from the write's own response
+  through `lib/approvals/decidedGates.ts` (the § 22 signal), stays in place, and leaves on the next load
+  (§ 20 / § 26).
+- **States drawn:** pending with a list (2a), pending with no list (2b), deciding (2c), decided (2d),
+  left the set while looking — withdrawn or decided elsewhere (2e). A withdrawn gate is never its own
+  row: the tab reads awaiting gates only, so withdrawal arrives as the held row.
+- **The Approvals room** (Panel 4) renders the same row: waiting for somebody else (_is waiting on a
+  person_, the _Asked of_ cell, the Awaiting pill, no door), and decided (_was marked done_, _Decided by_,
+  the decided time, _Marked done_). A withdrawn `manual_work` gate is not listed (ADR §7).
+- **Accessible name of the row door:** `workbench.approvals.reviewRow` with the plain sentence —
+  _Review ACME-31 — Create the production Stripe account is waiting on you_.
+
+### 33.3 The OVERLAY PORT (overlay mock, Panels 1–7)
+
+The kind opens in the shipped overlay (§ 22): exit row, then `ApprovalGateControl`'s three bands.
+
+| band              | content (en / zh)                                                                                                                                                                                                                                                                                                                                                                     | tokens                                                                                                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 · kind line     | `hand` glyph · **Manual work** / **人工工作** · meta _Handed to you by a run · {done} of {total} steps done_ / _由一次运行交给你 · 已完成 {done}/{total} 步_ (no list: _… · no to-do list_ / _… · 无待办清单_) · state pill                                                                                                                                                           | kind `text-sm font-semibold --el-text`; meta `text-xs --el-text-secondary`; shipped pills                                                                                                                             |
+| 2 · port, lead    | _This is work a person does, so the run stopped here and handed it to you. Do the steps, then mark it done. Guide me through walks you through them one at a time._ / _这是需要人来完成的工作，所以运行在这里停下，把它交给了你。完成这些步骤，然后标记完成。“带我完成”会一步一步带你做。_                                                                                            | `text-[13.5px] --el-text`, `max-w-[48rem]`                                                                                                                                                                            |
+| 2 · port, list    | the to-do list in its READ FACE: `ContentSectionCard` header (_To-do list — the steps of this work_ · _待办清单 — 本项工作的步骤_, progress _{d} of {t} done_ right) and `TodoRowReadOnly`'s two-track rows with the box DRAWN by state (`GuideTodoCanvas`'s static idiom); instructions still expand                                                                                 | ticked box `--el-accent` fill + `--el-accent-text` check; open box `--el-border-strong` on `--el-input-readonly-bg`; done text `--el-text-secondary line-through`; _Done by {name}_ `text-[11px] --el-text-secondary` |
+| 2 · port, no list | lead: _… It has no to-do list: its description says what to do, and Guide me through can propose the steps._ / _……它没有待办清单：描述里写明了要做什么，“带我完成”也可以为你提出步骤。_ · box: **No to-do list** / _Open the work item to read its description, or let Guide me through propose the steps._ / **无待办清单** / _打开工作项阅读它的描述，或让“带我完成”为你提出步骤。_ | box `--el-surface-soft`, `--el-border`, `--radius-card`; title `--el-text`, body `--el-text-secondary`                                                                                                                |
+| 3 · verbs         | consequence _Marking done moves {key} to Done._ / _标记完成后 {key} 将移至“已完成”。_ · **Guide me through** / **带我完成** (`Button` secondary `sm`, as a link, `BrandMark` mark 14px) · **Mark done** / **标记完成** (`Button` primary `sm`). **No Request changes.**                                                                                                               | shipped band recipe                                                                                                                                                                                                   |
+
+- **The box is not a control in the port.** Ticking belongs to the item page and the guide; a third
+  tick surface inside a decision frame would split the list's writers.
+- **With an open linked pull request** the consequence reads _Marking done records it here. {key} moves
+  to Done when its pull request merges._ / _标记完成会在此记录。{key} 会在其拉取请求合并后移至“已完成”。_
+  (ADR §4, `merge_writes_done`).
+- **Mark done pressing** (Panel 3): Mark done `loading` (_Marking…_ / _正在标记…_); Guide me through
+  `aria-disabled` and dimmed for the length of the write; Close stays live.
+- **Decided** (Panel 4): pill **Marked done**; lead _This work was marked done. The work items waiting on
+  it can start._ / _这项工作已标记完成。等待它的工作项可以开始了。_; band 3 becomes the shipped record
+  band (who · when). The overlay does not close.
+- **Withdrawn** (Panel 5): the shipped withdrawn frame (colourless **Withdrawn**, _Nobody decided it._,
+  _No decision · no one to attribute_), with the cause line per ADR §6:
+
+| cause                                     | en                                                                                       | zh                                                       |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `no_longer_manual` (new)                  | The work item is no longer manual work, so this question was withdrawn.                  | 该工作项已不再是人工工作，因此该问题已撤回。             |
+| `pulled_back` — `causeByKind.manual_work` | The work item was cancelled or archived, so this question was withdrawn.                 | 该工作项已被取消或归档，因此该问题已撤回。               |
+| `closed_without_decision` (new)           | The work item was closed without anyone marking it done, so this question was withdrawn. | 该工作项在无人标记完成的情况下被关闭，因此该问题已撤回。 |
+
+The `pulled_back` line is kind-specific because the shipped one (_pulled back out of review_) is false
+for a card that never entered review.
+
+- **Read-only, not routed** (Panel 6): the frame's state B — pill **Awaiting**, band 3 _Waiting on
+  {name}._ (shipped), **no controls at all**. Not Guide me through either: the guide ticks rows as the
+  person walking, and the walk is the routed person's. The item page keeps its own door for anyone who
+  may edit (A2.7).
+- **Dialog name:** `approvalOverlay.dialogTitle` with kind **Manual work** — _Manual work for ACME-31_ /
+  _ACME-31 的人工工作_.
+
+### 33.4 The run's wording
+
+Drawn in `design/runs/run-section--waiting-on-you.mock.html`; its rules are in `design/runs/design-notes.md`
+§ _Waiting on you_. Copy:
+
+| key (proposed)                      | en                               | zh                              |
+| ----------------------------------- | -------------------------------- | ------------------------------- |
+| `runs.skipReason.waitingOnYou`      | Skipped — waiting on you.        | 已跳过 — 等你处理。             |
+| `runs.skipReason.waitingOn`         | Skipped — waiting on {name}.     | 已跳过 — 等 {name} 处理。       |
+| `runs.skipReason.markedDone`        | Skipped — marked done by {name}. | 已跳过 — 已由 {name} 标记完成。 |
+| `runs.skipReason.needsHuman` (text) | Skipped — manual work.           | 已跳过 — 人工工作。             |
+| `runs.summaryWaitingYou`            | {n} waiting on you               | 等你处理 {n} 项                 |
+| `runs.summaryWaitingOthers`         | {n} waiting on others            | 等他人处理 {n} 项               |
+
+### 33.5 Copy — the new and changed strings for the row and the port
+
+| key (proposed)                                                                                                       | en                                                    | zh                                          |
+| -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------- |
+| `workbench.approvals.sentence.manual_work`                                                                           | `<title>{name}</title> is waiting on you`             | `<title>{name}</title>等你处理`             |
+| `workbench.approvals.sentence.manual_work_other`                                                                     | `<title>{name}</title> is waiting on a person`        | `<title>{name}</title>等人处理`             |
+| `workbench.approvals.sentence.manual_work_done`                                                                      | `<title>{name}</title> was marked done`               | `<title>{name}</title>已标记完成`           |
+| `workbench.approvals.sentence.manual_work_held`                                                                      | `Manual work on <title>{name}</title>`                | `<title>{name}</title>的人工工作`           |
+| `workbench.approvals.manualSteps`                                                                                    | {done}/{total} steps                                  | {done}/{total} 步                           |
+| `workbench.approvals.manualNoList`                                                                                   | No to-do list                                         | 无待办清单                                  |
+| `workbench.approvals.markDone`                                                                                       | Mark done                                             | 标记完成                                    |
+| `workbench.approvals.marking`                                                                                        | Marking…                                              | 正在标记…                                   |
+| `workbench.approvals.kind.manual_work`                                                                               | Manual work                                           | 人工工作                                    |
+| `approvalGate.manualWork.state.markedDone`                                                                           | Marked done                                           | 已标记完成                                  |
+| `approvalGate.manualWork.meta`                                                                                       | Handed to you by a run · {done} of {total} steps done | 由一次运行交给你 · 已完成 {done}/{total} 步 |
+| `approvalGate.manualWork.metaNoList`                                                                                 | Handed to you by a run · no to-do list                | 由一次运行交给你 · 无待办清单               |
+| `approvalGate.manualWork.lead` / `leadNoList` / `leadDone`                                                           | § 33.3                                                | § 33.3                                      |
+| `approvalGate.manualWork.noList.title` / `.body`                                                                     | § 33.3                                                | § 33.3                                      |
+| `approvalGate.manualWork.consequence` / `consequenceMerges`                                                          | § 33.3                                                | § 33.3                                      |
+| `approvalGate.withdrawn.cause.no_longer_manual` · `.closed_without_decision` · `causeByKind.manual_work.pulled_back` | § 33.3                                                | § 33.3                                      |
+| (shipped) `runs.guide.door`                                                                                          | Guide me through                                      | 带我完成                                    |
+
+No raw hex and no raw shape utility in any of the four deltas.
+
+### What this asset does NOT decide
+
+- **The guide itself** — what Guide me through opens is MOTIR-7462's design.
+- **Whether a parent run resumes** after Mark done (MOTIR-6858).
+- **The Approvals room's structure**, the overlay's frame, and every other kind's row — composed, unchanged.
+
+### GIVES / TAKES
+
+| card                                              | GIVES                                                                                                                                                                         | TAKES                                                                                                                                                         |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-7476** (rename)                           | § 33.1: the label, the empty state, the eight dependent strings, the zh strings NOT to rename                                                                                 | Nothing                                                                                                                                                       |
+| **MOTIR-7477** (run wording)                      | § 33.4 and the runs area's § _Waiting on you_: four leg labels, two summary segments                                                                                          | **PREMISE:** the run DTOs must carry, per `needs_human` leg, its gate's state and routed person, and `legSummary` a count of waiting legs by routed-to-reader |
+| **MOTIR-7478** (row + port)                       | § 33.2, § 33.3, § 33.5: the four sentence forms, the details cell with the Guide me through link, Mark done in the Decide cell and its states, the port, the withdrawn causes | **ELEMENT:** `SENTENCE_KEY` gains a kind whose sentence depends on state and routing — the only kind so; `StatePill` gains _Marked done_ for this kind        |
+| **MOTIR-7474** (handler)                          | Nothing                                                                                                                                                                       | Nothing — the verbs drawn are the ADR's                                                                                                                       |
+| **MOTIR-5147 / 5216 / 5222 / 5239 / 5997 / 7462** | Nothing                                                                                                                                                                       | Nothing — composed; their mocks are records and are not edited                                                                                                |

@@ -12,6 +12,7 @@ import {
 } from '@/lib/services/dispatchRunService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures/workItemFixtures';
+import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
@@ -555,5 +556,237 @@ describe('the boundaries — asserted, not inspected', () => {
 
     const read = await dispatchRunService.getRun(run.id, fixture.ctx);
     expect(read.cards[0]!.sessionBranch).toBe('motir/auto-1');
+  });
+});
+
+// A RUN THAT REACHES A MANUAL CARD RAISES ITS GATE (Story MOTIR-7460 · MOTIR-7475;
+// `docs/decisions/manual-work-gate.md` §2). The raise hangs off the leg the run
+// already records — at open or by a later event — so no runner has to change.
+describe('a needs_human leg raises the manual-work gate', () => {
+  async function manualCard(title: string) {
+    const card = await workItemsService.createWorkItem(
+      { projectId: fixture.projectId, kind: 'task', title, type: 'manual', executor: 'human' },
+      fixture.ctx,
+    );
+    return card.identifier;
+  }
+
+  const gatesOn = (identifier: string) =>
+    adminDb.approvalGate.findMany({
+      where: { kind: 'manual_work', workItem: { identifier } },
+    });
+
+  it('at OPEN — one awaiting gate on the manual card, routed to the run’s starter', async () => {
+    const key = await manualCard('Rotate the signing key');
+    const [coded] = await seedItems(1);
+
+    await dispatchRunService.open(
+      {
+        projectKey: fixture.projectIdentifier,
+        command: 'run_scope',
+        reportedBy: 'cli',
+        cards: [
+          { key, disposition: 'skipped', skipReason: 'needs_human' },
+          { key: coded!, disposition: 'queued' },
+        ],
+      },
+      fixture.ctx,
+    );
+
+    const gates = await gatesOn(key);
+    expect(gates).toHaveLength(1);
+    // The card was unassigned, so the raise assigned it to the run's starter (§3).
+    expect(gates[0]).toMatchObject({ state: 'awaiting', routedToId: fixture.ownerId });
+    expect(await adminDb.approvalGate.count({ where: { kind: 'manual_work' } })).toBe(1);
+  });
+
+  it('by a later EVENT — and the same leg reported again, or by a second run, asks once', async () => {
+    const key = await manualCard('Renew the certificate');
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fixture.projectIdentifier,
+        command: 'auto',
+        reportedBy: 'cli',
+        cards: [{ key, disposition: 'queued' }],
+      },
+      fixture.ctx,
+    );
+    expect(await gatesOn(key)).toHaveLength(0);
+
+    const skip = {
+      kind: 'card_skipped' as const,
+      workItemKey: key,
+      disposition: 'skipped' as const,
+      skipReason: 'needs_human' as const,
+    };
+    await dispatchRunService.appendEvents(run.id, [skip], fixture.ctx);
+    await dispatchRunService.appendEvents(run.id, [skip], fixture.ctx);
+    await dispatchRunService.open(
+      {
+        projectKey: fixture.projectIdentifier,
+        command: 'auto',
+        reportedBy: 'cli',
+        cards: [{ key, disposition: 'skipped', skipReason: 'needs_human' }],
+      },
+      fixture.ctx,
+    );
+
+    const gates = await gatesOn(key);
+    expect(gates).toHaveLength(1);
+    expect(gates[0]!.state).toBe('awaiting');
+  });
+
+  it('raises nothing for a manual card already Done', async () => {
+    const key = await manualCard('Already handled');
+    const card = await adminDb.workItem.findFirstOrThrow({ where: { identifier: key } });
+    await workItemsService.updateStatus(card.id, 'in_progress', fixture.ctx);
+    await workItemsService.updateStatus(card.id, 'done', fixture.ctx);
+
+    await dispatchRunService.open(
+      {
+        projectKey: fixture.projectIdentifier,
+        command: 'run_scope',
+        reportedBy: 'cli',
+        cards: [{ key, disposition: 'skipped', skipReason: 'needs_human' }],
+      },
+      fixture.ctx,
+    );
+
+    expect(await gatesOn(key)).toHaveLength(0);
+  });
+
+  it('raises nothing for any OTHER skip reason, at open or by event', async () => {
+    const key = await manualCard('Waits on something else');
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fixture.projectIdentifier,
+        command: 'run_scope',
+        reportedBy: 'cli',
+        cards: [{ key, disposition: 'skipped', skipReason: 'claim_refused' }],
+      },
+      fixture.ctx,
+    );
+    await dispatchRunService.appendEvents(
+      run.id,
+      [
+        {
+          kind: 'card_skipped',
+          workItemKey: key,
+          disposition: 'skipped',
+          skipReason: 'claim_refused',
+        },
+      ],
+      fixture.ctx,
+    );
+
+    expect(await gatesOn(key)).toHaveLength(0);
+  });
+});
+
+// THE RUN SURFACES NAME WHO A MANUAL LEG WAITS ON (Story MOTIR-7460 · MOTIR-7477;
+// `design/runs/design-notes.md` § _Waiting on you_). The browser's run reads carry
+// each `needs_human` leg's gate, resolved for the READER, and the index row counts
+// the legs still waiting by whether they wait on the reader.
+describe('the run reads carry each manual leg’s gate, for the reader', () => {
+  async function openWithManualLeg() {
+    const card = await workItemsService.createWorkItem(
+      {
+        projectId: fixture.projectId,
+        kind: 'task',
+        title: 'Order the badges',
+        type: 'manual',
+        executor: 'human',
+      },
+      fixture.ctx,
+    );
+    const [coded] = await seedItems(1);
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fixture.projectIdentifier,
+        command: 'run_scope',
+        reportedBy: 'cli',
+        cards: [
+          { key: card.identifier, disposition: 'skipped', skipReason: 'needs_human' },
+          { key: coded!, disposition: 'skipped', skipReason: 'claim_refused' },
+        ],
+      },
+      fixture.ctx,
+    );
+    return { run, card };
+  }
+
+  const listRow = async () =>
+    (
+      await dispatchRunService.listRunsForProject(
+        fixture.projectIdentifier,
+        { take: 10 },
+        fixture.ctx,
+      )
+    ).runs[0]!;
+
+  it('awaiting, routed to the reader: waiting on YOU — on the detail, the history and the index', async () => {
+    const { run, card } = await openWithManualLeg();
+
+    const detail = await dispatchRunService.getRunDetail(run.id, fixture.ctx);
+    expect(detail.cards[0]!.manualGate).toEqual({
+      state: 'awaiting',
+      name: fixture.owner.name || fixture.owner.email,
+      routedToReader: true,
+    });
+    // Any other leg carries no gate — `null`, never a guess.
+    expect(detail.cards[1]!.manualGate).toBeNull();
+
+    const history = await dispatchRunService.listRunsForWorkItemKey(
+      card.identifier,
+      { take: 10 },
+      fixture.ctx,
+    );
+    expect(history[0]!.cards[0]!.manualGate).toMatchObject({ routedToReader: true });
+
+    const row = await listRow();
+    expect(row.legs.skipped).toBe(2);
+    expect(row.waiting).toEqual({ you: 1, others: 0 });
+  });
+
+  it('awaiting, routed to somebody else: named, and counted as waiting on others', async () => {
+    const { run, card } = await openWithManualLeg();
+    const mara = await createTestUser({ name: 'Mara S.' });
+    await adminDb.workItem.update({ where: { id: card.id }, data: { assigneeId: mara.id } });
+
+    const detail = await dispatchRunService.getRunDetail(run.id, fixture.ctx);
+    expect(detail.cards[0]!.manualGate).toEqual({
+      state: 'awaiting',
+      name: 'Mara S.',
+      routedToReader: false,
+    });
+    expect((await listRow()).waiting).toEqual({ you: 0, others: 1 });
+  });
+
+  it('marked done: names who decided it, and the leg counts as skipped again', async () => {
+    const { run, card } = await openWithManualLeg();
+    await adminDb.approvalGate.updateMany({
+      where: { kind: 'manual_work', workItemId: card.id },
+      data: { state: 'approved', decidedById: fixture.ownerId, decidedAt: new Date() },
+    });
+
+    const detail = await dispatchRunService.getRunDetail(run.id, fixture.ctx);
+    expect(detail.cards[0]!.manualGate).toEqual({
+      state: 'approved',
+      name: fixture.owner.name || fixture.owner.email,
+      routedToReader: false,
+    });
+    expect((await listRow()).waiting).toEqual({ you: 0, others: 0 });
+  });
+
+  it('a withdrawn gate is no gate — the leg reads as manual work', async () => {
+    const { run, card } = await openWithManualLeg();
+    await adminDb.approvalGate.updateMany({
+      where: { kind: 'manual_work', workItemId: card.id },
+      data: { state: 'superseded', supersededCause: 'no_longer_manual' },
+    });
+
+    const detail = await dispatchRunService.getRunDetail(run.id, fixture.ctx);
+    expect(detail.cards[0]!.manualGate).toBeNull();
+    expect((await listRow()).waiting).toEqual({ you: 0, others: 0 });
   });
 });

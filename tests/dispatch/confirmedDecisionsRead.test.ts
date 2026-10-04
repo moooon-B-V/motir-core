@@ -16,6 +16,8 @@ vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
 const { dispatchPromptService } = await import('@/lib/services/dispatchPromptService');
+const { decisionPageService } = await import('@/lib/services/decisionPageService');
+const { pagesService } = await import('@/lib/services/pagesService');
 
 let fx: WorkItemFixture;
 let seq = 0;
@@ -148,6 +150,87 @@ describe('the epic’s confirmed decisions reach the prompt', () => {
       executor: 'coding_agent',
     });
     expect(await promptFor(card.identifier)).not.toContain(foreign.identifier);
+  });
+});
+
+// MOTIR-7438 — an AGENT decision approved over a PAGE joins the same feed, cited by
+// the version its approval FROZE, read with `get_page`.
+describe('approved decision pages reach the prompt', () => {
+  async function approvedPageDecision(parentId: string, title: string) {
+    const card = await create({ parentId, title, type: 'decision', executor: 'coding_agent' });
+    const page = await pagesService.createPageFromMarkdown(fx.ctx, {
+      projectId: fx.projectId,
+      title,
+      markdown: `# ${title}\n\nThe approved text.`,
+    });
+    await decisionPageService.publish({ workItemId: card.id, pageId: page.id }, fx.ctx);
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: card.id, kind: 'decision_approval' },
+      fx.ctx,
+    );
+    await approvalGatesService.decide(
+      { gateId: read.gate!.id, decision: 'approve', source: 'api', stamp: read.stamp! },
+      fx.ctx,
+      { decidedAt: new Date('2026-09-10T09:00:00Z') },
+    );
+    return { card, page };
+  }
+
+  it('cites the frozen version with get_page, in date order beside confirmed human decisions', async () => {
+    const epic = await create({ kind: 'epic', title: 'Exports' });
+    const human = await decision(epic.id, 'Use a bucket', 'Exports go to a bucket.', 'Bucket.');
+    await decide(human.id, 'approve', new Date('2026-09-01T09:00:00Z'));
+    const { card, page } = await approvedPageDecision(epic.id, 'Pick the format');
+    const work = await create({
+      parentId: epic.id,
+      title: 'Build it',
+      type: 'code',
+      executor: 'coding_agent',
+    });
+
+    // The page moves on after the approval: the prompt still cites what was approved.
+    const now = await pagesService.getPageMarkdown(fx.ctx, {
+      projectId: fx.projectId,
+      pageId: page.id,
+    });
+    await pagesService.savePageMarkdown(fx.ctx, {
+      projectId: fx.projectId,
+      pageId: page.id,
+      markdown: '# Pick the format\n\nEdited after approval.',
+      expectedRevision: now.revision,
+    });
+
+    const prompt = await promptFor(work.identifier);
+    expect(prompt).toContain(`  ${card.identifier} — Pick the format`);
+    expect(prompt).toContain('    approved 2026-09-10T09:00:00.000Z');
+    expect(prompt).toContain(
+      `      get_page { projectKey: "PROD", pageId: "${page.id}", version: 1 }`,
+    );
+    expect(prompt.indexOf(human.identifier)).toBeLessThan(prompt.indexOf(card.identifier));
+    expect(prompt).not.toContain('Edited after approval.');
+  });
+
+  it('an agent decision still awaiting approval is not listed', async () => {
+    const epic = await create({ kind: 'epic', title: 'Pending' });
+    const card = await create({
+      parentId: epic.id,
+      title: 'Undecided',
+      type: 'decision',
+      executor: 'coding_agent',
+    });
+    const page = await pagesService.createPageFromMarkdown(fx.ctx, {
+      projectId: fx.projectId,
+      title: 'Undecided',
+      markdown: '# Undecided\n\nDraft.',
+    });
+    await decisionPageService.publish({ workItemId: card.id, pageId: page.id }, fx.ctx);
+    const work = await create({
+      parentId: epic.id,
+      title: 'Work',
+      type: 'code',
+      executor: 'coding_agent',
+    });
+    expect(await promptFor(work.identifier)).not.toContain('CONFIRMED DECISIONS');
   });
 });
 

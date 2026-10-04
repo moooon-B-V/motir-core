@@ -10,7 +10,7 @@ import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import type { RunLegBadge } from '@/components/planning/WorkItemNode';
 import type { DispatchRunDto } from '@/lib/dto/dispatchRuns';
 import { fetchRoadmapLevel } from '@/lib/planning/roadmapClient';
-import { DISPOSITION_TONE, SKIP_REASON_KEY } from '@/lib/runs/timeline';
+import { DISPOSITION_TONE, skipReasonMessage } from '@/lib/runs/timeline';
 
 // THE RUN'S SET, ON THE SHARED CANVAS (MOTIR-3895 · `design/runs/design-notes.md`
 // § The run MODAL).
@@ -53,16 +53,19 @@ export function RunCanvasPane({
    * vocabulary and cannot fall out of step with the run header or the index. The
    * skip REASON is `SKIP_REASON_KEY`'s, whose seven members are the enum's (not
    * the six `batchPlan.ts`'s `SKIP_LABEL` carries), and a skip shown without its
-   * reason says nothing.
+   * reason says nothing. A MANUAL leg names who it waits on (MOTIR-7477) —
+   * `skipReasonMessage` resolves it from the leg's gate, the same call the item
+   * page's Run section makes.
    */
   const runLegs = useMemo(() => {
     const map = new Map<string, RunLegBadge>();
     for (const leg of run.cards) {
       if (leg.workItemId === null) continue;
-      const label =
+      const skip =
         leg.disposition === 'skipped' && leg.skipReason !== null
-          ? t(`skipReason.${SKIP_REASON_KEY[leg.skipReason]}`)
-          : t(`disposition.${leg.disposition}`);
+          ? skipReasonMessage({ skipReason: leg.skipReason, manualGate: leg.manualGate })
+          : null;
+      const label = skip ? t(skip.key, skip.values) : t(`disposition.${leg.disposition}`);
       map.set(leg.workItemId, { tone: DISPOSITION_TONE[leg.disposition], label });
     }
     return map;

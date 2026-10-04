@@ -1495,7 +1495,9 @@ describe('motir auto — the session-branch run', () => {
     expect(agent.invocations()).toHaveLength(1);
     expect(agent.invocations()[0]?.stdin).toContain(codeItem.identifier);
     expect(auto.stderr).toContain('needs planning');
-    expect(auto.stderr).toContain('needs a human');
+    // ADR `manual-work-gate.md` §8 (MOTIR-7477): the starter's own manual card.
+    expect(auto.stderr).toContain("waiting on you in Motir's Waiting on you");
+    expect(auto.stderr).not.toContain('needs a human');
     // A skipped item is NOT dispatched, so it is not transitioned either.
     expect((await stateOf(fx, story.id)).status).toBe('todo');
     expect((await stateOf(fx, human.id)).status).toBe('todo');

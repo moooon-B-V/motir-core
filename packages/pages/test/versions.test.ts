@@ -60,6 +60,8 @@ describe('decideVersionWrite', () => {
     savedAt: new Date(0),
     restoredFromVersionId: null,
     restoredFromNumber: null,
+    sealedAt: null,
+    frozenAt: null,
   };
 
   it('starts version 1 on an empty history', () => {
@@ -88,6 +90,13 @@ describe('decideVersionWrite', () => {
     ).toEqual({ kind: 'new', number: 5 });
     // A restore whose source was pruned is still a restore.
     expect(decideVersionWrite({ ...base, restoredFromNumber: 2 }, 'A', new Date(1))).toEqual({
+      kind: 'new',
+      number: 5,
+    });
+  });
+
+  it('never extends a SEALED version, whatever the author and the window (MOTIR-7431)', () => {
+    expect(decideVersionWrite({ ...base, sealedAt: new Date(0) }, 'A', new Date(1))).toEqual({
       kind: 'new',
       number: 5,
     });
@@ -178,7 +187,105 @@ describe('the cap', () => {
   it('does not prune when a save only extends', async () => {
     const page = await createPage(store, clock, scope);
     await write(page.id, 'A', 'x');
-    expect(store.called('deleteOldestVersions')).toBe(0);
+    expect(store.called('deleteOldestUnmarkedVersions')).toBe(0);
+  });
+});
+
+describe('the marks (MOTIR-7431)', () => {
+  it('a same-author save in the window after a SEAL starts N+1 and leaves N untouched', async () => {
+    const page = await createPage(store, clock, scope);
+    advance(MINUTE);
+    await write(page.id, 'A', 'published text');
+    const [v1] = store.versionsOf(page.id);
+    store.markVersion(v1!.id, { sealedAt: clock.current });
+
+    advance(2 * MINUTE);
+    await write(page.id, 'A', 'a typo fixed after publishing');
+
+    const versions = store.versionsOf(page.id);
+    expect(versions.map((v) => [v.number, v.bodyMarkdown])).toEqual([
+      [1, 'published text'],
+      [2, 'a typo fixed after publishing'],
+    ]);
+    expect(stateToMarkdown(versions[0]!.bodyState)).toBe('published text');
+  });
+
+  it('105 saves keep sealed versions 2 and 3 and a frozen one; the page holds the cap of UNMARKED + the marked', async () => {
+    const page = await createPage(store, clock, scope);
+    for (let n = 1; n <= 3; n += 1) {
+      advance(11 * MINUTE);
+      await write(page.id, 'A', `early ${n}`);
+    }
+    const [, v2, v3, v4] = store.versionsOf(page.id);
+    store.markVersion(v2!.id, { sealedAt: clock.current });
+    store.markVersion(v3!.id, { sealedAt: clock.current });
+    store.markVersion(v4!.id, { sealedAt: clock.current, frozenAt: clock.current });
+
+    for (let n = 1; n <= 105; n += 1) {
+      advance(11 * MINUTE);
+      await write(page.id, 'A', `save ${n}`);
+    }
+
+    const versions = store.versionsOf(page.id);
+    const numbers = versions.map((v) => v.number);
+    expect(numbers).toContain(v2!.number);
+    expect(numbers).toContain(v3!.number);
+    expect(numbers).toContain(v4!.number);
+    // Three marked rows are never counted away, so the page keeps the cap + 3
+    // only while the unmarked pass the cap — here the cap is what remains.
+    expect(versions).toHaveLength(PAGE_VERSION_CAP);
+    expect(versions.at(-1)!.bodyMarkdown).toBe('save 105');
+  });
+
+  it('a page whose marked versions alone pass the cap keeps more than the cap', async () => {
+    const page = await createPage(store, clock, scope);
+    for (let n = 2; n <= PAGE_VERSION_CAP + 2; n += 1) {
+      const v = await store.insertVersion({
+        workspaceId: 'w1',
+        projectId: 'p1',
+        pageId: page.id,
+        number: n,
+        authorId: 'seed',
+        bodyState: emptyState(),
+        bodyMarkdown: `sealed ${n}`,
+        startedAt: clock.current,
+        savedAt: clock.current,
+        restoredFromVersionId: null,
+        restoredFromNumber: null,
+      });
+      store.markVersion(v.id, { sealedAt: clock.current });
+    }
+    advance(MINUTE);
+    await write(page.id, 'A', 'newest');
+
+    const versions = store.versionsOf(page.id);
+    // v1 (unmarked) is pruned; every sealed one stays; the newest is written.
+    expect(versions.map((v) => v.number)).not.toContain(1);
+    expect(versions).toHaveLength(PAGE_VERSION_CAP + 2);
+    expect(versions.at(-1)!.bodyMarkdown).toBe('newest');
+  });
+
+  it('restoring a FROZEN version writes an unmarked new version and leaves the frozen one as it was', async () => {
+    const page = await createPage(store, clock, scope);
+    advance(MINUTE);
+    await write(page.id, 'A', 'approved');
+    const [v1] = store.versionsOf(page.id);
+    store.markVersion(v1!.id, { sealedAt: clock.current, frozenAt: clock.current });
+    advance(11 * MINUTE);
+    await write(page.id, 'A', 'edited after approval');
+
+    advance(MINUTE);
+    const { version } = await restorePageVersion(store, clock, {
+      pageId: page.id,
+      number: 1,
+      actorId: 'A',
+    });
+
+    expect(version).toMatchObject({ number: 3, sealedAt: null, frozenAt: null });
+    expect(version.restoredFromNumber).toBe(1);
+    const frozen = store.versionsOf(page.id)[0]!;
+    expect(frozen).toMatchObject({ id: v1!.id, bodyMarkdown: 'approved' });
+    expect(frozen.frozenAt).not.toBeNull();
   });
 });
 
@@ -241,7 +348,7 @@ describe('restorePageVersion', () => {
     // `page` has versions 1–2; `other` has 1–3, so 3 exists only on `other`.
     const before = JSON.stringify([...store.pages.values(), store.versions]);
     const writes = () =>
-      ['updateBody', 'insertVersion', 'updateVersion', 'deleteOldestVersions'].map((m) =>
+      ['updateBody', 'insertVersion', 'updateVersion', 'deleteOldestUnmarkedVersions'].map((m) =>
         store.called(m as never),
       );
     const writesBefore = writes();

@@ -6,6 +6,7 @@ import {
   PageCycleError,
   PageDepthExceededError,
   PageFolderNotFoundError,
+  PageHoldsFrozenVersionError,
   PageLevelCursorInvalidError,
   PageNeighbourInvalidError,
   PageArchiveRootRequiredError,
@@ -111,6 +112,13 @@ export function pageErrorResponse(err: unknown): NextResponse {
   // tree refusal like the others above, 422.
   if (err instanceof PageArchivedError || err instanceof PageNotArchivedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  // A delete that would take an approved decision's frozen version (MOTIR-7431).
+  if (err instanceof PageHoldsFrozenVersionError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, pageId: err.pageId },
+      { status: 409 },
+    );
   }
   if (err instanceof PageArchiveRootRequiredError) {
     return NextResponse.json(

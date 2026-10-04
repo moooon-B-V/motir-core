@@ -26,6 +26,7 @@ import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import type { PlanAuthorSourceDto, PlanOriginDto } from '@/lib/dto/plans';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
+import type { TodoProgressDto, WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 
 // Wire DTOs for the approval-gate record (Story MOTIR-4778 · Subtask
 // MOTIR-4788; ADR docs/decisions/approval-gates.md). The service layer (the
@@ -61,7 +62,10 @@ export type ApprovalGateKindDTO =
   /** A PLAN, on a gate that belongs to NO work item (ADR §11, MOTIR-6032). */
   | 'plan_approval'
   /** The REVIEW AGENT's question over a green delivery set (ADR §12, MOTIR-6818). */
-  | 'agent_review';
+  | 'agent_review'
+  /** MANUAL WORK a run reached, waiting on a person (MOTIR-7474;
+   *  `docs/decisions/manual-work-gate.md`). */
+  | 'manual_work';
 
 /**
  * WHETHER A DECISION IS WAITING ON A WORK ITEM, AND ON WHOM — the one answer the
@@ -184,7 +188,11 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'review_agent_disabled'
   /** The gate's subject no longer resolves through its kind's handler, so a read that
    *  observed it withdrew the question (MOTIR-7146). */
-  | 'subject_gone';
+  | 'subject_gone'
+  /** A `manual_work` card stopped being manual (MOTIR-7474). */
+  | 'no_longer_manual'
+  /** A `manual_work` card reached a done status by a write nobody decided (MOTIR-7474). */
+  | 'closed_without_decision';
 
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can
@@ -552,8 +560,9 @@ export interface AcceptanceResultSubjectSummaryDTO {
  */
 export interface DecisionApprovalSubjectSummaryDTO {
   kind: 'decision_approval';
-  /** `one` — a single document; anything else, the gate cannot be approved. */
-  outcome: 'one' | 'none' | 'several' | 'unreadable';
+  /** `one` — a single document; `page` — a published page version (MOTIR-7436); anything
+   *  else, the gate cannot be approved. */
+  outcome: 'one' | 'page' | 'none' | 'several' | 'unreadable';
   /** `owner/name#number` of the pull request the answer was read off. */
   repo: string;
   number: number;
@@ -565,6 +574,8 @@ export interface DecisionApprovalSubjectSummaryDTO {
   blobSha: string | null;
   /** How many documents the head writes — what a `several` row counts (MOTIR-5679). */
   documentCount: number;
+  /** For `page`: the published version's number (the row reads *title · page, version N*). */
+  versionNumber?: number;
 }
 
 /**
@@ -691,7 +702,42 @@ export interface UnregisteredSubjectSummaryDTO {
     | 'decision_choice'
     | 'decision_confirmation'
     | 'plan_approval'
+    | 'manual_work'
   >;
+}
+
+/**
+ * WHAT MANUAL WORK a row is waiting on (MOTIR-7474; `docs/decisions/manual-work-gate.md`
+ * §7) — the card IS the subject, so the row's title is the card's; this carries the
+ * progress the row prints beside it: `<done>/<total> steps` from the card's to-do list,
+ * or `todos: null` when the card has no list.
+ */
+export interface ManualWorkSubjectSummaryDTO {
+  kind: 'manual_work';
+  todos: { done: number; total: number } | null;
+  /**
+   * THE STAMP the row's MARK DONE presents (Story MOTIR-7460 · MOTIR-7478; design
+   * `design/workbench/design-notes.md` § 33.2). This kind is the one row that DECIDES
+   * from the row (ADR `manual-work-gate.md` §5), so the row is a render the decide door
+   * compares against — computed from the same card read this summary is, by the one
+   * definition (`computeGateStamp`). A decided record carries it too, and nothing
+   * presses one.
+   */
+  stamp: string;
+}
+
+/**
+ * THE MANUAL-WORK PORT (Story MOTIR-7460 · MOTIR-7478; design § 33.3) — the card's to-do
+ * list in its read face, and whether Mark done will write Done itself or record the
+ * decision for the merge to finish (`merge_writes_done`, ADR §4).
+ */
+export interface ManualWorkPortDTO {
+  /** The card's to-do rows, in list order — drawn read-only; the port ticks nothing. */
+  todos: WorkItemTodoDto[];
+  progress: TodoProgressDto;
+  /** True when the card has an OPEN delivering pull request: Mark done then records the
+   *  decision and the merge writes Done (`manualWorkHandler.approve`). */
+  mergeWritesDone: boolean;
 }
 
 /**
@@ -766,6 +812,7 @@ export type ApprovalGateSubjectSummaryDTO =
   | DecisionChoiceSubjectSummaryDTO
   | DecisionConfirmationSubjectSummaryDTO
   | PlanApprovalSubjectSummaryDTO
+  | ManualWorkSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
 /** The card a gate hangs off, as a queue row identifies it. */
@@ -1012,6 +1059,12 @@ export type ApprovalGateOverlaySubjectDTO =
   | { state: 'no_gate' }
   | { state: 'kind_not_built' }
   | { state: 'gone' }
+  | {
+      state: 'resolved';
+      kind: 'manual_work';
+      /** THE MANUAL-WORK PORT (Story MOTIR-7460 · MOTIR-7478) — the card's to-do list. */
+      manualWork: ManualWorkPortDTO;
+    }
   | {
       state: 'resolved';
       kind: 'decision_choice';

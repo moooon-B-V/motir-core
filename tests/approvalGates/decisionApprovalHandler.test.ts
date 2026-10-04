@@ -257,6 +257,7 @@ describe('the decide door over a decision gate', () => {
 describe('the RESOLVER is the only thing a second implementation changes (clause 8)', () => {
   const fake: DecisionDocumentResolver = {
     async resolve(identity) {
+      if (identity.source === 'page') return { outcome: 'unresolvable', reason: 'unreadable' };
       return identity.resolvable
         ? {
             outcome: 'resolved',

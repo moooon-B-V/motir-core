@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { servePrivateObjectStore } from './_helpers/object-store';
@@ -14,8 +14,16 @@ import {
 } from './_helpers/design-approval-seed';
 import { seedApprovalsRoom, type ApprovalsRoomSeed } from './_helpers/approvals-room-seed';
 
-// THE APPROVAL RECORDS ROOM, END TO END — AND THE ACCEPTANCE RECEIPT FOR IT
-// (Story MOTIR-5299 · Subtask MOTIR-5304).
+// THE APPROVAL RECORDS ROOM, END TO END — Story MOTIR-5299's walk, as a
+// REGRESSION spec. It was that story's acceptance receipt
+// (`acceptance-approvals-room.spec.ts`, Subtask MOTIR-5304); Story MOTIR-7460
+// PROMOTED it into the main lane (docs/acceptance-lane-triage.md § MOTIR-7460)
+// when the Workbench's To approve tab was renamed Waiting on you. The import swap
+// to `_helpers/promoted-regression` keeps every `chapter()` as a step and drops the
+// pacing; the one chapter restated is the queue forgetting the decided approval —
+// the tab's link and its empty state now read Waiting on you and "Nothing is
+// waiting on you" (design `design/workbench/design-notes.md` § 33). The header
+// below is the receipt's, kept as it was written.
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //
@@ -210,11 +218,14 @@ test.describe('Approval records — a place you can go', () => {
 
     await chapter('The Workbench queue forgets it, as a queue should', async () => {
       await rail(page).getByRole('link', { name: 'Workbench', exact: true }).click();
-      await page.getByRole('link', { name: /To approve/ }).click();
+      // ⚠️ RESTATED AFTER PROMOTION (Story MOTIR-7460, design
+      // `design/workbench/design-notes.md` § 33): the tab is Waiting on you now,
+      // not To approve, and its empty state is "Nothing is waiting on you".
+      await page.getByRole('link', { name: /Waiting on you/ }).click();
       await expect(page).toHaveURL(/tab=approvals/);
-      await expect(
-        page.getByRole('heading', { name: 'Nothing is waiting on your approval' }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole('heading', { name: 'Nothing is waiting on you' })).toBeVisible({
+        timeout: 30_000,
+      });
     });
     await beat();
 

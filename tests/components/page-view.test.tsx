@@ -14,6 +14,7 @@ import { decodeBase64, sendPageUpdate, uploadPageImage } from '@/components/page
 // PageView's own ⋯ and the archived banner read the router (MOTIR-7423).
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // The page at its own address (Story MOTIR-5752 · MOTIR-7280) —

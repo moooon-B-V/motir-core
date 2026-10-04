@@ -26,6 +26,9 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { PlanChangeSessionNotFoundError } from '@/lib/planChange/errors';
 import { PermissionDeniedError, ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { ApprovalGatePendingError, WorkItemError } from '@/lib/workItems/errors';
+import { ApprovalGateError } from '@/lib/approvalGates/errors';
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import {
   EmptyTodoTextError,
   TodoCommandTooLongError,
@@ -419,13 +422,20 @@ async function landOne(
         }
       } catch (err) {
         // A pending approval owns the card's status (MOTIR-4887). The guide never
-        // moves past it, and never decides it: that press is a person's.
+        // moves past it — and decides it ONLY when it is the manual-work question,
+        // whose answer IS this close (`manual-work-gate.md` §5; A2.6 row 2).
         if (err instanceof ApprovalGatePendingError) {
-          throw new Skip(
-            'an approval waiting on this card owns its status — decide it on the card',
-          );
+          if (err.gateKind === 'manual_work' && err.gateId) {
+            await markManualWorkDone(err.gateId, actor);
+            card.item = await workItemsService.getWorkItem(card.item.id, actor);
+          } else {
+            throw new Skip(
+              'an approval waiting on this card owns its status — decide it on the card',
+            );
+          }
+        } else {
+          throw err;
         }
-        throw err;
       }
       await commentsService.addComment(
         card.item.id,
@@ -438,6 +448,33 @@ async function landOne(
   // Unreachable: the parser admits only the closed set.
   void index;
   throw new Skip('not an action this build lands');
+}
+
+/**
+ * THE GUIDE'S CONSENTED CLOSE DECIDES A PENDING `manual_work` GATE (MOTIR-7474;
+ * `manual-work-gate.md` §5, `conversation-turn-intent.md` A2.6 row 2) — through the
+ * decide door, as the person whose turn it was, never around it. Mark done is the
+ * gate's `approve`: the door records the decision and writes Done.
+ *
+ * `DECIDED_WITHOUT_A_READER`: the person consented in the conversation and was never
+ * shown the gate's render, so there is no stamp to hand back. Nothing about manual
+ * work has a version (§1), so the stale check has nothing to protect here. A refusal
+ * from the door (not their card to decide, already decided) becomes a skip.
+ */
+async function markManualWorkDone(gateId: string, actor: ServiceContext): Promise<void> {
+  try {
+    await approvalGatesService.decide(
+      { gateId, decision: 'approve', source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
+      actor,
+    );
+  } catch (err) {
+    if (err instanceof ApprovalGateError) {
+      throw new Skip(
+        'the work waiting on this card could not be marked done — mark it on the card',
+      );
+    }
+    throw err;
+  }
 }
 
 /** The words appended to the reply when an action was skipped, so the turn says

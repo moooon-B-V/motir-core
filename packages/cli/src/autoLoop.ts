@@ -51,15 +51,17 @@ export function classifyReadyItem(item: {
 }
 
 /**
- * A `decision` card an AGENT runs — dispatched like any other, but on a pull
- * request of its OWN and never onto a session branch (MOTIR-6094).
+ * A `decision` card an AGENT runs — dispatched like any other, but never onto a
+ * session branch (MOTIR-6094), and since MOTIR-7437 onto no branch at all: the
+ * agent writes its decision as a PAGE and publishes it with
+ * `publish_decision_page`, making no commit and opening no pull request.
  *
- * Approving a decision also authorises the merge of the pull request linked to
- * it, so a decision linked to a session pull request would carry every other
- * card of the run into `main` on one press. The server's prompt already keeps
- * such a card off the lineage (`isAgentDecisionItem`, restated here for the
- * reason {@link classifyReadyItem} gives); a scoped drain additionally holds the
- * decision's dependents until its gate is approved, because nothing else in
+ * The server's prompt renders no git workflow for such a card and names no
+ * branch (`isAgentDecisionItem`, restated here for the reason
+ * {@link classifyReadyItem} gives). Keeping it off the session still matters: a
+ * decision makes no commits to integrate, and seeding a lineage for it would open
+ * a session pull request with nothing on it. A scoped drain additionally holds
+ * the decision's dependents until its gate is approved, because nothing else in
  * that loop would.
  */
 export function isAgentDecisionItem(item: {
@@ -164,6 +166,9 @@ export interface SkipRecord {
    * `records`, is unaffected by it.
    */
   reason: 'needs_planning' | 'needs_human' | 'claim_refused' | 'blocked_in_scope';
+  /** For `needs_human`: the person the card waits on when that is NOT the run's
+   *  starter (see {@link manualWaitingOn}). Absent means the starter — *you*. */
+  waitingOn?: string;
   /** For `blocked_in_scope`: the in-scope blockers that were still open when the
    *  run reached this card. Absent for every other reason. */
   blockedBy?: string[];
@@ -408,9 +413,63 @@ const STOP_LABEL: Record<StopReason, string> = {
   replanned: 'an agent refused its work item and submitted a re-plan — waiting for you in Motir',
 };
 
-const SKIP_LABEL: Record<SkipRecord['reason'], string> = {
+/**
+ * WHO A MANUAL CARD THE RUN SKIPPED IS WAITING ON (Story MOTIR-7460 · MOTIR-7477;
+ * `docs/decisions/manual-work-gate.md` §8).
+ *
+ * The run's skip raises a `manual_work` gate on the card, routed to its assignee —
+ * and an UNASSIGNED card is assigned to the run's starter first (§3). So the CLI,
+ * which cannot see the gate, answers from the card it was handed: `undefined` —
+ * *waiting on you*, the starter — when the card is unassigned or the starter's;
+ * the assignee's name otherwise. Every loop picks only unassigned or own cards
+ * (`isPickable`), so the second arm is the rare one; it is here so the report
+ * never says *you* about somebody else's card.
+ */
+export function manualWaitingOn(
+  item: { assigneeId: string | null; assigneeName?: string | null },
+  ownerId: string | null | undefined,
+): string | undefined {
+  if (item.assigneeId === null || !ownerId || item.assigneeId === ownerId) return undefined;
+  return item.assigneeName?.trim() || 'its assignee';
+}
+
+/**
+ * The `needs_human` group of a run report, in the words §8 gives it: the card is
+ * waiting on its person in Motir's **Waiting on you** — never *needs a human*.
+ * Split in two so *you* stays true: the starter's cards, then anybody else's,
+ * each line naming who.
+ */
+export function renderManualSkipGroups(
+  prefix: string,
+  group: ReadonlyArray<{ key: string; title: string | null; waitingOn?: string | undefined }>,
+  titleWidth: number,
+): string[] {
+  const blocks: string[] = [];
+  const mine = group.filter((s) => s.waitingOn === undefined);
+  const others = group.filter((s) => s.waitingOn !== undefined);
+  if (mine.length > 0) {
+    blocks.push(
+      [
+        `${prefix} — waiting on you in Motir's Waiting on you (${mine.length}):`,
+        ...mine.map((s) => `  ${s.key} — ${truncate(s.title ?? '', titleWidth)}`),
+      ].join('\n'),
+    );
+  }
+  if (others.length > 0) {
+    blocks.push(
+      [
+        `${prefix} — waiting on someone else in Motir (${others.length}):`,
+        ...others.map(
+          (s) => `  ${s.key} — ${truncate(s.title ?? '', titleWidth)} (waiting on ${s.waitingOn})`,
+        ),
+      ].join('\n'),
+    );
+  }
+  return blocks;
+}
+
+const SKIP_LABEL: Record<Exclude<SkipRecord['reason'], 'needs_human'>, string> = {
   needs_planning: 'needs planning',
-  needs_human: 'needs a human',
   // ⚠️ A SCOPED-RUN reason (MOTIR-3199), and it can only arise there. The run
   // OWNS this card — the claim took every member in the to-do category,
   // `blocked` included — which is not the same as being allowed to build it out
@@ -671,6 +730,10 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
   ] as const) {
     const group = summary.skipped.filter((s) => s.reason === reason);
     if (group.length === 0) continue;
+    if (reason === 'needs_human') {
+      blocks.push(...renderManualSkipGroups('Skipped', group, titleWidth));
+      continue;
+    }
     blocks.push(
       [
         `Skipped — ${SKIP_LABEL[reason]} (${group.length}):`,

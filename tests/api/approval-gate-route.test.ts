@@ -402,6 +402,42 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     expect(body.subject).toEqual({ state: 'kind_not_built' });
   });
 
+  it('a MANUAL card resolves to its to-do list, read-only, and whether a merge writes Done (MOTIR-7478)', async () => {
+    const { workItemTodosService } = await import('@/lib/services/workItemTodosService');
+    const created = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Create the production Stripe account',
+        type: 'manual',
+        executor: 'human',
+      },
+      fx.ctx,
+    );
+    const card = await adminDb.workItem.findUniqueOrThrow({ where: { id: created.id } });
+    const first = await workItemTodosService.addTodo(card.id, { text: 'Sign in' }, fx.ctx);
+    await workItemTodosService.addTodo(card.id, { text: 'Turn on live mode' }, fx.ctx);
+    await workItemTodosService.setTodoDone(first.todo.id, true, fx.ctx);
+    const gate = await rawGate(card, 'manual_work', card.id);
+    signIn(owner());
+
+    const res = await gateViaRoute({ key: card.identifier, kind: 'manual_work' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.gate).toMatchObject({ id: gate.id, kind: 'manual_work' });
+    expect(body.subject).toMatchObject({
+      state: 'resolved',
+      kind: 'manual_work',
+      manualWork: { progress: { done: 1, total: 2 }, mergeWritesDone: false },
+    });
+    expect(
+      body.subject.manualWork.todos.map((t: { text: string; done: boolean }) => [t.text, t.done]),
+    ).toEqual([
+      ['Sign in', true],
+      ['Turn on live mode', false],
+    ]);
+  });
+
   it('the APPROVE-TO-MERGE gate resolves to the Development block: both pull requests, the delivery set and How to test (MOTIR-5439)', async () => {
     const story = await twoRepoStory();
     // The approve-and-merge gate's subject is the card's delivery set, so its
@@ -545,6 +581,49 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     expect(body.subject).toMatchObject({ state: 'resolved', kind: 'pull_request_approval' });
     expect(body.subject.decision).toEqual({ document });
     expect(read).toHaveBeenCalledWith(story.id, expect.anything());
+    read.mockRestore();
+  });
+
+  it('a DECISION published as a PAGE resolves over an EMPTY delivery set — no pull request is its normal shape (MOTIR-5761)', async () => {
+    const created = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Decide how a page stores its body' },
+      fx.ctx,
+    );
+    const story = await adminDb.workItem.findUniqueOrThrow({ where: { id: created.id } });
+    const gate = await rawGate(story, 'decision_approval', story.id);
+    const { decisionDocumentService } = await import('@/lib/services/decisionDocumentService');
+    const document = {
+      outcome: 'page' as const,
+      pageId: 'page-1',
+      versionId: 'version-1',
+      versionNumber: 1,
+      title: 'How a page stores its body',
+      markdown: '# How a page stores its body',
+      pageUrl: '/pages/page-1',
+      versionUrl: '/pages/page-1?version=1',
+      compareUrl: '/pages/page-1?history=open&version=1',
+      authorName: 'Ada Lovelace',
+      savedAt: '2026-10-03T10:00:00.000Z',
+      frozen: false,
+      changedSince: false,
+    };
+    const read = vi
+      .spyOn(decisionDocumentService, 'readViewForWorkItem')
+      .mockResolvedValue(document);
+    signIn(owner());
+
+    const body = await (
+      await gateViaRoute({ key: story.identifier, kind: 'decision_approval' })
+    ).json();
+
+    expect(body.gate).toMatchObject({ id: gate.id, kind: 'decision_approval', state: 'awaiting' });
+    expect(body.subject).toMatchObject({
+      state: 'resolved',
+      kind: 'pull_request_approval',
+      deliveries: [],
+      pullRequests: [],
+    });
+    expect(body.subject.decision).toEqual({ document });
     read.mockRestore();
   });
 
@@ -1073,10 +1152,16 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       // `motir fix`, beside the row whose reason a person cannot act on (MOTIR-5806) —
       // the same read `lateReads.ts` makes for the item page's own Development block.
       'workItemRepairService.getRepairView',
+      // The manual-work port (MOTIR-7478): the card's to-do list, the same read the item
+      // page's To-do section makes.
+      'workItemTodosService.listTodos',
       'workItemsService.getDeliveryView',
       // A design's PARENT — where its Re-plan opens the planner (MOTIR-6427, §10h).
       'workItemsService.getWorkItem',
       'workItemsService.getWorkItemByIdentifier',
+      // The manual-work port's consequence line (MOTIR-7478): whether an open delivering
+      // pull request means the merge, not the press, writes Done (ADR §4).
+      'workItemsService.listDeliverySet',
       'workItemsService.listLinkedPullRequests',
       // The project's workflow — the overlay header's status chip (MOTIR-6427).
       'workflowsService.listStatusesByProject',

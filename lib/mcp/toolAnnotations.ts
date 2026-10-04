@@ -329,6 +329,15 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // A replay of the same version writes nothing, so it is idempotent; not destructive
+  // (nothing is removed).
+  // W: publishDecisionPage.ts → decisionPageService.publish — seals a version, records the publication, supersedes + raises the decision gate
+  publish_decision_page: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   // W: workItemTodos.ts → workItemTodosService.addTodo — appends a step + revision; additive
   add_work_item_todo: {
     readOnlyHint: false,

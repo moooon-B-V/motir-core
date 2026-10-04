@@ -2,6 +2,7 @@
 
 import { lazy, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 import { History, Info, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -74,8 +75,16 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
   // gone" notice live here, because the title row's control, the compare split
   // and the panel all read them. A page opens with history closed; `page.tsx`
   // keys this view by page id, so navigating to another page closes it.
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [selected, setSelected] = useState<number | null>(null);
+  // A link to ONE VERSION — `?version=<n>`, which the decision port's *Open page* and
+  // *Compare with current* use (MOTIR-7436) — opens with History open on that version's
+  // compare view, because the live page may have moved past what was decided.
+  const searchParams = useSearchParams();
+  const linkedVersion = (() => {
+    const raw = Number(searchParams?.get('version'));
+    return Number.isInteger(raw) && raw > 0 ? raw : null;
+  })();
+  const [historyOpen, setHistoryOpen] = useState(linkedVersion !== null);
+  const [selected, setSelected] = useState<number | null>(linkedVersion);
   const [goneNumber, setGoneNumber] = useState<number | null>(null);
   const [listKey, setListKey] = useState(0);
 

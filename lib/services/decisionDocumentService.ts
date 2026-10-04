@@ -1,5 +1,6 @@
 import { loadDecisionIdentity } from '@/lib/approvalGates/decisionApprovalHandler';
 import {
+  pageDecisionResolver,
   repoFileDecisionResolver,
   type DecisionDocumentContent,
   type DecisionDocumentResolver,
@@ -9,6 +10,8 @@ import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import { toDecisionDocumentViewDTO } from '@/lib/mappers/decisionDocumentMappers';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { repoFileReadService } from './repoFileReadService';
 
 // READ A DECISION DOCUMENT — the one door a surface uses to SHOW what a decision gate
@@ -35,9 +38,42 @@ let activeResolver: DecisionDocumentResolver = repoFileDecisionResolver((ctx, re
   repoFileReadService.readFile(ctx, repoRef, path, ref),
 );
 
+// THE PAGE RESOLVER (Story MOTIR-5761 · MOTIR-7433) — a published page version's
+// markdown, read under the reader's workspace context. The read is a Motir row, so it
+// could run in a transaction; it runs here, beside the file read, so a surface has ONE
+// door whichever kind of document the card is asked about.
+let activePageResolver: DecisionDocumentResolver = pageDecisionResolver(async (ctx, versionId) =>
+  withWorkspaceContext(ctx, async (tx) => {
+    const version = await pageVersionRepository.findVersionById(versionId, tx);
+    if (!version) return null;
+    // What the port's meta line and notices draw (MOTIR-7436): the author, the save time,
+    // the freeze, and the page's newest version — above this one means it changed since.
+    // Both rows exist whenever the version does: the page's newest version is at least
+    // this one, and the author's FK is `Restrict`, so neither read can come back empty.
+    const latest = (await pageVersionRepository.findLatest(version.pageId, tx))!;
+    const [author] = await userRepository.findByIds([version.authorId], tx);
+    return {
+      markdown: version.bodyMarkdown,
+      authorName: author!.name,
+      savedAt: version.savedAt.toISOString(),
+      frozen: version.frozenAt !== null,
+      latestVersionNumber: latest.number,
+    };
+  }),
+);
+
+/** Register the PAGE resolver, returning the one it replaced — the file seam's twin. */
+export function setPageDecisionDocumentResolver(
+  resolver: DecisionDocumentResolver,
+): DecisionDocumentResolver {
+  const previous = activePageResolver;
+  activePageResolver = resolver;
+  return previous;
+}
+
 /**
- * Register the resolver every read goes through, returning the one it replaced so a
- * caller can put it back. The production default reads the repository.
+ * Register the resolver every FILE read goes through, returning the one it replaced so
+ * a caller can put it back. The production default reads the repository.
  */
 export function setDecisionDocumentResolver(
   resolver: DecisionDocumentResolver,
@@ -59,7 +95,9 @@ export const decisionDocumentService = {
   async readForWorkItem(workItemId: string, ctx: ServiceContext): Promise<DecisionDocumentRead> {
     const identity = await withWorkspaceContext(ctx, (tx) => loadDecisionIdentity(workItemId, tx));
     if (!identity) return { identity: null, content: null };
-    return { identity, content: await activeResolver.resolve(identity, ctx) };
+    // The resolver is picked by the identity's SOURCE — a page, or a file.
+    const resolver = identity.source === 'page' ? activePageResolver : activeResolver;
+    return { identity, content: await resolver.resolve(identity, ctx) };
   },
 
   /**

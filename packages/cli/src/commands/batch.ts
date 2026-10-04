@@ -45,6 +45,7 @@ import {
   type SnapshotSkip,
 } from '../batchPlan.js';
 import type { DispatchItem, MotirClient } from '../client.js';
+import { manualWaitingOn } from '../autoLoop.js';
 import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
 
 // `motir batch` — THE FROZEN SNAPSHOT (Story 7.9 · Subtask 7.9.10 · MOTIR-888).
@@ -185,7 +186,7 @@ function partitionByExclusion(
 
 /** Freeze the ready set into the run's plan: what will be implemented, and
  *  what is left out with the reason. */
-export function planSnapshot(items: DispatchItem[]): Snapshot {
+export function planSnapshot(items: DispatchItem[], ownerId?: string): Snapshot {
   const taken: SnapshotEntry[] = [];
   const skipped: SnapshotSkip[] = [];
   for (const item of items) {
@@ -198,7 +199,14 @@ export function planSnapshot(items: DispatchItem[]): Snapshot {
         statusKey: item.status?.key,
       });
     } else {
-      skipped.push({ key: item.key, title: item.title, reason: disposition });
+      // Who a manual card now waits on (MOTIR-7477, ADR §8) — absent is the starter.
+      const waitingOn = disposition === 'needs_human' ? manualWaitingOn(item, ownerId) : undefined;
+      skipped.push({
+        key: item.key,
+        title: item.title,
+        reason: disposition,
+        ...(waitingOn ? { waitingOn } : {}),
+      });
     }
   }
   return { taken, skipped };
@@ -363,7 +371,7 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
     ...(kinds ? { kinds } : {}),
   });
   const [eligible, heldOut] = partitionByExclusion(enumerated, persistedExcludes);
-  const snapshot = planSnapshot(eligible);
+  const snapshot = planSnapshot(eligible, ownerId);
   // Everything the snapshot saw — the frozen boundary. An item outside this set
   // at the end of the run became ready DURING it. The held-out items were seen,
   // so they belong to the boundary too.

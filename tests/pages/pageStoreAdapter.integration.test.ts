@@ -750,6 +750,8 @@ describe('pageStoreFor(tx) — the version methods on real Postgres (MOTIR-7384)
       savedAt: at(2),
       restoredFromVersionId: null,
       restoredFromNumber: null,
+      sealedAt: null,
+      frozenAt: null,
     });
     expect(await inTenant(t, (tx) => pageStoreFor(tx).latestVersion('missing'))).toBeNull();
   });
@@ -793,13 +795,13 @@ describe('pageStoreFor(tx) — the version methods on real Postgres (MOTIR-7384)
     expect(await inTenant(t, (tx) => pageStoreFor(tx).findVersion(page.id, 2))).toBeNull();
   });
 
-  it('deleteOldestVersions(pageId, 3) on 5 versions leaves 3–5, and only touches that page', async () => {
+  it('deleteOldestUnmarkedVersions(pageId, 3) on 5 versions leaves 3–5, and only touches that page', async () => {
     const t = await makeTenant('vcap');
     const page = await create(t);
     const other = await create(t);
     for (let n = 2; n <= 5; n += 1) await insertVersion(t, page.id, n);
 
-    await inTenant(t, (tx) => pageStoreFor(tx).deleteOldestVersions(page.id, 3));
+    await inTenant(t, (tx) => pageStoreFor(tx).deleteOldestUnmarkedVersions(page.id, 3));
 
     const left = await adminDb.pageVersion.findMany({
       where: { pageId: page.id },

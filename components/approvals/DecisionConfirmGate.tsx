@@ -3,7 +3,12 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
-import { CircleAlert, FileText } from 'lucide-react';
+import { ArrowUpRight, CircleAlert, FileText, Notebook } from 'lucide-react';
+import { FrozenPill } from '@/components/pages/FrozenPill';
+import {
+  DecisionRecordPagePicker,
+  type DecisionRecordPagePickerProps,
+} from './DecisionRecordPagePicker';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { useRefusalReplanSlots, type RefusalReplanProps } from './RefusalReplan';
 import type { DecisionChange, DecisionDraft } from '@/lib/approvalGates/decisionRecord';
@@ -84,11 +89,61 @@ export function SupersededChip({ item }: { item: SupersededItemDTO }) {
   );
 }
 
+const bold = (chunks: ReactNode) => <b>{chunks}</b>;
+
+/** What a person who can edit the card needs to point at a page as the record. */
+export type DecisionRecordPicker = Omit<DecisionRecordPagePickerProps, 'chosen'>;
+
 /** The record LINK (or its absence) the port shows while the question is open. */
-function RecordLine({ record, count }: { record: ConfirmedRecordDTO; count: number }) {
+function RecordLine({
+  record,
+  count,
+  picker,
+}: {
+  record: ConfirmedRecordDTO;
+  count: number;
+  picker?: DecisionRecordPicker;
+}) {
   const t = useTranslations('approvalGate.decisionConfirm.record');
+  // A person who can edit the card may CHOOSE a page as the record (MOTIR-7444): with no
+  // record yet, or to change a page already chosen. An attachment record renders as before.
+  if (picker && (record.kind === 'none' || record.kind === 'page')) {
+    return (
+      <DecisionRecordPagePicker
+        {...picker}
+        chosen={
+          record.kind === 'page'
+            ? { pageId: record.pageId, title: record.title, versionNumber: record.versionNumber }
+            : null
+        }
+      />
+    );
+  }
   if (record.kind === 'none') {
     return <p className="text-[13px] text-(--el-text-secondary)">{t('none')}</p>;
+  }
+  if (record.kind === 'page') {
+    // A published page version (MOTIR-7444, delta 4 Panel 2a) — read-only here; the
+    // editable row with *Change* is the picker's.
+    return (
+      <p
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]"
+        data-testid="decision-record-page"
+      >
+        <span className="text-(--el-text-secondary)">{t('link')}</span>
+        <Notebook className="h-3.5 w-3.5 flex-none text-(--el-text-secondary)" aria-hidden />
+        <span className="text-(--el-text)">
+          {t.rich('page', { title: record.title, number: record.versionNumber, b: bold })}
+        </span>
+        <Link
+          href={`/pages/${encodeURIComponent(record.pageId)}?version=${record.versionNumber}`}
+          className="inline-flex items-center gap-1 font-semibold text-(--el-link) hover:text-(--el-link-pressed)"
+        >
+          {t('open')}
+          <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+        </Link>
+      </p>
+    );
   }
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
@@ -112,11 +167,14 @@ export function DecisionPortBody({
   view,
   record,
   recordCount,
+  recordPicker,
 }: {
   view: DecisionPortView;
   /** The record the port links — omitted on a decided gate, whose band reads the stamp. */
   record?: ConfirmedRecordDTO;
   recordCount?: number;
+  /** *Choose page*, for a person who can edit the card while the question is open. */
+  recordPicker?: DecisionRecordPicker;
 }) {
   const t = useTranslations('approvalGate.decisionConfirm.eyebrow');
   return (
@@ -165,7 +223,9 @@ export function DecisionPortBody({
           />
         </div>
       ) : null}
-      {record ? <RecordLine record={record} count={recordCount ?? 0} /> : null}
+      {record ? (
+        <RecordLine record={record} count={recordCount ?? 0} picker={recordPicker} />
+      ) : null}
     </div>
   );
 }
@@ -185,6 +245,8 @@ export interface DecisionConfirmGateFrameProps {
    */
   replan?: RefusalReplanProps;
   canDecide: boolean;
+  /** *Choose page* in the open port (MOTIR-7444); omitted for a reader who cannot edit. */
+  recordPicker?: DecisionRecordPicker;
   routedToLabel: string | null;
   /** The card's `KEY-<n>`, named in the consequence and confirm lines. */
   identifier: string;
@@ -208,6 +270,7 @@ export function DecisionConfirmGateFrame({
   presentRecordIds,
   replan,
   canDecide,
+  recordPicker,
   routedToLabel,
   identifier,
   layout,
@@ -251,7 +314,23 @@ export function DecisionConfirmGateFrame({
         consequences: [
           record.kind === 'attachment'
             ? t('confirmStep.recordWith', { file: record.originalFilename })
-            : t('confirmStep.recordWithout'),
+            : record.kind === 'page'
+              ? t.rich('confirmStep.recordWithPage', {
+                  title: record.title,
+                  number: record.versionNumber,
+                  b: bold,
+                })
+              : t('confirmStep.recordWithout'),
+          // Delta 4 Panel 3: a page record is FROZEN by the Confirm — said before it happens.
+          ...(record.kind === 'page'
+            ? [
+                t.rich('confirmStep.freeze', {
+                  title: record.title,
+                  number: record.versionNumber,
+                  b: bold,
+                }),
+              ]
+            : []),
           t('confirmStep.done', { key: identifier }),
           t('confirmStep.nothingElse'),
         ],
@@ -285,7 +364,7 @@ export function DecisionConfirmGateFrame({
         <DecisionPortBody
           view={view}
           // The DECIDED bands read the stamp; only an open question links the record now.
-          {...(gate.state === 'awaiting' ? { record, recordCount } : {})}
+          {...(gate.state === 'awaiting' ? { record, recordCount, recordPicker } : {})}
         />
       }
       verbs={verbs}
@@ -337,6 +416,22 @@ function ConfirmedBand({
   const t = useTranslations('approvalGate.decisionConfirm.band');
   if (!stamp || stamp.kind === 'none') {
     return <span className="basis-full text-(--el-text)">{t('withoutRecord')}</span>;
+  }
+  if (stamp.kind === 'page') {
+    // Delta 4 Panel 4: the FROZEN version, read from the stamp — never the live page.
+    return (
+      <span className="flex basis-full flex-wrap items-center gap-2 text-(--el-text)">
+        <span>{t('withRecord')}</span>
+        <Link
+          href={`/pages/${encodeURIComponent(stamp.pageId)}?version=${stamp.versionNumber}`}
+          className="inline-flex items-center gap-1 text-(--el-link) hover:underline"
+        >
+          <Notebook className="h-3.5 w-3.5 flex-none" aria-hidden />
+          {t('pageRecord', { title: stamp.title, number: stamp.versionNumber })}
+        </Link>
+        <FrozenPill>{t('frozen')}</FrozenPill>
+      </span>
+    );
   }
   const present = presentRecordIds.includes(stamp.attachmentId);
   return (

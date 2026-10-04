@@ -103,6 +103,9 @@ export function ApprovalsList({
               // by a mechanism rather than by a decision.
               record={{ section: live.heldIds.has(row.gateId) ? 'held' : 'awaiting', row }}
               arrived={live.arrivedIds.has(row.gateId)}
+              // The tab lists only the questions routed to its reader (`listAwaitingMe`),
+              // which is what the manual-work row's *is waiting on you* says (§ 33.2).
+              routedToReader
             />
           ))}
         </div>

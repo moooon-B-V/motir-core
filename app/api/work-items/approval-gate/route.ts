@@ -14,7 +14,10 @@ import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { agentReviewViewService } from '@/lib/services/agentReviewViewService';
+import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { isManualReadyItem } from '@/lib/dto/ready';
+import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   APPROVAL_GATE_HANDLERS,
@@ -104,7 +107,12 @@ function isNotAvailable(err: unknown): boolean {
 async function readSubject(
   kind: ApprovalGateKindDTO,
   gate: ApprovalGateDTO | null,
-  item: { id: string; type: string | null; targetRepos: readonly string[] },
+  item: {
+    id: string;
+    type: WorkItemTypeDto | null;
+    executor: ExecutorDto | null;
+    targetRepos: readonly string[];
+  },
   ctx: ServiceContext,
 ): Promise<ApprovalGateOverlaySubjectDTO> {
   // ⚠️ A PLAN GATE IS NEVER PORTED HERE, registered or not (Story MOTIR-6012 ·
@@ -216,7 +224,15 @@ async function readSubject(
         ),
         decisionDocumentService.readViewForWorkItem(item.id, ctx).catch(() => null),
       ]);
-      const block = await readDevelopmentBlock(gate, item, ctx, merge.gate);
+      // A PAGE DECISION HAS NO DELIVERY SET (Story MOTIR-5761): its subject is the published
+      // page version, so the port resolves over an empty set rather than reading `gone`.
+      const block = await readDevelopmentBlock(
+        gate,
+        item,
+        ctx,
+        merge.gate,
+        document?.outcome === 'page',
+      );
       return block.state === 'resolved' && block.kind === 'pull_request_approval'
         ? { ...block, decision: { document } }
         : block;
@@ -253,6 +269,31 @@ async function readSubject(
         ? { ...block, agentReview }
         : block;
     }
+    // A RUN'S MANUAL CARD (Story MOTIR-7460 · MOTIR-7478; design `design/workbench/
+    // design-notes.md` § 33.3). The subject IS the card, so the port is the card's to-do
+    // list — read by the SAME service the item page reads it with — and whether the card
+    // has an open delivering pull request, which is what decides Mark done's consequence
+    // line (`merge_writes_done`, `manualWorkHandler.approve`). Every state resolves: a
+    // withdrawn gate's frame draws its own cause over the card it was about. An AWAITING
+    // gate on a card that is no longer manual asks about work nobody owes a person, so it
+    // is `gone` — the same answer `manualWorkHandler.resolveSubject` gives, which is what
+    // lets the open withdraw it (MOTIR-7146) rather than draw Mark done over it.
+    case 'manual_work': {
+      if (gate.state === 'awaiting' && !isManualReadyItem(item)) return { state: 'gone' };
+      const [todoList, deliveries] = await Promise.all([
+        workItemTodosService.listTodos(item.id, ctx),
+        workItemsService.listDeliverySet(item.id, ctx),
+      ]);
+      return {
+        state: 'resolved',
+        kind: 'manual_work',
+        manualWork: {
+          todos: todoList.items,
+          progress: todoList.progress,
+          mergeWritesDone: deliveries.some((delivery) => delivery.pullRequest.state === 'open'),
+        },
+      };
+    }
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error
        here until it has its own arm. */
@@ -282,6 +323,8 @@ async function readDevelopmentBlock(
   item: { id: string; type: string | null; targetRepos: readonly string[] },
   ctx: ServiceContext,
   merge: ApprovalGateDTO | null = null,
+  /** A decision published as a PAGE (MOTIR-5761) delivers nothing, so an empty set is its normal shape. */
+  emptySetResolves = false,
 ): Promise<ApprovalGateOverlaySubjectDTO> {
   const membersGate = merge ?? gate;
   // THE DEVELOPMENT BLOCK as the port (Story MOTIR-5437 · MOTIR-5439). The subject
@@ -321,7 +364,7 @@ async function readDevelopmentBlock(
     acceptanceEvidenceService.getCurrentForStory(item.id, ctx),
     approvalGatesService.getForWorkItem({ workItemId: item.id, kind: 'acceptance_result' }, ctx),
   ]);
-  if (deliveryView.deliveries.length === 0) return { state: 'gone' };
+  if (deliveryView.deliveries.length === 0 && !emptySetResolves) return { state: 'gone' };
   return {
     state: 'resolved',
     kind: 'pull_request_approval',

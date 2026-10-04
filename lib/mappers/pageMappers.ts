@@ -117,6 +117,9 @@ export const PAGE_VERSION_RECORD_SELECT = {
   savedAt: true,
   restoredFromVersionId: true,
   restoredFromNumber: true,
+  sealedAt: true,
+  frozenAt: true,
+  frozenByGateId: true,
 } as const;
 
 export function toPageVersionRow(record: PageVersionRecord): PageVersionRow {
@@ -129,6 +132,8 @@ export function toPageVersionRow(record: PageVersionRecord): PageVersionRow {
     savedAt: record.savedAt,
     restoredFromVersionId: record.restoredFromVersionId,
     restoredFromNumber: record.restoredFromNumber,
+    sealedAt: record.sealedAt,
+    frozenAt: record.frozenAt,
   };
 }
 
@@ -377,6 +382,29 @@ export function toPageArchivedListItemDto(
  * revision to write against and its newest version with the author's name the
  * service resolved in one batch.
  */
+/**
+ * The page as an agent reads it AT one version (MOTIR-7429): the page's own
+ * fields from `page`, the body from that version, and the version's marks.
+ */
+export function toPageMarkdownAtVersionDto(
+  page: PageMarkdownDto,
+  version: PageVersionBodyRecord,
+  authorName: string | undefined,
+): PageMarkdownDto {
+  return {
+    ...page,
+    markdown: version.bodyMarkdown,
+    version: {
+      number: version.number,
+      authorId: version.authorId,
+      authorName: authorName ?? '',
+      savedAt: version.savedAt.toISOString(),
+      sealed: version.sealedAt !== null,
+      frozen: version.frozenAt !== null,
+    },
+  };
+}
+
 export function toPageMarkdownDto(
   record: PageMarkdownRecord,
   latest: PageVersionRecord | null,

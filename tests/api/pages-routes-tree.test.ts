@@ -28,7 +28,7 @@ vi.mock('@/lib/projects', async (importOriginal) => ({
   }),
 }));
 
-const { POST: CREATE } = await import('@/app/api/pages/route');
+const { POST: CREATE, GET: LIST } = await import('@/app/api/pages/route');
 const { GET: TREE } = await import('@/app/api/pages/tree/route');
 const { PATCH: PLACE } = await import('@/app/api/pages/[pageId]/placement/route');
 const { pagesService } = await import('@/lib/services/pagesService');
@@ -257,6 +257,38 @@ describe('GET /api/pages/tree', () => {
     expect((await tree({ projectKey: 'TRE', parent: 'root' })).status).toBe(404);
     as(null);
     expect((await tree({ projectKey: 'TRE', parent: 'root' })).status).toBe(401);
+  });
+});
+
+describe('GET /api/pages — the flat list (Story MOTIR-5761 · MOTIR-7444)', () => {
+  const list = (query: Record<string, string> = {}) =>
+    LIST(new Request(`${BASE}?${new URLSearchParams(query)}`));
+
+  it('lists the project pages, archived ones left out, and resolves another project by key', async () => {
+    const f = await makeFixture();
+    as(f.manager);
+    const kept = await mkPage(f, 'Kept');
+    const gone = await mkPage(f, 'Gone');
+    await pagesService.archivePage(svc(f.manager), { projectId: f.projectId, pageId: gone.id });
+    const res = await list({ projectKey: 'TRE' });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: Array<{ id: string; title: string }> };
+    expect(body.items.map((p) => p.id)).toEqual([kept.id]);
+
+    const elsewhere = await pagesService.createPage(svc(f.manager), {
+      projectId: f.otherProjectId,
+      title: 'Elsewhere',
+    });
+    const other = (await (await list({ projectKey: 'OTH' })).json()) as { items: { id: string }[] };
+    expect(other.items.map((p) => p.id)).toEqual([elsewhere.id]);
+  });
+
+  it('answers a non-member 404, and an unauthenticated request 401', async () => {
+    const f = await makeFixture();
+    as(await actorAs(f, 'stranger-list', null));
+    expect((await list({ projectKey: 'TRE' })).status).toBe(404);
+    as(null);
+    expect((await list()).status).toBe(401);
   });
 });
 

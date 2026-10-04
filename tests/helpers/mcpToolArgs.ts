@@ -57,6 +57,7 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // MOTIR-7411 — the page writes, aimed the same way.
     create_page: { projectKey: t.projectKey, markdown: 'rogue' },
     update_page: { projectKey: t.projectKey, pageId: t.pageId, markdown: 'rogue', revision: 1 },
+    publish_decision_page: { key: t.item1, pageId: t.pageId },
     get_work_item: { key: t.item1 },
     get_design: { key: t.item1 },
     list_designs: { projectKey: t.projectKey },

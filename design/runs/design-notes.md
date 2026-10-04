@@ -1889,3 +1889,29 @@ in MOTIR-6864 owns them. They are follow-ups for the planner:
 - `billing.ai.tagline` / `billing.plans.subtitle` — _hosted agents_
 
 ("Self-hosted" in install-mode copy is a different meaning and stays.)
+
+## Waiting on you — a run's manual leg names who it waits on (MOTIR-7473, 2026-10-03)
+
+**Asset:** `design/runs/run-section--waiting-on-you.mock.html`, a NEW delta mock. It amends
+`run-section.mock.html` and § _The run MODAL_ / the runs index above; neither is edited. Card MOTIR-7473
+(Story MOTIR-7460), built on `docs/decisions/manual-work-gate.md` §8; built by **MOTIR-7477**. **The
+copy table (en + zh) and the GIVES/TAKES are in `design/workbench/design-notes.md` § 33.4**, beside the
+gate's row and overlay; this section holds the runs area's rules.
+
+- **The wire value and the disposition do not change.** A manual card a run reaches is still
+  `skipped` / `skipReason: needs_human`, and still takes the `skipped` tone (muted chip, tertiary dot) —
+  § _THE TONE VOCABULARY_ refuses a new tint for a distinction the words carry.
+- **The LABEL is resolved per leg from that card's `manual_work` gate**, so `needs_human` maps to four
+  strings: _Skipped — waiting on you._ (awaiting, routed to the READER) · _Skipped — waiting on {name}._
+  (awaiting, routed to someone else) · _Skipped — marked done by {name}._ (approved) · _Skipped — manual
+  work._ (no gate: withdrawn, a leg older than the kind, or a run that raised none). _Skipped — needs a
+  human._ is retired. _You_ is the reader, not the run's starter (the CLI's report uses the starter, ADR §8).
+- **Where it shows** (Panels 1, 3): the compact `RunTonePill` on the run modal's canvas node
+  (`RunCanvasPane` → `WorkItemNode`) and the leg line in an item page's Run section (`RunSection`). The
+  manual card's own page usually draws Guide me through in the Run section's slot (MOTIR-7467), so the
+  leg line there is for a reader without that door.
+- **The summary** (`legSummary`, Panel 2): waiting legs leave _skipped_ and become their own segments
+  right after _done_ — _{n} waiting on you_, then _{n} waiting on others_ — each omitted at zero. A leg
+  whose gate was marked done counts as skipped: the run did not do it.
+- **zh** (Panel 4): 已跳过 — 等你处理。 · 已跳过 — 等 {name} 处理。 · 已跳过 — 已由 {name} 标记完成。 ·
+  已跳过 — 人工工作。 · 等你处理 {n} 项 · 等他人处理 {n} 项.

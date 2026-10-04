@@ -364,6 +364,8 @@ export const pageRepository = {
    * whose ancestor chain contains it. Archived descendants INCLUDED, unfiltered on
    * purpose: a move rebases them with their ancestor, and restore and delete read
    * a subtree's archived pages — the package filters what it needs (§7).
+   * Shallowest first, so a set built from it lists a parent before its children
+   * whatever order the heap holds the rows in.
    */
   async findSubtree(pageId: string, tx: Prisma.TransactionClient): Promise<PageSubtreeRecord[]> {
     return tx.$queryRaw<PageSubtreeRecord[]>`
@@ -373,6 +375,7 @@ export const pageRepository = {
              "archive_root_id" AS "archiveRootId"
         FROM "page"
        WHERE "ancestor_page_ids" @> ARRAY[${pageId}]::text[]
+       ORDER BY cardinality("ancestor_page_ids"), "id"
     `;
   },
 

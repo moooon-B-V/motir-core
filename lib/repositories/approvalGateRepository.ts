@@ -279,6 +279,63 @@ export const approvalGateRepository = {
       ORDER BY g."decided_at" ASC, wi."identifier" ASC`;
   },
 
+  /**
+   * The APPROVED page decisions under the same epic (Story MOTIR-5761 · MOTIR-7438) —
+   * every agent `decision` card whose latest `decision_approval` gate is approved over
+   * a PAGE, with the version that approval FROZE (`page_version.frozen_by_gate_id`),
+   * oldest approval first. The frozen version, never the page's latest: a run reads
+   * the text that was approved. Same epic walk as
+   * {@link findConfirmedDecisionsUnderEpicOf}, beside which the prompt merges it.
+   */
+  async findApprovedPageDecisionsUnderEpicOf(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      identifier: string;
+      title: string;
+      decidedAt: Date;
+      pageId: string;
+      versionNumber: number;
+    }>
+  > {
+    return tx.$queryRaw`
+      WITH RECURSIVE up AS (
+        SELECT wi."id", wi."parentId", wi."kind"::text AS "kind", 0 AS "depth"
+        FROM "work_item" wi WHERE wi."id" = ${workItemId}
+        UNION ALL
+        SELECT p."id", p."parentId", p."kind"::text, up."depth" + 1
+        FROM "work_item" p JOIN up ON p."id" = up."parentId"
+      ),
+      epic AS (
+        SELECT "id" FROM up WHERE "kind" = 'epic' ORDER BY "depth" ASC LIMIT 1
+      ),
+      down AS (
+        SELECT e."id" FROM epic e
+        UNION ALL
+        SELECT c."id" FROM "work_item" c JOIN down ON c."parentId" = down."id"
+      )
+      SELECT wi."identifier" AS "identifier", wi."title" AS "title",
+             g."decided_at" AS "decidedAt", pv."page_id" AS "pageId",
+             pv."number" AS "versionNumber"
+      FROM down
+      JOIN "work_item" wi ON wi."id" = down."id"
+      JOIN LATERAL (
+        SELECT ag."id", ag."state", ag."decided_at"
+        FROM "approval_gate" ag
+        WHERE ag."work_item_id" = wi."id" AND ag."kind" = 'decision_approval'
+        ORDER BY (ag."state" = 'awaiting') DESC, ag."created_at" DESC
+        LIMIT 1
+      ) g ON TRUE
+      JOIN "page_version" pv ON pv."frozen_by_gate_id" = g."id"
+      WHERE wi."type"::text = 'decision'
+        AND wi."executor"::text <> 'human'
+        AND wi."archivedAt" IS NULL
+        AND g."state" = 'approved'
+        AND g."decided_at" IS NOT NULL
+      ORDER BY g."decided_at" ASC, wi."identifier" ASC`;
+  },
+
   async findLatestByWorkItem(
     workItemId: string,
     kind: ApprovalGateKind,
@@ -383,6 +440,45 @@ export const approvalGateRepository = {
     // Every row matched `workItemId IN (…)`, so none is card-less; the guard narrows the type.
     for (const row of rows) {
       if (row.workItemId !== null && !head.has(row.workItemId)) head.set(row.workItemId, row);
+    }
+    return head;
+  },
+
+  /**
+   * The LATEST gate of one kind on MANY work items, with who it waits on and who
+   * decided it (Story MOTIR-7460 · MOTIR-7477) — the run surfaces' read of each
+   * manual leg's `manual_work` gate, so a skipped leg can say *waiting on you*,
+   * *waiting on {name}* or *marked done by {name}*.
+   *
+   * The head per work item is {@link findLatestByWorkItem}'s, for MANY: the live
+   * question first (the OLDEST awaiting row), else the most recent row. ONE query
+   * for the whole set; the head is taken in memory, because the rows per card are
+   * the number of times a run reached it.
+   *
+   * The card's assignee and reporter ride along because an awaiting gate's
+   * recipient is RE-DERIVED from the live card (`awaitingRoutedToWhere`, §2), never
+   * read off `routedToId` — so the run page names the person Waiting on you lists
+   * it for.
+   */
+  async findLatestWithPeopleByWorkItems(
+    workItemIds: string[],
+    kind: ApprovalGateKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Map<string, GateWithPeople>> {
+    if (workItemIds.length === 0) return new Map();
+    const client = tx ?? dbRead;
+    const rows = await client.approvalGate.findMany({
+      where: { workItemId: { in: workItemIds }, kind },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: GATE_WITH_PEOPLE_SELECT,
+    });
+    const head = new Map<string, GateWithPeople>();
+    for (const row of rows) {
+      if (row.workItemId === null) continue;
+      const held = head.get(row.workItemId);
+      // The oldest awaiting row is kept once found; otherwise the later row wins.
+      if (held?.state === 'awaiting') continue;
+      head.set(row.workItemId, row);
     }
     return head;
   },
@@ -1542,6 +1638,34 @@ export type RecordGateRow = Prisma.ApprovalGateGetPayload<{
 /** One row of the routing read, as Prisma returns it. */
 export type AwaitingGateRow = Prisma.ApprovalGateGetPayload<{
   select: typeof AWAITING_GATE_SELECT;
+}>;
+
+const PERSON_SELECT = { id: true, name: true, email: true } as const;
+
+/**
+ * The run surfaces' read of a leg's gate (MOTIR-7477): its state, the card's
+ * live routing (§2's `assigneeId ?? reporterId`, with the people to name) and who
+ * decided it.
+ */
+const GATE_WITH_PEOPLE_SELECT = {
+  id: true,
+  workItemId: true,
+  state: true,
+  decidedByLabel: true,
+  decidedBy: { select: PERSON_SELECT },
+  workItem: {
+    select: {
+      assigneeId: true,
+      reporterId: true,
+      assignee: { select: PERSON_SELECT },
+      reporter: { select: PERSON_SELECT },
+    },
+  },
+} as const satisfies Prisma.ApprovalGateSelect;
+
+/** One row of {@link approvalGateRepository.findLatestWithPeopleByWorkItems}. */
+export type GateWithPeople = Prisma.ApprovalGateGetPayload<{
+  select: typeof GATE_WITH_PEOPLE_SELECT;
 }>;
 
 /**

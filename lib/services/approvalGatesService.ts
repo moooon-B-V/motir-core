@@ -177,6 +177,9 @@ const CONFIRMATION_KIND = 'decision_confirmation';
 /** The one kind that offers no `request_changes` because a plan is changed by TALKING
  *  to the planner (ADR §11.4, MOTIR-6035). */
 const PLAN_KIND = 'plan_approval';
+/** The kind whose one verb is Mark done — manual work is done or not done
+ *  (`docs/decisions/manual-work-gate.md` §4, MOTIR-7474). */
+const MANUAL_WORK_KIND = 'manual_work';
 /** The REVIEW AGENT's kind (ADR §12.3, MOTIR-6819) — decided by the agent through
  *  {@link approvalGatesService.decideAgentReview}, or APPROVED by the routed person with a
  *  reason (*Continue without the review*); a person has no refusal verb on it. */
@@ -2440,6 +2443,11 @@ export const approvalGatesService = {
       // A plan is changed by TALKING to the planner, never by a gate verb (ADR §11.4).
       if (input.decision === 'request_changes' && locked.kind === PLAN_KIND) {
         throw new ApprovalGateVerbNotOfferedError(input.gateId, 'request_changes_on_plan');
+      }
+      // Manual work is done or not done (`manual-work-gate.md` §4): Mark done is the one
+      // verb, and a person who cannot do the work says so on the card or in the guide.
+      if (input.decision === 'request_changes' && locked.kind === MANUAL_WORK_KIND) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'request_changes_on_manual_work');
       }
       // …and DECLINE is offered by the one kind that supplies it (ADR §11.4). Its note
       // is OPTIONAL, deliberately — see `planApprovalHandler.ts`'s header.

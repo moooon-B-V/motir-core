@@ -174,6 +174,9 @@ describe('ONE CONTROL — the approval frame is SHARED and COMPOSABLE (MOTIR-479
       'components/approvals/ChoiceGate.tsx',
       // The decision's confirm port and its Confirm · Overturn verbs (MOTIR-5960).
       'components/approvals/DecisionConfirmGate.tsx',
+      // The manual-work port — the to-do list read-only, Guide me through and Mark done
+      // (MOTIR-7478).
+      'components/approvals/ManualWorkGate.tsx',
     ];
     for (const frame of KIND_FRAMES) {
       expect(codeOf(frame), `${frame} is a kind frame that does not render the control`).toContain(
@@ -283,6 +286,12 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         // a moved stamp, a broken body, an executor flipped off `human`.
         'lib/services/decisionConfirmationGateService.ts',
         'lib/services/decisionDocumentCaptureService.ts',
+        // MOTIR-7432 (`approval-gates.md` §8 NINTH AMENDMENT, clause 3): publishing a NEW
+        // page version as a card's decision retires the awaiting decision question, cause
+        // `republished` — the design republish's write, product-written, no actor. The
+        // new question is then raised by the predicate (`reconcileGatesFor`), so the
+        // publish adds no `create` caller.
+        'lib/services/decisionPageService.ts',
         'lib/services/designEvidenceService.ts',
         // MOTIR-6595 (`approval-gates.md` §4 FIFTH AMENDMENT, point 4): the operator
         // convergence withdraws a gate the OLD rule re-asked from a queue failure, with
@@ -292,6 +301,10 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         // withdrawn from a card that is not `in_review` (`withdrawMergeQuestionOffReview`,
         // cause `pulled_back`) — product-written, no actor, never a decision.
         'lib/services/gateSetFor.ts',
+        // MOTIR-7474 (`manual-work-gate.md` §6): the MANUAL-WORK question is withdrawn when
+        // its card stops being manual (`no_longer_manual`) or is closed by a write nobody
+        // decided (`closed_without_decision`) — product-written, no actor, never a decision.
+        'lib/services/manualWorkGateService.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],
     },
@@ -322,6 +335,9 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         'lib/services/approvalGatesService.ts',
         'lib/services/choiceGateService.ts',
         'lib/services/decisionConfirmationGateService.ts',
+        // MOTIR-7474 (`manual-work-gate.md` §2): the MANUAL-WORK question's one raiser,
+        // inside a run's leg write; a second run, or a redelivery, is "already raised".
+        'lib/services/manualWorkGateService.ts',
       ],
     },
     {

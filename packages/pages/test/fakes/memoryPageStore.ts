@@ -220,7 +220,12 @@ export class MemoryPageStore implements PageStore {
       throw new Error(`unique (page_id, number) violated: ${row.pageId} v${row.number}`);
     }
     this.nextId += 1;
-    const version: PageVersionWithBody = { id: `version-${this.nextId}`, ...row };
+    const version: PageVersionWithBody = {
+      id: `version-${this.nextId}`,
+      ...row,
+      sealedAt: null,
+      frozenAt: null,
+    };
     this.versions.push(version);
     return version;
   }
@@ -240,10 +245,26 @@ export class MemoryPageStore implements PageStore {
     return this.versionsOf(pageId).length;
   }
 
-  async deleteOldestVersions(pageId: string, keep: number): Promise<void> {
-    this.record('deleteOldestVersions', pageId, keep);
+  async findPageWithFrozenVersion(pageIds: readonly string[]): Promise<string | null> {
+    this.record('findPageWithFrozenVersion', pageIds);
+    const ids = new Set(pageIds);
+    return this.versions.find((v) => ids.has(v.pageId) && v.frozenAt !== null)?.pageId ?? null;
+  }
+
+  /** Stamps the marks on a version, as the gate services do (test helper). */
+  markVersion(versionId: string, marks: { sealedAt?: Date; frozenAt?: Date }): void {
+    this.versions = this.versions.map((v) => (v.id === versionId ? { ...v, ...marks } : v));
+  }
+
+  async deleteOldestUnmarkedVersions(pageId: string, keep: number): Promise<void> {
+    this.record('deleteOldestUnmarkedVersions', pageId, keep);
     const own = this.versionsOf(pageId);
-    const doomed = new Set(own.slice(0, Math.max(0, own.length - keep)).map((v) => v.id));
+    const excess = Math.max(0, own.length - keep);
+    const newest = own.at(-1)?.id;
+    const unmarked = own.filter(
+      (v) => v.sealedAt === null && v.frozenAt === null && v.id !== newest,
+    );
+    const doomed = new Set(unmarked.slice(0, excess).map((v) => v.id));
     // ON DELETE SET NULL on `restored_from_version_id`, as the table does.
     this.versions = this.versions
       .filter((v) => !doomed.has(v.id))

@@ -1094,7 +1094,9 @@ export function toPlanWithItems(body: PlanBody): PlanWithItems {
  * The narrowest of the views over this row — `toReadyPage` renders a table,
  * this one routes a run — and what it drops is the point:
  *
- * • `assignee` / `descriptionExcerpt` — display, and nothing here displays.
+ * • `descriptionExcerpt` — display, and nothing here displays. The assignee's
+ *   NAME is kept (MOTIR-7477): a run report names who a skipped manual card
+ *   waits on.
  * • `dependencies` — a ready item's blockers are satisfied by definition, so
  *   the edge block has nothing to tell a loop about to dispatch it.
  * • `targetRepo` is not dropped, it was never here. The row omits it
@@ -1111,6 +1113,7 @@ export function toDispatchItem(row: ReadyBody['items'][number]): DispatchItem {
     type: row.type,
     executor: row.executor,
     assigneeId: row.assigneeId,
+    assigneeName: row.assignee?.name ?? null,
     inheritedSessionBranch: row.inheritedSessionBranch,
     containerKey: row.container?.key ?? null,
   };

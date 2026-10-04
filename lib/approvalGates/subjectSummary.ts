@@ -5,6 +5,7 @@ import type {
   DecisionApprovalSubjectSummaryDTO,
   DecisionChoiceSubjectSummaryDTO,
   DecisionConfirmationSubjectSummaryDTO,
+  ManualWorkSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PlanApprovalSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
@@ -15,6 +16,10 @@ import { isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { decisionPagePublicationRepository } from '@/lib/repositories/decisionPagePublicationRepository';
+import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
+import { isManualWork } from '@/lib/approvalGates/manualWorkHandler';
+import { computeGateStamp } from '@/lib/approvalGates/stamp';
 import { parseChoiceOptions } from '@/lib/approvalGates/choiceOptions';
 import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
 import { decisionConfirmationSummaryOf } from '@/lib/approvalGates/decisionRecord';
@@ -247,6 +252,34 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
     }
     return out;
   },
+  // MOTIR-7474 — a manual-work row's subject IS its card, so the row names it by the
+  // card's title; this reads the to-do progress it prints (`manual-work-gate.md` §7). A
+  // card that stopped being manual is absent, and the row says the subject is gone.
+  async manual_work(subjectIds, tx) {
+    const items = (await workItemRepository.findByIds([...subjectIds], tx)).filter(isManualWork);
+    const counts = await workItemTodoRepository.countByWorkItems(
+      items.map((item) => item.id),
+      tx,
+    );
+    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const item of items) {
+      const todos = counts.get(item.id) ?? null;
+      const summary: ManualWorkSubjectSummaryDTO = {
+        kind: 'manual_work',
+        todos: todos && todos.total > 0 ? todos : null,
+        // THE ROW'S STAMP (MOTIR-7478) — the decide door recomputes exactly these inputs
+        // under its lock: this kind's `subjectVersion` is always null (the work has no
+        // version) and it has no companion gate, so the card's body is the whole of it.
+        stamp: computeGateStamp({
+          subjectVersion: null,
+          companionSubjectVersion: null,
+          descriptionMd: item.descriptionMd,
+        }),
+      };
+      out.set(item.id, summary);
+    }
+    return out;
+  },
   // MOTIR-4950 — the acceptance row names the RECORDING the gate asks about.
   async acceptance_result(subjectIds, tx) {
     const rows = await acceptanceEvidenceRepository.findManyByIds(subjectIds, tx);
@@ -283,8 +316,12 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
   // requests: `subjectId` is the card, so one batched delivery read answers every
   // decision gate on the page, and no host is called. A card with no captured open pull
   // request is absent, and its row says the subject no longer resolves.
-  async decision_approval(subjectIds, _tx, shared) {
+  async decision_approval(subjectIds, tx, shared) {
+    // A PUBLISHED PAGE wins the subject (MOTIR-7433), so it wins the row too (MOTIR-7436):
+    // the page's title and the version asked about, read for every item at once.
     const deliveries = await shared.deliveries(subjectIds);
+    const publications = await decisionPagePublicationRepository.latestForWorkItems(subjectIds, tx);
+    const pageByItem = new Map(publications.map((row) => [row.workItemId, row]));
     const membersByItem = new Map<string, Parameters<typeof decisionIdentityOf>[0][number][]>();
     for (const delivery of deliveries) {
       const pr = delivery.pullRequest;
@@ -303,7 +340,21 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
       else membersByItem.set(delivery.workItemId, [member]);
     }
     const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const [workItemId, page] of pageByItem) {
+      out.set(workItemId, {
+        kind: 'decision_approval',
+        outcome: 'page',
+        repo: '',
+        number: 0,
+        path: null,
+        title: page.pageTitle,
+        blobSha: null,
+        documentCount: 1,
+        versionNumber: page.versionNumber,
+      });
+    }
     for (const [workItemId, members] of membersByItem) {
+      if (pageByItem.has(workItemId)) continue;
       const identity = decisionIdentityOf(members);
       if (!identity) continue;
       const summary: DecisionApprovalSubjectSummaryDTO = identity.resolvable
