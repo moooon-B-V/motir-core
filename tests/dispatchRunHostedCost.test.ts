@@ -67,6 +67,7 @@ async function openRun(origin: 'local' | 'hosted'): Promise<string> {
     {
       projectKey: fixture.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       origin,
       model: origin === 'hosted' ? 'claude-opus-5-5' : undefined,
       cards: [{ key: item.identifier, disposition: 'queued' }],

@@ -139,6 +139,13 @@ import {
 } from './tools/archiveWorkItem';
 import { DELETE_WORK_ITEM_TOOL_NAME, registerDeleteWorkItem } from './tools/deleteWorkItem';
 import { CHANGE_KIND_TOOL_NAME, registerChangeKind } from './tools/changeKind';
+import {
+  CLOSE_WORK_ITEM_RUN_TOOL_NAME,
+  REPORT_ACTION_TOOL_NAME,
+  START_WORK_ITEM_RUN_TOOL_NAME,
+  registerWorkItemRun,
+} from './tools/workItemRun';
+import { heartbeatingServer } from './runHeartbeat';
 
 // The MCP tool registry (Story 7.8 · Subtask 7.8.4, extended by 7.8.5 / 7.8.6 /
 // 7.8.10 / 7.8.11 / 7.8.13 / 7.8.14 / 2.8.5) — the single place that assembles
@@ -177,6 +184,9 @@ export const MCP_TOOL_NAMES = [
   CLAIM_WORK_ITEM_CONTINUE_TOOL_NAME,
   TOUCH_WORK_ITEM_CONTINUE_TOOL_NAME,
   CLOSE_WORK_ITEM_CONTINUE_TOOL_NAME,
+  START_WORK_ITEM_RUN_TOOL_NAME,
+  REPORT_ACTION_TOOL_NAME,
+  CLOSE_WORK_ITEM_RUN_TOOL_NAME,
   DISPATCH_PROMPT_TOOL_NAME,
   EXPAND_ITEM_TOOL_NAME,
   GET_PLAN_STATUS_TOOL_NAME,
@@ -301,11 +311,15 @@ export function registerMcpTools(
   // ends every tool's description with a link to that tool's entry in the
   // published reference (`toolReference.ts`).
   const strict = strictInputServer(annotatedServer(referencedServer(server)));
+  // The RUN HEARTBEAT (MOTIR-7451) wraps every callback the gates let through, so
+  // each handled call refreshes the caller's open agent-reported runs AFTER it
+  // answers — and never fails it (`runHeartbeat.ts`).
+  const beating = heartbeatingServer(strict, resolveContext);
   // Two wrappers, and the ORDER is the policy: the permission gate runs first,
   // so a call the token was never granted is refused BEFORE it can consume any
   // of the request budget MOTIR-2610 added. Metering a refused call would let an
   // unauthorised caller exhaust the owner's allowance.
-  const granted = resolveGrant ? permissionGatedServer(strict, resolveGrant) : strict;
+  const granted = resolveGrant ? permissionGatedServer(beating, resolveGrant) : beating;
   const target = meterBillableTools ? rateLimitedServer(granted, resolveContext) : granted;
   // Read + dispatch tools (7.8.4).
   registerGetWorkItem(target, resolveContext);
@@ -387,6 +401,8 @@ export function registerMcpTools(
   // `workItemContinueService` and dispatch-run heartbeat/close. The same lock
   // `motir continue` takes over v1.
   registerWorkItemContinue(target, resolveContext);
+  // The RUN tools (MOTIR-7451) — any agent reports its own run of a card.
+  registerWorkItemRun(target, resolveContext);
   registerAddLesson(target, resolveContext);
   registerSearchLessons(target, resolveContext);
   registerReinforceLesson(target, resolveContext);

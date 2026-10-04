@@ -42,6 +42,7 @@ async function openRun(fixture: WorkItemFixture, command: 'auto' | 'run_scope' =
     {
       projectKey: fixture.projectIdentifier,
       command,
+      reportedBy: 'cli',
       cards: [{ key: item.identifier, disposition: 'queued' }],
     },
     fixture.ctx,

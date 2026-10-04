@@ -242,6 +242,7 @@ describe('the populations the rule keeps apart', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: card.identifier, disposition: 'queued' }],
       },
       fx.ctx,

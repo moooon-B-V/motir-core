@@ -36,7 +36,12 @@ async function runOver(
   close: 'halted' | 'completed' | null,
 ) {
   const { run } = await dispatchRunService.open(
-    { projectKey: fx.projectIdentifier, command: 'run', cards: [{ key, disposition: 'queued' }] },
+    {
+      projectKey: fx.projectIdentifier,
+      command: 'run',
+      reportedBy: 'cli',
+      cards: [{ key, disposition: 'queued' }],
+    },
     fx.ctx,
   );
   await dispatchRunService.appendEvents(
@@ -134,6 +139,7 @@ describe('getDispatchPrompt with continueFrom — a run across repositories', ()
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: card.identifier, disposition: 'queued' }],
       },
       fx.ctx,
@@ -198,6 +204,7 @@ describe('getDispatchPrompt with continueFrom — a run across repositories', ()
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: card.identifier, disposition: 'queued' }],
       },
       fx.ctx,
@@ -243,6 +250,7 @@ describe('getDispatchPrompt with continueFrom — how the dead run ended', () =>
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         origin,
         cards: [{ key: card.identifier, disposition: 'queued' }],
       },

@@ -298,6 +298,7 @@ describe('the refusals (Q8) — each moves nothing', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         origin: 'instance',
         agentInstanceId: a.id,
         agent: 'claude',
@@ -622,6 +623,7 @@ describe('the lost races — every guarded move refuses rather than overwrites (
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         origin: 'instance',
         agentInstanceId: a.id,
         agent: 'claude',

@@ -229,6 +229,7 @@ describe('the back-fill SQL and `normalizeReportedModel` are ONE rule', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'batch',
+        reportedBy: 'cli',
         cards: keys.map((key) => ({ key, disposition: 'queued' as const })),
       },
       fixture.ctx,

@@ -4,6 +4,7 @@ import type {
   DispatchCommand,
   DispatchEventKind,
   DispatchRunOrigin,
+  DispatchRunReporter,
   DispatchRunStatus,
   DispatchSkipReason,
   DispatchStopReason,
@@ -82,6 +83,12 @@ export interface DispatchRunEventDto {
    * the 30-day retention window has passed and the sweep cleared it.
    */
   body: string | null;
+  /**
+   * Who wrote this event (MOTIR-7450, `agent-reported-runs.md` §3) — `agent` for a
+   * step or milestone the agent reported through `report_action`, `cli` for every
+   * other writer.
+   */
+  reportedBy: DispatchRunReporter;
   createdAt: string;
 }
 
@@ -117,6 +124,12 @@ export interface DispatchRunDto {
    * (`lib/runs/runLiveness.ts`), never compared to a clock anywhere else.
    */
   lastHeartbeatAt: string | null;
+  /**
+   * Who reports this run (MOTIR-7450, `agent-reported-runs.md` §1) — `agent` for a
+   * run the agent opened about itself, `cli` for every run a runner observes. Set by
+   * the door that opened the run, never by a caller.
+   */
+  reportedBy: DispatchRunReporter;
   createdById: string | null;
   /**
    * The developer's own agent the run executed in (MOTIR-7023,
@@ -213,6 +226,57 @@ export interface DispatchRunOpenedDto {
    */
   created: boolean;
 }
+
+/**
+ * What `start_work_item_run` answers with (MOTIR-7450, `agent-reported-runs.md` §2):
+ * the run, and whether this call OPENED it or found the caller's own open run on the
+ * same card — a retried or resumed session gets `mine` and the same run, never a
+ * second one.
+ */
+export interface AgentRunOpenedDto {
+  outcome: 'opened' | 'mine';
+  run: DispatchRunDto;
+  /** The run's legs in order, each with its card's title (null for a card no longer in the tree). */
+  legs: AgentRunLegDto[];
+}
+
+/** One leg of an agent-reported run, as `start_work_item_run` names it. */
+export interface AgentRunLegDto {
+  /** Null only for a leg whose card has since been deleted. */
+  key: string | null;
+  title: string | null;
+}
+
+/**
+ * What `close_work_item_run` answers with (MOTIR-7451, §4): the run as it now
+ * stands, the leg cards a delivered close stamped with the run's harness and model,
+ * and whether it was ALREADY closed (a second close, or one the reap beat), in which
+ * case nothing was written and `stamped` is empty.
+ */
+export interface AgentRunClosedDto {
+  run: DispatchRunDto;
+  stamped: string[];
+  alreadyClosed: boolean;
+}
+
+/**
+ * What `report_action` answers with (MOTIR-7450, §3). `reported` when it wrote into
+ * the caller's open run on a card; `heartbeat` for the no-argument form, with how
+ * many of the caller's open runs it touched (a run beaten under a minute ago is
+ * left alone, so `0` is an ordinary answer).
+ */
+export type AgentActionReportedDto =
+  | {
+      kind: 'reported';
+      runId: string;
+      /** Who reports the run it wrote into — `cli` when the agent is inside a CLI run. */
+      runReportedBy: DispatchRunReporter;
+      /** How many events this call wrote. */
+      appended: number;
+      /** The run's new highest `seq`. */
+      seq: number;
+    }
+  | { kind: 'heartbeat'; touched: number };
 
 /** What the APPEND operation answers with. */
 export interface DispatchRunAppendedDto {

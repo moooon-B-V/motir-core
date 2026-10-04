@@ -54,6 +54,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     endedAt: new Date().toISOString(),
     createdById: null,
     lastHeartbeatAt: null,
+    reportedBy: 'cli',
     agentInstance: null,
     cards: [leg(), leg({ id: 'leg_2', key: 'MOTIR-1793', workItemId: 'wi_2' })],
     seq: 0,
@@ -69,6 +70,7 @@ function logEvent(seq: number, body: string, workItemKey?: string): DispatchRunE
     cardId: 'leg_1',
     data: workItemKey === undefined ? null : { workItemKey },
     body,
+    reportedBy: 'cli',
     createdAt: '2026-08-30T14:02:00.000Z',
   };
 }
@@ -141,6 +143,7 @@ describe('the lines — backfill and live through ONE path, in seq order', () =>
       cardId: null,
       data: null,
       body: null,
+      reportedBy: 'cli',
       createdAt: '2026-08-30T14:02:00.000Z',
     };
     await mount(run(), null, [other]);

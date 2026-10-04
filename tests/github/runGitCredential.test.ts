@@ -212,6 +212,7 @@ async function openRun(legs: string[][]): Promise<string> {
     {
       projectKey: fixture.projectIdentifier,
       command: items.length > 1 ? 'run_scope' : 'run',
+      reportedBy: 'cli',
       origin: 'hosted',
       model: 'claude-opus-5-5',
       cards: items.map((it) => ({ key: it.identifier, disposition: 'queued' as const })),
@@ -729,6 +730,7 @@ describe('coverage top-up — the operational edges', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         origin: 'hosted',
         model: 'claude-opus-5-5',
         cards: [{ key: card.identifier, disposition: 'queued' as const }],

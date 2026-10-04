@@ -3,6 +3,7 @@ import {
   DispatchCommand,
   DispatchEventKind,
   DispatchRunOrigin,
+  DispatchRunReporter,
   DispatchRunStatus,
   DispatchSkipReason,
   DispatchStopReason,
@@ -132,6 +133,8 @@ describe('the columns the record DOES own are present', () => {
         'agent',
         'model',
         'idempotencyKey',
+        // Who reports the run (MOTIR-7450, `agent-reported-runs.md` §1).
+        'reportedBy',
       ]),
     );
   });
@@ -152,7 +155,7 @@ describe('the columns the record DOES own are present', () => {
 
   it('the event carries seq, kind, structured data and the opt-in body', () => {
     expect(Object.keys(Prisma.DispatchRunEventScalarFieldEnum)).toEqual(
-      expect.arrayContaining(['seq', 'kind', 'data', 'body', 'dispatchRunCardId']),
+      expect.arrayContaining(['seq', 'kind', 'data', 'body', 'dispatchRunCardId', 'reportedBy']),
     );
   });
 });
@@ -187,6 +190,10 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
     // `instance` — MOTIR-7023: a run in the developer's own agent
     // (`agent-instance-run.md` §5).
     expect(Object.keys(DispatchRunOrigin)).toEqual(['local', 'hosted', 'instance']);
+  });
+
+  it('DispatchRunReporter — who reports a run or an event (MOTIR-7450)', () => {
+    expect(Object.keys(DispatchRunReporter)).toEqual(['cli', 'agent']);
   });
 
   it('DispatchRunStatus', () => {
@@ -269,7 +276,10 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
       'unbuildable_reported',
       // A review run's verdict (MOTIR-6821) — server-written by the verdict route.
       'review_verdict',
+      // One step the AGENT says it is about to take (MOTIR-7450,
+      // `agent-reported-runs.md` §3) — written only through `report_action`.
+      'agent_action',
     ]);
-    expect(kinds).toHaveLength(23);
+    expect(kinds).toHaveLength(24);
   });
 });

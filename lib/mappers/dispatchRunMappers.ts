@@ -54,6 +54,7 @@ export function toDispatchRunEventDto(row: DispatchRunEvent): DispatchRunEventDt
     cardId: row.dispatchRunCardId,
     data: row.data ?? null,
     body: row.body,
+    reportedBy: row.reportedBy,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -110,6 +111,7 @@ export function toDispatchRunDto(
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt?.toISOString() ?? null,
     lastHeartbeatAt: row.lastHeartbeatAt?.toISOString() ?? null,
+    reportedBy: row.reportedBy,
     createdById: row.createdById,
     agentInstance: toDispatchRunAgentInstanceDto(row.agentInstance),
     cards: row.cards.map(toDispatchRunCardDto),

@@ -69,6 +69,7 @@ async function openRun(ctx: ServiceContext, opts: { scopeKey?: string } = {}): P
     {
       projectKey: fx.projectIdentifier,
       command: 'batch',
+      reportedBy: 'cli',
       ...(opts.scopeKey ? { scopeKey: opts.scopeKey } : {}),
       cards: [{ key: card, disposition: 'queued' as const }],
     },

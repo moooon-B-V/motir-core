@@ -319,6 +319,7 @@ describe('To fix offers Fix on the hosted agent on a row a REVIEW sent back (§ 
       {
         projectKey: fx.projectIdentifier,
         command: 'fix',
+        reportedBy: 'cli',
         cards: [{ key: `${fx.projectIdentifier}-${identifier}`, disposition: 'queued' }],
       },
       fx.ctx,

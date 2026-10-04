@@ -41,6 +41,7 @@ async function openRun(fixture: WorkItemFixture, origin: 'local' | 'hosted' = 'l
     {
       projectKey: fixture.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       origin,
       cards: [{ key: item.identifier, disposition: 'queued' }],
     },

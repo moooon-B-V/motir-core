@@ -32,6 +32,7 @@ async function openRun(): Promise<string> {
     {
       projectKey: fixture.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       origin: 'hosted',
       cards: [{ key: item.identifier, disposition: 'queued' }],
     },

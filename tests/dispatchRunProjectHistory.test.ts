@@ -70,6 +70,7 @@ async function openRun(
     {
       projectKey: fx.projectIdentifier,
       command: opts.command ?? 'batch',
+      reportedBy: 'cli',
       ...(opts.scopeKey ? { scopeKey: opts.scopeKey } : {}),
       cards: opts.keys.map((key) => ({ key, disposition: 'queued' as const })),
     },

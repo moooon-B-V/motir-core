@@ -664,6 +664,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         claim_work_item_continue: { key: item1 },
         touch_work_item_continue: { key: item1, runId: 'run_scoped' },
         close_work_item_continue: { key: item1, runId: 'run_scoped', outcome: 'completed' },
+        // MOTIR-7451 — the run tools, the same three `work_item:edit` writes.
+        start_work_item_run: { key: item1, harness: 'Scoped Agent' },
+        report_action: { key: item1, action: 'scoped step' },
+        close_work_item_run: { key: item1, runId: 'run_scoped', outcome: 'completed' },
         // MOTIR-3361 — the caller's OWN project. A write-scoped tool, so the
         // read-only-token loop asserts it is REFUSED at the scope gate rather
         // than reaching motir-ai.

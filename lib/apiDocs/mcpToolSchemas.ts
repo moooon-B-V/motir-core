@@ -722,6 +722,31 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  close_work_item_run: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The card you started the run on (e.g. "ACME-7") — the same key `start_work_item_run` took.',
+      },
+      runId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The run’s id — the `runId` `start_work_item_run` answered.',
+      },
+      outcome: {
+        type: 'string',
+        enum: ['drained', 'completed', 'max', 'halted', 'interrupted', 'replanned', 'gated'],
+        description:
+          'How the run ended: "completed" (the work is delivered), "drained" (a parent run finished every child it could), "max" (it stopped at a card limit), "halted" (you stopped on something you could not get past), "interrupted" (the person stopped you), "replanned" (the card went to Planning) or "gated" (it stopped at an approval gate).',
+      },
+    },
+    required: ['key', 'runId', 'outcome'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   complete_session: {
     type: 'object',
     properties: {
@@ -2029,6 +2054,80 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  report_action: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The card the step is on (e.g. "ACME-7") — the card you started the run on, or one of its children in a parent run. Required with `action` or `events`; omit everything for a heartbeat only.',
+      },
+      action: {
+        type: 'string',
+        description:
+          'The step you are ABOUT to take, in one line of at most 500 characters — e.g. "Running the targeted tests for the run service". Never a transcript, a diff, file contents, a prompt or a secret.',
+      },
+      events: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            kind: {
+              type: 'string',
+              minLength: 1,
+              description:
+                'The milestone: "checkout_ready" (your branch is checked out — put `{ branch }` in `data`), "delivery_linked" (a pull request is linked — `{ url }`), "leg_verdict" or "card_settled". Any other kind comes back in `refused`.',
+            },
+            data: {
+              type: 'object',
+              additionalProperties: {},
+              description: 'The milestone’s facts, e.g. `{ "branch": "subtask/ACME-7-fix" }`.',
+            },
+            disposition: {
+              type: 'string',
+              enum: [
+                'queued',
+                'running',
+                'integrated',
+                'implemented',
+                'failed',
+                'replanned',
+                'skipped',
+                'not_reached',
+              ],
+              description:
+                'The leg’s new disposition, when the milestone settles it (e.g. "implemented").',
+            },
+            skipReason: {
+              type: 'string',
+              enum: [
+                'needs_planning',
+                'needs_human',
+                'claim_refused',
+                'blocked_in_scope',
+                'integrated_dep',
+                'replan_submitted',
+                'checkout_unavailable',
+              ],
+              description: 'Why the leg was skipped, with a "skipped" disposition.',
+            },
+            sessionBranch: {
+              type: 'string',
+              minLength: 1,
+              description: 'The session/integration branch name, e.g. "session/ACME-42-run".',
+            },
+          },
+          required: ['kind'],
+          additionalProperties: false,
+        },
+        maxItems: 20,
+        description: 'Milestones to record before the step, on the leg of `key`.',
+      },
+    },
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   report_unbuildable_target: {
     type: 'object',
     properties: {
@@ -2319,6 +2418,34 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['sprintId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  start_work_item_run: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      harness: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 100,
+        description:
+          'The agent harness you are running in, as its makers name it — e.g. "Claude Code", "Codex", "Kimi CLI". Say what you are, honestly; it is what the run and the card record.',
+      },
+      model: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+        description:
+          'The model you are running on, by its id (e.g. "gpt-5-codex"). Omit it when you do not know it rather than guessing.',
+      },
+    },
+    required: ['key', 'harness'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -3358,6 +3485,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   claim_work_item_repair: 'Claim a red work item’s repair',
   close_work_item_continue: 'Close a continue',
   close_work_item_repair: 'Close a repair',
+  close_work_item_run: 'Close your run of a work item',
   complete_session: 'Complete session',
   complete_sprint: 'Complete sprint',
   create_acceptance_upload: 'Create acceptance upload',
@@ -3403,6 +3531,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   publish_test_instructions: 'Publish How to test',
   record_plan_revision_reason: 'Record WHY a plan had to change',
   reinforce_lesson: 'Reinforce a lesson',
+  report_action: 'Report your next step',
   report_unbuildable_target: 'Report a card you cannot build',
   search_lessons: 'Search lessons by meaning',
   search_work_items: 'Search work items',
@@ -3410,6 +3539,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   set_work_item_todo_done: 'Tick or untick a to-do step',
   skeleton: 'Project skeleton',
   start_sprint: 'Start sprint',
+  start_work_item_run: 'Start your run of a work item',
   submit_plan_session: 'Submit plan conversation',
   touch_work_item_continue: 'Keep a continue alive',
   touch_work_item_repair: 'Keep a repair alive',
@@ -3527,6 +3657,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   close_work_item_repair: {
     title: 'Close a repair',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  close_work_item_run: {
+    title: 'Close your run of a work item',
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,
@@ -3749,6 +3886,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: true,
     openWorldHint: false,
   },
+  report_action: {
+    title: 'Report your next step',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   report_unbuildable_target: {
     title: 'Report a card you cannot build',
     readOnlyHint: false,
@@ -3783,6 +3927,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     title: 'Start sprint',
     readOnlyHint: false,
     destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  start_work_item_run: {
+    title: 'Start your run of a work item',
+    readOnlyHint: false,
+    destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
   },

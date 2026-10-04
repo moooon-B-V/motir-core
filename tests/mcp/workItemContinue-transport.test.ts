@@ -173,6 +173,7 @@ async function deadCard(
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: [{ key: card.identifier, disposition: 'queued' }],
     },
     fx.ctx,
@@ -210,6 +211,7 @@ async function deadParentLeg(fx: WorkItemFixture) {
     {
       projectKey: fx.projectIdentifier,
       command: 'run_scope',
+      reportedBy: 'cli',
       scopeKey: story.identifier,
       cards: [{ key: child.identifier, disposition: 'queued' }],
     },
