@@ -1,4 +1,17 @@
-import type { ReauditResultDTO } from '@/lib/dto/codeHealth';
+import type { ReauditRepoJobsDTO } from '@/lib/dto/codeHealth';
+
+/**
+ * One queued repo AS THE BROWSER RECORDS IT: the trigger's answer plus the
+ * moment this browser queued it (MOTIR-7620). `queuedAt` is what a resumed run
+ * times its deriving row from — the job read carries no timestamp, and the
+ * repo's previous audit is the wrong clock. Optional because a record written
+ * before it existed has none; such a row falls back to "just started".
+ */
+export type StoredReauditRepo = ReauditRepoJobsDTO & { queuedAt?: string };
+
+export interface StoredReauditRun {
+  repos: StoredReauditRepo[];
+}
 
 // The in-flight re-audit RECORD's merge rule (MOTIR-2249), kept out of the
 // island so it can be reasoned about and tested on its own.
@@ -14,10 +27,10 @@ import type { ReauditResultDTO } from '@/lib/dto/codeHealth';
 // the newest entry winning for a repo that appears in both. A narrower run can
 // never narrow the record.
 export function mergeReauditRun(
-  stored: ReauditResultDTO | null,
-  queued: ReauditResultDTO['repos'],
-): ReauditResultDTO {
-  const byRepo = new Map<string | null, ReauditResultDTO['repos'][number]>();
+  stored: StoredReauditRun | null,
+  queued: StoredReauditRepo[],
+): StoredReauditRun {
+  const byRepo = new Map<string | null, StoredReauditRepo>();
   for (const entry of stored?.repos ?? []) byRepo.set(entry.repoKey, entry);
   for (const entry of queued) byRepo.set(entry.repoKey, entry);
   return { repos: [...byRepo.values()] };

@@ -15,6 +15,7 @@ import type { RepoAuditSurfaceDTO } from '@/lib/dto/codeHealth';
 // class the app's `i18n/request.ts` `now` kills in production).
 const NOW = new Date('2026-08-05T00:05:00.000Z');
 const AUDITED_AT = '2026-08-05T00:00:00.000Z';
+const TWO_WEEKS_AGO = '2026-07-22T00:05:00.000Z';
 
 function audited(repoKey: string, pct: number, total: number): RepoAuditSurfaceDTO {
   return {
@@ -65,6 +66,7 @@ function renderList(
   audits: RepoAuditSurfaceDTO[],
   over: {
     deriving?: string[];
+    derivingSince?: Record<string, string>;
     selected?: string | null;
     onSelect?: (repoKey: string) => void;
     onRetry?: (repoKey: string) => void;
@@ -74,7 +76,7 @@ function renderList(
 ) {
   return renderWithIntl(
     <AuditRepoList
-      rows={buildRepoAuditRows(audits, over.deriving ?? [])}
+      rows={buildRepoAuditRows(audits, over.deriving ?? [], over.derivingSince ?? {})}
       selectedRepoKey={over.selected ?? audits[0]?.repoKey ?? null}
       onSelect={over.onSelect ?? vi.fn()}
       onRetry={over.onRetry ?? vi.fn()}
@@ -88,7 +90,10 @@ function renderList(
 const group = () => screen.getByRole('group', { name: 'Choose a repository’s audit report' });
 const rowButtons = () => within(group()).getAllByRole('button');
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('AuditRepoList — N = 1 (Panel 7 §7)', () => {
   it('renders NOTHING for a single connected repo', () => {
@@ -351,11 +356,84 @@ describe('AuditRepoList — the states an audit’s own numbers can be missing',
     expect(names).toContain('Show the audit for a/one · Not measured');
   });
 
-  it('times a deriving row from the audit it is replacing', () => {
-    // A repo whose PREVIOUS audit is on screen while a fresh one derives keeps
-    // its `createdAt`, so the row can say WHEN rather than "just started".
-    renderList([audited('a/one', 34, 5), audited('a/two', 90, 7)], { deriving: ['a/two'] });
+  // MOTIR-7620: a re-audit's row used to time itself from the audit it is
+  // REPLACING, so pressing Re-audit on a repo audited two weeks ago read
+  // "started 2 weeks ago" — a working audit that looked stuck.
+  it('never times a re-audit from the audit it is replacing', () => {
+    const twoWeeksOld = audited('a/two', 90, 7);
+    twoWeeksOld.surface!.audit!.createdAt = TWO_WEEKS_AGO;
+    renderList([audited('a/one', 34, 5), twoWeeksOld], { deriving: ['a/two'] });
 
-    expect(screen.getByText('started 5 minutes ago')).toBeTruthy();
+    // No queued-at known yet → the honest "just started", never the old age.
+    expect(screen.queryByText('started 2 weeks ago')).toBeNull();
+    expect(screen.getByText('just started')).toBeTruthy();
+  });
+
+  it('times a re-audit from when THIS audit was queued', () => {
+    // The queued-at is the browser's own clock, read against the browser's now —
+    // a run queued after the page was served is later than the provider's `now`.
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+    const twoWeeksOld = audited('a/two', 90, 7);
+    twoWeeksOld.surface!.audit!.createdAt = TWO_WEEKS_AGO;
+    renderList([audited('a/one', 34, 5), twoWeeksOld], {
+      deriving: ['a/two'],
+      derivingSince: { 'a/two': '2026-08-05T00:02:00.000Z' },
+    });
+
+    expect(screen.getByText('started 3 minutes ago')).toBeTruthy();
+    expect(screen.queryByText('started 2 weeks ago')).toBeNull();
+  });
+
+  it('reads "just started" inside a run’s first minute, never "started now"', () => {
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+    const twoWeeksOld = audited('a/two', 90, 7);
+    twoWeeksOld.surface!.audit!.createdAt = TWO_WEEKS_AGO;
+    renderList([audited('a/one', 34, 5), twoWeeksOld], {
+      deriving: ['a/two'],
+      derivingSince: { 'a/two': '2026-08-05T00:04:30.000Z' },
+    });
+
+    expect(screen.getByText('just started')).toBeTruthy();
+  });
+
+  it('times a run queued AFTER the page was served from the browser’s clock', () => {
+    // The provider's `now` is the request instant (00:05); the browser is at
+    // 00:15 and queued the run at 00:13. Against the provider's clock that is
+    // "in 8 minutes"; against the browser's it is what happened.
+    vi.useFakeTimers({ now: new Date('2026-08-05T00:15:00.000Z'), toFake: ['Date'] });
+    renderList([audited('a/one', 34, 5), audited('a/two', 90, 7)], {
+      deriving: ['a/two'],
+      derivingSince: { 'a/two': '2026-08-05T00:13:00.000Z' },
+    });
+
+    expect(screen.getByText('started 2 minutes ago')).toBeTruthy();
+  });
+
+  it('still reads "just started" for a first audit in flight', () => {
+    renderList([audited('a/one', 34, 5), neverAudited('a/two')], { deriving: ['a/two'] });
+
+    expect(screen.getByText('just started')).toBeTruthy();
+  });
+
+  it('times a first audit in flight from its queued-at too', () => {
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+    renderList([audited('a/one', 34, 5), neverAudited('a/two')], {
+      deriving: ['a/two'],
+      derivingSince: { 'a/two': '2026-08-05T00:04:00.000Z' },
+    });
+
+    expect(screen.getByText('started 1 minute ago')).toBeTruthy();
+  });
+
+  it('leaves an audited row timed from its own audit', () => {
+    const twoWeeksOld = audited('a/two', 90, 7);
+    twoWeeksOld.surface!.audit!.createdAt = TWO_WEEKS_AGO;
+    renderList([audited('a/one', 34, 5), twoWeeksOld], {
+      // A queued-at for a repo that is NOT deriving is ignored.
+      derivingSince: { 'a/two': '2026-08-05T00:02:00.000Z' },
+    });
+
+    expect(screen.getByText('2 weeks ago')).toBeTruthy();
+    expect(screen.getByText('5 minutes ago')).toBeTruthy();
   });
 });

@@ -29,7 +29,12 @@ export interface RepoAuditRow {
   /** This repo's TOTAL finding count — off the surface's `total`, never the
    *  length of the findings page (the list reads at `findingsLimit=1`). */
   findingCount: number;
+  /** When this repo's LATEST audit landed. On a deriving row that is the audit
+   *  being REPLACED — never when the run in flight started (MOTIR-7620). */
   auditedAt: string | null;
+  /** When the audit in flight was queued — set on a `deriving` row only, and
+   *  only once the island knows it; null otherwise ("just started"). */
+  startedAt: string | null;
 }
 
 export interface RepoAuditRollup {
@@ -62,12 +67,19 @@ const STATE_RANK: Record<RepoAuditRowState, number> = {
  * `reaudit()` queued whose audit has not changed since. It is not a field on the
  * DTO: inventing one would be a motir-ai change and a two-repo straddle
  * (Panel 7 §5), so the caller passes what the trigger already told it.
+ *
+ * `derivingSince` is, per repo, when the island queued that run (MOTIR-7620).
+ * A deriving row is timed from it and from nothing else: the previous audit's
+ * `createdAt` is when the LAST audit landed, and presenting it as the start of
+ * this one made a fresh re-audit read "started 2 weeks ago".
  */
 export function buildRepoAuditRows(
   audits: readonly RepoAuditSurfaceDTO[],
   derivingRepoKeys: readonly string[] = [],
+  derivingSince: Readonly<Record<string, string>> = {},
 ): RepoAuditRow[] {
   return audits.map(({ repoKey, surface }) => {
+    const startedAt = derivingRepoKeys.includes(repoKey) ? (derivingSince[repoKey] ?? null) : null;
     if (surface === null) {
       return {
         repoKey,
@@ -76,6 +88,7 @@ export function buildRepoAuditRows(
         conformancePct: null,
         findingCount: 0,
         auditedAt: null,
+        startedAt: null,
       };
     }
     if (surface.audit === null) {
@@ -90,6 +103,7 @@ export function buildRepoAuditRows(
         conformancePct: null,
         findingCount: 0,
         auditedAt: null,
+        startedAt,
       };
     }
     // A repo whose PREVIOUS audit is still on screen while a fresh one derives
@@ -104,6 +118,7 @@ export function buildRepoAuditRows(
         conformancePct: null,
         findingCount: surface.total,
         auditedAt: surface.audit.createdAt,
+        startedAt,
       };
     }
     const summary = surface.audit.healthSummary;
@@ -115,6 +130,7 @@ export function buildRepoAuditRows(
       ...(summary.notMeasured ? { notMeasured: true } : {}),
       findingCount: surface.total,
       auditedAt: surface.audit.createdAt,
+      startedAt: null,
     };
   });
 }

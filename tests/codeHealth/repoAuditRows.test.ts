@@ -98,6 +98,35 @@ describe('buildRepoAuditRows — the four row states', () => {
     expect(rows.map((r) => r.state)).toEqual(['deriving', 'deriving', 'audited']);
     expect(rows[0]!.grade).toBeNull();
   });
+
+  // MOTIR-7620: a deriving row's start is when THIS run was queued. The
+  // previous audit's `createdAt` stays on the row as `auditedAt` — it is still
+  // when the report underneath landed — but it is never the start.
+  it('times a deriving row from its queued-at, and only a deriving row', () => {
+    const rows = buildRepoAuditRows(
+      [audited('a/one', 78, 4), neverAudited('a/two'), audited('a/three', 40)],
+      ['a/one', 'a/two'],
+      { 'a/one': '2026-08-05T00:03:00.000Z', 'a/three': '2026-08-05T00:03:00.000Z' },
+    );
+
+    expect(rows[0]).toMatchObject({
+      state: 'deriving',
+      startedAt: '2026-08-05T00:03:00.000Z',
+      auditedAt: rows[2]!.auditedAt,
+      findingCount: 4,
+    });
+    // Queued, but the island has no moment for it → "just started".
+    expect(rows[1]).toMatchObject({ state: 'deriving', startedAt: null, auditedAt: null });
+    // Not deriving: a stray queued-at is ignored.
+    expect(rows[2]).toMatchObject({ state: 'audited', startedAt: null });
+  });
+
+  it('carries no start on a deriving row before its queued-at is known', () => {
+    const [row] = buildRepoAuditRows([audited('a/one', 78)], ['a/one']);
+
+    expect(row).toMatchObject({ state: 'deriving', startedAt: null });
+    expect(row!.auditedAt).not.toBeNull();
+  });
 });
 
 describe('orderRepoAuditRows — worst first, then by state', () => {
