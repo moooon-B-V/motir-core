@@ -145,17 +145,19 @@ describe('THE INVENTORY — while a plan gate is awaiting, only the door writes 
   });
 
   it('names §11.8’s writers of a decided plan status, and no other appears', () => {
-    // Every `planRepository.update(…)` whose data writes `approved` / `declined`.
+    // Every `planRepository.update(…)` or `.endGenerating(…)` (the compare-and-set
+    // that ends a `generating` attempt) whose data writes `approved` / `declined`.
     const writers: Record<string, number> = {};
     for (const file of SOURCE_FILES) {
-      const n = callArgs(codeOf(file), /planRepository\.update\(/).filter((args) =>
+      const n = callArgs(codeOf(file), /planRepository\.(update|endGenerating)\(/).filter((args) =>
         /status:\s*'(approved|declined)'/.test(args),
       ).length;
       if (n > 0) writers[file] = n;
     }
     expect(writers).toEqual({
-      // §11.8 item 4 — `abandonedPlanService.reconcileAbandoned`, `generating` only.
-      'lib/services/abandonedPlanService.ts': 1,
+      // §11.8 item 4 — `abandonedPlanService.reconcileAbandoned` and
+      // `endFailedAttempt` (MOTIR-7628), `generating` only and never while asked.
+      'lib/services/abandonedPlanService.ts': 2,
       // Four in plansService, each named:
       //   · markPlanned's EMPTY close (`declined` / `discarded`, §11.8 item 1 — no gate);
       //   · the LAST-withdrawal discard (item 3 — it supersedes `plan_discarded` in the
