@@ -12,6 +12,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
 import { formatRunInstant } from '@/lib/runs/runClock';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import { DEVELOPMENT_SECTION_ID } from './decisionAnchor';
 import { useLandOnLateSection } from './useLandOnLateSection';
 
@@ -103,6 +104,7 @@ export function ToFixBanner({
   fixGroup = null,
 }: ToFixBannerProps) {
   const t = useTranslations('toFix.banner');
+  const routes = useReaderRoutes();
   const tw = useTranslations('workbench.toFix');
   const locale = useLocale();
   // Read ONCE per mount: a relative label that moved between renders would be a
@@ -294,7 +296,7 @@ export function ToFixBanner({
           // A carried card points at the HEAD's page — its Development block holds both
           // repairs — never at a Workbench row the reader may not have.
           <Link
-            href={`/items/${carriedBy}#${DEVELOPMENT_SECTION_ID}`}
+            href={routes.item(carriedBy, DEVELOPMENT_SECTION_ID)}
             data-testid="to-fix-banner-to-head"
             className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
