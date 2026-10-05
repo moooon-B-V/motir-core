@@ -243,6 +243,31 @@ export const planChangeSessionRepository = {
    * session does not exist; the caller re-reads the current row UNDER the lock
    * to allocate from a `turnCount` no sibling transaction can still move.
    */
+  /**
+   * The IDLE CLOSE's discovery read (AMENDMENT 23 §2; MOTIR-7638): open,
+   * non-`guide` sessions whose last activity is older than `olderThan` and that
+   * hold no undecided plan. Cross-tenant, so it runs under the system context
+   * (`plan_change_session_system_read`); the end re-checks each one under its
+   * own row lock before writing. Oldest first, bounded per pass.
+   */
+  async listIdleOpen(
+    olderThan: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    return tx.planChangeSession.findMany({
+      where: {
+        endedAt: null,
+        origin: { not: 'guide' },
+        lastActivityAt: { lt: olderThan },
+        plans: { none: { status: { in: ['generating', 'planned', 'stale'] } } },
+      },
+      select: { id: true, workspaceId: true },
+      orderBy: [{ lastActivityAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+  },
+
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "plan_change_session" WHERE "id" = ${id} FOR UPDATE

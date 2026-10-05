@@ -46,3 +46,18 @@ function isFailedStatus(data: unknown): boolean {
     typeof data === 'object' && data !== null && (data as { status?: unknown }).status === 'failed'
   );
 }
+
+/**
+ * Whether a relayed frame says the job ENDED BADLY — a `status` frame of
+ * `failed` or `canceled` (story MOTIR-7630 · MOTIR-7638). The relay ends the
+ * attempt's planning session on it, server-side, so a closed tab never loses
+ * the end. A client disconnect is not a frame and ends nothing.
+ */
+export function isTerminalFailureFrame(frame: JobStreamEvent): boolean {
+  if (frame.event !== 'status') return false;
+  const status =
+    typeof frame.data === 'object' && frame.data !== null
+      ? (frame.data as { status?: unknown }).status
+      : undefined;
+  return status === 'failed' || status === 'canceled';
+}

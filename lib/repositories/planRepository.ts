@@ -58,6 +58,15 @@ export const planRepository = {
     });
   },
 
+  /** How many of a session's plans are UNDECIDED (`generating` / `planned` /
+   *  `stale`) — the idle close's guard, re-read under the session's lock
+   *  (AMENDMENT 23 §2). */
+  async countUndecidedBySession(sessionId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.plan.count({
+      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+    });
+  },
+
   /** The id of a session's LATEST plan — "is this plan the conversation's current
    *  one?" (AMENDMENT 17 §5), the question `lastJobId` used to answer only for
    *  the latest submit. `tx` required: it guards a following release. */

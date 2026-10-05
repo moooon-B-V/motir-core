@@ -931,6 +931,20 @@ export const planTargetLockService = {
   },
 
   /**
+   * {@link refreshForSession} INSIDE THE CALLER'S TRANSACTION — every TURN
+   * refreshes the lease, not only a submit (AMENDMENT 23 §2; MOTIR-7638), so a
+   * session's lease expiry and its idle deadline are the same instant and the
+   * idle close never ends a conversation a person is still having.
+   */
+  async refreshForSessionWithin(
+    sessionId: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return planTargetLockRepository.extendBySessionId(sessionId, leaseExpiryFrom(now), tx);
+  },
+
+  /**
    * RECOVERY — release every lease whose window has run out.
    *
    * This is the path that reaches the case nothing else can. A planner that

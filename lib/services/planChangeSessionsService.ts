@@ -380,9 +380,14 @@ async function appendWithin(
     throw err;
   }
 
+  // Every turn is activity, so it pushes the session's lease out too (AMENDMENT
+  // 23 §2): the idle close reads `lastActivityAt` and the lease sweep reads the
+  // lease, and the two must agree on when the session went quiet.
+  const now = new Date();
+  await planTargetLockService.refreshForSessionWithin(fresh.id, now, tx);
   return planChangeSessionRepository.update(
     fresh.id,
-    { ...patch, turnCount: seq + 1, lastActivityAt: new Date() },
+    { ...patch, turnCount: seq + 1, lastActivityAt: now },
     tx,
   );
 }

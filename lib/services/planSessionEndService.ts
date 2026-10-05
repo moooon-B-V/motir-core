@@ -1,7 +1,12 @@
 import type { Prisma, PlanChangeSession, PlanSessionEndReason } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
+import { PLAN_TARGET_LOCK_LEASE_MS } from '@/lib/planChange/targetLock';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -32,10 +37,15 @@ export interface PlanSessionEndActor {
    *  person; for Motir it is resolved by {@link endSession} when omitted. */
   actor: ServiceContext;
   now?: Date;
+  /** The IDLE CLOSE's guard, checked under the session's lock: end only if the
+   *  session's last activity is still older than this AND it holds no undecided
+   *  plan. A turn that landed after the sweep's discovery read wins. */
+  onlyIfIdleBefore?: Date;
 }
 
 /** What an end did: `ended` is false when the session had already ended, in
- *  which case `session` is the FIRST end, untouched. */
+ *  which case `session` is the FIRST end, untouched — or, for the idle close,
+ *  when the session turned out not to be idle, in which case it is still open. */
 export interface PlanSessionEndResult {
   ended: boolean;
   session: PlanChangeSession;
@@ -89,6 +99,12 @@ export async function endSessionWithin(
   const fresh = await planChangeSessionRepository.findById(sessionId, workspaceId, tx);
   if (!fresh) throw new PlanChangeSessionNotFoundError(sessionId);
   if (fresh.endedAt) return { ended: false, session: fresh };
+  if (by.onlyIfIdleBefore) {
+    const stillIdle =
+      fresh.lastActivityAt < by.onlyIfIdleBefore &&
+      (await planRepository.countUndecidedBySession(sessionId, tx)) === 0;
+    if (!stillIdle) return { ended: false, session: fresh };
+  }
 
   const session = await planChangeSessionRepository.update(
     sessionId,
@@ -149,6 +165,7 @@ export async function endSession(
     endedById?: string | null;
     actorId?: string | null;
     now?: Date;
+    onlyIfIdleBefore?: Date;
   },
 ): Promise<PlanSessionEndResult> {
   const { workspaceId } = opts;
@@ -174,8 +191,99 @@ export async function endSession(
       endedById: opts.endedById ?? null,
       actor: { userId: signer, workspaceId },
       now: opts.now,
+      onlyIfIdleBefore: opts.onlyIfIdleBefore,
     }),
   );
 }
 
-export const planSessionEndService = { endSession, endSessionWithin };
+/**
+ * END THE SESSION WHOSE ATTEMPT JUST FAILED (MOTIR-7638; AMENDMENT 23 §2) — the
+ * stream relays call it on a terminal `failed` / `canceled` frame.
+ *
+ * The session is the one whose `lastJobId` is this job: only the session's
+ * CURRENT attempt ends it. An older job of a session that has since submitted
+ * again names no session, so its failure ends nothing. A job no session owns
+ * (a work item's contextual plan) is a no-op. Idempotent with the abandoned-plan
+ * sweep, which ends the same session as a backstop.
+ */
+export async function endSessionForFailedJob(
+  jobId: string,
+  ctx: { userId: string; workspaceId: string; projectId: string },
+): Promise<PlanSessionEndResult | null> {
+  const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    planChangeSessionRepository.findByProjectAndLastJobId(
+      ctx.projectId,
+      jobId,
+      ctx.workspaceId,
+      tx,
+    ),
+  );
+  if (!session || session.endedAt) return null;
+  // No `actorId`: Motir ended it, so the restores are signed by the session's
+  // starter, whoever happens to be watching the stream.
+  return endSession(session.id, 'failed', { workspaceId: ctx.workspaceId });
+}
+
+/**
+ * END THE SESSION OF A PLAN THE ABANDONED SWEEP JUST DECLINED (MOTIR-7638) — the
+ * backstop for an attempt nobody was watching. Only when that plan is still the
+ * session's LATEST: a session that has moved on to a newer plan is not this
+ * attempt's to end. Idempotent with the relay: a session it already ended
+ * returns its first end.
+ */
+export async function endSessionForAbandonedPlan(plan: {
+  id: string;
+  workspaceId: string;
+  sessionId: string | null;
+}): Promise<PlanSessionEndResult | null> {
+  const sessionId = plan.sessionId;
+  if (!sessionId) return null;
+  const latest = await withWorkspaceServiceContext(plan.workspaceId, (tx) =>
+    planRepository.findLatestIdBySession(sessionId, tx),
+  );
+  if (latest !== plan.id) return null;
+  return endSession(sessionId, 'failed', { workspaceId: plan.workspaceId });
+}
+
+/** Sessions ended per idle-close pass; a backlog drains over several passes. */
+export const PLAN_SESSION_IDLE_CLOSE_BATCH_SIZE = 200;
+
+/**
+ * THE IDLE CLOSE (MOTIR-7638; AMENDMENT 23 §2) — run by the lock sweep every 5
+ * minutes. Ends as `idle` every open, non-`guide` session with no undecided plan
+ * whose last activity is older than the session lease, whether or not it holds a
+ * lock. A session's lease is refreshed on every turn, so its lease expiry and its
+ * idle deadline are the same instant: a person mid-conversation is never closed,
+ * and a session whose plan waits for a decision stays open until that decision.
+ *
+ * CROSS-TENANT discovery, PER-TENANT end, exactly like the lease sweep: the read
+ * runs under the system context and each end binds the session's own workspace
+ * and re-checks idleness under the row lock.
+ */
+export async function closeIdleSessions(
+  now: Date = new Date(),
+  batchSize: number = PLAN_SESSION_IDLE_CLOSE_BATCH_SIZE,
+): Promise<{ closed: number; sessionIds: string[] }> {
+  const olderThan = new Date(now.getTime() - PLAN_TARGET_LOCK_LEASE_MS);
+  const idle = await withSystemContext((tx) =>
+    planChangeSessionRepository.listIdleOpen(olderThan, batchSize, tx),
+  );
+  const sessionIds: string[] = [];
+  for (const session of idle) {
+    const out = await endSession(session.id, 'idle', {
+      workspaceId: session.workspaceId,
+      now,
+      onlyIfIdleBefore: olderThan,
+    });
+    if (out.ended) sessionIds.push(session.id);
+  }
+  return { closed: sessionIds.length, sessionIds };
+}
+
+export const planSessionEndService = {
+  closeIdleSessions,
+  endSession,
+  endSessionWithin,
+  endSessionForFailedJob,
+  endSessionForAbandonedPlan,
+};

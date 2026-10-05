@@ -60,8 +60,17 @@ export const planTargetLockSweep = defineJob(
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {
-    return ctx.step.run('release-expired-planning-locks', () =>
+    // The IDLE CLOSE first (AMENDMENT 23 §2; MOTIR-7638): ending an idle session
+    // gives back everything it held, so the lease release below then finds only
+    // the leases of sessions that are NOT idle — a session whose plan waits for a
+    // decision, which keeps its plan-held locks for its reviewer.
+    const idle = await ctx.step.run('close-idle-planning-sessions', () =>
+      services.planSessionEnd.closeIdleSessions(),
+    );
+    const released = await ctx.step.run('release-expired-planning-locks', () =>
       services.planTargetLock.releaseExpired(),
     );
+    // The lease release's own shape, unchanged, with the idle close beside it.
+    return { ...released, idle };
   },
 );
