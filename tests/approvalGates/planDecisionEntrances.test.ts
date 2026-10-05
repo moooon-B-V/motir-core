@@ -156,6 +156,10 @@ describe('THE INVENTORY — while a plan gate is awaiting, only the door writes 
     expect(writers).toEqual({
       // §11.8 item 4 — `abandonedPlanService.reconcileAbandoned`, `generating` only.
       'lib/services/abandonedPlanService.ts': 1,
+      // The session END's discard (AMENDMENT 23 §2, MOTIR-7637) — of the session's
+      // LATEST plan, and only while it is `generating`: a plan is asked about once it
+      // is `planned`, so there is never a question for this write to go around.
+      'lib/services/planSessionEndService.ts': 1,
       // Four in plansService, each named:
       //   · markPlanned's EMPTY close (`declined` / `discarded`, §11.8 item 1 — no gate);
       //   · the LAST-withdrawal discard (item 3 — it supersedes `plan_discarded` in the
@@ -169,6 +173,9 @@ describe('THE INVENTORY — while a plan gate is awaiting, only the door writes 
     for (const body of ['approveWithin', 'declineWithin']) {
       expect(functionBody(plans, body), body).toContain('assertNoAwaitingGateUnlessDeciding(');
     }
+    expect(codeOf('lib/services/planSessionEndService.ts')).toMatch(
+      /if \(plan\?\.status === 'generating'\)/,
+    );
     // Only the handler's seams waive it.
     expect(plans.match(/viaGate:\s*true/g)).toHaveLength(2);
   });

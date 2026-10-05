@@ -830,15 +830,32 @@ export const planTargetLockService = {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     return withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-      async (tx) => {
-        const locks = await planTargetLockRepository.listBySessionId(sessionId, tx);
-        const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];
-        for (const lock of locks) {
-          results.push({ workItemId: lock.workItemId, outcome: await releaseOne(lock, ctx, tx) });
-        }
-        return results;
-      },
+      (tx) => planTargetLockService.releaseForSessionWithin(sessionId, ctx, tx),
     );
+  },
+
+  /**
+   * {@link releaseForSession} INSIDE THE CALLER'S TRANSACTION — for the one end
+   * operation (`planChangeSessionsService.endSession`, AMENDMENT 23 §2), which
+   * stamps the end and gives the cards back in ONE transaction. `system` signs
+   * each restore as a background write, the way the sweep does, for an end
+   * Motir made rather than a person.
+   */
+  async releaseForSessionWithin(
+    sessionId: string,
+    actor: ServiceContext,
+    tx: Prisma.TransactionClient,
+    opts: { system?: boolean } = {},
+  ): Promise<Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }>> {
+    const locks = await planTargetLockRepository.listBySessionId(sessionId, tx);
+    const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];
+    for (const lock of locks) {
+      results.push({
+        workItemId: lock.workItemId,
+        outcome: await releaseOne(lock, actor, tx, opts),
+      });
+    }
+    return results;
   },
 
   /**
@@ -871,15 +888,27 @@ export const planTargetLockService = {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     return withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-      async (tx) => {
-        const locks = await planTargetLockRepository.listByPlanId(planId, tx);
-        const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];
-        for (const lock of locks) {
-          results.push({ workItemId: lock.workItemId, outcome: await releaseOne(lock, ctx, tx) });
-        }
-        return results;
-      },
+      (tx) => planTargetLockService.releaseForPlanWithin(planId, ctx, tx),
     );
+  },
+
+  /** {@link releaseForPlan} INSIDE THE CALLER'S TRANSACTION — the end operation's
+   *  arm for a `generating` plan it discards (AMENDMENT 23 §2). */
+  async releaseForPlanWithin(
+    planId: string,
+    actor: ServiceContext,
+    tx: Prisma.TransactionClient,
+    opts: { system?: boolean } = {},
+  ): Promise<Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }>> {
+    const locks = await planTargetLockRepository.listByPlanId(planId, tx);
+    const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];
+    for (const lock of locks) {
+      results.push({
+        workItemId: lock.workItemId,
+        outcome: await releaseOne(lock, actor, tx, opts),
+      });
+    }
+    return results;
   },
 
   /**

@@ -58,6 +58,7 @@ import {
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
 import { resumableSince } from '@/lib/planChange/sessionWindow';
 import { attachmentsService } from '@/lib/services/attachmentsService';
+import { endSession } from '@/lib/services/planSessionEndService';
 
 /**
  * How a write ADDRESSES its session (AMENDMENT 17 §2, story MOTIR-6011): by its
@@ -596,6 +597,13 @@ async function resumeSeededOrStartWithin(
 }
 
 export const planChangeSessionsService = {
+  /**
+   * END a session (AMENDMENT 23 §2) — the one end operation, idempotent, in one
+   * transaction. Lives in `planSessionEndService` (see its header for why); this
+   * is the conversation service's address for it.
+   */
+  endSession,
+
   /**
    * The RESUME read (AMENDMENT 17 §3): the caller's OWN most recent session for
    * the scope, if its last turn was inside `PLAN_SESSION_RESUME_WINDOW_MS`, else
