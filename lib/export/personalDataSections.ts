@@ -716,6 +716,12 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'only from the platform tier, not a record about the operator as a data subject — ' +
     '`OrgFeatureFlag`’s argument; every add and remove is recorded in the audit log ' +
     '(`ai.run_model_list.add` / `ai.run_model_list.remove`) with the same actor.',
+  EnterpriseRequest:
+    'An organization’s request to talk about the Enterprise plan (Story MOTIR-7602): a ' +
+    'commercial record about the ORG, sent by one of its owners or admins, which the org ' +
+    'keeps after the sender leaves (`requestedById` is SetNull). Its RLS admits only the ' +
+    'org context (`app.organization_id`) and platform staff, so neither export tier can ' +
+    'read it. Exporting it would need an org tier this enumeration does not have.',
   PlanTargetLock:
     'A planning lease measured in minutes, held by a session and released by a sweep. ' +
     'It carries no fact about the person beyond "a lock existed", and is gone before ' +
