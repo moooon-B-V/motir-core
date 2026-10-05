@@ -15,7 +15,8 @@
       block: the entry's member list and its fold.
 
       Line 1 is WorkbenchList's row; line 2 is WorkbenchFixLine's fix line; the
-      repairs are the fix line's command and the shipped Continue hosted door.
+      repairs are the fix line's command and the shipped ContinueHostedDoor, its
+      button relabelled Continue (Request changes, 2026-10-05).
       Fixture keys are ACME-n.
     -->
     <style>
@@ -4759,7 +4760,7 @@
                             aria-hidden="true"
                           >
                             <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></svg
-                          >Continue hosted
+                          >Continue
                         </button></span
                       ><span class="tf-repair"
                         ><code class="tf-cmd">motir continue ACME-12</code
@@ -5360,18 +5361,22 @@
       <p class="note">
         The run of <strong>ACME-12</strong> died with five of its work items in progress. Before,
         the tab drew SIX rows for it — the story plus one per work item, each with its own
-        <code>motir continue ACME-12</code> and its own Continue hosted — and counted six. Now it is
-        ONE entry. <strong>Line 1 is the HEAD</strong>: the card the repair continues (the dead
-        run's scope card, <code>fixDetail.continueKey</code>), in <code>WorkbenchList</code>'s own
-        row. <strong>Line 2</strong> is the § 31 fix line unchanged, plus one clause,
-        <em>· 5 more work items in this run</em>, in the affected clause's ink
-        (<code>--el-text-secondary</code>). Under it, the <strong>member list</strong>: one 32px
-        line per stuck work item, aligned to line 1's four columns, in the run's own order
+        <code>motir continue ACME-12</code> and its own hosted-agent Continue button — and counted
+        six. Now it is ONE entry. <strong>Line 1 is the HEAD</strong>: the card the repair continues
+        (the dead run's scope card, <code>fixDetail.continueKey</code>), in
+        <code>WorkbenchList</code>'s own row. <strong>Line 2</strong> is the § 31 fix line
+        unchanged, plus one clause, <em>· 5 more work items in this run</em>, in the affected
+        clause's ink (<code>--el-text-secondary</code>). Under it, the <strong>member list</strong>:
+        one 32px line per stuck work item, aligned to line 1's four columns, in the run's own order
         (<code>DispatchRunCard.position</code>). It folds after THREE;
         <em>Show 2 more work items</em> is the shipped show-more button
         (<code>ObsolescenceField</code>: 12px, <code>--el-link</code>, <code>aria-expanded</code>).
         The strip's To fix badge counts entries: <strong>3</strong>. The sprint run's red pull
         request (ACME-31) is one entry too — Panel 3.
+        <strong>The door's button reads <em>Continue</em></strong
+        >, no longer <em>Continue hosted</em>: the hosted agent is how Motir runs, so the word adds
+        nothing (the run control already reads <em>Run</em>). The model picker beside it still says
+        where it runs.
       </p>
     </div>
 
@@ -5516,7 +5521,7 @@
                             aria-hidden="true"
                           >
                             <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></svg
-                          >Continue hosted
+                          >Continue
                         </button></span
                       ><span class="tf-repair"
                         ><code class="tf-cmd">motir continue ACME-12</code
@@ -6454,7 +6459,7 @@
                             aria-hidden="true"
                           >
                             <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></svg
-                          >Continue hosted
+                          >Continue
                         </button></span
                       ><span class="tf-repair"
                         ><code class="tf-cmd">motir continue ACME-40</code
@@ -7486,7 +7491,7 @@
                             aria-hidden="true"
                           >
                             <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></svg
-                          >Continue hosted
+                          >Continue
                         </button></span
                       ><span class="tf-repair"
                         ><code class="tf-cmd">motir continue ACME-12</code
@@ -8460,7 +8465,7 @@
                             aria-hidden="true"
                           >
                             <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></svg
-                          >托管继续
+                          >继续
                         </button></span
                       ><span class="tf-repair"
                         ><code class="tf-cmd">motir continue ACME-12</code

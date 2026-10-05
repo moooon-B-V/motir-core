@@ -3449,6 +3449,13 @@ No raw hex and no raw shape utility in any of the four deltas.
 
 ## 34 · TO FIX · ONE ENTRY PER RUN — cards stuck for one reason that one repair clears are one entry, and the tab counts entries — MOTIR-7590
 
+> **Revised 2026-10-05 after Request changes.** The reviewer sent the design back with: _"We need to remove the
+> text copy "hosted" on the button, because we don't call it "run hosted" anymore, which is just run, we should just
+> say "continue"."_ The door's button now reads **Continue** (zh **继续**), and its parent form **Continue {key}**
+> (zh **继续 {key}**). The model picker beside it still names the model; the run control already reads **Run**.
+> Rows added to § 34.6, with the two sentences that name the button. The lead and the _Being continued … in a
+> hosted container_ lines describe where the work runs, not the button, and stay.
+
 **The asset:** [`workbench--to-fix--per-run.mock.html`](./workbench--to-fix--per-run.mock.html), a new delta
 mock, Panels **1–8**, the zh panel and the grouping-key table. **It edits no existing mock.** It amends **§ 30**
 ([`workbench--to-fix.mock.html`](./workbench--to-fix.mock.html), MOTIR-6599, the To fix tab, its row and its
@@ -3465,7 +3472,7 @@ every one of them offered the same repair:
 
 - **A dead story run** puts the story and every in-progress leg on the tab. The legs carry `run_died` with
   `continueKey` = the story (`continue_the_parent`), so a run with five legs in flight drew six rows, six
-  `motir continue ACME-12` commands and six Continue hosted doors, and the badge read 6 for one repair.
+  `motir continue ACME-12` commands and six hosted Continue doors, and the badge read 6 for one repair.
 - **A red pull request shared by several run targets** (a sprint run, or a story run that never recorded How to
   test) puts each card on the tab with the same `ci_failed` / `conflicted` / `queue_failed` reason, each with its
   own `motir fix` for one repair.
@@ -3547,15 +3554,19 @@ to.** Nothing else is stored, and no second table is written.
 
 ### 34.6 Copy
 
-| key (proposed)                                                      | en                                                                                                                  | zh                                  |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `workbench.toFix.entry.carriesRun`                                  | {count, plural, one {# more work item in this run} other {# more work items in this run}}                           | 此运行中另有 {count} 个工作项       |
-| `workbench.toFix.entry.carriesPullRequests`                         | {count, plural, one {# more work item on the same pull request} other {# more work items on the same pull request}} | 相同拉取请求上另有 {count} 个工作项 |
-| `workbench.toFix.entry.membersLabel`                                | Work items stuck with {key}                                                                                         | 与 {key} 一起受阻的工作项           |
-| `workbench.toFix.entry.showMore`                                    | Show {count, plural, one {# more work item} other {# more work items}}                                              | 再显示 {count} 个工作项             |
-| `workbench.toFix.entry.showFewer`                                   | Show fewer                                                                                                          | 收起                                |
-| (shipped) `workbench.live.cleared`                                  | Cleared                                                                                                             | 已解除                              |
-| (retired from the Workbench) `workbench.toFix.reason.runDiedParent` | not drawn by the Workbench any more                                                                                 | 同左                                |
+| key (proposed)                                                                             | en                                                                                                                                              | zh                                                                                                           |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `workbench.toFix.entry.carriesRun`                                                         | {count, plural, one {# more work item in this run} other {# more work items in this run}}                                                       | 此运行中另有 {count} 个工作项                                                                                |
+| `workbench.toFix.entry.carriesPullRequests`                                                | {count, plural, one {# more work item on the same pull request} other {# more work items on the same pull request}}                             | 相同拉取请求上另有 {count} 个工作项                                                                          |
+| `workbench.toFix.entry.membersLabel`                                                       | Work items stuck with {key}                                                                                                                     | 与 {key} 一起受阻的工作项                                                                                    |
+| `workbench.toFix.entry.showMore`                                                           | Show {count, plural, one {# more work item} other {# more work items}}                                                                          | 再显示 {count} 个工作项                                                                                      |
+| `workbench.toFix.entry.showFewer`                                                          | Show fewer                                                                                                                                      | 收起                                                                                                         |
+| `github.development.continue.hosted.button` (CHANGED)                                      | Continue (was _Continue hosted_)                                                                                                                | 继续（原为“托管继续”）                                                                                       |
+| `github.development.continue.hosted.buttonParent` (CHANGED)                                | Continue {key} (was _Continue {key} hosted_)                                                                                                    | 继续 {key}（原为“托管继续 {key}”）                                                                           |
+| `github.development.continue.hosted.refused.outOfCredits.body` (CHANGED, names the button) | Nothing was booted and nothing was charged. Continue works again once the organization has credits — or carry it on from your terminal.         | 没有启动任何机器，也没有产生任何费用。组织有积分后即可再次继续——或者在终端中继续。                           |
+| `github.development.continue.hosted.runDied` (CHANGED, names the button)                   | This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it here or from a terminal in Development below. | 此运行已中断——最后一次联系在<b><when></when></b>。其工作保留在分支上；请在下方“开发”中继续，或在终端中继续。 |
+| (shipped) `workbench.live.cleared`                                                         | Cleared                                                                                                                                         | 已解除                                                                                                       |
+| (retired from the Workbench) `workbench.toFix.reason.runDiedParent`                        | not drawn by the Workbench any more                                                                                                             | 同左                                                                                                         |
 
 Colour only through `--el-*`; shape only through element-semantic tokens. The delta block (`tf-members`,
 `tf-member*`, `tf-more*`) names no raw hue and no raw shape utility. Every text ink is `--el-text` or
@@ -3563,7 +3574,7 @@ Colour only through `--el-*`; shape only through element-semantic tokens. The de
 
 ### What this asset does NOT decide
 
-- **The repairs themselves**: `motir continue`, `motir fix` and the Continue hosted door are § 30 / § 31's and the
+- **The repairs themselves**: `motir continue`, `motir fix` and the hosted Continue door are § 30 / § 31's (only its button's words change, § 34.6) and the
   runs area's, unchanged.
 - **The `/items` To fix filter**: per card, unchanged.
 - **Whether a story run should record How to test earlier** so its legs never fan out on a pull-request reason.
