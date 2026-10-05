@@ -49,6 +49,7 @@ import type {
   JobContextBag,
   JobKind,
   JobStreamEvent,
+  PlannerModelCandidateRead,
   PlannerModelListEntryRead,
   PlannerModelListRead,
   PlannerModelListWriteInput,
@@ -2319,11 +2320,21 @@ function isPlannerModelListEntry(value: unknown): value is PlannerModelListEntry
   );
 }
 
+function isPlannerModelCandidate(value: unknown): value is PlannerModelCandidateRead {
+  if (!value || typeof value !== 'object') return false;
+  const c = value as Record<string, unknown>;
+  return typeof c['id'] === 'string' && typeof c['provider'] === 'string';
+}
+
 function parsePlannerModelList(body: unknown): PlannerModelListRead | null {
   if (!body || typeof body !== 'object') return null;
-  const { entries } = body as { entries?: unknown };
+  const { entries, candidates } = body as { entries?: unknown; candidates?: unknown };
   if (!Array.isArray(entries) || !entries.every(isPlannerModelListEntry)) return null;
-  return { entries };
+  // `candidates` (motir-ai MOTIR-7614) is additive: a motir-ai that predates it
+  // answers none, which reads as nothing addable rather than as an outage.
+  if (candidates === undefined) return { entries, candidates: [] };
+  if (!Array.isArray(candidates) || !candidates.every(isPlannerModelCandidate)) return null;
+  return { entries, candidates };
 }
 
 /**

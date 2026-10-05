@@ -142,7 +142,11 @@ test('a superadmin curates both model lists, and a project’s Run hosted picker
     async () => {
       await main.getByRole('button', { name: lists.add }).click();
       const dialog = page.getByRole('alertdialog');
-      await dialog.getByRole('textbox', { name: planning.add.modelLabel }).fill(GLM);
+      // The picker offers motir-ai's candidates — plannable and not yet listed
+      // (MOTIR-7614) — so the admin picks GLM rather than typing its id.
+      await dialog.getByRole('combobox', { name: planning.add.modelLabel }).click();
+      await expect(page.getByRole('option', { name: new RegExp(SONNET) })).toHaveCount(0);
+      await page.getByRole('option', { name: new RegExp(GLM) }).click();
       await beat();
       await confirmWithReason(page, planning.add.confirm, 'Trial GLM 5.2 for internal planning');
 

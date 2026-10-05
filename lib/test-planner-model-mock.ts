@@ -125,7 +125,14 @@ function plannable(fixture: PlannerModelFixture) {
 }
 
 function listToWire(fixture: PlannerModelFixture) {
+  const listed = new Set(listOf(fixture).map((e) => e.model));
   return {
+    // motir-ai's `candidates` (MOTIR-7614): plannable (`offered` here) minus listed,
+    // sorted by provider, then id.
+    candidates: fixture.offered
+      .filter((m) => !listed.has(m.id))
+      .map((m) => ({ id: m.id, provider: m.provider }))
+      .sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id)),
     entries: listOf(fixture).map((e) => {
       const offered = fixture.offered.find((m) => m.id === e.model);
       return {

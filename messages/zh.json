@@ -10157,11 +10157,12 @@
       "add": {
         "title": "添加一个规划可使用的模型",
         "body": "添加后，只要 motir-ai 提供它，超级管理员就可以把任何受众设置为它。",
-        "modelLabel": "模型 ID",
-        "modelHint": "只有网关提供、属于对话模型且有规划费率的模型，motir-ai 才会添加。",
+        "modelLabel": "模型",
+        "placeholder": "选择一个模型",
+        "pickerFoot": "网关提供、可用于规划（对话模型且有规划费率）且尚未在列表中的模型。",
+        "nothing": "所有可用于规划的模型都已在列表中。",
         "confirm": "添加模型",
-        "refused": "未添加：{detail}",
-        "modelRequired": "请输入模型 ID。"
+        "refused": "未添加：{detail}"
       },
       "remove": {
         "title": "要从规划列表中移除 {model} 吗？",
