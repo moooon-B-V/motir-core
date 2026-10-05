@@ -1,6 +1,10 @@
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { resolveJobState } from '@/lib/services/aiPlanEditsService';
+import {
+  planTargetLockService,
+  type PlanTargetLockContext,
+} from '@/lib/services/planTargetLockService';
 import type { PlanJobStateDto } from '@/lib/dto/plans';
 
 // ABANDONED-PLAN reconciliation (MOTIR-3064) — the recovery half of the
@@ -227,7 +231,107 @@ export function classifyAbandonedCandidate(
   return { abandoned: false, reason: 'job_in_flight' };
 }
 
+/** What {@link abandonedPlanService.endFailedAttempt} did with one job's plan. */
+export type FailedAttemptOutcome =
+  /** The attempt's plan was `generating` and this call ended it. `released` is
+   *  how many cards it held went back to their prior status. */
+  | { outcome: 'ended'; planId: string; released: number }
+  /** There is no plan behind the job in this project, it is no longer
+   *  `generating` (a person decided it, the run finished, or the sweep — or
+   *  another observer of the same job — ended it first). Nothing was written. */
+  | { outcome: 'left_as_is'; planId: string | null };
+
 export const abandonedPlanService = {
+  /**
+   * End ONE planning attempt whose job core has just WATCHED fail (MOTIR-7628)
+   * — the prompt half of what {@link reconcileAbandoned} does an hour later.
+   *
+   * A plan IS its planning session, and each submit is an attempt that opens a
+   * `generating` plan bound to its job (`sourceJobId`). When that job fails,
+   * core is told nothing (no failure callback — see the file header), so the
+   * attempt sat `generating` until the next hourly pass: the session read
+   * "writing" for up to an hour while the conversation already said *"That didn't
+   * go through"*, and the attempt's parked cards stayed parked. But core is NOT
+   * blind while a person is watching — the job stream it relays carries the
+   * terminal `status` frame. The stream routes call this on that frame, so the
+   * attempt ends inside the handling that observed the failure.
+   *
+   * It writes what the sweep writes — `declined`, `decisionReason: 'abandoned'`,
+   * no decider — because it is the same fact found out sooner: the producer is
+   * provably gone and nobody decided anything. That reason is also what takes
+   * the attempt out of the session's state (`planChangeSessionRepository`'s
+   * latest-plan join), so the session reads as its previous version or `none`,
+   * never `generating` and never `declined`.
+   *
+   * The write is {@link planRepository.endGenerating}'s compare-and-set, which
+   * the sweep uses too: the two paths can race on one attempt and exactly one
+   * ends it. A job with no plan, or one already decided, writes nothing.
+   *
+   * RELEASE — what the person's own discard of the attempt would release
+   * (`plansService`'s `releasePlanTargetLocks`), restoring each card's prior
+   * status: the plan's OWN locks (an MCP or generation plan parks its targets),
+   * and — because a CONVERSATION's attempts park nothing of their own, the
+   * session holds the anchor for all of them (MOTIR-5648) — the session's lease
+   * when this attempt is the session's latest. That is the card the report saw
+   * stuck at Planning. The retry takes it back: an anchored resubmit re-takes its
+   * scope exactly as a new turn does (`contextualPlanningService`). Best-effort
+   * and after the commit, like every decision path's release: a failed release
+   * leaves the lease to expire, never the attempt `generating`.
+   */
+  async endFailedAttempt(
+    jobId: string,
+    pctx: PlanTargetLockContext,
+    now: Date = new Date(),
+  ): Promise<FailedAttemptOutcome> {
+    const ended = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+      const plan = await planRepository.findBySourceJobId(jobId, pctx.workspaceId, tx);
+      if (!plan || plan.projectId !== pctx.projectId) {
+        return { planId: null, sessionId: null, ended: false };
+      }
+      if (plan.status !== 'generating') {
+        return { planId: plan.id, sessionId: plan.sessionId, ended: false };
+      }
+      const won = await planRepository.endGenerating(
+        plan.id,
+        { status: 'declined', decidedAt: now, decisionReason: 'abandoned' },
+        tx,
+      );
+      return { planId: plan.id, sessionId: plan.sessionId, ended: won };
+    });
+    if (!ended.ended || ended.planId === null) {
+      return { outcome: 'left_as_is', planId: ended.planId };
+    }
+
+    let released = 0;
+    try {
+      const own = await planTargetLockService.releaseForPlan(ended.planId, pctx);
+      released += own.filter((r) => r.outcome !== 'left_as_is').length;
+      const sessionId = ended.sessionId;
+      if (sessionId) {
+        // Only the session's LATEST attempt hands its lease back — an older
+        // attempt's job failing late must not unpark a conversation that has
+        // moved on to a newer one.
+        const latest = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+          planRepository.findLatestIdBySession(sessionId, tx),
+        );
+        if (latest === ended.planId) {
+          released += (await planTargetLockService.releaseForSession(sessionId, pctx)).filter(
+            (r) => r.outcome !== 'left_as_is',
+          ).length;
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `[abandoned-plan] releasing target locks for failed attempt ${ended.planId} failed; the lease will expire and the sweep will clear it`,
+        err,
+      );
+    }
+    console.warn(
+      `[abandoned-plan] plan ${ended.planId} (project ${pctx.projectId}) ended as a failed attempt — job ${jobId} reached a terminal failure; ${released} target(s) restored`,
+    );
+    return { outcome: 'ended', planId: ended.planId, released };
+  },
+
   /**
    * One reconciliation pass: find every `generating` plan whose producer has had
    * its grace, ask motir-ai what became of that producer, and DECLINE the ones
@@ -319,7 +423,11 @@ export const abandonedPlanService = {
         // bound to the plan's own workspace, disagrees.
         const items = await tx.planItem.count({ where: { planId: plan.id } });
         if (items !== plan._count.items) return false;
-        await planRepository.update(
+        // A COMPARE-AND-SET (MOTIR-7628): the conversation that watched this
+        // job fail may be ending the same attempt right now, and the re-read
+        // above does not lock. Whichever write lands second matches nothing and
+        // reads as `row_moved`, so one attempt is ended exactly once.
+        return planRepository.endGenerating(
           plan.id,
           // No `decidedById`: nobody decided this. See the method doc. The
           // `decisionReason` is what says so on the row rather than leaving it to
@@ -327,7 +435,6 @@ export const abandonedPlanService = {
           { status: 'declined', decidedAt: now, decisionReason: 'abandoned' },
           tx,
         );
-        return true;
       });
 
       if (!written) {

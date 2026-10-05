@@ -50,10 +50,17 @@ export const planRepository = {
    * — a cross-tenant lookup returns `null` (→ 404, never 403). Newest-first so a
    * re-submitted job resolves to its latest plan. Read-only.
    */
-  /** A session's LATEST plan row — the pending-plan read (AMENDMENT 17 §5). */
+  /** A session's LATEST plan row — the pending-plan read (AMENDMENT 17 §5).
+   *  An attempt whose producer died (`decisionReason: 'abandoned'`, MOTIR-7628)
+   *  is not a version of the plan, so it is skipped here exactly as the Plans
+   *  room's latest-plan join skips it: the session falls back to its previous
+   *  version, or to none. */
   async findLatestBySession(sessionId: string, tx: Prisma.TransactionClient): Promise<Plan | null> {
     return tx.plan.findFirst({
-      where: { sessionId },
+      where: {
+        sessionId,
+        OR: [{ decisionReason: null }, { decisionReason: { not: 'abandoned' } }],
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },
@@ -414,6 +421,23 @@ export const planRepository = {
 
   async update(id: string, data: PlanUpdateInput, tx: Prisma.TransactionClient): Promise<Plan> {
     return tx.plan.update({ where: { id }, data });
+  },
+
+  /**
+   * END a plan that is still `generating` — a COMPARE-AND-SET, not a plain
+   * update (MOTIR-7628). The `status` guard is in the `WHERE`, so two enders
+   * racing on one row (the conversation observing its job fail, and the hourly
+   * abandoned-plan sweep) cannot both win: Postgres re-evaluates the predicate
+   * after the loser waits on the winner's row lock, and the loser matches
+   * nothing. Answers whether THIS call ended it.
+   */
+  async endGenerating(
+    id: string,
+    data: PlanUpdateInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const r = await tx.plan.updateMany({ where: { id, status: 'generating' }, data });
+    return r.count === 1;
   },
 
   /**

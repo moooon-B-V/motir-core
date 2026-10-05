@@ -46,3 +46,19 @@ function isFailedStatus(data: unknown): boolean {
     typeof data === 'object' && data !== null && (data as { status?: unknown }).status === 'failed'
   );
 }
+
+/**
+ * Whether a relayed frame says the job ended WITHOUT finishing — the terminal
+ * `failed` or `canceled` status (MOTIR-7628). The plan-change stream routes end
+ * the attempt's `generating` plan on it (`abandonedPlanService.endFailedAttempt`),
+ * so the session stops reading "writing" the moment the conversation is told
+ * *"That didn't go through"*. A `succeeded` job — a STOPPED run included — closes
+ * its own plan through `markPlanned` and is not this.
+ */
+export function isJobFailureFrame(frame: JobStreamEvent): boolean {
+  if (frame.event !== 'status') return false;
+  const data = frame.data;
+  if (typeof data !== 'object' || data === null) return false;
+  const status = (data as { status?: unknown }).status;
+  return status === 'failed' || status === 'canceled';
+}

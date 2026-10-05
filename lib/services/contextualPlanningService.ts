@@ -277,6 +277,11 @@ export const contextualPlanningService = {
   ): Promise<ContextualPlanResult> {
     const scope = await resolveScope({ ...req, prompt: '' }, pctx);
     const sessionId = await requireAddressed(req.sessionId, pctx, scope);
+    // RE-TAKE the scope, as a continuing turn does above: the attempt this retry
+    // follows FAILED, and ending it handed the conversation's lease back
+    // (MOTIR-7628, `abandonedPlanService.endFailedAttempt`). Idempotent for the
+    // holder, so a retry whose lease survived only refreshes it.
+    await planTargetLockService.acquireForScope(sessionId, scope.targetKeys, pctx);
     const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, {
       sessionId,
     });

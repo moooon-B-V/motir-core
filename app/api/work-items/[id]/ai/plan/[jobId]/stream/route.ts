@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { contextualPlanningService } from '@/lib/services/contextualPlanningService';
-import { failureReasonFrame } from '@/lib/ai/jobStream';
+import { failureReasonFrame, isJobFailureFrame } from '@/lib/ai/jobStream';
+import { abandonedPlanService } from '@/lib/services/abandonedPlanService';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import { mapContextualPlanError, noActiveProject } from '../../_errors';
@@ -101,7 +102,19 @@ export async function GET(
       try {
         let result = first;
         let reasonEmitted = false;
+        let attemptEnded = false;
         while (!result.done) {
+          // A failed attempt is ENDED before the client hears it failed
+          // (MOTIR-7628): by the time the conversation renders "That didn't go
+          // through", the session already reads as its previous version and the
+          // attempt's parked cards are back. Best-effort — the hourly sweep is
+          // the backstop, and a refusal here must never cost the relay.
+          if (!attemptEnded && isJobFailureFrame(result.value)) {
+            attemptEnded = true;
+            await abandonedPlanService.endFailedAttempt(jobId, ctx).catch((err: unknown) => {
+              console.warn(`[plan stream] ending failed attempt for job ${jobId} failed`, err);
+            });
+          }
           controller.enqueue(encoder.encode(formatFrame(result.value)));
           if (!reasonEmitted) {
             const reason = await failureReasonFrame(jobId, result.value, ctx.projectId);

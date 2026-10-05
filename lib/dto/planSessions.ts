@@ -8,7 +8,9 @@ import type { PlanStatusDto } from '@/lib/dto/plans';
 
 /**
  * A session's PLAN STATE — its LATEST plan's `PlanStatus`, or `none` when it has
- * proposed nothing (§8). `none` is a member of the vocabulary in its own right,
+ * proposed nothing (§8). An attempt whose producer died is not a version
+ * (MOTIR-7628): it is skipped, so a session whose last attempt failed reads as
+ * its previous version — or `none` — and never as `generating` or `declined`. `none` is a member of the vocabulary in its own right,
  * never a fallback: the filter, the counts and the chip are all TOTAL over it.
  * The type is derived from the array, so the two cannot drift.
  */

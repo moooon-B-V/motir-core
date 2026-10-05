@@ -323,7 +323,8 @@ export const planChangeSessionRepository = {
       ) ft ON true
       ${latestPlanJoin}
       LEFT JOIN LATERAL (
-        SELECT count(*)::int AS "n" FROM "plan" p WHERE p."session_id" = s."id"
+        SELECT count(*)::int AS "n" FROM "plan" p
+        WHERE p."session_id" = s."id" AND ${isSessionVersion}
       ) pc ON true
       WHERE s."project_id" = ${args.projectId} AND s."workspace_id" = ${args.workspaceId}
         AND s."origin" <> 'guide'
@@ -516,11 +517,22 @@ export function planItemTouchesHiddenSql(alias: 'hpi' | 'pi', hidden: string[]):
           )`;
 }
 
-/** A session's LATEST plan — newest `created_at`, `id` breaking a tie. */
+/**
+ * A plan that is a VERSION of its session — every plan but an attempt whose
+ * producer died (MOTIR-7628). Such an attempt is ended `declined` with
+ * `decisionReason: 'abandoned'` and no decider, by the conversation that watched
+ * its job fail or by the hourly sweep; nobody declined it and it proposed nothing
+ * a person was asked to read, so a session whose latest attempt failed must read
+ * as its PREVIOUS version (or `none`) — never `generating`, never `declined`.
+ */
+const isSessionVersion = Prisma.sql`p."decision_reason" IS DISTINCT FROM 'abandoned'`;
+
+/** A session's LATEST plan — newest `created_at`, `id` breaking a tie — among
+ *  its versions ({@link isSessionVersion}). */
 const latestPlanJoin = Prisma.sql`
   LEFT JOIN LATERAL (
     SELECT p."id", p."status", p."title", p."summary" FROM "plan" p
-    WHERE p."session_id" = s."id"
+    WHERE p."session_id" = s."id" AND ${isSessionVersion}
     ORDER BY p."created_at" DESC, p."id" DESC LIMIT 1
   ) lp ON true`;
 
