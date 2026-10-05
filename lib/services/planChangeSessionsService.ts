@@ -38,6 +38,7 @@ import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
 import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
+  CopyableSessionDto,
   DebugLandingDto,
   PlanChangeSessionDto,
   PlanChangeSubmitResultDto,
@@ -54,6 +55,7 @@ import {
   PlanChangeTurnNotFoundError,
   PlanSeedNotApplicableError,
   PlanSessionEndedError,
+  PlanSessionNotCopyableError,
   PlanSessionNotFoundError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
@@ -311,7 +313,7 @@ async function appendLocked(
  * row AMENDMENT 17 §1 forbids. `tx` is REQUIRED; this never opens a transaction.
  *
  * Every append moves `lastActivityAt` in the SAME update that bumps `turnCount`
- * (§3): the resume window and the Plans page's order both read it, and a turn
+ * (§3): the idle close and the Plans page's order both read it, and a turn
  * that did not move it would let a live conversation age out mid-sentence.
  */
 async function appendWithin(
@@ -616,6 +618,22 @@ async function resumeSeededOrStartWithin(
   return created.id;
 }
 
+/** The end reasons whose conversation a new session may carry over (AMENDMENT 23
+ *  §6): Motir ended them. Never `restarted` (the person asked for something
+ *  new), never `approved` / `declined` (those were decisions). */
+const COPYABLE_END_REASONS: ReadonlySet<string> = new Set(['failed', 'idle']);
+
+/** The copyable read's answer for the caller's latest own conversation. */
+function toCopyable(row: PlanChangeSession | null): CopyableSessionDto | null {
+  if (!row?.endedAt || !row.endReason || !COPYABLE_END_REASONS.has(row.endReason)) return null;
+  return {
+    id: row.id,
+    endReason: row.endReason as CopyableSessionDto['endReason'],
+    endedAt: row.endedAt.toISOString(),
+    turnCount: row.turnCount,
+  };
+}
+
 export const planChangeSessionsService = {
   /**
    * END a session (AMENDMENT 23 §2) — the one end operation, idempotent, in one
@@ -735,18 +753,26 @@ export const planChangeSessionsService = {
     scopeKey: string = PROJECT_SCOPE_KEY,
   ): Promise<ResumableSessionDto> {
     const session = await planChangeSessionsService.findResumable(pctx, scopeKey);
-    if (session) return { session, earlier: null };
-    const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-      planChangeSessionRepository.findLatestConversationInScope(
+    if (session) return { session, earlier: null, copyable: null };
+    const [row, own] = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => [
+      await planChangeSessionRepository.findLatestConversationInScope(
         pctx.projectId,
         scopeKey,
         pctx.workspaceId,
         null,
         tx,
       ),
-    );
+      await planChangeSessionRepository.findLatestConversationForUser(
+        pctx.projectId,
+        scopeKey,
+        pctx.userId,
+        pctx.workspaceId,
+        tx,
+      ),
+    ]);
     return {
       session: null,
+      copyable: toCopyable(own),
       earlier: row
         ? {
             id: row.id,
@@ -808,6 +834,102 @@ export const planChangeSessionsService = {
           tx,
         );
         return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * CARRY AN ENDED CONVERSATION INTO A NEW SESSION (AMENDMENT 23 §6; MOTIR-7641).
+   * In ONE transaction, under the member's scope lock (so two racing copies
+   * create one session):
+   *
+   *  * the caller's own OPEN session for the source's scope wins — it is
+   *    returned and nothing is copied (a second copy, or a copy after a turn
+   *    already started one, lands there);
+   *  * a source that is not the caller's is `PLAN_SESSION_NOT_FOUND`, so an id
+   *    confirms nothing; one that is open, or ended `restarted` / `approved` /
+   *    `declined`, is `PLAN_SESSION_NOT_COPYABLE`;
+   *  * otherwise a new `conversation` session of the same scope is created with
+   *    `copiedFromSessionId`, holding the source's `user` and `assistant` turns
+   *    in `seq` order — not its `system` turns, not a pending question, not a
+   *    turn's `jobId` (an idempotency key of the old job).
+   *
+   * It takes NO lock: like the `open` doors it is an explicit start, and its
+   * first new turn takes the scope as any first turn does. The source is left
+   * ended and unchanged. `ai:plan`-gated: it writes.
+   */
+  async startCopied(pctx: ProjectContext, fromSessionId: string): Promise<PlanChangeSessionDto> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await assertCanPlan(pctx.projectId, ctx);
+    const now = new Date();
+
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const source = await planChangeSessionRepository.findByIdInProject(
+          fromSessionId,
+          pctx.projectId,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!source || source.createdById !== pctx.userId || source.origin !== 'conversation') {
+          throw new PlanSessionNotFoundError(fromSessionId);
+        }
+        await planChangeSessionRepository.lockScopeForUser(
+          pctx.projectId,
+          source.scopeKey,
+          pctx.userId,
+          tx,
+        );
+        const open = await planChangeSessionRepository.findResumableForUser(
+          pctx.projectId,
+          source.scopeKey,
+          pctx.userId,
+          pctx.workspaceId,
+          tx,
+        );
+        if (open) return toDto(open, pctx, tx);
+        if (!source.endedAt || !source.endReason || !COPYABLE_END_REASONS.has(source.endReason)) {
+          throw new PlanSessionNotCopyableError(source.id, source.endReason);
+        }
+
+        const turns = (
+          await planChangeTurnRepository.listBySessionId(source.id, pctx.workspaceId, tx)
+        ).filter((t) => t.role === 'user' || t.role === 'assistant');
+        const created = await planChangeSessionRepository.create(
+          {
+            workspaceId: pctx.workspaceId,
+            projectId: pctx.projectId,
+            createdById: pctx.userId,
+            scopeKey: source.scopeKey,
+            targetKeys: source.targetKeys,
+            origin: 'conversation',
+            copiedFromSessionId: source.id,
+            turnCount: turns.length,
+            lastActivityAt: now,
+          },
+          tx,
+        );
+        for (const [seq, turn] of turns.entries()) {
+          await planChangeTurnRepository.create(
+            {
+              workspaceId: pctx.workspaceId,
+              sessionId: created.id,
+              seq,
+              role: turn.role,
+              body: turn.body,
+              authorId: turn.authorId,
+              isAnswer: turn.isAnswer,
+              intent: turn.intent,
+              anchorKey: turn.anchorKey,
+              citations: turn.citations,
+              attachmentIds: turn.attachmentIds,
+              createdAt: turn.createdAt,
+            },
+            tx,
+          );
+        }
+        return toDto(created, pctx, tx);
       },
     );
   },

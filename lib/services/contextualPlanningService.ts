@@ -262,11 +262,11 @@ export const contextualPlanningService = {
       // Nothing resumed — say where the scope's earlier conversation is, when
       // there is one (MOTIR-6024's notice). Never for a NAMED session.
       if (req.sessionId) return { session, planId: null };
-      const { earlier } = await planChangeSessionsService.findResumableWithEarlier(
+      const { earlier, copyable } = await planChangeSessionsService.findResumableWithEarlier(
         pctx,
         scope.scopeKey,
       );
-      return { session, planId: null, earlier };
+      return { session, planId: null, earlier, copyable };
     }
 
     // The session's still-undecided plan, through the COLUMN (AMENDMENT 17 §5).

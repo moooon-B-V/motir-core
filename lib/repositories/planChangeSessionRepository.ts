@@ -105,6 +105,22 @@ export const planChangeSessionRepository = {
     });
   },
 
+  /** This member's own most recent CONVERSATION for the scope, open or ended —
+   *  the COPYABLE read (AMENDMENT 23 §6; MOTIR-7641): with no open session, the
+   *  one that ended is what a new session may carry over. */
+  async findLatestConversationForUser(
+    projectId: string,
+    scopeKey: string,
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    return tx.planChangeSession.findFirst({
+      where: { projectId, scopeKey, workspaceId, createdById: userId, origin: 'conversation' },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
   /**
    * The TAKE-BACK read (AMENDMENT 23 §3; MOTIR-7639): this member's own OPEN
    * conversation that HOLDS one of `targetKeys` — a lock naming the session, or

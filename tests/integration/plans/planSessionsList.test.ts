@@ -55,15 +55,34 @@ async function activeAt(sessionId: string, at: Date) {
 const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000);
 
 /**
- * A NEW conversation in the project scope. A member's second first turn within
- * the resume window lands on the session they already have (AMENDMENT 17 §3),
- * so each is aged past the window before the next one starts.
+ * A NEW, OPEN conversation in the project scope. A member's open session is
+ * resumed at any age (AMENDMENT 23 §3), so a second first turn would land on the
+ * first: each one after the first is written directly, with its one user turn.
  */
 let aged = 0;
 async function freshSession(body: string): Promise<string> {
-  const s = await planChangeSessionsService.startWithFirstTurn(pctx(), PROJECT_SCOPE, body);
   aged += 1;
-  await activeAt(s.id, minutesAgo(180 + aged));
+  const s = await adminDb.planChangeSession.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      createdById: fx.ownerId,
+      scopeKey: PROJECT_SCOPE.scopeKey,
+      targetKeys: [],
+      turnCount: 1,
+      lastActivityAt: minutesAgo(180 + aged),
+    },
+  });
+  await adminDb.planChangeTurn.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      sessionId: s.id,
+      seq: 0,
+      role: 'user',
+      body,
+      authorId: fx.ownerId,
+    },
+  });
   return s.id;
 }
 
@@ -228,6 +247,7 @@ describe('the plan-state filter', () => {
       stale: 0,
       approved: 1,
       declined: 0,
+      closed: 0,
     });
     for (const planState of PLAN_SESSION_STATE_VALUES) {
       const page = await planSessionsService.listSessions(fx.projectId, fx.ctx, { planState });

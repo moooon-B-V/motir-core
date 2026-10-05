@@ -157,7 +157,7 @@ describe('SEAM: turn → submit → plan → list', () => {
   it('a first turn through the route starts a session, its submit plans ON it, and the list shows it `generating`', async () => {
     // Looking creates nothing — the browser's read of a scope with no session.
     const look = await readSessionRoute(new Request(`${APP}?scope=`));
-    expect(await look.json()).toEqual({ session: null, earlier: null });
+    expect(await look.json()).toEqual({ session: null, earlier: null, copyable: null });
     expect(await adminDb.planChangeSession.count()).toBe(0);
 
     const sessionId = await startThroughRoute('Split the billing epic');

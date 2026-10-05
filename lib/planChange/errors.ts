@@ -43,6 +43,27 @@ export class PlanSessionEndedError extends Error {
 }
 
 /**
+ * A copy asked of a session that cannot be copied (AMENDMENT 23 §6; MOTIR-7641):
+ * it is still open, or it ended `restarted` (the person asked for something new)
+ * or `approved` / `declined` (those were decisions). → 409, a state conflict.
+ * A session that is not the caller's is a 404 instead, so nothing is confirmed.
+ */
+export class PlanSessionNotCopyableError extends Error {
+  readonly code = 'PLAN_SESSION_NOT_COPYABLE' as const;
+  constructor(
+    readonly sessionId: string,
+    readonly endReason: string | null,
+  ) {
+    super(
+      endReason
+        ? `Planning session ${sessionId} ended ${endReason}, so its conversation can't be carried into a new one.`
+        : `Planning session ${sessionId} is still open, so there is nothing to carry over.`,
+    );
+    this.name = 'PlanSessionNotCopyableError';
+  }
+}
+
+/**
  * A concurrent append claimed the same position on the thread. Turn order is
  * allocated under the session row's `SELECT … FOR UPDATE` lock with a re-read
  * inside the transaction, so two concurrent appends normally SERIALIZE into two

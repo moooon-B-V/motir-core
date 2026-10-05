@@ -41,6 +41,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 }));
 
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
+const { planSessionEndService } = await import('@/lib/services/planSessionEndService');
 
 let fx: WorkItemFixture;
 
@@ -192,12 +193,9 @@ describe('the card-anchored read goes through the column', () => {
       sessionId: older.id,
     });
     await adminDb.plan.update({ where: { id: approvedId! }, data: { status: 'approved' } });
-    // The older conversation goes quiet past the window; the next first turn
-    // starts a new session of the same scope.
-    await adminDb.planChangeSession.update({
-      where: { id: older.id },
-      data: { lastActivityAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
-    });
+    // The older conversation ENDS; the next first turn starts a new session of
+    // the same scope (AMENDMENT 23 §3 — an open one would be resumed at any age).
+    await planSessionEndService.endSession(older.id, 'idle', { workspaceId: fx.workspaceId });
     const newer = await planChangeSessionsService.startWithFirstTurn(pctx(), scope, 'second go');
     expect(newer.id).not.toBe(older.id);
     const { planId: plannedId } = await planChangeSessionsService.submit(pctx(), {

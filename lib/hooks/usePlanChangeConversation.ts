@@ -520,7 +520,7 @@ export interface UsePlanChangeConversationOptions {
   anchorId?: string | null;
   /**
    * REOPEN this exact conversation (MOTIR-6024) — the overlay's `planSession`
-   * address, which a Plans row writes. The resume window does not apply: a
+   * address, which a Plans row writes. The resume read does not apply: a
    * named session opens whatever its age or starter.
    */
   sessionId?: string | null;

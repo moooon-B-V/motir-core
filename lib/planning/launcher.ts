@@ -292,7 +292,7 @@ export const OVERLAY_PARAM_NAMES = {
   /**
    * A NAMED planning session to reopen (MOTIR-6024; AMENDMENT 17 §2) — what a
    * Plans row writes. Read only for a `project` or `work-item` origin, and it
-   * bypasses the resume window: a named conversation opens whatever its age.
+   * bypasses the resume read: a named conversation opens whatever its age or state.
    */
   session: 'planSession',
   /**

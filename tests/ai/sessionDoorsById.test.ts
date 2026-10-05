@@ -46,14 +46,35 @@ function pctx(userId = fx.ownerId): ProjectContext {
   return { userId, workspaceId: fx.workspaceId, projectId: fx.projectId, project: fx.project };
 }
 
-/** Two sessions of ONE scope: an older one gone quiet, and a newer one. */
+/** Two OPEN sessions of ONE scope: an older one gone quiet, and a newer one.
+ *  An open session is resumed at any age (AMENDMENT 23 §3), so the newer one is
+ *  written directly — what is under test is the by-id address. */
 async function twoSessions(scope = PROJECT_SCOPE) {
   const older = await planChangeSessionsService.startWithFirstTurn(pctx(), scope, 'older');
   await adminDb.planChangeSession.update({
     where: { id: older.id },
     data: { lastActivityAt: new Date(Date.now() - THREE_HOURS) },
   });
-  const newer = await planChangeSessionsService.startWithFirstTurn(pctx(), scope, 'newer');
+  const newer = await adminDb.planChangeSession.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      createdById: fx.ownerId,
+      scopeKey: scope.scopeKey,
+      targetKeys: scope.targetKeys,
+      turnCount: 1,
+    },
+  });
+  await adminDb.planChangeTurn.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      sessionId: newer.id,
+      seq: 0,
+      role: 'user',
+      body: 'newer',
+      authorId: fx.ownerId,
+    },
+  });
   expect(newer.id).not.toBe(older.id);
   return { older: older.id, newer: newer.id };
 }
@@ -146,7 +167,7 @@ describe('ITEM-ANCHORED planning', () => {
       pctx(viewer.id),
     );
 
-    expect(read).toEqual({ session: null, planId: null, earlier: null });
+    expect(read).toEqual({ session: null, planId: null, earlier: null, copyable: null });
     expect(await adminDb.planChangeSession.count()).toBe(0);
   });
 });

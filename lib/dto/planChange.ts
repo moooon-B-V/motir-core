@@ -155,7 +155,7 @@ export interface PlanChangeSessionDto {
   lastJobId: string | null;
   lastSubmittedAt: string | null;
   /** When the session was last used — every turn and every submit moves it
-   *  (AMENDMENT 17 §3). The resume window and the Plans list read it. */
+   *  (AMENDMENT 17 §3). The Plans list orders by it; the idle close reads it (AMENDMENT 23 §2). */
   lastActivityAt: string;
   /** Which door opened the session (AMENDMENT 17 §4). */
   origin: PlanSessionOriginDto;
@@ -240,6 +240,9 @@ export interface ContextualSessionResumeDto {
   /** When NOTHING resumed: the scope's most recent other conversation, for the
    *  fresh-start notice (MOTIR-6024). Absent/null otherwise. */
   earlier?: EarlierSessionDto | null;
+  /** When NOTHING resumed: the caller's own failed or idle-closed session of the
+   *  scope, which a new session may carry over (AMENDMENT 23 §6). */
+  copyable?: CopyableSessionDto | null;
 }
 
 /**
@@ -262,6 +265,18 @@ export interface EarlierSessionDto {
 export interface ResumableSessionDto {
   session: PlanChangeSessionDto | null;
   earlier: EarlierSessionDto | null;
+  /** When nothing resumed and the caller's own latest conversation of the scope
+   *  ended `failed` or `idle`: that session, which a new one may carry over
+   *  (AMENDMENT 23 §6; MOTIR-7641). Absent/null otherwise. */
+  copyable?: CopyableSessionDto | null;
+}
+
+/** A session whose conversation a new session may carry over (AMENDMENT 23 §6). */
+export interface CopyableSessionDto {
+  id: string;
+  endReason: 'failed' | 'idle';
+  endedAt: string;
+  turnCount: number;
 }
 
 /**

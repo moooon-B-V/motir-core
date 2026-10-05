@@ -78,8 +78,8 @@ async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** The caller's own RESUMABLE project-wide conversation — their session active
- *  within the resume window — or `null` (MOTIR-6023; AMENDMENT 17 §3). A READ:
+/** The caller's own RESUMABLE project-wide conversation — their session
+ *  that is still OPEN (AMENDMENT 23 §3) — or `null` (MOTIR-6023; AMENDMENT 17 §3). A READ:
  *  mounting the rail creates nothing; the first turn does ({@link startPlanChangeSession}). */
 export async function findResumableSession(signal?: AbortSignal): Promise<ResumableSessionDto> {
   const body = await get<Partial<ResumableSessionDto> | null>(

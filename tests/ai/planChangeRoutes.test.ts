@@ -131,7 +131,7 @@ describe('GET /api/ai/plan-change/session — a look creates nothing (MOTIR-6023
     const res = await readSession(readReq());
     expect(res.status).toBe(200);
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
-    expect(await res.json()).toEqual({ session: null, earlier: null });
+    expect(await res.json()).toEqual({ session: null, earlier: null, copyable: null });
     expect(await adminDb.planChangeSession.count()).toBe(0);
   });
 
@@ -210,6 +210,34 @@ describe('POST /api/ai/plan-change/session — the first turn starts it', () => 
     };
     expect(again.id).toBe(opened.id);
     expect(again.turns).toHaveLength(2);
+  });
+
+  it('starts a COPY of the caller’s ended session from `copyFrom` (MOTIR-7641)', async () => {
+    const source = await started('Split the epic');
+    await planSessionEndService.endSession(source, 'failed', { workspaceId: fx.workspaceId });
+
+    const res = await startSession(startReq({ copyFrom: source }));
+    expect(res.status).toBe(200);
+    const copy = (await res.json()) as { id: string; turns: Array<{ body: string }> };
+    expect(copy.id).not.toBe(source);
+    expect(copy.turns.map((t) => t.body)).toEqual(['Split the epic']);
+  });
+
+  it('refuses a copy of a session a decision or a restart ended, and a malformed `copyFrom`', async () => {
+    const source = await started('Split the epic');
+    await planSessionEndService.endSession(source, 'restarted', {
+      workspaceId: fx.workspaceId,
+      endedById: fx.ownerId,
+      actorId: fx.ownerId,
+    });
+
+    const refused = await startSession(startReq({ copyFrom: source }));
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({
+      code: 'PLAN_SESSION_NOT_COPYABLE',
+      endReason: 'restarted',
+    });
+    expect((await startSession(startReq({ copyFrom: 42 }))).status).toBe(400);
   });
 
   it('400s malformed JSON and a missing first turn', async () => {

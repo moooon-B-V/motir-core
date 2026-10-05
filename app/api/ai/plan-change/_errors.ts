@@ -18,6 +18,7 @@ import {
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
   PlanSessionEndedError,
+  PlanSessionNotCopyableError,
   PlanSessionNotFoundError,
   PlanTargetLockedError,
   TurnFilesGuideOnlyError,
@@ -80,6 +81,13 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   if (err instanceof PlanSessionEndedError) {
     return NextResponse.json(
       { code: err.code, error: err.message, sessionId: err.sessionId },
+      { status: 409 },
+    );
+  }
+  // A copy of a session that is still open or ended by a decision or a restart.
+  if (err instanceof PlanSessionNotCopyableError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, sessionId: err.sessionId, endReason: err.endReason },
       { status: 409 },
     );
   }
