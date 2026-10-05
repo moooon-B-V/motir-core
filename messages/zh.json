@@ -6947,8 +6947,8 @@
         "retry": "重试",
         "hosted": {
           "lead": "在这里用托管容器继续——无需终端：",
-          "button": "托管继续",
-          "buttonParent": "托管继续 {key}",
+          "button": "继续",
+          "buttonParent": "继续 {key}",
           "orTerminal": "或者在终端中继续：",
           "branches": {
             "lead": "其工作位于它的 {count} 个代码仓库各自的分支上：",
@@ -6970,10 +6970,10 @@
             "noDeadRun": "未启动——此工作项没有中断的运行。",
             "theParent": "未启动——它是 <link>{key}</link> 运行的一部分，因此从那里继续。",
             "outOfCredits": {
-              "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次托管继续——或者在终端中继续。"
+              "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次继续——或者在终端中继续。"
             }
           },
-          "runDied": "此运行已中断——最后一次联系在<b><when></when></b>。其工作保留在分支上；请在下方“开发”中托管继续或在终端中继续。"
+          "runDied": "此运行已中断——最后一次联系在<b><when></when></b>。其工作保留在分支上；请在下方“开发”中继续，或在终端中继续。"
         }
       },
       "emptyTitle": "暂无关联的拉取请求",
@@ -8283,7 +8283,8 @@
         "assigned": "已分配",
         "reported": "我提交的",
         "both": "两者皆是",
-        "watching": "关注中"
+        "watching": "关注中",
+        "none": "—"
       }
     },
     "empty": {
@@ -8435,7 +8436,14 @@
         "body": "请将 {command} 粘贴到终端。"
       },
       "fixingHosted": "<b>{name}</b> 正在用托管代理修复 · <run>{label}</run>",
-      "fixingHostedByYou": "<b>你</b>正在用托管代理修复 · <run>{label}</run>"
+      "fixingHostedByYou": "<b>你</b>正在用托管代理修复 · <run>{label}</run>",
+      "entry": {
+        "carriesRun": "此运行中另有 {count} 个工作项",
+        "carriesPullRequests": "相同拉取请求上另有 {count} 个工作项",
+        "membersLabel": "与 {key} 一起受阻的工作项",
+        "showMore": "再显示 {count} 个工作项",
+        "showFewer": "收起"
+      }
     }
   },
   "approvalRecords": {
@@ -12536,7 +12544,8 @@
       "conflicted": "待修复 · 与其目标分支冲突",
       "ci_failed": "待修复 · CI 未通过",
       "changes_requested": "待修复 · 已要求修改",
-      "sent_back_by_agent": "待修复 · 已被审查代理退回"
+      "sent_back_by_agent": "待修复 · 已被审查代理退回",
+      "withHead": "{name} · 随 {head}"
     },
     "banner": {
       "queueFailed": "需要修复：它在合并队列中失败（检查 <code>{check}</code>）。",
@@ -12564,7 +12573,11 @@
       "hostedLead": "在这里用托管代理修复——无需终端：",
       "orTerminal": "或者在终端中修复：",
       "fixingHosted": "托管修复正在运行——由 <b>{name}</b> 于<when></when>开始 · <run>{label}</run>",
-      "fixingHostedByYou": "托管修复正在运行——由<b>你</b>于<when></when>开始 · <run>{label}</run>"
+      "fixingHostedByYou": "托管修复正在运行——由<b>你</b>于<when></when>开始 · <run>{label}</run>",
+      "carries": "另有 {count} 个工作项随它受阻：<keys></keys>",
+      "carriesMore": "等另外 {count} 个",
+      "repairedWithHead": "随 <b>{head}</b> 一起修复——它们共用同一个拉取请求。",
+      "toHead": "打开 {head}"
     }
   },
   "workItems": {

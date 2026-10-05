@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToFixBanner } from '@/app/(authed)/items/[key]/_components/ToFixBanner';
 import { LATE_FALLBACK_ATTR } from '@/app/(authed)/items/[key]/_components/decisionAnchor';
-import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { FixDetailDto, FixGroupPointerDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import zhMessages from '@/messages/zh.json';
 
 // THE TO FIX BANNER (Story MOTIR-6589 · MOTIR-6611; design MOTIR-6608 panels 5
@@ -20,6 +20,7 @@ afterEach(() => {
 });
 
 const BASE: FixDetailDto = {
+  groupKey: null,
   repair: 'fix',
   check: null,
   queueReason: null,
@@ -41,7 +42,11 @@ const BASE: FixDetailDto = {
 function renderBanner(
   fixReason: WorkItemFixReasonDto | null,
   over: Partial<FixDetailDto> = {},
-  opts: { statusCategory?: 'in_progress' | 'done'; locale?: 'zh' } = {},
+  opts: {
+    statusCategory?: 'in_progress' | 'done';
+    locale?: 'zh';
+    fixGroup?: FixGroupPointerDto | null;
+  } = {},
 ) {
   return render(
     <ToFixBanner
@@ -49,6 +54,7 @@ function renderBanner(
       fixReason={fixReason}
       fixDetail={fixReason ? { ...BASE, ...over } : null}
       statusCategory={opts.statusCategory ?? 'in_progress'}
+      fixGroup={opts.fixGroup ?? null}
     />,
     opts.locale === 'zh' ? { locale: 'zh', messages: zhMessages } : {},
   );
@@ -321,5 +327,103 @@ describe('its place on the page', () => {
   it('the Development section carries the id the link lands on', () => {
     const late = readFileSync('app/(authed)/items/[key]/_components/LateSections.tsx', 'utf8');
     expect(late).toContain('id={DEVELOPMENT_SECTION_ID}');
+  });
+});
+
+describe('one entry per run (MOTIR-7589) — the head carries, every other card points at it', () => {
+  const heard = () => new Date(Date.now() - 12 * 60_000).toISOString();
+  const died: Partial<FixDetailDto> = {
+    repair: 'continue',
+    lastHeardAt: heard(),
+    pushed: true,
+    continueKey: 'PROD-42',
+    diedReason: 'lapsed',
+  };
+
+  it('the head names the cards it carries, up to five, then how many more', () => {
+    const carriedKeys = [
+      'PROD-43',
+      'PROD-44',
+      'PROD-45',
+      'PROD-46',
+      'PROD-47',
+      'PROD-48',
+      'PROD-49',
+    ];
+    renderBanner('run_died', died, {
+      fixGroup: { kind: 'run', headKey: 'PROD-42', isHead: true, carriedKeys },
+    });
+    const line = screen.getByTestId('to-fix-banner-carries');
+    expect(line.textContent).toBe(
+      '7 more work items are stuck with it: PROD-43, PROD-44, PROD-45, PROD-46, PROD-47 and 2 more',
+    );
+    // The head keeps its own repair link — it IS where the repair runs.
+    expect(screen.getByRole('link', { name: 'See how to continue it' }).getAttribute('href')).toBe(
+      '#development',
+    );
+    expect(screen.queryByTestId('to-fix-banner-to-head')).toBeNull();
+  });
+
+  it('the head names one carried card without a tail', () => {
+    renderBanner(
+      'ci_failed',
+      { check: 'lint' },
+      {
+        fixGroup: { kind: 'prs', headKey: 'PROD-42', isHead: true, carriedKeys: ['PROD-43'] },
+      },
+    );
+    expect(screen.getByTestId('to-fix-banner-carries').textContent).toBe(
+      '1 more work item is stuck with it: PROD-43',
+    );
+  });
+
+  it("a carried run leg names its run's head and links to the head's page", () => {
+    renderBanner(
+      'run_died',
+      { ...died, continueKey: 'PROD-42' },
+      {
+        fixGroup: { kind: 'run', headKey: 'PROD-12', isHead: false, carriedKeys: ['PROD-42'] },
+      },
+    );
+    expect(banner().querySelector('p')?.textContent).toMatch(
+      /^This needs a fix: the run of PROD-12 it was part of died/,
+    );
+    const link = screen.getByTestId('to-fix-banner-to-head');
+    expect(link.getAttribute('href')).toBe('/items/PROD-12#development');
+    expect(link.textContent).toContain('Open PROD-12');
+    expect(screen.queryByTestId('to-fix-banner-carries')).toBeNull();
+  });
+
+  it('a carried pull-request card keeps its reason, says to repair it with the head, and prints no command', () => {
+    renderBanner(
+      'ci_failed',
+      { check: 'typecheck' },
+      {
+        fixGroup: { kind: 'prs', headKey: 'PROD-12', isHead: false, carriedKeys: ['PROD-42'] },
+      },
+    );
+    expect(banner().querySelector('p')?.textContent).toBe(
+      'This needs a fix: CI failed (check typecheck).',
+    );
+    const repaired = screen.getByTestId('to-fix-banner-repaired-with-head');
+    expect(repaired.textContent).toBe('Repair it with PROD-12 — they share one pull request.');
+    expect(repaired.querySelector('b')?.textContent).toBe('PROD-12');
+    expect(banner().querySelector('pre')).toBeNull();
+    expect(screen.getByTestId('to-fix-banner-to-head').getAttribute('href')).toBe(
+      '/items/PROD-12#development',
+    );
+  });
+
+  it('reads in Chinese', () => {
+    renderBanner(
+      'ci_failed',
+      { check: 'typecheck' },
+      {
+        locale: 'zh',
+        fixGroup: { kind: 'prs', headKey: 'PROD-12', isHead: false, carriedKeys: ['PROD-42'] },
+      },
+    );
+    expect(screen.getByTestId('to-fix-banner-repaired-with-head').textContent).toContain('PROD-12');
+    expect(screen.getByTestId('to-fix-banner-to-head').textContent).toContain('PROD-12');
   });
 });

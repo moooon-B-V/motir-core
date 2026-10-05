@@ -145,7 +145,13 @@ function workbenchRow(status: string): HomeWorkItemRowDto {
     viewerIsAssignee: true,
     viewerIsReporter: true,
     canContinueHosted: false,
-  } as HomeWorkItemRowDto;
+    fixReason: null,
+    fixDetail: null,
+    canFixHosted: false,
+    repairRun: null,
+    fixGroupKind: null,
+    fixMembers: [],
+  };
 }
 
 /** The three surfaces, each rendering the SAME card at the given status. */

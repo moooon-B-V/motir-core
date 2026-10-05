@@ -1409,6 +1409,104 @@ export const workItemRepository = {
   },
 
   /**
+   * TO FIX's ENTRY KEYS, in the tab's order (MOTIR-7589; `design/workbench/design-notes.md`
+   * § 34.2) — every card on the reader's To fix slice, as `{ id, fixDetail }` only.
+   *
+   * The tab lists, pages and counts ENTRIES — cards stuck for one reason that one repair
+   * clears — so the service groups these by `fixGroupKeyOf` before it pages. The read is
+   * {@link homeMembershipWhere}'s over {@link HOME_SLICE_TO_FIX}, the SAME predicate the
+   * card count used, so which cards are on the tab (and the In progress / To fix
+   * partition) is unchanged card for card; only the unit the pager counts moves.
+   *
+   * ⚠️ UNWINDOWED, and that is bounded by what it reads: the reader's stuck cards in one
+   * project, two narrow columns. The order is the card list's own — reason priority,
+   * then the work tabs' kind order, then `id` — so an entry sits where its first card did.
+   */
+  async listToFixGroupKeysByAssigneeOrReporterInWorkspace(
+    userId: string,
+    workspaceId: string,
+    projectScopes: readonly HomeProjectScope[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; fixDetail: Prisma.JsonValue | null }[]> {
+    if (projectScopes.length === 0) return [];
+    return tx.workItem.findMany({
+      where: homeMembershipWhere(userId, workspaceId, projectScopes, { slice: HOME_SLICE_TO_FIX }),
+      select: { id: true, fixDetail: true },
+      orderBy: [{ fixReason: 'asc' }, ...homeOrderBy('updatedAt')],
+    });
+  },
+
+  /**
+   * The ids of every STUCK card in these To fix entries (MOTIR-7589; § 34.2) — whoever
+   * holds them, in the given projects. An entry's members are the cards one dead run
+   * carried, or every card one pull-request set delivers, and the reader holds only some
+   * of them; the member list draws the rest.
+   *
+   * Raw, because the predicate is the JSON expression `work_item_fix_group_key_idx`
+   * indexes (`"fixDetail" ->> 'groupKey'`), which Prisma's JSON filter does not render
+   * as. Workspace-gated, and archived / triaged rows excluded, like every list read.
+   */
+  async findFixGroupMemberIds(
+    workspaceId: string,
+    projectIds: readonly string[],
+    groupKeys: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string }[]> {
+    if (projectIds.length === 0 || groupKeys.length === 0) return [];
+    return tx.$queryRaw<{ id: string }[]>`
+      SELECT w."id"
+        FROM "work_item" w
+       WHERE w."workspaceId" = ${workspaceId}
+         AND w."fixReason" IS NOT NULL
+         AND (w."fixDetail" ->> 'groupKey') = ANY(${[...groupKeys]}::text[])
+         AND w."projectId" = ANY(${[...projectIds]}::text[])
+         AND w."archivedAt" IS NULL
+         AND w."triagedAt" IS NULL`;
+  },
+
+  /**
+   * The stored to-fix answer of these cards, by id (MOTIR-7589) — what the tag's
+   * *· with {head}* name needs on a list or board whose rows carry `fixReason` only.
+   * Callers pass only the ids already showing a reason.
+   */
+  async findFixStateByIds(
+    workspaceId: string,
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    {
+      id: string;
+      projectId: string;
+      fixReason: WorkItemFixReason | null;
+      fixDetail: Prisma.JsonValue | null;
+    }[]
+  > {
+    if (ids.length === 0) return [];
+    return tx.workItem.findMany({
+      where: { workspaceId, id: { in: [...ids] } },
+      select: { id: true, projectId: true, fixReason: true, fixDetail: true },
+    });
+  },
+
+  /**
+   * Workbench rows BY ID (MOTIR-7589) — the members and heads of a page of To fix
+   * entries, in the shared {@link HOME_WORK_ITEM_SELECT} projection plus `parentId`
+   * (the head rule follows ancestry). Workspace-gated; archived and triaged rows
+   * excluded, so a card that left since the keys were read is simply not returned.
+   */
+  async findHomeRowsByIds(
+    workspaceId: string,
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<(HomeWorkItemRow & { parentId: string | null })[]> {
+    if (ids.length === 0) return [];
+    return tx.workItem.findMany({
+      where: { workspaceId, id: { in: [...ids] }, archivedAt: null, triagedAt: null },
+      select: { ...HOME_WORK_ITEM_SELECT, parentId: true },
+    });
+  },
+
+  /**
    * THE WATERMARK over one Workbench work tab (Story MOTIR-5238 · MOTIR-5240) —
    * how many rows the tab holds, and the most recent `updatedAt` among them, in
    * ONE query.

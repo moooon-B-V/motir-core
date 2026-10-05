@@ -8,7 +8,7 @@
 // `string` (a fractional-index key is already a string and Decimals don't
 // JSON-serialize losslessly as numbers). The mapper owns those conversions.
 
-import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { FixDetailDto, FixGroupPointerDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 import type { FilterAst } from '@/lib/filters/ast';
@@ -526,6 +526,12 @@ export interface IssueDetailDto {
    * MOTIR-6600). `null` exactly when `fixReason` is (MOTIR-6611).
    */
   fixDetail: FixDetailDto | null;
+  /**
+   * The To fix ENTRY this card is one of, when it holds other cards (MOTIR-7589) — the
+   * banner names the head and only the head shows a command; the quick view's tag names
+   * the head. `null` for a card stuck alone or not stuck, and for a Visitor.
+   */
+  fixGroup: FixGroupPointerDto | null;
   ancestors: WorkItemSummaryDto[];
   parent: WorkItemSummaryDto | null;
   children: WorkItemSummaryDto[];
@@ -724,6 +730,11 @@ export interface WorkItemTreeNodeDto {
    *  `done` category (`toFixTagState`, MOTIR-6610); the raw value travels so every
    *  surface applies ONE rule. */
   fixReason: WorkItemFixReasonDto | null;
+  /**
+   * The HEAD of the To fix entry this card is carried by (MOTIR-7589), when it is not
+   * the head itself — the tag's name gains *· with {head}*. Absent otherwise.
+   */
+  fixHeadKey?: string;
   // The remaining core properties the list row shows alongside status/assignee
   // (the same fields the detail page's core-fields panel carries): priority,
   // reporter, due date, estimate. `reporterId` is always set; `dueDate` is a
@@ -1035,6 +1046,11 @@ export interface WorkItemListItemDto {
    *  `done` category (`toFixTagState`, MOTIR-6610); the raw value travels so every
    *  surface applies ONE rule. */
   fixReason: WorkItemFixReasonDto | null;
+  /**
+   * The HEAD of the To fix entry this card is carried by (MOTIR-7589), when it is not
+   * the head itself — the tag's name gains *· with {head}*. Absent otherwise.
+   */
+  fixHeadKey?: string;
   priority: WorkItemPriorityDto;
   assigneeId: string | null;
   reporterId: string;

@@ -57,6 +57,23 @@ export const dispatchRunCardRepository = {
   },
 
   /**
+   * Several runs' legs, as `(run, card, position)` only (MOTIR-7589) — the order a dead
+   * run's To fix entry lists the cards it carried in (§ 34.2). A leg whose card is gone
+   * comes back with a null `workItemId`, which the caller has nothing to order by.
+   */
+  async listPositionsByRuns(
+    dispatchRunIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ dispatchRunId: string; workItemId: string | null; position: number }[]> {
+    if (dispatchRunIds.length === 0) return [];
+    return tx.dispatchRunCard.findMany({
+      where: { dispatchRunId: { in: [...dispatchRunIds] } },
+      select: { dispatchRunId: true, workItemId: true, position: true },
+      orderBy: [{ dispatchRunId: 'asc' }, { position: 'asc' }],
+    });
+  },
+
+  /**
    * One leg, addressed the way a reporter addresses it: by the run and the card.
    *
    * ⚠️ `workItemId` IS NULLABLE AND THE UNIQUE INDEX TREATS NULLS AS DISTINCT, so

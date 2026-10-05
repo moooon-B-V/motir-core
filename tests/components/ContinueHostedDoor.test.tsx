@@ -134,7 +134,7 @@ describe('C1 — died, continuable', () => {
     await mount(died());
     const text = screen.getByTestId('continue-part').textContent ?? '';
     expect(text).toContain('Continue it here, in a hosted container — no terminal needed:');
-    expect(screen.getByTestId('continue-hosted').textContent).toBe('Continue hosted');
+    expect(screen.getByTestId('continue-hosted').textContent).toBe('Continue');
     expect(text).toContain('Or carry it on from your terminal:');
     expect(text).toContain('motir continue ACME-12');
     // C7: the run died, so a fresh run is not the way forward.
@@ -183,7 +183,7 @@ describe('C3 — a child of a dead parent run', () => {
   it('continues the PARENT, by its key', async () => {
     routes[START_PARENT] = () => ({ status: 201, body: { dispatchRunId: 'run_3', created: true } });
     await mount(died({ refusal: 'continue_the_parent', parentKey: 'ACME-1' }));
-    expect(screen.getByTestId('continue-hosted').textContent).toBe('Continue ACME-1 hosted');
+    expect(screen.getByTestId('continue-hosted').textContent).toBe('Continue ACME-1');
     await press();
     expect(calls(START_PARENT)).toHaveLength(1);
     expect(calls(START)).toHaveLength(0);
@@ -236,7 +236,7 @@ describe('C5 — what the door answers', () => {
     await mount(died());
     await press();
     expect(screen.getByTestId('continue-hosted-refused-outOfCredits').textContent).toContain(
-      'Continue hosted works again once the organization has credits — or carry it on from your terminal.',
+      'Continue works again once the organization has credits — or carry it on from your terminal.',
     );
     expect(refresh).not.toHaveBeenCalled();
   });
@@ -244,7 +244,7 @@ describe('C5 — what the door answers', () => {
   it('draws each continue refusal in zh too', async () => {
     routes[START] = () => ({ status: 409, body: { code: 'hosted_continue_no_dead_run' } });
     await mount(died(), { zh: true });
-    expect(screen.getByTestId('continue-hosted').textContent).toBe('托管继续');
+    expect(screen.getByTestId('continue-hosted').textContent).toBe('继续');
     await press();
     expect(screen.getByTestId('continue-hosted-refused-noDeadRun').textContent).toContain(
       '未启动——此工作项没有中断的运行。',

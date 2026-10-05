@@ -246,7 +246,12 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
               glyph when both hold, outside the edit trigger like it. In the STATUS
               cell rather than beside the CI glyph in the title cell, so a red CI
               glyph and the tag sit in different columns (design MOTIR-6608). */}
-          <ToFixTag fixReason={r.fixReason} statusCategory={r.statusCategory} form="glyph" />
+          <ToFixTag
+            fixReason={r.fixReason}
+            statusCategory={r.statusCategory}
+            form="glyph"
+            headKey={r.fixHeadKey}
+          />
         </span>
       ),
     },

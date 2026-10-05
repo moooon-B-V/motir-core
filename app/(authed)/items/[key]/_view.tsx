@@ -621,6 +621,7 @@ export default async function ItemView({
                       identifier={item.identifier}
                       fixReason={detail.fixReason}
                       fixDetail={detail.fixDetail}
+                      fixGroup={detail.fixGroup}
                       statusCategory={statusCategory}
                       repairRun={repairRun}
                       hostedDoor={

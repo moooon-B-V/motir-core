@@ -54,6 +54,7 @@ const EMPTY = <p>Nothing to fix</p>;
 
 function detail(over: Partial<FixDetailDto> = {}): FixDetailDto {
   return {
+    groupKey: null,
     repair: 'fix',
     check: null,
     queueReason: null,
@@ -102,6 +103,8 @@ function stuck(
     viewerIsAssignee: true,
     viewerIsReporter: false,
     canContinueHosted: false,
+    fixGroupKind: null,
+    fixMembers: [],
     canFixHosted: false,
     repairRun: null,
   };
@@ -353,12 +356,10 @@ describe('To fix — a dead run (§ 31, MOTIR-6880)', () => {
     );
   });
 
-  it('a leg of a parent run — the parent clause, and the command continues the parent', () => {
+  it('a leg of a parent run — NO parent clause any more (§ 34 retires § 31 state 3), and the command still continues the parent', () => {
     stubRoutes();
     render(list([editable(stuck('M-16', 'run_died', died({ continueKey: 'M-12' })))]));
-    expect(fixLine('M-16').querySelector('p')?.textContent).toContain(
-      'Part of M-12’s run — both repairs continue the whole run',
-    );
+    expect(fixLine('M-16').querySelector('p')?.textContent).not.toContain('Part of');
     expect(within(fixLine('M-16')).getByText('motir continue M-12')).toBeTruthy();
   });
 
@@ -491,7 +492,7 @@ describe('To fix — Continue hosted on a dead-run row (§ 31, MOTIR-6882)', () 
     stubRoutes();
     render(list([editable(stuck('M-14', 'run_died', died()))]));
     const line = fixLine('M-14');
-    const button = await within(line).findByRole('button', { name: 'Continue hosted' });
+    const button = await within(line).findByRole('button', { name: 'Continue' });
     await vi.waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
     const command = within(line).getByText('motir continue M-14');
     // Reading order: the door, then the command.
@@ -504,7 +505,7 @@ describe('To fix — Continue hosted on a dead-run row (§ 31, MOTIR-6882)', () 
     stubRoutes();
     render(list([editable(stuck('M-16', 'run_died', died({ continueKey: 'M-12' })))]));
     expect(
-      await within(fixLine('M-16')).findByRole('button', { name: 'Continue M-12 hosted' }),
+      await within(fixLine('M-16')).findByRole('button', { name: 'Continue M-12' }),
     ).toBeTruthy();
     expect(within(fixLine('M-16')).getByText('motir continue M-12')).toBeTruthy();
   });
@@ -564,7 +565,7 @@ describe('To fix — Continue hosted on a dead-run row (§ 31, MOTIR-6882)', () 
     const f = stubRoutes();
     const rows = [editable(stuck('M-14', 'run_died', died())), FOUR[0]!];
     const view = render(list(rows));
-    const button = await screen.findByRole('button', { name: 'Continue hosted' });
+    const button = await screen.findByRole('button', { name: 'Continue' });
     await vi.waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
     await act(async () => {
       fireEvent.click(button);
@@ -599,7 +600,7 @@ describe('To fix — Continue hosted on a dead-run row (§ 31, MOTIR-6882)', () 
         ),
     );
     const view = render(list([editable(stuck('M-14', 'run_died', died())), FOUR[0]!]));
-    const button = await screen.findByRole('button', { name: 'Continue hosted' });
+    const button = await screen.findByRole('button', { name: 'Continue' });
     await vi.waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
     await act(async () => {
       fireEvent.click(button);
@@ -616,7 +617,7 @@ describe('To fix — Continue hosted on a dead-run row (§ 31, MOTIR-6882)', () 
   it('a pre-flight refusal leaves the row as it was, the notice under the repairs', async () => {
     stubRoutes(() => new Response(JSON.stringify({ code: 'out_of_credits' }), { status: 402 }));
     render(list([editable(stuck('M-14', 'run_died', died())), FOUR[0]!]));
-    const button = await screen.findByRole('button', { name: 'Continue hosted' });
+    const button = await screen.findByRole('button', { name: 'Continue' });
     await vi.waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
     await act(async () => {
       fireEvent.click(button);
@@ -626,5 +627,145 @@ describe('To fix — Continue hosted on a dead-run row (§ 31, MOTIR-6882)', () 
     expect(within(line).getByTestId('continue-hosted-refused-outOfCredits')).toBeTruthy();
     expect(within(line).getByText('motir continue M-14')).toBeTruthy();
     expect(screen.getByTestId('workbench-row-M-14').dataset.held).toBeUndefined();
+  });
+});
+
+describe('To fix — ONE ENTRY per run or pull-request set (§ 34, MOTIR-7589)', () => {
+  function member(identifier: string, over: Partial<HomeWorkItemRowDto> = {}): HomeWorkItemRowDto {
+    return { ...stuck(identifier, 'ci_failed', detail({ check: 'lint' })), ...over };
+  }
+  function entry(
+    head: string,
+    kind: 'run' | 'prs',
+    members: HomeWorkItemRowDto[],
+    over: Partial<HomeWorkItemRowDto> = {},
+  ): HomeWorkItemRowDto {
+    return {
+      ...stuck(head, 'ci_failed', detail({ check: 'lint' })),
+      kind: 'story',
+      fixGroupKind: kind,
+      fixMembers: members,
+      ...over,
+    };
+  }
+
+  it('one row for the head, a clause counting the rest, and the members beneath it', () => {
+    render(list([entry('S-1', 'prs', [member('S-2'), member('S-3')])]));
+    expect(screen.getByTestId('workbench-fix-carries-S-1').textContent).toContain(
+      '2 more work items on the same pull request',
+    );
+    const members = screen.getByRole('list', { name: 'Work items stuck with S-1' });
+    expect(
+      within(members)
+        .getAllByRole('listitem')
+        .map((li) => li.dataset.testid),
+    ).toEqual(['workbench-fix-member-S-2', 'workbench-fix-member-S-3']);
+    expect(
+      within(members).getByRole('link', { name: 'S-2 Title of S-2' }).getAttribute('href'),
+    ).toBe('/items/S-2');
+    // ONE command — the head's — for the whole entry.
+    expect(screen.getAllByText(/^motir fix /)).toHaveLength(1);
+  });
+
+  it('a run entry says "in this run" and a single member reads singular', () => {
+    render(list([entry('S-1', 'run', [member('S-2')])]));
+    expect(screen.getByTestId('workbench-fix-carries-S-1').textContent).toContain(
+      '1 more work item in this run',
+    );
+  });
+
+  it('a card stuck alone draws no clause and no member list', () => {
+    render(list([FOUR[0]!]));
+    expect(screen.queryByTestId('workbench-fix-carries-M-1')).toBeNull();
+    expect(screen.queryByRole('list')).toBeNull();
+  });
+
+  it('shows three members, folds the rest behind Show N more, and unfolds', () => {
+    render(
+      list([
+        entry(
+          'S-1',
+          'run',
+          ['S-2', 'S-3', 'S-4', 'S-5', 'S-6'].map((k) => member(k)),
+        ),
+      ]),
+    );
+    const members = () => screen.getByTestId('workbench-fix-members-S-1');
+    expect(within(members()).getAllByRole('listitem')).toHaveLength(3);
+    const toggle = screen.getByRole('button', { name: 'Show 2 more work items' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-controls')).toBe(members().id);
+    fireEvent.click(toggle);
+    expect(within(members()).getAllByRole('listitem')).toHaveLength(5);
+    expect(screen.getByRole('button', { name: 'Show fewer' }).getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+  });
+
+  it('a member that leaves the entry is HELD as Cleared, in place', () => {
+    const view = render(list([entry('S-1', 'prs', [member('S-2'), member('S-3')])]));
+    view.rerender(list([entry('S-1', 'prs', [member('S-3')])]));
+    const left = screen.getByTestId('workbench-fix-member-S-2');
+    expect(left.dataset.cleared).toBe('true');
+    expect(within(left).getByText('Cleared')).toBeTruthy();
+    expect(screen.getByTestId('workbench-fix-member-S-3').dataset.cleared).toBeUndefined();
+    // A member that joins later appears after the ones already drawn.
+    view.rerender(list([entry('S-1', 'prs', [member('S-3'), member('S-4')])]));
+    expect(
+      within(screen.getByTestId('workbench-fix-members-S-1'))
+        .getAllByRole('listitem')
+        .map((li) => li.dataset.testid),
+    ).toEqual(['workbench-fix-member-S-2', 'workbench-fix-member-S-3', 'workbench-fix-member-S-4']);
+  });
+
+  it("a head the reader does not hold reads — in Your role; a member they don't hold too", () => {
+    render(
+      list([
+        entry(
+          'S-1',
+          'prs',
+          [
+            member('S-2'),
+            member('S-3', { assigneeId: null, reporterId: 'u9', viewerIsAssignee: false }),
+          ],
+          {
+            assigneeId: null,
+            reporterId: 'u9',
+            viewerIsAssignee: false,
+            viewerIsReporter: false,
+          },
+        ),
+      ]),
+    );
+    const row = screen.getByTestId('workbench-row-S-1');
+    expect(within(row).getAllByText('—').length).toBeGreaterThan(0);
+    expect(within(screen.getByTestId('workbench-fix-member-S-3')).getByText('—')).toBeTruthy();
+  });
+
+  it('the whole entry is held when its head leaves the tab', () => {
+    const view = render(list([entry('S-1', 'prs', [member('S-2')])]));
+    view.rerender(list([], { total: 0 }));
+    expect(screen.getByTestId('workbench-row-S-1').dataset.held).toBe('true');
+    expect(screen.getByTestId('workbench-fix-member-S-2')).toBeTruthy();
+  });
+
+  it('reads in Chinese', () => {
+    render(
+      list([
+        entry(
+          'S-1',
+          'prs',
+          ['S-2', 'S-3', 'S-4', 'S-5'].map((k) => member(k)),
+        ),
+      ]),
+      {
+        locale: 'zh',
+        messages: zhMessages,
+      },
+    );
+    expect(screen.getByTestId('workbench-fix-carries-S-1').textContent).not.toContain('more');
+    expect(screen.getByTestId('workbench-fix-members-toggle-S-1').textContent).not.toContain(
+      'Show',
+    );
   });
 });

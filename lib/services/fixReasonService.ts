@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Prisma } from '@/generated/prisma/client';
 import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
@@ -13,12 +14,16 @@ import {
 } from '@/lib/services/workItemContinueService';
 import {
   NOTHING_TO_FIX,
+  PULL_REQUEST_GROUP_PREFIX,
   REVIEW_AGENT_REVIEWER_NAME,
+  cardFixGroupKey,
   changesRequestedOf,
   deadRunReasonOf,
   pullRequestReasonOf,
   reviewerNameOf,
+  runFixGroupKey,
   sameFixReason,
+  withFixGroupKey,
   type FixReasonValue,
 } from '@/lib/workItems/fixReason';
 
@@ -50,6 +55,24 @@ import {
 // one that read the most. Idempotent — an unchanged answer writes nothing — and it
 // emits no event. It runs INSIDE the caller's transaction and bound tenant context;
 // `work_item` has no system arm.
+
+/**
+ * The ENTRY key of a pull-request set (MOTIR-7589; `design/workbench/design-notes.md`
+ * § 34.2) — a hash of its OPEN members' ids, sorted, so every card those same pull
+ * requests deliver computes the same key without reading one another. A card with no
+ * open member has no set to share and stands alone.
+ */
+export function pullRequestFixGroupKey(
+  workItemId: string,
+  openPullRequestIds: readonly string[],
+): string {
+  if (openPullRequestIds.length === 0) return cardFixGroupKey(workItemId);
+  const digest = createHash('sha256')
+    .update([...openPullRequestIds].sort().join(','))
+    .digest('hex')
+    .slice(0, 24);
+  return `${PULL_REQUEST_GROUP_PREFIX}${digest}`;
+}
 
 /** The reviewer's display name — the live user row first (`reviewerNameOf`). */
 async function reviewerName(
@@ -105,7 +128,8 @@ export async function deriveFixReason(
       ranByName: deadRun.dispatcher?.name ?? null,
       diedReason: reason,
     });
-    if (died) return died;
+    // ONE ENTRY PER DEAD RUN (§ 34.2): the story and every leg the run carried share it.
+    if (died) return withFixGroupKey(died, runFixGroupKey(continued.run.id));
   }
 
   const [verdict, deliveries] = await Promise.all([
@@ -113,9 +137,14 @@ export async function deriveFixReason(
     workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
   ]);
   // The predicate's own notion of an open member, so `total` counts what it counted.
-  const total = deliveries.filter(
-    (d) => d.pullRequest.state === 'open' && !d.pullRequest.merged,
-  ).length;
+  const open = deliveries.filter((d) => d.pullRequest.state === 'open' && !d.pullRequest.merged);
+  const total = open.length;
+  // ONE ENTRY PER PULL-REQUEST SET (§ 34.2): every card these open pull requests deliver,
+  // stuck for a reason one push to them clears.
+  const setKey = pullRequestFixGroupKey(
+    item.id,
+    open.map((d) => d.pullRequest.id),
+  );
 
   if (verdict.ok) {
     // A claimable card is classed by the members the predicate handed over. On the
@@ -123,7 +152,7 @@ export async function deriveFixReason(
     // `acceptance_rerun` they are every open member, and when none is red the reason
     // is the reviewer's refusal the class exists for.
     const byMembers = pullRequestReasonOf(verdict.pullRequests, total);
-    if (byMembers) return byMembers;
+    if (byMembers) return withFixGroupKey(byMembers, setKey);
     if (verdict.repairClass === 'acceptance_rerun' && verdict.acceptanceRefusal) {
       // The standing refusal the class was admitted on is the story's latest DECIDED
       // acceptance gate (`readStandingAcceptanceRefusal`) — read for WHO decided it.
@@ -132,30 +161,37 @@ export async function deriveFixReason(
         'acceptance_result',
         tx,
       );
-      return changesRequestedOf(
-        {
-          gate: 'acceptance_result',
-          reviewerName: await reviewerName(
-            gate?.decidedById ?? null,
-            verdict.acceptanceRefusal.decidedByLabel,
-            tx,
-          ),
-          noteMd: verdict.acceptanceRefusal.reasonMd,
-        },
-        total,
+      // An acceptance Re-run is the story's own (§ 34.2): a card alone.
+      return withFixGroupKey(
+        changesRequestedOf(
+          {
+            gate: 'acceptance_result',
+            reviewerName: await reviewerName(
+              gate?.decidedById ?? null,
+              verdict.acceptanceRefusal.decidedByLabel,
+              tx,
+            ),
+            noteMd: verdict.acceptanceRefusal.reasonMd,
+          },
+          total,
+        ),
+        cardFixGroupKey(item.id),
       );
     }
     if (verdict.repairClass === 'review' && verdict.reviewRefusal) {
       // A card a REVIEW sent back (MOTIR-6822): the predicate read the standing refusal
       // and named its reviewer — the review agent as the agent (§12.3), a person by their
       // live name — so the row names exactly who the claim's prompt names.
-      return changesRequestedOf(
-        {
-          gate: verdict.reviewRefusal.gate,
-          reviewerName: verdict.reviewRefusal.reviewerName,
-          noteMd: verdict.reviewRefusal.findingsMd,
-        },
-        total,
+      return withFixGroupKey(
+        changesRequestedOf(
+          {
+            gate: verdict.reviewRefusal.gate,
+            reviewerName: verdict.reviewRefusal.reviewerName,
+            noteMd: verdict.reviewRefusal.findingsMd,
+          },
+          total,
+        ),
+        setKey,
       );
     }
     /* v8 ignore next 2 -- NO PRODUCER: an `ok` evaluation of the `ci` class hands over
@@ -171,15 +207,18 @@ export async function deriveFixReason(
     // The review AGENT's refusal names the agent, never the run's attributed user (§12.3):
     // the row must not read as a person having reviewed the code.
     const byAgent = latest.kind === 'agent_review';
-    return changesRequestedOf(
-      {
-        gate: byAgent ? 'agent_review' : 'pull_request_approval',
-        reviewerName: byAgent
-          ? REVIEW_AGENT_REVIEWER_NAME
-          : await reviewerName(latest.decidedById, latest.decidedByLabel, tx),
-        noteMd: latest.noteMd,
-      },
-      total,
+    return withFixGroupKey(
+      changesRequestedOf(
+        {
+          gate: byAgent ? 'agent_review' : 'pull_request_approval',
+          reviewerName: byAgent
+            ? REVIEW_AGENT_REVIEWER_NAME
+            : await reviewerName(latest.decidedById, latest.decidedByLabel, tx),
+          noteMd: latest.noteMd,
+        },
+        total,
+      ),
+      setKey,
     );
   }
   return NOTHING_TO_FIX;

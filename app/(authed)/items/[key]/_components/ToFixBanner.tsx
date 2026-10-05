@@ -2,11 +2,12 @@
 
 import { useCallback, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowDown, LoaderCircle, Wrench } from 'lucide-react';
+import { ArrowDown, ArrowRight, LoaderCircle, Wrench } from 'lucide-react';
 import { relativeLabel, RepairRunLink } from '@/components/github/RepairFixPart';
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import { toFixTagState } from '@/components/workItems/ToFixTag';
-import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import Link from 'next/link';
+import type { FixDetailDto, FixGroupPointerDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
@@ -41,6 +42,15 @@ import { useLandOnLateSection } from './useLandOnLateSection';
 // Development block already carries `motir continue` and Continue hosted, and one page
 // must not hold two copies of one control (`design/work-items/design-notes.md` § *The
 // TO FIX tag and banner: RUN DIED*). The banner says one sentence and points there.
+//
+// ⚠️ ONE ENTRY PER RUN (MOTIR-7589; § _The TO FIX tag and banner: ONE ENTRY PER RUN_). A
+// card stuck WITH others — the legs of one dead run, the cards one pull-request set
+// delivers — is repaired through its entry's HEAD. Only the head shows a command, under a
+// meta line naming the cards it carries; every other card names the head and links to the
+// head's Development block, which is where both repairs live.
+
+/** How many carried keys the head's meta line names before *and N more*. */
+const CARRIED_KEYS_SHOWN = 5;
 
 /** GitHub's raw queue reasons the Workbench humanises (`workbench.toFix.queueReason.*`);
  *  any other raw reason falls to the bare sentence, as the Workbench row does. */
@@ -72,6 +82,11 @@ export interface ToFixBannerProps {
    * command follows under `orTerminal`. Absent, `leadFix` and the command alone.
    */
   hostedDoor?: ReactNode;
+  /**
+   * The To fix ENTRY this card is one of (MOTIR-7589), or null for a card stuck alone —
+   * which keeps today's banner exactly.
+   */
+  fixGroup?: FixGroupPointerDto | null;
   /** The card's OPEN repair (MOTIR-6930) — the one-repair lock. A hosted one replaces the
    *  lead, the door and the command with *A hosted repair is running*; a local one keeps
    *  the command alone. Null when none is open. */
@@ -85,6 +100,7 @@ export function ToFixBanner({
   statusCategory,
   hostedDoor = null,
   repairRun = null,
+  fixGroup = null,
 }: ToFixBannerProps) {
   const t = useTranslations('toFix.banner');
   const tw = useTranslations('workbench.toFix');
@@ -107,6 +123,9 @@ export function ToFixBanner({
       );
     };
   const isDeadRun = reason === 'run_died';
+  // A card carried by another card's entry: it names the head and offers no repair.
+  const carriedBy = fixGroup && !fixGroup.isHead ? fixGroup.headKey : null;
+  const carries = fixGroup?.isHead ? fixGroup.carriedKeys : [];
   const nothingPushed = isDeadRun && fixDetail.pushed === false;
   // FIX ON THE HOSTED AGENT (MOTIR-6930): a review's refusal only; a hosted repair already
   // running replaces both repairs, and ANY open repair withdraws the door.
@@ -122,9 +141,10 @@ export function ToFixBanner({
         const heard = when(fixDetail.lastHeardAt ?? new Date(clock).toISOString());
         if (nothingPushed) return t.rich('runDiedNothingPushed', { when: heard });
         const parent =
-          fixDetail.continueKey !== null && fixDetail.continueKey !== identifier
+          carriedBy ??
+          (fixDetail.continueKey !== null && fixDetail.continueKey !== identifier
             ? fixDetail.continueKey
-            : null;
+            : null);
         return parent
           ? t.rich('runDiedParent', { parent, b: bold, when: heard })
           : t.rich('runDied', { when: heard });
@@ -166,6 +186,27 @@ export function ToFixBanner({
     }
   })();
 
+  // THE HEAD'S META LINE (§ _ONE ENTRY PER RUN_): the cards its one repair also clears.
+  const carriesLine =
+    carries.length > 0
+      ? t.rich('carries', {
+          count: carries.length,
+          keys: () => (
+            <>
+              {carries.slice(0, CARRIED_KEYS_SHOWN).map((key, i) => (
+                <span key={key}>
+                  {i > 0 ? ', ' : null}
+                  <b className="font-semibold">{key}</b>
+                </span>
+              ))}
+              {carries.length > CARRIED_KEYS_SHOWN
+                ? ` ${t('carriesMore', { count: carries.length - CARRIED_KEYS_SHOWN })}`
+                : null}
+            </>
+          ),
+        })
+      : null;
+
   const meta = (
     isDeadRun
       ? []
@@ -200,7 +241,24 @@ export function ToFixBanner({
             {meta.join(' · ')}
           </p>
         ) : null}
-        {isDeadRun ? null : hostedRepair ? (
+        {carriesLine ? (
+          <p
+            className="m-0 font-sans text-[13px] text-(--el-danger-surface-text)"
+            data-testid="to-fix-banner-carries"
+          >
+            {carriesLine}
+          </p>
+        ) : null}
+        {isDeadRun ? null : carriedBy ? (
+          // A card on its head's pull requests: one sentence in place of the lead and the
+          // command — two copies of one repair is what the entry removes.
+          <p
+            className="m-0 mt-1 font-sans text-[13px] text-(--el-danger-surface-text)"
+            data-testid="to-fix-banner-repaired-with-head"
+          >
+            {t.rich('repairedWithHead', { head: carriedBy, b: bold })}
+          </p>
+        ) : hostedRepair ? (
           // § 32 Panel 4, running: the lead, the door and the command give way to one line
           // — the open repair IS the lock (`hosted-agent-run.md` §8.6).
           <p
@@ -232,27 +290,42 @@ export function ToFixBanner({
             <CopyableCodeBlock language="shell" code={`motir ${fixDetail.repair} ${identifier}`} />
           </>
         )}
-        {/* A real `#development` link, so it works with scripting off; with it on,
+        {carriedBy ? (
+          // A carried card points at the HEAD's page — its Development block holds both
+          // repairs — never at a Workbench row the reader may not have.
+          <Link
+            href={`/items/${carriedBy}#${DEVELOPMENT_SECTION_ID}`}
+            data-testid="to-fix-banner-to-head"
+            className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            {t('toHead', { head: carriedBy })}
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        ) : (
+          <>
+            {/* A real `#development` link, so it works with scripting off; with it on,
             the press waits for the late stack the way the header marker does. */}
-        <a
-          href={`#${DEVELOPMENT_SECTION_ID}`}
-          onClick={(event) => {
-            event.preventDefault();
-            press();
-          }}
-          aria-busy={pending || undefined}
-          className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-        >
-          {t(isDeadRun ? (nothingPushed ? 'toStartOver' : 'toContinue') : 'toDevelopment')}
-          {pending ? (
-            <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
-          ) : (
-            <ArrowDown className="h-3.5 w-3.5" aria-hidden />
-          )}
-        </a>
-        <span className="sr-only" role="status" aria-live="polite">
-          {pending ? t(isDeadRun ? 'openingDevelopment' : 'opening') : ''}
-        </span>
+            <a
+              href={`#${DEVELOPMENT_SECTION_ID}`}
+              onClick={(event) => {
+                event.preventDefault();
+                press();
+              }}
+              aria-busy={pending || undefined}
+              className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              {t(isDeadRun ? (nothingPushed ? 'toStartOver' : 'toContinue') : 'toDevelopment')}
+              {pending ? (
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+              )}
+            </a>
+            <span className="sr-only" role="status" aria-live="polite">
+              {pending ? t(isDeadRun ? 'openingDevelopment' : 'opening') : ''}
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

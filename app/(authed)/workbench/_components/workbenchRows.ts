@@ -75,6 +75,13 @@ export interface WorkbenchRowView {
   canFixHosted: boolean;
   /** The open repair on a sent-back row, or null (MOTIR-6930). */
   repairRun: OpenRepairRunDto | null;
+  /**
+   * TO FIX ONLY (MOTIR-7589; § 34): the kind of entry this row heads, and the OTHER
+   * cards stuck with it, in the entry's order. `null` / empty elsewhere and for a card
+   * stuck alone.
+   */
+  fixGroupKind: 'run' | 'prs' | 'card' | null;
+  members: WorkbenchRowView[];
 }
 
 /**
@@ -89,12 +96,15 @@ export interface WorkbenchRowView {
  * own; an item they watch AND own reads `both` there too, which is why the same
  * item legitimately appears in both tabs.
  */
-export type WorkbenchRole = 'assigned' | 'reported' | 'both' | 'watching';
+export type WorkbenchRole = 'assigned' | 'reported' | 'both' | 'watching' | 'none';
 
 function resolveRole(row: HomeWorkItemRowDto, isWatchingTab: boolean): WorkbenchRole {
   if (row.viewerIsAssignee && row.viewerIsReporter) return 'both';
   if (row.viewerIsAssignee) return 'assigned';
   if (row.viewerIsReporter) return 'reported';
+  // A To fix ENTRY's head or member the reader does not hold (MOTIR-7589; § 34.4): the
+  // entry is on their tab because they hold SOME member, not this one — the cell reads —.
+  if (row.fixGroupKind !== null) return 'none';
   // Only reachable on the Watching tab — every WORK read's predicate IS
   // assignee-or-reporter, so a row there always matched one of the two above.
   return isWatchingTab ? 'watching' : 'assigned';
@@ -107,14 +117,16 @@ export function toWorkbenchRowViews(
   isWatchingTab: boolean,
 ): WorkbenchRowView[] {
   const nameByUserId = new Map(members.map((m) => [m.userId, m.name]));
-  return rows.map((row) => {
+  const view = (row: HomeWorkItemRowDto, isMember: boolean): WorkbenchRowView => {
     const status = workflow.statuses.find((s) => s.key === row.status);
     return {
       id: row.id,
       identifier: row.identifier,
       title: row.title,
       kind: row.kind,
-      role: resolveRole(row, isWatchingTab),
+      role: isMember
+        ? resolveRole({ ...row, fixGroupKind: 'card' }, false)
+        : resolveRole(row, isWatchingTab),
       assigneeName: row.assigneeId ? (nameByUserId.get(row.assigneeId) ?? null) : null,
       agent: row.executor === 'coding_agent',
       status: row.status,
@@ -129,6 +141,9 @@ export function toWorkbenchRowViews(
       canContinueHosted: row.canContinueHosted,
       canFixHosted: row.canFixHosted,
       repairRun: row.repairRun,
+      fixGroupKind: row.fixGroupKind,
+      members: row.fixMembers.map((m) => view(m, true)),
     };
-  });
+  };
+  return rows.map((row) => view(row, false));
 }

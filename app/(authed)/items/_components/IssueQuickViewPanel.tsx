@@ -696,6 +696,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           fixReason={data.fixReason}
           statusCategory={data.statusCategory}
           fixGate={data.fixGate}
+          headKey={data.fixHeadKey ?? null}
         />
         {/* MOTIR-2050: the "Archived" chip, mirroring the detail page's eyebrow
           chip (2.9.6) — the archived state stays legible after the main column

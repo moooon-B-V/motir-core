@@ -35,6 +35,8 @@ export function toHomeWorkItemRowDto(row: HomeWorkItemRow, viewerId: string): Ho
     canContinueHosted: false,
     canFixHosted: false,
     repairRun: null,
+    fixGroupKind: null,
+    fixMembers: [],
     priority: row.priority,
     assigneeId: row.assigneeId,
     reporterId: row.reporterId,

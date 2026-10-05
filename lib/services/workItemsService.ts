@@ -341,6 +341,7 @@ import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { writeDerivedRepoSet, writeRepoRefs } from '@/lib/workItems/repoSetWrites';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { fixGroupPointersFor, fixHeadKeysFor } from './fixGroupService';
 
 // ⚠️ `assertSingleTargetRepoInput` MOVED to `lib/workItems/targetRepo.ts`
 // (MOTIR-4904) and is imported above. It was private here while this was the only
@@ -1110,6 +1111,8 @@ function assembleProjectForest(
   // A Visitor's forest (MOTIR-6644): a private epic's node is marked and its
   // sizing nulled; its withheld children never reached `rows`.
   visitor = false,
+  // The To fix HEAD each carried card's tag names (MOTIR-7589) — empty for a Visitor.
+  fixHeads: ReadonlyMap<string, string> = new Map(),
 ): WorkItemTreeNodeDto[] {
   const childrenByParent = new Map<string, WorkItemForestRow[]>();
   const roots: WorkItemForestRow[] = [];
@@ -1134,7 +1137,10 @@ function assembleProjectForest(
     }
     // Ancestor retention: drop only an unmatched node with no surviving child.
     if (prune && !row.matched && children.length === 0) return null;
-    const node = toWorkItemTreeNodeDto(row, children);
+    const head = fixHeads.get(row.id);
+    const node = head
+      ? { ...toWorkItemTreeNodeDto(row, children), fixHeadKey: head }
+      : toWorkItemTreeNodeDto(row, children);
     return visitor ? stripPrivateEpicTells(node, row.publicChildrenHidden) : node;
   };
 
@@ -4904,7 +4910,18 @@ export const workItemsService = {
       ),
     );
 
-    return assembleProjectForest(rows, repoFilterIsActive(repoFilter), visitor);
+    // The To fix tag's *· with {head}* (MOTIR-7589): read only for the rows showing a
+    // reason, and never for a Visitor — a head key names another card.
+    const fixHeads = visitor
+      ? new Map<string, string>()
+      : await withWorkspaceServiceContext(workspaceId, (tx) =>
+          fixHeadKeysFor(
+            workspaceId,
+            rows.filter((r) => r.fixReason !== null).map((r) => r.id),
+            tx,
+          ),
+        );
+    return assembleProjectForest(rows, repoFilterIsActive(repoFilter), visitor, fixHeads);
   },
 
   /**
@@ -5395,11 +5412,25 @@ export const workItemsService = {
       ),
     );
 
-    const items = rows.map((row) =>
-      opened.visitor
-        ? stripPrivateEpicTells(toWorkItemListItemDto(row), row.publicChildrenHidden)
-        : toWorkItemListItemDto(row),
-    );
+    // The To fix tag's *· with {head}* (MOTIR-7589) — never for a Visitor.
+    const fixHeads = opened.visitor
+      ? new Map<string, string>()
+      : await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+          fixHeadKeysFor(
+            project.workspaceId,
+            rows.filter((r) => r.fixReason !== null).map((r) => r.id),
+            tx,
+          ),
+        );
+    const items = rows.map((row) => {
+      if (opened.visitor) {
+        return stripPrivateEpicTells(toWorkItemListItemDto(row), row.publicChildrenHidden);
+      }
+      const head = fixHeads.get(row.id);
+      return head
+        ? { ...toWorkItemListItemDto(row), fixHeadKey: head }
+        : toWorkItemListItemDto(row);
+    });
     return { items, total, page, pageSize };
   },
 
@@ -6511,6 +6542,16 @@ export const workItemsService = {
     const itemRepositories = await withWorkspaceServiceContext(workspaceId, (tx) =>
       workItemRepoRepository.listByWorkItem(item.id, tx),
     );
+    // The To fix ENTRY the card is one of (MOTIR-7589): read only for a stuck card whose
+    // key can be shared, and never for a Visitor — the pointer names other cards.
+    const fixPointer =
+      visitor || item.fixReason === null
+        ? null
+        : ((
+            await withWorkspaceServiceContext(workspaceId, (tx) =>
+              fixGroupPointersFor(workspaceId, [item], tx),
+            )
+          ).get(item.id) ?? null);
 
     return {
       // The resolved repository REFERENCES (MOTIR-3041) ride the detail shape,
@@ -6526,6 +6567,15 @@ export const workItemsService = {
       placementFolder: placement.placementFolder,
       fixReason: item.fixReason,
       fixDetail: toFixDetailDto(item.fixReason, item.fixDetail),
+      fixGroup:
+        fixPointer && fixPointer.kind !== 'card'
+          ? {
+              kind: fixPointer.kind,
+              headKey: fixPointer.headKey,
+              isHead: fixPointer.headId === item.id,
+              carriedKeys: fixPointer.carriedKeys,
+            }
+          : null,
       ancestors,
       parent: placement.parent,
       // A Visitor's child panel names no hidden child; a private epic's is empty.

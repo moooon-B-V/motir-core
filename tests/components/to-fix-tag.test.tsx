@@ -163,3 +163,24 @@ describe('the catalogues', () => {
     }
   });
 });
+
+describe("ToFixTag — a card carried by another card's entry (MOTIR-7589)", () => {
+  it('adds the head to the accessible name, in both forms', () => {
+    render(
+      <ToFixTag fixReason="run_died" statusCategory="in_progress" form="glyph" headKey="PROD-12" />,
+    );
+    expect(screen.getByRole('img', { name: `${NAMES.run_died} · with PROD-12` })).toBeTruthy();
+    cleanup();
+    render(
+      <ToFixTag fixReason="ci_failed" statusCategory="in_progress" id="t-2" headKey="PROD-12" />,
+    );
+    expect(document.getElementById('t-2')!.textContent).toBe(`${NAMES.ci_failed} · with PROD-12`);
+  });
+
+  it('keeps its own name with no head', () => {
+    render(
+      <ToFixTag fixReason="ci_failed" statusCategory="in_progress" form="glyph" headKey={null} />,
+    );
+    expect(screen.getByRole('img', { name: NAMES.ci_failed })).toBeTruthy();
+  });
+});

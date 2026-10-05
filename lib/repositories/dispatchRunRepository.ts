@@ -629,6 +629,22 @@ export const dispatchRunRepository = {
     return tx.dispatchRun.findUnique({ where: { id }, include: WITH_CARDS });
   },
 
+  /**
+   * Several runs' SCOPE cards, by run id (MOTIR-7589) — the head of a dead run's To fix
+   * entry is the card the run was pointed at (`design/workbench/design-notes.md` § 34.2).
+   * `scopeWorkItemId` is null for a single-card run; its one leg is then the head.
+   */
+  async findScopesByIds(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; scopeWorkItemId: string | null }[]> {
+    if (ids.length === 0) return [];
+    return tx.dispatchRun.findMany({
+      where: { id: { in: [...ids] } },
+      select: { id: true, scopeWorkItemId: true },
+    });
+  },
+
   /** One run, header only — the cheap read the append path makes per batch. */
   async findById(id: string, tx: Prisma.TransactionClient): Promise<DispatchRun | null> {
     return tx.dispatchRun.findUnique({ where: { id } });

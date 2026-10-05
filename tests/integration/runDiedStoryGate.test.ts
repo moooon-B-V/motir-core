@@ -441,14 +441,23 @@ describe('case 6 — the 12-hour legacy window', () => {
 });
 
 describe('case 7 — a parent run’s legs continue with the parent', () => {
-  it('each unfinished leg is run_died with continueKey = the parent, and its listed row carries it', async () => {
+  it('each unfinished leg is run_died with continueKey = the parent, carried by the parent’s ONE entry', async () => {
     const fx = await makeWorkItemFixture();
     const { story, legs } = await parentRun(fx);
     const page = await homeService.listToFix(hctx(fx));
+    // ONE ENTRY PER DEAD RUN (MOTIR-7589; workbench § 34 retires § 31 state 3): the story
+    // heads it, and every leg is a member under it rather than a row of its own.
+    const entry = page.items.find((r) => r.id === story.id);
+    expect(entry?.fixGroupKind).toBe('run');
+    expect(page.items.filter((r) => legs.some((l) => l.id === r.id))).toEqual([]);
     for (const leg of legs) {
-      const row = page.items.find((r) => r.id === leg.id);
-      expect(row?.fixReason).toBe('run_died');
-      expect(row?.fixDetail).toMatchObject({ repair: 'continue', continueKey: story.identifier });
+      const member = entry?.fixMembers.find((r) => r.id === leg.id);
+      expect(member?.fixReason).toBe('run_died');
+      expect(member?.fixDetail).toMatchObject({
+        repair: 'continue',
+        continueKey: story.identifier,
+        groupKey: entry?.fixDetail?.groupKey,
+      });
     }
   });
 });
