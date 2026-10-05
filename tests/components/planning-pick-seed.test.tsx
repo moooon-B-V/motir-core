@@ -290,6 +290,7 @@ const ADDRESS = withPlanningOverlay('/items/ACME-42', { kind: 'refused-gate', ga
 const ANCHOR_40 = {
   anchor: { id: 'wi_40', identifier: 'ACME-40', title: 'Reporting', kind: 'story' as const },
   ancestors: [],
+  hasChildren: true,
 };
 
 function openAt(href: string) {
@@ -363,6 +364,7 @@ describe('the overlay — a pick seed opens FORWARD, with the turn to send', () 
     fetchPlanningAnchor.mockResolvedValue({
       anchor: { id: 'wi_42', identifier: 'ACME-42', title: 'Choose', kind: 'subtask' as const },
       ancestors: [],
+      hasChildren: false,
     });
     mountOverlay();
     await act(async () => {});

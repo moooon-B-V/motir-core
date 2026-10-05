@@ -266,6 +266,7 @@ import type {
   WorkItemEdgeSummaryDto,
   WorkItemKindDto,
   WorkItemLineageDto,
+  PlanningAnchorLineageDto,
   WorkItemTypeDto,
   WorkItemDifficultyDto,
   WorkItemObsolescenceDto,
@@ -6301,6 +6302,34 @@ export const workItemsService = {
       workItemRepository.findAncestors(row.id, ctx.workspaceId, tx),
     );
     return { item: toWorkItemDto(row), ancestors: ancestorRows.map(toWorkItemSummaryDto) };
+  },
+
+  /**
+   * The planning surface's ANCHOR read (MOTIR-7621) — the lineage read plus
+   * whether the anchor has children, so the arrival rule can open INSIDE a
+   * target only when there is something inside it.
+   *
+   * The lineage half is `getWorkItemWithAncestors` verbatim — same tenant gate,
+   * same `assertCanBrowse`, same no-existence-leak `WorkItemNotFoundError` — and
+   * the count is the lazy tree's own level count for that parent, so the answer
+   * agrees with the level the canvas would load.
+   */
+  async getPlanningAnchor(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<PlanningAnchorLineageDto> {
+    const lineage = await this.getWorkItemWithAncestors(projectId, identifier, ctx);
+    const childCount = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.countProjectTreeLevel(
+        lineage.item.projectId,
+        ctx.workspaceId,
+        lineage.item.id,
+        null,
+        tx,
+      ),
+    );
+    return { ...lineage, hasChildren: childCount > 0 };
   },
 
   /**

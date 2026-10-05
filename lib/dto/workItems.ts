@@ -472,6 +472,21 @@ export interface WorkItemLineageDto {
 }
 
 /**
+ * The planning surface's ANCHOR read (MOTIR-7621) — the lineage plus whether the
+ * item has anything INSIDE it. The canvas opens inside a target only when there
+ * is a level to open onto; a childless story, task or bug arrives on its own
+ * level instead, beside its siblings, so the item the conversation is about is
+ * on screen rather than hidden behind an empty level.
+ *
+ * `hasChildren` counts with the SAME predicate the lazy tree loads a parent's
+ * level with (`countProjectTreeLevel`: live, not in triage), so "has children"
+ * and "the level the canvas would load is non-empty" are one answer.
+ */
+export interface PlanningAnchorLineageDto extends WorkItemLineageDto {
+  hasChildren: boolean;
+}
+
+/**
  * The folder a work item EFFECTIVELY sits in (Story MOTIR-5309 · MOTIR-5375) —
  * its own, else its root ancestor's. Only a root can be filed (the CHECK
  * `work_item_parent_xor_folder`), so a story under a filed epic lives in the

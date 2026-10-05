@@ -14,6 +14,7 @@ describe('followFromTarget — the person ADDED a target', () => {
     const req = followFromTarget({
       anchor: { id: 'wi_3', identifier: 'MOTIR-3', title: 'The story', kind: 'story' },
       ancestors: [EPIC],
+      hasChildren: true,
     });
 
     // The SAME rule the surface arrived by — not a second answer to "where does
@@ -37,8 +38,46 @@ describe('followFromTarget — the person ADDED a target', () => {
       followFromTarget({
         anchor: { id: 'wi_9', identifier: 'MOTIR-9', title: 'A subtask', kind: 'subtask' },
         ancestors: [],
+        hasChildren: false,
       }),
     ).toBeNull();
+  });
+
+  it("a CHILDLESS story under a parent moves to the story's OWN level (MOTIR-7621)", () => {
+    // Not inside it — that level would be empty. The canvas stands where the
+    // story is, among its siblings, with the target ring.
+    const req = followFromTarget({
+      anchor: { id: 'wi_3', identifier: 'MOTIR-3', title: 'The story', kind: 'story' },
+      ancestors: [EPIC],
+      hasChildren: false,
+    });
+    expect(req?.trail.map((c) => c.id)).toEqual(['wi_1']);
+  });
+
+  it('a CHILDLESS root target asks for nothing, so the PLAN can move the canvas later', () => {
+    // MOTIR-7621 step 3: the leaf is already on screen at the root, so the target
+    // trigger stays silent and `followRequest` falls through to `followFromPlan`
+    // — which moves INSIDE the leaf once the plan proposes children under it.
+    const fromTarget = followFromTarget({
+      anchor: { id: 'wi_8', identifier: 'MOTIR-8', title: 'A bug', kind: 'bug' },
+      ancestors: [],
+      hasChildren: false,
+    });
+    expect(fromTarget).toBeNull();
+
+    const review = planReview([
+      planReviewItem({
+        op: 'add',
+        nodeId: 'p1',
+        parentNodeId: 'wi_8',
+        parentIdentifier: 'MOTIR-8',
+        parentTitle: 'A bug',
+        parentTrail: [{ id: 'wi_8', identifier: 'MOTIR-8', title: 'A bug' }],
+      }),
+    ]);
+    const req = followRequest(fromTarget, followFromPlan(review, 'New'));
+    expect(req?.key).toBe('plan:wi_8');
+    expect(req?.trail.at(-1)?.id).toBe('wi_8');
   });
 });
 
