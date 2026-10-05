@@ -47,6 +47,8 @@ interface Call {
 let calls: Call[] = [];
 let auditFixtures: Record<string, CodeAuditSurfaceDTO> = {};
 let failingRepos = new Set<string>();
+/** What `GET /api/ai/jobs/:id` reports — unset answers `{}`, which reads as terminal. */
+let jobStatusReply: string | undefined;
 
 function json(body: unknown): Response {
   return { ok: true, json: async () => body } as unknown as Response;
@@ -61,6 +63,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: false });
   calls = [];
   failingRepos = new Set();
+  jobStatusReply = undefined;
   // motir-ai + motir-core audited; motir-meta has NO report.
   auditFixtures = {
     'moooon/motir-ai': auditFor('moooon/motir-ai', 63),
@@ -74,6 +77,9 @@ beforeEach(() => {
       method: init?.method ?? 'GET',
       body: init?.body === undefined ? undefined : JSON.parse(init.body),
     });
+    if (url.startsWith('/api/ai/jobs/') && jobStatusReply !== undefined) {
+      return Promise.resolve(json({ status: jobStatusReply, result: null }));
+    }
     if (url.includes('/convention')) {
       return Promise.resolve(
         json({ repoKey: '', convention: null, versions: [], nextCursor: null }),
@@ -263,6 +269,75 @@ describe('the two states that get NO derive trigger', () => {
   });
 });
 
+describe('a re-audit row’s start time (MOTIR-7620)', () => {
+  const RUN_KEY = 'motir:code-health:reaudit-run:proj_1';
+  const TWO_WEEKS_AGO = '2026-07-22T00:05:00.000Z';
+
+  it('a fresh re-audit of a repo audited two weeks ago reads "just started", not its age', async () => {
+    vi.setSystemTime(NOW);
+    auditFixtures['moooon/motir-core'] = {
+      ...auditFor('moooon/motir-core', 78),
+      audit: { ...auditFor('moooon/motir-core', 78).audit!, createdAt: TWO_WEEKS_AGO },
+    };
+    render();
+    expect(within(repoGroup()).getByText('2 weeks ago')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Re-audit moooon/motir-core' }));
+    });
+
+    expect(within(repoGroup()).getByText('just started')).toBeTruthy();
+    expect(within(repoGroup()).queryByText('started 2 weeks ago')).toBeNull();
+    expect(JSON.parse(localStorage.getItem(RUN_KEY) ?? 'null').repos[0].queuedAt).toBe(
+      NOW.toISOString(),
+    );
+  });
+
+  it('a RESUMED run is timed from the queued-at its record kept', async () => {
+    vi.setSystemTime(NOW);
+    jobStatusReply = 'running';
+    auditFixtures['moooon/motir-core'] = {
+      ...auditFor('moooon/motir-core', 78),
+      audit: { ...auditFor('moooon/motir-core', 78).audit!, createdAt: TWO_WEEKS_AGO },
+    };
+    localStorage.setItem(
+      RUN_KEY,
+      JSON.stringify({
+        repos: [
+          {
+            repoKey: 'moooon/motir-core',
+            auditJobId: 'job_core',
+            conventionJobId: 'cj_core',
+            queuedAt: '2026-08-05T00:02:00.000Z',
+          },
+        ],
+      }),
+    );
+    render();
+    await act(async () => {});
+
+    expect(within(repoGroup()).getByText('started 3 minutes ago')).toBeTruthy();
+    expect(within(repoGroup()).queryByText('started 2 weeks ago')).toBeNull();
+  });
+
+  it('a resumed record written before queued-at existed reads "just started"', async () => {
+    vi.setSystemTime(NOW);
+    jobStatusReply = 'running';
+    localStorage.setItem(
+      RUN_KEY,
+      JSON.stringify({
+        repos: [
+          { repoKey: 'moooon/motir-core', auditJobId: 'job_core', conventionJobId: 'cj_core' },
+        ],
+      }),
+    );
+    render();
+    await act(async () => {});
+
+    expect(within(repoGroup()).getByText('just started')).toBeTruthy();
+  });
+});
+
 describe('the in-flight record', () => {
   const RUN_KEY = 'motir:code-health:reaudit-run:proj_1';
 
@@ -276,6 +351,8 @@ describe('the in-flight record', () => {
         repoKey: 'moooon/motir-meta',
         auditJobId: 'job_moooon/motir-meta',
         conventionJobId: 'cj_moooon/motir-meta',
+        // MOTIR-7620: when it was queued, so a resumed row is timed from it.
+        queuedAt: expect.any(String),
       },
     ]);
 

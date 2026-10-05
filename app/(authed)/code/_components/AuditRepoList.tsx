@@ -135,12 +135,40 @@ export function AuditRepoList({
             onSelect={onSelect}
             onRetry={onRetry}
             onAudit={canTrigger ? (repoKey) => onAuditRepos?.([repoKey]) : undefined}
-            when={row.auditedAt === null ? null : format.relativeTime(new Date(row.auditedAt))}
+            // A deriving row is timed from when THIS run was queued, never from
+            // the audit it is replacing (MOTIR-7620) — that one's age read as
+            // "started 2 weeks ago" on a re-audit fired a second earlier. Its
+            // clock is the browser's, not the provider's per-request `now`: the
+            // run was queued AFTER the page was served, so against that `now`
+            // it would read as starting in the future. Only the island ever sets
+            // `startedAt`, so this never renders on the server. Inside its first
+            // minute it stays "just started" rather than "started now".
+            when={
+              row.state === 'deriving'
+                ? startedWhen(row.startedAt, (at, now) => format.relativeTime(at, now))
+                : row.auditedAt === null
+                  ? null
+                  : format.relativeTime(new Date(row.auditedAt))
+            }
           />
         ))}
       </div>
     </Card>
   );
+}
+
+const JUST_STARTED_MS = 60_000;
+
+/** A deriving row's "{when}", or null for "just started" — no queued-at known
+ *  yet, or one less than a minute old. */
+function startedWhen(
+  startedAt: string | null,
+  relative: (at: Date, now: Date) => string,
+): string | null {
+  if (startedAt === null) return null;
+  const at = new Date(startedAt);
+  const now = new Date();
+  return now.getTime() - at.getTime() < JUST_STARTED_MS ? null : relative(at, now);
 }
 
 function RepoRow({
