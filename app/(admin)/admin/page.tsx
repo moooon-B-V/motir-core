@@ -5,7 +5,7 @@ import { Activity, CloudOff } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { PlatformActivityItemDTO, PlatformOverviewPeriod } from '@/lib/dto/platform';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { platformReadService } from '@/lib/services/platformReadService';
 
 /**
@@ -53,7 +53,7 @@ export default async function AdminOverviewPage({
 }: {
   searchParams: Promise<{ period?: string; cursor?: string }>;
 }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const t = await getTranslations('platformAdmin.overview');
   const format = await getFormatter();
   const params = await searchParams;

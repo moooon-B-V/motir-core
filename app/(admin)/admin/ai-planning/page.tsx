@@ -7,7 +7,7 @@ import type {
   PlatformPlannerModelListDTO,
   PlatformPlannerModelSettingsDTO,
 } from '@/lib/dto/platformPlannerModel';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { platformPlannerModelService } from '@/lib/services/platformPlannerModelService';
 import { PlannerModelRows } from './_components/PlannerModelRows';
 import { PlannerModelsSkeleton } from '@/components/ai/PlannerModelsSkeleton';
@@ -21,8 +21,9 @@ import type { PlatformPrincipal } from '@/lib/platform/auth';
  * § AMENDMENT 2026-10 (MOTIR-7222), card MOTIR-7231, story MOTIR-7220.
  *
  * Which model Motir plans with, one row per audience. Every staff role reads
- * it; only a `superadmin` gets the pickers. A non-staff request never reaches
- * this file: the `(admin)` layout answers the app's 404 first.
+ * it; only a `superadmin` gets the pickers. A non-staff request gets the app's
+ * 404 from this page's gate as from the layout's — the two render concurrently,
+ * so the page cannot rely on the layout's (`pageGate.ts`, MOTIR-7613).
  *
  * ⚠️ NO VALUE IS GUESSED. When motir-ai cannot answer, the page renders the
  * console's error card with Retry and no rows (Panel 9), rather than a default
@@ -35,7 +36,7 @@ export const metadata: Metadata = { title: 'AI planning' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminAiPlanningPage() {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const t = await getTranslations('platformAdmin.aiPlanning');
   const tAdmin = await getTranslations('platformAdmin');
 

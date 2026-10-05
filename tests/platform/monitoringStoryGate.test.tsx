@@ -330,8 +330,10 @@ describe('staff-only, audited, and offline', () => {
     const user = await createTestUser({ email: 'owner@customer.test' });
     session = { user: { id: user.id } };
 
-    await expect(AdminMonitoringPage({ searchParams: Promise.resolve({}) })).rejects.toBeInstanceOf(
-      NotPlatformStaffError,
+    // The page answers the app's 404 (Next's not-found sentinel), as the layout
+    // does — never a thrown NotPlatformStaffError (MOTIR-7613).
+    await expect(AdminMonitoringPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_HTTP_ERROR_FALLBACK;404',
     );
     const { requirePlatformStaff } = await import('@/lib/platform/auth');
     await expect(requirePlatformStaff('support')).rejects.toBeInstanceOf(NotPlatformStaffError);

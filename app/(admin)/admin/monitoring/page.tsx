@@ -17,7 +17,7 @@ import type {
   PlatformSignalId,
   PlatformSignalState,
 } from '@/lib/dto/platformHealth';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { platformHealthService } from '@/lib/services/platformHealthService';
 import { platformFleetMonitorService } from '@/lib/services/platformFleetMonitorService';
 import { platformIndexAllowanceService } from '@/lib/services/platformIndexAllowanceService';
@@ -100,7 +100,7 @@ export default async function AdminMonitoringPage({
     killsPage?: string;
   }>;
 }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const t = await getTranslations('platformAdmin');
   const format = await getFormatter();
   const params = await searchParams;

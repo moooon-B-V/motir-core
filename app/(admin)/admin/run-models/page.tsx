@@ -5,7 +5,8 @@ import { Info } from 'lucide-react';
 import { PlannerModelsSkeleton } from '@/components/ai/PlannerModelsSkeleton';
 import type { PlatformRunModelListDTO } from '@/lib/dto/platformRunModel';
 import { HostedModelsUnavailableError } from '@/lib/hostedRuns/errors';
-import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
+import { type PlatformPrincipal } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { platformRunModelService } from '@/lib/services/platformRunModelService';
 import { RunModelList } from './_components/RunModelList';
 import { RunModelListUnavailable } from './_components/RunModelListUnavailable';
@@ -16,8 +17,8 @@ import { RunModelListUnavailable } from './_components/RunModelListUnavailable';
  * MOTIR-7521; `docs/decisions/hosted-agent-run.md` §7 as amended by MOTIR-7522.
  *
  * Which models a hosted run may use, for every project. Every staff role reads
- * it; only a `superadmin` adds or removes. A non-staff request never reaches
- * this file: the `(admin)` layout answers the app's 404 first.
+ * it; only a `superadmin` adds or removes. A non-staff request gets the app's
+ * 404 from this page's gate as from the layout's (`pageGate.ts`, MOTIR-7613).
  *
  * ⚠️ NOT SHOWN HALF-KNOWN. The list is stored here, but whether each entry is
  * offered is motir-ai's answer, so when motir-ai cannot answer the page renders
@@ -30,7 +31,7 @@ export const metadata: Metadata = { title: 'Hosted-run models' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminRunModelsPage() {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const t = await getTranslations('platformAdmin.runModels');
 
   return (

@@ -7,7 +7,8 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import type { PlatformOrgOverviewDTO } from '@/lib/dto/platform';
-import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
+import { type PlatformPrincipal } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
 import { buildSpendSheet, parseSpendPeriod } from '@/lib/platform/spend';
 import { platformOrgBillingService } from '@/lib/services/platformOrgBillingService';
@@ -61,7 +62,7 @@ export default async function AdminOrganizationPage({
     months?: string;
   }>;
 }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const { orgId } = await params;
   const query = await searchParams;
   const tab = parseOrgTab(query.tab);
