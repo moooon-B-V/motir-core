@@ -25,6 +25,8 @@ const DIED = {
 describe('toFixDetailDto', () => {
   it('maps a dead run detail field by field', () => {
     expect(toFixDetailDto('run_died', DIED)).toEqual({
+      // A row stored before MOTIR-7589 has no entry key; it reads as null.
+      groupKey: null,
       repair: 'continue',
       check: null,
       queueReason: null,
