@@ -1,4 +1,8 @@
-import { type EnterpriseRequest, type Prisma } from '@/generated/prisma/client';
+import {
+  type EnterpriseRequest,
+  type EnterpriseRequestStatus,
+  type Prisma,
+} from '@/generated/prisma/client';
 
 // Data access for `enterprise_request` (Story MOTIR-7602 · Subtask MOTIR-7605) —
 // one row per Contact-sales request an org sends from Billing & plans.
@@ -31,6 +35,19 @@ export interface EnterpriseRequestCreateInput {
   note: string;
   tierKeyAtRequest: string | null;
 }
+
+/** A request with the org's name and the requester's display fields — the console's row. */
+export type EnterpriseRequestWithParties = Prisma.EnterpriseRequestGetPayload<{
+  include: {
+    organization: { select: { name: true } };
+    requestedBy: { select: { id: true; name: true; email: true } };
+  };
+}>;
+
+const WITH_PARTIES = {
+  organization: { select: { name: true } },
+  requestedBy: { select: { id: true, name: true, email: true } },
+} as const;
 
 export const enterpriseRequestRepository = {
   /**
@@ -69,5 +86,62 @@ export const enterpriseRequestRepository = {
   /** One request by id, whatever its state. */
   async findById(id: string, tx: Prisma.TransactionClient): Promise<EnterpriseRequest | null> {
     return tx.enterpriseRequest.findUnique({ where: { id } });
+  },
+
+  /** One request by id with its org and requester (the console's detail). */
+  async findByIdWithParties(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<EnterpriseRequestWithParties | null> {
+    return tx.enterpriseRequest.findUnique({ where: { id }, include: WITH_PARTIES });
+  },
+
+  /**
+   * One page of requests in `statuses` (every state when null), newest first,
+   * keyset-paged AFTER the row `afterId` (exclusive). `take` is the caller's
+   * page size plus one, so the caller can tell whether another page exists.
+   */
+  async listPage(
+    statuses: readonly EnterpriseRequestStatus[] | null,
+    afterId: string | null,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<EnterpriseRequestWithParties[]> {
+    return tx.enterpriseRequest.findMany({
+      where: statuses ? { status: { in: [...statuses] } } : {},
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: WITH_PARTIES,
+      take,
+      ...(afterId ? { cursor: { id: afterId }, skip: 1 } : {}),
+    });
+  },
+
+  /** How many requests stand in each state, across every org. */
+  async countByStatus(
+    tx: Prisma.TransactionClient,
+  ): Promise<{ status: EnterpriseRequestStatus; count: number }[]> {
+    const rows = await tx.enterpriseRequest.groupBy({ by: ['status'], _count: { _all: true } });
+    return rows.map((r) => ({ status: r.status, count: r._count._all }));
+  },
+
+  /**
+   * Move a request from `from` to `to` ONLY if it is still in `from`, and
+   * return how many rows moved (0 or 1). The condition is the race guard: two
+   * staff moving one request at once both issue this, the second blocks on the
+   * row lock until the first commits, re-evaluates `status = from`, and moves
+   * nothing. No read-then-write can stop that; the WHERE clause does.
+   */
+  async transitionIf(
+    id: string,
+    from: EnterpriseRequestStatus,
+    to: EnterpriseRequestStatus,
+    closedAt: Date | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.enterpriseRequest.updateMany({
+      where: { id, status: from },
+      data: { status: to, closedAt },
+    });
+    return result.count;
   },
 };

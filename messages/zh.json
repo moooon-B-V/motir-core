@@ -8711,6 +8711,9 @@
           },
           "fleet": {
             "stop": "已停止运行中的容器"
+          },
+          "enterprise_request": {
+            "transition": "变更了企业版请求的状态"
           }
         }
       }

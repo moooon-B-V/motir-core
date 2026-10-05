@@ -275,6 +275,19 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * on the record as exactly as partial as it was.
    */
   'fleet.stop': { kind: 'write', reason: 'required' },
+  /**
+   * An Enterprise request was MOVED through its states by staff (Story
+   * MOTIR-7602 · MOTIR-7608): `new → contacted → offer_sent → won`, or any open
+   * state → `lost`. At the `operator` degree of ADR §7. Target is the
+   * `organization` that sent it; metadata `{ requestId, from, to }`, which is
+   * also what the detail page's History is read from.
+   *
+   * `required`, with a reason the SERVICE writes ("Moved … from … to …") rather
+   * than one the operator types: the design gives a move no reason field (the
+   * history records who and when, and a state move carries no judgement a reason
+   * would explain), and a write is never `never`.
+   */
+  'enterprise_request.transition': { kind: 'write', reason: 'required' },
 } as const satisfies Record<
   string,
   { kind: PlatformAuditActionKind; reason: PlatformAuditReasonPolicy }

@@ -8715,6 +8715,9 @@
           },
           "fleet": {
             "stop": "Stopped the fleet containers"
+          },
+          "enterprise_request": {
+            "transition": "Moved an Enterprise request"
           }
         }
       }

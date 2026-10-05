@@ -539,3 +539,66 @@ export class ImpersonationCredentialRefusedError extends Error {
     this.name = 'ImpersonationCredentialRefusedError';
   }
 }
+
+/**
+ * No Enterprise request with this id (Story MOTIR-7602 · MOTIR-7608) — or the
+ * id was named with an organization it does not belong to. The detail page
+ * answers it with the app 404.
+ */
+export class PlatformEnterpriseRequestNotFoundError extends Error {
+  readonly code = 'PLATFORM_ENTERPRISE_REQUEST_NOT_FOUND';
+
+  constructor(readonly requestId: string) {
+    super(`No Enterprise request with id "${requestId}"`);
+    this.name = 'PlatformEnterpriseRequestNotFoundError';
+  }
+}
+
+/**
+ * The console's Enterprise-request list was asked for a filter or a cursor it
+ * does not know (MOTIR-7608). Carries the offending field.
+ */
+export class PlatformEnterpriseRequestQueryInvalidError extends Error {
+  readonly code = 'PLATFORM_ENTERPRISE_REQUEST_QUERY_INVALID';
+
+  constructor(readonly field: 'filter' | 'cursor') {
+    super(`The Enterprise-request query field "${field}" is not valid`);
+    this.name = 'PlatformEnterpriseRequestQueryInvalidError';
+  }
+}
+
+/**
+ * A move that is not an edge of the lifecycle (MOTIR-7608): only
+ * `new → contacted → offer_sent → won`, and any open state → `lost`. `won` and
+ * `lost` are terminal. The page never draws an illegal edge, so this is a
+ * Server Action reached without the page.
+ */
+export class EnterpriseRequestIllegalTransitionError extends Error {
+  readonly code = 'ENTERPRISE_REQUEST_ILLEGAL_TRANSITION';
+
+  constructor(
+    readonly from: string,
+    readonly to: string,
+  ) {
+    super(`An Enterprise request cannot move from "${from}" to "${to}"`);
+    this.name = 'EnterpriseRequestIllegalTransitionError';
+  }
+}
+
+/**
+ * The request was not in the state the move started from (MOTIR-7608) —
+ * another staff member moved it first. Nothing was changed and nothing was
+ * recorded. Carries the CURRENT state, and who put it there when a move did, so
+ * the page can say "{who} marked it {state}" and re-read.
+ */
+export class EnterpriseRequestStaleError extends Error {
+  readonly code = 'ENTERPRISE_REQUEST_STALE';
+
+  constructor(
+    readonly currentStatus: string,
+    readonly movedBy: { userId: string; email: string } | null,
+  ) {
+    super(`The Enterprise request is now "${currentStatus}"; the move was refused`);
+    this.name = 'EnterpriseRequestStaleError';
+  }
+}

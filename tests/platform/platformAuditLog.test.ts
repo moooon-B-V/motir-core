@@ -149,6 +149,9 @@ describe('append-only, as an application property', () => {
       // the newest `fleet.stop` on one target. A READ, added by the story and
       // missed here until its integration gate (MOTIR-7321) ran this file.
       'findLatestByTargetAndAction',
+      // MOTIR-7608's Enterprise-request History: one action's rows whose
+      // metadata names the request. A READ.
+      'listByActionAndMetadata',
       'listByActor',
       'listByOrganization',
       // MOTIR-1167's target read — Panel 9's "Support actions" log. A READ, so
@@ -236,6 +239,7 @@ describe('the reason rule', () => {
     // A platform admin's stop of one organisation's fleet (Story MOTIR-6905 ·
     // MOTIR-7317) — destructive and cross-tenant, so `superadmin` with a reason.
     'fleet.stop': 'required',
+    'enterprise_request.transition': 'required',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {

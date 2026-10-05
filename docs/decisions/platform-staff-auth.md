@@ -466,6 +466,7 @@ every consumer builds to.
 | Classify an **organization** internal-billing / remove it        | **MOTIR-4565** (Story MOTIR-4337) | `superadmin` | **yes**         | yes     |
 | Set the platform planning model per audience                     | **MOTIR-7227** (Story MOTIR-7220) | `superadmin` | **yes**         | yes     |
 | Stop one organisation's fleet containers                         | **MOTIR-7317** (Story MOTIR-6905) | `superadmin` | **yes**         | yes     |
+| Move an **Enterprise request** through its states                | **MOTIR-7608** (Story MOTIR-7602) | `operator`   | yes (service)   | yes     |
 | The audit-log **VIEW**, searchable + tamper-evident (hash chain) | 10.3 MOTIR-751                    | `superadmin` | no              | yes     |
 | Grant / revoke `platformRole`                                    | 10.3 (no card yet — §6)           | `superadmin` | yes             | yes     |
 
@@ -635,6 +636,17 @@ startedAt, expiresAt, endedAt }`, plus `supersededBy` / `revokedBecause` when th
 > `reason: 'required'`, with `targetKind: 'organization'`, and is written AFTER the effects with what
 > they achieved, failures included, as metadata. The preview it confirms from is a read under the
 > first row's `support` minimum, audited as `estate.read`.
+
+> **⚠️ AMENDED 2026-10-05 (Story MOTIR-7602 · MOTIR-7608).** The Enterprise-request row is the fourth
+> member from outside Epic 10, and the first at `operator` since MOTIR-1167: a move changes where a
+> sales conversation stands, not what an organisation is billed or can do, so it sits with the
+> day-1 support writes rather than the `superadmin` rows. Its action, `enterprise_request.transition`,
+> joins `PLATFORM_AUDIT_ACTIONS` as `reason: 'required'`, `targetKind: 'organization'`, metadata
+> `{ requestId, from, to }`, written in the same transaction as a CONDITIONAL update (`WHERE id = ? AND
+status = from`), so a move that loses a race to another staff member changes nothing and records
+> nothing (`ENTERPRISE_REQUEST_STALE`). The reason is written by the service, not typed: the design
+> gives a move no reason field. Listing and reading requests are the first row's `support` reads,
+> audited as `estate.read`.
 
 ---
 
