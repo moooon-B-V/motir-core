@@ -1,0 +1,14 @@
+-- MOTIR-7233 — drop the retired `project.ai_planner_model` column, the third and
+-- last release of its removal.
+--
+-- 1. Story MOTIR-7220 (subtask MOTIR-7228) stopped every reader and writer and
+--    marked `Project.aiPlannerModel` `@ignore`, leaving the column in place for
+--    the build still serving during that rollout.
+-- 2. Verification MOTIR-7230 read production on 2026-10-05: motir-core v963,
+--    image GH_SHA 1dd62a389e098bc1ca565ec9f0559f9e2e29b479, whose schema carries
+--    the `@ignore`, so nothing serving selects the column.
+-- 3. This release drops it.
+--
+-- `IF EXISTS` keeps it idempotent against a database a repair already cleaned.
+-- The card named the table `projects`; the model maps to `project`.
+ALTER TABLE "project" DROP COLUMN IF EXISTS "ai_planner_model";
