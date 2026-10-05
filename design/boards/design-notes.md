@@ -2249,3 +2249,23 @@ Chromium) in light and dark, every panel inspected, and no board in it scrolls h
 `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto` are not installed on the box that drew it.
 That stack is copied unchanged from the base mock. The substitute is WIDER than the real face, so
 every line that fits in the render fits in the product.
+
+---
+
+## Warm touches in the default Motir palette (MOTIR-7583)
+
+**Amends** `design/boards/board.mock.html`'s COLOURS only — no layout, copy or component change.
+Delta mock: `design/boards/board--motir-warm-touches.mock.html`. The spec — the role table, the
+measurement matrix, every consumer with its disposition, the two intensities and the hand-off — is
+`design/design-system/design-notes.md` § 8, because the change is a palette change and that is the
+palette's area.
+
+What the board panels show, today (left) vs proposed (right), light and dark: the Epic kind icon in
+warm orange beside the burnt-orange **Blocked** pill and the amber **High** chip it was measured
+against; the blue in-progress column, blue focus ring, ink **Create** button and ink brand tile
+unchanged; a selected backlog row and a focused row; every work-item type chip (Design takes citrine
+gold, its own hue apart from the orange Epic; Review and Verification keep the burnt orange); progress at 0 / 40 / 100% (the done/total meter stays green,
+upload and import bars warm); avatars, labels, the Blocked pill and a warning callout on the warmer
+peach; the planning-canvas glow and the donut ramp; the Appearance palette picker (unchanged); and
+the two intensities, subtle recommended. Revision 2 (2026-10-05) added the citrine Design hue
+after review asked for citrine too.

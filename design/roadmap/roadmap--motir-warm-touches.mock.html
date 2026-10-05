@@ -1,0 +1,3656 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Warm touches in the default Motir palette — roadmap (MOTIR-7583)</title>
+    <!--
+      DELTA MOCK — Subtask MOTIR-7583 (Story MOTIR-7582), revision 3. Spec:
+      design/roadmap/design-notes.md § "Warm touches in the default Motir palette (MOTIR-7583)"
+      and design/design-system/design-notes.md § 8.9.
+
+      IT EDITS NO EXISTING MOCK. It amends design/roadmap/roadmap.mock.html's COLOURS only.
+      Every pair shows today's motir palette and the proposal by toggling ONE attribute,
+      data-proposal. Node markup mirrors components/planning/WorkItemNode.tsx.
+    -->
+    <style>
+      /* ── TOKEN LAYER — read from packages/design-system/theme.css on origin/main ──
+         Tier-0 values: the motir light block, its dark companion, and the @theme
+         base for the few names the motir blocks leave alone. Tier-3: the base
+         element block, verbatim (var() references only). Shape: @theme. */
+      :root {
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+      }
+      .wt-scope {
+        --color-accent: #2563c9;
+        --color-accent-green: #18804a;
+        --color-accent-orange: #c2410c;
+        --color-accent-teal: #0e8f86;
+        --color-background: #ffffff;
+        --color-border: #e2e4e9;
+        --color-canvas: #e6e8ed;
+        --color-charcoal: #20242a;
+        --color-destructive: #c92a2a;
+        --color-foreground: #16191d;
+        --color-hairline-strong: #c8ccd3;
+        --color-info: #155bc4;
+        --color-link: #155bc4;
+        --color-muted: #eef0f3;
+        --color-primary: #155bc4;
+        --color-primary-fill: #1a1d21;
+        --color-primary-foreground: #ffffff;
+        --color-slate: #565c64;
+        --color-stone: #8a8f98;
+        --color-success: #18804a;
+        --color-surface: #eef0f3;
+        --color-surface-soft: #f8f9fa;
+        --color-tint-lavender: #e4e6f3;
+        --color-tint-mint: #d9efe1;
+        --color-tint-peach: #f7e6d6;
+        --color-tint-rose: #f6dfe8;
+        --color-tint-sky: #dde9f6;
+        --color-tint-yellow: #f6f1d6;
+        --color-warning: #c2410c;
+        --focus-ring-color: var(--color-primary);
+      }
+      .wt-scope[data-theme='dark'] {
+        --color-accent: #5b9dff;
+        --color-accent-green: #34b86e;
+        --color-accent-orange: #f08a4b;
+        --color-accent-teal: #2db6a8;
+        --color-background: #0c0d0f;
+        --color-border: #282a2e;
+        --color-canvas: #08090b;
+        --color-charcoal: #d7d9dd;
+        --color-destructive: #d83847;
+        --color-foreground: #edeef0;
+        --color-hairline-strong: #3a3d42;
+        --color-info: #7db1ff;
+        --color-link: #7db1ff;
+        --color-muted: #18191c;
+        --color-primary: #7db1ff;
+        --color-primary-fill: #edeef0;
+        --color-primary-foreground: #0c0d0f;
+        --color-slate: #a9adb5;
+        --color-stone: #696e77;
+        --color-success: #34b86e;
+        --color-surface: #18191c;
+        --color-surface-soft: #141517;
+        --color-tint-lavender: #1f2236;
+        --color-tint-mint: #15271e;
+        --color-tint-peach: #2e2418;
+        --color-tint-rose: #2f1c26;
+        --color-tint-sky: #15233a;
+        --color-tint-yellow: #2a2716;
+        --color-warning: #f08a4b;
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── THE PROPOSAL — the only values this design adds. Recommended: subtle. ── */
+      .wt-scope[data-proposal] {
+        --color-accent: #d66000;
+        --color-tint-peach: #fde0c8;
+        --color-tint-yellow: #fdf0c6;
+      }
+      .wt-scope[data-theme='dark'][data-proposal] {
+        --color-accent: #fa5500;
+        --color-tint-peach: #36230f;
+        --color-tint-yellow: #302a12;
+      }
+      .wt-scope {
+        --el-accent: var(--color-primary-fill);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-avatar-fallback: var(--color-info);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-canvas: var(--color-canvas);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-card: var(--color-background);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-danger: var(--color-destructive);
+        --el-epic-accent: var(--color-accent);
+        --el-highlight: var(--color-accent);
+        --el-info: var(--color-info);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-link: var(--color-link);
+        --el-muted: var(--color-muted);
+        --el-page-bg: var(--color-background);
+        --el-priority-high: #ab6400;
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-low: var(--color-info);
+        --el-priority-medium: var(--color-slate);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-role-custom: var(--color-tint-peach);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-status-blocked: var(--color-warning);
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-implemented: var(--color-charcoal);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: #113264;
+        --el-status-todo: var(--color-stone);
+        --el-success: var(--color-success);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-text: var(--color-foreground);
+        --el-text-inverted: var(--color-background);
+        --el-text-secondary: var(--color-slate);
+        --el-text-strong: var(--color-charcoal);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-bug: var(--color-destructive);
+        --el-type-choice: var(--color-charcoal);
+        --el-type-chore: var(--color-slate);
+        --el-type-code: var(--color-info);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-design: var(--color-accent);
+        --el-type-epic: var(--color-accent);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-story: var(--color-accent-green);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-task: var(--color-info);
+        --el-type-test: var(--color-success);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-warning: var(--color-warning);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-progress-fill: var(--color-primary-fill);
+        --focus-ring-color: var(--color-primary);
+      }
+      .wt-scope[data-theme='dark'] {
+        --el-priority-high: var(--color-warning);
+        --el-status-in-review: #c2e6ff;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+      }
+      /* the NEW role the code card adds: progress takes the warm accent in motir only */
+      .wt-scope[data-proposal] {
+        --el-progress-fill: var(--color-accent);
+        --el-type-design: #746019; /* citrine — Citrine's light --color-primary, Mirotone yellow-700 */
+      }
+      .wt-scope[data-theme='dark'][data-proposal] {
+        --el-type-design: #ffd02f; /* citrine — Miro Sunglow, Citrine's dark --color-primary */
+      }
+      /* the REJECTED "a bit more colourful" intensity — drawn for comparison only */
+      .wt-scope[data-proposal='colourful'] {
+        --wt-chip-mix: 22%;
+      }
+      .wt-scope[data-theme='dark'][data-proposal='colourful'] {
+      }
+
+      *,
+      ::before,
+      ::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        border: 0 solid;
+      }
+      body {
+        font-family: var(--font-sans);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+      }
+      body.wt-sheet {
+        background: var(--el-surface-soft);
+        padding: 32px;
+      }
+      .wt-scope {
+        --wt-chip-mix: 14%;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+      }
+      .wt-sheet-head {
+        max-width: 1240px;
+        margin: 0 auto 28px;
+      }
+      .wt-sheet-title {
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .wt-sheet-lede {
+        margin-top: 6px;
+        max-width: 92ch;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .wt-panel {
+        max-width: 1240px;
+        margin: 0 auto 36px;
+      }
+      .wt-panel-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-bottom: 4px;
+      }
+      .wt-panel-note {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin-bottom: 12px;
+        max-width: 110ch;
+      }
+      .wt-stack {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+      .wt-frame {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .wt-frame-cap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .wt-tag {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-muted);
+      }
+      .wt-tag-rec {
+        background: var(--el-tint-mint);
+      }
+      .wt-ico {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .wt-ico-sm {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .wt-key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .wt-hue {
+        color: var(--wt-hue);
+      }
+      .wt-road {
+        position: relative;
+        padding: 22px;
+        background: var(--el-canvas);
+      }
+      .wt-road-grid {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 34px 46px;
+      }
+      .wt-road-edges {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: visible;
+      }
+      .wt-edge {
+        fill: none;
+        stroke-width: 2.2;
+        stroke-linecap: round;
+      }
+      .wt-edge-committed {
+        stroke: var(--el-canvas-edge-committed);
+      }
+      .wt-edge-pending {
+        stroke: var(--el-canvas-edge-pending);
+        stroke-dasharray: 2 5;
+      }
+      .wt-edge-warning {
+        stroke: var(--el-warning);
+      }
+      .wt-node {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-height: 132px;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+        padding: 14px;
+      }
+      .wt-node-here {
+        border-color: var(--el-accent);
+      }
+      .wt-node-done {
+        background: var(--el-tint-sky);
+        box-shadow: var(--shadow-subtle);
+      }
+      .wt-node-ready {
+        background: var(--el-tint-mint);
+      }
+      .wt-node-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .wt-node-body {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .wt-node-tile {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        flex: none;
+        border-radius: var(--radius-control);
+      }
+      .wt-node-main {
+        min-width: 0;
+        flex: 1;
+      }
+      .wt-node-idline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .wt-node-title {
+        margin-top: 2px;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.35;
+        color: var(--el-text);
+      }
+      .wt-node-struck {
+        text-decoration: line-through;
+        color: var(--el-text-secondary);
+      }
+      .wt-node-meter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: auto;
+        padding-top: 10px;
+      }
+      .wt-node-track {
+        flex: 1;
+        height: 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        overflow: hidden;
+      }
+      .wt-node-fill {
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-success);
+      }
+      .wt-node-count {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .wt-npill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 6px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+      .wt-npill-here {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .wt-npill-ready {
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .wt-npill-done {
+        background: var(--el-text-secondary);
+        color: var(--el-text-inverted);
+      }
+      .wt-ok {
+        color: var(--el-success);
+      }
+      .wt-chev {
+        margin-left: auto;
+        color: var(--el-text-secondary);
+      }
+      .wt-bg-tint-rose {
+        background: var(--el-tint-rose);
+      }
+      .wt-bg-tint-lavender {
+        background: var(--el-tint-lavender);
+      }
+      .wt-bg-tint-sky {
+        background: var(--el-tint-sky);
+      }
+      .wt-bg-tint-mint {
+        background: var(--el-tint-mint);
+      }
+      .wt-bg-tint-peach {
+        background: var(--el-tint-peach);
+      }
+      .wt-bg-tint-yellow {
+        background: var(--el-tint-yellow);
+      }
+      .wt-bg-muted {
+        background: var(--el-muted);
+      }
+      .wt-road-legend {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        margin-top: 18px;
+        font-size: 12px;
+        color: var(--el-text-strong);
+      }
+      .wt-road-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .wt-mtype {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 0 6px;
+        font-size: 10.5px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        background: color-mix(in srgb, var(--wt-hue) 18%, var(--el-page-bg));
+      }
+    </style>
+  </head>
+  <body class="wt-sheet">
+    <header class="wt-sheet-head">
+      <h1 class="wt-sheet-title">Warm touches in the default Motir palette — the roadmap</h1>
+      <p class="wt-sheet-lede">
+        What the new colours add on /roadmap. In every pair the top frame is what ships today and
+        the bottom one is the recommended proposal. A roadmap node draws a kind ICON, never a
+        work-type chip (the Manual chip is the one exception), so the citrine Design hue does not
+        reach the roadmap. What changes is the Epic glyph and the peach and yellow tints, and
+        nothing else.
+      </p>
+    </header>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">R1 · Root level — light</h2>
+      <p class="wt-panel-note">
+        The roadmap's root is your epics, so the orange lands hardest here: every root node's Epic
+        glyph turns from the link blue to the warm orange, on its rose tile (3.01:1, at the 3.0
+        floor; the tile is aria-hidden and the key and title carry the meaning). The Blocked chip
+        (peach) and the Planning chip (yellow) warm a little. The ink You-are-here pill and border,
+        the green progress meters, the mint Ready wash, the sky Done card and every edge are
+        unchanged.
+      </p>
+      <div class="wt-stack">
+        <div class="wt-scope wt-frame" data-theme="light">
+          <div class="wt-frame-cap">Light · today (shipped)</div>
+          <div class="wt-road">
+            <div class="wt-road-grid">
+              <svg
+                class="wt-road-edges"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M31 22 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M64 22 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-pending"
+                  d="M31 78 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-warning"
+                  d="M64 78 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
+              <div class="wt-node wt-node-done">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-done"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" /></svg
+                    >Done</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-119</span></div>
+                    <div class="wt-node-title wt-node-struck">Sign in with a passkey</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="7 of 7 done">
+                    <div class="wt-node-fill" style="width: 100%"></div>
+                  </div>
+                  <span class="wt-node-count">7/7</span>
+                </div>
+              </div>
+              <div class="wt-node wt-node-here">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-here">You are here</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-120</span></div>
+                    <div class="wt-node-title">Onboarding revamp</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="3 of 8 done">
+                    <div class="wt-node-fill" style="width: 38%"></div>
+                  </div>
+                  <span class="wt-node-count">3/8</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-sky"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >In progress</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-121</span></div>
+                    <div class="wt-node-title">Public roadmap</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="5 of 9 done">
+                    <div class="wt-node-fill" style="width: 56%"></div>
+                  </div>
+                  <span class="wt-node-count">5/9</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-peach"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" x2="12" y1="8" y2="12" />
+                      <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                    >Blocked</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-122</span></div>
+                    <div class="wt-node-title">Billing v2</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="1 of 6 done">
+                    <div class="wt-node-fill" style="width: 17%"></div>
+                  </div>
+                  <span class="wt-node-count">1/6</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-yellow"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >Planning</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-123</span></div>
+                    <div class="wt-node-title">Import from Jira</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 4 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/4</span>
+                </div>
+              </div>
+              <div class="wt-node wt-node-ready">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-ready"
+                    ><span class="wt-ok"
+                      ><svg
+                        class="wt-ico-sm"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" /></svg></span
+                    >Ready</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-124</span></div>
+                    <div class="wt-node-title">Mobile web</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 5 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/5</span>
+                </div>
+              </div>
+            </div>
+            <div class="wt-road-legend">
+              <span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-committed" d="M2 6H31" /></svg
+                >Blocks</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-pending" d="M2 6H31" /></svg
+                >Planned</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-warning" d="M2 6H31" /></svg
+                >Crosses a sprint</span
+              >
+            </div>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+          <div class="wt-frame-cap">
+            Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span>
+          </div>
+          <div class="wt-road">
+            <div class="wt-road-grid">
+              <svg
+                class="wt-road-edges"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M31 22 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M64 22 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-pending"
+                  d="M31 78 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-warning"
+                  d="M64 78 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
+              <div class="wt-node wt-node-done">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-done"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" /></svg
+                    >Done</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-119</span></div>
+                    <div class="wt-node-title wt-node-struck">Sign in with a passkey</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="7 of 7 done">
+                    <div class="wt-node-fill" style="width: 100%"></div>
+                  </div>
+                  <span class="wt-node-count">7/7</span>
+                </div>
+              </div>
+              <div class="wt-node wt-node-here">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-here">You are here</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-120</span></div>
+                    <div class="wt-node-title">Onboarding revamp</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="3 of 8 done">
+                    <div class="wt-node-fill" style="width: 38%"></div>
+                  </div>
+                  <span class="wt-node-count">3/8</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-sky"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >In progress</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-121</span></div>
+                    <div class="wt-node-title">Public roadmap</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="5 of 9 done">
+                    <div class="wt-node-fill" style="width: 56%"></div>
+                  </div>
+                  <span class="wt-node-count">5/9</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-peach"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" x2="12" y1="8" y2="12" />
+                      <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                    >Blocked</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-122</span></div>
+                    <div class="wt-node-title">Billing v2</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="1 of 6 done">
+                    <div class="wt-node-fill" style="width: 17%"></div>
+                  </div>
+                  <span class="wt-node-count">1/6</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-yellow"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >Planning</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-123</span></div>
+                    <div class="wt-node-title">Import from Jira</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 4 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/4</span>
+                </div>
+              </div>
+              <div class="wt-node wt-node-ready">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-ready"
+                    ><span class="wt-ok"
+                      ><svg
+                        class="wt-ico-sm"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" /></svg></span
+                    >Ready</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-124</span></div>
+                    <div class="wt-node-title">Mobile web</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 5 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/5</span>
+                </div>
+              </div>
+            </div>
+            <div class="wt-road-legend">
+              <span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-committed" d="M2 6H31" /></svg
+                >Blocks</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-pending" d="M2 6H31" /></svg
+                >Planned</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-warning" d="M2 6H31" /></svg
+                >Crosses a sprint</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">R2 · Root level — dark</h2>
+      <p class="wt-panel-note">
+        The same level on the dark canvas: the orange Epic glyph is 4.84:1 on its rose tile.
+      </p>
+      <div class="wt-stack">
+        <div class="wt-scope wt-frame" data-theme="dark">
+          <div class="wt-frame-cap">Dark · today (shipped)</div>
+          <div class="wt-road">
+            <div class="wt-road-grid">
+              <svg
+                class="wt-road-edges"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M31 22 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M64 22 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-pending"
+                  d="M31 78 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-warning"
+                  d="M64 78 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
+              <div class="wt-node wt-node-done">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-done"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" /></svg
+                    >Done</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-119</span></div>
+                    <div class="wt-node-title wt-node-struck">Sign in with a passkey</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="7 of 7 done">
+                    <div class="wt-node-fill" style="width: 100%"></div>
+                  </div>
+                  <span class="wt-node-count">7/7</span>
+                </div>
+              </div>
+              <div class="wt-node wt-node-here">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-here">You are here</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-120</span></div>
+                    <div class="wt-node-title">Onboarding revamp</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="3 of 8 done">
+                    <div class="wt-node-fill" style="width: 38%"></div>
+                  </div>
+                  <span class="wt-node-count">3/8</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-sky"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >In progress</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-121</span></div>
+                    <div class="wt-node-title">Public roadmap</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="5 of 9 done">
+                    <div class="wt-node-fill" style="width: 56%"></div>
+                  </div>
+                  <span class="wt-node-count">5/9</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-peach"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" x2="12" y1="8" y2="12" />
+                      <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                    >Blocked</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-122</span></div>
+                    <div class="wt-node-title">Billing v2</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="1 of 6 done">
+                    <div class="wt-node-fill" style="width: 17%"></div>
+                  </div>
+                  <span class="wt-node-count">1/6</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-yellow"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >Planning</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-123</span></div>
+                    <div class="wt-node-title">Import from Jira</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 4 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/4</span>
+                </div>
+              </div>
+              <div class="wt-node wt-node-ready">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-ready"
+                    ><span class="wt-ok"
+                      ><svg
+                        class="wt-ico-sm"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" /></svg></span
+                    >Ready</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-124</span></div>
+                    <div class="wt-node-title">Mobile web</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 5 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/5</span>
+                </div>
+              </div>
+            </div>
+            <div class="wt-road-legend">
+              <span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-committed" d="M2 6H31" /></svg
+                >Blocks</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-pending" d="M2 6H31" /></svg
+                >Planned</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-warning" d="M2 6H31" /></svg
+                >Crosses a sprint</span
+              >
+            </div>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+          <div class="wt-frame-cap">
+            Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span>
+          </div>
+          <div class="wt-road">
+            <div class="wt-road-grid">
+              <svg
+                class="wt-road-edges"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M31 22 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M64 22 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-pending"
+                  d="M31 78 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-warning"
+                  d="M64 78 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
+              <div class="wt-node wt-node-done">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-done"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" /></svg
+                    >Done</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-119</span></div>
+                    <div class="wt-node-title wt-node-struck">Sign in with a passkey</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="7 of 7 done">
+                    <div class="wt-node-fill" style="width: 100%"></div>
+                  </div>
+                  <span class="wt-node-count">7/7</span>
+                </div>
+              </div>
+              <div class="wt-node wt-node-here">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-here">You are here</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-120</span></div>
+                    <div class="wt-node-title">Onboarding revamp</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="3 of 8 done">
+                    <div class="wt-node-fill" style="width: 38%"></div>
+                  </div>
+                  <span class="wt-node-count">3/8</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-sky"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >In progress</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-121</span></div>
+                    <div class="wt-node-title">Public roadmap</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="5 of 9 done">
+                    <div class="wt-node-fill" style="width: 56%"></div>
+                  </div>
+                  <span class="wt-node-count">5/9</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-peach"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" x2="12" y1="8" y2="12" />
+                      <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                    >Blocked</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-122</span></div>
+                    <div class="wt-node-title">Billing v2</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="1 of 6 done">
+                    <div class="wt-node-fill" style="width: 17%"></div>
+                  </div>
+                  <span class="wt-node-count">1/6</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-yellow"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >Planning</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-123</span></div>
+                    <div class="wt-node-title">Import from Jira</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 4 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/4</span>
+                </div>
+              </div>
+              <div class="wt-node wt-node-ready">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-ready"
+                    ><span class="wt-ok"
+                      ><svg
+                        class="wt-ico-sm"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" /></svg></span
+                    >Ready</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-rose" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-epic)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-124</span></div>
+                    <div class="wt-node-title">Mobile web</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 5 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/5</span>
+                </div>
+              </div>
+            </div>
+            <div class="wt-road-legend">
+              <span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-committed" d="M2 6H31" /></svg
+                >Blocks</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-pending" d="M2 6H31" /></svg
+                >Planned</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-warning" d="M2 6H31" /></svg
+                >Crosses a sprint</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="wt-panel">
+      <h2 class="wt-panel-title">R3 · A drilled level — light and dark</h2>
+      <p class="wt-panel-note">
+        Inside an epic. The Bug tile is peach, so it warms; the red bug glyph on it stays 4.33:1
+        light and 3.26:1 dark. Story, task and subtask tiles and glyphs, the Manual chip and the
+        in-review lavender are unchanged — once you leave the epics, very little moves.
+      </p>
+      <div class="wt-stack">
+        <div class="wt-scope wt-frame" data-theme="light">
+          <div class="wt-frame-cap">Light · today (shipped)</div>
+          <div class="wt-road">
+            <div class="wt-road-grid">
+              <svg
+                class="wt-road-edges"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M31 22 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M64 22 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-pending"
+                  d="M31 78 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-warning"
+                  d="M64 78 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-lavender"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >In review</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-mint" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-story)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 7v14" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-130</span></div>
+                    <div class="wt-node-title">Invite a teammate from the board</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="4 of 5 done">
+                    <div class="wt-node-fill" style="width: 80%"></div>
+                  </div>
+                  <span class="wt-node-count">4/5</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-peach"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" x2="12" y1="8" y2="12" />
+                      <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                    >Blocked</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-peach" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 20v-9" />
+                        <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+                        <path d="M14.12 3.88 16 2" />
+                        <path d="M21 21a4 4 0 0 0-3.81-4" />
+                        <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+                        <path d="M22 13h-4" />
+                        <path d="M3 21a4 4 0 0 1 3.81-4" />
+                        <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+                        <path d="M6 13H2" />
+                        <path d="m8 2 1.88 1.88" />
+                        <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-131</span></div>
+                    <div class="wt-node-title">Import drops labels</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node wt-node-ready">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-ready"
+                    ><span class="wt-ok"
+                      ><svg
+                        class="wt-ico-sm"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" /></svg></span
+                    >Ready</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-sky" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-task)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"
+                        />
+                        <path d="m9 11 3 3L22 4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-132</span></div>
+                    <div class="wt-node-title">Paginate the member list</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-yellow"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >Planning</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-mint" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-story)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 7v14" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-133</span></div>
+                    <div class="wt-node-title">Welcome checklist</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 3 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/3</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-muted"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >To do</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-lavender" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M13 5h8" />
+                        <path d="M13 12h8" />
+                        <path d="M13 19h8" />
+                        <path d="m3 17 2 2 4-4" />
+                        <path d="m3 7 2 2 4-4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline">
+                      <span class="wt-key">MOTIR-134</span
+                      ><span class="wt-mtype" style="--wt-hue: var(--el-type-manual)"
+                        ><span class="wt-hue"
+                          ><svg
+                            class="wt-ico-sm"
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                            <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                            <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                            <path
+                              d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                            /></svg></span
+                        >Manual</span
+                      >
+                    </div>
+                    <div class="wt-node-title">Copy for the empty state</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node wt-node-done">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-done"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" /></svg
+                    >Done</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-sky" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-task)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"
+                        />
+                        <path d="m9 11 3 3L22 4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-135</span></div>
+                    <div class="wt-node-title wt-node-struck">Seed the demo workspace</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="wt-road-legend">
+              <span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-committed" d="M2 6H31" /></svg
+                >Blocks</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-pending" d="M2 6H31" /></svg
+                >Planned</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-warning" d="M2 6H31" /></svg
+                >Crosses a sprint</span
+              >
+            </div>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+          <div class="wt-frame-cap">
+            Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span>
+          </div>
+          <div class="wt-road">
+            <div class="wt-road-grid">
+              <svg
+                class="wt-road-edges"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M31 22 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M64 22 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-pending"
+                  d="M31 78 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-warning"
+                  d="M64 78 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-lavender"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >In review</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-mint" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-story)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 7v14" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-130</span></div>
+                    <div class="wt-node-title">Invite a teammate from the board</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="4 of 5 done">
+                    <div class="wt-node-fill" style="width: 80%"></div>
+                  </div>
+                  <span class="wt-node-count">4/5</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-peach"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" x2="12" y1="8" y2="12" />
+                      <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                    >Blocked</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-peach" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 20v-9" />
+                        <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+                        <path d="M14.12 3.88 16 2" />
+                        <path d="M21 21a4 4 0 0 0-3.81-4" />
+                        <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+                        <path d="M22 13h-4" />
+                        <path d="M3 21a4 4 0 0 1 3.81-4" />
+                        <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+                        <path d="M6 13H2" />
+                        <path d="m8 2 1.88 1.88" />
+                        <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-131</span></div>
+                    <div class="wt-node-title">Import drops labels</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node wt-node-ready">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-ready"
+                    ><span class="wt-ok"
+                      ><svg
+                        class="wt-ico-sm"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" /></svg></span
+                    >Ready</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-sky" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-task)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"
+                        />
+                        <path d="m9 11 3 3L22 4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-132</span></div>
+                    <div class="wt-node-title">Paginate the member list</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-yellow"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >Planning</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-mint" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-story)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 7v14" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-133</span></div>
+                    <div class="wt-node-title">Welcome checklist</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 3 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/3</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-muted"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >To do</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-lavender" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M13 5h8" />
+                        <path d="M13 12h8" />
+                        <path d="M13 19h8" />
+                        <path d="m3 17 2 2 4-4" />
+                        <path d="m3 7 2 2 4-4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline">
+                      <span class="wt-key">MOTIR-134</span
+                      ><span class="wt-mtype" style="--wt-hue: var(--el-type-manual)"
+                        ><span class="wt-hue"
+                          ><svg
+                            class="wt-ico-sm"
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                            <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                            <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                            <path
+                              d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                            /></svg></span
+                        >Manual</span
+                      >
+                    </div>
+                    <div class="wt-node-title">Copy for the empty state</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node wt-node-done">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-done"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" /></svg
+                    >Done</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-sky" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-task)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"
+                        />
+                        <path d="m9 11 3 3L22 4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-135</span></div>
+                    <div class="wt-node-title wt-node-struck">Seed the demo workspace</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="wt-road-legend">
+              <span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-committed" d="M2 6H31" /></svg
+                >Blocks</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-pending" d="M2 6H31" /></svg
+                >Planned</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-warning" d="M2 6H31" /></svg
+                >Crosses a sprint</span
+              >
+            </div>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="dark">
+          <div class="wt-frame-cap">Dark · today (shipped)</div>
+          <div class="wt-road">
+            <div class="wt-road-grid">
+              <svg
+                class="wt-road-edges"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M31 22 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M64 22 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-pending"
+                  d="M31 78 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-warning"
+                  d="M64 78 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-lavender"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >In review</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-mint" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-story)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 7v14" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-130</span></div>
+                    <div class="wt-node-title">Invite a teammate from the board</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="4 of 5 done">
+                    <div class="wt-node-fill" style="width: 80%"></div>
+                  </div>
+                  <span class="wt-node-count">4/5</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-peach"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" x2="12" y1="8" y2="12" />
+                      <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                    >Blocked</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-peach" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 20v-9" />
+                        <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+                        <path d="M14.12 3.88 16 2" />
+                        <path d="M21 21a4 4 0 0 0-3.81-4" />
+                        <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+                        <path d="M22 13h-4" />
+                        <path d="M3 21a4 4 0 0 1 3.81-4" />
+                        <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+                        <path d="M6 13H2" />
+                        <path d="m8 2 1.88 1.88" />
+                        <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-131</span></div>
+                    <div class="wt-node-title">Import drops labels</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node wt-node-ready">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-ready"
+                    ><span class="wt-ok"
+                      ><svg
+                        class="wt-ico-sm"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" /></svg></span
+                    >Ready</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-sky" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-task)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"
+                        />
+                        <path d="m9 11 3 3L22 4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-132</span></div>
+                    <div class="wt-node-title">Paginate the member list</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-yellow"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >Planning</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-mint" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-story)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 7v14" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-133</span></div>
+                    <div class="wt-node-title">Welcome checklist</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 3 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/3</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-muted"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >To do</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-lavender" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M13 5h8" />
+                        <path d="M13 12h8" />
+                        <path d="M13 19h8" />
+                        <path d="m3 17 2 2 4-4" />
+                        <path d="m3 7 2 2 4-4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline">
+                      <span class="wt-key">MOTIR-134</span
+                      ><span class="wt-mtype" style="--wt-hue: var(--el-type-manual)"
+                        ><span class="wt-hue"
+                          ><svg
+                            class="wt-ico-sm"
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                            <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                            <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                            <path
+                              d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                            /></svg></span
+                        >Manual</span
+                      >
+                    </div>
+                    <div class="wt-node-title">Copy for the empty state</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node wt-node-done">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-done"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" /></svg
+                    >Done</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-sky" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-task)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"
+                        />
+                        <path d="m9 11 3 3L22 4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-135</span></div>
+                    <div class="wt-node-title wt-node-struck">Seed the demo workspace</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="wt-road-legend">
+              <span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-committed" d="M2 6H31" /></svg
+                >Blocks</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-pending" d="M2 6H31" /></svg
+                >Planned</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-warning" d="M2 6H31" /></svg
+                >Crosses a sprint</span
+              >
+            </div>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+          <div class="wt-frame-cap">
+            Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span>
+          </div>
+          <div class="wt-road">
+            <div class="wt-road-grid">
+              <svg
+                class="wt-road-edges"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M31 22 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-committed"
+                  d="M64 22 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-pending"
+                  d="M31 78 H36"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  class="wt-edge wt-edge-warning"
+                  d="M64 78 H69"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-lavender"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >In review</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-mint" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-story)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 7v14" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-130</span></div>
+                    <div class="wt-node-title">Invite a teammate from the board</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="4 of 5 done">
+                    <div class="wt-node-fill" style="width: 80%"></div>
+                  </div>
+                  <span class="wt-node-count">4/5</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-peach"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" x2="12" y1="8" y2="12" />
+                      <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                    >Blocked</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-peach" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-bug)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 20v-9" />
+                        <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+                        <path d="M14.12 3.88 16 2" />
+                        <path d="M21 21a4 4 0 0 0-3.81-4" />
+                        <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+                        <path d="M22 13h-4" />
+                        <path d="M3 21a4 4 0 0 1 3.81-4" />
+                        <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+                        <path d="M6 13H2" />
+                        <path d="m8 2 1.88 1.88" />
+                        <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-131</span></div>
+                    <div class="wt-node-title">Import drops labels</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node wt-node-ready">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-ready"
+                    ><span class="wt-ok"
+                      ><svg
+                        class="wt-ico-sm"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" /></svg></span
+                    >Ready</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-sky" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-task)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"
+                        />
+                        <path d="m9 11 3 3L22 4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-132</span></div>
+                    <div class="wt-node-title">Paginate the member list</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-tint-yellow"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >Planning</span
+                  ><span class="wt-chev"
+                    ><svg
+                      class="wt-ico"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-mint" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-story)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 7v14" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-133</span></div>
+                    <div class="wt-node-title">Welcome checklist</div>
+                  </div>
+                </div>
+                <div class="wt-node-meter">
+                  <div class="wt-node-track" role="progressbar" aria-label="0 of 3 done">
+                    <div class="wt-node-fill" style="width: 0%"></div>
+                  </div>
+                  <span class="wt-node-count">0/3</span>
+                </div>
+              </div>
+              <div class="wt-node">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-bg-muted"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="4" x2="20" y1="9" y2="9" />
+                      <line x1="4" x2="20" y1="15" y2="15" />
+                      <line x1="10" x2="8" y1="3" y2="21" />
+                      <line x1="16" x2="14" y1="3" y2="21" /></svg
+                    >To do</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-lavender" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-subtask)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M13 5h8" />
+                        <path d="M13 12h8" />
+                        <path d="M13 19h8" />
+                        <path d="m3 17 2 2 4-4" />
+                        <path d="m3 7 2 2 4-4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline">
+                      <span class="wt-key">MOTIR-134</span
+                      ><span class="wt-mtype" style="--wt-hue: var(--el-type-manual)"
+                        ><span class="wt-hue"
+                          ><svg
+                            class="wt-ico-sm"
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                            <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                            <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                            <path
+                              d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                            /></svg></span
+                        >Manual</span
+                      >
+                    </div>
+                    <div class="wt-node-title">Copy for the empty state</div>
+                  </div>
+                </div>
+              </div>
+              <div class="wt-node wt-node-done">
+                <div class="wt-node-status">
+                  <span class="wt-npill wt-npill-done"
+                    ><svg
+                      class="wt-ico-sm"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" /></svg
+                    >Done</span
+                  >
+                </div>
+                <div class="wt-node-body">
+                  <span class="wt-node-tile wt-bg-tint-sky" aria-hidden="true"
+                    ><span class="wt-hue" style="--wt-hue: var(--el-type-task)"
+                      ><svg
+                        class="wt-ico"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"
+                        />
+                        <path d="m9 11 3 3L22 4" /></svg></span
+                  ></span>
+                  <div class="wt-node-main">
+                    <div class="wt-node-idline"><span class="wt-key">MOTIR-135</span></div>
+                    <div class="wt-node-title wt-node-struck">Seed the demo workspace</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="wt-road-legend">
+              <span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-committed" d="M2 6H31" /></svg
+                >Blocks</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-pending" d="M2 6H31" /></svg
+                >Planned</span
+              ><span
+                ><svg viewBox="0 0 40 12" width="40" height="12" aria-hidden="true">
+                  <path class="wt-edge wt-edge-warning" d="M2 6H31" /></svg
+                >Crosses a sprint</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

@@ -13,7 +13,7 @@
 > `[data-palette='motir'][data-theme='dark']` companion.
 
 **Tagline:** Stark and editorial — cool greyscale surfaces + ink, an ink CTA, a
-single restrained cool-blue accent.
+restrained cool-blue accent and a few warm touches.
 **Inspiration:** Vercel's black-and-white precision and Linear's ultra-minimal
 (getdesign.md), mapped onto Motir's `--el-*` roles; the actual light/dark ramps
 and UI-state steps are drawn from **Radix Colors** (Slate / Blue / Red / Grass /
@@ -126,6 +126,41 @@ shape/feel token (`--radius-*` / `--spacing-*` / `--shadow-*` / `--height-*` /
 `--transition-*`). That disjointness — colour here, shape on the `data-style`
 axis — is what makes "style × palette" a product of two independent choices, and
 `tests/theme/paletteRegistry.test.ts` enforces it.
+
+## Warm touches (MOTIR-7582)
+
+Design MOTIR-7583 (`design/design-system/design-notes.md` §8) added a few warm
+touches without moving Motir's identity. The **decorative** accent left the link
+blue for a warm orange, the **Design** type took the Citrine palette's own gold
+(Citrine's `--color-primary`), and the peach / yellow washes warmed. Everything
+that carries identity or meaning stays where it was: the ink CTA, links, the
+focus ring, `--el-info`, selection, warning, priority-high and danger.
+
+| Role                                                                 | Light     | Dark      |
+| -------------------------------------------------------------------- | --------- | --------- |
+| Decorative highlight `--el-highlight` (via `--color-accent`)         | `#d66000` | `#fa5500` |
+| Epic type · epic accent · chart category 6 (ride the accent)         | `#d66000` | `#fa5500` |
+| Progress fill `--el-progress-fill` (upload / import bars) — new role | `#d66000` | `#fa5500` |
+| Design type `--el-type-design` — Citrine's `--color-primary`         | `#746019` | `#ffd02f` |
+| Editor focus `--el-editor-focus` — new role, stays on the link blue  | `#155bc4` | `#7db1ff` |
+| Peach wash `--el-tint-peach`                                         | `#fde0c8` | `#36230f` |
+| Yellow wash `--el-tint-yellow`                                       | `#fdf0c6` | `#302a12` |
+
+The two new roles exist so the orange could not leak where it does not belong:
+the progress bars used to paint `--el-accent` (the ink fill) and the Markdown
+editor's focus border and rings used to paint `--el-highlight`. Every other
+palette maps them back to exactly those tokens, so only Motir changes.
+
+The orange sits in a narrow slot. In light it has the burnt-orange warning on
+one side and the amber priority-high step on the other, and `#d66000` clears
+both at **ΔE2000 11.0** while holding **≥3.08:1** on every surface it paints on
+(3.80:1 on the page, 3.32:1 on `--el-surface`). In dark one light orange is the
+neighbour, so a deeper, redder `#fa5500` clears it at ΔE 11.5 and is ≥4.77:1 on
+every dark surface. The Epic glyph on its rose roadmap tile is the tightest
+figure in light, 3.01:1. Citrine is ≥5.36:1 / ≥11.98:1 on the surfaces and ΔE ≥
+10 from every status, priority and type hue. `--el-text-strong` on the warmed
+washes stays above 13:1. `tests/theme/motirWarmTouches.test.ts` pins every one
+of these pairs in both themes, plus the unchanged identity roles.
 
 ## Colour roles (the `--el-*` element-token layer)
 

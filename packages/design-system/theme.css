@@ -3274,6 +3274,16 @@
   --el-accent-on-surface: var(--color-primary);
   --el-accent-pressed: var(--color-primary-pressed);
   --el-highlight: var(--color-accent); /* brand pink — decorative accents */
+  /* Progress FILL for a determinate bar (MOTIR-7584) — upload / import bars.
+     Resolves to the CTA fill, which is what those bars painted before the role
+     existed, so every palette that does not override it is pixel-identical.
+     (The planning node's done/total meter is NOT this role: it means DONE and
+     stays --el-success.) */
+  --el-progress-fill: var(--color-primary-fill);
+  /* The rich-text editor's FOCUS indicator (MOTIR-7584). Resolves to the
+     decorative accent the editor borrowed before the role existed; a palette
+     whose accent is decorative-only (motir) points it back at its focus hue. */
+  --el-editor-focus: var(--color-accent);
 
   /* ── Surfaces ──────────────────────────────────────────────────── */
   --el-surface: var(--color-surface);
@@ -4079,7 +4089,12 @@
   --color-tint-sky: #dcecfa;
   --color-tint-yellow: #fef7d6;
   --color-warning: #dd5b00;
+  /* MOTIR-7584 — carried for the same reason as --el-status-approved below:
+     `motir` overrides all three, so a scoped amethyst tile under a motir page
+     would otherwise inherit motir's warm values. */
+  --el-editor-focus: var(--color-accent);
   --el-priority-high: var(--color-warning);
+  --el-progress-fill: var(--color-primary-fill);
   --el-sidebar-item-bg-hover: #eeede9;
   /* MOTIR-5139 — carried here because `evergreen` OVERRIDES it. A token this
      block omits leaks from the ANCESTOR into a scoped `motir` tile, so an
@@ -4095,6 +4110,7 @@
   --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
   --el-status-in-review: var(--color-primary);
   --el-status-planning: var(--color-accent-teal);
+  --el-type-design: var(--color-accent);
 }
 
 /* The base palette's DARK arm — only the tokens the global dark block
@@ -4376,19 +4392,24 @@
   --color-border: #e2e4e9;
 
   /* accent secondary — the cool-blue highlight replaces the warm brand pink */
-  --color-accent: #2563c9; /* cool-blue decorative highlight / epic & design hue */
+  /* WARM TOUCH (MOTIR-7582 / design MOTIR-7583 §8): the decorative accent —
+     highlight, Epic, chart segment 6, the progress fill — is a warm orange.
+     It sits in the narrow slot between the burnt-orange warning #c2410c and the
+     amber priority-high step #ab6400: ΔE2000 11.0 from each, and 3.08:1 or
+     better on every light surface (the selected row is the tightest). */
+  --color-accent: #d66000; /* warm orange — decorative highlight / epic hue */
   --color-accent-orange: #c2410c; /* review hue / warning — cooled */
   --color-accent-teal: #0e8f86; /* subtask / content hue */
   --color-accent-green: #18804a; /* story hue / success — cooled */
 
   /* card tints — cooled pastel washes (6 distinct feature hues; charcoal text
      on them clears AA in both themes) */
-  --color-tint-peach: #f7e6d6;
+  --color-tint-peach: #fde0c8; /* warmed (MOTIR-7582) — ink on it 12.38:1 */
   --color-tint-rose: #f6dfe8;
   --color-tint-mint: #d9efe1;
   --color-tint-lavender: #e4e6f3; /* cool indigo wash */
   --color-tint-sky: #dde9f6; /* cool blue wash — the accent tint */
-  --color-tint-yellow: #f6f1d6;
+  --color-tint-yellow: #fdf0c6; /* warmed (MOTIR-7582) — ink on it 13.70:1 */
 
   /* semantic */
   --color-success: #18804a;
@@ -4441,6 +4462,19 @@
      here and reads as "not yet coloured in", which is what the state is:
      ΔE 15.9 light / 11.8 dark from the nearest status. */
   --el-status-implemented: var(--color-charcoal);
+
+  /* Warm touches (MOTIR-7582 / design MOTIR-7583 §8) — the Tier-3 half.
+     Design takes the Citrine palette's own gold, its --color-primary #746019
+     (Mirotone yellow-700), so it reads apart from the orange Epic: ΔE2000 16.3
+     from its nearest glyph neighbour (priority-high) and 4.97:1 or better on
+     every light surface. Set directly, as --el-sidebar-item-bg-hover is, since
+     no Tier-0 source carries it. */
+  --el-type-design: #746019;
+  /* progress bars take the warm accent instead of the ink CTA fill */
+  --el-progress-fill: var(--color-accent);
+  /* the editor's focus border / rings stay the blue focus hue — the accent they
+     borrowed is decorative-only here now */
+  --el-editor-focus: var(--color-primary);
 }
 
 /* Motir (formerly Graphite) — dark companion. A cool near-black slate canvas; the CTA fill
@@ -4476,14 +4510,16 @@
   --color-primary-fill: #edeef0; /* near-white ink CTA fill (black-on AA) */
 
   /* cooled tints, dimmed for the near-black canvas */
-  --color-tint-peach: #2e2418;
+  --color-tint-peach: #36230f; /* warmed (MOTIR-7582) — ink on it 10.58:1 */
   --color-tint-rose: #2f1c26;
   --color-tint-mint: #15271e;
   --color-tint-lavender: #1f2236;
   --color-tint-sky: #15233a;
-  --color-tint-yellow: #2a2716;
+  --color-tint-yellow: #302a12; /* warmed (MOTIR-7582) — ink on it 10.14:1 */
 
-  --color-accent: #5b9dff; /* bright cool-blue highlight on dark */
+  /* warm touch — a deeper, redder orange than the dark warning #f08a4b clears
+     it by ΔE2000 11.5, and is 4.77:1 or better on every dark surface */
+  --color-accent: #fa5500; /* warm orange highlight on dark */
   --color-accent-orange: #f08a4b;
   --color-accent-teal: #2db6a8;
   --color-accent-green: #34b86e;
@@ -4519,6 +4555,14 @@
      themes so the light value cannot cascade into dark (the cascade trap this
      suite checks for). */
   --el-status-implemented: var(--color-charcoal);
+
+  /* Warm touches — the dark halves of the light block's Tier-3 overrides, in
+     BOTH themes for the cascade reason above. Design takes the Citrine
+     palette's dark --color-primary, Miro Sunglow #ffd02f: ΔE2000 27.5 from its
+     nearest glyph neighbour, 10.0:1 or better on every dark surface. */
+  --el-type-design: #ffd02f;
+  --el-progress-fill: var(--color-accent);
+  --el-editor-focus: var(--color-primary);
 }
 
 /* ── Palette: Evergreen (data-palette="evergreen") — Subtask 7.3.50 ──────────
