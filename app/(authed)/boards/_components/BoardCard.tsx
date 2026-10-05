@@ -17,9 +17,10 @@ import { ToFixTag, toFixTagId, toFixTagState } from '@/components/workItems/ToFi
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { formatStoryPoints } from '@/lib/estimation/scales';
 import type { BoardCardDto } from '@/lib/dto/boards';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import { planHoldKey, type PlanHoldDTO } from '@/lib/dto/plans';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
-import { planRowDestination } from '@/lib/planning/planDestination';
+import { planRowDestination, sessionHoldDestination } from '@/lib/planning/planDestination';
+import { sessionHolderSentence } from '@/components/issues/StatusHeldNotice';
 import { WorkItemActionsMenu } from '@/components/issues/actions/WorkItemActionsMenu';
 import { Avatar, PriorityValue } from '../../items/_components/issueCellPrimitives';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
@@ -286,20 +287,37 @@ function PlanFooterDoor({ plan }: { plan: PlanHoldDTO }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const qs = searchParams?.toString() ?? '';
-  const destination = planRowDestination({
-    planStatus: plan.planStatus,
-    planId: plan.planId,
-    sessionId: plan.sessionId,
-    host: `${pathname}${qs ? `?${qs}` : ''}`,
-    anchorKey: plan.anchorKey,
-    routes,
-  });
-  const highlight = () => onPlanFooterHover?.(plan.planId);
+  const host = `${pathname}${qs ? `?${qs}` : ''}`;
+  // A PLAN's door goes where `planRowDestination` sends it; an open SESSION's
+  // (MOTIR-7640) to the planning surface on that session — or nowhere, for a
+  // Visitor, whose footer is then a plain box.
+  const destination =
+    plan.kind === 'session'
+      ? sessionHoldDestination({
+          sessionId: plan.sessionId,
+          host,
+          anchorKey: plan.anchorKey,
+          routes,
+        })
+      : planRowDestination({
+          planStatus: plan.planStatus,
+          planId: plan.planId,
+          sessionId: plan.sessionId,
+          host,
+          anchorKey: plan.anchorKey,
+          routes,
+        });
+  const key = planHoldKey(plan);
+  const highlight = () => onPlanFooterHover?.(key);
   const clear = () => onPlanFooterHover?.(null);
+  const title =
+    plan.kind === 'session'
+      ? sessionHolderSentence(plan, tHeld)
+      : tHeld(`planState.${plan.planStatus}`);
   const props = {
-    title: tHeld(`planState.${plan.planStatus}`),
-    'data-plan-footer': plan.planId,
-    'data-plan-door': destination.kind,
+    title,
+    'data-plan-footer': key,
+    'data-plan-door': destination?.kind ?? 'none',
     onMouseEnter: highlight,
     onMouseLeave: clear,
     onFocus: highlight,
@@ -310,12 +328,21 @@ function PlanFooterDoor({ plan }: { plan: PlanHoldDTO }) {
     <span className="flex min-w-0 items-center gap-1.5">
       <PlanHoldMarker plan={plan} />
       <span className="flex-1" />
-      <span className="inline-flex shrink-0 items-center gap-1 font-medium group-hover/foot:underline">
-        <Sparkles aria-hidden className="h-3.5 w-3.5" />
-        {tHeld('reviewPlan')}
-      </span>
+      {destination ? (
+        <span className="inline-flex shrink-0 items-center gap-1 font-medium group-hover/foot:underline">
+          <Sparkles aria-hidden className="h-3.5 w-3.5" />
+          {tHeld(plan.kind === 'session' ? 'openSession' : 'reviewPlan')}
+        </span>
+      ) : null}
     </span>
   );
+  if (!destination) {
+    return (
+      <div title={title} data-plan-footer={key} data-plan-door="none" className={PLAN_FOOTER_CLASS}>
+        {content}
+      </div>
+    );
+  }
   if (destination.kind === 'plan-page') {
     return (
       <Link href={destination.href} {...props}>
@@ -323,15 +350,16 @@ function PlanFooterDoor({ plan }: { plan: PlanHoldDTO }) {
       </Link>
     );
   }
+  const href = destination.href;
   function onClick(event: MouseEvent<HTMLAnchorElement>) {
     // A modified or non-primary click keeps the real href (a new tab).
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
       return;
     event.preventDefault();
-    shallowPush(destination.href);
+    shallowPush(href);
   }
   return (
-    <a href={destination.href} onClick={onClick} {...props}>
+    <a href={href} onClick={onClick} {...props}>
       {content}
     </a>
   );
@@ -445,15 +473,15 @@ export function BoardCard({
       {planHold ? (
         <div
           ref={setNodeRef}
-          data-plan-id={planHold.planId}
+          data-plan-id={planHoldKey(planHold)}
           data-plan-shell=""
-          data-plan-outlined={highlightedPlanId === planHold.planId ? '' : undefined}
+          data-plan-outlined={highlightedPlanId === planHoldKey(planHold) ? '' : undefined}
           data-surface="card"
           data-tilt=""
           style={style}
           className={`${SHELL_CLASS} ${shellStateClass({
             refused: refusedByPlan,
-            outlined: highlightedPlanId === planHold.planId,
+            outlined: highlightedPlanId === planHoldKey(planHold),
             dragging: isDragging,
           })}`}
         >

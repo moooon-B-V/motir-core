@@ -105,6 +105,26 @@ export const planChangeSessionRepository = {
     });
   },
 
+  /** What the SESSION HOLD reads of the session a lock names (AMENDMENT 23 §5;
+   *  MOTIR-7640): whether it is open, its anchor, and who started it. */
+  async findHoldSubject(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    endedAt: Date | null;
+    targetKeys: string[];
+    createdBy: { id: string; name: string } | null;
+  } | null> {
+    return tx.planChangeSession.findUnique({
+      where: { id },
+      select: {
+        endedAt: true,
+        targetKeys: true,
+        createdBy: { select: { id: true, name: true } },
+      },
+    });
+  },
+
   /** This member's own most recent CONVERSATION for the scope, open or ended —
    *  the COPYABLE read (AMENDMENT 23 §6; MOTIR-7641): with no open session, the
    *  one that ended is what a new session may carry over. */

@@ -66,6 +66,7 @@ const INSTANCES: Record<string, () => Error> = {
     }),
   PlanTargetHeldError: () =>
     new PlanTargetHeldError({
+      kind: 'plan',
       statusKey: 'in_progress',
       itemKey: 'ACME-4',
       workItemId: 'wi_1',

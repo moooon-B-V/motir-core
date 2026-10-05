@@ -6,7 +6,7 @@ import type { WorkItemDto, WorkItemPlacementDto, WorkItemSummaryDto } from '@/li
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { PlanHeldByPlanDTO } from '@/lib/dto/plans';
 import { planRowDestination } from '@/lib/planning/planDestination';
 
 // The inline rail commits through the edit Server Actions + refreshes the route;
@@ -374,7 +374,8 @@ describe('CoreFieldsPanel — a PLAN holds the status (MOTIR-6267)', () => {
       ...workflow.statuses,
     ],
   };
-  const hold: PlanHoldDTO = {
+  const hold: PlanHeldByPlanDTO = {
+    kind: 'plan',
     itemKey: 'PROD-7',
     workItemId: 'wi_1',
     planId: 'pln_1',
@@ -390,7 +391,7 @@ describe('CoreFieldsPanel — a PLAN holds the status (MOTIR-6267)', () => {
     anchorKey: hold.anchorKey,
   }).href;
 
-  function renderHeld(planHold: PlanHoldDTO | null, { readOnly = false } = {}) {
+  function renderHeld(planHold: PlanHeldByPlanDTO | null, { readOnly = false } = {}) {
     const tree = (
       <CoreFieldsPanel
         item={makeItem({ status: 'planning' })}

@@ -4236,8 +4236,11 @@
     "noActiveSprintCta": "Go to Backlog",
     "announcementHeld": "{key} returned. {line}",
     "announcementPlanHeld": "{key} returned. It is held by {plan}. {line}",
+    "announcementSessionHeld": "{key} returned. It is held by {session}. {line}",
     "planHold": {
       "marker": "Plan · {name}",
+      "sessionMarker": "Session · {name}",
+      "sessionSiblings": "{count, plural, =0 {No other item on this board is in this session.} one {# other item on this board is in this session.} other {# other items on this board are in this session.}}",
       "siblings": "{count, plural, =0 {No other item on this board is in this plan.} one {# other item on this board is in this plan.} other {# other items on this board are in this plan.}}"
     }
   },
@@ -11689,6 +11692,12 @@
       },
       "reviewPlan": "Review plan",
       "planHeldOption": "held by plan",
+      "sessionHeld": "Being planned in a conversation — status can't change until it ends.",
+      "sessionBy": "{name} is planning it with Motir AI.",
+      "sessionByYou": "You are planning it with Motir AI.",
+      "sessionByUnknown": "A teammate is planning it with Motir AI.",
+      "openSession": "Open the session",
+      "sessionHeldOption": "held by session",
       "planAndGate": "A <strong>{decision}</strong> is waiting on this item too — it can be decided once the plan is."
     },
     "decision": {

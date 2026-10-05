@@ -143,3 +143,28 @@ export function planRowDestination({
       return { kind: 'plan-page', href: planPage, reason: 'decided' };
   }
 }
+
+/**
+ * WHERE AN OPEN SESSION'S HOLD GOES (AMENDMENT 23 §5; MOTIR-7640) — the session
+ * form of {@link planRowDestination}, for the held line's **Open the session**
+ * door. A session hold has no plan, so it has no plan page to fall back to: a
+ * member lands on the planning surface on that session; a Visitor — to whom the
+ * planning workspace is not served — gets `null`, and the door is not drawn.
+ */
+export function sessionHoldDestination({
+  sessionId,
+  host,
+  anchorKey,
+  routes,
+}: {
+  sessionId: string;
+  host: string;
+  anchorKey?: string | null;
+  routes?: ReaderRoutes;
+}): { kind: 'planning-surface'; href: string } | null {
+  if (routes && routes.identifier !== null) return null;
+  return {
+    kind: 'planning-surface',
+    href: withPlanningOverlay(host, launchContext(sessionId, anchorKey, undefined)),
+  };
+}

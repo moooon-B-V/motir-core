@@ -712,50 +712,48 @@ export class PlanTargetHeldError extends WorkItemError {
   /** The held card's `KEY-n`. */
   readonly itemKey: string;
   readonly workItemId: string;
-  /** The plan holding it. */
-  readonly planId: string;
-  /** The plan's status — `generating` · `planned` · `stale` — which is the second
-   *  line a surface draws. */
-  readonly planStatus: 'generating' | 'planned' | 'stale';
-  /** The plan's SESSION, or null when it has none — `planRowDestination`'s key. */
-  readonly sessionId: string | null;
-  /** The plan's first anchor key — its session's `targetKeys[0]`, the way the
-   *  To-approve row reads it — or null. */
-  readonly anchorKey: string | null;
-  constructor(args: {
-    statusKey: string;
-    itemKey: string;
-    workItemId: string;
-    planId: string;
-    planStatus: 'generating' | 'planned' | 'stale';
-    sessionId: string | null;
-    anchorKey: string | null;
-  }) {
+  /** The whole hold — a PLAN's, or an open SESSION's (AMENDMENT 23 §5). */
+  readonly hold: PlanHoldDTO;
+  constructor(args: { statusKey: string } & PlanHoldDTO) {
+    const { statusKey, ...hold } = args;
     super(
-      `${args.itemKey} cannot be moved out of Planning while a plan is open: the plan is ` +
-        'rewriting this item, so its status is the plan’s until the plan is decided. Approve or ' +
-        'decline the plan, or withdraw the proposal that names this item.',
+      hold.kind === 'session'
+        ? `${hold.itemKey} cannot be moved out of Planning while a planning conversation holds it: ` +
+            'the card is being planned, so its status stays Planning until that conversation ends.'
+        : `${hold.itemKey} cannot be moved out of Planning while a plan is open: the plan is ` +
+            'rewriting this item, so its status is the plan’s until the plan is decided. Approve or ' +
+            'decline the plan, or withdraw the proposal that names this item.',
     );
     this.name = 'PlanTargetHeldError';
-    this.statusKey = args.statusKey;
-    this.itemKey = args.itemKey;
-    this.workItemId = args.workItemId;
-    this.planId = args.planId;
-    this.planStatus = args.planStatus;
-    this.sessionId = args.sessionId;
-    this.anchorKey = args.anchorKey;
+    this.statusKey = statusKey;
+    this.itemKey = hold.itemKey;
+    this.workItemId = hold.workItemId;
+    this.hold = hold as PlanHoldDTO;
   }
 
-  /** The wire payload every door returns under `plan` — AMENDMENT 21 §2's table. */
+  /** The plan holding it, or null for a session hold. */
+  get planId(): string | null {
+    return this.hold.planId;
+  }
+
+  /** The plan's undecided status, or null for a session hold. */
+  get planStatus(): PlanHoldDTO['planStatus'] {
+    return this.hold.planStatus;
+  }
+
+  /** The holding session — the plan's, or the session that holds it. */
+  get sessionId(): string | null {
+    return this.hold.sessionId;
+  }
+
+  get anchorKey(): string | null {
+    return this.hold.anchorKey;
+  }
+
+  /** The wire payload every door returns under `plan` — AMENDMENT 21 §2's table,
+   *  with AMENDMENT 23 §5's session form. */
   get payload(): PlanHoldDTO {
-    return {
-      itemKey: this.itemKey,
-      workItemId: this.workItemId,
-      planId: this.planId,
-      planStatus: this.planStatus,
-      sessionId: this.sessionId,
-      anchorKey: this.anchorKey,
-    };
+    return this.hold;
   }
 }
 

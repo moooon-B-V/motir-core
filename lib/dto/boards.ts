@@ -245,7 +245,12 @@ export interface BoardCardDto {
  * load a bounded set, so a client count would be wrong for a long lane.
  */
 export interface BoardPlanHoldSummaryDto {
-  planId: string;
+  /** A PLAN's hold, or an OPEN SESSION's (AMENDMENT 23 §5; MOTIR-7640). */
+  kind: 'plan' | 'session';
+  /** The plan, or null for a session hold. */
+  planId: string | null;
+  /** The holding session — a session hold's subject; a plan's session otherwise. */
+  sessionId: string | null;
   /** The plan's first anchor key (its session's `targetKeys[0]`), or null. */
   anchorKey: string | null;
   /** The plan's title, or null. */
@@ -399,7 +404,8 @@ export interface BoardProjectionDto {
    */
   sprint: SprintSummaryDto | null;
   /**
-   * Every plan that holds a loaded card, keyed by `planId` (MOTIR-6268) — the
+   * Every plan — or open session — that holds a loaded card, keyed by
+   * `planHoldKey` (MOTIR-6268; MOTIR-7640) — the
    * label fields and held count each card's plan footer and refusal read. Empty
    * when no loaded card is held.
    */

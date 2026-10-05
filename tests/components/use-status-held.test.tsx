@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { useStatusHeld } from '@/components/issues/useStatusHeld';
 import type { HeldTransitionDTO } from '@/lib/dto/approvalGate';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { PlanHeldByPlanDTO, PlanHoldDTO } from '@/lib/dto/plans';
 
 // The status control's HELD state (Story MOTIR-4887 · MOTIR-5528 · MOTIR-5530's
 // coverage floor) — seeded from the read, folded forward by a refusal and a move,
@@ -141,7 +141,8 @@ describe('useStatusHeld', () => {
     { ...statuses[0]!, id: 's0', key: 'planning', label: 'Planning', category: 'todo' },
     ...statuses,
   ];
-  const hold = (over: Partial<PlanHoldDTO> = {}): PlanHoldDTO => ({
+  const hold = (over: Partial<PlanHeldByPlanDTO> = {}): PlanHeldByPlanDTO => ({
+    kind: 'plan',
     itemKey: 'PROD-1',
     workItemId: 'wi_1',
     planId: 'pln_1',
@@ -413,6 +414,7 @@ describe('useStatusHeld — the mark (MOTIR-6676)', () => {
         markStatuses,
         'planning',
         {
+          kind: 'plan',
           itemKey: 'PROD-1',
           workItemId: 'wi_1',
           planId: 'pln_1',

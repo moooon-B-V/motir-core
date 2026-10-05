@@ -277,7 +277,21 @@ describe('the up-front read agrees with the guard — and the PlanStatus checkli
     ],
     // ── the other exclusions ──
     [
-      'a SESSION-only lock (planId null) — does not hold',
+      'a SESSION-only lock (planId null) on an OPEN session — holds (AMENDMENT 23 §5)',
+      true,
+      async () => {
+        const c = await seedCard();
+        const planId = await plannedModify(c.id);
+        const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+        await adminDb.planTargetLock.update({
+          where: { workItemId: c.id },
+          data: { planId: null, sessionId: plan.sessionId },
+        });
+        return c;
+      },
+    ],
+    [
+      'a SESSION-only lock whose session has ENDED — does not hold',
       false,
       async () => {
         const c = await seedCard();
@@ -286,6 +300,10 @@ describe('the up-front read agrees with the guard — and the PlanStatus checkli
         await adminDb.planTargetLock.update({
           where: { workItemId: c.id },
           data: { planId: null, sessionId: plan.sessionId },
+        });
+        await adminDb.planChangeSession.update({
+          where: { id: plan.sessionId! },
+          data: { endedAt: new Date(), endReason: 'idle' },
         });
         return c;
       },

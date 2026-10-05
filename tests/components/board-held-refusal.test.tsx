@@ -19,7 +19,8 @@ import {
 import { planRowDestination } from '@/lib/planning/planDestination';
 import { heldLineFromRefusal, readHeldRefusal } from '@/components/issues/heldRefusal';
 import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { PlanHeldByPlanDTO } from '@/lib/dto/plans';
+import type { BoardPlanHoldSummaryDto } from '@/lib/dto/boards';
 
 // THE BOARD REFUSES ON THE CARD (Story MOTIR-4887 · Subtask MOTIR-5529;
 // `design/boards/design-notes.md` § panel 2b). A dnd-kit drag is not driven in
@@ -45,7 +46,8 @@ const gate = (
   ...over,
 });
 
-const plan = (over: Partial<PlanHoldDTO> = {}): PlanHoldDTO => ({
+const plan = (over: Partial<PlanHeldByPlanDTO> = {}): PlanHeldByPlanDTO => ({
+  kind: 'plan',
   itemKey: 'PROD-7',
   workItemId: 'wi_a',
   planId: 'pln_a',
@@ -174,7 +176,14 @@ describe('BoardCardHeldRefusal — the PLAN refusal, in the footer slot (MOTIR-6
           held,
           close,
           planHolds: {
-            pln_a: { planId: 'pln_a', anchorKey: 'PROD-10', title: 'Import', heldCount: 3 },
+            pln_a: {
+              kind: 'plan',
+              planId: 'pln_a',
+              sessionId: null,
+              anchorKey: 'PROD-10',
+              title: 'Import',
+              heldCount: 3,
+            },
           },
           projectName: 'Motir',
         }}
@@ -263,10 +272,24 @@ describe('BoardCardHeldRefusal — the PLAN refusal, in the footer slot (MOTIR-6
 
 describe('planHoldName — the {name} rule', () => {
   it('anchor key, else title, else the project name', () => {
-    const holds = {
-      a: { planId: 'a', anchorKey: 'PROD-1', title: 'T', heldCount: 1 },
-      b: { planId: 'b', anchorKey: null, title: 'Import rewrite', heldCount: 1 },
-      c: { planId: 'c', anchorKey: null, title: '  ', heldCount: 1 },
+    const holds: Record<string, BoardPlanHoldSummaryDto> = {
+      a: {
+        kind: 'plan',
+        planId: 'a',
+        sessionId: null,
+        anchorKey: 'PROD-1',
+        title: 'T',
+        heldCount: 1,
+      },
+      b: {
+        kind: 'plan',
+        planId: 'b',
+        sessionId: null,
+        anchorKey: null,
+        title: 'Import rewrite',
+        heldCount: 1,
+      },
+      c: { kind: 'plan', planId: 'c', sessionId: null, anchorKey: null, title: '  ', heldCount: 1 },
     };
     expect(planHoldName({ planId: 'a', anchorKey: null }, holds, 'Motir')).toEqual({
       name: 'PROD-1',

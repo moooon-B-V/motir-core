@@ -58,7 +58,7 @@ import { BoardCardOverlay } from '@/app/(authed)/boards/_components/BoardCard';
 import { BoardHeldRefusalProvider } from '@/app/(authed)/boards/_components/BoardHeldRefusal';
 import { planRowDestination } from '@/lib/planning/planDestination';
 import type { BoardCardDto, BoardColumnDto, BoardProjectionDto } from '@/lib/dto/boards';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { PlanHeldByPlanDTO } from '@/lib/dto/plans';
 
 afterEach(() => {
   cleanup();
@@ -67,8 +67,11 @@ afterEach(() => {
   dnd.props = null;
 });
 
-function hold(over: Partial<PlanHoldDTO> & { itemKey: string; workItemId: string }): PlanHoldDTO {
+function hold(
+  over: Partial<PlanHeldByPlanDTO> & { itemKey: string; workItemId: string },
+): PlanHeldByPlanDTO {
   return {
+    kind: 'plan',
     planId: 'pln_a',
     planStatus: 'planned',
     sessionId: 'pcs_a',
@@ -139,8 +142,22 @@ const projection: BoardProjectionDto = {
   truncated: false,
   sprint: null,
   planHolds: {
-    pln_a: { planId: 'pln_a', anchorKey: 'PROD-10', title: 'Import', heldCount: 3 },
-    pln_b: { planId: 'pln_b', anchorKey: null, title: 'Saved views', heldCount: 1 },
+    pln_a: {
+      kind: 'plan',
+      planId: 'pln_a',
+      sessionId: null,
+      anchorKey: 'PROD-10',
+      title: 'Import',
+      heldCount: 3,
+    },
+    pln_b: {
+      kind: 'plan',
+      planId: 'pln_b',
+      sessionId: null,
+      anchorKey: null,
+      title: 'Saved views',
+      heldCount: 1,
+    },
   },
   columns: [
     column({
