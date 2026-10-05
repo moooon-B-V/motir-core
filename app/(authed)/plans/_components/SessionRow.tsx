@@ -102,6 +102,10 @@ function StateChip({ state, label }: { state: PlanSessionStateDto; label: React.
       return <Pill severity="success">{label}</Pill>;
     case 'declined':
       return <Pill tone="archived">{label}</Pill>;
+    case 'closed':
+      // Motir ended the session (AMENDMENT 23 §1). Its look is MOTIR-7634's
+      // design and lands with MOTIR-7642; until then it keeps the map TOTAL.
+      return <Pill tone="neutral">{label}</Pill>;
   }
 }
 

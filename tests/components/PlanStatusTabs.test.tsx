@@ -17,7 +17,15 @@ import { PLAN_STATE_PARAM } from '@/lib/planning/planSessionFilter';
 // successor of the status tab strip (MOTIR-3241). The page-level wiring is
 // `tests/planning/plansSessionListPage.test.tsx`; the strip itself is pinned here.
 
-const COUNTS = { none: 2, generating: 1, planned: 3, stale: 0, approved: 9, declined: 4 };
+const COUNTS = {
+  none: 2,
+  generating: 1,
+  planned: 3,
+  stale: 0,
+  approved: 9,
+  declined: 4,
+  closed: 5,
+};
 
 beforeEach(() => {
   mocks.push.mockReset();
@@ -29,20 +37,21 @@ const option = (name: string) => screen.getByRole('button', { name: new RegExp(`
 const group = () => screen.getByRole('group', { name: 'Filter conversations by plan state' });
 
 describe('the filter’s a11y contract', () => {
-  it('is a LABELLED group of seven real buttons — All first, then every state', () => {
+  it('is a LABELLED group of eight real buttons — All first, then every state', () => {
     renderWithIntl(<PlanStatusTabs value={null} counts={COUNTS} />);
 
     const labels = within(group())
       .getAllByRole('button')
       .map((b) => b.textContent);
     expect(labels).toEqual([
-      'All19',
+      'All24',
       'No plan yet2',
       'Writing1',
       'Waiting for approval3',
       'Stale0',
       'Approved9',
       'Declined4',
+      'Closed5',
     ]);
     expect(option('All').getAttribute('aria-pressed')).toBe('true');
     expect(screen.queryByRole('tablist')).toBeNull();

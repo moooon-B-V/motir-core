@@ -41,6 +41,10 @@ function dto(over: Partial<PlanSessionRowDto> = {}): PlanSessionRowDto {
     latestPlan: { id: 'p_1', status: 'planned', title: 'The plan' },
     planCount: 1,
     seed: null,
+    state: 'planned',
+    endedAt: null,
+    endReason: null,
+    endedBy: null,
     ...over,
   };
 }

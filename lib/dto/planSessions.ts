@@ -7,10 +7,13 @@ import type { PlanStatusDto } from '@/lib/dto/plans';
 // states its latest plan's state — or that it has proposed nothing yet.
 
 /**
- * A session's PLAN STATE — its LATEST plan's `PlanStatus`, or `none` when it has
- * proposed nothing (§8). `none` is a member of the vocabulary in its own right,
- * never a fallback: the filter, the counts and the chip are all TOTAL over it.
- * The type is derived from the array, so the two cannot drift.
+ * A session's PLAN STATE (§8, as amended by AMENDMENT 23 §1). The END is read
+ * FIRST: a session Motir ended (`failed` · `idle` · `restarted`) is `closed`, one
+ * a person ended reads `declined` / `approved`. An OPEN session reads its LATEST
+ * plan's `PlanStatus`, or `none` when it has proposed nothing. `none` and
+ * `closed` are members of the vocabulary in their own right, never fallbacks:
+ * the filter, the counts and the chip are all TOTAL over them. The type is
+ * derived from the array, so the two cannot drift.
  */
 export const PLAN_SESSION_STATE_VALUES = [
   'none',
@@ -19,9 +22,25 @@ export const PLAN_SESSION_STATE_VALUES = [
   'stale',
   'approved',
   'declined',
-] as const satisfies readonly ('none' | PlanStatusDto)[];
+  'closed',
+] as const satisfies readonly ('none' | 'closed' | PlanStatusDto)[];
 
 export type PlanSessionStateDto = (typeof PLAN_SESSION_STATE_VALUES)[number];
+
+/**
+ * WHY a session ended (AMENDMENT 23 §1) — `PlanSessionEndReason`, mirrored so
+ * the DTO layer names no generated type. Derived from the array, so a switch
+ * over it is total.
+ */
+export const PLAN_SESSION_END_REASON_VALUES = [
+  'failed',
+  'idle',
+  'restarted',
+  'declined',
+  'approved',
+] as const;
+
+export type PlanSessionEndReasonDto = (typeof PLAN_SESSION_END_REASON_VALUES)[number];
 
 /** How many sessions hold each plan state — total over the vocabulary. */
 export type PlanSessionStateCountsDto = Record<PlanSessionStateDto, number>;
@@ -74,6 +93,15 @@ export interface PlanSessionRowDto {
   latestPlan: { id: string; status: PlanStatusDto; title: string | null } | null;
   /** How many plans the session holds — `latestPlan` included. */
   planCount: number;
+  /** The session's state, END first (AMENDMENT 23 §1) — the value the filter
+   *  and the counts read, so the chip can never disagree with its tab. */
+  state: PlanSessionStateDto;
+  /** When it ended, or null while it is OPEN. */
+  endedAt: string | null;
+  /** Why it ended, or null while it is OPEN. */
+  endReason: PlanSessionEndReasonDto | null;
+  /** Who ended it; null while open, when Motir ended it, or for a departed member. */
+  endedBy: { id: string; name: string } | null;
   /** The refused gate that SEEDED the session (MOTIR-6207's `seedGateId`),
    *  resolved to its work item. Null on an unseeded session, when the gate row is
    *  gone (`SetNull`), and when the viewer cannot browse the gate's work item —

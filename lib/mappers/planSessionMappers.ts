@@ -2,9 +2,11 @@ import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import type { PlanStatusDto } from '@/lib/dto/plans';
 import {
   PLAN_SESSION_SEED_GATE_KINDS,
+  type PlanSessionEndReasonDto,
   type PlanSessionRowDto,
   type PlanSessionSeedDto,
   type PlanSessionSeedGateKindDto,
+  type PlanSessionStateDto,
 } from '@/lib/dto/planSessions';
 import type { PlanSessionListRow } from '@/lib/repositories/planChangeSessionRepository';
 
@@ -79,6 +81,10 @@ export function toPlanSessionRowDto(row: PlanSessionListRow): PlanSessionRowDto 
         }
       : null,
     planCount: row.planCount,
+    state: row.state as PlanSessionStateDto,
+    endedAt: row.endedAt ? row.endedAt.toISOString() : null,
+    endReason: (row.endReason as PlanSessionEndReasonDto | null) ?? null,
+    endedBy: row.endedById && row.endedByName ? { id: row.endedById, name: row.endedByName } : null,
     seed: seedOf(row),
   };
 }

@@ -7138,7 +7138,8 @@
         "planned": "Waiting for approval",
         "stale": "Stale",
         "approved": "Approved",
-        "declined": "Declined"
+        "declined": "Declined",
+        "closed": "Closed"
       },
       "origin": {
         "mcp": "Agent plan",

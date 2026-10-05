@@ -305,6 +305,9 @@ export const planChangeSessionRepository = {
              lp."id" AS "planId", lp."status"::text AS "planStatus",
              lp."title" AS "planTitle", lp."summary" AS "planSummary",
              pc."n" AS "planCount",
+             ${sessionStateSql}::text AS "state",
+             s."ended_at" AS "endedAt", s."end_reason"::text AS "endReason",
+             eb."id" AS "endedById", eb."name" AS "endedByName",
              s."seed_gate_id" AS "seedGateId", sg."kind"::text AS "seedGateKind",
              sg."state"::text AS "seedGateState",
              sg."chosen_option"->>'label' AS "seedChosenLabel",
@@ -312,6 +315,7 @@ export const planChangeSessionRepository = {
              (sw."id" IS NOT NULL AND sw."projectId" = s."project_id") AS "seedCardInProject"
       FROM "plan_change_session" s
       LEFT JOIN "user" u ON u."id" = s."created_by_id"
+      LEFT JOIN "user" eb ON eb."id" = s."ended_by_id"
       LEFT JOIN "approval_gate" sg
         ON sg."id" = s."seed_gate_id" AND sg."workspace_id" = s."workspace_id"
       LEFT JOIN "work_item" sw
@@ -417,7 +421,7 @@ export const planChangeSessionRepository = {
     hiddenIds?: readonly string[],
   ): Promise<Array<{ state: string; count: number }>> {
     return tx.$queryRaw<Array<{ state: string; count: number }>>`
-      SELECT COALESCE(lp."status"::text, 'none') AS "state", count(*)::int AS "count"
+      SELECT ${sessionStateSql}::text AS "state", count(*)::int AS "count"
       FROM "plan_change_session" s
       ${latestPlanJoin}
       WHERE s."project_id" = ${projectId} AND s."workspace_id" = ${workspaceId}
@@ -429,8 +433,9 @@ export const planChangeSessionRepository = {
   },
 };
 
-/** A plan state the list filters on — `none` or a `PlanStatus` value. */
-export type PlanSessionListState = 'none' | PlanStatus;
+/** A session state the list filters on — `none`, `closed` or a `PlanStatus`
+ *  value (AMENDMENT 23 §1). */
+export type PlanSessionListState = 'none' | 'closed' | PlanStatus;
 
 /** One raw row of {@link planChangeSessionRepository.listPageByProject}. */
 export interface PlanSessionListRow {
@@ -446,6 +451,12 @@ export interface PlanSessionListRow {
   planTitle: string | null;
   planSummary: string | null;
   planCount: number;
+  /** The session's state, END first — {@link sessionStateSql}. */
+  state: string;
+  endedAt: Date | null;
+  endReason: string | null;
+  endedById: string | null;
+  endedByName: string | null;
   /** MOTIR-6207's `seed_gate_id` — still set when the gate's work item moved away. */
   seedGateId: string | null;
   /** The seeding gate's kind; null when the session is unseeded or the gate is gone. */
@@ -525,6 +536,20 @@ const latestPlanJoin = Prisma.sql`
   ) lp ON true`;
 
 /**
+ * A session's STATE (AMENDMENT 23 §1), END FIRST: an ended session reads
+ * `declined` / `approved` when a person's decision ended it and `closed` when
+ * Motir did (`failed` · `idle` · `restarted`); an OPEN one reads its latest
+ * plan's status, or `none`. Over `s` and {@link latestPlanJoin}'s `lp`, and the
+ * ONE expression the list, its filter and the counts all read — so a count, its
+ * tab and a row's chip cannot disagree.
+ */
+export const sessionStateSql = Prisma.sql`(CASE
+    WHEN s."ended_at" IS NULL THEN COALESCE(lp."status"::text, 'none')
+    WHEN s."end_reason" IN ('declined', 'approved') THEN s."end_reason"::text
+    ELSE 'closed'
+  END)`;
+
+/**
  * The Plans room's `mine` scope (Story MOTIR-6179 · MOTIR-6330): WHO is reading,
  * and the ids of the plans whose approval gate is routed to them — resolved ONCE
  * per read by the service through `approvalGateRepository.findAwaitingRoutedPlanIds`,
@@ -559,6 +584,5 @@ function mineFilter(mine: PlanSessionMineScope | null): Prisma.Sql {
 
 function stateFilter(state: PlanSessionListState | null): Prisma.Sql {
   if (state === null) return Prisma.empty;
-  if (state === 'none') return Prisma.sql`AND lp."id" IS NULL`;
-  return Prisma.sql`AND lp."status" = CAST(${state} AS "plan_status")`;
+  return Prisma.sql`AND ${sessionStateSql} = ${state}`;
 }

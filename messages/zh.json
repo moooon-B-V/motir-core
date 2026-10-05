@@ -7134,7 +7134,8 @@
         "planned": "等待批准",
         "stale": "已过时",
         "approved": "已批准",
-        "declined": "已拒绝"
+        "declined": "已拒绝",
+        "closed": "已关闭"
       },
       "origin": {
         "mcp": "智能体计划",
