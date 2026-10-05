@@ -131,8 +131,11 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // (`20261001200000_platform_staff_estate_read_arms`, asserted in
     // `platformReadService.test.ts`). `platform_run_model` and its
     // `platform_run_model_list` marker are MOTIR-7525's hosted-run model list —
-    // platform configuration, written solely from this tier.
+    // platform configuration, written solely from this tier. `enterprise_request`
+    // is MOTIR-7605's Contact-sales request, which staff list and move from the
+    // console (MOTIR-7608); its tenant arm is the org's own.
     expect(rows.map((r) => r.tablename)).toEqual([
+      'enterprise_request',
       'impersonation_session',
       'org_feature_flag',
       'organization',

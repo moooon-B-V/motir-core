@@ -98,6 +98,10 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
     'Monitoring · Fleet and the tenant Fleet card (MOTIR-6905) — compares running containers with the credits the fleet meter debits, which exist only on a billing build; off it the read answers `{ meter: "disabled" }`',
   ],
   [
+    'lib/services/enterpriseRequestService.ts',
+    'the Enterprise card’s Contact sales (MOTIR-7605) — it lives on Billing & plans, which exists only on a billing build; off it the request route answers 404',
+  ],
+  [
     'lib/services/platformOrgIndexCostService.ts',
     'the org page’s Index & fleet cost card (MOTIR-5341) — the same billing-build switch as the fleet meter it reads',
   ],
