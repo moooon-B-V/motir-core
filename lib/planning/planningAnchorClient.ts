@@ -31,6 +31,9 @@ export interface PlanningAnchorAncestor {
 export interface PlanningAnchor {
   anchor: PlanningTarget;
   ancestors: PlanningAnchorAncestor[];
+  /** Does the anchor have live children (MOTIR-7621)? The arrival rule opens
+   *  INSIDE the anchor only when it does; a leaf arrives on its own level. */
+  hasChildren: boolean;
 }
 
 /**
@@ -58,5 +61,8 @@ export async function fetchPlanningAnchor(
   return {
     anchor: body.anchor,
     ancestors: body.ancestors ?? [],
+    // Absent reads as a leaf: arriving BESIDE an item always shows it, while
+    // arriving inside a childless one shows an empty level.
+    hasChildren: body.hasChildren === true,
   };
 }

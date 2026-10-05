@@ -251,7 +251,11 @@ describe('ONE ARRIVAL RULE, EVERY ENTRANCE', () => {
   ];
 
   it.each(ENTRANCES)('%s arrives INSIDE the story', async (_name, query) => {
-    fetchPlanningAnchor.mockResolvedValue({ anchor: STORY_ANCHOR, ancestors: [EPIC_ANCESTOR] });
+    fetchPlanningAnchor.mockResolvedValue({
+      anchor: STORY_ANCHOR,
+      ancestors: [EPIC_ANCESTOR],
+      hasChildren: true,
+    });
     openAt(query);
     await mountSurface();
 
@@ -262,7 +266,11 @@ describe('ONE ARRIVAL RULE, EVERY ENTRANCE', () => {
     expect(onLevel('A sibling story')).toBe(false);
 
     // …and it is EXACTLY the level the one rule names for this anchor.
-    const expected = surfaceArrivalTrail({ anchor: STORY_ANCHOR, ancestors: [EPIC_ANCESTOR] });
+    const expected = surfaceArrivalTrail({
+      anchor: STORY_ANCHOR,
+      ancestors: [EPIC_ANCESTOR],
+      hasChildren: true,
+    });
     const crumb = breadcrumb()!;
     for (const c of expected) {
       expect(within(crumb).getByText(c.label)).toBeTruthy();
@@ -280,6 +288,7 @@ describe('THE KINDS', () => {
     fetchPlanningAnchor.mockResolvedValue({
       anchor: SUBTASK_ANCHOR,
       ancestors: [EPIC_ANCESTOR, { id: 'wi_s1', identifier: 'MOTIR-3', title: 'The story' }],
+      hasChildren: false,
     });
     openAt('plan=contextual&planFrom=work-item&planItem=MOTIR-9');
     await mountSurface();
@@ -293,6 +302,28 @@ describe('THE KINDS', () => {
     const crumb = breadcrumb()!;
     expect(within(crumb).getByRole('button', { current: 'page' }).textContent).toContain(
       'MOTIR-3 · The story',
+    );
+    expect(within(crumb).queryByText('Planning target:')).toBeNull();
+  });
+
+  it('a CHILDLESS story opens on its OWN level, beside its siblings (MOTIR-7621)', async () => {
+    // A story not yet broken down has no inside: opening inside it drew an empty
+    // level with the item the conversation is about nowhere on screen.
+    fetchPlanningAnchor.mockResolvedValue({
+      anchor: { id: 'wi_s2', identifier: 'MOTIR-4', title: 'A sibling story', kind: 'story' },
+      ancestors: [EPIC_ANCESTOR],
+      hasChildren: false,
+    });
+    openAt('plan=contextual&planFrom=work-item&planItem=MOTIR-4');
+    await mountSurface();
+
+    // The epic's children — the anchor itself AND its sibling.
+    await waitFor(() => expect(onLevel('A sibling story')).toBe(true));
+    expect(onLevel('The story')).toBe(true);
+    // The crumb ends at the PARENT with no target mark; the node ring holds it.
+    const crumb = breadcrumb()!;
+    expect(within(crumb).getByRole('button', { current: 'page' }).textContent).toContain(
+      'MOTIR-1 · Refine AI planning',
     );
     expect(within(crumb).queryByText('Planning target:')).toBeNull();
   });

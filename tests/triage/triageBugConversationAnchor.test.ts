@@ -149,6 +149,8 @@ describe('a triage bug resolves where a conversation anchors', () => {
       },
       // Parentless — a triage item has no lineage until it is promoted.
       ancestors: [],
+      // And childless, so the surface opens on its own level (MOTIR-7621).
+      hasChildren: false,
     });
   });
 

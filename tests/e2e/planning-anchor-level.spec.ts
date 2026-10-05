@@ -203,6 +203,31 @@ test('a ROOT-level container anchor (an epic) opens inside it, on its stories', 
   await expect(breadcrumb).toContainText(`${seed.epicKey} · ${seed.epicTitle}`);
 });
 
+test('a CHILDLESS container anchor opens on its OWN level, ringed — not an empty one', async ({
+  page,
+}) => {
+  // MOTIR-7621. The arrival rule used to open INSIDE every container KIND, so an
+  // epic, story, task or bug not yet broken down landed the canvas on an empty
+  // level with the item the conversation is about nowhere on screen. The rule
+  // now reads whether the anchor HAS children; this one has none, and it sits
+  // at the root, so the canvas stays at the root with the anchor ringed.
+  const seed = await seedPlanningAnchorTree('planning-anchor-childless@example.com');
+  await signIn(page, seed.email, seed.password);
+
+  await page.goto(anchoredHref(seed.childlessEpicKey));
+
+  await expect(workspace(page).getByTestId('planning-canvas')).toBeVisible();
+  // The anchor AND its root-level sibling are drawn — the level it sits on.
+  await expect(canvasNode(page, seed.childlessEpicTitle)).toBeVisible();
+  await expect(canvasNode(page, seed.epicTitle)).toBeVisible();
+  // No trail: the root is where it stands.
+  await expect(workspace(page).getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0);
+  // The target is marked by the node ring, on a level the user is looking at.
+  const target = workspace(page).getByTestId('planning-target-node');
+  await expect(target).toBeVisible();
+  await expect(target).toContainText(seed.childlessEpicTitle);
+});
+
 test('an UNRESOLVABLE ?item= opens the workspace at the root, never an error', async ({ page }) => {
   const seed = await seedPlanningAnchorTree('planning-anchor-unknown@example.com');
   await signIn(page, seed.email, seed.password);

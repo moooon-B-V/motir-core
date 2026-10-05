@@ -1150,6 +1150,7 @@ describe('PlanningWorkspaceHost — the follow-move request', () => {
     fetchPlanningAnchor.mockResolvedValue({
       anchor: { id: 'wi_e1', identifier: 'MOTIR-1', title: 'The epic', kind: 'epic' },
       ancestors: [],
+      hasChildren: true,
     });
     renderHost({ mode: 'replan', from: 'project' });
 

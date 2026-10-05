@@ -119,6 +119,7 @@ const ANCHOR = {
     kind: 'story' as const,
   },
   ancestors: [{ id: 'wi_1', identifier: 'ACME-1', title: 'Exports' }],
+  hasChildren: true,
 };
 const SEEDED_ADDRESS = withPlanningOverlay('/items/ACME-44', {
   kind: 'refused-gate',

@@ -39,10 +39,19 @@ export interface FollowRequest {
  * Only when the set was EMPTY at open: a surface that already had a target
  * arrived inside it, and a second target must not move the canvas off the first
  * (the story's rule — with several targets the canvas is inside the FIRST one).
+ *
+ * A LEAF target at the root yields an empty trail and so no request (MOTIR-7621):
+ * the canvas is already on the level that shows it, and `followRequest` then
+ * falls through to `followFromPlan`, which moves inside the leaf once the plan
+ * proposes children under it.
  */
 export function followFromTarget(anchor: PlanningAnchor | null): FollowRequest | null {
   if (anchor === null) return null;
-  const trail = surfaceArrivalTrail({ anchor: anchor.anchor, ancestors: anchor.ancestors });
+  const trail = surfaceArrivalTrail({
+    anchor: anchor.anchor,
+    ancestors: anchor.ancestors,
+    hasChildren: anchor.hasChildren,
+  });
   if (trail.length === 0) return null;
   return { key: `target:${anchor.anchor.id}`, trail };
 }

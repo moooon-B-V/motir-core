@@ -133,6 +133,32 @@ describe('GET /api/work-items/planning-anchor · the happy path', () => {
     ]);
   });
 
+  it('says whether the anchor has CHILDREN — the arrival rule reads it (MOTIR-7621)', async () => {
+    // The kind cannot answer this: a story with children and a story without are
+    // the same kind. The canvas opens INSIDE only the first.
+    const s = await makeScenario('children');
+    signIn(s);
+    const { epic, story, leaf } = await makeTree(s);
+    const bare = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'story', title: 'Not broken down yet', parentId: epic.id },
+      s.ctx,
+    );
+
+    expect((await (await anchorViaRoute(story.identifier)).json()).hasChildren).toBe(true);
+    expect((await (await anchorViaRoute(epic.identifier)).json()).hasChildren).toBe(true);
+    expect((await (await anchorViaRoute(bare.identifier)).json()).hasChildren).toBe(false);
+    expect((await (await anchorViaRoute(leaf.identifier)).json()).hasChildren).toBe(false);
+  });
+
+  it('an ARCHIVED child does not count — the level it would open on is empty', async () => {
+    const s = await makeScenario('archived-child');
+    signIn(s);
+    const { story, leaf } = await makeTree(s);
+    await workItemsService.archiveWorkItem(leaf.id, s.ctx);
+
+    expect((await (await anchorViaRoute(story.identifier)).json()).hasChildren).toBe(false);
+  });
+
   it('a ROOT-level item has an empty ancestor list, not a missing one', async () => {
     const s = await makeScenario('root');
     signIn(s);
@@ -335,7 +361,7 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
 
   it('reads through the service and adds no second read', () => {
     const calls = code.match(/workItemsService\.\w+/g) ?? [];
-    expect(calls).toEqual(['workItemsService.getWorkItemWithAncestors']);
+    expect(calls).toEqual(['workItemsService.getPlanningAnchor']);
   });
 
   it('holds the 2FA gate AFTER the no-project arm', () => {

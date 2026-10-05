@@ -149,6 +149,7 @@ const ANCHOR = {
     { id: 'wi_1', identifier: 'MOTIR-1', title: 'Epic 8' },
     { id: 'wi_3', identifier: 'MOTIR-3', title: 'The story' },
   ],
+  hasChildren: false,
 };
 
 beforeEach(() => {
@@ -373,7 +374,7 @@ describe('the ANCHOR read', () => {
     expect(fetchPlanningAnchor.mock.calls[0]![0]).toBe('MOTIR-7');
   });
 
-  it('a CONTAINER anchor opens INSIDE it — the trail ends at the anchor itself', async () => {
+  it('an anchor WITH CHILDREN opens INSIDE it — the trail ends at the anchor itself', async () => {
     // The change MOTIR-6154 asks for, at the seam that produces it: the canvas
     // loads the level named by the LAST crumb, so appending the anchor is what
     // makes the workspace open on the STORY'S CHILDREN rather than beside it
@@ -381,6 +382,7 @@ describe('the ANCHOR read', () => {
     fetchPlanningAnchor.mockResolvedValue({
       anchor: { id: 'wi_3', identifier: 'MOTIR-3', title: 'The story', kind: 'story' as const },
       ancestors: [{ id: 'wi_1', identifier: 'MOTIR-1', title: 'Epic 8' }],
+      hasChildren: true,
     });
     openAt('plan=contextual&planFrom=work-item&planItem=MOTIR-3');
     mount();
@@ -389,6 +391,21 @@ describe('the ANCHOR read', () => {
     const host = screen.getByTestId('host');
     expect(host.getAttribute('data-anchor-id')).toBe('wi_3');
     expect(host.getAttribute('data-trail')).toBe('wi_1,wi_3');
+  });
+
+  it('a CHILDLESS story opens BESIDE it — its own level, not an empty one (MOTIR-7621)', async () => {
+    fetchPlanningAnchor.mockResolvedValue({
+      anchor: { id: 'wi_3', identifier: 'MOTIR-3', title: 'The story', kind: 'story' as const },
+      ancestors: [{ id: 'wi_1', identifier: 'MOTIR-1', title: 'Epic 8' }],
+      hasChildren: false,
+    });
+    openAt('plan=contextual&planFrom=work-item&planItem=MOTIR-3');
+    mount();
+    await act(async () => {});
+
+    const host = screen.getByTestId('host');
+    expect(host.getAttribute('data-anchor-id')).toBe('wi_3');
+    expect(host.getAttribute('data-trail')).toBe('wi_1');
   });
 
   it('a 404 opens the PROJECT conversation at the root, with no error surface', async () => {
@@ -434,6 +451,7 @@ describe('the ANCHOR read', () => {
     fetchPlanningAnchor.mockResolvedValue({
       anchor: { id: 'wi_8', identifier: 'MOTIR-8', title: 'Another', kind: 'subtask' as const },
       ancestors: [],
+      hasChildren: false,
     });
     params = new URLSearchParams('plan=contextual&planFrom=work-item&planItem=MOTIR-8');
     view.rerender(

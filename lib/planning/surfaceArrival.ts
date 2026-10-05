@@ -1,4 +1,3 @@
-import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import type { PlanningAnchor, PlanningAnchorAncestor } from '@/lib/planning/planningAnchorClient';
 import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 
@@ -53,36 +52,23 @@ import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanv
 
 /** What the arrival rule needs: the resolved anchor, or `null` when the read
  *  answered `404` — the no-existence-leak answer for a stale, deleted, foreign
- *  or forbidden key alike (`fetchPlanningAnchor`). */
+ *  or forbidden key alike (`fetchPlanningAnchor`) — and whether the anchor has
+ *  any children to open onto. */
 export interface SurfaceArrivalInput {
   anchor: Pick<PlanningAnchor['anchor'], 'id' | 'identifier' | 'title' | 'kind'> | null;
   ancestors: readonly PlanningAnchorAncestor[];
+  hasChildren: boolean;
 }
 
-/**
- * ⚠️ TOTAL over `WorkItemKindDto`, with NO default arm, deliberately.
- *
- * A `Record<WorkItemKindDto, …>` is what makes a new kind a COMPILE error here
- * instead of a silent fall-through to whichever branch the author happened to
- * write last. The same discipline `WorkItemNode`'s own note argues for, one
- * module over: a closed map the compiler certifies as total is the only place a
- * missing member can be caught by the type checker rather than by a reader.
- *
- * The values answer ONE question — can a work item of this kind have children?
- * — and the answer is the kind-parent matrix's, not a second opinion about it:
- * `lib/issues/parentRules.ts` maps `subtask → []` and gives every other kind a
- * non-empty child set, so `subtask` is the single structural leaf.
- */
-const KIND_HAS_INSIDE: Record<WorkItemKindDto, boolean> = {
-  epic: true,
-  story: true,
-  task: true,
-  bug: true,
-  // The one structural leaf: nothing may be parented to a subtask, so it has no
-  // inside to open. It arrives on its OWN level with the target ring — which is
-  // MOTIR-2070's arrival, still correct for exactly this case.
-  subtask: false,
-};
+// ── INSIDE ⇔ THE ANCHOR HAS CHILDREN (MOTIR-7621) ──────────────────────────
+// This used to be decided by KIND: every kind but `subtask` "has an inside",
+// per the kind-parent matrix. That answers whether an item CAN have children,
+// not whether it DOES — and a story, task or bug not yet broken down is common
+// (a freshly filed bug, a small task). Opening inside one landed the canvas on
+// an empty level with the target visible only as the last crumb, which looks
+// like a failed load and is exactly MOTIR-2070's complaint. So the rule now
+// reads the anchor read's `hasChildren`. A `subtask` stays a leaf by
+// construction: nothing may be parented to it, so it never has children.
 
 /**
  * The breadcrumb trail the surface canvas OPENS on, root-ancestor first.
@@ -92,15 +78,19 @@ const KIND_HAS_INSIDE: Record<WorkItemKindDto, boolean> = {
  * so changing what this returns changes the arrival without touching the canvas
  * engine at all.
  *
- * - a CONTAINER anchor → `ancestors ++ [anchor]`, so the canvas opens on the
- *   anchor's CHILDREN and the breadcrumb ends at the anchor;
- * - a `subtask` anchor → `ancestors`, the own-level arrival, where the target
- *   is marked by the shipped node ring rather than by a crumb;
+ * - an anchor WITH children → `ancestors ++ [anchor]`, so the canvas opens on
+ *   the anchor's CHILDREN and the breadcrumb ends at the anchor;
+ * - a CHILDLESS anchor (any kind) → `ancestors`, the own-level arrival, where
+ *   the target is marked by the shipped node ring rather than by a crumb;
  * - no anchor (`null`) → `[]`, the project root, silently. This is the
  *   degradation the overlay already applies for an unresolvable `?planItem=`,
  *   and it is deliberately indistinguishable from "no target was named".
  */
-export function surfaceArrivalTrail({ anchor, ancestors }: SurfaceArrivalInput): CanvasCrumb[] {
+export function surfaceArrivalTrail({
+  anchor,
+  ancestors,
+  hasChildren,
+}: SurfaceArrivalInput): CanvasCrumb[] {
   const trail: CanvasCrumb[] = ancestors.map((a) => ({
     id: a.id,
     crumbKey: a.identifier,
@@ -108,7 +98,7 @@ export function surfaceArrivalTrail({ anchor, ancestors }: SurfaceArrivalInput):
   }));
 
   if (anchor === null) return [];
-  if (!KIND_HAS_INSIDE[anchor.kind]) return trail;
+  if (!arrivesInsideAnchor({ anchor, hasChildren })) return trail;
 
   trail.push({
     id: anchor.id,
@@ -125,6 +115,9 @@ export function surfaceArrivalTrail({ anchor, ancestors }: SurfaceArrivalInput):
  * TARGET crumb — the design's answer to MOTIR-2070 — and deriving it a second
  * time from `trail.length` would be a second encoding of the rule above.
  */
-export function arrivesInsideAnchor(anchor: SurfaceArrivalInput['anchor']): boolean {
-  return anchor !== null && KIND_HAS_INSIDE[anchor.kind];
+export function arrivesInsideAnchor({
+  anchor,
+  hasChildren,
+}: Pick<SurfaceArrivalInput, 'anchor' | 'hasChildren'>): boolean {
+  return anchor !== null && hasChildren;
 }
