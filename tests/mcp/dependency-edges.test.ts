@@ -599,6 +599,8 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
     // banner reads them, and publishing them to agents is not that story's call.
     expect(structured).not.toHaveProperty('fixReason');
     expect(structured).not.toHaveProperty('fixDetail');
+    // And `fixGroup` (MOTIR-7589), the To fix entry the banner points at, for the same reason.
+    expect(structured).not.toHaveProperty('fixGroup');
     const {
       children: _ignored,
       item: toolItem,
@@ -618,6 +620,7 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
       placementFolder: _pageOnly,
       fixReason: _pageFixReason,
       fixDetail: _pageFixDetail,
+      fixGroup: _pageFixGroup,
       ...restOfDto
     } = detail as unknown as Record<string, unknown>;
     const { commentCount: _count, ...toolItemRest } = toolItem as Record<string, unknown>;
