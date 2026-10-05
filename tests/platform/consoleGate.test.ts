@@ -309,9 +309,12 @@ describe('1 · every non-staff principal kind is refused everywhere the story ad
     '%s — every page and server action refuses, and the (admin) layout answers 404',
     async (kind) => {
       currentSession = sessionFor(kind);
+      // A PAGE answers the app's 404 from its own gate, as the layout does — the
+      // two render concurrently, so a page that threw instead surfaced as an
+      // unhandled production error (MOTIR-7613). A server action refuses.
       for (const [name, route] of Object.entries(await storyRoutes(estate))) {
         await expect(Promise.resolve().then(route), name).rejects.toBeInstanceOf(
-          NotPlatformStaffError,
+          name.startsWith('action ') ? NotPlatformStaffError : NotFoundSentinel,
         );
       }
       const layout = await import('@/app/(admin)/layout');

@@ -2054,3 +2054,54 @@ not gaps to close (the story's carve-out).
 - **Email-delivery ops** — bounces, complaints, suppression lists.
 - **Granting / revoking `platformRole`** (ADR §7's last row, no card yet).
 - **The internal-billing classification control** — shipped by MOTIR-4568 (Panel 12); not re-drawn or moved.
+
+---
+
+# AMENDMENT 2026-10-05 — the planning add becomes a picker (MOTIR-7614)
+
+**Amends:** § _AMENDMENT 2026-10-04 — Model lists_ (MOTIR-7523), **Panel 3 (Planning add)** and the
+first bullet of its _Where the card and the shipped contracts do not line up_ note. That section and
+its mock `console--model-lists.mock.html` are the design result published on MOTIR-7523 (the
+published result is the design of record; neither was committed here). **No new mock:** the changed
+dialog is the run list's add, **Panel 6 of that same mock**, with the planning copy below, so
+drawing it again would be a second copy of a panel the reviewer already has.
+
+**Why it changes.** Panel 3 took a typed model id because _"motir-ai publishes no list of planning
+candidates"_. It does now: `GET /v1/planner-model-list` answers `candidates: [{ id, provider }]`
+(motir-ai MOTIR-7614) — every servable, chat, planning-rated model not on the list, sorted by provider
+then id, judged by the same derivation as the add refusal. So the planning add is the picker the
+MOTIR-7523 card asked for, and both lists on the console add the same way.
+
+## Panel 3, redrawn by reference
+
+- **(a) open with one chosen** — Panel 6a: a `Combobox` labelled _Model_ over `candidates`, grouped
+  by provider, placeholder _Choose a model_, with the foot line under the options; then the reason
+  `Input`; the primary disabled until a model is chosen and the reason is non-blank.
+- **(b) refused by motir-ai** — unchanged from the 2026-10-04 Panel 3b: the dialog stays open with the
+  reason inline (`--el-danger-on-surface`), nothing added, no audit row. It is still reachable: a
+  candidate can stop being plannable between the read and the confirm.
+- **(c) nothing addable** — Panel 6b with one difference: the line says every plannable model is
+  listed and the dialog shows **no input at all** (neither the picker nor the reason), with the
+  primary disabled. There is nothing to give a reason for.
+
+## Copy (the `platformAdmin` namespace, each with a `zh` twin)
+
+| key                            | string                                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `planningList.add.modelLabel`  | Model _(was "Model id")_                                                                          |
+| `planningList.add.placeholder` | Choose a model                                                                                    |
+| `planningList.add.pickerFoot`  | Models the gateway serves that can plan (chat, with a planning rate) and are not on the list yet. |
+| `planningList.add.nothing`     | Every model that can plan is already listed.                                                      |
+
+**Retired:** `planningList.add.modelHint` (the picker only offers models that qualify, so the hint
+explained a rule the admin can no longer break) and `planningList.add.modelRequired` (a picker cannot
+submit a blank id; the action's server-side guard stays and reads as the generic failure line).
+
+## Data and roles
+
+| element      | source                                                                |
+| ------------ | --------------------------------------------------------------------- |
+| planning add | `candidates[]` of `GET /v1/planner-model-list`, grouped by `provider` |
+
+Colour, shape and roles are Panel 6's: the foot line and the nothing line are `--el-text-secondary`,
+the refusal line `--el-danger-on-surface`. Only a superadmin sees **Add model** (unchanged).

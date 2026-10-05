@@ -1051,9 +1051,17 @@ export interface PlannerModelListEntryRead {
   createdAt: string;
 }
 
+/** A model an admin may ADD to the list (MOTIR-7614): plannable right now, not yet listed. */
+export interface PlannerModelCandidateRead {
+  id: string;
+  provider: string;
+}
+
 /** The raw `GET /v1/planner-model-list` body, and the `PUT` answer. */
 export interface PlannerModelListRead {
   entries: PlannerModelListEntryRead[];
+  /** Servable ∩ chat ∩ planning-rated, minus the listed — sorted by provider, then id. */
+  candidates: PlannerModelCandidateRead[];
 }
 
 /** The `PUT /v1/planner-model-list` body. */

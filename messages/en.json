@@ -10169,11 +10169,12 @@
       "add": {
         "title": "Add a model planning may use",
         "body": "Once added, a superadmin can set any audience to it while motir-ai offers it.",
-        "modelLabel": "Model id",
-        "modelHint": "motir-ai adds a model only if the gateway serves it, it is a chat model and it has a planning rate.",
+        "modelLabel": "Model",
+        "placeholder": "Choose a model",
+        "pickerFoot": "Models the gateway serves that can plan (chat, with a planning rate) and are not on the list yet.",
+        "nothing": "Every model that can plan is already listed.",
         "confirm": "Add model",
-        "refused": "Not added: {detail}",
-        "modelRequired": "Enter a model id."
+        "refused": "Not added: {detail}"
       },
       "remove": {
         "title": "Remove {model} from the planning list?",

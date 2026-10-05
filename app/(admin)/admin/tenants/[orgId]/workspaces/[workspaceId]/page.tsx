@@ -6,7 +6,7 @@ import { ArrowLeft, Info } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import type { PlatformWorkspacePageDTO } from '@/lib/dto/platform';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { PlatformWorkspaceNotFoundError } from '@/lib/platform/errors';
 import { platformOrgPageService } from '@/lib/services/platformOrgPageService';
 
@@ -34,7 +34,7 @@ export default async function AdminWorkspacePage({
   params: Promise<{ orgId: string; workspaceId: string }>;
   searchParams: Promise<{ members?: string; jobs?: string }>;
 }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const { orgId, workspaceId } = await params;
   const query = await searchParams;
   const jobsStack = (query.jobs ?? '').split(',').filter(Boolean);

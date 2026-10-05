@@ -8,7 +8,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PlatformLessonsSkeleton } from '@/components/ai/PlatformLessonsSkeleton';
 import { MotirAiError } from '@/lib/ai/errors';
 import type { PlatformLessonListDTO, PlatformLessonListFilters } from '@/lib/dto/platformLessons';
-import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
+import { type PlatformPrincipal } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { platformLessonsService } from '@/lib/services/platformLessonsService';
 import { LessonFilters } from './_components/LessonFilters';
 import { FILTER_KEYS } from './_components/filterKeys';
@@ -21,8 +22,9 @@ import { RetentionCard } from './_components/RetentionCard';
  * § AMENDMENT 2026-10-02 (Planning lessons), card MOTIR-1411, story MOTIR-1408.
  *
  * Every organisation's planning lessons beside the global corpus, filtered and
- * cursor-paged by motir-ai. Every staff role reads; a non-staff request never
- * reaches this file — the `(admin)` layout answers the app's 404 first. Loading
+ * cursor-paged by motir-ai. Every staff role reads; a non-staff request gets
+ * the app's 404 from this page's gate as from the layout's (`pageGate.ts` says
+ * why both must answer it, MOTIR-7613). Loading
  * a page is a cross-tenant read and writes one `estate.read` row (the service).
  *
  * ⚠️ THERE IS NO TOTAL. The API is cursor-paged; the pager says "Page {n}" and
@@ -61,7 +63,7 @@ export default async function AdminPlanningLessonsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const t = await getTranslations('platformAdmin.lessons');
   const params = await searchParams;
 

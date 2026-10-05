@@ -3,7 +3,7 @@ import { getFormatter, getTranslations } from 'next-intl/server';
 import { Card } from '@/components/ui/Card';
 import { ErrorState } from '@/components/ui/ErrorState';
 import type { RawPlatformModelFigures } from '@/lib/ai/motirAiClient';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { buildSpendSheet, parseSpendPeriod, recentMonths } from '@/lib/platform/spend';
 import { platformReadService } from '@/lib/services/platformReadService';
 import { SpendPeriodSwitch } from '../_components/SpendPeriodSwitch';
@@ -32,7 +32,7 @@ export default async function AdminUsagePage({
 }: {
   searchParams: Promise<{ period?: string }>;
 }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const t = await getTranslations('platformAdmin.usage');
   const format = await getFormatter();
   const period = parseSpendPeriod((await searchParams).period);

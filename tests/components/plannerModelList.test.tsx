@@ -71,6 +71,11 @@ function list(over: Partial<PlatformPlannerModelListDTO> = {}): PlatformPlannerM
         addedBy: 'ops@moooon.net',
       }),
     ],
+    candidates: [
+      { id: 'deepseek-v4-pro', provider: 'deepseek' },
+      { id: 'mistral-large-3', provider: 'mistral' },
+      { id: 'kimi-k2.6', provider: 'moonshot' },
+    ],
     canEdit: true,
     ...over,
   };
@@ -100,6 +105,12 @@ async function openAdd() {
   return screen.findByRole('alertdialog');
 }
 
+/** Choose a candidate in the Add dialog's picker (MOTIR-7614). */
+async function pick(dialog: HTMLElement, model: string) {
+  fireEvent.click(within(dialog).getByRole('combobox'));
+  fireEvent.click(await screen.findByRole('option', { name: new RegExp(model) }));
+}
+
 describe('PlannerModelList', () => {
   it('Panel 1: each entry with its provider, offered state, users and added line', () => {
     renderList(list());
@@ -127,14 +138,12 @@ describe('PlannerModelList', () => {
     );
   });
 
-  it('Panel 3a: an add needs a model and a reason, then sends both trimmed and says so', async () => {
+  it('Panel 3a: an add needs a picked model and a reason, then sends both and says so', async () => {
     renderList(list());
     const dialog = await openAdd();
     const confirm = within(dialog).getByRole('button', { name: 'Add model' });
     expect(confirm.hasAttribute('disabled')).toBe(true);
-    fireEvent.change(within(dialog).getByLabelText('Model id'), {
-      target: { value: '  deepseek-v4-pro ' },
-    });
+    await pick(dialog, 'deepseek-v4-pro');
     expect(confirm.hasAttribute('disabled')).toBe(true);
     fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: ' Try it ' } });
     await act(async () => {
@@ -156,7 +165,7 @@ describe('PlannerModelList', () => {
     });
     renderList(list());
     const dialog = await openAdd();
-    fireEvent.change(within(dialog).getByLabelText('Model id'), { target: { value: 'x' } });
+    await pick(dialog, 'mistral-large-3');
     fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'r' } });
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Add model' }));
@@ -174,7 +183,7 @@ describe('PlannerModelList', () => {
     });
     renderList(list());
     const dialog = await openAdd();
-    fireEvent.change(within(dialog).getByLabelText('Model id'), { target: { value: 'x' } });
+    await pick(dialog, 'mistral-large-3');
     fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'r' } });
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Add model' }));
@@ -234,22 +243,53 @@ describe('PlannerModelList', () => {
     expect(within(rowOf('glm-5.2')).getByRole('alert').textContent).toBe('Not removed: nope');
   });
 
-  it('a MODEL_REQUIRED add asks for the id', async () => {
+  it('the picker offers every candidate and no listed model, with its foot line', async () => {
+    renderList(list());
+    const dialog = await openAdd();
+    fireEvent.click(within(dialog).getByRole('combobox'));
+    const options = (await screen.findAllByRole('option')).map((o) => o.textContent ?? '');
+    for (const id of ['deepseek-v4-pro', 'mistral-large-3', 'kimi-k2.6']) {
+      expect(options.some((o) => o.includes(id))).toBe(true);
+    }
+    expect(options.some((o) => o.includes('claude-sonnet-5-5'))).toBe(false);
+    expect(
+      screen.getByText(
+        'Models the gateway serves that can plan (chat, with a planning rate) and are not on the list yet.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('with no candidates, the dialog says every plannable model is listed and shows no input', async () => {
+    renderList(list({ candidates: [] }));
+    const dialog = await openAdd();
+    expect(within(dialog).getByTestId('planner-model-add-nothing').textContent).toBe(
+      'Every model that can plan is already listed.',
+    );
+    expect(within(dialog).queryByRole('combobox')).toBeNull();
+    expect(within(dialog).queryByRole('textbox')).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Add model' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+  });
+
+  it('a MODEL_REQUIRED add (unreachable from the picker) shows the generic line', async () => {
     addPlannerListModelAction.mockResolvedValueOnce({ ok: false, code: 'MODEL_REQUIRED' });
     renderList(list());
     const dialog = await openAdd();
-    fireEvent.change(within(dialog).getByLabelText('Model id'), { target: { value: 'x' } });
+    await pick(dialog, 'mistral-large-3');
     fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'r' } });
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Add model' }));
     });
-    expect(screen.getByRole('alert').textContent).toBe('Enter a model id.');
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Something went wrong, and nothing was changed. Try again.',
+    );
   });
 
   it('Panel 12b: a model this tab added reads “Added just now by you” once listed', async () => {
     const { rerender } = renderList(list());
     const dialog = await openAdd();
-    fireEvent.change(within(dialog).getByLabelText('Model id'), { target: { value: 'kimi-k2.6' } });
+    await pick(dialog, 'kimi-k2.6');
     fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'r' } });
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Add model' }));
@@ -291,7 +331,7 @@ describe('PlannerModelList', () => {
     addPlannerListModelAction.mockResolvedValueOnce({ ok: false, code });
     renderList(list());
     const dialog = await openAdd();
-    fireEvent.change(within(dialog).getByLabelText('Model id'), { target: { value: 'x' } });
+    await pick(dialog, 'mistral-large-3');
     fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'r' } });
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Add model' }));
@@ -336,7 +376,7 @@ describe('PlannerModelList', () => {
     });
     renderList(list());
     const dialog = await openAdd();
-    fireEvent.change(within(dialog).getByLabelText('Model id'), { target: { value: 'x' } });
+    await pick(dialog, 'mistral-large-3');
     fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'r' } });
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Add model' }));

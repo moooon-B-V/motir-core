@@ -3,7 +3,7 @@ import { getFormatter, getTranslations } from 'next-intl/server';
 import { Search } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { parseSpendPeriod, recentMonths } from '@/lib/platform/spend';
 import { parseTenantSort, platformUsageService } from '@/lib/services/platformUsageService';
 import { SpendPeriodSwitch } from '../_components/SpendPeriodSwitch';
@@ -35,7 +35,7 @@ export default async function AdminTenantsPage({
 }: {
   searchParams: Promise<{ q?: string; period?: string; sort?: string }>;
 }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const t = await getTranslations('platformAdmin.tenants');
   const tu = await getTranslations('platformAdmin.usage');
   // TWO chips, TWO labels — the operator's one vocabulary for the two flags

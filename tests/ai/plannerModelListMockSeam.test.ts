@@ -85,12 +85,18 @@ describe('the planning-model list seam', () => {
     seed({ ...structuredClone(BASE), list: [{ model: 'claude-opus-5-5' }] });
     expect((await getPlannerModelSettings()).offered.map((m) => m.id)).toEqual(['claude-opus-5-5']);
 
+    expect((await getPlannerModelList()).candidates).toEqual([
+      { id: 'claude-sonnet-5-5', provider: 'anthropic' },
+      { id: 'glm-5.2', provider: 'z-ai' },
+    ]);
+
     const after = await updatePlannerModelList({
       action: 'add',
       model: 'glm-5.2',
       actorCoreUserId: 'u_1',
     });
     expect(after.entries.at(-1)).toMatchObject({ model: 'glm-5.2', addedByCoreUserId: 'u_1' });
+    expect(after.candidates).toEqual([{ id: 'claude-sonnet-5-5', provider: 'anthropic' }]);
     expect(stored().list?.map((e) => e.model)).toEqual(['claude-opus-5-5', 'glm-5.2']);
     expect((await getPlannerModelSettings()).offered.map((m) => m.id)).toEqual([
       'claude-opus-5-5',

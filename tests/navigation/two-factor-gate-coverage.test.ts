@@ -154,7 +154,7 @@ describe('⚠️ the gate runs AFTER the session read and never as a fifth seque
     // Platform staff are NOT exempt: this console reaches every tenant's data,
     // so it is the last place a second factor should be optional.
     const src = code('app/(admin)/layout.tsx');
-    const staff = src.indexOf('await requirePlatformStaff()');
+    const staff = src.indexOf('await requirePlatformStaffPage()');
     const call = src.indexOf(`await ${HELPER}(`);
     const audit = src.indexOf('platformAuditService.record');
     expect(call).toBeGreaterThan(staff);

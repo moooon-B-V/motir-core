@@ -93,11 +93,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+const CANDIDATES = [
+  { id: 'glm-5.2', provider: 'z-ai' },
+  { id: 'kimi-k2.6', provider: 'moonshot' },
+];
+
 const fetchStub = vi.fn(async (url: string, init: RequestInit) => {
   if (url.endsWith('/v1/planner-model-settings')) {
     return json({ settings, offered: [] });
   }
-  if (init.method === 'GET') return json({ entries: listed });
+  if (init.method === 'GET') return json({ entries: listed, candidates: CANDIDATES });
   const body = JSON.parse(String(init.body)) as {
     action: 'add' | 'remove';
     model: string;
@@ -175,6 +180,11 @@ describe('listModels — any staff role reads', () => {
       'claude-opus-4-8',
     ]);
     expect(await auditRows()).toHaveLength(0);
+  });
+
+  it("carries motir-ai's addable candidates through, in its order (MOTIR-7614)", async () => {
+    const dto = await platformPlannerModelService.listModels(currentPrincipal!);
+    expect(dto.candidates).toEqual(CANDIDATES);
   });
 
   it('each entry carries its offered state, reason, users and the fallback flag', async () => {
