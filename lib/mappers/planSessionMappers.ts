@@ -85,6 +85,9 @@ export function toPlanSessionRowDto(row: PlanSessionListRow): PlanSessionRowDto 
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
     endReason: (row.endReason as PlanSessionEndReasonDto | null) ?? null,
     endedBy: row.endedById && row.endedByName ? { id: row.endedById, name: row.endedByName } : null,
+    copiedFrom: row.copiedFromId
+      ? { id: row.copiedFromId, endedAt: row.copiedFromEndedAt?.toISOString() ?? null }
+      : null,
     seed: seedOf(row),
   };
 }

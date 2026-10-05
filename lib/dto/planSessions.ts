@@ -102,6 +102,9 @@ export interface PlanSessionRowDto {
   endReason: PlanSessionEndReasonDto | null;
   /** Who ended it; null while open, when Motir ended it, or for a departed member. */
   endedBy: { id: string; name: string } | null;
+  /** The session this one CONTINUES (AMENDMENT 23 §6) — its id and end time —
+   *  or null when it is no copy, or its source is gone. */
+  copiedFrom: { id: string; endedAt: string | null } | null;
   /** The refused gate that SEEDED the session (MOTIR-6207's `seedGateId`),
    *  resolved to its work item. Null on an unseeded session, when the gate row is
    *  gone (`SetNull`), and when the viewer cannot browse the gate's work item —

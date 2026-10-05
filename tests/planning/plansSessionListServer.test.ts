@@ -15,7 +15,11 @@ const { getActiveProject, getCapabilities, listSessions, resolveActionReadActor 
 );
 
 vi.mock('next-intl/server', () => ({
-  getFormatter: async () => ({ relativeTime: (d: Date) => `at ${d.toISOString()}` }),
+  getFormatter: async () => ({
+    relativeTime: (d: Date) => `at ${d.toISOString()}`,
+    dateTime: (d: Date, o: Intl.DateTimeFormatOptions) =>
+      new Intl.DateTimeFormat('en-US', { ...o, timeZone: 'UTC' }).format(d),
+  }),
 }));
 vi.mock('@/lib/projects', () => ({ getActiveProject }));
 vi.mock('@/lib/services/projectAccessService', () => ({
@@ -45,6 +49,7 @@ function dto(over: Partial<PlanSessionRowDto> = {}): PlanSessionRowDto {
     endedAt: null,
     endReason: null,
     endedBy: null,
+    copiedFrom: null,
     ...over,
   };
 }
@@ -58,7 +63,7 @@ beforeEach(() => {
 
 describe('buildSessionRowViews', () => {
   it('titles a row by its first turn, formats its activity, and keeps its plan', async () => {
-    const [view] = await buildSessionRowViews([dto()]);
+    const [view] = await buildSessionRowViews([dto()], 'u1');
     expect(view).toEqual({
       id: 's_1',
       origin: 'conversation',
@@ -68,6 +73,9 @@ describe('buildSessionRowViews', () => {
       startedByName: 'Mara',
       latestPlan: { id: 'p_1', status: 'planned' },
       planCount: 1,
+      state: 'planned',
+      end: null,
+      copiedFrom: null,
       seed: null,
     });
   });
@@ -79,19 +87,78 @@ describe('buildSessionRowViews', () => {
       origin: 'refusal',
       chosenLabel: null,
     } as const;
-    const [view] = await buildSessionRowViews([dto({ seed })]);
+    const [view] = await buildSessionRowViews([dto({ seed })], 'u1');
     expect(view!.seed).toEqual(seed);
   });
 
   it('falls back to the latest plan’s title, then to nothing', async () => {
-    const [byPlan, bare] = await buildSessionRowViews([
-      dto({ firstTurn: null, startedBy: null }),
-      dto({ firstTurn: null, latestPlan: null, planCount: 0 }),
-    ]);
+    const [byPlan, bare] = await buildSessionRowViews(
+      [
+        dto({ firstTurn: null, startedBy: null }),
+        dto({ firstTurn: null, latestPlan: null, planCount: 0 }),
+      ],
+      'u1',
+    );
     expect(byPlan!.title).toBe('The plan');
     expect(byPlan!.startedByName).toBeNull();
     expect(bare!.title).toBe('');
     expect(bare!.latestPlan).toBeNull();
+  });
+});
+
+describe('buildSessionRowViews — the END (MOTIR-7642)', () => {
+  it('an ended session carries its reason, its end time and who ended it', async () => {
+    const [view] = await buildSessionRowViews(
+      [
+        dto({
+          state: 'closed',
+          endedAt: '2026-10-03T18:34:00.000Z',
+          endReason: 'restarted',
+          endedBy: { id: 'u1', name: 'Mara' },
+        }),
+      ],
+      'u1',
+    );
+    expect(view!.state).toBe('closed');
+    expect(view!.end).toEqual({
+      reason: 'restarted',
+      // Not today, so the short DATE; the full date-time rides `title`.
+      timeLabel: 'Oct 3',
+      fullLabel: expect.stringContaining('2026'),
+      endedByName: 'Mara',
+      endedByViewer: true,
+    });
+  });
+
+  it('ended TODAY reads the short time, and another reader is not "you"', async () => {
+    const endedAt = new Date();
+    endedAt.setUTCHours(12, 5, 0, 0);
+    const [view] = await buildSessionRowViews(
+      [
+        dto({
+          state: 'declined',
+          endedAt: endedAt.toISOString(),
+          endReason: 'declined',
+          endedBy: { id: 'u1', name: 'Mara' },
+        }),
+      ],
+      'u2',
+    );
+    expect(view!.end).toMatchObject({ timeLabel: '12:05 PM', endedByViewer: false });
+  });
+
+  it('an open session has no end; a copy names its source by its end time', async () => {
+    const [open, copy, orphan] = await buildSessionRowViews(
+      [
+        dto(),
+        dto({ copiedFrom: { id: 's_0', endedAt: '2026-10-03T18:34:00.000Z' } }),
+        dto({ copiedFrom: { id: 's_0', endedAt: null } }),
+      ],
+      null,
+    );
+    expect(open!.end).toBeNull();
+    expect(copy!.copiedFrom).toEqual({ id: 's_0', whenLabel: 'Oct 3' });
+    expect(orphan!.copiedFrom).toBeNull();
   });
 });
 

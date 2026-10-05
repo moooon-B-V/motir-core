@@ -411,6 +411,7 @@ export const planChangeSessionRepository = {
              ${sessionStateSql}::text AS "state",
              s."ended_at" AS "endedAt", s."end_reason"::text AS "endReason",
              eb."id" AS "endedById", eb."name" AS "endedByName",
+             cf."id" AS "copiedFromId", cf."ended_at" AS "copiedFromEndedAt",
              s."seed_gate_id" AS "seedGateId", sg."kind"::text AS "seedGateKind",
              sg."state"::text AS "seedGateState",
              sg."chosen_option"->>'label' AS "seedChosenLabel",
@@ -419,6 +420,9 @@ export const planChangeSessionRepository = {
       FROM "plan_change_session" s
       LEFT JOIN "user" u ON u."id" = s."created_by_id"
       LEFT JOIN "user" eb ON eb."id" = s."ended_by_id"
+      LEFT JOIN "plan_change_session" cf
+        ON cf."id" = s."copied_from_session_id" AND cf."workspace_id" = s."workspace_id"
+       AND cf."project_id" = s."project_id"
       LEFT JOIN "approval_gate" sg
         ON sg."id" = s."seed_gate_id" AND sg."workspace_id" = s."workspace_id"
       LEFT JOIN "work_item" sw
@@ -560,6 +564,10 @@ export interface PlanSessionListRow {
   endReason: string | null;
   endedById: string | null;
   endedByName: string | null;
+  /** The session this one was COPIED from (AMENDMENT 23 §6), when it is still
+   *  in the project; null otherwise — a gone source reads like no source. */
+  copiedFromId: string | null;
+  copiedFromEndedAt: Date | null;
   /** MOTIR-6207's `seed_gate_id` — still set when the gate's work item moved away. */
   seedGateId: string | null;
   /** The seeding gate's kind; null when the session is unseeded or the gate is gone. */

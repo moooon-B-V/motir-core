@@ -7180,7 +7180,22 @@
         "pickLabel": "<mono>{key}</mono> 的后续规划",
         "chose": "选择了 {label}",
         "pickAria": "打开 {key}，这段对话是它的后续规划（选择了 {label}）"
-      }
+      },
+      "end": {
+        "failed": "已关闭 · 尝试失败 · {time}",
+        "idle": "已关闭 · 闲置 · {time}",
+        "restartedYou": "已关闭 · 你开始了新的规划 · {time}",
+        "restartedBy": "已关闭 · {name} 开始了新的规划 · {time}",
+        "restarted": "已关闭 · 开始了新的规划 · {time}",
+        "declinedBy": "{name} 已拒绝 · {time}",
+        "declinedYou": "你已拒绝 · {time}",
+        "declined": "已拒绝 · {time}",
+        "approvedBy": "{name} 已批准 · {time}",
+        "approvedYou": "你已批准 · {time}",
+        "approved": "已批准 · {time}"
+      },
+      "continuedFrom": "接续 {when} 的对话",
+      "continuedFromAria": "打开此对话所接续的对话（{when} 关闭）"
     }
   },
   "planningWorkspace": {

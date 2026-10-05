@@ -7184,7 +7184,22 @@
         "pickLabel": "Follow-up to <mono>{key}</mono>",
         "chose": "chose {label}",
         "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})"
-      }
+      },
+      "end": {
+        "failed": "Closed · the attempt failed · {time}",
+        "idle": "Closed · idle · {time}",
+        "restartedYou": "Closed · you started something new · {time}",
+        "restartedBy": "Closed · {name} started something new · {time}",
+        "restarted": "Closed · started something new · {time}",
+        "declinedBy": "Declined by {name} · {time}",
+        "declinedYou": "Declined by you · {time}",
+        "declined": "Declined · {time}",
+        "approvedBy": "Approved by {name} · {time}",
+        "approvedYou": "Approved by you · {time}",
+        "approved": "Approved · {time}"
+      },
+      "continuedFrom": "Continued from the {when} conversation",
+      "continuedFromAria": "Open the conversation this one continues, closed {when}"
     }
   },
   "planningWorkspace": {

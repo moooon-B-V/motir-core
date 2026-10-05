@@ -179,6 +179,34 @@ describe('every session of the project is listed, newest activity first', () => 
     expect(row!.planCount).toBe(2);
   });
 
+  it('an ENDED session carries its end, and a COPY names the one it continues (MOTIR-7642)', async () => {
+    const source = await freshSession('the old attempt');
+    const endedAt = minutesAgo(30);
+    await adminDb.planChangeSession.update({
+      where: { id: source },
+      data: { endedAt, endReason: 'failed' },
+    });
+    const copy = await freshSession('the old attempt');
+    await adminDb.planChangeSession.update({
+      where: { id: copy },
+      data: { copiedFromSessionId: source, lastActivityAt: minutesAgo(1) },
+    });
+
+    const rows = (await planSessionsService.listSessions(fx.projectId, fx.ctx)).sessions;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(source)).toMatchObject({
+      state: 'closed',
+      endedAt: endedAt.toISOString(),
+      endReason: 'failed',
+      endedBy: null,
+      copiedFrom: null,
+    });
+    expect(byId.get(copy)).toMatchObject({
+      endedAt: null,
+      copiedFrom: { id: source, endedAt: endedAt.toISOString() },
+    });
+  });
+
   it('is ONE statement per page — no per-row plan or turn read', async () => {
     for (let i = 0; i < 4; i += 1) {
       const id = await freshSession(`t${i}`);
