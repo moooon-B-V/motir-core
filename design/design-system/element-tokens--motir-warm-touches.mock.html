@@ -3,7 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Design mock · Warm touches in the default Motir palette — element tokens (MOTIR-7583)</title>
+    <title>
+      Design mock · Warm touches in the default Motir palette — element tokens (MOTIR-7583)
+    </title>
     <!--
       DELTA MOCK — Subtask MOTIR-7583 (Story MOTIR-7582). Spec:
       design/design-system/design-notes.md § "Warm touches in the default Motir palette (MOTIR-7583)".
@@ -18,7 +20,8 @@
          base for the few names the motir blocks leave alone. Tier-3: the base
          element block, verbatim (var() references only). Shape: @theme. */
       :root {
-        --font-sans: var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
         --radius-btn: 8px;
         --radius-card: 12px;
@@ -219,145 +222,1120 @@
       }
       /* the REJECTED "a bit more colourful" intensity — drawn for comparison only */
       .wt-scope[data-proposal='colourful'] {
-
         --wt-chip-mix: 22%;
       }
       .wt-scope[data-theme='dark'][data-proposal='colourful'] {
-
       }
 
-      *, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; border: 0 solid; }
-      body { font-family: var(--font-sans); background: var(--el-page-bg); color: var(--el-text); }
-      body.wt-sheet { background: var(--el-surface-soft); padding: 32px; }
-      .wt-scope { --wt-chip-mix: 14%; background: var(--el-page-bg); color: var(--el-text); font-family: var(--font-sans); }
-      .wt-sheet-head { max-width: 1240px; margin: 0 auto 28px; }
-      .wt-sheet-title { font-size: 22px; font-weight: 600; color: var(--el-text); }
-      .wt-sheet-lede { margin-top: 6px; max-width: 92ch; font-size: 13.5px; line-height: 1.55; color: var(--el-text-secondary); }
-      .wt-panel { max-width: 1240px; margin: 0 auto 36px; }
-      .wt-panel-title { font-size: 15px; font-weight: 600; color: var(--el-text); margin-bottom: 4px; }
-      .wt-panel-note { font-size: 12.5px; line-height: 1.5; color: var(--el-text-secondary); margin-bottom: 12px; max-width: 110ch; }
-      .wt-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-      .wt-quad { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-      .wt-frame { border: 1px solid var(--el-border); border-radius: var(--radius-card); overflow: hidden; }
-      .wt-frame-cap { display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 12px; font-weight: 600;
-        color: var(--el-text-secondary); background: var(--el-page-bg); border-bottom: 1px solid var(--el-border); }
-      .wt-frame-body { padding: 16px; }
-      .wt-tag { display: inline-flex; align-items: center; border-radius: var(--radius-badge);
-        padding: var(--spacing-chip-y) var(--spacing-chip-x); font-size: 11px; font-weight: 600; color: var(--el-text-strong);
-        background: var(--el-muted); }
-      .wt-tag-rec { background: var(--el-tint-mint); }
-      .wt-link { font-size: 13px; font-weight: 500; color: var(--el-link); text-decoration: underline; }
-      .wt-ico { width: 16px; height: 16px; flex: none; }
-      .wt-chipgrid { display: flex; flex-wrap: wrap; gap: 8px; }
-      .wt-tok { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-      .wt-tok th { text-align: left; font-weight: 600; color: var(--el-text-secondary); padding: 6px 10px; border-bottom: 1px solid var(--el-border); }
-      .wt-tok td { padding: 6px 10px; border-bottom: 1px solid var(--el-border); color: var(--el-text); }
-      .wt-tok-name { font-family: var(--font-mono); font-size: 12px; }
-      .wt-sw { display: inline-block; width: 44px; height: 22px; border-radius: var(--radius-control); border: 1px solid var(--el-border); vertical-align: middle; }
-      .wt-mkt-tile { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: var(--radius-control);
-        background: var(--el-tint-peach); color: var(--el-text-strong); }
-      .wt-mkt-card { display: flex; gap: 16px; align-items: flex-start; border: 1px solid var(--el-border); border-radius: var(--radius-card);
-        background: var(--el-page-bg); padding: var(--spacing-card-padding); }
-      .wt-mkt-h { font-size: 15px; font-weight: 700; color: var(--el-text); margin-bottom: 4px; }
-      .wt-mkt-p { font-size: 13px; line-height: 1.55; color: var(--el-text-secondary); }
-      .wt-method { display: inline-flex; min-width: 52px; justify-content: center; border-radius: var(--radius-badge);
-        padding: var(--spacing-chip-y) var(--spacing-chip-x); font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; color: var(--el-text-strong); }
-      .wt-bg-tint-sky { background: var(--el-tint-sky); }
-      .wt-bg-tint-mint { background: var(--el-tint-mint); }
-      .wt-bg-tint-peach { background: var(--el-tint-peach); }
-      .wt-bg-tint-rose { background: var(--el-tint-rose); }
-      .wt-bg-tint-yellow { background: var(--el-tint-yellow); }
-      .wt-mkt-note { border-radius: var(--radius-control); padding: 8px 10px; font-size: 12.5px; line-height: 1.45; color: var(--el-text-strong); }
-      .wt-mkt-alert { border-radius: var(--radius-card); background: var(--el-tint-peach); padding: 24px; text-align: center; }
-      .wt-mkt-stack { display: flex; flex-direction: column; gap: 14px; }
+      *,
+      ::before,
+      ::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        border: 0 solid;
+      }
+      body {
+        font-family: var(--font-sans);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+      }
+      body.wt-sheet {
+        background: var(--el-surface-soft);
+        padding: 32px;
+      }
+      .wt-scope {
+        --wt-chip-mix: 14%;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+      }
+      .wt-sheet-head {
+        max-width: 1240px;
+        margin: 0 auto 28px;
+      }
+      .wt-sheet-title {
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .wt-sheet-lede {
+        margin-top: 6px;
+        max-width: 92ch;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .wt-panel {
+        max-width: 1240px;
+        margin: 0 auto 36px;
+      }
+      .wt-panel-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-bottom: 4px;
+      }
+      .wt-panel-note {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin-bottom: 12px;
+        max-width: 110ch;
+      }
+      .wt-pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .wt-quad {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .wt-frame {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .wt-frame-cap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .wt-frame-body {
+        padding: 16px;
+      }
+      .wt-tag {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-muted);
+      }
+      .wt-tag-rec {
+        background: var(--el-tint-mint);
+      }
+      .wt-link {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-link);
+        text-decoration: underline;
+      }
+      .wt-ico {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .wt-chipgrid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .wt-tok {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .wt-tok th {
+        text-align: left;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .wt-tok td {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--el-border);
+        color: var(--el-text);
+      }
+      .wt-tok-name {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .wt-sw {
+        display: inline-block;
+        width: 44px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        vertical-align: middle;
+      }
+      .wt-mkt-tile {
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .wt-mkt-card {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: var(--spacing-card-padding);
+      }
+      .wt-mkt-h {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin-bottom: 4px;
+      }
+      .wt-mkt-p {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .wt-method {
+        display: inline-flex;
+        min-width: 52px;
+        justify-content: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .wt-bg-tint-sky {
+        background: var(--el-tint-sky);
+      }
+      .wt-bg-tint-mint {
+        background: var(--el-tint-mint);
+      }
+      .wt-bg-tint-peach {
+        background: var(--el-tint-peach);
+      }
+      .wt-bg-tint-rose {
+        background: var(--el-tint-rose);
+      }
+      .wt-bg-tint-yellow {
+        background: var(--el-tint-yellow);
+      }
+      .wt-mkt-note {
+        border-radius: var(--radius-control);
+        padding: 8px 10px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .wt-mkt-alert {
+        border-radius: var(--radius-card);
+        background: var(--el-tint-peach);
+        padding: 24px;
+        text-align: center;
+      }
+      .wt-mkt-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
     </style>
   </head>
   <body class="wt-sheet">
     <header class="wt-sheet-head">
-      <h1 class="wt-sheet-title">Warm touches in the default Motir palette — the --el-* rows that change</h1>
-      <p class="wt-sheet-lede">Every --el-* role whose resolved value moves in the motir palette, plus the new roles, before and after, in both themes. Then the identity roles that deliberately do not move, and the motir.co surfaces that paint a changed role.</p>
+      <h1 class="wt-sheet-title">
+        Warm touches in the default Motir palette — the --el-* rows that change
+      </h1>
+      <p class="wt-sheet-lede">
+        Every --el-* role whose resolved value moves in the motir palette, plus the new roles,
+        before and after, in both themes. Then the identity roles that deliberately do not move, and
+        the motir.co surfaces that paint a changed role.
+      </p>
     </header>
     <section class="wt-panel">
       <h2 class="wt-panel-title">1 · Changed roles — light</h2>
-      <p class="wt-panel-note">The orange group (highlight, Epic, epic accent, chart segment 6, the new progress fill), the citrine Design hue, and the two tints with the roles that alias them.</p>
+      <p class="wt-panel-note">
+        The orange group (highlight, Epic, epic accent, chart segment 6, the new progress fill), the
+        citrine Design hue, and the two tints with the roles that alias them.
+      </p>
       <div class="wt-pair">
-      <div class="wt-scope wt-frame" data-theme="light">
-        <div class="wt-frame-cap">Light · today (shipped)</div>
-        <div class="wt-frame-body"><table class="wt-tok"><thead><tr><th>role</th><th>swatch</th></tr></thead><tbody><tr><td class="wt-tok-name">--el-highlight</td><td><span class="wt-sw" style="background: var(--el-highlight)"></span></td></tr><tr><td class="wt-tok-name">--el-type-epic</td><td><span class="wt-sw" style="background: var(--el-type-epic)"></span></td></tr><tr><td class="wt-tok-name">--el-type-design</td><td><span class="wt-sw" style="background: var(--el-type-design)"></span></td></tr><tr><td class="wt-tok-name">--el-epic-accent</td><td><span class="wt-sw" style="background: var(--el-epic-accent)"></span></td></tr><tr><td class="wt-tok-name">--el-chart-cat-6</td><td><span class="wt-sw" style="background: var(--el-chart-cat-6)"></span></td></tr><tr><td class="wt-tok-name">--el-progress-fill</td><td><span class="wt-sw" style="background: var(--el-progress-fill)"></span></td></tr><tr><td class="wt-tok-name">--el-tint-peach</td><td><span class="wt-sw" style="background: var(--el-tint-peach)"></span></td></tr><tr><td class="wt-tok-name">--el-warning-surface</td><td><span class="wt-sw" style="background: var(--el-warning-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-role-custom</td><td><span class="wt-sw" style="background: var(--el-role-custom)"></span></td></tr><tr><td class="wt-tok-name">--el-label-1</td><td><span class="wt-sw" style="background: var(--el-label-1)"></span></td></tr><tr><td class="wt-tok-name">--el-avatar-peach</td><td><span class="wt-sw" style="background: var(--el-avatar-peach)"></span></td></tr><tr><td class="wt-tok-name">--el-roadmap-submitted</td><td><span class="wt-sw" style="background: var(--el-roadmap-submitted)"></span></td></tr><tr><td class="wt-tok-name">--el-station-tier-validation</td><td><span class="wt-sw" style="background: var(--el-station-tier-validation)"></span></td></tr><tr><td class="wt-tok-name">--el-tint-yellow</td><td><span class="wt-sw" style="background: var(--el-tint-yellow)"></span></td></tr><tr><td class="wt-tok-name">--el-label-6</td><td><span class="wt-sw" style="background: var(--el-label-6)"></span></td></tr><tr><td class="wt-tok-name">--el-avatar-yellow</td><td><span class="wt-sw" style="background: var(--el-avatar-yellow)"></span></td></tr></tbody></table></div>
+        <div class="wt-scope wt-frame" data-theme="light">
+          <div class="wt-frame-cap">Light · today (shipped)</div>
+          <div class="wt-frame-body">
+            <table class="wt-tok">
+              <thead>
+                <tr>
+                  <th>role</th>
+                  <th>swatch</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="wt-tok-name">--el-highlight</td>
+                  <td><span class="wt-sw" style="background: var(--el-highlight)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-epic</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-epic)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-design</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-design)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-epic-accent</td>
+                  <td><span class="wt-sw" style="background: var(--el-epic-accent)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-chart-cat-6</td>
+                  <td><span class="wt-sw" style="background: var(--el-chart-cat-6)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-progress-fill</td>
+                  <td><span class="wt-sw" style="background: var(--el-progress-fill)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-tint-peach</td>
+                  <td><span class="wt-sw" style="background: var(--el-tint-peach)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-warning-surface</td>
+                  <td><span class="wt-sw" style="background: var(--el-warning-surface)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-role-custom</td>
+                  <td><span class="wt-sw" style="background: var(--el-role-custom)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-label-1</td>
+                  <td><span class="wt-sw" style="background: var(--el-label-1)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-avatar-peach</td>
+                  <td><span class="wt-sw" style="background: var(--el-avatar-peach)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-roadmap-submitted</td>
+                  <td>
+                    <span class="wt-sw" style="background: var(--el-roadmap-submitted)"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-station-tier-validation</td>
+                  <td>
+                    <span
+                      class="wt-sw"
+                      style="background: var(--el-station-tier-validation)"
+                    ></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-tint-yellow</td>
+                  <td><span class="wt-sw" style="background: var(--el-tint-yellow)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-label-6</td>
+                  <td><span class="wt-sw" style="background: var(--el-label-6)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-avatar-yellow</td>
+                  <td><span class="wt-sw" style="background: var(--el-avatar-yellow)"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+          <div class="wt-frame-cap">
+            Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span>
+          </div>
+          <div class="wt-frame-body">
+            <table class="wt-tok">
+              <thead>
+                <tr>
+                  <th>role</th>
+                  <th>swatch</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="wt-tok-name">--el-highlight</td>
+                  <td><span class="wt-sw" style="background: var(--el-highlight)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-epic</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-epic)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-design</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-design)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-epic-accent</td>
+                  <td><span class="wt-sw" style="background: var(--el-epic-accent)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-chart-cat-6</td>
+                  <td><span class="wt-sw" style="background: var(--el-chart-cat-6)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-progress-fill</td>
+                  <td><span class="wt-sw" style="background: var(--el-progress-fill)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-tint-peach</td>
+                  <td><span class="wt-sw" style="background: var(--el-tint-peach)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-warning-surface</td>
+                  <td><span class="wt-sw" style="background: var(--el-warning-surface)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-role-custom</td>
+                  <td><span class="wt-sw" style="background: var(--el-role-custom)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-label-1</td>
+                  <td><span class="wt-sw" style="background: var(--el-label-1)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-avatar-peach</td>
+                  <td><span class="wt-sw" style="background: var(--el-avatar-peach)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-roadmap-submitted</td>
+                  <td>
+                    <span class="wt-sw" style="background: var(--el-roadmap-submitted)"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-station-tier-validation</td>
+                  <td>
+                    <span
+                      class="wt-sw"
+                      style="background: var(--el-station-tier-validation)"
+                    ></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-tint-yellow</td>
+                  <td><span class="wt-sw" style="background: var(--el-tint-yellow)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-label-6</td>
+                  <td><span class="wt-sw" style="background: var(--el-label-6)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-avatar-yellow</td>
+                  <td><span class="wt-sw" style="background: var(--el-avatar-yellow)"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      <div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
-        <div class="wt-frame-cap">Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
-        <div class="wt-frame-body"><table class="wt-tok"><thead><tr><th>role</th><th>swatch</th></tr></thead><tbody><tr><td class="wt-tok-name">--el-highlight</td><td><span class="wt-sw" style="background: var(--el-highlight)"></span></td></tr><tr><td class="wt-tok-name">--el-type-epic</td><td><span class="wt-sw" style="background: var(--el-type-epic)"></span></td></tr><tr><td class="wt-tok-name">--el-type-design</td><td><span class="wt-sw" style="background: var(--el-type-design)"></span></td></tr><tr><td class="wt-tok-name">--el-epic-accent</td><td><span class="wt-sw" style="background: var(--el-epic-accent)"></span></td></tr><tr><td class="wt-tok-name">--el-chart-cat-6</td><td><span class="wt-sw" style="background: var(--el-chart-cat-6)"></span></td></tr><tr><td class="wt-tok-name">--el-progress-fill</td><td><span class="wt-sw" style="background: var(--el-progress-fill)"></span></td></tr><tr><td class="wt-tok-name">--el-tint-peach</td><td><span class="wt-sw" style="background: var(--el-tint-peach)"></span></td></tr><tr><td class="wt-tok-name">--el-warning-surface</td><td><span class="wt-sw" style="background: var(--el-warning-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-role-custom</td><td><span class="wt-sw" style="background: var(--el-role-custom)"></span></td></tr><tr><td class="wt-tok-name">--el-label-1</td><td><span class="wt-sw" style="background: var(--el-label-1)"></span></td></tr><tr><td class="wt-tok-name">--el-avatar-peach</td><td><span class="wt-sw" style="background: var(--el-avatar-peach)"></span></td></tr><tr><td class="wt-tok-name">--el-roadmap-submitted</td><td><span class="wt-sw" style="background: var(--el-roadmap-submitted)"></span></td></tr><tr><td class="wt-tok-name">--el-station-tier-validation</td><td><span class="wt-sw" style="background: var(--el-station-tier-validation)"></span></td></tr><tr><td class="wt-tok-name">--el-tint-yellow</td><td><span class="wt-sw" style="background: var(--el-tint-yellow)"></span></td></tr><tr><td class="wt-tok-name">--el-label-6</td><td><span class="wt-sw" style="background: var(--el-label-6)"></span></td></tr><tr><td class="wt-tok-name">--el-avatar-yellow</td><td><span class="wt-sw" style="background: var(--el-avatar-yellow)"></span></td></tr></tbody></table></div>
-      </div>
-    </div>
     </section>
     <section class="wt-panel">
       <h2 class="wt-panel-title">2 · Changed roles — dark</h2>
       <p class="wt-panel-note"></p>
       <div class="wt-pair">
-      <div class="wt-scope wt-frame" data-theme="dark">
-        <div class="wt-frame-cap">Dark · today (shipped)</div>
-        <div class="wt-frame-body"><table class="wt-tok"><thead><tr><th>role</th><th>swatch</th></tr></thead><tbody><tr><td class="wt-tok-name">--el-highlight</td><td><span class="wt-sw" style="background: var(--el-highlight)"></span></td></tr><tr><td class="wt-tok-name">--el-type-epic</td><td><span class="wt-sw" style="background: var(--el-type-epic)"></span></td></tr><tr><td class="wt-tok-name">--el-type-design</td><td><span class="wt-sw" style="background: var(--el-type-design)"></span></td></tr><tr><td class="wt-tok-name">--el-epic-accent</td><td><span class="wt-sw" style="background: var(--el-epic-accent)"></span></td></tr><tr><td class="wt-tok-name">--el-chart-cat-6</td><td><span class="wt-sw" style="background: var(--el-chart-cat-6)"></span></td></tr><tr><td class="wt-tok-name">--el-progress-fill</td><td><span class="wt-sw" style="background: var(--el-progress-fill)"></span></td></tr><tr><td class="wt-tok-name">--el-tint-peach</td><td><span class="wt-sw" style="background: var(--el-tint-peach)"></span></td></tr><tr><td class="wt-tok-name">--el-warning-surface</td><td><span class="wt-sw" style="background: var(--el-warning-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-role-custom</td><td><span class="wt-sw" style="background: var(--el-role-custom)"></span></td></tr><tr><td class="wt-tok-name">--el-label-1</td><td><span class="wt-sw" style="background: var(--el-label-1)"></span></td></tr><tr><td class="wt-tok-name">--el-avatar-peach</td><td><span class="wt-sw" style="background: var(--el-avatar-peach)"></span></td></tr><tr><td class="wt-tok-name">--el-roadmap-submitted</td><td><span class="wt-sw" style="background: var(--el-roadmap-submitted)"></span></td></tr><tr><td class="wt-tok-name">--el-station-tier-validation</td><td><span class="wt-sw" style="background: var(--el-station-tier-validation)"></span></td></tr><tr><td class="wt-tok-name">--el-tint-yellow</td><td><span class="wt-sw" style="background: var(--el-tint-yellow)"></span></td></tr><tr><td class="wt-tok-name">--el-label-6</td><td><span class="wt-sw" style="background: var(--el-label-6)"></span></td></tr><tr><td class="wt-tok-name">--el-avatar-yellow</td><td><span class="wt-sw" style="background: var(--el-avatar-yellow)"></span></td></tr></tbody></table></div>
+        <div class="wt-scope wt-frame" data-theme="dark">
+          <div class="wt-frame-cap">Dark · today (shipped)</div>
+          <div class="wt-frame-body">
+            <table class="wt-tok">
+              <thead>
+                <tr>
+                  <th>role</th>
+                  <th>swatch</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="wt-tok-name">--el-highlight</td>
+                  <td><span class="wt-sw" style="background: var(--el-highlight)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-epic</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-epic)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-design</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-design)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-epic-accent</td>
+                  <td><span class="wt-sw" style="background: var(--el-epic-accent)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-chart-cat-6</td>
+                  <td><span class="wt-sw" style="background: var(--el-chart-cat-6)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-progress-fill</td>
+                  <td><span class="wt-sw" style="background: var(--el-progress-fill)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-tint-peach</td>
+                  <td><span class="wt-sw" style="background: var(--el-tint-peach)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-warning-surface</td>
+                  <td><span class="wt-sw" style="background: var(--el-warning-surface)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-role-custom</td>
+                  <td><span class="wt-sw" style="background: var(--el-role-custom)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-label-1</td>
+                  <td><span class="wt-sw" style="background: var(--el-label-1)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-avatar-peach</td>
+                  <td><span class="wt-sw" style="background: var(--el-avatar-peach)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-roadmap-submitted</td>
+                  <td>
+                    <span class="wt-sw" style="background: var(--el-roadmap-submitted)"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-station-tier-validation</td>
+                  <td>
+                    <span
+                      class="wt-sw"
+                      style="background: var(--el-station-tier-validation)"
+                    ></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-tint-yellow</td>
+                  <td><span class="wt-sw" style="background: var(--el-tint-yellow)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-label-6</td>
+                  <td><span class="wt-sw" style="background: var(--el-label-6)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-avatar-yellow</td>
+                  <td><span class="wt-sw" style="background: var(--el-avatar-yellow)"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+          <div class="wt-frame-cap">
+            Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span>
+          </div>
+          <div class="wt-frame-body">
+            <table class="wt-tok">
+              <thead>
+                <tr>
+                  <th>role</th>
+                  <th>swatch</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="wt-tok-name">--el-highlight</td>
+                  <td><span class="wt-sw" style="background: var(--el-highlight)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-epic</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-epic)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-design</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-design)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-epic-accent</td>
+                  <td><span class="wt-sw" style="background: var(--el-epic-accent)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-chart-cat-6</td>
+                  <td><span class="wt-sw" style="background: var(--el-chart-cat-6)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-progress-fill</td>
+                  <td><span class="wt-sw" style="background: var(--el-progress-fill)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-tint-peach</td>
+                  <td><span class="wt-sw" style="background: var(--el-tint-peach)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-warning-surface</td>
+                  <td><span class="wt-sw" style="background: var(--el-warning-surface)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-role-custom</td>
+                  <td><span class="wt-sw" style="background: var(--el-role-custom)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-label-1</td>
+                  <td><span class="wt-sw" style="background: var(--el-label-1)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-avatar-peach</td>
+                  <td><span class="wt-sw" style="background: var(--el-avatar-peach)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-roadmap-submitted</td>
+                  <td>
+                    <span class="wt-sw" style="background: var(--el-roadmap-submitted)"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-station-tier-validation</td>
+                  <td>
+                    <span
+                      class="wt-sw"
+                      style="background: var(--el-station-tier-validation)"
+                    ></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-tint-yellow</td>
+                  <td><span class="wt-sw" style="background: var(--el-tint-yellow)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-label-6</td>
+                  <td><span class="wt-sw" style="background: var(--el-label-6)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-avatar-yellow</td>
+                  <td><span class="wt-sw" style="background: var(--el-avatar-yellow)"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      <div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
-        <div class="wt-frame-cap">Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
-        <div class="wt-frame-body"><table class="wt-tok"><thead><tr><th>role</th><th>swatch</th></tr></thead><tbody><tr><td class="wt-tok-name">--el-highlight</td><td><span class="wt-sw" style="background: var(--el-highlight)"></span></td></tr><tr><td class="wt-tok-name">--el-type-epic</td><td><span class="wt-sw" style="background: var(--el-type-epic)"></span></td></tr><tr><td class="wt-tok-name">--el-type-design</td><td><span class="wt-sw" style="background: var(--el-type-design)"></span></td></tr><tr><td class="wt-tok-name">--el-epic-accent</td><td><span class="wt-sw" style="background: var(--el-epic-accent)"></span></td></tr><tr><td class="wt-tok-name">--el-chart-cat-6</td><td><span class="wt-sw" style="background: var(--el-chart-cat-6)"></span></td></tr><tr><td class="wt-tok-name">--el-progress-fill</td><td><span class="wt-sw" style="background: var(--el-progress-fill)"></span></td></tr><tr><td class="wt-tok-name">--el-tint-peach</td><td><span class="wt-sw" style="background: var(--el-tint-peach)"></span></td></tr><tr><td class="wt-tok-name">--el-warning-surface</td><td><span class="wt-sw" style="background: var(--el-warning-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-role-custom</td><td><span class="wt-sw" style="background: var(--el-role-custom)"></span></td></tr><tr><td class="wt-tok-name">--el-label-1</td><td><span class="wt-sw" style="background: var(--el-label-1)"></span></td></tr><tr><td class="wt-tok-name">--el-avatar-peach</td><td><span class="wt-sw" style="background: var(--el-avatar-peach)"></span></td></tr><tr><td class="wt-tok-name">--el-roadmap-submitted</td><td><span class="wt-sw" style="background: var(--el-roadmap-submitted)"></span></td></tr><tr><td class="wt-tok-name">--el-station-tier-validation</td><td><span class="wt-sw" style="background: var(--el-station-tier-validation)"></span></td></tr><tr><td class="wt-tok-name">--el-tint-yellow</td><td><span class="wt-sw" style="background: var(--el-tint-yellow)"></span></td></tr><tr><td class="wt-tok-name">--el-label-6</td><td><span class="wt-sw" style="background: var(--el-label-6)"></span></td></tr><tr><td class="wt-tok-name">--el-avatar-yellow</td><td><span class="wt-sw" style="background: var(--el-avatar-yellow)"></span></td></tr></tbody></table></div>
-      </div>
-    </div>
     </section>
     <section class="wt-panel">
       <h2 class="wt-panel-title">3 · Identity roles that do NOT change — light and dark</h2>
-      <p class="wt-panel-note">Ink CTA, accent on a surface, links, info, the selection wash, the neighbouring task / review / warning / priority / danger hues, surfaces, ink and borders: identical left and right.</p>
-      <div class="wt-quad"><div class="wt-scope wt-frame" data-theme="light">
-        <div class="wt-frame-cap">Light · today (shipped)</div>
-        <div class="wt-frame-body"><table class="wt-tok"><thead><tr><th>role</th><th>swatch</th></tr></thead><tbody><tr><td class="wt-tok-name">--el-accent</td><td><span class="wt-sw" style="background: var(--el-accent)"></span></td></tr><tr><td class="wt-tok-name">--el-accent-text</td><td><span class="wt-sw" style="background: var(--el-accent-text)"></span></td></tr><tr><td class="wt-tok-name">--el-accent-on-surface</td><td><span class="wt-sw" style="background: var(--el-accent-on-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-link</td><td><span class="wt-sw" style="background: var(--el-link)"></span></td></tr><tr><td class="wt-tok-name">--el-info</td><td><span class="wt-sw" style="background: var(--el-info)"></span></td></tr><tr><td class="wt-tok-name">--el-selection-bg</td><td><span class="wt-sw" style="background: var(--el-selection-bg)"></span></td></tr><tr><td class="wt-tok-name">--el-type-task</td><td><span class="wt-sw" style="background: var(--el-type-task)"></span></td></tr><tr><td class="wt-tok-name">--el-type-review</td><td><span class="wt-sw" style="background: var(--el-type-review)"></span></td></tr><tr><td class="wt-tok-name">--el-warning</td><td><span class="wt-sw" style="background: var(--el-warning)"></span></td></tr><tr><td class="wt-tok-name">--el-priority-high</td><td><span class="wt-sw" style="background: var(--el-priority-high)"></span></td></tr><tr><td class="wt-tok-name">--el-danger</td><td><span class="wt-sw" style="background: var(--el-danger)"></span></td></tr><tr><td class="wt-tok-name">--el-page-bg</td><td><span class="wt-sw" style="background: var(--el-page-bg)"></span></td></tr><tr><td class="wt-tok-name">--el-surface</td><td><span class="wt-sw" style="background: var(--el-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-text</td><td><span class="wt-sw" style="background: var(--el-text)"></span></td></tr><tr><td class="wt-tok-name">--el-border</td><td><span class="wt-sw" style="background: var(--el-border)"></span></td></tr></tbody></table></div>
-      </div><div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
-        <div class="wt-frame-cap">Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
-        <div class="wt-frame-body"><table class="wt-tok"><thead><tr><th>role</th><th>swatch</th></tr></thead><tbody><tr><td class="wt-tok-name">--el-accent</td><td><span class="wt-sw" style="background: var(--el-accent)"></span></td></tr><tr><td class="wt-tok-name">--el-accent-text</td><td><span class="wt-sw" style="background: var(--el-accent-text)"></span></td></tr><tr><td class="wt-tok-name">--el-accent-on-surface</td><td><span class="wt-sw" style="background: var(--el-accent-on-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-link</td><td><span class="wt-sw" style="background: var(--el-link)"></span></td></tr><tr><td class="wt-tok-name">--el-info</td><td><span class="wt-sw" style="background: var(--el-info)"></span></td></tr><tr><td class="wt-tok-name">--el-selection-bg</td><td><span class="wt-sw" style="background: var(--el-selection-bg)"></span></td></tr><tr><td class="wt-tok-name">--el-type-task</td><td><span class="wt-sw" style="background: var(--el-type-task)"></span></td></tr><tr><td class="wt-tok-name">--el-type-review</td><td><span class="wt-sw" style="background: var(--el-type-review)"></span></td></tr><tr><td class="wt-tok-name">--el-warning</td><td><span class="wt-sw" style="background: var(--el-warning)"></span></td></tr><tr><td class="wt-tok-name">--el-priority-high</td><td><span class="wt-sw" style="background: var(--el-priority-high)"></span></td></tr><tr><td class="wt-tok-name">--el-danger</td><td><span class="wt-sw" style="background: var(--el-danger)"></span></td></tr><tr><td class="wt-tok-name">--el-page-bg</td><td><span class="wt-sw" style="background: var(--el-page-bg)"></span></td></tr><tr><td class="wt-tok-name">--el-surface</td><td><span class="wt-sw" style="background: var(--el-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-text</td><td><span class="wt-sw" style="background: var(--el-text)"></span></td></tr><tr><td class="wt-tok-name">--el-border</td><td><span class="wt-sw" style="background: var(--el-border)"></span></td></tr></tbody></table></div>
-      </div><div class="wt-scope wt-frame" data-theme="dark">
-        <div class="wt-frame-cap">Dark · today (shipped)</div>
-        <div class="wt-frame-body"><table class="wt-tok"><thead><tr><th>role</th><th>swatch</th></tr></thead><tbody><tr><td class="wt-tok-name">--el-accent</td><td><span class="wt-sw" style="background: var(--el-accent)"></span></td></tr><tr><td class="wt-tok-name">--el-accent-text</td><td><span class="wt-sw" style="background: var(--el-accent-text)"></span></td></tr><tr><td class="wt-tok-name">--el-accent-on-surface</td><td><span class="wt-sw" style="background: var(--el-accent-on-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-link</td><td><span class="wt-sw" style="background: var(--el-link)"></span></td></tr><tr><td class="wt-tok-name">--el-info</td><td><span class="wt-sw" style="background: var(--el-info)"></span></td></tr><tr><td class="wt-tok-name">--el-selection-bg</td><td><span class="wt-sw" style="background: var(--el-selection-bg)"></span></td></tr><tr><td class="wt-tok-name">--el-type-task</td><td><span class="wt-sw" style="background: var(--el-type-task)"></span></td></tr><tr><td class="wt-tok-name">--el-type-review</td><td><span class="wt-sw" style="background: var(--el-type-review)"></span></td></tr><tr><td class="wt-tok-name">--el-warning</td><td><span class="wt-sw" style="background: var(--el-warning)"></span></td></tr><tr><td class="wt-tok-name">--el-priority-high</td><td><span class="wt-sw" style="background: var(--el-priority-high)"></span></td></tr><tr><td class="wt-tok-name">--el-danger</td><td><span class="wt-sw" style="background: var(--el-danger)"></span></td></tr><tr><td class="wt-tok-name">--el-page-bg</td><td><span class="wt-sw" style="background: var(--el-page-bg)"></span></td></tr><tr><td class="wt-tok-name">--el-surface</td><td><span class="wt-sw" style="background: var(--el-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-text</td><td><span class="wt-sw" style="background: var(--el-text)"></span></td></tr><tr><td class="wt-tok-name">--el-border</td><td><span class="wt-sw" style="background: var(--el-border)"></span></td></tr></tbody></table></div>
-      </div><div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
-        <div class="wt-frame-cap">Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
-        <div class="wt-frame-body"><table class="wt-tok"><thead><tr><th>role</th><th>swatch</th></tr></thead><tbody><tr><td class="wt-tok-name">--el-accent</td><td><span class="wt-sw" style="background: var(--el-accent)"></span></td></tr><tr><td class="wt-tok-name">--el-accent-text</td><td><span class="wt-sw" style="background: var(--el-accent-text)"></span></td></tr><tr><td class="wt-tok-name">--el-accent-on-surface</td><td><span class="wt-sw" style="background: var(--el-accent-on-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-link</td><td><span class="wt-sw" style="background: var(--el-link)"></span></td></tr><tr><td class="wt-tok-name">--el-info</td><td><span class="wt-sw" style="background: var(--el-info)"></span></td></tr><tr><td class="wt-tok-name">--el-selection-bg</td><td><span class="wt-sw" style="background: var(--el-selection-bg)"></span></td></tr><tr><td class="wt-tok-name">--el-type-task</td><td><span class="wt-sw" style="background: var(--el-type-task)"></span></td></tr><tr><td class="wt-tok-name">--el-type-review</td><td><span class="wt-sw" style="background: var(--el-type-review)"></span></td></tr><tr><td class="wt-tok-name">--el-warning</td><td><span class="wt-sw" style="background: var(--el-warning)"></span></td></tr><tr><td class="wt-tok-name">--el-priority-high</td><td><span class="wt-sw" style="background: var(--el-priority-high)"></span></td></tr><tr><td class="wt-tok-name">--el-danger</td><td><span class="wt-sw" style="background: var(--el-danger)"></span></td></tr><tr><td class="wt-tok-name">--el-page-bg</td><td><span class="wt-sw" style="background: var(--el-page-bg)"></span></td></tr><tr><td class="wt-tok-name">--el-surface</td><td><span class="wt-sw" style="background: var(--el-surface)"></span></td></tr><tr><td class="wt-tok-name">--el-text</td><td><span class="wt-sw" style="background: var(--el-text)"></span></td></tr><tr><td class="wt-tok-name">--el-border</td><td><span class="wt-sw" style="background: var(--el-border)"></span></td></tr></tbody></table></div>
-      </div></div>
+      <p class="wt-panel-note">
+        Ink CTA, accent on a surface, links, info, the selection wash, the neighbouring task /
+        review / warning / priority / danger hues, surfaces, ink and borders: identical left and
+        right.
+      </p>
+      <div class="wt-quad">
+        <div class="wt-scope wt-frame" data-theme="light">
+          <div class="wt-frame-cap">Light · today (shipped)</div>
+          <div class="wt-frame-body">
+            <table class="wt-tok">
+              <thead>
+                <tr>
+                  <th>role</th>
+                  <th>swatch</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="wt-tok-name">--el-accent</td>
+                  <td><span class="wt-sw" style="background: var(--el-accent)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-accent-text</td>
+                  <td><span class="wt-sw" style="background: var(--el-accent-text)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-accent-on-surface</td>
+                  <td>
+                    <span class="wt-sw" style="background: var(--el-accent-on-surface)"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-link</td>
+                  <td><span class="wt-sw" style="background: var(--el-link)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-info</td>
+                  <td><span class="wt-sw" style="background: var(--el-info)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-selection-bg</td>
+                  <td><span class="wt-sw" style="background: var(--el-selection-bg)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-task</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-task)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-review</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-review)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-warning</td>
+                  <td><span class="wt-sw" style="background: var(--el-warning)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-priority-high</td>
+                  <td><span class="wt-sw" style="background: var(--el-priority-high)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-danger</td>
+                  <td><span class="wt-sw" style="background: var(--el-danger)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-page-bg</td>
+                  <td><span class="wt-sw" style="background: var(--el-page-bg)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-surface</td>
+                  <td><span class="wt-sw" style="background: var(--el-surface)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-text</td>
+                  <td><span class="wt-sw" style="background: var(--el-text)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-border</td>
+                  <td><span class="wt-sw" style="background: var(--el-border)"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+          <div class="wt-frame-cap">
+            Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span>
+          </div>
+          <div class="wt-frame-body">
+            <table class="wt-tok">
+              <thead>
+                <tr>
+                  <th>role</th>
+                  <th>swatch</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="wt-tok-name">--el-accent</td>
+                  <td><span class="wt-sw" style="background: var(--el-accent)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-accent-text</td>
+                  <td><span class="wt-sw" style="background: var(--el-accent-text)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-accent-on-surface</td>
+                  <td>
+                    <span class="wt-sw" style="background: var(--el-accent-on-surface)"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-link</td>
+                  <td><span class="wt-sw" style="background: var(--el-link)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-info</td>
+                  <td><span class="wt-sw" style="background: var(--el-info)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-selection-bg</td>
+                  <td><span class="wt-sw" style="background: var(--el-selection-bg)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-task</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-task)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-review</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-review)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-warning</td>
+                  <td><span class="wt-sw" style="background: var(--el-warning)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-priority-high</td>
+                  <td><span class="wt-sw" style="background: var(--el-priority-high)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-danger</td>
+                  <td><span class="wt-sw" style="background: var(--el-danger)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-page-bg</td>
+                  <td><span class="wt-sw" style="background: var(--el-page-bg)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-surface</td>
+                  <td><span class="wt-sw" style="background: var(--el-surface)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-text</td>
+                  <td><span class="wt-sw" style="background: var(--el-text)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-border</td>
+                  <td><span class="wt-sw" style="background: var(--el-border)"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="dark">
+          <div class="wt-frame-cap">Dark · today (shipped)</div>
+          <div class="wt-frame-body">
+            <table class="wt-tok">
+              <thead>
+                <tr>
+                  <th>role</th>
+                  <th>swatch</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="wt-tok-name">--el-accent</td>
+                  <td><span class="wt-sw" style="background: var(--el-accent)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-accent-text</td>
+                  <td><span class="wt-sw" style="background: var(--el-accent-text)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-accent-on-surface</td>
+                  <td>
+                    <span class="wt-sw" style="background: var(--el-accent-on-surface)"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-link</td>
+                  <td><span class="wt-sw" style="background: var(--el-link)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-info</td>
+                  <td><span class="wt-sw" style="background: var(--el-info)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-selection-bg</td>
+                  <td><span class="wt-sw" style="background: var(--el-selection-bg)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-task</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-task)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-review</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-review)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-warning</td>
+                  <td><span class="wt-sw" style="background: var(--el-warning)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-priority-high</td>
+                  <td><span class="wt-sw" style="background: var(--el-priority-high)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-danger</td>
+                  <td><span class="wt-sw" style="background: var(--el-danger)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-page-bg</td>
+                  <td><span class="wt-sw" style="background: var(--el-page-bg)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-surface</td>
+                  <td><span class="wt-sw" style="background: var(--el-surface)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-text</td>
+                  <td><span class="wt-sw" style="background: var(--el-text)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-border</td>
+                  <td><span class="wt-sw" style="background: var(--el-border)"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+          <div class="wt-frame-cap">
+            Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span>
+          </div>
+          <div class="wt-frame-body">
+            <table class="wt-tok">
+              <thead>
+                <tr>
+                  <th>role</th>
+                  <th>swatch</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="wt-tok-name">--el-accent</td>
+                  <td><span class="wt-sw" style="background: var(--el-accent)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-accent-text</td>
+                  <td><span class="wt-sw" style="background: var(--el-accent-text)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-accent-on-surface</td>
+                  <td>
+                    <span class="wt-sw" style="background: var(--el-accent-on-surface)"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-link</td>
+                  <td><span class="wt-sw" style="background: var(--el-link)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-info</td>
+                  <td><span class="wt-sw" style="background: var(--el-info)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-selection-bg</td>
+                  <td><span class="wt-sw" style="background: var(--el-selection-bg)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-task</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-task)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-type-review</td>
+                  <td><span class="wt-sw" style="background: var(--el-type-review)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-warning</td>
+                  <td><span class="wt-sw" style="background: var(--el-warning)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-priority-high</td>
+                  <td><span class="wt-sw" style="background: var(--el-priority-high)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-danger</td>
+                  <td><span class="wt-sw" style="background: var(--el-danger)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-page-bg</td>
+                  <td><span class="wt-sw" style="background: var(--el-page-bg)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-surface</td>
+                  <td><span class="wt-sw" style="background: var(--el-surface)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-text</td>
+                  <td><span class="wt-sw" style="background: var(--el-text)"></span></td>
+                </tr>
+                <tr>
+                  <td class="wt-tok-name">--el-border</td>
+                  <td><span class="wt-sw" style="background: var(--el-border)"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </section>
     <section class="wt-panel">
       <h2 class="wt-panel-title">4 · motir.co — the surfaces that paint a changed role</h2>
-      <p class="wt-panel-note">The site renders the default palette from its pinned @motir/design-system. Only peach and yellow washes reach it: the open-core tile, the PATCH / PUT method chips (and 4xx status chips), the sandbox notes, and the public-project error state. No type hue, highlight or avatar is painted there.</p>
-      <div class="wt-quad"><div class="wt-scope wt-frame" data-theme="light">
-        <div class="wt-frame-cap">Light · today (shipped)</div>
-        <div class="wt-frame-body"><div class="wt-mkt-stack">
-          <div class="wt-mkt-card"><span class="wt-mkt-tile" aria-hidden="true"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span><div><div class="wt-mkt-h">Open core, on GitHub</div><p class="wt-mkt-p">The planning app is open source. <span class="wt-link">Read the source</span></p></div></div>
-          <div class="wt-chipgrid"><span class="wt-method wt-bg-tint-sky">GET</span><span class="wt-method wt-bg-tint-mint">POST</span><span class="wt-method wt-bg-tint-peach">PATCH</span><span class="wt-method wt-bg-tint-peach">PUT</span><span class="wt-method wt-bg-tint-rose">DELETE</span></div>
-          <p class="wt-mkt-note wt-bg-tint-yellow">Your sandbox keeps its data for 24 hours after the last sign-in.</p>
-          <div class="wt-mkt-alert"><div class="wt-mkt-h">We could not load this project</div><p class="wt-mkt-p">The Motir application is not answering right now. Try again in a moment.</p></div>
-        </div></div>
-      </div><div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
-        <div class="wt-frame-cap">Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
-        <div class="wt-frame-body"><div class="wt-mkt-stack">
-          <div class="wt-mkt-card"><span class="wt-mkt-tile" aria-hidden="true"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span><div><div class="wt-mkt-h">Open core, on GitHub</div><p class="wt-mkt-p">The planning app is open source. <span class="wt-link">Read the source</span></p></div></div>
-          <div class="wt-chipgrid"><span class="wt-method wt-bg-tint-sky">GET</span><span class="wt-method wt-bg-tint-mint">POST</span><span class="wt-method wt-bg-tint-peach">PATCH</span><span class="wt-method wt-bg-tint-peach">PUT</span><span class="wt-method wt-bg-tint-rose">DELETE</span></div>
-          <p class="wt-mkt-note wt-bg-tint-yellow">Your sandbox keeps its data for 24 hours after the last sign-in.</p>
-          <div class="wt-mkt-alert"><div class="wt-mkt-h">We could not load this project</div><p class="wt-mkt-p">The Motir application is not answering right now. Try again in a moment.</p></div>
-        </div></div>
-      </div><div class="wt-scope wt-frame" data-theme="dark">
-        <div class="wt-frame-cap">Dark · today (shipped)</div>
-        <div class="wt-frame-body"><div class="wt-mkt-stack">
-          <div class="wt-mkt-card"><span class="wt-mkt-tile" aria-hidden="true"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span><div><div class="wt-mkt-h">Open core, on GitHub</div><p class="wt-mkt-p">The planning app is open source. <span class="wt-link">Read the source</span></p></div></div>
-          <div class="wt-chipgrid"><span class="wt-method wt-bg-tint-sky">GET</span><span class="wt-method wt-bg-tint-mint">POST</span><span class="wt-method wt-bg-tint-peach">PATCH</span><span class="wt-method wt-bg-tint-peach">PUT</span><span class="wt-method wt-bg-tint-rose">DELETE</span></div>
-          <p class="wt-mkt-note wt-bg-tint-yellow">Your sandbox keeps its data for 24 hours after the last sign-in.</p>
-          <div class="wt-mkt-alert"><div class="wt-mkt-h">We could not load this project</div><p class="wt-mkt-p">The Motir application is not answering right now. Try again in a moment.</p></div>
-        </div></div>
-      </div><div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
-        <div class="wt-frame-cap">Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span></div>
-        <div class="wt-frame-body"><div class="wt-mkt-stack">
-          <div class="wt-mkt-card"><span class="wt-mkt-tile" aria-hidden="true"><svg class="wt-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span><div><div class="wt-mkt-h">Open core, on GitHub</div><p class="wt-mkt-p">The planning app is open source. <span class="wt-link">Read the source</span></p></div></div>
-          <div class="wt-chipgrid"><span class="wt-method wt-bg-tint-sky">GET</span><span class="wt-method wt-bg-tint-mint">POST</span><span class="wt-method wt-bg-tint-peach">PATCH</span><span class="wt-method wt-bg-tint-peach">PUT</span><span class="wt-method wt-bg-tint-rose">DELETE</span></div>
-          <p class="wt-mkt-note wt-bg-tint-yellow">Your sandbox keeps its data for 24 hours after the last sign-in.</p>
-          <div class="wt-mkt-alert"><div class="wt-mkt-h">We could not load this project</div><p class="wt-mkt-p">The Motir application is not answering right now. Try again in a moment.</p></div>
-        </div></div>
-      </div></div>
+      <p class="wt-panel-note">
+        The site renders the default palette from its pinned @motir/design-system. Only peach and
+        yellow washes reach it: the open-core tile, the PATCH / PUT method chips (and 4xx status
+        chips), the sandbox notes, and the public-project error state. No type hue, highlight or
+        avatar is painted there.
+      </p>
+      <div class="wt-quad">
+        <div class="wt-scope wt-frame" data-theme="light">
+          <div class="wt-frame-cap">Light · today (shipped)</div>
+          <div class="wt-frame-body">
+            <div class="wt-mkt-stack">
+              <div class="wt-mkt-card">
+                <span class="wt-mkt-tile" aria-hidden="true"
+                  ><svg
+                    class="wt-ico"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m16 18 6-6-6-6" />
+                    <path d="m8 6-6 6 6 6" /></svg
+                ></span>
+                <div>
+                  <div class="wt-mkt-h">Open core, on GitHub</div>
+                  <p class="wt-mkt-p">
+                    The planning app is open source. <span class="wt-link">Read the source</span>
+                  </p>
+                </div>
+              </div>
+              <div class="wt-chipgrid">
+                <span class="wt-method wt-bg-tint-sky">GET</span
+                ><span class="wt-method wt-bg-tint-mint">POST</span
+                ><span class="wt-method wt-bg-tint-peach">PATCH</span
+                ><span class="wt-method wt-bg-tint-peach">PUT</span
+                ><span class="wt-method wt-bg-tint-rose">DELETE</span>
+              </div>
+              <p class="wt-mkt-note wt-bg-tint-yellow">
+                Your sandbox keeps its data for 24 hours after the last sign-in.
+              </p>
+              <div class="wt-mkt-alert">
+                <div class="wt-mkt-h">We could not load this project</div>
+                <p class="wt-mkt-p">
+                  The Motir application is not answering right now. Try again in a moment.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="light" data-proposal="warm">
+          <div class="wt-frame-cap">
+            Light · warm touches<span class="wt-tag wt-tag-rec">Recommended</span>
+          </div>
+          <div class="wt-frame-body">
+            <div class="wt-mkt-stack">
+              <div class="wt-mkt-card">
+                <span class="wt-mkt-tile" aria-hidden="true"
+                  ><svg
+                    class="wt-ico"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m16 18 6-6-6-6" />
+                    <path d="m8 6-6 6 6 6" /></svg
+                ></span>
+                <div>
+                  <div class="wt-mkt-h">Open core, on GitHub</div>
+                  <p class="wt-mkt-p">
+                    The planning app is open source. <span class="wt-link">Read the source</span>
+                  </p>
+                </div>
+              </div>
+              <div class="wt-chipgrid">
+                <span class="wt-method wt-bg-tint-sky">GET</span
+                ><span class="wt-method wt-bg-tint-mint">POST</span
+                ><span class="wt-method wt-bg-tint-peach">PATCH</span
+                ><span class="wt-method wt-bg-tint-peach">PUT</span
+                ><span class="wt-method wt-bg-tint-rose">DELETE</span>
+              </div>
+              <p class="wt-mkt-note wt-bg-tint-yellow">
+                Your sandbox keeps its data for 24 hours after the last sign-in.
+              </p>
+              <div class="wt-mkt-alert">
+                <div class="wt-mkt-h">We could not load this project</div>
+                <p class="wt-mkt-p">
+                  The Motir application is not answering right now. Try again in a moment.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="dark">
+          <div class="wt-frame-cap">Dark · today (shipped)</div>
+          <div class="wt-frame-body">
+            <div class="wt-mkt-stack">
+              <div class="wt-mkt-card">
+                <span class="wt-mkt-tile" aria-hidden="true"
+                  ><svg
+                    class="wt-ico"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m16 18 6-6-6-6" />
+                    <path d="m8 6-6 6 6 6" /></svg
+                ></span>
+                <div>
+                  <div class="wt-mkt-h">Open core, on GitHub</div>
+                  <p class="wt-mkt-p">
+                    The planning app is open source. <span class="wt-link">Read the source</span>
+                  </p>
+                </div>
+              </div>
+              <div class="wt-chipgrid">
+                <span class="wt-method wt-bg-tint-sky">GET</span
+                ><span class="wt-method wt-bg-tint-mint">POST</span
+                ><span class="wt-method wt-bg-tint-peach">PATCH</span
+                ><span class="wt-method wt-bg-tint-peach">PUT</span
+                ><span class="wt-method wt-bg-tint-rose">DELETE</span>
+              </div>
+              <p class="wt-mkt-note wt-bg-tint-yellow">
+                Your sandbox keeps its data for 24 hours after the last sign-in.
+              </p>
+              <div class="wt-mkt-alert">
+                <div class="wt-mkt-h">We could not load this project</div>
+                <p class="wt-mkt-p">
+                  The Motir application is not answering right now. Try again in a moment.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="wt-scope wt-frame" data-theme="dark" data-proposal="warm">
+          <div class="wt-frame-cap">
+            Dark · warm touches<span class="wt-tag wt-tag-rec">Recommended</span>
+          </div>
+          <div class="wt-frame-body">
+            <div class="wt-mkt-stack">
+              <div class="wt-mkt-card">
+                <span class="wt-mkt-tile" aria-hidden="true"
+                  ><svg
+                    class="wt-ico"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m16 18 6-6-6-6" />
+                    <path d="m8 6-6 6 6 6" /></svg
+                ></span>
+                <div>
+                  <div class="wt-mkt-h">Open core, on GitHub</div>
+                  <p class="wt-mkt-p">
+                    The planning app is open source. <span class="wt-link">Read the source</span>
+                  </p>
+                </div>
+              </div>
+              <div class="wt-chipgrid">
+                <span class="wt-method wt-bg-tint-sky">GET</span
+                ><span class="wt-method wt-bg-tint-mint">POST</span
+                ><span class="wt-method wt-bg-tint-peach">PATCH</span
+                ><span class="wt-method wt-bg-tint-peach">PUT</span
+                ><span class="wt-method wt-bg-tint-rose">DELETE</span>
+              </div>
+              <p class="wt-mkt-note wt-bg-tint-yellow">
+                Your sandbox keeps its data for 24 hours after the last sign-in.
+              </p>
+              <div class="wt-mkt-alert">
+                <div class="wt-mkt-h">We could not load this project</div>
+                <p class="wt-mkt-p">
+                  The Motir application is not answering right now. Try again in a moment.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   </body>
 </html>
