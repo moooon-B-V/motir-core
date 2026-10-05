@@ -9,6 +9,8 @@
 --    the `@ignore`, so nothing serving selects the column.
 -- 3. This release drops it.
 --
+-- @client-stopped-selecting: MOTIR-7228
+--
 -- `IF EXISTS` keeps it idempotent against a database a repair already cleaned.
 -- The card named the table `projects`; the model maps to `project`.
 ALTER TABLE "project" DROP COLUMN IF EXISTS "ai_planner_model";
