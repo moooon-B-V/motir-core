@@ -6951,8 +6951,8 @@
         "retry": "Try again",
         "hosted": {
           "lead": "Continue it here, in a hosted container — no terminal needed:",
-          "button": "Continue hosted",
-          "buttonParent": "Continue {key} hosted",
+          "button": "Continue",
+          "buttonParent": "Continue {key}",
           "orTerminal": "Or carry it on from your terminal:",
           "branches": {
             "lead": "Its work is on a branch in each of its {count} repositories:",
@@ -6974,10 +6974,10 @@
             "noDeadRun": "Not started — no run of this work item died.",
             "theParent": "Not started — this is part of <link>{key}</link>'s run, so it is continued from there.",
             "outOfCredits": {
-              "body": "Nothing was booted and nothing was charged. Continue hosted works again once the organization has credits — or carry it on from your terminal."
+              "body": "Nothing was booted and nothing was charged. Continue works again once the organization has credits — or carry it on from your terminal."
             }
           },
-          "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it hosted or from a terminal in Development below."
+          "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it here or from a terminal in Development below."
         }
       },
       "emptyTitle": "No linked pull request",
@@ -8287,7 +8287,8 @@
         "assigned": "Assigned",
         "reported": "Reported",
         "both": "Both",
-        "watching": "Watching"
+        "watching": "Watching",
+        "none": "—"
       }
     },
     "empty": {
@@ -8439,7 +8440,14 @@
         "body": "Paste {command} into your terminal."
       },
       "fixingHosted": "Being fixed on the hosted agent by <b>{name}</b> · <run>{label}</run>",
-      "fixingHostedByYou": "Being fixed on the hosted agent by <b>you</b> · <run>{label}</run>"
+      "fixingHostedByYou": "Being fixed on the hosted agent by <b>you</b> · <run>{label}</run>",
+      "entry": {
+        "carriesRun": "{count, plural, one {# more work item in this run} other {# more work items in this run}}",
+        "carriesPullRequests": "{count, plural, one {# more work item on the same pull request} other {# more work items on the same pull request}}",
+        "membersLabel": "Work items stuck with {key}",
+        "showMore": "Show {count, plural, one {# more work item} other {# more work items}}",
+        "showFewer": "Show fewer"
+      }
     }
   },
   "approvalRecords": {
@@ -12541,7 +12549,8 @@
       "conflicted": "To fix · conflicts with its base branch",
       "ci_failed": "To fix · CI failed",
       "changes_requested": "To fix · changes requested",
-      "sent_back_by_agent": "To fix · sent back by the review agent"
+      "sent_back_by_agent": "To fix · sent back by the review agent",
+      "withHead": "{name} · with {head}"
     },
     "banner": {
       "queueFailed": "This needs a fix: it failed in the merge queue (check <code>{check}</code>).",
@@ -12569,7 +12578,11 @@
       "hostedLead": "Fix it on the hosted agent — no terminal needed:",
       "orTerminal": "Or repair it from your terminal:",
       "fixingHosted": "A hosted repair is running — started by <b>{name}</b> <when></when> · <run>{label}</run>",
-      "fixingHostedByYou": "A hosted repair is running — started by <b>you</b> <when></when> · <run>{label}</run>"
+      "fixingHostedByYou": "A hosted repair is running — started by <b>you</b> <when></when> · <run>{label}</run>",
+      "carries": "{count, plural, one {# more work item is stuck with it} other {# more work items are stuck with it}}: <keys></keys>",
+      "carriesMore": "and {count} more",
+      "repairedWithHead": "Repair it with <b>{head}</b> — they share one pull request.",
+      "toHead": "Open {head}"
     }
   },
   "workItems": {

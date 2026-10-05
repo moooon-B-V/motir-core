@@ -197,6 +197,11 @@ export interface BoardCardDto {
    */
   fixReason: WorkItemFixReasonDto | null;
   /**
+   * The HEAD of the To fix entry this card is carried by (MOTIR-7589), when it is not
+   * the head itself — the tag's name gains *· with {head}*. Absent otherwise.
+   */
+  fixHeadKey?: string;
+  /**
    * The card's OBSOLESCENCE mark (Story MOTIR-6575 · MOTIR-6677) — `outdated` /
    * `deprecated`, or `null` while it is still true of the code. The card wears the
    * shared `ObsolescenceBadge`; nothing on the board hides, dims or re-sorts a

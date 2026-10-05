@@ -59,6 +59,9 @@ export interface IssueRowData {
    *  the To fix tag's GLYPH form in the Status cell, and only off the `done`
    *  category — `toFixTagState`, shared with the board card (MOTIR-6610). */
   fixReason: WorkItemFixReasonDto | null;
+  /** The head of the To fix entry this card is carried by (MOTIR-7589) — the tag's
+   *  name gains *· with {head}*; null otherwise. */
+  fixHeadKey?: string | null;
   /** The OBSOLESCENCE mark (MOTIR-6677) — the status cell draws its GLYPH after the
    *  status pill. Nothing hides, dims or re-sorts a marked row. */
   obsolescence: WorkItemObsolescenceDto | null;
@@ -183,6 +186,7 @@ function shapeRowData(
     statusCategory: status?.category ?? null,
     ciState: item.ciState,
     fixReason: item.fixReason,
+    fixHeadKey: item.fixHeadKey ?? null,
     obsolescence: item.obsolescence,
     assigneeId: item.assigneeId,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,

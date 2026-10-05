@@ -106,6 +106,11 @@ export interface QuickViewData {
   /** Which gate a `changes_requested` was on (`fixDetail.gate`) — names the review agent in
    *  the tag's accessible name (MOTIR-6825). Null for every other reason. */
   fixGate?: FixDetailDto['gate'];
+  /**
+   * The HEAD of the To fix entry this card is carried by (MOTIR-7589), when it is not
+   * the head itself — the tag's name gains *· with {head}*. Absent otherwise.
+   */
+  fixHeadKey?: string;
   descriptionMd: string | null;
   /**
    * The WHY (MOTIR-4183, story MOTIR-4181, design Part XIV §6).

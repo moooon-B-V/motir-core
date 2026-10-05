@@ -127,8 +127,8 @@ describe('one model list, many presses', () => {
 
   it('names the parent on a row whose target is not the card it sits on', async () => {
     await mountTwo();
-    expect(row('a').getByTestId('continue-hosted').textContent).toBe('Continue hosted');
-    expect(row('b').getByTestId('continue-hosted').textContent).toBe('Continue ACME-30 hosted');
+    expect(row('a').getByTestId('continue-hosted').textContent).toBe('Continue');
+    expect(row('b').getByTestId('continue-hosted').textContent).toBe('Continue ACME-30');
   });
 
   it('a refusal is answered on its own row only', async () => {
@@ -257,7 +257,7 @@ describe('each refusal in its shipped words', () => {
   it('draws in zh too', async () => {
     routes[START_A] = () => ({ status: 409, body: { code: 'hosted_continue_no_dead_run' } });
     await mountTwo({}, { zh: true });
-    expect(row('a').getByTestId('continue-hosted').textContent).toBe('托管继续');
+    expect(row('a').getByTestId('continue-hosted').textContent).toBe('继续');
     await press('a');
     expect(row('a').getByTestId('continue-hosted-refused-noDeadRun').textContent).toContain(
       '未启动——此工作项没有中断的运行。',

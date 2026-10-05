@@ -83,6 +83,12 @@ interface ToFixTagProps {
    * own name.
    */
   fixGate?: FixDetailDto['gate'] | null;
+  /**
+   * The HEAD of the To fix entry this card is carried by (MOTIR-7589;
+   * `design/work-items/design-notes.md` § _ONE ENTRY PER RUN_), when it is not the head
+   * itself: the name and `title` gain *· with {head}*. Nothing visible changes.
+   */
+  headKey?: string | null;
 }
 
 export function ToFixTag({
@@ -91,12 +97,14 @@ export function ToFixTag({
   form = 'label',
   id,
   fixGate = null,
+  headKey = null,
 }: ToFixTagProps) {
   const t = useTranslations();
   const reason = toFixTagState(fixReason, statusCategory);
   if (!reason) return null;
 
-  const name = t(`toFix.tagName.${toFixTagNameKey(reason, fixGate)}`);
+  const own = t(`toFix.tagName.${toFixTagNameKey(reason, fixGate)}`);
+  const name = headKey ? t('toFix.tagName.withHead', { name: own, head: headKey }) : own;
 
   if (form === 'glyph') {
     // ⚠️ `shrink-0` is load-bearing, as on the CI and decision glyphs: the status

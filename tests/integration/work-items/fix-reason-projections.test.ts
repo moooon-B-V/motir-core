@@ -128,6 +128,7 @@ describe('fixReason + fixDetail on the item page read (MOTIR-6611)', () => {
     // A detail stored before the dead-run fields existed (MOTIR-6880) reads them as null.
     expect(read.fixDetail).toEqual({
       ...detail,
+      groupKey: null,
       lastHeardAt: null,
       ranByName: null,
       branch: null,

@@ -71,6 +71,7 @@ export function toFixDetailDto(
   }
   const d = raw as Record<string, unknown>;
   return {
+    groupKey: str(d.groupKey),
     repair: repair(d.repair),
     check: str(d.check),
     queueReason: str(d.queueReason),
