@@ -41,11 +41,12 @@ the same primitives — no design→code gap.
 > Code follow-ups blocked on this asset: **8.1.16 / MOTIR-1303** (seat toggle +
 > drop the note) and **8.1.17 / MOTIR-1304** (pricing blocks).
 
-| Surface                                                | Asset                                     | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup)     | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face).                                                                                                                                                        |
-| **Motir CI — the third billed line** (AMENDMENT)       | **`ci-line.mock.html`** (HTML mockup)     | The CI-minutes line the allowance adds to the settings panel, 8 panels: the line in place at real width · its three non-paused states · `ci_credits_exhausted` for an admin (the two-option decision, measured in a 1280×800 viewport) and for a member (the routing alert) · what renders nothing · loading / balance-unreachable / error · the pointer form on other surfaces · the paused-state card ordering. Amends the row above; redraws none of it. `ci-line.png` beside it. See § "Amendment 2026-07-30 — the Motir CI line" at the end of this file. |
-| **Motir Search — the FOURTH billed line** (AMENDMENT)  | **`search-line.mock.html`** (HTML mockup) | The web-search line the grounding channel adds to the settings panel, 6 panels: the line in place at real width beside ①②③ · its states (spend · nothing billed · the ABSENCE of a paused state, drawn) · the META org, which renders no line · loading / figures-UNAVAILABLE / page error · role gating · the access path, reproduced. Amends the two rows above; redraws neither. `search-line.png` beside it. See § "Amendment 2026-09-05 — the Motir Search line" at the end of this file.                                                                 |
+| Surface                                                     | Asset                                                | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Billing settings · pricing storefront · AI paywall**      | **`billing.mock.html`** (HTML mockup)                | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face).                                                                                                                                                        |
+| **Motir CI — the third billed line** (AMENDMENT)            | **`ci-line.mock.html`** (HTML mockup)                | The CI-minutes line the allowance adds to the settings panel, 8 panels: the line in place at real width · its three non-paused states · `ci_credits_exhausted` for an admin (the two-option decision, measured in a 1280×800 viewport) and for a member (the routing alert) · what renders nothing · loading / balance-unreachable / error · the pointer form on other surfaces · the paused-state card ordering. Amends the row above; redraws none of it. `ci-line.png` beside it. See § "Amendment 2026-07-30 — the Motir CI line" at the end of this file. |
+| **Motir Search — the FOURTH billed line** (AMENDMENT)       | **`search-line.mock.html`** (HTML mockup)            | The web-search line the grounding channel adds to the settings panel, 6 panels: the line in place at real width beside ①②③ · its states (spend · nothing billed · the ABSENCE of a paused state, drawn) · the META org, which renders no line · loading / figures-UNAVAILABLE / page error · role gating · the access path, reproduced. Amends the two rows above; redraws neither. `search-line.png` beside it. See § "Amendment 2026-09-05 — the Motir Search line" at the end of this file.                                                                 |
+| **Contact sales — the Enterprise request form** (AMENDMENT) | **`billing--contact-sales.mock.html`** (HTML mockup) | What the Enterprise card's Contact sales opens, 10 panels: access path · the control closed (manager / member disabled / Request sent) · the form empty and filled · validation · sending · sent · the open request read-only · refused (409 / 403) and network error · `zh` · narrow. Amends panel 5's Enterprise CTA only. See § "Amendment 2026-10-05 — Contact sales opens a request form" at the end of this file.                                                                                                                                        |
 
 ## What this area is
 
@@ -1244,3 +1245,262 @@ dispositioned by MOTIR-4564. Panels 1, 4–8 of `billing.mock.html` are untouche
 
 - **MOTIR-4818** — the code card. It implements the predicate table above and adds the two copy blocks.
 - **MOTIR-4809** — the `design/ai-usage` half of the same re-take, and where the exempt grammar this borrows was set.
+
+---
+
+# Amendment 2026-10-05 — Contact sales opens a request form (MOTIR-7603)
+
+**Asset:** `billing--contact-sales.mock.html` (HTML mock, a DELTA, 10 panels) · **Card:** MOTIR-7603
+(design, Story MOTIR-7602) · **Builds it:** [the form's code](motir:cmuuwienn00johwoiyxicgk7u)
+(MOTIR-7607), which is `blocked_by` this card. **Request contract drawn:**
+[the request record](motir:cmuuwielk00jkhwoio44kne2b) (MOTIR-7605).
+
+**Amends** § _Panels_ panel 5 of `billing.mock.html` — the Motir AI storefront's **Enterprise**
+card, whose CTA ships as a secondary `Contact sales` `<a href="mailto:sales@motir.co">`
+(`BillingClient.tsx` `PlanCard`, the `!plan.prices` branch). Nothing else in that mock, nor in
+`ci-line.mock.html` / `search-line.mock.html`, is touched; `billing.mock.html` is a record and is
+not edited.
+
+**Design system** (read, not assumed): `package.json` depends on `@motir/design-system`
+(`workspace:*`, `packages/design-system` **0.8.1**) AND `app/globals.css` imports
+`@motir/design-system/theme.css` → **on Motir Design (branch a)**. The project's axes are applied
+from the persisted appearance in `app/layout.tsx` (`data-style` / `data-palette` / `data-type`);
+the mock renders the base axes, as every mock in this area does. The package exports
+`@motir/design-system/mock` (`renderMock`) at 0.8.1, but it is NOT used: the delta copies
+`billing.mock.html`'s token block and its card / pill / button / plan-card rules byte for byte so
+it composes from exactly what the base already reviewed (the same choice
+`design/auth/design-notes.md` § _OAuth consent — the pinned action bar_ records), plus the eight
+`theme.css` tokens the base predates (`--el-overlay-scrim`, `--el-danger-surface`,
+`--el-danger-surface-text`, `--el-input-border`, `--el-input-disabled-{bg,border,text}`, and
+their `--color-hairline` source), declared at `theme.css`'s own values.
+
+**⚠️ The plan-ladder delta is NOT on main.** The card description says to compose the Enterprise
+card "as the plan-ladder delta mock (`billing--plan-delivery.mock.html` in this folder) leaves it". That file does not exist on
+`origin/main` (checked at `047323b`), and its design card **MOTIR-7596** is `todo` — the story
+(MOTIR-7594) is blocked behind the planner-cost measurement (MOTIR-7612). So the card is composed
+against the approved base and the shipped `PlanCard`, reduced by MOTIR-7594's own acceptance
+criterion (_"Enterprise shows no price and no estimate. Its Contact-sales control is still
+present."_): **no price row is drawn**, and the use-case / pool / seat / feature lines are the
+shipped `billing.plans.tiers.enterprise` copy. The Standard / Pro / Max cards are drawn as dashed
+outlines labelled with MOTIR-7596, because their content is that delta's and this card draws no
+price. When MOTIR-7596 lands, its card content wins; this delta owns only the control and what it
+opens.
+
+## What changes
+
+1. **The control.** `Contact sales` stops being a `mailto:` link and becomes a `Button`
+   (`variant="secondary" size="sm"`, `w-full`, `aria-haspopup="dialog"`) that opens a `Modal`.
+   It is the only behaviour change on the card.
+2. **The member variant** (no `manageBilling`, i.e. `data.access.canManageBilling === false`).
+   Today the link is live for everyone; it becomes **disabled**, with the reason said under it
+   (`Lock` glyph + `--el-text-secondary` 11.5px line, wired as the button's
+   `aria-describedby`): _"Only owners and admins of {org} can contact sales."_ A disabled button
+   cannot take focus, so the reason is visible text, not a tooltip. Same permission and the same
+   "owners and admins" wording the billing screens use for every other mutation.
+3. **The open-request variant.** While the org has a request in an OPEN state (`new`,
+   `contacted`, `offer_sent`), the control is replaced by **`Request sent · {date}`** — the same
+   button, on `--el-tint-mint` with `--el-text-strong` ink and a `Check` glyph — and pressing it
+   opens that request read-only (panel 7). A member sees the same words as a non-interactive mint
+   line (panel 2d): whether they may read the request is MOTIR-7605's read permission, and the
+   line tells them what they need (someone already asked) without a door they may not open.
+   `won` / `lost` are closed: the card returns to `Contact sales`.
+4. **The form** (panels 3–5, 8): `Modal size="lg"` (32rem), title + description, `Modal.Body`
+   scrolling under a pinned `Modal.Footer` (Cancel `ghost` · **Send request** `primary` with a
+   `Send` icon).
+
+## The form asks only what the person alone knows
+
+**Read-only at the top** — a soft summary box titled _Sent with your request_; none of these is
+an input, and none is sent from the client (the server reads them again; the box is there so the
+person knows what accompanies the request):
+
+| Shown                  | Where the product already has it                                                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Organization           | the active org — `organizationsService.resolveActiveOrganization` (the billing `page.tsx` already passes `orgName` to `BillingClient`)                                                     |
+| Requested by           | the session user (`getSession()`), name; the email seeds the contact field below                                                                                                           |
+| Current plan           | `BillingStatusDTO.motirAi.tier.name` — what the storefront's current-plan strip already shows                                                                                              |
+| Repositories connected | a count of the org's `project_repository` rows (`ProjectRepo`, `projectRepoRepository`) across its workspaces — read server-side by the form's service; the client is never trusted for it |
+
+**Inputs** — every one optional except the note, said once above them (_"Everything below is
+optional except the note."_) rather than an "(optional)" tag on seven labels:
+
+| Field (label)             | Primitive                                                                      | Contract field (MOTIR-7605)                                                    |
+| ------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Work items a day, roughly | `FormField` + `Input type="number" inputMode="numeric"`, placeholder `e.g. 40` | `cardsPerDay` (int, optional)                                                  |
+| Agents in parallel        | `FormField` + `Input type="number"`, placeholder `e.g. 8`                      | `parallelAgents` (int, optional)                                               |
+| Which agents              | radio-card group (below), 3 options                                            | `agentPath`: `hosted` · `own` · `both`                                         |
+| How should it run?        | radio-card group, 3 options                                                    | `autonomy`: `autonomous_lead` · `volume_only` · `unsure`                       |
+| When would you start?     | `FormField` + `Combobox` (single, no search), placeholder `Choose…`            | `startWhen`: `now` · `within_month` · `within_quarter` · `exploring`           |
+| Team size                 | `FormField` + `Combobox`, placeholder `Choose…`                                | `teamSize`: `size_1_10` · `size_11_50` · `size_51_200` · `size_201_plus`       |
+| Best way to reach you     | `FormField` + `Input`, **prefilled** with the account email, helper text       | `contact` (string; the server defaults it to the requester's email when empty) |
+| Note — `Required`         | `FormField` + `Textarea` (3 rows, auto-grow)                                   | `note` (required)                                                              |
+
+The two numbers sit two-up, as do the two pick-lists; both pairs stack at the narrow width.
+
+**The radio cards** are not a new primitive: they are the shipped
+`components/approvals/RefusalReason.tsx` verdict grammar — `role="radiogroup"` labelled by its
+legend, a visually-hidden `<input type="radio">`, a 16px dot, label + hint, `--radius-card`,
+`--el-accent` border + `--el-surface-soft` fill when selected, `--el-surface` on hover. Laid out
+one per row here (the hints are a sentence long). A radio group cannot be un-chosen, which is
+right for optional single choices only because _Not sure yet_ exists on the one where "no answer"
+is a real answer; `agentPath` stays unset until clicked.
+
+## States (panel by panel)
+
+| #   | State                 | What is drawn                                                                                                                                                                                                                                                                                                                                                                                         |
+| --- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Access path           | Settings sidebar _Billing & plans_ → the Motir AI line's **Change plan** → the plans screen → the Enterprise card's **Contact sales**. Drawn as it ships; only the last step's behaviour is new. No price on the line (the fee is omitted in the drawing, not removed from the product).                                                                                                              |
+| 2   | Closed control        | (a) manager, rest and hover/focus · (b) member: disabled + reason · (c) open request, manager: `Request sent · 5 Oct 2026` · (d) open request, member: the line.                                                                                                                                                                                                                                      |
+| 3   | Open form             | Empty; and filled with the _When would you start?_ list open (Combobox popover, `--shadow-elevated`, selected row on `--el-surface` with a check).                                                                                                                                                                                                                                                    |
+| 4   | Validation            | On Send with the note empty and `0` in _Work items a day_: the `Input` / `Textarea` borders turn `--el-danger`, each field says why under itself (`FormField error`), focus moves to the first invalid field, nothing is sent. Validation is client-side first and repeated by the server (MOTIR-7605's 400 maps to the same field messages).                                                         |
+| 5   | Sending               | `Button loading` (Spinner + _Sending…_), every input `disabled` (the `--el-input-disabled-*` fill/ink), Cancel disabled, the corner × removed so the dialog cannot be dismissed mid-request.                                                                                                                                                                                                          |
+| 6   | Sent                  | The form is replaced in place by a confirmation (mint check, _"Platform staff will reply to {contact}…"_) and one **Done**. On close the card shows `Request sent · {date}` (beside it). The board/list behind it is a client island: the code updates the card from the POST's own response, no refresh needed.                                                                                      |
+| 7   | Already requested     | _Your Enterprise request_ — sent date and requester, the **state pill**, _What you told us_ (unset answers say _Not given_), the note quoted, and how staff reply. One **Close**. No form, no edit, no second request.                                                                                                                                                                                |
+| 8   | Refused or error      | The form is kept; a `FormField errorVariant="box"` alert (`--el-danger-surface` / `--el-danger-surface-text`) sits above the footer. **409 `ENTERPRISE_REQUEST_OPEN`**: Send disabled, a _View the request_ link swaps the dialog to panel 7 and the card to `Request sent`. **403** (billing's own `manageBilling` refusal): Send disabled. **Network / 5xx**: Send stays enabled; nothing was sent. |
+| 9   | `zh`                  | The card's three control states, the empty form, the read-only request (`沟通中`), the 409 alert and the sent confirmation, in `zh`. Chinese labels run longer only in the radio hints, which wrap.                                                                                                                                                                                                   |
+| 10  | Narrow reflow (375px) | The plans row scrolls horizontally (shipped behaviour; the Enterprise card is reached by scrolling it). The dialog is `90vw`; the summary box goes to one column, the two-up rows and radio cards stack, the body scrolls under the pinned footer, Cancel / Send split the footer width. Shown at rest and sending.                                                                                   |
+
+**The org-visible state** (panel 7's pill) maps the server's five states to three words, and
+never shows the closed two:
+
+| Server state  | The org sees                                   | Pill                                    |
+| ------------- | ---------------------------------------------- | --------------------------------------- |
+| `new`         | Received                                       | `--el-tint-yellow` / `--el-text-strong` |
+| `contacted`   | In conversation                                | `--el-tint-sky` / `--el-text-strong`    |
+| `offer_sent`  | Offer sent                                     | `--el-tint-mint` / `--el-text-strong`   |
+| `won`, `lost` | — (closed: the card shows Contact sales again) | —                                       |
+
+The three tints are deliberately not lavender, which this screen spends on `Current` /
+`Recommended`. No price, figure or amount appears in any state — an offer's terms travel by
+email, not on this card.
+
+## Colour + shape roles (additions only — the base tables above still govern)
+
+| Element                                 | Colour                                                                                                                  | Shape                                                                              |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Dialog panel                            | `--el-page-bg`, `--el-border`, scrim `--el-overlay-scrim`                                                               | `--radius-modal`, `--shadow-modal`, `--spacing-card-padding`                       |
+| Corner close ×                          | `--el-text-secondary`, hover `--el-surface` / `--el-text`                                                               | `--radius-control`, `--spacing-icon-btn`                                           |
+| _Sent with your request_ box            | `--el-surface-soft` fill, `--el-border`; keys `--el-text-secondary`, values `--el-text`                                 | `--radius-card`                                                                    |
+| Input / Combobox trigger / Textarea     | `--el-page-bg`, `--el-input-border`; placeholder `--el-text-muted` (white fill only); error border `--el-danger`        | `--radius-input`, `--height-input`, `--spacing-input-x/y`                          |
+| Field error line                        | `--el-danger-on-surface` (not raw `--el-danger`, which is under AA on the dark page in base/cobalt/motir)               | —                                                                                  |
+| Helper / optional note / `Required` tag | `--el-text-secondary`                                                                                                   | —                                                                                  |
+| Radio card                              | `--el-page-bg` / `--el-border`; on: `--el-accent` border + `--el-surface-soft`; hover `--el-surface`; dot `--el-accent` | `--radius-card` (dot `rounded-full`)                                               |
+| Combobox popover                        | `--el-page-bg`, `--el-border`, active row `--el-surface`                                                                | `--radius-card`, rows `--radius-control` / `--height-control`, `--shadow-elevated` |
+| Refusal / error box                     | `--el-danger-surface` / `--el-danger-surface-text` (link the same ink, underlined)                                      | `--radius-control`, `--spacing-tooltip-x/y`                                        |
+| Disabled (sending)                      | `--el-input-disabled-bg` / `-border` / `-text`                                                                          | —                                                                                  |
+| `Request sent` control / line           | `--el-tint-mint` / `--el-text-strong`                                                                                   | `--radius-btn` (button) · `--radius-badge` (member line)                           |
+| Member reason line                      | `--el-text-secondary`, `Lock` glyph                                                                                     | —                                                                                  |
+| Sent check                              | `--el-tint-mint` / `--el-text-strong`                                                                                   | `rounded-full`                                                                     |
+
+No `--el-text-faint` carries text; `--el-text-muted` appears only as placeholder ink on the white
+input fill. Nothing names a hue.
+
+## Primitives composed
+
+- **Package (`@motir/design-system`):** `Modal` (+ `Modal.Body`, `Modal.Footer`), `FormField`
+  (`error`, `errorVariant="box"`, `helperText`), `Input`, `Textarea`, `Combobox`, `Button`
+  (`primary`, `secondary`, `ghost`, `loading`, `disabled`), `Pill`, `Spinner`. Nothing is missing;
+  **nothing is proposed to the package.**
+- **Product-local, shipped:** the radio-card group of `components/approvals/RefusalReason.tsx` —
+  the code card should lift it into a small shared `RadioCardGroup` in `components/` rather than
+  copy it a third time (`ConnectStep.tsx` has a similar one). **Product-local, new:** only the
+  _Sent with your request_ summary box (a `<dl>` in a `--el-surface-soft` panel) and the
+  read-only request view, both inside the new dialog component.
+- **Icons (lucide):** `Send`, `Check`, `Lock`, `CircleAlert`, `WifiOff`, `Mail`, `X`, `ChevronDown`.
+
+## Copy strings (both locales — the `billing.contactSales` namespace MOTIR-7607 adds)
+
+The keys below are the mock's own names; the code card may rename them inside the namespace. The
+dates, the org, the requester, the plan, the count and the email are interpolations
+(`{date}`, `{org}`, `{name}`, `{contact}`), not literals. The note text is user content and has
+no key.
+
+| key             | en                                                                                                                                   | zh                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `contact`       | Contact sales                                                                                                                        | 联系销售                                                                                           |
+| `sent_chip`     | Request sent · 5 Oct 2026                                                                                                            | 已发送请求 · 2026年10月5日                                                                         |
+| `member_reason` | Only owners and admins of moooon can contact sales.                                                                                  | 只有 moooon 的所有者和管理员可以联系销售。                                                         |
+| `ent`           | Enterprise                                                                                                                           | Enterprise                                                                                         |
+| `ent_use`       | Custom volume, plus org controls.                                                                                                    | 定制用量，外加组织管控。                                                                           |
+| `pool`          | Custom credit pool                                                                                                                   | 定制额度池                                                                                         |
+| `seats`         | Motir seats included (custom)                                                                                                        | 包含 Motir 席位（定制）                                                                            |
+| `every`         | Everything in Max, plus                                                                                                              | 包含 Max 的全部，另加                                                                              |
+| `f1`            | Invoiced billing & SSO                                                                                                               | 开票计费与 SSO                                                                                     |
+| `f2`            | Dedicated support                                                                                                                    | 专属支持                                                                                           |
+| `title`         | Contact sales — Enterprise                                                                                                           | 联系销售 —— Enterprise                                                                             |
+| `sub`           | Tell us what you want Motir to run. Platform staff read every request and reply to you directly.                                     | 告诉我们你希望 Motir 运行什么。平台团队会阅读每一条请求，并直接回复你。                            |
+| `facts_h`       | Sent with your request                                                                                                               | 随请求一并发送                                                                                     |
+| `k_org`         | Organization                                                                                                                         | 组织                                                                                               |
+| `v_org`         | moooon                                                                                                                               | moooon                                                                                             |
+| `k_req`         | Requested by                                                                                                                         | 发起人                                                                                             |
+| `v_req`         | Sam Rivera                                                                                                                           | Sam Rivera                                                                                         |
+| `k_plan`        | Current plan                                                                                                                         | 当前套餐                                                                                           |
+| `v_plan`        | Max                                                                                                                                  | Max                                                                                                |
+| `k_repo`        | Repositories connected                                                                                                               | 已连接的仓库                                                                                       |
+| `v_repo`        | 4                                                                                                                                    | 4                                                                                                  |
+| `optional_all`  | Everything below is optional except the note.                                                                                        | 除备注外，以下各项均为选填。                                                                       |
+| `l_cards`       | Work items a day, roughly                                                                                                            | 每天大约多少个工作项                                                                               |
+| `ph_cards`      | e.g. 40                                                                                                                              | 例如 40                                                                                            |
+| `l_par`         | Agents in parallel                                                                                                                   | 并行智能体数量                                                                                     |
+| `ph_par`        | e.g. 8                                                                                                                               | 例如 8                                                                                             |
+| `l_which`       | Which agents                                                                                                                         | 使用哪些智能体                                                                                     |
+| `w_hosted`      | Motir’s hosted agents                                                                                                                | Motir 托管的智能体                                                                                 |
+| `w_hosted_h`    | Run on Motir’s models.                                                                                                               | 运行在 Motir 的模型上。                                                                            |
+| `w_own`         | Our own agents                                                                                                                       | 我们自己的智能体                                                                                   |
+| `w_own_h`       | Claude Code, Codex or another agent on our own credential, in Motir’s cloud.                                                         | Claude Code、Codex 或其他智能体，使用我们自己的凭据，运行在 Motir 云中。                           |
+| `w_both`        | Both                                                                                                                                 | 两者都用                                                                                           |
+| `w_both_h`      | Some of each.                                                                                                                        | 各用一部分。                                                                                       |
+| `l_auto`        | How should it run?                                                                                                                   | 希望如何运行？                                                                                     |
+| `a_lead`        | Around the clock, on its own                                                                                                         | 全天候自主运行                                                                                     |
+| `a_lead_h`      | The autonomous lead: Motir plans, runs and repairs, and your team decides at approval gates.                                         | 自主负责人：Motir 负责规划、运行与修复，团队在审批关口做决定。                                     |
+| `a_vol`         | A large volume of runs we start                                                                                                      | 由我们发起的大量运行                                                                               |
+| `a_vol_h`       | Your team starts each run.                                                                                                           | 每次运行由团队发起。                                                                               |
+| `a_unsure`      | Not sure yet                                                                                                                         | 还不确定                                                                                           |
+| `a_unsure_h`    |                                                                                                                                      |                                                                                                    |
+| `l_when`        | When would you start?                                                                                                                | 打算何时开始？                                                                                     |
+| `choose`        | Choose…                                                                                                                              | 请选择…                                                                                            |
+| `l_team`        | Team size                                                                                                                            | 团队规模                                                                                           |
+| `l_reach`       | Best way to reach you                                                                                                                | 最佳联系方式                                                                                       |
+| `v_reach`       | sam@moooon.example                                                                                                                   | sam@moooon.example                                                                                 |
+| `h_reach`       | Your account email. Change it if someone else should get the reply.                                                                  | 你的账户邮箱。如需由他人接收回复，可修改。                                                         |
+| `l_note`        | Note                                                                                                                                 | 备注                                                                                               |
+| `req`           | Required                                                                                                                             | 必填                                                                                               |
+| `ph_note`       | What should Motir do for your team? Anything we should know about your repositories, security or timing.                             | 你希望 Motir 为团队做什么？关于仓库、安全或时间安排，有什么需要我们了解的。                        |
+| `v_note`        | We want Motir to run our three product repositories overnight. Security review needs SSO and an invoice before we start.             | 我们希望 Motir 在夜间运行三个产品仓库。安全评审要求开始前先有 SSO 和发票。                         |
+| `cancel`        | Cancel                                                                                                                               | 取消                                                                                               |
+| `send`          | Send request                                                                                                                         | 发送请求                                                                                           |
+| `sending`       | Sending…                                                                                                                             | 正在发送…                                                                                          |
+| `close`         | Close                                                                                                                                | 关闭                                                                                               |
+| `done`          | Done                                                                                                                                 | 完成                                                                                               |
+| `e_note`        | Add a note — tell us what you want Motir to do for your team.                                                                        | 请填写备注——告诉我们你希望 Motir 为团队做什么。                                                    |
+| `e_num`         | Enter a whole number of at least 1.                                                                                                  | 请输入不小于 1 的整数。                                                                            |
+| `r409_t`        | Your organization already has an open request.                                                                                       | 你的组织已有一条未关闭的请求。                                                                     |
+| `r409_b`        | It was sent on 5 Oct 2026, from another tab or by another admin. Nothing new was sent.                                               | 它于 2026年10月5日 从另一个标签页或由另一位管理员发送。本次没有发送新的请求。                      |
+| `r409_a`        | View the request                                                                                                                     | 查看该请求                                                                                         |
+| `r403_t`        | You can’t contact sales for moooon.                                                                                                  | 你无法为 moooon 联系销售。                                                                         |
+| `r403_b`        | Only owners and admins can. Your role may have changed since this page loaded — ask an organization admin.                           | 只有所有者和管理员可以。自本页加载后你的角色可能已变更——请联系组织管理员。                         |
+| `rnet_t`        | Couldn’t reach Motir.                                                                                                                | 无法连接 Motir。                                                                                   |
+| `rnet_b`        | Nothing was sent. Check your connection and send again — what you wrote is kept.                                                     | 没有发送任何内容。请检查网络后重新发送——你填写的内容已保留。                                       |
+| `ok_t`          | Request sent                                                                                                                         | 请求已发送                                                                                         |
+| `ok_b`          | Platform staff will reply to sam@moooon.example. Until the request is closed, the Enterprise card shows it instead of Contact sales. | 平台团队会回复至 sam@moooon.example。在请求关闭前，Enterprise 卡片会显示该请求，而不是“联系销售”。 |
+| `ro_t`          | Your Enterprise request                                                                                                              | 你的 Enterprise 请求                                                                               |
+| `ro_sub`        | Sent 5 Oct 2026 by Sam Rivera.                                                                                                       | Sam Rivera 于 2026年10月5日 发送。                                                                 |
+| `ro_state`      | State                                                                                                                                | 状态                                                                                               |
+| `st_new`        | Received                                                                                                                             | 已收到                                                                                             |
+| `st_contacted`  | In conversation                                                                                                                      | 沟通中                                                                                             |
+| `st_offer`      | Offer sent                                                                                                                           | 已发报价                                                                                           |
+| `ro_reply`      | Platform staff reply to sam@moooon.example. To add something, answer their email.                                                    | 平台团队会回复至 sam@moooon.example。如需补充，请直接回复他们的邮件。                              |
+| `ro_asked`      | What you told us                                                                                                                     | 你告诉我们的                                                                                       |
+| `ro_unset`      | Not given                                                                                                                            | 未填写                                                                                             |
+| `when_opts`     | Now · Within a month · Within a quarter · Just exploring                                                                             | 现在 · 一个月内 · 一个季度内 · 只是了解一下                                                        |
+| `team_opts`     | 1–10 · 11–50 · 51–200 · 201+                                                                                                         | 1–10 · 11–50 · 51–200 · 201+                                                                       |
+
+## Who consumes this
+
+- **MOTIR-7607** — the form's code: the control's three variants on `PlanCard`, the dialog, the
+  read-only view, and the refusal mapping above.
+- **MOTIR-7605** — the request record and its routes: the contract this draws (fields, the five
+  states and their org-visible three, `ENTERPRISE_REQUEST_OPEN`). If its field list changes, this
+  delta is redrawn, not reinterpreted.
+- **Out of scope:** the staff side (the /admin Enterprise requests page — [the console
+  design](motir:cmuuwiekk00jihwoikmmc2wqk)), the card's content (MOTIR-7596), and any price.
