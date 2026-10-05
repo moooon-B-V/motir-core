@@ -835,11 +835,15 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('approved');
   });
 
-  it('leaves the CONVERSATION open after an approve — the thread is not consumed', async () => {
-    // What makes this a conversation rather than a transaction: approving does
-    // not end the thread, so the next turn still refines the same context.
+  it('ENDS the conversation on an approve — the next turn starts a new one', async () => {
+    // REVERSED by AMENDMENT 23 §2 (MOTIR-7637). This used to assert the thread was
+    // NOT consumed by an approve, so the next turn refined the same context. An
+    // approve is now one of the six events that end a session: the plan it
+    // produced has been decided, and a later turn on the same scope is a new
+    // request, so it starts a new session that carries none of the old turns.
     await openSessionRoute();
     await appendTurnRoute(post('/api/ai/plan-change/session/turns', { body: 'Add a story' }));
+    const opened = { id: heldSessionId! };
     const submitted = await submitRoute();
     const { planId } = (await submitted.json()) as { planId: string };
 
@@ -847,26 +851,36 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
       { op: 'add', proposedFields: { title: 'Reporting', kind: 'story' } },
     ]);
     expect((await approvePlan(planId)).status).toBe(200);
+    const ended = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: opened.id } });
+    expect(ended.endReason).toBe('approved');
 
+    // A turn addressed to the ended session is refused, not silently appended.
+    const refused = await appendTurnRoute(
+      post('/api/ai/plan-change/session/turns', { body: 'Now split it' }),
+    );
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { code: string }).code).toBe('PLAN_SESSION_ENDED');
+
+    // The panel's next first turn starts a new session.
+    heldSessionId = null;
     submitJobMock.mockResolvedValue({ jobId: 'job-augment-2' });
-    await appendTurnRoute(post('/api/ai/plan-change/session/turns', { body: 'Now split it' }));
+    const next = (await (
+      await appendTurnRoute(post('/api/ai/plan-change/session/turns', { body: 'Now split it' }))
+    ).json()) as { id: string };
+    expect(next.id).not.toBe(opened.id);
     const second = await submitRoute();
     expect(second.status).toBe(200);
 
-    // The refinement still carries the original request. Selected by KIND, not by
-    // call index: an approve on a project's first plan also fires the one-shot
-    // `propose_convention` job (MOTIR-839), which is a submit this seam does not
-    // care about. Since MOTIR-4304 the kind that selects the planning submits is
-    // `plan` — the ONE planning kind — and `propose_convention` is still the
-    // thing being filtered out, so the selection is unchanged in what it means.
+    // Selected by KIND, not by call index: an approve on a project's first plan
+    // also fires the one-shot `propose_convention` job (MOTIR-839).
     const calls = submitJobMock.mock.calls as unknown as Array<
       [string, unknown, { prompt: string }]
     >;
     const planningSubmits = calls.filter((call) => call[0] === 'plan');
     expect(planningSubmits).toHaveLength(2);
     const [, , payload] = planningSubmits[1]!;
-    expect(payload.prompt).toContain('Add a story');
     expect(payload.prompt).toContain('Now split it');
+    expect(payload.prompt).not.toContain('Add a story');
   });
 
   it('refuses a proposal that would rewrite DONE work, and persists nothing', async () => {

@@ -253,6 +253,7 @@ async function acquireOne(
         item.identifier,
         await holderName(existing.heldById, tx),
         existing.expiresAt,
+        { sessionId: existing.sessionId, planId: existing.planId },
       );
     }
     // Ours (refresh) or expired (reclaim). EITHER WAY `priorStatus` and

@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { buildScope, PROJECT_SCOPE } from '@/lib/planChange/scope';
-import { PLAN_SESSION_RESUME_WINDOW_MS } from '@/lib/planChange/sessionWindow';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { PlanTargetLockedError } from '@/lib/planChange/errors';
 import { plansService } from '@/lib/services/plansService';
 import { usersService } from '@/lib/services/usersService';
@@ -132,11 +132,12 @@ async function submitThroughRoute(sessionId: string): Promise<{ jobId: string; p
   return (await res.json()) as { jobId: string; planId: string };
 }
 
-async function age(sessionId: string, ms: number) {
-  await adminDb.planChangeSession.update({
-    where: { id: sessionId },
-    data: { lastActivityAt: new Date(Date.now() - ms) },
-  });
+/** END a session through the shipped end operation (AMENDMENT 23 §2). Since
+ *  MOTIR-7639 openness, not age, decides what resumes — a session left for hours
+ *  is still the member's conversation until it ends. */
+async function endIt(sessionId: string) {
+  const row = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } });
+  await planSessionEndService.endSession(sessionId, 'idle', { workspaceId: row.workspaceId });
 }
 
 beforeEach(async () => {
@@ -283,9 +284,9 @@ describe('SEAM: the resume window is ONE rule across every door', () => {
     expect((mcp.structuredContent as { id: string }).id).toBe(sessionId);
     expect(await adminDb.planChangeSession.count()).toBe(1);
 
-    // PAST the window: the browser's read finds nothing resumable, and names
+    // ONCE IT HAS ENDED: the browser's read finds nothing resumable, and names
     // the earlier conversation instead; the public doors START a new session.
-    await age(sessionId, PLAN_SESSION_RESUME_WINDOW_MS + 60_000);
+    await endIt(sessionId);
     const later = (await (await readSessionRoute(new Request(`${APP}?scope=`))).json()) as {
       session: unknown;
       earlier: { id: string } | null;
@@ -322,12 +323,12 @@ describe('SEAM: the target lock between sessions', () => {
     );
   }
 
-  it('an older OWN session hands its live lease to the new one; another member’s live lease still refuses', async () => {
+  it('an ENDED own session’s card passes to the new one; another member’s live lease still refuses', async () => {
     const item = await card('Anchor');
     const scope = buildScope([item.identifier]);
 
     const older = await planChangeSessionsService.startWithFirstTurn(pctx(), scope, 'first');
-    await age(older.id, PLAN_SESSION_RESUME_WINDOW_MS + 60_000);
+    await endIt(older.id);
     const fresh = await planChangeSessionsService.startWithFirstTurn(pctx(), scope, 'second');
 
     expect(fresh.id).not.toBe(older.id);
@@ -356,7 +357,7 @@ describe('GUARD: card-anchored plan resolution', () => {
       sessionId: older.id,
     });
     await adminDb.plan.update({ where: { id: approvedId! }, data: { status: 'approved' } });
-    await age(older.id, PLAN_SESSION_RESUME_WINDOW_MS + 60_000);
+    await endIt(older.id);
 
     const newer = await planChangeSessionsService.startWithFirstTurn(pctx(), scope, 'second go');
     expect(newer.id).not.toBe(older.id);

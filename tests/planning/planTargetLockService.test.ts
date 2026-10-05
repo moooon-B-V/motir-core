@@ -913,7 +913,10 @@ describe('the refusal itself', () => {
     expect(err.code).toBe('PLAN_TARGET_LOCKED');
     expect(err.message).toContain('PROD-7');
     expect(err.message).toContain('another session');
-    expect(err.message).toContain(at.toISOString());
+    // AMENDMENT 23 §4: the time a person can act on is FREES BY — the lease's
+    // expiry plus one sweep interval, stated as an upper bound.
+    expect(err.message).toContain(new Date(at.getTime() + 5 * 60 * 1000).toISOString());
+    expect(err.freesBy).toEqual(new Date(at.getTime() + 5 * 60 * 1000));
   });
 });
 

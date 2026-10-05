@@ -77,8 +77,8 @@ export const planChangeSessionRepository = {
     return tx.planChangeSession.findFirst({ where: { id, projectId, workspaceId } });
   },
 
-  /** The RESUME read (AMENDMENT 17 §3): this member's OWN most recent
-   *  CONVERSATION for the scope, active at or after `since`. Another member's
+  /** The RESUME read (AMENDMENT 17 §3, AMENDMENT 23 §3): this member's OWN most
+   *  recent OPEN CONVERSATION for the scope. Another member's
    *  session never qualifies — auto-resume is own-only — and neither does a
    *  session a door opened for a plan with no conversation (`mcp`, `expand`, …):
    *  it has no turns to resume into. Served by the
@@ -88,7 +88,6 @@ export const planChangeSessionRepository = {
     scopeKey: string,
     userId: string,
     workspaceId: string,
-    since: Date,
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeSession | null> {
     return tx.planChangeSession.findFirst({
@@ -98,7 +97,41 @@ export const planChangeSessionRepository = {
         workspaceId,
         createdById: userId,
         origin: 'conversation',
-        lastActivityAt: { gte: since },
+        // OPEN, at any age (AMENDMENT 23 §3) — the 2-hour window is retired. An
+        // ended session is never resumed, however recent.
+        endedAt: null,
+      },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
+  /**
+   * The TAKE-BACK read (AMENDMENT 23 §3; MOTIR-7639): this member's own OPEN
+   * conversation that HOLDS one of `targetKeys` — a lock naming the session, or
+   * naming its plan. A first turn or an open on a card the member is already
+   * planning lands back in that conversation instead of starting a second one.
+   * Newest activity wins when more than one does.
+   */
+  async findOpenHoldingForUser(
+    projectId: string,
+    targetKeys: readonly string[],
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    if (targetKeys.length === 0) return null;
+    const names = { workItem: { identifier: { in: [...targetKeys] } } };
+    return tx.planChangeSession.findFirst({
+      where: {
+        projectId,
+        workspaceId,
+        createdById: userId,
+        origin: 'conversation',
+        endedAt: null,
+        OR: [
+          { targetLocks: { some: names } },
+          { plans: { some: { targetLocks: { some: names } } } },
+        ],
       },
       orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
     });
@@ -124,8 +157,8 @@ export const planChangeSessionRepository = {
   },
 
   /** The SEEDED-session read (AMENDMENT 17 §9; MOTIR-6207): this member's OWN
-   *  most recent session seeded by `seedGateId` in this project, active at or
-   *  after `since`. Never another member's (sessions are per member), never an
+   *  most recent OPEN session seeded by `seedGateId` in this project (AMENDMENT
+   *  23 §3 — no window). Never another member's (sessions are per member), never an
    *  unseeded session and never one seeded by a different gate. Served by the
    *  `(seed_gate_id, created_by_id, last_activity_at)` index. */
   async findSeededForUser(
@@ -133,7 +166,6 @@ export const planChangeSessionRepository = {
     seedGateId: string,
     userId: string,
     workspaceId: string,
-    since: Date,
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeSession | null> {
     return tx.planChangeSession.findFirst({
@@ -142,7 +174,7 @@ export const planChangeSessionRepository = {
         workspaceId,
         seedGateId,
         createdById: userId,
-        lastActivityAt: { gte: since },
+        endedAt: null,
       },
       orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
     });
@@ -184,8 +216,9 @@ export const planChangeSessionRepository = {
     return row?.createdBy ?? null;
   },
 
-  /** The ids of this member's OTHER sessions of the scope — the predecessors a new
-   *  session may take a live target lease over from (AMENDMENT 17 §6). */
+  /** The ids of this member's OTHER OPEN sessions of the scope — the sessions a
+   *  new SEEDED session may take a live target lease over from (AMENDMENT 17 §6,
+   *  kept for §9 only by AMENDMENT 23 §3). */
   async listIdsForUserInScope(
     projectId: string,
     scopeKey: string,
@@ -195,7 +228,16 @@ export const planChangeSessionRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<string[]> {
     const rows = await tx.planChangeSession.findMany({
-      where: { projectId, scopeKey, workspaceId, createdById: userId, id: { not: excludeId } },
+      // OPEN sessions only: an ended one released its leases when it ended
+      // (AMENDMENT 23 §2), so it has nothing left to hand over.
+      where: {
+        projectId,
+        scopeKey,
+        workspaceId,
+        createdById: userId,
+        id: { not: excludeId },
+        endedAt: null,
+      },
       select: { id: true },
     });
     return rows.map((r) => r.id);

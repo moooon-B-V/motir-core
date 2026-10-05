@@ -53,10 +53,10 @@ import {
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
   PlanSeedNotApplicableError,
+  PlanSessionEndedError,
   PlanSessionNotFoundError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
-import { resumableSince } from '@/lib/planChange/sessionWindow';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { endSession } from '@/lib/services/planSessionEndService';
 
@@ -331,6 +331,10 @@ async function appendWithin(
   if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
 
   if (skipIf && (await skipIf(tx))) return fresh;
+  // An ENDED session takes no turn from a person (AMENDMENT 23 §3), checked
+  // under the row lock so an end that commits first is always seen. A late
+  // machine turn of the attempt that just finished may still land on the record.
+  if (fresh.endedAt && turn.role === 'user') throw new PlanSessionEndedError(fresh.id);
 
   const seq = fresh.turnCount;
   try {
@@ -418,12 +422,26 @@ async function resumeOrStartWithin(
     scope.scopeKey,
     pctx.userId,
     pctx.workspaceId,
-    resumableSince(now),
     tx,
   );
+  // TAKE-BACK (AMENDMENT 23 §3): no open session for this scope, but one of the
+  // member's own open sessions already holds a card in it — that is the
+  // conversation they are having about it, so the turn lands there. Nothing is
+  // created and nothing is taken over; its own scope is left as it is.
+  const heldBy = resumable
+    ? null
+    : await planChangeSessionRepository.findOpenHoldingForUser(
+        pctx.projectId,
+        scope.targetKeys,
+        pctx.userId,
+        pctx.workspaceId,
+        tx,
+      );
 
   let sessionId: string;
-  if (resumable) {
+  if (heldBy) {
+    sessionId = heldBy.id;
+  } else if (resumable) {
     sessionId = resumable.id;
     await planTargetLockService.acquireForScopeWithin(sessionId, scope.targetKeys, pctx, now, tx);
   } else {
@@ -440,17 +458,11 @@ async function resumeOrStartWithin(
       tx,
     );
     sessionId = created.id;
-    const predecessors = await planChangeSessionRepository.listIdsForUserInScope(
-      pctx.projectId,
-      scope.scopeKey,
-      pctx.userId,
-      pctx.workspaceId,
-      created.id,
-      tx,
-    );
-    await planTargetLockService.acquireForScopeWithin(sessionId, scope.targetKeys, pctx, now, tx, {
-      takeOverFrom: predecessors,
-    });
+    // No take-over (AMENDMENT 23 §3 retires AMENDMENT 17 §6 here): a card the
+    // caller's own open session holds was TAKEN BACK above, and an ended session
+    // released its leases when it ended — so whatever refuses this acquire is
+    // another person's.
+    await planTargetLockService.acquireForScopeWithin(sessionId, scope.targetKeys, pctx, now, tx);
   }
   return sessionId;
 }
@@ -566,7 +578,6 @@ async function resumeSeededOrStartWithin(
     seedGateId,
     pctx.userId,
     pctx.workspaceId,
-    resumableSince(now),
     tx,
   );
   if (seeded) {
@@ -587,6 +598,10 @@ async function resumeSeededOrStartWithin(
     },
     tx,
   );
+  // A SEEDED session is the one place the hand-over survives (AMENDMENT 17 §9):
+  // it must never land on the member's own unseeded (or differently seeded)
+  // session, so take-back cannot serve it, and the card passes from that OPEN
+  // session to this one instead of refusing the member over their own hold.
   const predecessors = await planChangeSessionRepository.listIdsForUserInScope(
     pctx.projectId,
     scope.scopeKey,
@@ -610,31 +625,44 @@ export const planChangeSessionsService = {
   endSession,
 
   /**
-   * The RESUME read (AMENDMENT 17 §3): the caller's OWN most recent session for
-   * the scope, if its last turn was inside `PLAN_SESSION_RESUME_WINDOW_MS`, else
-   * `null`. Another member's session is never resumed automatically — reopening
-   * one is an explicit by-id act ({@link getById}). WRITES NOTHING and takes no
-   * lock: looking at the door is not starting a conversation.
+   * The RESUME read (AMENDMENT 17 §3, AMENDMENT 23 §3): the caller's OWN OPEN
+   * session for the scope, at any age, else `null` — an ended session is never
+   * resumed. A scope the caller has no open session for falls back to the
+   * TAKE-BACK: their own open session that holds one of the scope's cards.
+   * Another member's session is never resumed automatically — reopening one is
+   * an explicit by-id act ({@link getById}). WRITES NOTHING and takes no lock:
+   * looking at the door is not starting a conversation.
    *
    * Browse-gated, like {@link getById}: it reads a conversation.
    */
   async findResumable(
     pctx: ProjectContext,
     scopeKey: string = PROJECT_SCOPE_KEY,
-    now: Date = new Date(),
   ): Promise<PlanChangeSessionDto | null> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
-    const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-      planChangeSessionRepository.findResumableForUser(
+    // A scope key IS its canonical target set (`buildScope`), so the take-back
+    // needs no second argument; the project scope (`''`) holds no card.
+    const targetKeys = scopeKey ? scopeKey.split(',') : [];
+    const row = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+      const own = await planChangeSessionRepository.findResumableForUser(
         pctx.projectId,
         scopeKey,
         pctx.userId,
         pctx.workspaceId,
-        resumableSince(now),
         tx,
-      ),
-    );
+      );
+      return (
+        own ??
+        planChangeSessionRepository.findOpenHoldingForUser(
+          pctx.projectId,
+          targetKeys,
+          pctx.userId,
+          pctx.workspaceId,
+          tx,
+        )
+      );
+    });
     return row ? toDto(row, pctx) : null;
   },
 
@@ -705,9 +733,8 @@ export const planChangeSessionsService = {
   async findResumableWithEarlier(
     pctx: ProjectContext,
     scopeKey: string = PROJECT_SCOPE_KEY,
-    now: Date = new Date(),
   ): Promise<ResumableSessionDto> {
-    const session = await planChangeSessionsService.findResumable(pctx, scopeKey, now);
+    const session = await planChangeSessionsService.findResumable(pctx, scopeKey);
     if (session) return { session, earlier: null };
     const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
       planChangeSessionRepository.findLatestConversationInScope(
@@ -942,17 +969,13 @@ export const planChangeSessionsService = {
 
   /**
    * The SEEDED-session read the refusal's door returns to (AMENDMENT 17 §9;
-   * MOTIR-6207): the id of the caller's OWN session seeded by `seedGateId`
-   * whose last activity is inside the resume window, else `null`. Another
-   * member's seeded session is never returned — sessions are per member
-   * (MOTIR-6011 §6) — and neither is an expired one. Browse-gated like
-   * {@link findResumable}; WRITES NOTHING and takes no lock.
+   * MOTIR-6207): the id of the caller's OWN OPEN session seeded by `seedGateId`,
+   * else `null` (AMENDMENT 23 §3 — no window). Another member's seeded session
+   * is never returned — sessions are per member (MOTIR-6011 §6) — and neither is
+   * an ended one. Browse-gated like {@link findResumable}; WRITES NOTHING and
+   * takes no lock.
    */
-  async findSeededSession(
-    pctx: ProjectContext,
-    seedGateId: string,
-    now: Date = new Date(),
-  ): Promise<string | null> {
+  async findSeededSession(pctx: ProjectContext, seedGateId: string): Promise<string | null> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
     const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
@@ -961,7 +984,6 @@ export const planChangeSessionsService = {
         seedGateId,
         pctx.userId,
         pctx.workspaceId,
-        resumableSince(now),
         tx,
       ),
     );

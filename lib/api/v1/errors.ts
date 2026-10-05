@@ -558,6 +558,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // holder, and the time the lease runs out, so "retry later" is actionable
   // rather than a shrug.
   PLAN_TARGET_LOCKED: 409,
+  // 409: a turn on a session that has ENDED (AMENDMENT 23 §3; MOTIR-7639). The
+  // session exists and is finished — a state, not a permission or a body fault.
+  PLAN_SESSION_ENDED: 409,
 
   // ── Story MOTIR-5310, the FOLDER resource (MOTIR-5408) ────────────────────
   // The statuses `lib/folders/errors.ts`' own header names, so the tree's

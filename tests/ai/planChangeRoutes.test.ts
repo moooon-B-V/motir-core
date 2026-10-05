@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -161,12 +162,10 @@ describe('GET /api/ai/plan-change/session — a look creates nothing (MOTIR-6023
     expect(await adminDb.planChangeSession.count()).toBe(before);
   });
 
-  it('past the window: no resumable conversation, and the EARLIER one to point to (MOTIR-6024)', async () => {
+  it('once ended: no resumable conversation, and the EARLIER one to point to (MOTIR-6024)', async () => {
     const id = await started();
-    await adminDb.planChangeSession.update({
-      where: { id },
-      data: { lastActivityAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
-    });
+    // AMENDMENT 23 §3: an open session resumes at any age; only its END stops it.
+    await planSessionEndService.endSession(id, 'idle', { workspaceId: fx.workspaceId });
     const before = await adminDb.planChangeSession.count();
 
     const body = (await (await readSession(readReq())).json()) as {
@@ -260,13 +259,34 @@ describe('POST /api/ai/plan-change/session/turns', () => {
 
   it('two sessions of one scope each hold only their own turns', async () => {
     const older = await started('older conversation');
-    // The older one goes quiet past the resume window, so the next first turn
-    // starts a second session of the same (project-wide) scope.
-    await adminDb.planChangeSession.update({
-      where: { id: older },
-      data: { lastActivityAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
+    // A second OPEN session of the same (project-wide) scope. The resume rule
+    // returns a member's open session at any age (AMENDMENT 23 §3), so it never
+    // starts this sibling itself — the row is written directly, because what is
+    // under test is that each session keeps its own turns.
+    const scopeKey = (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: older } }))
+      .scopeKey;
+    const newer = (
+      await adminDb.planChangeSession.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          createdById: fx.ownerId,
+          scopeKey,
+          targetKeys: [],
+          turnCount: 1,
+        },
+      })
+    ).id;
+    await adminDb.planChangeTurn.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        sessionId: newer,
+        seq: 0,
+        role: 'user',
+        body: 'newer conversation',
+        authorId: fx.ownerId,
+      },
     });
-    const newer = await started('newer conversation');
     expect(newer).not.toBe(older);
 
     await appendTurn(turnsReq({ sessionId: older, body: 'to the older one' }));

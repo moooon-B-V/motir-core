@@ -130,9 +130,18 @@ async function resolveScope(
   return buildScope(identifiers);
 }
 
-/** The caller's own resumable session for the scope, or null (AMENDMENT 17 §3). */
+/** The caller's own OPEN session for the scope — or the one of theirs that holds
+ *  a card in it (the take-back) — or null (AMENDMENT 17 §3, AMENDMENT 23 §3). */
+async function resumable(
+  pctx: ProjectContext,
+  scope: PlanChangeScope,
+): Promise<{ id: string; scopeKey: string } | null> {
+  const session = await planChangeSessionsService.findResumable(pctx, scope.scopeKey);
+  return session ? { id: session.id, scopeKey: buildScope(session.targetKeys).scopeKey } : null;
+}
+
 async function resumableId(pctx: ProjectContext, scope: PlanChangeScope): Promise<string | null> {
-  return (await planChangeSessionsService.findResumable(pctx, scope.scopeKey))?.id ?? null;
+  return (await resumable(pctx, scope))?.id ?? null;
 }
 
 /** A write that CONTINUES a conversation needs one: the addressed session, else
@@ -176,11 +185,17 @@ export const contextualPlanningService = {
     // The ADDRESSED session, else the caller's resumable one; with neither, this
     // first turn STARTS the session (AMENDMENT 17 §1, §3). The submit then sends
     // the ACCUMULATED intent — the session's own `targetKeys` make it contextual.
-    const target = seeded ? null : (req.sessionId ?? (await resumableId(pctx, scope)));
+    const resumed = seeded || req.sessionId ? null : await resumable(pctx, scope);
+    const target = seeded ? null : (req.sessionId ?? resumed?.id ?? null);
     // A CONTINUING conversation re-takes its targets, as opening one always did
     // (MOTIR-2786): an earlier plan's decision may have handed them back, and a
     // turn that plans them again must hold them again. Idempotent for the holder.
-    if (target) await planTargetLockService.acquireForScope(target, scope.targetKeys, pctx);
+    // A TAKE-BACK (AMENDMENT 23 §3) — a session of another scope that already
+    // holds this card — is returned as it is: nothing new is taken for it.
+    const takenBack = resumed !== null && resumed.scopeKey !== scope.scopeKey;
+    if (target && !takenBack) {
+      await planTargetLockService.acquireForScope(target, scope.targetKeys, pctx);
+    }
     const sessionId = target
       ? (
           await planChangeSessionsService.appendTurn(
