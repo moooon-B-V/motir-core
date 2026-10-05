@@ -223,7 +223,10 @@ function ProgressBar({ value, total }: { value: number; total: number }) {
       aria-valuemin={0}
       aria-valuemax={100}
     >
-      <div className="h-full bg-(--el-accent) transition-[width]" style={{ width: `${pct}%` }} />
+      <div
+        className="h-full bg-(--el-progress-fill) transition-[width]"
+        style={{ width: `${pct}%` }}
+      />
     </div>
   );
 }

@@ -387,7 +387,7 @@ export function AttachmentsPanel({
                     >
                       <div
                         className={cn(
-                          'bg-(--el-accent) h-full rounded-(--radius-badge)',
+                          'bg-(--el-progress-fill) h-full rounded-(--radius-badge)',
                           upload.progress === null && 'w-1/3 animate-pulse',
                         )}
                         style={

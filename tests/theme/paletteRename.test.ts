@@ -58,6 +58,9 @@ describe('no colour moves — resolved --el-* tokens against the pre-rename shee
   // `motir` under `amethyst`. The resolver is the same one every palette suite
   // uses. A LATER, deliberate retune of either palette changes these values on
   // purpose: regenerate the fixture in that change rather than loosening this.
+  // Regenerated once so far: MOTIR-7584 (the motir warm touches, design MOTIR-7583
+  // §8), which moved motir's warm roles and added `--el-progress-fill` /
+  // `--el-editor-focus` to every palette at the value their consumers painted.
   const before = JSON.parse(
     readFileSync(join(process.cwd(), 'tests/fixtures/paletteRename6471.before.json'), 'utf8'),
   ) as Record<string, Record<string, string>>;

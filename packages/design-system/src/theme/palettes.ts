@@ -77,7 +77,7 @@ export const PALETTE_REGISTRY = {
     id: 'motir',
     name: 'Motir',
     tagline:
-      'Stark and editorial — cool greyscale surfaces + ink, an ink CTA, a single restrained cool-blue accent.',
+      'Stark and editorial — cool greyscale surfaces + ink, an ink CTA, a restrained cool-blue accent and a few warm touches.',
     inspiration:
       "Vercel's black-and-white precision + Linear's ultra-minimal, on Radix Slate/Blue scales.",
     designDoc: 'docs/palettes/motir.md',
