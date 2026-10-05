@@ -42,7 +42,7 @@ function request(overrides: Partial<EnterpriseRequestWithParties> = {}) {
 function move(metadata: unknown) {
   return {
     id: 'log_1',
-    seq: 1n,
+    seq: BigInt(1),
     actorUserId: 'staff_1',
     action: 'enterprise_request.transition',
     metadata,
