@@ -19,6 +19,7 @@ closest existing usage surface.
 
 | **ORG lookup · ORG page · the internal-billing CLASSIFICATION control** (AMENDMENT 2026-09-05) | **`console.mock.html`** (HTML mockup, Panels 10 · 10b · 11 · 12) | The ORG level of the reserved **Tenants** row. Four panels: the **org lookup** (a GET form, the shipped user-lookup grammar one entity over) · its **three states** (idle · query too short · no results) · the **org page** (identity, plan tier, balance, the `isMeta` and `internalBilling` chips drawn SEPARATELY, MOTIR-733's panels as RESERVED regions, and the allocation table) · the **classification control** in six states (not-classified · classified · confirm with a mandatory reason · reason-missing · already-in-that-state · generic failure) with the `PlatformAuditLog` row rendered back on the same surface. **Gates MOTIR-4566 and MOTIR-4568** (Story MOTIR-4337). Draws to `docs/decisions/internal-billing-classification.md`. |
 | **The OPS TOOLKIT — org Operations tab · credits & plan · org suspend · kill-switches · View as · the audit log** (AMENDMENT 2026-10-03) | **`console--ops-toolkit.mock.html`** (delta, Panels 1–8) | Story 10.3’s governance writes on the shipped org and user pages, plus the hash-chained audit log at `/admin/audit-log`. **Gates MOTIR-747 … MOTIR-752.** |
+| **ENTERPRISE REQUESTS — the rail row · the list (state filter, cursor paging, count) · the detail per state · support read-only · stale refusal** (AMENDMENT 2026-10-05) | **`console--enterprise-requests.mock.html`** (delta, Panels 1–10) | A new Platform-group page at `/admin/enterprise-requests` where staff work the requests orgs send from the Enterprise card’s Contact sales. **Gates MOTIR-7609.** |
 
 ## What this area is
 
@@ -2105,3 +2106,256 @@ submit a blank id; the action's server-side guard stays and reads as the generic
 
 Colour, shape and roles are Panel 6's: the foot line and the nothing line are `--el-text-secondary`,
 the refusal line `--el-danger-on-surface`. Only a superadmin sees **Add model** (unchanged).
+
+---
+
+# AMENDMENT 2026-10-05 — Enterprise requests (MOTIR-7604 · story MOTIR-7602)
+
+**Design system check (first, per the design-system rule).** Read `package.json` (depends on
+`@motir/design-system` `workspace:*`) and `app/globals.css` (imports the package's `theme.css`).
+**Verdict: the project is on Motir Design** (package `0.8.1`, `packages/design-system/package.json`).
+The root layout applies the signed-in person's own `data-style` / `data-palette` / `data-type`, so
+there are no fixed project axes: the mock draws the base values and routes every element through a
+token. **Nothing the package lacks is needed** — no proposed addition, no product-local component.
+`0.8.1` does export `@motir/design-system/mock`; the mock is nonetheless composed the way every
+console delta in this area is (below), because the console shell, table and pager it draws are the
+console's own markup, which `renderMock`'s parts do not carry, and a reviewer comparing this delta
+with its siblings should see one grammar.
+
+**Mock (a DELTA):** [`console--enterprise-requests.mock.html`](console--enterprise-requests.mock.html),
+ten panels. **Amends:**
+
+- `console.mock.html` Panel 2 / 13 (the shell): the rail gains one row. The rail is drawn as
+  `AdminShell.tsx` ships it TODAY — Platform: Overview · Usage & cost · Tenants · Users; Operations:
+  Monitoring · AI planning · Hosted-run models · Planning lessons · (Audit log, superadmin only) —
+  not as the older mocks drew it (their reserved `Governance · 10.3` row is gone).
+- Panel 7a: the 404, referenced and not redrawn.
+
+The older mocks are records and are not edited.
+
+**Gates:** **MOTIR-7609** — [the page's code](motir:cmuuwiepk00jshwoih49i7zi0) builds it: the rail
+row in `app/(admin)/_components/AdminShell.tsx` + `app/(admin)/layout.tsx`, a new list page
+at the URL `/admin/enterprise-requests`, a new detail page at `/admin/enterprise-requests/<id>`
+(both under `app/(admin)/admin/`, which MOTIR-7609 creates), every state below, en + zh. It renders the
+rules of **MOTIR-7608** (`platformEnterpriseRequestService`: `list` / `get` / `transition`, 50 a
+page with a total, `ENTERPRISE_REQUEST_STALE`, `enterprise_request.transition` audit rows) on the
+record of **MOTIR-7605**.
+
+**Composed, not redrawn.** The token block, primitive CSS and lucide sprite are spliced verbatim
+from `console--planning-lessons.mock.html` (itself from `console--ai-planning.mock.html` and
+`console.mock.html`). The shell is the shipped `AdminShell.tsx` (the `Sidebar` primitive + the
+tint-sky operator bar). The list is the console's `Card` + the shipped `Segmented` as a state filter
+
+- the at-scale table + the cursor pager the audit log ships (Newer / Older). The detail is the
+  lessons detail's grammar: `detail-head` with pills, a `kv` card, and a stacked right column. The
+  closing confirm is the console's `Modal role="alertdialog"`. The additions block at the end of the
+  mock's `<style>` holds only the five state pills, the list cells, the history timeline, the narrow
+  frame and nine lucide glyphs (`Inbox`, `Bot`, `ScrollText`, `UserSearch`, `Mail`, `ArrowRight`,
+  `CircleX`, `MessageSquare`, `Lock`).
+
+## What this page is
+
+Where platform staff work the **requests organisations send from the Enterprise card's Contact
+sales** (the org-side form is the billing delta's, not this asset's). One list across every
+organisation, newest first, and a detail per request that shows every answer the org gave, links to
+the org's tenant page, records every move, and offers only the legal next state. **Staff-facing
+only**: for a non-staff user both routes are the app 404 (Panel 10 → `console.mock.html` Panel 7a).
+
+**No price appears anywhere** on either route. The org's tier at the moment it sent the request
+(`tierKeyAtRequest`) is shown as a NAME ("on Team when sent"), never an amount. Setting a tier or
+granting credits stays on the tenant page's Operations tab (`console--ops-toolkit.mock.html`); this
+page only links there.
+
+## The access path — a new rail row (Panel 1)
+
+**Platform → Enterprise requests**, the LAST row of the Platform group, after **Users**:
+
+- **Icon:** `Inbox` (lucide).
+- **Route:** `/admin/enterprise-requests`, active when
+  `pathname.startsWith('/admin/enterprise-requests')`, so a request's detail keeps it lit.
+- **Visibility:** a LIVE row, visible to **every staff role** (`support` reads the page).
+- **Label:** a new `navEnterpriseRequests` beside `navUsers` in `AdminShellLabels`.
+
+It sits in **Platform**, not Operations, because it is a view of the estate's customers — the same
+family as Tenants and Users, which it links into — while Operations holds knobs on how the platform
+runs (Monitoring, AI planning, Hosted-run models, Planning lessons) and the audit log.
+
+## The roles
+
+| Staff role               | Reads                               | Can move a request                              |
+| ------------------------ | ----------------------------------- | ----------------------------------------------- |
+| `support`                | the list and every detail (Panel 7) | nothing — no Move-to buttons; one line says why |
+| `operator`               | the list and every detail           | every legal edge (Panels 4–5)                   |
+| `superadmin`             | the list and every detail           | the same as an operator                         |
+| not staff (owners incl.) | the app 404 (Panel 10 → Panel 7a)   | —                                               |
+
+Reads are `requirePlatformStaff('support')`; a move is `operator` and is re-gated in the service —
+the missing buttons are presentation, the service is the rule. `support` sits below `operator` in
+`PLATFORM_ROLE_LADDER` (`lib/platform/auth.ts`). **Reads are audited**: loading a list page writes
+one `estate.read` row, opening a detail writes one — the page line under the title says so.
+
+## The state set
+
+| value        | label (en / zh)       | pill (`--el-*`)                                        | legal next (the Move-to buttons) |
+| ------------ | --------------------- | ------------------------------------------------------ | -------------------------------- |
+| `new`        | New / 新请求          | `--el-tint-sky` + `--el-text-strong`                   | **Mark contacted** · Mark lost   |
+| `contacted`  | Contacted / 已联系    | `--el-tint-lavender` + `--el-text-strong`              | **Mark offer sent** · Mark lost  |
+| `offer_sent` | Offer sent / 已发方案 | `--el-tint-yellow` + `--el-text-strong`                | **Mark won** · Mark lost         |
+| `won`        | Won / 已成交          | `--el-tint-mint` + `--el-text-strong`                  | none — closed                    |
+| `lost`       | Lost / 已流失         | `--el-surface` + `--el-border` + `--el-text-secondary` | none — closed                    |
+
+The edge set is exactly `new → contacted → offer_sent → won`, plus any open state → `lost`. A skip
+(`new → won`, `contacted → won`) is never drawn, so the page cannot ask the service for an illegal
+edge. **Open** = `new` · `contacted` · `offer_sent`. The forward move is the primary `Button`; Mark
+lost is a secondary `Button` with a `CircleX` glyph and `--el-danger-on-surface` ink (≥ 4.77:1 on
+the white card in all palettes) — never `--el-danger-text`, which is only for a danger fill.
+
+## The panels (review EACH — mistake #31)
+
+1. **The list, populated.** Inside the shell, the new row active. One `Card`: title _Requests_ with
+   the count line (_Newest first. **63 open** — new, contacted or offer sent._), then the state
+   filter — a `Segmented` of **Open** (default) · New · Contacted · Offer sent · Won · Lost · All,
+   each segment carrying its count — then the table:
+   - **Organisation**: name, with _on {tier} when sent_ beneath (omitted when `tierKeyAtRequest` is
+     null).
+   - **Requester**: name, email beneath.
+   - **Sent**: the date, the relative time beneath.
+   - **Needs**: work items a day · parallel agents · which agents · runs on its own, joined by `·`; an
+     unanswered one reads `{unit} —` in italic `--el-text-secondary`.
+   - **State**: the state pill. Then a chevron; the whole row opens the detail.
+
+   The foot: _Newest first · 50 a page_ and the pager — _1–50 of 63_, **Newer** / **Older** by
+   cursor (the audit log's shipped grammar), the unavailable direction disabled.
+
+2. **Filtered and paged.** LEFT: Lost chosen; the count line and the pager follow the filter. RIGHT:
+   Won chosen with nothing in it — the filter-shaped empty state (`Filter` glyph, _No won
+   requests_, **Show open requests**), never the never-any one. BELOW: a later page, _51–63 of 63_,
+   Newer live and Older disabled.
+3. **States.** (a) **Loading**: the card, its title and the filter paint at once; four skeleton rows;
+   no count is guessed — the segments carry none until the read lands. (b) **Empty**: no request has
+   ever been sent; no filter to clear. (c) **Error**: the read failed — the console's error card with
+   Retry, no rows. A detail whose id does not exist is the app 404 (not redrawn).
+4. **Detail, `new`, an operator.** `/admin/enterprise-requests/[id]`. A **Back to requests** link,
+   the org name as the page heading, the state pill and _Sent {date}_. LEFT, _The request_: a `kv`
+   list of Organisation (with the tier at request), Requester, Contact, Sent, Work items a day, Parallel
+   agents, Which agents, Runs on its own, Start, Team size — an unanswered field reads _Not
+   answered_ — then the **Note** as a quoted block. Its card head carries **Open {org} in Tenants →**,
+   a link to `/admin/tenants/[orgId]`. RIGHT: **Move to** (Panel 5's buttons for this state, with a
+   one-line hint), then **History**, oldest first: the request's own _Sent as New_ (by the
+   requester) and every applied move as `{from pill} → {to pill}` with _{staff email} · {date,
+   time}_.
+5. **The controls per state** — the state card only, one cell per value (a–e), exactly the table
+   above. The two closed states show a line instead: _Closed as {Won|Lost} on {date}. A closed
+   request does not move again. The organisation can send a new one from its Billing page._
+6. **A closed request in full** (Won): no controls; three moves by two staff members in History.
+7. **A `support` viewer**, on an open (Contacted) request: everything read-only; in the Move-to
+   card's place a _State_ card with a `Lock` glyph and the line _Read-only for support. Moving a
+   request is an operator's or a superadmin's job; you can read everything here and in the history._
+8. **Closing, and a refused move.** LEFT: **Mark won** and **Mark lost** close the request for good,
+   so each asks once in an `alertdialog` (_Mark this request lost?_ … Cancel · Mark lost). No reason
+   field: the history records who and when, and the move carries no judgement a reason would explain.
+   The two open-state moves apply on one press. RIGHT: the **stale refusal**
+   (`ENTERPRISE_REQUEST_STALE`): a `--el-tint-yellow` callout (`role="alert"`) — _Not changed —
+   someone else moved this request first. {who} marked it **{current state}** a moment ago, so your
+   "{action}" was refused and nothing was recorded. The page now shows its current state; choose
+   again._ The page RE-READS the request (the page-state-after-mutation contract): the pill, the
+   Move-to buttons and the History all show the current state.
+9. **`zh` and the narrow reflow (390px).** Below `md` the shipped shell hides the rail; the bar keeps
+   the staff marker and drops the inert search. The filter wraps; the table becomes one stacked row
+   per request (org + state pill; requester · sent; needs); the pager foot wraps. The detail is one
+   column: header, Move to, the request, then History. LEFT: the list in zh. RIGHT: a detail in en.
+10. **Not staff** — by reference to `console.mock.html` Panel 7a.
+
+## Copy (en — the `platformAdmin` namespace MOTIR-7609 adds, with a `zh` twin each)
+
+| key                                                                   | en                                                                                                                                                                                                      | zh                                                                                                                                          |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | --------- |
+| `shell.navEnterpriseRequests`                                         | Enterprise requests                                                                                                                                                                                     | 企业版请求                                                                                                                                  |
+| `enterpriseRequests.title`                                            | Enterprise requests                                                                                                                                                                                     | 企业版请求                                                                                                                                  |
+| `enterpriseRequests.subtitle`                                         | What organisations sent from the Enterprise card’s Contact sales. Work each request from new to won or lost; every move is recorded with who made it.                                                   | 组织在企业版卡片上点击“联系销售”后发来的请求。在这里跟进每一条请求，直到成交或流失；每次变更都会记录操作人。                                |
+| `enterpriseRequests.auditLine`                                        | A request is customer data. Loading this list and opening a request are cross-tenant reads, written to the audit log.                                                                                   | 请求属于客户数据。加载此列表和打开请求均为跨租户读取，会写入审计日志。                                                                      |
+| `enterpriseRequests.cardTitle`                                        | Requests                                                                                                                                                                                                | 企业版请求                                                                                                                                  |
+| `enterpriseRequests.count.open`                                       | Newest first. {count} open — new, contacted or offer sent.                                                                                                                                              | 最新的在前。{count} 条进行中。                                                                                                              |
+| `enterpriseRequests.count.state`                                      | Newest first. {count} {state}.                                                                                                                                                                          | 最新的在前。{count} 条{state}。                                                                                                             |
+| `enterpriseRequests.filterLabel`                                      | Filter requests by state                                                                                                                                                                                | 按状态筛选                                                                                                                                  |
+| `enterpriseRequests.filter.open` / `.all`                             | Open / All                                                                                                                                                                                              | 进行中 / 全部                                                                                                                               |
+| `enterpriseRequests.status.*`                                         | New · Contacted · Offer sent · Won · Lost                                                                                                                                                               | 新请求 · 已联系 · 已发方案 · 已成交 · 已流失                                                                                                |
+| `enterpriseRequests.col.*`                                            | Organisation · Requester · Sent · Needs · State                                                                                                                                                         | 组织 · 请求人 · 发送时间 · 需求 · 状态                                                                                                      |
+| `enterpriseRequests.tierWhenSent`                                     | on {tier} when sent                                                                                                                                                                                     | 发送时为 {tier}                                                                                                                             |
+| `enterpriseRequests.needs.cardsPerDay`                                | {n} items/day                                                                                                                                                                                           | 每天 {n} 个工作项                                                                                                                           |
+| `enterpriseRequests.needs.agents`                                     | {n} agents                                                                                                                                                                                              | {n} 个智能体                                                                                                                                |
+| `enterpriseRequests.agentPath.*`                                      | Motir-hosted · Their own · Both                                                                                                                                                                         | Motir 托管 · 自有智能体 · 两者                                                                                                              |
+| `enterpriseRequests.autonomy.*`                                       | Runs on its own · Volume only · Not sure                                                                                                                                                                | 自主推进 · 仅需产能 · 尚未确定                                                                                                              |
+| `enterpriseRequests.startWhen.*`                                      | Now · Within a month · Within a quarter · Just exploring                                                                                                                                                | 立即 · 一个月内 · 一个季度内 · 只是了解                                                                                                     |
+| `enterpriseRequests.notAnswered`                                      | Not answered                                                                                                                                                                                            | 未填写                                                                                                                                      |
+| `enterpriseRequests.pager.note`                                       | Newest first · 50 a page                                                                                                                                                                                | 最新的在前 · 每页 50 条                                                                                                                     |
+| `enterpriseRequests.pager.range`                                      | {from}–{to} of {total}                                                                                                                                                                                  | 第 {from}–{to} 条，共 {total} 条                                                                                                            |
+| `enterpriseRequests.pager.newer` / `.older`                           | Newer / Older                                                                                                                                                                                           | 较新 / 较早                                                                                                                                 |
+| `enterpriseRequests.empty.title` / `.body`                            | No enterprise requests yet / When an organisation’s owner presses Contact sales on the Enterprise plan, the request lands here and platform staff are emailed.                                          | 还没有企业版请求 / 组织所有者在企业版上点击“联系销售”后，请求会出现在这里，平台员工也会收到邮件。                                           |
+| `enterpriseRequests.emptyFilter.title` / `.body` / `.action`          | No {state} requests / No request is {state} right now. / Show open requests                                                                                                                             | 没有{state}的请求 / 目前没有{state}的请求。 / 查看进行中的请求                                                                              |
+| `enterpriseRequests.error.title` / `.body`                            | Couldn’t load the requests / Something went wrong reading the requests, so none is shown. Nothing has changed.                                                                                          | 无法加载请求 / 读取请求时出错，因此没有显示任何请求。没有任何更改。                                                                         |
+| `enterpriseRequests.detail.back`                                      | Back to requests                                                                                                                                                                                        | 返回请求列表                                                                                                                                |
+| `enterpriseRequests.detail.sent`                                      | Sent {date}                                                                                                                                                                                             | 发送于 {date}                                                                                                                               |
+| `enterpriseRequests.detail.requestTitle`                              | The request                                                                                                                                                                                             | 请求内容                                                                                                                                    |
+| `enterpriseRequests.detail.orgLink`                                   | Open {org} in Tenants                                                                                                                                                                                   | 在租户中打开 {org}                                                                                                                          |
+| `enterpriseRequests.detail.field.*`                                   | Organisation · Requester · Contact · Sent · Work items a day · Parallel agents · Which agents · Runs on its own · Start · Team size · Note                                                              | 组织 · 请求人 · 联系方式 · 发送时间 · 每天工作项数 · 并行智能体 · 使用哪种智能体 · 自主推进 · 开始时间 · 团队规模 · 备注                    |
+| `enterpriseRequests.move.title`                                       | Move to                                                                                                                                                                                                 | 变更为                                                                                                                                      |
+| `enterpriseRequests.move.contacted` / `.offerSent` / `.won` / `.lost` | Mark contacted / Mark offer sent / Mark won / Mark lost                                                                                                                                                 | 标记为已联系 / 标记为已发方案 / 标记为已成交 / 标记为已流失                                                                                 |
+| `enterpriseRequests.move.hint.*`                                      | Next: you reached out to the requester. · Next: you sent them an offer. · Next: they accepted — or it is lost. (+ “Won and lost close the request.”)                                                    | 下一步：你已联系请求人。· 下一步：你已发送方案。· 下一步：对方接受，或已流失。（+“成交和流失会关闭请求。”）                                 |
+| `enterpriseRequests.closed`                                           | Closed as {state} on {date}. A closed request does not move again. The organisation can send a new one from its Billing page.                                                                           | 已于 {date} 以{state}关闭。关闭的请求不能再变更。该组织可以在其账单页面重新发送请求。                                                       |
+| `enterpriseRequests.readOnly`                                         | Read-only for support. Moving a request is an operator’s or a superadmin’s job; you can read everything here and in the history.                                                                        | 支持人员只读。变更请求需由运维人员或超级管理员操作；你可以查看这里和历史中的全部内容。                                                      |
+| `enterpriseRequests.confirm.title`                                    | Mark this request {won                                                                                                                                                                                  | lost}?                                                                                                                                      | 将此请求标记为{已成交 | 已流失}？ |
+| `enterpriseRequests.confirm.body`                                     | {org}’s request closes as {state} and cannot be moved again. The organisation can send a new request from its Billing page.                                                                             | {org} 的请求将以{state}关闭，且不能再变更。该组织可以在其账单页面重新发送请求。                                                             |
+| `enterpriseRequests.stale`                                            | Not changed — someone else moved this request first. {who} marked it {state} a moment ago, so your “{action}” was refused and nothing was recorded. The page now shows its current state; choose again. | 未更改——其他人已先变更了此请求。{who} 刚刚将其标记为{state}，因此你的“{action}”被拒绝，未记录任何内容。页面现在显示其当前状态，请重新选择。 |
+| `enterpriseRequests.history.title`                                    | History                                                                                                                                                                                                 | 历史                                                                                                                                        |
+| `enterpriseRequests.history.sent`                                     | Sent as New                                                                                                                                                                                             | 以新请求发送                                                                                                                                |
+
+`{who}` in the stale line is the staff email from the newest history entry the re-read returns;
+when the re-read has none newer than the viewer's (an unexpected race), the line drops _{who}
+marked it … a moment ago_ and reads _It is now **{state}**._
+
+## Data — what each element reads
+
+| element                  | source                                                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| list rows, total, cursor | `list(principal, { status, cursor })` — 50 a page, newest first, with a total          |
+| segment counts           | the service's per-state count (`countByStatus`); omitted while loading                 |
+| detail fields            | `get(principal, id)` — the request DTO (`PlatformEnterpriseRequestDTO`)                |
+| history                  | `get(...)`'s history: the `enterprise_request.transition` audit rows, oldest first     |
+| org link                 | `/admin/tenants/{orgId}`                                                               |
+| Move-to buttons          | the legal edges from the current `status`, and `platformRoleAtLeast(role, 'operator')` |
+| stale callout            | `transition` → `ENTERPRISE_REQUEST_STALE` with the current state; then re-`get`        |
+
+## Colour and shape roles (`--el-*` only)
+
+- State pills: the table above — the hue in a `--el-tint-*` background with `--el-text-strong`
+  (finding #35); Lost is the neutral pill. Radius `--radius-badge`, padding `--spacing-chip-x/y`.
+- Every secondary ink (sub-lines, needs, hints, history meta, the read-only and closed lines, the
+  unanswered italic) is `--el-text-secondary` — it lands on the white card and on `--el-surface`
+  board chrome alike. `--el-text-faint` carries no text.
+- Mark lost: `--el-danger-on-surface` ink on a transparent secondary button with
+  `--el-border-strong`. The stale callout: `--el-tint-yellow` + `--el-text-strong`, glyph
+  `--el-warning`. The org link and Back link: `--el-link`.
+- Buttons `--radius-btn` / `--height-btn-md`; the filter `--radius-btn` + `--height-control`;
+  cards `--radius-card` + `--shadow-card`; the confirm `--radius-modal` + `--shadow-modal`; the note
+  quote `--radius-control`.
+
+## A11y
+
+- The filter is a `radiogroup` labelled _Filter requests by state_; each segment's count is part of
+  its name.
+- The skeleton table is `aria-busy`.
+- The history's arrow carries `aria-label="to"`, so a move reads _New to Contacted_.
+- The confirm is an `alertdialog` with its title as the label; the stale callout is `role="alert"`
+  so it is announced on the refused press.
+- The read-only line is real text, not a tooltip on a disabled button: support sees no disabled
+  control at all.
+
+## What this amendment does NOT draw
+
+- The org's request form and its _Request sent_ state (the billing delta).
+- The tenant page it links to (shipped), and any tier-setting or credit-grant control (the tenant's
+  Operations tab).
+- A reason on a move, an assignee, notes by staff, or reopening a closed request — none is in the
+  service's contract.
+- Any price.

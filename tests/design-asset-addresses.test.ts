@@ -255,6 +255,22 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
+  // ── FORWARD-LOOKING: the Enterprise requests console (Story MOTIR-7602) ──
+  {
+    file: 'design/platform-admin/console--enterprise-requests.mock.html',
+    address: '/admin/enterprise-requests',
+    why: 'FORWARD-LOOKING: MOTIR-7604 drew the Enterprise requests console before MOTIR-7609 builds it. DELETE this row when `app/(admin)/admin/enterprise-requests/` lands — the `carries no KNOWN entry that has stopped applying` arm turns red in that pull request.',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    address: '/admin/enterprise-requests',
+    why: 'FORWARD-LOOKING: MOTIR-7604 drew the Enterprise requests console before MOTIR-7609 builds it. DELETE this row when `app/(admin)/admin/enterprise-requests/` lands — the `carries no KNOWN entry that has stopped applying` arm turns red in that pull request.',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    address: '/admin/enterprise-requests/[id]',
+    why: 'FORWARD-LOOKING: MOTIR-7604 drew the Enterprise requests console before MOTIR-7609 builds it. DELETE this row when `app/(admin)/admin/enterprise-requests/` lands — the `carries no KNOWN entry that has stopped applying` arm turns red in that pull request.',
+  },
   // ── ✅ RETIRED 2026-09-11 (MOTIR-5170, under Bug MOTIR-4925) ──────────────
   //  Three FORWARD-LOOKING rows stood here for `/settings/project/approvals` —
   //  MOTIR-4942's design named the room's address in `design/projects/`,
