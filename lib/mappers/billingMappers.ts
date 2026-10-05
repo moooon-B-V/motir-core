@@ -1,5 +1,10 @@
-import type { Organization } from '@/generated/prisma/client';
-import type { ScaledTrackerStateDTO, AiIncludedSeatDTO } from '@/lib/dto/billing';
+import type { EnterpriseRequest, Organization } from '@/generated/prisma/client';
+import type {
+  AiIncludedSeatDTO,
+  EnterpriseRequestDTO,
+  EnterpriseRequestOrgStatus,
+  ScaledTrackerStateDTO,
+} from '@/lib/dto/billing';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 
 // Prisma → DTO converters for the billing-propagation domain (Story 8.1). The
@@ -19,4 +24,30 @@ export function toScaledTrackerStateDTO(org: Organization): ScaledTrackerStateDT
 
 export function toAiIncludedSeatDTO(org: Organization): AiIncludedSeatDTO {
   return { organizationId: org.id, aiIncludedSeat: org.aiIncludedSeat };
+}
+
+const ORG_STATUS: Record<EnterpriseRequest['status'], EnterpriseRequestOrgStatus> = {
+  new: 'received',
+  contacted: 'in_conversation',
+  offer_sent: 'offer_sent',
+  won: 'closed',
+  lost: 'closed',
+};
+
+/** The org's view of an Enterprise request (MOTIR-7605) — staff's states folded
+ *  into the org's words, and nothing the org did not give or cannot see. */
+export function toEnterpriseRequestDTO(row: EnterpriseRequest): EnterpriseRequestDTO {
+  return {
+    id: row.id,
+    status: ORG_STATUS[row.status],
+    createdAt: row.createdAt.toISOString(),
+    cardsPerDay: row.cardsPerDay,
+    parallelAgents: row.parallelAgents,
+    agentPath: row.agentPath,
+    autonomy: row.autonomy,
+    startWhen: row.startWhen,
+    teamSize: row.teamSize,
+    contact: row.contact,
+    note: row.note,
+  };
 }
