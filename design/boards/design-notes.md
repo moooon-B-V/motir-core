@@ -2263,8 +2263,9 @@ palette's area.
 What the board panels show, today (left) vs proposed (right), light and dark: the Epic kind icon in
 warm orange beside the burnt-orange **Blocked** pill and the amber **High** chip it was measured
 against; the blue in-progress column, blue focus ring, ink **Create** button and ink brand tile
-unchanged; a selected backlog row and a focused row; every work-item type chip (Design warms, Review
-and Verification keep the burnt orange); progress at 0 / 40 / 100% (the done/total meter stays green,
+unchanged; a selected backlog row and a focused row; every work-item type chip (Design takes citrine
+gold, its own hue apart from the orange Epic; Review and Verification keep the burnt orange); progress at 0 / 40 / 100% (the done/total meter stays green,
 upload and import bars warm); avatars, labels, the Blocked pill and a warning callout on the warmer
 peach; the planning-canvas glow and the donut ramp; the Appearance palette picker (unchanged); and
-the two intensities side by side, subtle recommended.
+the two intensities, subtle recommended. Revision 2 (2026-10-05) added the citrine Design hue
+after review asked for citrine too.

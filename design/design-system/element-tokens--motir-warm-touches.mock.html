@@ -210,14 +210,18 @@
       /* the NEW role the code card adds: progress takes the warm accent in motir only */
       .wt-scope[data-proposal] {
         --el-progress-fill: var(--color-accent);
+        --el-type-design: #91771e; /* citrine — Mirotone yellow-650 */
+      }
+      .wt-scope[data-theme='dark'][data-proposal] {
+        --el-type-design: #ffd02f; /* citrine — Miro Sunglow, yellow-500 */
       }
       /* the REJECTED "a bit more colourful" intensity — drawn for comparison only */
       .wt-scope[data-proposal='colourful'] {
-        --el-type-design: #e0533f;
+
         --wt-chip-mix: 22%;
       }
       .wt-scope[data-theme='dark'][data-proposal='colourful'] {
-        --el-type-design: #ff6b5a;
+
       }
 
       *, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; border: 0 solid; }
@@ -269,11 +273,11 @@
   <body class="wt-sheet">
     <header class="wt-sheet-head">
       <h1 class="wt-sheet-title">Warm touches in the default Motir palette — the --el-* rows that change</h1>
-      <p class="wt-sheet-lede">Every --el-* role whose resolved value moves in the motir palette, plus the one new role, before and after, in both themes. Then the identity roles that deliberately do not move, and the motir.co surfaces that paint a changed role.</p>
+      <p class="wt-sheet-lede">Every --el-* role whose resolved value moves in the motir palette, plus the new roles, before and after, in both themes. Then the identity roles that deliberately do not move, and the motir.co surfaces that paint a changed role.</p>
     </header>
     <section class="wt-panel">
       <h2 class="wt-panel-title">1 · Changed roles — light</h2>
-      <p class="wt-panel-note">The accent group (highlight, Epic, Design, epic accent, chart segment 6, the new progress fill) and the two tints with the roles that alias them.</p>
+      <p class="wt-panel-note">The orange group (highlight, Epic, epic accent, chart segment 6, the new progress fill), the citrine Design hue, and the two tints with the roles that alias them.</p>
       <div class="wt-pair">
       <div class="wt-scope wt-frame" data-theme="light">
         <div class="wt-frame-cap">Light · today (shipped)</div>

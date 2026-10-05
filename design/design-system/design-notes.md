@@ -339,29 +339,38 @@ is the base; the delta is `design/design-system/element-tokens--motir-warm-touch
 The board surfaces are drawn in `design/boards/board--motir-warm-touches.mock.html` (base
 `design/boards/board.mock.html`, cited from `design/boards/design-notes.md`). Neither base is edited.
 
-**What it decides.** Motir keeps its monochrome identity and gains one warm-orange accent on
-DECORATIVE roles only. The change is three Tier-0 values per theme plus two new Tier-3 roles; every
-other `--color-*` in the motir blocks, and every other palette, is untouched.
+**What it decides.** Motir keeps its monochrome identity and gains two warm touches on
+DECORATIVE roles only: a warm ORANGE (the highlight, Epic, progress, chart segment 6) and a CITRINE gold
+for Design — borrowed from the Citrine palette's own documented Mirotone steps, so Design gets its own
+hue instead of sharing Epic's. The change is three Tier-0 values per theme, one Tier-3 value the motir
+blocks set directly (`--el-type-design`, as Citrine itself sets `--el-sidebar-item-bg-hover`) and two
+new Tier-3 roles; every other `--color-*` in the motir
+blocks, and every other palette, is untouched.
+
+**Revision 2 (2026-10-05).** The first version (evidence `cmuufps5w00gmhwoithztvrn6`) was sent back
+with _"I want to add "citrine" color too"_. This revision adds citrine as the Design hue — §8.1, the
+citrine matrix in §8.3, and §8.7. Nothing else moved.
 
 ### 8.1 The role table (recommended intensity: SUBTLE)
 
-| role                                                                                                                                                               | light: today → proposed     | dark: today → proposed      | how it moves                                                                                          |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `--color-accent`                                                                                                                                                   | `#2563c9` → **`#d66000`**   | `#5b9dff` → **`#fa5500`**   | the source the six roles below read                                                                   |
-| `--el-highlight`                                                                                                                                                   | `#2563c9` → `#d66000`       | `#5b9dff` → `#fa5500`       | rides `--color-accent`                                                                                |
-| `--el-type-epic` · `--el-epic-accent`                                                                                                                              | `#2563c9` → `#d66000`       | `#5b9dff` → `#fa5500`       | rides `--color-accent`                                                                                |
-| `--el-type-design`                                                                                                                                                 | `#2563c9` → `#d66000`       | `#5b9dff` → `#fa5500`       | rides `--color-accent`                                                                                |
-| `--el-chart-cat-6`                                                                                                                                                 | `#2563c9` → `#d66000`       | `#5b9dff` → `#fa5500`       | rides `--color-accent`                                                                                |
-| `--el-progress-fill` — **NEW**                                                                                                                                     | `#1a1d21` (ink) → `#d66000` | `#edeef0` (ink) → `#fa5500` | base `var(--color-primary-fill)`; motir overrides to `var(--color-accent)`                            |
-| `--el-editor-focus` — **NEW**                                                                                                                                      | `#2563c9` → `#155bc4`       | `#5b9dff` → `#7db1ff`       | base `var(--color-accent)`; motir overrides to `var(--color-primary)` — keeps the editor's focus BLUE |
-| `--color-tint-peach`                                                                                                                                               | `#f7e6d6` → **`#fde0c8`**   | `#2e2418` → **`#36230f`**   | source of the peach roles below                                                                       |
-| `--el-tint-peach` · `--el-warning-surface` · `--el-role-custom` · `--el-label-1` · `--el-avatar-peach` · `--el-roadmap-submitted` · `--el-station-tier-validation` | `#f7e6d6` → `#fde0c8`       | `#2e2418` → `#36230f`       | ride `--color-tint-peach`                                                                             |
-| `--color-tint-yellow`                                                                                                                                              | `#f6f1d6` → **`#fdf0c6`**   | `#2a2716` → **`#302a12`**   | source of the yellow roles below                                                                      |
-| `--el-tint-yellow` · `--el-label-6` · `--el-avatar-yellow`                                                                                                         | `#f6f1d6` → `#fdf0c6`       | `#2a2716` → `#302a12`       | ride `--color-tint-yellow`                                                                            |
+| role                                                                                                                                                               | light: today → proposed     | dark: today → proposed      | how it moves                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--color-accent`                                                                                                                                                   | `#2563c9` → **`#d66000`**   | `#5b9dff` → **`#fa5500`**   | the source the six roles below read                                                                                                                                                                               |
+| `--el-highlight`                                                                                                                                                   | `#2563c9` → `#d66000`       | `#5b9dff` → `#fa5500`       | rides `--color-accent`                                                                                                                                                                                            |
+| `--el-type-epic` · `--el-epic-accent`                                                                                                                              | `#2563c9` → `#d66000`       | `#5b9dff` → `#fa5500`       | rides `--color-accent`                                                                                                                                                                                            |
+| `--el-type-design`                                                                                                                                                 | `#2563c9` → **`#91771e`**   | `#5b9dff` → **`#ffd02f`**   | **citrine** — set directly in both motir blocks (Mirotone `yellow-650` light / Sunglow `yellow-500` dark, the Citrine palette's own steps); the base keeps `var(--color-accent)`, so other palettes are untouched |
+| `--el-chart-cat-6`                                                                                                                                                 | `#2563c9` → `#d66000`       | `#5b9dff` → `#fa5500`       | rides `--color-accent`                                                                                                                                                                                            |
+| `--el-progress-fill` — **NEW**                                                                                                                                     | `#1a1d21` (ink) → `#d66000` | `#edeef0` (ink) → `#fa5500` | base `var(--color-primary-fill)`; motir overrides to `var(--color-accent)`                                                                                                                                        |
+| `--el-editor-focus` — **NEW**                                                                                                                                      | `#2563c9` → `#155bc4`       | `#5b9dff` → `#7db1ff`       | base `var(--color-accent)`; motir overrides to `var(--color-primary)` — keeps the editor's focus BLUE                                                                                                             |
+| `--color-tint-peach`                                                                                                                                               | `#f7e6d6` → **`#fde0c8`**   | `#2e2418` → **`#36230f`**   | source of the peach roles below                                                                                                                                                                                   |
+| `--el-tint-peach` · `--el-warning-surface` · `--el-role-custom` · `--el-label-1` · `--el-avatar-peach` · `--el-roadmap-submitted` · `--el-station-tier-validation` | `#f7e6d6` → `#fde0c8`       | `#2e2418` → `#36230f`       | ride `--color-tint-peach`                                                                                                                                                                                         |
+| `--color-tint-yellow`                                                                                                                                              | `#f6f1d6` → **`#fdf0c6`**   | `#2a2716` → **`#302a12`**   | source of the yellow roles below                                                                                                                                                                                  |
+| `--el-tint-yellow` · `--el-label-6` · `--el-avatar-yellow`                                                                                                         | `#f6f1d6` → `#fdf0c6`       | `#2a2716` → `#302a12`       | ride `--color-tint-yellow`                                                                                                                                                                                        |
 
 That list is COMPLETE: it is every `--el-*` token whose resolved value moves, computed by resolving
 the whole token layer with `tests/theme/paletteCascade.ts` (the resolver every palette suite uses)
-before and after the three Tier-0 edits — 15 roles per theme — plus the two new roles.
+before and after the three Tier-0 edits — 15 roles per theme — plus the two new roles and the citrine
+`--el-type-design` override (which takes Design out of the orange group).
 
 **Identity roles that deliberately do NOT change** (light / dark, both unchanged):
 
@@ -404,7 +413,7 @@ is a glyph's only carrier (the status-dot bar of `statusHueSeparation.test.ts`, 
 for text. The new hue is never text (it paints icons, chip glyphs, the progress fill, chart segments
 and glows), so 3.0 is its bar; every TEXT pair on a changed tint is measured against 4.5 in §8.4.
 
-#### light — new accent `#d66000` (`--color-accent` → `--el-highlight` / `--el-type-epic` / `--el-type-design` / `--el-epic-accent` / `--el-chart-cat-6` / proposed `--el-progress-fill`)
+#### light — new accent `#d66000` (`--color-accent` → `--el-highlight` / `--el-type-epic` / `--el-epic-accent` / `--el-chart-cat-6` / proposed `--el-progress-fill`)
 
 | neighbour (resolved)                                                                                                                                            | hex       | ΔE2000 | floor | clears |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------ | ----- | ------ |
@@ -432,7 +441,7 @@ and glows), so 3.0 is its bar; every TEXT pair on a changed tint is measured aga
 | selected row `--el-selection-bg`    | `#dde9f6` | 3.08     | 3.0             | ✓      |
 | its own type chip (14% over page)   | `#f9e9db` | 3.20     | 3.0             | ✓      |
 
-#### dark — new accent `#fa5500` (`--color-accent` → `--el-highlight` / `--el-type-epic` / `--el-type-design` / `--el-epic-accent` / `--el-chart-cat-6` / proposed `--el-progress-fill`)
+#### dark — new accent `#fa5500` (`--color-accent` → `--el-highlight` / `--el-type-epic` / `--el-epic-accent` / `--el-chart-cat-6` / proposed `--el-progress-fill`)
 
 | neighbour (resolved)                                                                                                                                            | hex       | ΔE2000 | floor | clears |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------ | ----- | ------ |
@@ -463,10 +472,68 @@ Every row clears. The tightest figures are the light orange's ΔE 11.0 from the 
 (both 1.0 over the floor) and its 3.08:1 on the selected row — the slot is narrow by construction, and
 these are its middle, not its edge.
 
+**Citrine — the Design hue.** Design takes the Citrine palette's gold, using a documented step on
+each side rather than an invented one: light needs a deep gold to reach 3:1 on the selected row (the
+Sunglow `#ffd02f` itself is 1.19:1 on white), and dark can carry Sunglow itself. Measured against
+every glyph hue, the new orange included:
+
+#### light — citrine `#91771e` (Mirotone `yellow-650`, Citrine’s own `--color-warning` / `--color-accent-orange` step) → `--el-type-design`
+
+| neighbour (resolved)                                                                   | hex       | ΔE2000 | floor | clears |
+| -------------------------------------------------------------------------------------- | --------- | ------ | ----- | ------ |
+| `--el-priority-high`                                                                   | `#ab6400` | 14.0   | 10    | ✓      |
+| `--el-highlight` · `--el-type-epic`                                                    | `#d66000` | 23.8   | 10    | ✓      |
+| `--el-success` · `--el-type-story` · `--el-type-test`                                  | `#18804a` | 28.5   | 10    | ✓      |
+| `--el-warning` · `--el-status-blocked` · `--el-type-review` · `--el-type-verification` | `#c2410c` | 28.9   | 10    | ✓      |
+| `--el-status-done`                                                                     | `#197245` | 28.9   | 10    | ✓      |
+| `--el-status-cancelled`                                                                | `#6b7079` | 29.3   | 10    | ✓      |
+| `--el-status-todo` · `--el-priority-lowest` · `--el-type-manual`                       | `#8a8f98` | 29.9   | 10    | ✓      |
+| `--el-priority-medium` · `--el-type-chore`                                             | `#565c64` | 32.4   | 10    | ✓      |
+| … every other glyph hue                                                                |           | ≥ 33.9 | 10    | ✓      |
+
+| surface (light)                   | hex       | contrast | floor (icon/UI) | clears |
+| --------------------------------- | --------- | -------- | --------------- | ------ |
+| page / card `--el-page-bg`        | `#ffffff` | 4.32     | 3.0             | ✓      |
+| surface `--el-surface`            | `#eef0f3` | 3.78     | 3.0             | ✓      |
+| surface-soft `--el-surface-soft`  | `#f8f9fa` | 4.10     | 3.0             | ✓      |
+| muted `--el-muted`                | `#eef0f3` | 3.78     | 3.0             | ✓      |
+| canvas `--el-canvas`              | `#e6e8ed` | 3.52     | 3.0             | ✓      |
+| selected row `--el-selection-bg`  | `#dde9f6` | 3.51     | 3.0             | ✓      |
+| its own type chip (14% over page) | `#f0ecdf` | 3.66     | 3.0             | ✓      |
+
+`--el-text-strong` on the citrine chip: 13.19. Chip wash vs the orange Epic chip ΔE 5.6, vs the amber High chip ΔE 2.8, vs Review ΔE 8.2 (duplicate floor 2).
+
+#### dark — citrine `#ffd02f` (Miro Sunglow, Mirotone `yellow-500`, Citrine’s `--color-primary-fill`) → `--el-type-design`
+
+| neighbour (resolved)                                                                                          | hex       | ΔE2000 | floor | clears |
+| ------------------------------------------------------------------------------------------------------------- | --------- | ------ | ----- | ------ |
+| `--el-warning` · `--el-status-blocked` · `--el-priority-high` · `--el-type-review` · `--el-type-verification` | `#f08a4b` | 27.5   | 10    | ✓      |
+| `--el-status-implemented` · `--el-type-decision` · `--el-type-legal` · `--el-type-choice`                     | `#d7d9dd` | 30.8   | 10    | ✓      |
+| `--el-status-approved`                                                                                        | `#b5dec9` | 30.8   | 10    | ✓      |
+| `--el-priority-medium` · `--el-type-chore`                                                                    | `#a9adb5` | 34.7   | 10    | ✓      |
+| `--el-status-done`                                                                                            | `#4cbd7f` | 35.9   | 10    | ✓      |
+| `--el-success` · `--el-type-story` · `--el-type-test`                                                         | `#34b86e` | 36.7   | 10    | ✓      |
+| `--el-highlight` · `--el-type-epic`                                                                           | `#fa5500` | 38.4   | 10    | ✓      |
+| `--el-status-cancelled`                                                                                       | `#888d96` | 39.4   | 10    | ✓      |
+| … every other glyph hue                                                                                       |           | ≥ 41.3 | 10    | ✓      |
+
+| surface (dark)                    | hex       | contrast | floor (icon/UI) | clears |
+| --------------------------------- | --------- | -------- | --------------- | ------ |
+| page / card `--el-page-bg`        | `#0c0d0f` | 13.25    | 3.0             | ✓      |
+| surface `--el-surface`            | `#18191c` | 11.98    | 3.0             | ✓      |
+| surface-soft `--el-surface-soft`  | `#141517` | 12.45    | 3.0             | ✓      |
+| muted `--el-muted`                | `#18191c` | 11.98    | 3.0             | ✓      |
+| canvas `--el-canvas`              | `#08090b` | 13.58    | 3.0             | ✓      |
+| selected row `--el-selection-bg`  | `#15233a` | 10.74    | 3.0             | ✓      |
+| its own type chip (14% over page) | `#2e2813` | 10.02    | 3.0             | ✓      |
+
+`--el-text-strong` on the citrine chip: 10.40. Chip wash vs the orange Epic chip ΔE 14.2, vs the amber High chip ΔE 10.7, vs Review ΔE 10.7 (duplicate floor 2).
+
 **The type CHIP.** A chip paints the hue at 14% over the page with `--el-text-strong` text; the glyph
-carries the hue at full strength. Epic/Design chip vs Review/Verification chip: ΔE 3.9 light / 4.5
-dark — above the 2.0 duplicate-detector floor tints use. The chips differ by glyph (pencil vs
-clipboard) and label as well as hue; the glyph hues are the ΔE 11 pair above.
+carries the hue at full strength. Epic chip vs Review/Verification chip: ΔE 3.9 light / 4.5
+dark — above the 2.0 duplicate-detector floor tints use. The chips differ by glyph and label as well
+as hue; the glyph hues are the ΔE 11 pair above. The citrine Design chip's figures are under its
+matrix above.
 
 **The donut gets FIXED, not just warmed.** Today `--el-chart-cat-6` (the accent) and
 `--el-chart-cat-1` / `-2` (`--color-primary` / `--color-info`) are the same blue in motir — three
@@ -482,7 +549,7 @@ segments of a seven-segment donut share one family. Segment 6 now sits ΔE 11.0 
 | `--color-tint-peach`  | `#f7e6d6` → `#fde0c8` | 4.5        | yellow 10.8                        | 12.38 ✓                           | 5.36 ✓                               | 4.11 ✓                                              |
 | `--color-tint-yellow` | `#f6f1d6` → `#fdf0c6` | 4.8        | peach 10.8                         | 13.70 ✓                           | 5.93 ✓                               | 4.55 ✓                                              |
 
-Type CHIP washes (light, 14% over the page): Epic/Design `#f9e9db` vs Review/Verification `#f6e4dd` ΔE 3.9; vs Peach tint `#fde0c8` ΔE 5.2 (duplicate-detector floor 2). `--el-text-strong` on the Epic chip: 13.14.
+Type CHIP washes (light, 14% over the page): Epic `#f9e9db` vs Review/Verification `#f6e4dd` ΔE 3.9; vs Peach tint `#fde0c8` ΔE 5.2 (duplicate-detector floor 2). `--el-text-strong` on the Epic chip: 13.14.
 
 #### dark — tints
 
@@ -491,7 +558,7 @@ Type CHIP washes (light, 14% over the page): Epic/Design `#f9e9db` vs Review/Ver
 | `--color-tint-peach`  | `#2e2418` → `#36230f` | 5.4        | yellow 9.1                         | 10.58 ✓                           | 6.65 ✓                               | 6.01 ✓                                              |
 | `--color-tint-yellow` | `#2a2716` → `#302a12` | 3.3        | peach 9.1                          | 10.14 ✓                           | 6.37 ✓                               | 5.76 ✓                                              |
 
-Type CHIP washes (dark, 14% over the page): Epic/Design `#2d170d` vs Review/Verification `#2c1e17` ΔE 4.5; vs Peach tint `#36230f` ΔE 7.2 (duplicate-detector floor 2). `--el-text-strong` on the Epic chip: 11.98.
+Type CHIP washes (dark, 14% over the page): Epic `#2d170d` vs Review/Verification `#2c1e17` ΔE 4.5; vs Peach tint `#36230f` ΔE 7.2 (duplicate-detector floor 2). `--el-text-strong` on the Epic chip: 11.98.
 
 Peach moves 4.5 / 5.4 ΔE warmer and yellow 4.8 / 3.3, so the pair that was tightest among the six
 washes (peach–yellow, ΔE 8.4 light / 6.2 dark) moves APART (10.8 / 9.1). Every text ink on them
@@ -511,7 +578,7 @@ same for `--color-tint-peach` and `--color-tint-yellow`, then `git grep -n -- "-
 | consumer                                                                                                        | where it paints                                                                                                                                    | disposition                                                                                                                                                                                             |
 | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--el-type-epic`                                                                                                | `components/issues/IssueTypeIcon.tsx` (every kind icon: board card, backlog row, detail header, pickers), `components/planning/PlanPreview.tsx`    | **warms**                                                                                                                                                                                               |
-| `--el-type-design`                                                                                              | `lib/issues/workItemTypeMeta.ts` → `WorkItemTypeChip` (items list, ready list, detail rail, planning node), `components/approvals/ApprovalRow.tsx` | **warms**                                                                                                                                                                                               |
+| `--el-type-design`                                                                                              | `lib/issues/workItemTypeMeta.ts` → `WorkItemTypeChip` (items list, ready list, detail rail, planning node), `components/approvals/ApprovalRow.tsx` | **re-pointed** — motir sets it directly to citrine gold, so it leaves the orange group                                                                                                                  |
 | `--el-epic-accent`                                                                                              | `app/tokens/page.tsx` only                                                                                                                         | **warms**                                                                                                                                                                                               |
 | `--el-chart-cat-6`                                                                                              | `components/ui/charts/tokens.ts` (donut ramp)                                                                                                      | **warms** — and de-duplicates segment 6 from 1/2 (§8.3)                                                                                                                                                 |
 | `--el-highlight` → `PlanWithAILauncher.tsx`, `PlanWithAIFab.tsx`, `PlanningTargetNode.tsx`, `AiCalloutMenu.tsx` | glows and gradients mixed with the ink `--el-accent`                                                                                               | **warms** — the ink fill stays dominant; the glow turns warm (board mock panel 7)                                                                                                                       |
@@ -566,19 +633,23 @@ All drawn in the element-tokens delta, panel 4. They reach the site only through
 
 ### 8.7 Two intensities, one decision — SUBTLE
 
-Drawn side by side in the board mock (panels 9–10):
+Drawn one above the other in the board mock (panels 9–10):
 
-- **Subtle** — the accent and the two tints, as above.
-- **A bit more colourful** — also Design its own coral (`#e0533f` / `#ff6b5a`), chips at 22% instead
-  of 14%, and column-count pills tinted by their status hue.
+- **Subtle** — the orange, the citrine Design hue and the two tints, as above.
+- **A bit more colourful** — the same hues, plus chips at 22% instead of 14% and column-count pills
+  tinted by their status hue.
 
-**Recommendation: subtle.** The evidence: (1) the best coral the floors allow in light is ΔE **10.2**
-from the danger red that **Bug** and **Deploy** wear — at the floor, the "rounding, not margin" case
-`docs/palettes/motir.md` already records for the priority ramp as a collision to fix, not to ship;
-drawn, the coral Design chip and the Deploy chip are hard to tell apart. (2) The 22% chips and tinted
-counts change COMPONENT recipes (`workItemTypeChipBackground`, `BoardColumn`), which would move every
-palette, not just motir — outside a palette story. (3) Subtle already delivers the brief: Epic and
-Design stop reading as the task/code blue, and the default look warms without losing its calm.
+**Recommendation: subtle.** The evidence: (1) the 22% chips and tinted counts change COMPONENT
+recipes (`workItemTypeChipBackground`, `BoardColumn`), which would move every palette, not just
+motir — outside a palette story. (2) They add no hue: everything the colourful board shows that is
+not recipe is already in the subtle one. (3) Subtle already delivers the brief: Epic reads warm
+orange, Design reads citrine, neither is the task/code blue, and the default look warms without
+losing its calm.
+
+The first revision's colourful variant gave Design a coral (`#e0533f` / `#ff6b5a`) and was rejected
+because that coral is ΔE 10.2 from the danger red Bug and Deploy wear. Citrine solves the same want —
+Design apart from Epic — at ΔE 14.0 from its nearest neighbour in light and 27.5 in dark, so it is
+in the recommendation rather than in the alternative.
 
 ### 8.8 Hand-off — GIVES / TAKES
 
@@ -586,20 +657,22 @@ Every `MOTIR-<n>` this asset names (grepped from this section and both delta moc
 
 - **MOTIR-7582** (the story) — TAKES its scope; GIVES nothing beyond this table.
 - **MOTIR-7583** (this card) — the design result.
-- **MOTIR-7584** (apply the tokens) — **GIVES**: write §8.1 verbatim in both motir blocks; add
+- **MOTIR-7584** (apply the tokens) — **GIVES**: write §8.1 verbatim in both motir blocks (including
+  `--el-type-design` set directly to the citrine hex in each motir block); add
   `--el-progress-fill` and `--el-editor-focus` to the Tier-3 base block (base values as §8.1) with motir
   overrides in BOTH themes; re-point `RunStep.tsx` / `AttachmentsPanel.tsx` to `--el-progress-fill`
   and `MarkdownEditor.tsx`'s three focus classes to `--el-editor-focus`; register both roles in
   `app/tokens/page.tsx`; regenerate `tests/fixtures/paletteRename6471.before.json`'s motir entries
   (the fixture says to regenerate on a deliberate retune); add a separation assertion that measures
   motir's `--color-accent` against `--color-warning`, `--el-priority-high` and `--color-destructive`
-  at ΔE 10, and against every surface at 3.0, in both themes; update `docs/palettes/motir.md` (a
+  at ΔE 10, and against every surface at 3.0, in both themes, and the same for `--el-type-design`
+  (citrine) against every other glyph hue, the orange included; update `docs/palettes/motir.md` (a
   warm-touches section with this table and why) and the registry tagline (keep the
   `Stark and editorial` prefix `paletteRename.test.ts` pins); add the `@motir/design-system` changeset.
 - **MOTIR-7585** (integration gate) — TAKES: the two re-pointed components and the new roles are its
   seams.
-- **MOTIR-7586** (E2E + receipt) — **GIVES**: the board shows the Epic kind ICON warm, not a Design
-  chip — the Design **chip** lives in the items list / ready list / detail rail, so verify it there;
+- **MOTIR-7586** (E2E + receipt) — **GIVES**: the board shows the Epic kind ICON orange, not a Design
+  chip — the citrine Design **chip** lives in the items list / ready list / detail rail, so verify it there;
   the focus ring and links stay blue; Settings › Appearance unchanged.
 - **MOTIR-7587** (release) / **MOTIR-7588** (motir.co re-pin) — GIVES: the §8.6 list is what the re-pin
   must show; nothing else on the site moves.
