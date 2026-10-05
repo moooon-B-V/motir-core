@@ -233,6 +233,7 @@ export async function runGetWorkItem(
     placementFolder: _pagePlacementOnly,
     fixReason: _pageFixReasonOnly,
     fixDetail: _pageFixDetailOnly,
+    fixGroup: _pageFixGroupOnly,
     ...publishedDetail
   } = detail;
   const folderPath =

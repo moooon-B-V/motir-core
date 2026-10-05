@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { ListChecks, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Combobox } from '@/components/ui/Combobox';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
@@ -21,7 +22,9 @@ import {
 
 /**
  * The PLANNING-MODEL LIST card — design `platform-admin/design-notes.md`
- * § AMENDMENT 2026-10-04 (Model lists) Panels 1–4 and 12, card MOTIR-7527.
+ * § AMENDMENT 2026-10-04 (Model lists) Panels 1–4 and 12, card MOTIR-7527; its
+ * Add dialog is a picker of motir-ai's `candidates` (MOTIR-7614), drawn as the
+ * run list's add (Panel 6) — § AMENDMENT 2026-10-05.
  *
  * Which models an audience may be set to. The rows are server-rendered props
  * and the actions `revalidatePath` the page, so a write re-reads the list AND
@@ -70,7 +73,10 @@ export function PlannerModelList({ list }: PlannerModelListProps) {
             <div className="flex items-center gap-2">
               <Pill tone="neutral">{t('modelLists.count', { n: list.entries.length })}</Pill>
               {list.canEdit ? (
-                <AddPlannerModel onAdded={(m) => setAddedHere((prev) => [...prev, m])} />
+                <AddPlannerModel
+                  candidates={list.candidates}
+                  onAdded={(m) => setAddedHere((prev) => [...prev, m])}
+                />
               ) : null}
             </div>
           </div>
@@ -193,28 +199,34 @@ function PlannerListRow({
   );
 }
 
-function AddPlannerModel({ onAdded }: { onAdded: (model: string) => void }) {
+function AddPlannerModel({
+  candidates,
+  onAdded,
+}: {
+  candidates: PlatformPlannerModelListDTO['candidates'];
+  onAdded: (model: string) => void;
+}) {
   const t = useTranslations('platformAdmin');
   const { toast } = useToast();
   const modelId = useId();
   const reasonId = useId();
   const [open, setOpen] = useState(false);
-  const [model, setModel] = useState('');
+  const [model, setModel] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function close() {
     setOpen(false);
-    setModel('');
+    setModel(null);
     setReason('');
     setRefusal(null);
   }
 
   function submit() {
-    const id = model.trim();
     const why = reason.trim();
-    if (!id || !why) return;
+    if (!model || !why) return;
+    const id = model;
     startTransition(async () => {
       const result = await addPlannerListModelAction(id, why);
       if (result.ok) {
@@ -223,10 +235,13 @@ function AddPlannerModel({ onAdded }: { onAdded: (model: string) => void }) {
         toast({ variant: 'success', title: t('planningList.added', { model: id }) });
         return;
       }
-      // Panel 3b: the dialog stays open with the reason; nothing was added.
+      // Panel 3b: the dialog stays open with the reason; nothing was added. A
+      // candidate can stop being plannable between the read and this confirm.
       setRefusal(addRefusalText(t, result));
     });
   }
+
+  const options = candidates.map((m) => ({ value: m.id, label: m.id, group: m.provider }));
 
   return (
     <>
@@ -247,28 +262,42 @@ function AddPlannerModel({ onAdded }: { onAdded: (model: string) => void }) {
         size="md"
       >
         <Modal.Body className="gap-4">
-          <Input
-            id={modelId}
-            label={t('planningList.add.modelLabel')}
-            helperText={t('planningList.add.modelHint')}
-            value={model}
-            onChange={(event) => {
-              setRefusal(null);
-              setModel(event.target.value);
-            }}
-            className="font-mono"
-            autoFocus
-            maxLength={200}
-          />
-          <Input
-            id={reasonId}
-            label={t('modelLists.reasonLabel')}
-            placeholder={t('modelLists.reasonPlaceholder')}
-            helperText={t('modelLists.reasonHint')}
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            maxLength={280}
-          />
+          {options.length === 0 ? (
+            <p
+              data-testid="planner-model-add-nothing"
+              className="font-sans text-sm text-(--el-text-secondary)"
+            >
+              {t('planningList.add.nothing')}
+            </p>
+          ) : (
+            <>
+              <Combobox
+                id={modelId}
+                label={t('planningList.add.modelLabel')}
+                placeholder={t('planningList.add.placeholder')}
+                options={options}
+                value={model}
+                onChange={(value) => {
+                  setRefusal(null);
+                  setModel(value);
+                }}
+                footer={
+                  <span className="font-sans text-xs text-(--el-text-secondary)">
+                    {t('planningList.add.pickerFoot')}
+                  </span>
+                }
+              />
+              <Input
+                id={reasonId}
+                label={t('modelLists.reasonLabel')}
+                placeholder={t('modelLists.reasonPlaceholder')}
+                helperText={t('modelLists.reasonHint')}
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                maxLength={280}
+              />
+            </>
+          )}
           {refusal ? (
             <p role="alert" className="font-sans text-xs text-(--el-danger-on-surface)">
               {refusal}
@@ -283,7 +312,7 @@ function AddPlannerModel({ onAdded }: { onAdded: (model: string) => void }) {
             variant="primary"
             onClick={submit}
             loading={isPending}
-            disabled={model.trim().length === 0 || reason.trim().length === 0}
+            disabled={!model || reason.trim().length === 0}
           >
             {t('planningList.add.confirm')}
           </Button>
@@ -402,7 +431,6 @@ function addRefusalText(t: Translator, result: Refusal): string {
     return t('planningList.add.refused', { detail });
   }
   if (result.code === 'REFUSED') return t('planningList.add.refused', { detail: result.detail });
-  if (result.code === 'MODEL_REQUIRED') return t('planningList.add.modelRequired');
   return commonRefusalText(t, result);
 }
 

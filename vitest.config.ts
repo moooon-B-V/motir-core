@@ -2799,6 +2799,8 @@ export default defineConfig({
         'lib/mappers/fixReasonMappers.ts',
         'lib/services/workItemFixReasonBackfillService.ts',
         'app/**/workbench/_components/WorkbenchFixLine.tsx',
+        // Story MOTIR-7589 · ONE ENTRY PER RUN — the entry resolver it added.
+        'lib/services/fixGroupService.ts',
         // ── Story MOTIR-6156 · THE MULTI-LINE COMPOSER (Subtask MOTIR-6239) ──
         // MEASURED on this branch before being pinned, per this list's own rule:
         // 97.11 statements / 90.43 branches / 100 functions / 100 lines, over the
@@ -6448,6 +6450,13 @@ export default defineConfig({
           statements: 90,
         },
         'lib/services/workItemFixReasonBackfillService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-7589 · ONE ENTRY PER RUN: the entry resolver, at the project floor.
+        'lib/services/fixGroupService.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

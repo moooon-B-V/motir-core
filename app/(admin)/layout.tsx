@@ -1,9 +1,7 @@
 import { type ReactNode } from 'react';
-import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { toPlatformOperatorDTO } from '@/lib/mappers/platformMappers';
-import { requirePlatformStaff } from '@/lib/platform/auth';
-import { NotPlatformStaffError } from '@/lib/platform/errors';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { platformAuditService } from '@/lib/services/platformAuditService';
 import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { AdminShell } from './_components/AdminShell';
@@ -40,13 +38,7 @@ import { AdminShell } from './_components/AdminShell';
  * PAGES; it is not the only assertion.
  */
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  let principal;
-  try {
-    principal = await requirePlatformStaff();
-  } catch (err) {
-    if (err instanceof NotPlatformStaffError) notFound();
-    throw err;
-  }
+  const principal = await requirePlatformStaffPage();
 
   // The 2FA enforcement gate (MOTIR-3648) — after the staff gate, before the
   // audit write and before any tenant-scoped read.

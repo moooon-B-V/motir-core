@@ -138,6 +138,7 @@ function openRun(over: Partial<OpenRepairRunDto> = {}): OpenRepairRunDto {
 }
 
 const DETAIL: FixDetailDto = {
+  groupKey: null,
   repair: 'fix',
   check: null,
   queueReason: null,
@@ -739,6 +740,8 @@ function row(
     viewerIsAssignee: true,
     viewerIsReporter: false,
     canContinueHosted: false,
+    fixGroupKind: null,
+    fixMembers: [],
     canFixHosted: flags.canFixHosted ?? true,
     repairRun: flags.repairRun ?? null,
   };

@@ -11,7 +11,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
  *  1. Every non-staff principal kind — no session, a user with no role, a
  *     workspace member, the org's own owner — gets the 404 posture on
  *     `/admin/monitoring` and `/admin/tenants/[orgId]`: the `(admin)` layout
- *     answers `notFound()`, and each page refuses on its own gate.
+ *     answers `notFound()`, and so does each page's own gate (MOTIR-7613).
  *  2. Both Stop-containers Server Actions refuse them (`NOT_PERMITTED`), and so
  *     does a forged stop from `support` / `operator` — before any effect: the
  *     org's in-flight CI intent and hosted slot are untouched and no audit row is
@@ -47,7 +47,6 @@ vi.mock('next-intl/server', async (importOriginal) => ({
 
 const { db } = await import('@/lib/db');
 const { MOTIR_RUNNER_LABEL } = await import('@/lib/ciFleet/config');
-const { NotPlatformStaffError } = await import('@/lib/platform/errors');
 const { hostedRunDispatchId } = await import('@/lib/hostedRuns/ids');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { createTestUser } = await import('../fixtures/userFixtures');
@@ -164,7 +163,7 @@ describe('1 · the 404 posture on both pages (AC4)', () => {
 
     const monitoring = await import('@/app/(admin)/admin/monitoring/page');
     await expect(monitoring.default({ searchParams: Promise.resolve({}) })).rejects.toBeInstanceOf(
-      NotPlatformStaffError,
+      NotFoundSentinel,
     );
 
     const tenant = await import('@/app/(admin)/admin/tenants/[orgId]/page');
@@ -173,7 +172,7 @@ describe('1 · the 404 posture on both pages (AC4)', () => {
         params: Promise.resolve({ orgId: estate.orgId }),
         searchParams: Promise.resolve({}),
       }),
-    ).rejects.toBeInstanceOf(NotPlatformStaffError);
+    ).rejects.toBeInstanceOf(NotFoundSentinel);
 
     await untouched(estate);
   });

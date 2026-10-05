@@ -6,7 +6,7 @@ import { ChevronLeft, History } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { MotirAiError, PlatformLessonNotFoundError } from '@/lib/ai/errors';
 import type { PlatformLessonChangeDTO, PlatformLessonDetailDTO } from '@/lib/dto/platformLessons';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { platformLessonsService } from '@/lib/services/platformLessonsService';
 import { LessonCurate } from '../_components/LessonCurate';
 import { LessonsUnavailable } from '../_components/LessonsUnavailable';
@@ -30,7 +30,7 @@ export default async function AdminPlanningLessonPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const { id } = await params;
   const t = await getTranslations('platformAdmin.lessons');
 

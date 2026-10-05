@@ -49,6 +49,14 @@ export interface FixBranchDto {
  */
 export interface FixDetailDto {
   /**
+   * The To fix ENTRY this card belongs to (MOTIR-7589; `design/workbench/design-notes.md`
+   * § 34.2): `run:<DispatchRun.id>` for a dead run, `prs:<hash>` for a pull-request set,
+   * `card:<WorkItem.id>` for a card alone. Cards sharing it are one entry with ONE
+   * repair. `null` on a row stored before the key existed — read as `card:<id>`
+   * (`fixGroupKeyOf`).
+   */
+  groupKey: string | null;
+  /**
    * The repair command. Decided by what `motir fix` would CLAIM, not by the reason:
    * the three pull-request reasons, an acceptance Re-run and a card a review sent back
    * (the review agent's refusal or an approve-to-merge Request changes — the `review`
@@ -99,4 +107,20 @@ export interface FixDetailDto {
   affected: number;
   /** How many open pull requests deliver the card — the row says "N of M" when > 1. */
   total: number;
+}
+
+/**
+ * Where a stuck card's TAG and BANNER point (MOTIR-7589; `design/work-items/design-notes.md`
+ * § _ONE ENTRY PER RUN_): the To fix entry it is one of, when that entry holds more than
+ * one card. A card stuck alone carries `null` and keeps today's tag name and banner.
+ */
+export interface FixGroupPointerDto {
+  /** `run` — one dead run's cards; `prs` — the cards one pull-request set delivers. */
+  kind: 'run' | 'prs';
+  /** The entry's HEAD — the card its one repair runs on. */
+  headKey: string;
+  /** Whether THIS card is the head: only the head shows a command. */
+  isHead: boolean;
+  /** The entry's other cards, in its order — the head's banner lists them. */
+  carriedKeys: string[];
 }

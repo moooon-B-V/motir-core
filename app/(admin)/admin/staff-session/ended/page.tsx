@@ -5,7 +5,7 @@ import { getFormatter, getTranslations } from 'next-intl/server';
 import { Clock } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { impersonationService } from '@/lib/services/impersonationService';
 
 /**
@@ -32,7 +32,7 @@ export default async function StaffSessionEndedPage({
 }: {
   searchParams: Promise<{ session?: string }>;
 }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const { session: sessionId } = await searchParams;
   if (!sessionId) notFound();
   const session = await impersonationService.getOwnSession(principal, sessionId);

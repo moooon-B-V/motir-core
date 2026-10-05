@@ -40,6 +40,7 @@ export interface FixReasonValue {
 export const NOTHING_TO_FIX: FixReasonValue = { fixReason: null, fixDetail: null };
 
 const EMPTY_DETAIL: Omit<FixDetailDto, 'repair' | 'affected' | 'total'> = {
+  groupKey: null,
   check: null,
   queueReason: null,
   base: null,
@@ -87,6 +88,116 @@ export interface DeadRunVerdict {
   /** The view's `deadRun.dispatcher.name`; null for a deleted account. */
   ranByName: string | null;
   diedReason: RunDiedReason;
+}
+
+// ── THE ENTRY A STUCK CARD BELONGS TO (MOTIR-7589; `design/workbench/design-notes.md`
+// § 34.2) ─────────────────────────────────────────────────────────────────────────────
+// Cards stuck for one reason that ONE repair clears are one To fix ENTRY. The key is
+// stored with the reason (`fixDetail.groupKey`) by the same recompute, so the tab can
+// group, page and count entries over the per-card column without a second stored truth.
+//
+//   `run:<DispatchRun.id>`  — `run_died`: every card the dead run carried.
+//   `prs:<hash>`            — a pull-request reason, or a review's Request changes on the
+//                             approve-and-merge gate / by the review agent: every card the
+//                             same open pull requests deliver.
+//   `card:<WorkItem.id>`    — an acceptance Re-run, and every row stored before the key
+//                             existed (the read's `COALESCE` fallback). A card alone.
+
+/** The three kinds of entry key — the prefix before the first `:`. */
+export type FixGroupKind = 'run' | 'prs' | 'card';
+
+export function runFixGroupKey(dispatchRunId: string): string {
+  return `run:${dispatchRunId}`;
+}
+
+export function cardFixGroupKey(workItemId: string): string {
+  return `card:${workItemId}`;
+}
+
+/** The PREFIX a pull-request set's key carries; the hash is the service's (it needs
+ *  `node:crypto`, and this module is imported by client components). */
+export const PULL_REQUEST_GROUP_PREFIX = 'prs:';
+
+/** Which kind of entry a key names. An unrecognised key reads as `card`: a card alone
+ *  is the one shape that can never merge two cards by mistake. */
+export function fixGroupKindOf(groupKey: string): FixGroupKind {
+  if (groupKey.startsWith('run:')) return 'run';
+  if (groupKey.startsWith(PULL_REQUEST_GROUP_PREFIX)) return 'prs';
+  return 'card';
+}
+
+/**
+ * The entry a stored row belongs to — its `fixDetail.groupKey`, or `card:<id>` when the
+ * row was stored before the key existed. The SAME fallback the grouped read's SQL
+ * (`COALESCE("fixDetail"->>'groupKey', 'card:' || id)`) applies, stated once for the
+ * readers that group in memory.
+ */
+export function fixGroupKeyOf(row: { id: string; fixDetail: unknown }): string {
+  const stored =
+    row.fixDetail !== null && typeof row.fixDetail === 'object' && !Array.isArray(row.fixDetail)
+      ? (row.fixDetail as Record<string, unknown>).groupKey
+      : null;
+  return typeof stored === 'string' && stored.length > 0 ? stored : cardFixGroupKey(row.id);
+}
+
+/** The same answer with its entry key set. `NOTHING_TO_FIX` stays nothing. */
+export function withFixGroupKey(value: FixReasonValue, groupKey: string): FixReasonValue {
+  if (value.fixDetail === null) return value;
+  return { ...value, fixDetail: { ...value.fixDetail, groupKey } };
+}
+
+/** A card in an entry, as the head rule reads it. */
+export interface FixGroupMember {
+  id: string;
+  identifier: string;
+  key: number;
+  parentId: string | null;
+}
+
+/**
+ * The HEAD of a pull-request entry (§ 34.2): the member that is an ANCESTOR of every
+ * other member — the story whose legs share its pull requests — else the lowest key.
+ * Ancestry is followed through the members' own `parentId`s, which is the shape a
+ * story or sprint run delivers (a run target and the leaves under it).
+ */
+export function pullRequestGroupHead<M extends FixGroupMember>(members: readonly M[]): M | null {
+  if (members.length === 0) return null;
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const isAncestorOf = (ancestor: M, of: M): boolean => {
+    const seen = new Set<string>();
+    let at = of.parentId;
+    while (at !== null && !seen.has(at)) {
+      if (at === ancestor.id) return true;
+      seen.add(at);
+      at = byId.get(at)?.parentId ?? null;
+    }
+    return false;
+  };
+  const ancestor = members.find((m) => members.every((o) => o === m || isAncestorOf(m, o)));
+  if (ancestor && members.length > 1) return ancestor;
+  return [...members].sort((a, b) => a.key - b.key)[0]!;
+}
+
+/**
+ * The order an entry lists its members in (§ 34.2 / § 34.4): the ones the READER holds
+ * first, so the fold never hides why the entry is on their tab, then the entry's own
+ * order — the run's leg positions for `run:`, the key for everything else.
+ */
+export function orderFixGroupMembers<M extends FixGroupMember>(
+  members: readonly M[],
+  heldByReader: (member: M) => boolean,
+  position: (member: M) => number | null,
+): M[] {
+  return [...members].sort((a, b) => {
+    const held = Number(heldByReader(b)) - Number(heldByReader(a));
+    if (held !== 0) return held;
+    const pa = position(a);
+    const pb = position(b);
+    if (pa !== null && pb !== null && pa !== pb) return pa - pb;
+    if (pa !== null && pb === null) return -1;
+    if (pa === null && pb !== null) return 1;
+    return a.key - b.key;
+  });
 }
 
 /**
@@ -283,6 +394,7 @@ export function standingMergeRefusalOf(
 
 /** The detail's fields, in one fixed order — what {@link sameFixReason} compares. */
 const FIX_DETAIL_FIELDS = [
+  'groupKey',
   'repair',
   'check',
   'queueReason',

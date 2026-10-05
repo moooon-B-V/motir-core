@@ -5,7 +5,6 @@ import {
   workItemRepository,
   HOME_SLICE_DONE,
   HOME_SLICE_IN_PROGRESS,
-  HOME_SLICE_TO_FIX,
   HOME_SLICE_TODO,
   HOME_SLICE_UNFINISHED,
   type HomeCategorySlice,
@@ -17,11 +16,13 @@ import { approvalGateRepository } from '@/lib/repositories/approvalGateRepositor
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
-import type { HomePageDto, HomeTabCountsDto } from '@/lib/dto/home';
+import type { HomePageDto, HomeTabCountsDto, HomeWorkItemRowDto } from '@/lib/dto/home';
 import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import { toOpenRepairRuns } from '@/lib/mappers/repairRunMappers';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { resolveFixEntries, type FixEntry } from '@/lib/services/fixGroupService';
+import { fixGroupKeyOf } from '@/lib/workItems/fixReason';
 
 // The Home landing surface's read layer (Story MOTIR-2649 · Subtask
 // MOTIR-2651) — the business logic behind `/home`'s two tabs. Orchestrates the
@@ -188,6 +189,34 @@ function windowFor(total: number, page: number | undefined, pageSize: number) {
   return { page: clamped, skip: (clamped - 1) * pageSize };
 }
 
+/**
+ * The To fix ENTRY keys in the tab's order (MOTIR-7589; § 34.2): each card's
+ * `fixGroupKeyOf`, first appearance wins, so an entry sits where its first card did in
+ * the card order the read returned.
+ */
+function orderedFixGroupKeys(rows: readonly { id: string; fixDetail: unknown }[]): string[] {
+  return [...new Set(rows.map(fixGroupKeyOf))];
+}
+
+/**
+ * One resolved To fix entry → its row DTO: the HEAD's row, carrying its members.
+ *
+ * A head that is not stuck itself (a scope card its dead run never claimed) still draws
+ * line 2: it borrows the reason its members share, which is the one the entry's repair
+ * answers.
+ */
+function toFixEntryDto(entry: FixEntry, viewerId: string): HomeWorkItemRowDto {
+  const head = toHomeWorkItemRowDto(entry.head, viewerId);
+  const members = entry.members.map((m) => toHomeWorkItemRowDto(m, viewerId));
+  const borrowed = head.fixReason === null ? members.find((m) => m.fixReason !== null) : null;
+  return {
+    ...head,
+    ...(borrowed ? { fixReason: borrowed.fixReason, fixDetail: borrowed.fixDetail } : {}),
+    fixGroupKind: entry.kind,
+    fixMembers: members,
+  };
+}
+
 /** Shape one repository window into the wire DTO. */
 function toPage(
   rows: HomeWorkItemRow[],
@@ -283,13 +312,48 @@ export const homeService = {
    * repaired (Story MOTIR-6588 · MOTIR-6604): a merge-queue failure, a conflict, red
    * CI, or a reviewer's standing Request changes, as `WorkItem.fixReason` records it.
    *
-   * ⚠️ THE SAME READ, ONE MORE SLICE — never a second membership query. It is In
+   * ⚠️ THE SAME PREDICATE, ONE MORE SLICE — never a second membership query. It is In
    * progress's category with `fixReason` set, and In progress is that category with it
    * unset, so the partition promise (no card on two tabs, none dropped) holds by the
    * predicate rather than by two queries agreeing.
+   *
+   * ⚠️ BUT IT PAGES ENTRIES, NOT CARDS (MOTIR-7589). Each row is an entry's HEAD carrying
+   * the other cards stuck with it (`fixMembers`), which may include cards the reader does
+   * not hold; `total` counts entries, the same number `tabCounts().toFix` returns.
    */
   async listToFix(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
-    const page = await homeService.listSlice(ctx, HOME_SLICE_TO_FIX, options);
+    // ONE ENTRY PER STUCK RUN (MOTIR-7589; `design/workbench/design-notes.md` § 34.2):
+    // the cards on the tab are still exactly the slice's, but the list pages, and the
+    // pager counts, ENTRIES — the cards one repair clears, under the card it runs on.
+    const pageSize = clampLimit(options.limit);
+    const page = await withWorkspaceContext(ctx, async (tx): Promise<HomePageDto> => {
+      const projectScopes = await resolveActiveProjectScope(ctx, tx);
+      const keyed = await workItemRepository.listToFixGroupKeysByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        tx,
+      );
+      const order = orderedFixGroupKeys(keyed);
+      const window = windowFor(order.length, options.page, pageSize);
+      const pageKeys = order.slice(window.skip, window.skip + pageSize);
+      const entries = await resolveFixEntries(
+        ctx.workspaceId,
+        projectScopes.map((scope) => scope.projectId),
+        pageKeys,
+        ctx.userId,
+        tx,
+      );
+      return {
+        items: pageKeys.flatMap((key) => {
+          const entry = entries.get(key);
+          return entry ? [toFixEntryDto(entry, ctx.userId)] : [];
+        }),
+        total: order.length,
+        page: window.page,
+        pageSize,
+      };
+    });
     // CONTINUE HOSTED ON A DEAD-RUN ROW (MOTIR-6882) and FIX ON THE HOSTED AGENT ON A
     // SENT-BACK ROW (MOTIR-6930) — each offered only where the reader may edit the card,
     // the item page's own Run hosted rule. Decided ONCE PER DISTINCT PROJECT among the
@@ -426,56 +490,59 @@ export const homeService = {
   async tabCounts(ctx: HomeActorContext): Promise<HomeTabCountsDto> {
     return withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await resolveActiveProjectScope(ctx, tx);
-      const [toDo, toFix, inProgress, recentlyFinished, watching, approvals] = await Promise.all([
-        workItemRepository.countByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_TODO },
-          tx,
-        ),
-        workItemRepository.countByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_TO_FIX },
-          tx,
-        ),
-        workItemRepository.countByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_IN_PROGRESS },
-          tx,
-        ),
-        workItemRepository.countByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
-          tx,
-        ),
-        watcherRepository.countByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
-        // THE APPROVALS COUNT (MOTIR-4794), no longer hardwired to `0`.
-        //
-        // ⚠️ IT IS THE LIST'S OWN PREDICATE, reached through the same repository
-        // builder `listAwaitingMe` uses — not a second count written beside it.
-        // The strip's badge and the tab's rows are two reads of ONE question, so
-        // a copy of the predicate here is a copy that can drift, and a badge
-        // saying `3` above a list of two is exactly what that looks like from
-        // the reader's side.
-        //
-        // ⚠️ AND IT IS DELIBERATELY **NOT** `homeService`'s membership `OR`.
-        // The four tabs beside it answer *what is MINE* with assignee-OR-reporter;
-        // a decision queue routes to exactly one recipient (`assigneeId ??
-        // reporterId`, ADR §2), so this number is counted on the gate's own
-        // predicate. Two tabs in one strip meaning two different things by "me"
-        // is the divergence that ADR records itself refusing to "fix" back.
-        approvalGateRepository.countAwaitingRoutedTo(
-          { projectIds: projectScopes.map((scope) => scope.projectId), userId: ctx.userId },
-          tx,
-        ),
-      ]);
+      const [toDo, toFixCards, inProgress, recentlyFinished, watching, approvals] =
+        await Promise.all([
+          workItemRepository.countByAssigneeOrReporterInWorkspace(
+            ctx.userId,
+            ctx.workspaceId,
+            projectScopes,
+            { slice: HOME_SLICE_TODO },
+            tx,
+          ),
+          // TO FIX COUNTS ENTRIES (MOTIR-7589; § 34.2) — the same keys the list pages, so
+          // the badge and the pager's total are one number.
+          workItemRepository.listToFixGroupKeysByAssigneeOrReporterInWorkspace(
+            ctx.userId,
+            ctx.workspaceId,
+            projectScopes,
+            tx,
+          ),
+          workItemRepository.countByAssigneeOrReporterInWorkspace(
+            ctx.userId,
+            ctx.workspaceId,
+            projectScopes,
+            { slice: HOME_SLICE_IN_PROGRESS },
+            tx,
+          ),
+          workItemRepository.countByAssigneeOrReporterInWorkspace(
+            ctx.userId,
+            ctx.workspaceId,
+            projectScopes,
+            { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
+            tx,
+          ),
+          watcherRepository.countByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
+          // THE APPROVALS COUNT (MOTIR-4794), no longer hardwired to `0`.
+          //
+          // ⚠️ IT IS THE LIST'S OWN PREDICATE, reached through the same repository
+          // builder `listAwaitingMe` uses — not a second count written beside it.
+          // The strip's badge and the tab's rows are two reads of ONE question, so
+          // a copy of the predicate here is a copy that can drift, and a badge
+          // saying `3` above a list of two is exactly what that looks like from
+          // the reader's side.
+          //
+          // ⚠️ AND IT IS DELIBERATELY **NOT** `homeService`'s membership `OR`.
+          // The four tabs beside it answer *what is MINE* with assignee-OR-reporter;
+          // a decision queue routes to exactly one recipient (`assigneeId ??
+          // reporterId`, ADR §2), so this number is counted on the gate's own
+          // predicate. Two tabs in one strip meaning two different things by "me"
+          // is the divergence that ADR records itself refusing to "fix" back.
+          approvalGateRepository.countAwaitingRoutedTo(
+            { projectIds: projectScopes.map((scope) => scope.projectId), userId: ctx.userId },
+            tx,
+          ),
+        ]);
+      const toFix = orderedFixGroupKeys(toFixCards).length;
       return {
         toDo,
         inProgress,
@@ -488,7 +555,8 @@ export const homeService = {
         // badge and the new ones cannot disagree.
         // To fix is carved out of In progress (MOTIR-6604), so it is added back
         // here: the old badge still means everything not finished.
-        myWork: toDo + inProgress + toFix,
+        // It counts CARDS, so it adds back the stuck cards, not To fix's entries.
+        myWork: toDo + inProgress + toFixCards.length,
       };
     });
   },

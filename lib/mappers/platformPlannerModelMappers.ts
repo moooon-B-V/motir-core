@@ -93,6 +93,7 @@ export function toPlatformPlannerModelListDTO(
       addedBy: e.addedByCoreUserId ? (nameById.get(e.addedByCoreUserId) ?? null) : null,
       seeded: !e.addedByCoreUserId,
     })),
+    candidates: list.candidates.map((c) => ({ id: c.id, provider: c.provider })),
     canEdit,
   };
 }

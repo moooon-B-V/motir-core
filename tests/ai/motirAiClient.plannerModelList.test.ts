@@ -34,6 +34,7 @@ const LIST: PlannerModelListRead = {
       createdAt: '2026-10-04T09:30:00.000Z',
     },
   ],
+  candidates: [{ id: 'glm-5.2', provider: 'z-ai' }],
 };
 
 function json(body: unknown, status = 200): Response {
@@ -78,9 +79,17 @@ describe('getPlannerModelList', () => {
   it('an empty list is an answer', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => json({ entries: [] })),
+      vi.fn(async () => json({ entries: [], candidates: [] })),
     );
-    await expect(getPlannerModelList()).resolves.toEqual({ entries: [] });
+    await expect(getPlannerModelList()).resolves.toEqual({ entries: [], candidates: [] });
+  });
+
+  it('a motir-ai that predates `candidates` reads as nothing addable (MOTIR-7614)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ entries: LIST.entries })),
+    );
+    await expect(getPlannerModelList()).resolves.toEqual({ entries: LIST.entries, candidates: [] });
   });
 
   it.each([
@@ -91,6 +100,11 @@ describe('getPlannerModelList', () => {
       () => json({ entries: [{ ...LIST.entries[1], reason: 'x' }] }),
     ],
     ['an entry missing its model', () => json({ entries: [{ ...LIST.entries[0], model: 7 }] })],
+    ['candidates that are not a list', () => json({ ...LIST, candidates: 'nope' })],
+    [
+      'a candidate missing its provider',
+      () => json({ ...LIST, candidates: [{ id: 'glm-5.2', provider: null }] }),
+    ],
     [
       'a transport failure',
       () => {

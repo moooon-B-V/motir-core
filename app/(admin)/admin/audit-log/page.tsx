@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations } from 'next-intl/server';
 import { AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -9,8 +8,9 @@ import { Pill } from '@/components/ui/Pill';
 import type { PlatformAuditChainVerificationDTO } from '@/lib/dto/platform';
 import { PLATFORM_AUDIT_ACTION_KEYS } from '@/lib/platform/auditActions';
 import { auditEntryChainStatus } from '@/lib/platform/auditChain';
-import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
-import { NotPlatformStaffError, PlatformAuditQueryInvalidError } from '@/lib/platform/errors';
+import { type PlatformPrincipal } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
+import { PlatformAuditQueryInvalidError } from '@/lib/platform/errors';
 import { platformAuditService } from '@/lib/services/platformAuditService';
 import { AuditLogFilters } from './_components/AuditLogFilters';
 import { AuditLogTable, type AuditLogRow } from './_components/AuditLogTable';
@@ -53,13 +53,7 @@ export default async function AuditLogPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  let principal: PlatformPrincipal;
-  try {
-    principal = await requirePlatformStaff('superadmin');
-  } catch (err) {
-    if (err instanceof NotPlatformStaffError) notFound();
-    throw err;
-  }
+  const principal = await requirePlatformStaffPage('superadmin');
   const query = parseAuditLogQuery(await searchParams);
   const t = await getTranslations('platformAdmin.audit');
 

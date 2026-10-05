@@ -142,6 +142,9 @@ const NO_DEAD_RUN = {
   diedReason: null,
 } as const;
 
+/** A pull-request set's entry key (MOTIR-7589) — a hash, so matched by shape. */
+const PRS_KEY = expect.stringMatching(/^prs:[0-9a-f]{24}$/);
+
 const versionOf = (repoName: string, number: number, head = HEAD) =>
   `acme/${repoName}#${number}@${head}`;
 
@@ -173,6 +176,7 @@ describe('the pure half', () => {
 
   it('sameFixReason compares the reason and the whole detail', () => {
     const detail = {
+      groupKey: 'prs:abc',
       repair: 'fix' as const,
       check: 'Vitest',
       queueReason: null,
@@ -197,6 +201,13 @@ describe('the pure half', () => {
       sameFixReason(
         { fixReason: 'ci_failed', fixDetail: detail },
         { fixReason: 'ci_failed', fixDetail: { ...detail, affected: 2 } },
+      ),
+    ).toBe(false);
+    // A card whose ENTRY moved (MOTIR-7589) — a fix run re-delivered its set — is rewritten.
+    expect(
+      sameFixReason(
+        { fixReason: 'ci_failed', fixDetail: detail },
+        { fixReason: 'ci_failed', fixDetail: { ...detail, groupKey: 'prs:def' } },
       ),
     ).toBe(false);
     // jsonb hands the keys back in its own order — still the same answer.
@@ -230,6 +241,7 @@ describe('each reason alone', () => {
     expect(value).toEqual({
       fixReason: 'ci_failed',
       fixDetail: {
+        groupKey: PRS_KEY,
         repair: 'fix',
         check: 'Lint',
         queueReason: null,
@@ -281,6 +293,7 @@ describe('each reason alone', () => {
     expect(await recompute(fx, card.id)).toEqual({
       fixReason: 'changes_requested',
       fixDetail: {
+        groupKey: PRS_KEY,
         repair: 'fix',
         check: null,
         queueReason: null,
@@ -370,6 +383,7 @@ describe('In Review with a red member (MOTIR-7491)', () => {
       expect(value).toEqual({
         fixReason: 'ci_failed',
         fixDetail: {
+          groupKey: PRS_KEY,
           repair: 'fix',
           check: 'Guard against the gateway artifact',
           queueReason: null,
@@ -726,6 +740,7 @@ describe('a standing review refusal the repair claim does not admit', () => {
     expect(await recompute(fx, card.id)).toEqual({
       fixReason: 'changes_requested',
       fixDetail: {
+        groupKey: PRS_KEY,
         repair: 'fix',
         check: null,
         queueReason: null,
@@ -935,6 +950,8 @@ describe('run_died — read through the continue claim’s own evaluation', () =
     expect(value).toEqual({
       fixReason: 'run_died',
       fixDetail: {
+        // ONE ENTRY PER DEAD RUN (MOTIR-7589): keyed by the run the continue view names.
+        groupKey: `run:${view.deadRun.id}`,
         repair: 'continue',
         check: null,
         queueReason: null,

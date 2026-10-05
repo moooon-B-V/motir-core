@@ -71,6 +71,9 @@ export interface PlatformPlannerModelListEntryDTO {
 /** The planning-list card: every listed model, and whether this principal may edit. */
 export interface PlatformPlannerModelListDTO {
   entries: PlatformPlannerModelListEntryDTO[];
+  /** What the Add dialog may offer (MOTIR-7614): motir-ai's plannable, not-yet-listed
+   *  models, in its order (provider, then id). Empty when every plannable model is listed. */
+  candidates: PlatformPlannerOfferedModelDTO[];
   /** True only for a `superadmin`; every other staff role reads. */
   canEdit: boolean;
 }

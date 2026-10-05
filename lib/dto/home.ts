@@ -82,6 +82,19 @@ export interface HomeWorkItemRowDto {
    * fix read; `false` on every other tab's rows.
    */
   canFixHosted: boolean;
+  /**
+   * TO FIX ONLY (MOTIR-7589; `design/workbench/design-notes.md` § 34): the kind of entry
+   * this row heads — `run` (one dead run), `prs` (one pull-request set) or `card` (a card
+   * alone). `null` on every other tab.
+   */
+  fixGroupKind: 'run' | 'prs' | 'card' | null;
+  /**
+   * TO FIX ONLY: the OTHER cards stuck in this entry, in the entry's order (the reader's
+   * own first) — the member list under the fix line. Each is a full row: the line draws
+   * its kind, key, title, the reader's role, its assignee and its status. Empty for a card
+   * alone, and on every other tab.
+   */
+  fixMembers: HomeWorkItemRowDto[];
   /** The OPEN repair on a sent-back row — the lock that replaces both repairs while it
    *  runs (`hosted-agent-run.md` §8.6). Read only by the To fix read; `null` elsewhere. */
   repairRun: OpenRepairRunDto | null;

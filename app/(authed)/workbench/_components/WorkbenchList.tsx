@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
+import { useId, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -132,6 +133,133 @@ function useFinishedLabel(): (iso: string) => string {
       'day',
     );
   };
+}
+
+/**
+ * The cards stuck WITH the head (MOTIR-7589; `design/workbench/design-notes.md` § 34.3):
+ * one 32px line per member, on line 1's columns and indented to the title, each its own
+ * link raised over the entry's stretched link. A member line carries no reason and no
+ * repair — the entry's one repair is line 2's.
+ *
+ * Three show; the rest fold behind *Show N more work items* (`ObsolescenceField`'s
+ * show-more recipe), local state only. A member that LEAVES while the reader looks (moved
+ * to Done, archived) is held IN PLACE with the *Cleared* chip (§ 34.5) until the next
+ * load; the clause counts only the ones still stuck.
+ */
+const MEMBERS_SHOWN = 3;
+
+function useHeldMembers(members: WorkbenchRowView[]): {
+  rows: WorkbenchRowView[];
+  clearedIds: ReadonlySet<string>;
+} {
+  // The members seen since this entry mounted, in first-seen order — React's
+  // "store information from previous renders" pattern: a render that sees a new member
+  // adds it, and one that misses an old member keeps it, marked cleared.
+  const [seen, setSeen] = useState(members);
+  const fresh = members.filter((m) => !seen.some((s) => s.id === m.id));
+  if (fresh.length > 0) setSeen([...seen, ...fresh]);
+  const current = new Map(members.map((m) => [m.id, m]));
+  const rows = [...seen, ...fresh].map((m) => current.get(m.id) ?? m);
+  return {
+    rows,
+    clearedIds: new Set(rows.filter((m) => !current.has(m.id)).map((m) => m.id)),
+  };
+}
+
+function EntryMembers({
+  head,
+  members,
+  held,
+  gridTemplateColumns,
+}: {
+  head: WorkbenchRowView;
+  members: WorkbenchRowView[];
+  held: boolean;
+  gridTemplateColumns: string;
+}) {
+  const t = useTranslations('workbench');
+  const listId = useId();
+  const [open, setOpen] = useState(false);
+  const { rows, clearedIds } = useHeldMembers(members);
+  if (rows.length === 0) return null;
+  const folded = rows.length - MEMBERS_SHOWN;
+  const shown = open || folded <= 0 ? rows : rows.slice(0, MEMBERS_SHOWN);
+  return (
+    <>
+      <ul
+        id={listId}
+        aria-label={t('toFix.entry.membersLabel', { key: head.identifier })}
+        data-testid={`workbench-fix-members-${head.identifier}`}
+        className="m-0 list-none p-0 pb-1.5"
+      >
+        {shown.map((m) => {
+          const cleared = clearedIds.has(m.id);
+          return (
+            <li
+              key={m.id}
+              data-testid={`workbench-fix-member-${m.identifier}`}
+              data-cleared={cleared ? 'true' : undefined}
+              className="group/member relative z-10 flex flex-col gap-1 py-1 pl-6 md:grid md:h-8 md:items-center md:gap-x-4 md:py-0 md:pl-6"
+              style={{ gridTemplateColumns }}
+            >
+              <Link
+                href={`/items/${m.identifier}`}
+                aria-label={`${m.identifier} ${m.title}`}
+                className="absolute inset-0 rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              />
+              <span className="flex min-w-0 items-center gap-2">
+                <IssueTypeIcon type={m.kind} className="h-3.5 w-3.5 shrink-0" />
+                <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
+                  {m.identifier}
+                </span>
+                <span
+                  className={cn(
+                    'min-w-0 truncate text-[12.5px] group-hover/member:underline',
+                    held || cleared ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
+                  )}
+                >
+                  {m.title}
+                </span>
+              </span>
+              <span className="hidden min-w-0 items-center md:flex">
+                <span className="truncate text-xs text-(--el-text-secondary)">
+                  {t(`row.role.${m.role}`)}
+                </span>
+              </span>
+              <span className="hidden min-w-0 items-center text-xs md:flex">
+                <AssigneeCell row={m} />
+              </span>
+              <span className="hidden min-w-0 items-center md:flex">
+                {cleared ? (
+                  <Pill tone="neutral">{t('live.cleared')}</Pill>
+                ) : (
+                  <StatusValue
+                    statusKey={m.status}
+                    category={m.statusCategory}
+                    label={m.statusLabel}
+                  />
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {folded > 0 ? (
+        <div className="pb-2.5 pl-6">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={listId}
+            onClick={() => setOpen((v) => !v)}
+            data-testid={`workbench-fix-members-toggle-${head.identifier}`}
+            className="relative z-10 text-xs font-medium text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            {open ? t('toFix.entry.showFewer') : t('toFix.entry.showMore', { count: folded })}
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 function WorkbenchRow({
@@ -271,6 +399,11 @@ function WorkbenchRow({
           itemKey={row.identifier}
           reason={row.fix.reason}
           detail={row.fix.detail}
+          carried={
+            row.fixGroupKind === 'run' || row.fixGroupKind === 'prs'
+              ? { kind: row.fixGroupKind, count: row.members.length }
+              : null
+          }
           held={held}
           canContinueHosted={row.canContinueHosted}
           canFixHosted={row.canFixHosted}
@@ -279,6 +412,14 @@ function WorkbenchRow({
           onStarted={onContinueStarted}
           onStateMoved={onContinueStarted}
         />
+        {row.members.length > 0 ? (
+          <EntryMembers
+            head={row}
+            members={row.members}
+            held={held}
+            gridTemplateColumns={gridTemplateColumns}
+          />
+        ) : null}
       </div>
     );
   }

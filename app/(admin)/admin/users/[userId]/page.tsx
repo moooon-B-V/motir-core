@@ -5,7 +5,8 @@ import { getFormatter, getTranslations } from 'next-intl/server';
 import { ChevronRight, Info } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
-import { platformRoleAtLeast, requirePlatformStaff } from '@/lib/platform/auth';
+import { platformRoleAtLeast } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { PlatformUserNotFoundError } from '@/lib/platform/errors';
 import { platformSupportService } from '@/lib/services/platformSupportService';
 import { impersonationService } from '@/lib/services/impersonationService';
@@ -54,7 +55,7 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function AdminUserPage({ params }: { params: Promise<{ userId: string }> }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const t = await getTranslations('platformAdmin');
   // Dates cross the boundary as ISO strings and are rendered here, locale-aware
   // (`lib/dto/platform.ts`'s note on why the DTO carries ISO). A Server

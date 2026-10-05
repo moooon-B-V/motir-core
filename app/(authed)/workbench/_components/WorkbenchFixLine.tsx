@@ -102,7 +102,9 @@ const REASON_SENTENCE: Readonly<
           : t.rich('toFix.reason.runDiedNoName', { when, branch: d.branch, d: mono })
         : t('toFix.reason.runDiedBare');
     const more = (d.branches?.length ?? 0) - 1;
-    const parent = d.continueKey !== null && d.continueKey !== c.itemKey ? d.continueKey : null;
+    // ⚠️ NO *Part of {parent}'s run* CLAUSE ANY MORE (MOTIR-7589; § 34.3 retires § 31
+    // state 3): a leg of a dead parent run is a MEMBER of the parent's entry now, never a
+    // row of its own, so the head this line belongs to is the card the repair runs on.
     return (
       <>
         {main}
@@ -115,15 +117,6 @@ const REASON_SENTENCE: Readonly<
           >
             {' '}
             {t('toFix.reason.runDiedMoreRepositories', { count: more })}
-          </span>
-        ) : null}
-        {parent ? (
-          <span className="text-(--el-text-secondary)">
-            {' · '}
-            {t.rich('toFix.reason.runDiedParent', {
-              parent,
-              b: (chunks) => <b className="font-semibold text-(--el-text)">{chunks}</b>,
-            })}
           </span>
         ) : null}
       </>
@@ -237,6 +230,7 @@ export function WorkbenchFixLine({
   itemKey,
   reason,
   detail,
+  carried = null,
   held,
   canContinueHosted = false,
   viewerId = null,
@@ -258,6 +252,12 @@ export function WorkbenchFixLine({
   itemKey: string;
   reason: WorkItemFixReasonDto;
   detail: FixDetailDto;
+  /**
+   * The OTHER cards stuck in this entry (MOTIR-7589; § 34.3) — drawn as one clause after
+   * the reason: *· 5 more work items in this run* / *· 2 more work items on the same pull
+   * request*. Null, or a count of 0, draws nothing: a card alone is § 30's row unchanged.
+   */
+  carried?: { kind: 'run' | 'prs'; count: number } | null;
   /** The card left the To fix set while the reader looked (§ 30 Panel 3). */
   held: boolean;
   /** A dead run the viewer may continue: the row places Continue hosted (§ 31). */
@@ -381,6 +381,19 @@ export function WorkbenchFixLine({
         {/* A held row drops its glyph (§ 30 Panel 3): it is a receipt, not a failure. */}
         {held ? null : <ReasonGlyph reason={reason} />}
         <span className="min-w-0 truncate">{REASON_SENTENCE[reason](t, detail, context)}</span>
+        {/* THE ENTRY CLAUSE (§ 34.3) — how many other cards this one repair clears. */}
+        {carried && carried.count > 0 ? (
+          <span
+            className="shrink-0 text-(--el-text-secondary)"
+            data-testid={`workbench-fix-carries-${itemKey}`}
+          >
+            {' · '}
+            {t(
+              carried.kind === 'run' ? 'toFix.entry.carriesRun' : 'toFix.entry.carriesPullRequests',
+              { count: carried.count },
+            )}
+          </span>
+        ) : null}
         {/* The affected clause — only for a card delivering more than one pull request. */}
         {detail.total > 1 ? (
           <span className="shrink-0 text-(--el-text-secondary)">
