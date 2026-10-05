@@ -969,6 +969,46 @@
       "renew": "Renewing the AI plan before {date} cancels the deletion. Until then your agents cannot be created or woken, and their storage is still charged every day.",
       "openBilling": "Renew the AI plan",
       "footer": "You are receiving this because you own agents in this organization."
+    },
+    "enterpriseRequestReceived": {
+      "subject": "Enterprise request from {organization}",
+      "preview": "{requester} asked about Enterprise for {organization}",
+      "greeting": "Hi,",
+      "lede": "{requester} ({email}) asked about the Enterprise plan for {organization}.",
+      "needsHeading": "What they told us",
+      "cardsPerDay": "Work items a day: about {count}",
+      "parallelAgents": "Agents in parallel: {count}",
+      "agentPath": "Which agents: {value}",
+      "autonomy": "Run on its own: {value}",
+      "startWhen": "When they would start: {value}",
+      "teamSize": "Team size: {value}",
+      "noNeeds": "They left every optional question blank.",
+      "contact": "Reach them at: {contact}",
+      "noteHeading": "Their note",
+      "openRequest": "Open the request",
+      "footer": "You are receiving this because you are Motir platform staff.",
+      "agentPathValue": {
+        "hosted": "Motir's hosted agents",
+        "own": "Their own agents",
+        "both": "Both"
+      },
+      "autonomyValue": {
+        "autonomous_lead": "Run the project around the clock on its own",
+        "volume_only": "A large volume of runs they start themselves",
+        "unsure": "Not sure yet"
+      },
+      "startWhenValue": {
+        "now": "Now",
+        "within_month": "Within a month",
+        "within_quarter": "Within a quarter",
+        "exploring": "Just exploring"
+      },
+      "teamSizeValue": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      }
     }
   },
   "auth": {

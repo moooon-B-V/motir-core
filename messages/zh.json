@@ -969,6 +969,46 @@
       "renew": "在 {date} 之前续订 AI 套餐即可取消删除。在此之前，你的智能体无法创建或唤醒，其存储仍按天收费。",
       "openBilling": "续订 AI 套餐",
       "footer": "你收到这封邮件，是因为你在该组织中拥有智能体。"
+    },
+    "enterpriseRequestReceived": {
+      "subject": "{organization} 的企业版咨询",
+      "preview": "{requester} 为 {organization} 咨询了企业版",
+      "greeting": "你好，",
+      "lede": "{requester}（{email}）为 {organization} 咨询了企业版。",
+      "needsHeading": "对方提供的信息",
+      "cardsPerDay": "每天工作项：约 {count}",
+      "parallelAgents": "并行智能体：{count}",
+      "agentPath": "使用的智能体：{value}",
+      "autonomy": "自主运行：{value}",
+      "startWhen": "计划开始时间：{value}",
+      "teamSize": "团队规模：{value}",
+      "noNeeds": "对方未填写任何可选问题。",
+      "contact": "联系方式：{contact}",
+      "noteHeading": "对方的留言",
+      "openRequest": "打开咨询",
+      "footer": "你收到这封邮件，是因为你是 Motir 平台工作人员。",
+      "agentPathValue": {
+        "hosted": "Motir 托管的智能体",
+        "own": "自己的智能体",
+        "both": "两者都用"
+      },
+      "autonomyValue": {
+        "autonomous_lead": "让项目全天候自主运行",
+        "volume_only": "由自己发起大量运行",
+        "unsure": "尚未确定"
+      },
+      "startWhenValue": {
+        "now": "现在",
+        "within_month": "一个月内",
+        "within_quarter": "一个季度内",
+        "exploring": "只是了解"
+      },
+      "teamSizeValue": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      }
     }
   },
   "auth": {

@@ -1,4 +1,5 @@
-import { Prisma } from '@/generated/prisma/client';
+import { Prisma, type EnterpriseRequest } from '@/generated/prisma/client';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { pmTierForOrg } from '@/lib/billing/entitlements';
 import {
@@ -14,7 +15,10 @@ import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
 import { withOrgContext } from '@/lib/organizations/context';
 import { enterpriseRequestRepository } from '@/lib/repositories/enterpriseRequestRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 
 // The ORG side of an Enterprise request (Story MOTIR-7602 · Subtask MOTIR-7605):
 // the Enterprise card's Contact sales sends one, and the card reads the open one
@@ -32,8 +36,9 @@ import { organizationsService } from '@/lib/services/organizationsService';
 // and looks up the request that won so the card can show it. There is no
 // read-then-insert to race.
 //
-// It records and reads. Emailing staff is MOTIR-7606; the console's reads and
-// state changes are `platformEnterpriseRequestService` (MOTIR-7608).
+// It records, reads, and — once a request has committed — emails platform staff
+// (MOTIR-7606). The console's reads and state changes are
+// `platformEnterpriseRequestService` (MOTIR-7608).
 
 /** Who is acting — the signed-in session's user. `email` is the contact default. */
 export interface EnterpriseRequestActor {
@@ -66,6 +71,55 @@ function parseInput(raw: unknown) {
   return parsed.data;
 }
 
+/**
+ * Email every platform staff member about a request that has COMMITTED
+ * (MOTIR-7606) — one `email.send` event each, keyed
+ * `enterprise-request:<requestId>:<userId>` so a retried send collapses to one
+ * delivery per person. Best-effort: a failure is logged and swallowed, because
+ * the request is already recorded and the console lists it regardless.
+ */
+async function notifyStaff(
+  row: EnterpriseRequest,
+  organizationName: string,
+  requesterName: string,
+): Promise<void> {
+  try {
+    const recipients = await platformStaffRepository.listStaffRecipients();
+    if (recipients.length === 0) return;
+    const requesterEmail = row.requestedById
+      ? ((await userRepository.findById(row.requestedById))?.email ?? row.contact)
+      : row.contact;
+    const requestUrl = `${resolveBaseUrlTrimmed()}/admin/enterprise-requests/${encodeURIComponent(row.id)}`;
+    for (const recipient of recipients) {
+      await sendEvent('email.send', {
+        workspaceId: null,
+        idempotencyKey: `enterprise-request:${row.id}:${recipient.id}`,
+        to: recipient.email,
+        template: 'enterprise-request-received',
+        data: {
+          organizationName,
+          requesterName,
+          requesterEmail,
+          cardsPerDay: row.cardsPerDay,
+          parallelAgents: row.parallelAgents,
+          agentPath: row.agentPath,
+          autonomy: row.autonomy,
+          startWhen: row.startWhen,
+          teamSize: row.teamSize,
+          contact: row.contact,
+          note: row.note,
+          requestUrl,
+        },
+      });
+    }
+  } catch (err) {
+    console.warn('[enterpriseRequest] staff email failed after commit; the request stands', {
+      requestId: row.id,
+      err,
+    });
+  }
+}
+
 export const enterpriseRequestService = {
   /**
    * Record the org's Enterprise request. Returns it as the org sees it.
@@ -84,13 +138,16 @@ export const enterpriseRequestService = {
     const input = parseInput(rawInput);
     const scope = { userId: actor.userId, organizationId };
 
+    let committed;
     try {
-      const row = await withOrgContext(scope, async (tx) => {
+      committed = await withOrgContext(scope, async (tx) => {
         await assertOrgNotClosing(organizationId, tx);
+        const organization = await organizationRepository.findByIdInTx(organizationId, tx);
+        const requester = await userRepository.findById(actor.userId, tx);
         const tier = pmTierForOrg(
           await organizationRepository.findCapContextInTx(organizationId, tx),
         );
-        return enterpriseRequestRepository.create(
+        const row = await enterpriseRequestRepository.create(
           {
             organizationId,
             requestedById: actor.userId,
@@ -106,8 +163,12 @@ export const enterpriseRequestService = {
           },
           tx,
         );
+        return {
+          row,
+          organizationName: organization?.name ?? organizationId,
+          requesterName: requester?.name || actor.email,
+        };
       });
-      return toEnterpriseRequestDTO(row);
     } catch (err) {
       // The partial unique index refused a second open request. The transaction
       // is aborted, so the winner is read in a fresh one.
@@ -119,6 +180,11 @@ export const enterpriseRequestService = {
       }
       throw err;
     }
+
+    // AFTER the commit, never inside it: a staff email about a request that
+    // rolled back would describe nothing, and a mail failure must not undo it.
+    await notifyStaff(committed.row, committed.organizationName, committed.requesterName);
+    return toEnterpriseRequestDTO(committed.row);
   },
 
   /** The org's OPEN request, or `null` when none is open. Same gate as create. */
