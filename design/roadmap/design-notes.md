@@ -2329,3 +2329,18 @@ keeps its glyph and label.
 | **MOTIR-6352**                  | TAKES a wording: "flags exactly `invalidEdges`" becomes "flags exactly the edges the validator calls invalid", since MOTIR-6509 moves cross-level edges into that verdict                                                                                       | amended on the record                                             |
 | **MOTIR-6509**                  | TAKES nothing: its verdict is what this design flags                                                                                                                                                                                                            | none owed                                                         |
 | **MOTIR-5713**                  | TAKES nothing: decision 7's folder line is kept, on the neutral anchor                                                                                                                                                                                          | none owed                                                         |
+
+## Warm touches in the default Motir palette (MOTIR-7583)
+
+**Amends** `design/roadmap/roadmap.mock.html`'s COLOURS only — no layout, copy or component change.
+Delta mock: `design/roadmap/roadmap--motir-warm-touches.mock.html`. The spec — the role table, the
+measurement matrix, the roadmap's own figures and the hand-off — is
+`design/design-system/design-notes.md` § 8 (§ 8.9 for the roadmap), because the change is a palette
+change and that is the palette's area.
+
+What the panels show, today vs proposed, light and dark: the root level of epics, where every Epic
+glyph turns from blue to warm orange on its rose tile (3.01:1 light, 4.84:1 dark), and the Blocked and
+Planning chips warm slightly; and a drilled level, where only the Bug tile's peach warms. The
+You-are-here pill, the Ready wash, the Done card, the green meters and every edge are unchanged. The
+citrine Design hue does not reach the roadmap, because a node draws a kind icon rather than a
+work-type chip.
