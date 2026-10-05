@@ -5,7 +5,7 @@ import { Search, UserSearch } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import {
   PLATFORM_USER_SEARCH_LIMIT,
   PLATFORM_USER_SEARCH_MIN_LENGTH,
@@ -53,7 +53,7 @@ export default async function AdminUsersPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  const principal = await requirePlatformStaff('support');
+  const principal = await requirePlatformStaffPage('support');
   const t = await getTranslations('platformAdmin');
   const { q } = await searchParams;
   const query = (q ?? '').trim();
