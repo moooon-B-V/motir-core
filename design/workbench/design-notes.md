@@ -2880,6 +2880,9 @@ No `--el-text-muted` or `--el-text-faint` carries text anywhere on the row, beca
 
 ## 31 · TO FIX · RUN DIED — the fifth reason, sorted first — MOTIR-6878
 
+> **State 3 RETIRED by MOTIR-7590 (§ 34).** A leg of a dead parent run no longer has a To fix row of its
+> own: it is a member of its run's ONE entry.
+
 **Asset:** `design/workbench/workbench--to-fix--run-died.mock.html`, a new delta mock (card
 MOTIR-6878). No existing mock is edited.
 
@@ -3443,3 +3446,132 @@ No raw hex and no raw shape utility in any of the four deltas.
 | **MOTIR-7478** (row + port)                       | § 33.2, § 33.3, § 33.5: the four sentence forms, the details cell with the Guide me through link, Mark done in the Decide cell and its states, the port, the withdrawn causes | **ELEMENT:** `SENTENCE_KEY` gains a kind whose sentence depends on state and routing — the only kind so; `StatePill` gains _Marked done_ for this kind        |
 | **MOTIR-7474** (handler)                          | Nothing                                                                                                                                                                       | Nothing — the verbs drawn are the ADR's                                                                                                                       |
 | **MOTIR-5147 / 5216 / 5222 / 5239 / 5997 / 7462** | Nothing                                                                                                                                                                       | Nothing — composed; their mocks are records and are not edited                                                                                                |
+
+## 34 · TO FIX · ONE ENTRY PER RUN — cards stuck for one reason that one repair clears are one entry, and the tab counts entries — MOTIR-7590
+
+**The asset:** [`workbench--to-fix--per-run.mock.html`](./workbench--to-fix--per-run.mock.html), a new delta
+mock, Panels **1–8**, the zh panel and the grouping-key table. **It edits no existing mock.** It amends **§ 30**
+([`workbench--to-fix.mock.html`](./workbench--to-fix.mock.html), MOTIR-6599, the To fix tab, its row and its
+count) and **§ 31** ([`workbench--to-fix--run-died.mock.html`](./workbench--to-fix--run-died.mock.html),
+MOTIR-6878), and it **RETIRES § 31's state 3** (_a child of a parent run_: one row per leg, each offering the
+parent's repairs). The tag and the banner are `design/work-items/design-notes.md` § _The TO FIX tag and banner:
+ONE ENTRY PER RUN_. Card **MOTIR-7590**, the design gate of **MOTIR-7589**. Rendered against motir-core
+`origin/main` @ `1dd62a3`.
+
+### 34.1 What was wrong
+
+The tab lists, counts and pages **cards**. One stuck run therefore drew as many rows as it had stuck cards, and
+every one of them offered the same repair:
+
+- **A dead story run** puts the story and every in-progress leg on the tab. The legs carry `run_died` with
+  `continueKey` = the story (`continue_the_parent`), so a run with five legs in flight drew six rows, six
+  `motir continue ACME-12` commands and six Continue hosted doors, and the badge read 6 for one repair.
+- **A red pull request shared by several run targets** (a sprint run, or a story run that never recorded How to
+  test) puts each card on the tab with the same `ci_failed` / `conflicted` / `queue_failed` reason, each with its
+  own `motir fix` for one repair.
+
+**A premise MOTIR-7589 carried is corrected here:** the pull-request reasons do NOT fan out to the legs of a story
+run whose run target holds a How to test record. For those legs `evaluateRepair` answers `repair_on_run_target`
+(`lib/services/repairPredicate.ts`, through `resolveRunTargetFor` in `lib/services/runTarget.ts`), so
+`deriveFixReason` writes nothing for them and only the story is listed. The pull-request fan-out exists only where
+several cards are each their own run target on one pull-request set. The `run_died` fan-out is real for every
+story run.
+
+### 34.2 The decision: an ENTRY is a group of stuck cards, read over the per-card column
+
+**Stored: one new field, `fixDetail.groupKey`, written by `recomputeWorkItemFixReason` with the reason it belongs
+to.** Nothing else is stored, and no second table is written.
+
+| reason                                                                | `groupKey`                                     | the HEAD (line 1)                                                         | member order                         |
+| --------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------ |
+| `run_died`                                                            | `run:<dead DispatchRun.id>`                    | the run's scope card: `continueKey` (for `no_branch`, `parentKey ?? key`) | the run's `DispatchRunCard.position` |
+| `queue_failed` · `conflicted` · `ci_failed`                           | `prs:<hash of the open member PR ids, sorted>` | the member that is an ANCESTOR of the others, else the lowest key         | by key                               |
+| `changes_requested` on `pull_request_approval` or by the review agent | `prs:<…>`, the same key                        | as above                                                                  | by key                               |
+| `changes_requested` on `acceptance_result`                            | `card:<id>`                                    | the card                                                                  | none                                 |
+| anything else, and every row stored before the key existed            | `card:<id>`                                    | the card                                                                  | none                                 |
+
+- `sameFixReason` compares `groupKey` like every other `FIX_DETAIL_FIELDS` member, so a card whose group changes
+  (a fix run re-delivered its set) is rewritten.
+- **Why not a run-keyed table** (one stored row per stuck run): the pull-request reasons are facts about a
+  PULL-REQUEST SET, not a run. A run may be closed while its pull request goes red, a fix run re-delivers the set,
+  and a hand-linked pull request has no run at all. And the per-card column has to stay anyway: the tag, the
+  banner, the `/items` filter and the In progress / To fix partition all read it. A second stored truth would need
+  its own writers, its own backfill and a reconciler, and it could drift from the column the rest of the app reads.
+- **The slice predicate does not change.** `HOME_SLICE_TO_FIX` (`{ in: ['in_progress'], fixReason: 'set' }`) still
+  decides which CARDS are on the tab, so the In progress / To fix partition holds card for card.
+- **The list** pages `DISTINCT COALESCE(fixDetail->>'groupKey', 'card:' || id)` over the reader's slice, in the
+  existing order (reason priority, then the work tabs' `READY_KIND_RANK`), then reads each page's members by
+  `groupKey`. **The count** (`tabCounts.toFix`) is `COUNT(DISTINCT …)` over the same expression. The code card adds
+  an expression index on it.
+- **The `/items` filter, the tag and the banner stay per card** (work-items § _ONE ENTRY PER RUN_).
+
+### 34.3 The entry (Panels 1, 2, 4)
+
+- **Line 1 is the HEAD**, in `WorkbenchList`'s row, unchanged. It is the head even when the reader holds only a
+  member, and even when the head itself is not stuck (a no-branch scope card that never claimed).
+- **Line 2 is the § 30 / § 31 fix line, unchanged**, plus ONE clause after the reason, in the affected clause's
+  recipe (`shrink-0 text-(--el-text-secondary)`): _· 5 more work items in this run_ for `run:` groups, _· 2 more work
+  items on the same pull request_ for `prs:` groups. `runDiedParent` (_Part of ACME-12's run…_) is no longer drawn
+  on the Workbench: no leg has a row of its own any more.
+- **The member list** (`tf-members`, a `<ul>` named _Work items stuck with ACME-12_): one 32px line per member other
+  than the head, on line 1's four columns and indented to the title (`0 28px 0 40px`): the kind glyph, the key
+  (mono, 12px, `--el-text-secondary`), the title (12.5px, `--el-text`, truncated), the reader's role on THAT
+  member, its assignee, its status pill. Each line is its own link to its card, raised over the entry's stretched
+  link the way the repairs are (`relative z-10`). A member line carries **no reason and no repair**.
+- **The fold.** Three member lines show; the rest fold behind _Show 2 more work items_, the shipped show-more
+  button (`ObsolescenceField`: 12px, `font-medium`, `--el-link`, hover underline, `aria-expanded`,
+  `aria-controls` the list). Expanded, it reads _Show fewer_. Local state: no fetch, no URL change.
+- **One member** (the common case) draws no clause, no list and no fold: it is the § 30 row pixel for pixel
+  (Panel 4).
+
+### 34.4 Whose entry it is (Panel 5)
+
+- An entry is on the reader's tab when they are the assignee or reporter of **ANY** member, which is the slice the
+  tab already reads. The role cell on line 1 is the reader's role on the HEAD, or **—** in `--el-text-secondary`.
+- Members the reader holds sort FIRST, then the order in § 34.2, so the fold never hides why the entry is here.
+- The repairs show when the reader may edit the **head** (the door rule, unchanged). When they may not, § 31's
+  sentence (`runDiedCannotEdit`) takes the repairs' place.
+
+### 34.5 States (Panels 3, 6, 7, 8)
+
+- **A pull-request group** (Panel 3): one entry, one `motir fix <HEAD>`, which repairs the set every member shares.
+- **Held** (Panel 6): continuing or fixing the head clears every member at once, so the WHOLE entry is held the way
+  § 30 holds a row: reason ink `--el-text-secondary`, the repairs replaced by the _Cleared_ chip
+  (`workbench.live.cleared`), member titles dimmed, until the refetch drops it. The badge falls by ONE.
+- **A member that leaves on its own** (moved to Done, archived) is held IN PLACE: its status cell shows the
+  _Cleared_ chip and the clause counts the members still stuck. An entry left with only its head is a § 30 row.
+- **Died again during a continue** (Panel 7): the continue is a new run, so the second death is a NEW entry keyed
+  by that run, naming who ran it. The old entry, if this session drew it, stays held until the refetch.
+- **The pager** (Panel 8): `IssueListPager` pages ENTRIES. An entry is never split across pages, and _Showing 26–27
+  of 27_ agrees with the badge.
+
+### 34.6 Copy
+
+| key (proposed)                                                      | en                                                                                                                  | zh                                  |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `workbench.toFix.entry.carriesRun`                                  | {count, plural, one {# more work item in this run} other {# more work items in this run}}                           | 此运行中另有 {count} 个工作项       |
+| `workbench.toFix.entry.carriesPullRequests`                         | {count, plural, one {# more work item on the same pull request} other {# more work items on the same pull request}} | 相同拉取请求上另有 {count} 个工作项 |
+| `workbench.toFix.entry.membersLabel`                                | Work items stuck with {key}                                                                                         | 与 {key} 一起受阻的工作项           |
+| `workbench.toFix.entry.showMore`                                    | Show {count, plural, one {# more work item} other {# more work items}}                                              | 再显示 {count} 个工作项             |
+| `workbench.toFix.entry.showFewer`                                   | Show fewer                                                                                                          | 收起                                |
+| (shipped) `workbench.live.cleared`                                  | Cleared                                                                                                             | 已解除                              |
+| (retired from the Workbench) `workbench.toFix.reason.runDiedParent` | not drawn by the Workbench any more                                                                                 | 同左                                |
+
+Colour only through `--el-*`; shape only through element-semantic tokens. The delta block (`tf-members`,
+`tf-member*`, `tf-more*`) names no raw hue and no raw shape utility. Every text ink is `--el-text` or
+`--el-text-secondary` (the show-more button `--el-link`); none is muted or faint.
+
+### What this asset does NOT decide
+
+- **The repairs themselves**: `motir continue`, `motir fix` and the Continue hosted door are § 30 / § 31's and the
+  runs area's, unchanged.
+- **The `/items` To fix filter**: per card, unchanged.
+- **Whether a story run should record How to test earlier** so its legs never fan out on a pull-request reason.
+
+### GIVES / TAKES
+
+| card                       | GIVES                                                                                                                                                                                                                                                         | TAKES                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-7589** (the build) | PREMISE: `fixDetail.groupKey` and its rules (§ 34.2), the grouped read, the DISTINCT count, the expression index. ELEMENT: the entry, its clause, the member list and its fold, the held states, every string in § 34.6 and work-items § _ONE ENTRY PER RUN_. | **PREMISE CORRECTED:** pull-request reasons do not fan out to the legs of a story run with a How to test record (§ 34.1). |
+| **MOTIR-6599** (§ 30)      | Nothing                                                                                                                                                                                                                                                       | The tab's count and pager now count entries, not cards.                                                                   |
+| **MOTIR-6878** (§ 31)      | Nothing                                                                                                                                                                                                                                                       | State 3 (one row per leg) is RETIRED; `runDiedParent` leaves the Workbench.                                               |

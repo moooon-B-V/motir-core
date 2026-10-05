@@ -9332,3 +9332,62 @@ part of the design.
 - **The approval frame, the verdict pair and the reason field** — MOTIR-4789 / MOTIR-6073's, unchanged.
 - **Whether the cap is ever per-project** — the record keeps it a constant.
 - **The Run hosted control itself** — the skipped lines link to it; it is 9.1's.
+
+## ⭐ The TO FIX tag and banner: ONE ENTRY PER RUN — a carried card names its head, and only the head offers the repair (MOTIR-7590 — `to-fix--tag-and-banner--per-run.mock.html`, DATED 2026-10-05)
+
+**The asset:** [`to-fix--tag-and-banner--per-run.mock.html`](./to-fix--tag-and-banner--per-run.mock.html), a
+new delta mock, Panels **1–2** and zh. **It edits no existing mock.** It amends § _The TO FIX tag and banner: RUN
+DIED_ (`to-fix--tag-and-banner--run-died.mock.html`, MOTIR-6878) and the published MOTIR-6608 tag and banner. The
+Workbench half, and the grouping rule this section relies on, is `design/workbench/design-notes.md` **§ 34**:
+cards stuck for one reason that one repair clears form ONE entry, keyed by `fixDetail.groupKey`, whose HEAD is the
+card the repair runs on. Card **MOTIR-7590**; the build is **MOTIR-7589**.
+
+### What stays per card
+
+Every card in an entry is still stuck, so **the tag, the List / Tree / Board / quick-view placements and the
+`/items` To fix filter stay per card, unchanged**. An entry is a Workbench idea; a card page is about one card.
+
+### The tag (Panel 1)
+
+Nothing visible changes. On a card that is NOT its entry's head, the accessible name and `title` gain a tail
+naming the head: _To fix · run died · with ACME-12_, _To fix · CI failed · with ACME-31_. The label form's
+`sr-only` tail grows the same way. A head, and a card stuck alone, keep today's name.
+
+### The banner (Panel 2)
+
+| card                              | sentence                | under it                                                                                                                          | link                                              |
+| --------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| head of a dead run                | today's `runDied`       | meta line `toFix.banner.carries`: _5 more work items are stuck with it: ACME-13, …_                                               | today's _See how to continue it_ (`#development`) |
+| a work item of that run           | today's `runDiedParent` | nothing                                                                                                                           | _Open ACME-12_ → `/items/ACME-12#development`     |
+| head of a pull-request group      | today's reason sentence | the meta line, then today's lead and `CopyableCodeBlock` (`motir fix ACME-31`)                                                    | today's _See its pull requests_                   |
+| another card on that pull request | today's reason sentence | `toFix.banner.repairedWithHead` in place of the lead and the command: _Repair it with **ACME-31** — they share one pull request._ | _Open ACME-31_ → `/items/ACME-31#development`     |
+| a card stuck alone                | today's                 | today's                                                                                                                           | today's                                           |
+
+- **A carried card points at the HEAD's page, not at a Workbench row.** The Workbench lists only the reader's own
+  work and is paged, so a row link misses for anyone reading a card someone else holds; the head's Development
+  block is where both repairs live.
+- **Only the head shows a command.** Two copies of one repair is what the entry removes. The meta line lists the
+  carried keys (bold, `--el-danger-surface-text`, regular weight, the lead's recipe), at most five, then _and N
+  more_.
+- The banner's frame, disc, sentence weight and link recipe are ToFixBanner's own; the new element is the meta line.
+
+### Copy
+
+| key (proposed)                  | en                                                                                                           | zh                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| `toFix.tagName.withHead`        | {name} · with {head}                                                                                         | {name} · 随 {head}                                  |
+| `toFix.banner.carries`          | {count, plural, one {# more work item is stuck with it} other {# more work items are stuck with it}}: {keys} | 另有 {count} 个工作项随它受阻：{keys}               |
+| `toFix.banner.carriesMore`      | and {count} more                                                                                             | 等另外 {count} 个                                   |
+| `toFix.banner.repairedWithHead` | Repair it with <b>{head}</b> — they share one pull request.                                                  | 随 <b>{head}</b> 一起修复——它们共用同一个拉取请求。 |
+| `toFix.banner.toHead`           | Open {head}                                                                                                  | 打开 {head}                                         |
+
+Colour only through `--el-*`: the meta line and the lead are `--el-danger-surface-text` on `--el-danger-surface`,
+the link `--el-text-strong`, and `--el-danger-text` appears only on the disc's `--el-danger` fill. The delta
+block's `rv-` rules are carried verbatim from `design/workbench/workbench--to-fix--review-agent.mock.html`.
+
+### GIVES / TAKES
+
+| card                       | GIVES                                                                                            | TAKES                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| **MOTIR-7589** (the build) | ELEMENT: the tag's `withHead` name, the four banner variants, the meta line, every string above. | Nothing                                                                                          |
+| **MOTIR-6878**             | Nothing                                                                                          | A leg's banner link now opens the head's page instead of scrolling to its own Development block. |
