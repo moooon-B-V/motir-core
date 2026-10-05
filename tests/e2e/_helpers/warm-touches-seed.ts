@@ -10,7 +10,7 @@
 // the Story.
 
 import { expect, type Page } from '@playwright/test';
-import { db } from './db-reset';
+import { adminDb } from './db-reset';
 import { createFirstProject, signUp } from './shell-session';
 import { workItemsService } from '@/lib/services/workItemsService';
 
@@ -41,13 +41,13 @@ export async function seedWarmTouchesFixture(
   await createFirstProject(page, PROJECT_NAME);
 
   const local = email.split('@')[0]!;
-  const user = await db.user.findFirst({ where: { email } });
-  const ws = await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
+  const user = await adminDb.user.findFirst({ where: { email } });
+  const ws = await adminDb.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
   expect(user, 'user exists after sign-up').not.toBeNull();
   expect(ws, 'auto workspace exists').not.toBeNull();
   // Bound to the project the browser is in, by name — a default project is also
   // seeded per workspace (MOTIR-4870), so an unordered read could pick that one.
-  const project = await db.project.findFirst({
+  const project = await adminDb.project.findFirst({
     where: { workspaceId: ws!.id, name: PROJECT_NAME },
   });
   expect(project, 'first project exists').not.toBeNull();
