@@ -268,9 +268,15 @@ test('a failed attempt closes its session, the conversation carries on, and the 
       .getByRole('main')
       .getByRole('button', { name: `Edit ${en.issueViews.status}`, exact: true })
       .click();
-    await expect(
-      page.getByRole('option', { name: new RegExp(`^${'To Do'}`) }).first(),
-    ).toContainText(held.sessionHeldOption);
+    // The edit swaps in the picker CLOSED; opening it is a second click.
+    await page
+      .getByRole('main')
+      .getByRole('combobox', { name: en.issueViews.status, exact: true })
+      .click();
+    const toDo = page.getByRole('option', { name: /^To Do/ });
+    await expect(toDo).toHaveAttribute('aria-disabled', 'true');
+    await expect(toDo).toContainText(held.sessionHeldOption);
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     expect((await cardOf(key)).status).toBe('planning');
     await beat();
