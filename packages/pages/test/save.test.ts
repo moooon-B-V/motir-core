@@ -581,8 +581,15 @@ describe('savePageMarkdown (§3, §8.2, MOTIR-7408)', () => {
         expectedRevision: 1,
       }).catch((err: unknown) => err);
 
+      // Not `size: reached`: the save converts the markdown a second time, on a
+      // doc with its own random Yjs clientID, and a clientID is varint-encoded —
+      // one under 2^28 (1 in 16) writes every reference to it a byte shorter, so
+      // two conversions of this text differ by 66,000 bytes. A size over the
+      // body cap is still only the MERGED state's: the update is under the save
+      // cap, which is half the body cap.
       expect(refusal).toBeInstanceOf(PageBodyTooLargeError);
-      expect(refusal).toMatchObject({ limit: PAGE_BODY_MAX_BYTES, size: reached });
+      expect(refusal).toMatchObject({ limit: PAGE_BODY_MAX_BYTES });
+      expect((refusal as PageBodyTooLargeError).size).toBeGreaterThan(PAGE_BODY_MAX_BYTES);
       expect(store.called('lockPage')).toBe(1);
       expect(store.called('updateBody')).toBe(0);
       expect(store.called('replaceDerivedLinks')).toBe(0);
