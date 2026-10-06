@@ -201,13 +201,22 @@ test('a failed attempt closes its session, the conversation carries on, and the 
     await beat();
   });
 
-  await chapter('A reload draws the same end — it is the server’s, not the stream’s', async () => {
-    await page.reload();
-    await expect(rail(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
-    await expect(endMarker(page)).toHaveAttribute('data-end-reason', 'failed');
-    await expect(composer(page)).toHaveCount(0);
-    await beat();
-  });
+  // An ENDED session is resumed by no door (AMENDMENT 23 §3), so a plain reload of
+  // the card's overlay opens an empty rail with the earlier-conversation notice.
+  // The session's OWN address — what a Plans row writes — still opens it, and what
+  // it draws there is read from the row: the end survives a fresh page.
+  await chapter(
+    'Opened by its address, the session draws the same end — it is the server’s, not the stream’s',
+    async () => {
+      const address = new URL(page.url());
+      address.searchParams.set('planSession', failedId);
+      await page.goto(address.pathname + address.search);
+      await expect(rail(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
+      await expect(endMarker(page)).toHaveAttribute('data-end-reason', 'failed');
+      await expect(composer(page)).toHaveCount(0);
+      await beat();
+    },
+  );
 
   await chapter('Start a new session — the conversation comes with it', async () => {
     const started = page.waitForResponse(
