@@ -1,5 +1,11 @@
 # @motir/design-system
 
+## 0.8.2
+
+### Patch Changes
+
+- 6f2f433: The `motir` palette gains a few warm touches (MOTIR-7582): the decorative accent is a warm orange, the Design type takes Citrine's gold, the peach and yellow washes warm, and two new roles, `--el-progress-fill` and `--el-editor-focus`, keep the change out of every other palette.
+
 ## 0.8.1
 
 ### Patch Changes
