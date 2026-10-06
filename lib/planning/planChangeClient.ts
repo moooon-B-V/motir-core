@@ -4,6 +4,7 @@ import type {
   DebugLandingDto,
   EarlierSessionDto,
   PlanChangeSessionDto,
+  PlanSessionRestartResultDto,
   PlanTargetHeldByDto,
   ResumableSessionDto,
 } from '@/lib/dto/planChange';
@@ -119,6 +120,39 @@ export async function startCopiedSession(
     { copyFrom: fromSessionId },
     signal,
   );
+}
+
+/** PLAN SOMETHING NEW pressed (MOTIR-7650; ADR AMENDMENT 3, A3.3): write the
+ *  fixed confirm onto the caller's own open session. Closes nothing. */
+export async function requestRestartConfirm(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto> {
+  return post<PlanChangeSessionDto>(
+    '/api/ai/plan-change/session/restart/confirm',
+    { sessionId },
+    signal,
+  );
+}
+
+/** The ANSWER to that confirm: `keep` returns the same session with its marker;
+ *  `confirm` ends it `restarted` and returns the NEW empty session to swap to. */
+export async function answerRestart(
+  sessionId: string,
+  answer: 'keep',
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto>;
+export async function answerRestart(
+  sessionId: string,
+  answer: 'confirm',
+  signal?: AbortSignal,
+): Promise<PlanSessionRestartResultDto>;
+export async function answerRestart(
+  sessionId: string,
+  answer: 'confirm' | 'keep',
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto | PlanSessionRestartResultDto> {
+  return post('/api/ai/plan-change/session/restart', { sessionId, answer }, signal);
 }
 
 /** One conversation BY ID — a reopened session (the Plans page's row). */
@@ -329,6 +363,8 @@ export type AskSettleResponse =
   | { outcome: 'debugging'; jobId: string; session: PlanChangeSessionDto }
   // That debug job's own settle (MOTIR-7049): the ONE card it wrote, if any.
   | { outcome: 'debugged'; landing: DebugLandingDto; session: PlanChangeSessionDto }
+  // A `new_session` turn (MOTIR-7649): the confirm is on the thread, no job ran.
+  | { outcome: 'confirming'; session: PlanChangeSessionDto }
   | { outcome: 'silent'; session: PlanChangeSessionDto };
 
 /**

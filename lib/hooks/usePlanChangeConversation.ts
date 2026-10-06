@@ -21,6 +21,8 @@ import {
   resumeContextualSession,
   settleAskJob,
   startCopiedSession,
+  requestRestartConfirm,
+  answerRestart,
   submitAskTurn,
   submitContextualPlan,
   attachMidRunTurn,
@@ -350,6 +352,16 @@ export interface PlanChangeConversationState {
    * Kept as the fallback for a state built without it (every rail test).
    */
   debugLandings?: Readonly<Record<string, DebugLandingDto>>;
+  /**
+   * PLAN SOMETHING NEW confirmed here (MOTIR-7650; ADR AMENDMENT 3): the id of the
+   * session that just ended `restarted`, for the rail's earlier-session line above
+   * the new session's opener. Null otherwise, and cleared by the next swap.
+   * Optional so a state built by hand needs no change.
+   */
+  restartedFrom?: string | null;
+  /** A confirm or keep answer is IN FLIGHT — the confirm's two buttons and the
+   *  control hold still until it lands. Optional for the same reason. */
+  restarting?: boolean;
 }
 
 const INITIAL: PlanChangeConversationState = {
@@ -551,6 +563,12 @@ export interface UsePlanChangeConversationOptions {
    */
   sessionIsResume?: boolean;
   /**
+   * The overlay SWAPPED to a new session in place (MOTIR-7650) — the caller puts
+   * its address where the old one's was. The hook already holds the session, so
+   * the `sessionId` that comes back through the address re-opens nothing.
+   */
+  onRestarted?: (sessionId: string) => void;
+  /**
    * The REFUSED gate a seeded re-plan starts from (story MOTIR-6068 · MOTIR-6210).
    * Two effects, both once-only:
    *  · the mount opens NOTHING — the caller's ordinary resumable conversation on
@@ -649,6 +667,7 @@ export function usePlanChangeConversation({
   sessionIsResume = false,
   seedGateId = null,
   onTriageChanged,
+  onRestarted,
 }: UsePlanChangeConversationOptions = {}) {
   const [state, setState] = useState<PlanChangeConversationState>(INITIAL);
   // The seed the FIRST send carries (MOTIR-6210). Seeded once from the option —
@@ -684,6 +703,12 @@ export function usePlanChangeConversation({
    * second Enter from firing a second turn.
    */
   const stoppingRef = useRef(false);
+  /** The session a restart swapped in (MOTIR-7650), so the address naming it
+   *  afterwards is recognised as already open. */
+  const adoptedSessionRef = useRef<string | null>(null);
+  /** A restart answer is in flight — set before the await, as `stoppingRef` is. */
+  const restartingRef = useRef(false);
+  const restartedCbRef = useRef(onRestarted);
   // A read-only mirror of the latest state, so a callback can read `jobId`/`planId`
   // without listing them as dependencies (which would re-create the callback — and
   // the rail's handlers — on every stream tick).
@@ -698,6 +723,7 @@ export function usePlanChangeConversation({
   useEffect(() => {
     stateRef.current = state;
     approvedCbRef.current = onApproved;
+    restartedCbRef.current = onRestarted;
     triageChangedRef.current = onTriageChanged;
     anchorRef.current = anchorId;
   });
@@ -837,6 +863,12 @@ export function usePlanChangeConversation({
   // a broken rail. An anchored item that was never planned simply has no thread
   // yet (`null`), which is an empty rail, not an error.
   useEffect(() => {
+    // The address now names the session a restart already swapped in (MOTIR-7650):
+    // it is on screen, so there is nothing to open.
+    if (sessionId && sessionId === adoptedSessionRef.current) return;
+    // Any other address opens as it always did, and the adoption is spent: coming
+    // BACK to the restarted session's address later must open it again.
+    adoptedSessionRef.current = null;
     const controller = new AbortController();
     void (async () => {
       try {
@@ -2162,11 +2194,107 @@ export function usePlanChangeConversation({
         readOnly: false,
         copyable: null,
         targetHeld: null,
+        restartedFrom: null,
       }));
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (!mountedRef.current) return;
       setState((s) => ({ ...s, errorCode: 'SESSION_UNAVAILABLE' }));
+    }
+  }, []);
+
+  /**
+   * PLAN SOMETHING NEW pressed (MOTIR-7650; ADR AMENDMENT 3, A3.3): the server
+   * writes the SAME fixed confirm the words produce. Nothing closes here, and a
+   * confirm already pending comes back unchanged.
+   */
+  const requestRestart = useCallback(async () => {
+    const session = stateRef.current.session;
+    if (!session || sessionEnded(session) || abortRef.current || restartingRef.current) return;
+    restartingRef.current = true;
+    setState((s) => ({ ...s, restarting: true }));
+    try {
+      const withConfirm = await requestRestartConfirm(session.id);
+      if (!mountedRef.current) return;
+      setState((s) => ({ ...s, session: withConfirm, restarting: false }));
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setState((s) => ({
+        ...s,
+        restarting: false,
+        errorCode:
+          err instanceof DOMException && err.name === 'AbortError'
+            ? s.errorCode
+            : 'SESSION_UNAVAILABLE',
+      }));
+    } finally {
+      restartingRef.current = false;
+    }
+  }, []);
+
+  /**
+   * The ANSWER to the confirm. `keep` lands the Keep planning marker and changes
+   * nothing else. `confirm` ends the session `restarted` (its cards go back) and
+   * SWAPS the overlay onto the new, empty session in place — the shape
+   * {@link startCopied} swaps with, plus the ended session's id for the rail's
+   * earlier-session line.
+   */
+  const answerRestartConfirm = useCallback(async (answer: 'confirm' | 'keep') => {
+    const session = stateRef.current.session;
+    if (!session || sessionEnded(session) || abortRef.current || restartingRef.current) return;
+    restartingRef.current = true;
+    setState((s) => ({ ...s, restarting: true }));
+    try {
+      if (answer === 'keep') {
+        const kept = await answerRestart(session.id, 'keep');
+        if (!mountedRef.current) return;
+        setState((s) => ({ ...s, session: kept, restarting: false }));
+        return;
+      }
+      const result = await answerRestart(session.id, 'confirm');
+      if (!mountedRef.current) return;
+      adoptedSessionRef.current = result.session.id;
+      lastAskTurnRef.current = null;
+      lastAskAnchorRef.current = null;
+      setState((s) => ({
+        ...s,
+        phase: 'idle',
+        session: result.session,
+        progress: null,
+        acts: [],
+        review: null,
+        liveReview: null,
+        discardedReview: null,
+        decided: null,
+        jobId: null,
+        planId: null,
+        approved: null,
+        errorCode: null,
+        outOfCredits: false,
+        stopping: false,
+        stopped: false,
+        queued: [],
+        earlier: null,
+        reopened: null,
+        readOnly: false,
+        copyable: null,
+        targetHeld: null,
+        restartedFrom: result.endedSessionId,
+        restarting: false,
+      }));
+      restartedCbRef.current?.(result.session.id);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setState((s) => ({
+        ...s,
+        restarting: false,
+        errorCode:
+          err instanceof DOMException && err.name === 'AbortError'
+            ? s.errorCode
+            : 'SESSION_UNAVAILABLE',
+      }));
+    } finally {
+      restartingRef.current = false;
     }
   }, []);
 
@@ -2180,5 +2308,7 @@ export function usePlanChangeConversation({
     dismissError,
     stop,
     startCopied,
+    requestRestart,
+    answerRestartConfirm,
   };
 }

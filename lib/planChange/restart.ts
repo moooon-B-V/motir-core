@@ -9,7 +9,7 @@
 
 /** The confirm's body (A3.2). Its answers are controls, never typed text. */
 export const NEW_SESSION_CONFIRM_BODY =
-  'Start something new? This closes the current planning session and gives its cards back.';
+  'Start something new? This closes the current planning session and gives its work items back.';
 
 /** The `system` marker Keep planning writes (A3.2). It is identified by its
  *  POSITION — the turn right after a confirm — never by these words. */

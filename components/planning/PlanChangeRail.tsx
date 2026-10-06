@@ -26,9 +26,11 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
+  SquarePen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { Spinner } from '@/components/ui/Spinner';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
@@ -64,6 +66,7 @@ import {
   CopiedDivider,
   copiedTurnCount,
   EndedComposerSlot,
+  RestartedDivider,
   SessionEndMarker,
   TakenBackNotice,
   TargetRefusal,
@@ -250,6 +253,13 @@ export interface PlanChangeRailProps {
    * its place.
    */
   onStartNewSession?: () => void;
+  /**
+   * PLAN SOMETHING NEW (MOTIR-7650; ADR AMENDMENT 3). `onRequestRestart` is the
+   * rail-head control — it raises the fixed confirm on the thread; `onAnswerRestart`
+   * answers that confirm. Optional: a host that offers no restart draws neither.
+   */
+  onRequestRestart?: () => void;
+  onAnswerRestart?: (answer: 'confirm' | 'keep') => void;
 }
 
 export function PlanChangeRail({
@@ -282,6 +292,8 @@ export function PlanChangeRail({
   staleRefused = false,
   conversationElsewhere = null,
   onStartNewSession,
+  onRequestRestart,
+  onAnswerRestart,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tp = useTranslations('approvalGate.planApproval');
@@ -299,6 +311,7 @@ export function PlanChangeRail({
   const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
   const ts = useTranslations('planningWorkspace.session');
+  const tr = useTranslations('planningWorkspace.restart');
   const format = useFormatter();
   const [draft, setDraft] = useState(initialDraft ?? '');
   // THE SEEDED SEND THAT FAILED keeps its words (MOTIR-6210). The composer clears
@@ -411,6 +424,23 @@ export function PlanChangeRail({
   // THE ENDED SESSION (AMENDMENT 23 §1): read from the server's row, so a reload
   // draws the same end. It accepts no turn — the composer slot says so instead.
   const ended = Boolean(state.session?.endedAt);
+  // PLAN SOMETHING NEW (MOTIR-7650; design panels 1 + 5): offered on the viewer's
+  // OWN open `conversation` session only — never on a guide conversation (A3.5), a
+  // read-only reopen, somebody else's session, or an ended one, which already
+  // shows its own way forward. Disabled, with its reason, while a run streams.
+  const restartable =
+    Boolean(onRequestRestart) &&
+    state.session !== null &&
+    !ended &&
+    !state.readOnly &&
+    state.session.origin === 'conversation' &&
+    state.session.startedByViewer !== false;
+  const restartBusy = busy || Boolean(state.restarting);
+  // The confirm is ANSWERABLE while it is the latest turn of an open session
+  // (A3.2): a later turn leaves it as a record without its buttons.
+  const lastTurn = turns.at(-1) ?? null;
+  const confirmPending =
+    !ended && !state.readOnly && lastTurn?.confirm === 'new_session' && Boolean(onAnswerRestart);
   // ANOTHER HOLDER'S CARD (AMENDMENT 23 §4) disables the composer while it is in
   // the tray; taking it out of the tray (other targets remaining) re-enables it.
   const held = state.targetHeld ?? null;
@@ -477,6 +507,13 @@ export function PlanChangeRail({
         <Pill tone="neutral" className="ml-auto" data-testid="planning-mode-chip">
           {followUp ? t('mode.followUp') : t(MODE_LABEL_KEY[launch.mode])}
         </Pill>
+        {restartable ? (
+          <RestartControl
+            disabled={restartBusy}
+            streaming={busy}
+            onPress={() => onRequestRestart?.()}
+          />
+        ) : null}
       </div>
 
       <div
@@ -567,6 +604,21 @@ export function PlanChangeRail({
           </p>
         ) : null}
 
+        {/* THE SWAP (MOTIR-7650; design panel 4): the overlay is on the NEW session
+            after Plan something new, and this one line points back at the one that
+            just closed. Its live region tells a screen reader what changed. */}
+        {state.restartedFrom && state.session && !ended ? (
+          <>
+            <RestartedDivider
+              fromSessionId={state.restartedFrom}
+              anchorKey={state.session.targetKeys[0] ?? null}
+            />
+            <p className="sr-only" aria-live="polite">
+              {tr('swapped')}
+            </p>
+          </>
+        ) : null}
+
         {/* The opener — the canvas already shows the plan, so "empty" is never a
             blank screen; only the conversation is empty (design panel 6). */}
         <Bubble role="assistant">
@@ -622,6 +674,12 @@ export function PlanChangeRail({
               // Keyed on the ASSISTANT turn that carries it — `correction.turnId`
               // names the USER turn the re-run replays, which is a different turn.
               correction={latest && turn.id === latest.id ? correctable : null}
+              restartConfirm={
+                confirmPending && turn.id === lastTurn?.id && onAnswerRestart
+                  ? { pending: restartBusy, onAnswer: onAnswerRestart }
+                  : null
+              }
+              afterConfirm={i > 0 && turns[i - 1]?.confirm === 'new_session'}
             />
             {/* THE COPIED DIVIDER (AMENDMENT 23 §6; MOTIR-7633 sheet 3), under the
               last turn carried over from the ended session. */}
@@ -1161,6 +1219,15 @@ interface TurnProps {
     corrected: boolean;
     onCorrect: (turnId: string) => void;
   } | null;
+  /** The Plan something new confirm's two answers (MOTIR-7650), on the confirm
+   *  turn while it is still answerable. Null on every other turn. */
+  restartConfirm: {
+    pending: boolean;
+    onAnswer: (answer: 'confirm' | 'keep') => void;
+  } | null;
+  /** This system turn sits right after a confirm — it is the Keep planning
+   *  marker (A3.3), which the decision identifies by position. */
+  afterConfirm: boolean;
 }
 
 /** The one pending question's DOM id — the composer's "See it" jump target.
@@ -1182,14 +1249,15 @@ const PENDING_QUESTION_ID = 'plan-change-pending-question';
 const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.ReactNode> = {
   // The submission MARKER — its body is the accumulated intent that went out,
   // which is provenance, not conversation, so it renders as a quiet divider.
-  system: function SystemTurn() {
+  system: function SystemTurn({ afterConfirm }: TurnProps) {
     const tc = useTranslations('planningWorkspace.conversation');
+    const tr = useTranslations('planningWorkspace.restart');
     return (
       <p
         className="text-center text-xs text-(--el-text-secondary)"
-        data-testid="plan-change-marker"
+        data-testid={afterConfirm ? 'planning-restart-kept' : 'plan-change-marker'}
       >
-        {tc('submitted')}
+        {afterConfirm ? tr('kept') : tc('submitted')}
       </p>
     );
   },
@@ -1206,9 +1274,45 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
     isPending,
     correction,
     debugOutcome,
+    restartConfirm,
   }: TurnProps) {
     const tc = useTranslations('planningWorkspace.conversation');
+    const tr = useTranslations('planningWorkspace.restart');
     const asking = turn.question !== null;
+    // THE PLAN SOMETHING NEW CONFIRM (MOTIR-7650; A3.2): a planner bubble with the
+    // fixed question, read from the CATALOGUE so it speaks the viewer's locale —
+    // never the stored body. Not a question: no asking tint, no label.
+    if (turn.confirm === 'new_session') {
+      return (
+        <div data-testid="planning-restart-confirm-turn">
+          <Bubble role="assistant">
+            <span>{tr('confirm.body')}</span>
+            {restartConfirm ? (
+              <span role="group" aria-label={tr('control')} className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => restartConfirm.onAnswer('confirm')}
+                  disabled={restartConfirm.pending}
+                  data-testid="planning-restart-confirm"
+                >
+                  {tr('confirm.yes')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => restartConfirm.onAnswer('keep')}
+                  disabled={restartConfirm.pending}
+                  data-testid="planning-restart-keep"
+                >
+                  {tr('confirm.keep')}
+                </Button>
+              </span>
+            ) : null}
+          </Bubble>
+        </div>
+      );
+    }
     return (
       <>
         {/* Why a SECOND assistant turn exists, in the passive marker voice. It
@@ -1323,6 +1427,42 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
     );
   },
 };
+
+/** THE PLAN SOMETHING NEW CONTROL (MOTIR-7650; design panel 1) — the rail head's
+ *  last item. While a run streams it stays in place, disabled, and names why in
+ *  its tooltip (panel 5). */
+function RestartControl({
+  disabled,
+  streaming,
+  onPress,
+}: {
+  disabled: boolean;
+  streaming: boolean;
+  onPress: () => void;
+}) {
+  const tr = useTranslations('planningWorkspace.restart');
+  const button = (
+    <Button
+      variant="secondary"
+      size="sm"
+      leftIcon={<SquarePen className="size-3.5" aria-hidden="true" />}
+      onClick={onPress}
+      disabled={disabled}
+      data-testid="planning-restart-control"
+    >
+      {tr('control')}
+    </Button>
+  );
+  if (!streaming) return button;
+  // A disabled button gets no pointer events, so the tooltip hangs off a wrapper.
+  return (
+    <Tooltip content={tr('disabledStreaming')} delayMs={300}>
+      <span className="inline-flex" tabIndex={0} aria-label={tr('disabledStreaming')}>
+        {button}
+      </span>
+    </Tooltip>
+  );
+}
 
 function Turn(props: TurnProps) {
   const Render = TURN_RENDERERS[props.turn.role];

@@ -1,7 +1,7 @@
 'use client';
 
 import { useFormatter, useTranslations } from 'next-intl';
-import { ArrowUp, Lock, Sparkles, Undo2, Users } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Lock, Sparkles, Undo2, Users } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
@@ -113,6 +113,43 @@ export function CopiedDivider({
           className="rounded-(--radius-control) font-semibold text-(--el-link) underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           {ts('copiedFromOpen')}
+        </a>
+      </span>
+      <span className="h-px flex-1 bg-(--el-border)" aria-hidden />
+    </div>
+  );
+}
+
+/** THE EARLIER-SESSION LINE — the overlay just swapped to a new session after
+ *  Plan something new (MOTIR-7650; `planning-workspace--plan-something-new.mock.html`
+ *  panel 4). The copied divider's idiom, pointing BACK: **Open it** reopens the
+ *  ended session read-only by id, in the same overlay. */
+export function RestartedDivider({
+  fromSessionId,
+  anchorKey,
+}: {
+  fromSessionId: string;
+  anchorKey: string | null;
+}) {
+  const tr = useTranslations('planningWorkspace.restart');
+  const { href, open } = useOpenPlanningWorkspace(
+    anchorKey
+      ? { kind: 'work-item', itemKey: anchorKey, sessionId: fromSessionId }
+      : { kind: 'project', sessionId: fromSessionId },
+  );
+  return (
+    <div role="note" data-testid="planning-restart-earlier" className="flex items-center gap-2">
+      <span className="h-px flex-1 bg-(--el-border)" aria-hidden />
+      <span className="flex items-center gap-1.5 text-xs text-(--el-text-secondary)">
+        <ArrowLeft aria-hidden className="size-3.5" />
+        <span>{tr('earlier')}</span>
+        <span aria-hidden>·</span>
+        <a
+          href={href}
+          onClick={open}
+          className="rounded-(--radius-control) font-semibold text-(--el-link) underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        >
+          {tr('earlierOpen')}
         </a>
       </span>
       <span className="h-px flex-1 bg-(--el-border)" aria-hidden />
