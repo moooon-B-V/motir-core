@@ -465,3 +465,42 @@ describe('workspace isolation', () => {
     },
   );
 });
+
+describe('the doors refuse a malformed or unauthenticated request before any write', () => {
+  const rawPost = (path: string, body: string) =>
+    new Request(`${BASE}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    });
+
+  it('an unauthenticated caller is 401 at both doors', async () => {
+    session.current = null;
+    const a = await restart(
+      post('/api/ai/plan-change/session/restart', { sessionId: 'x', answer: 'keep' }),
+    );
+    const b = await confirm(
+      post('/api/ai/plan-change/session/restart/confirm', { sessionId: 'x' }),
+    );
+    expect([a.status, b.status]).toEqual([401, 401]);
+  });
+
+  it('no active project is refused at both doors', async () => {
+    activeCtx.current = null;
+    const a = await restart(
+      post('/api/ai/plan-change/session/restart', { sessionId: 'x', answer: 'keep' }),
+    );
+    const b = await confirm(
+      post('/api/ai/plan-change/session/restart/confirm', { sessionId: 'x' }),
+    );
+    expect(a.status).toBeGreaterThanOrEqual(400);
+    expect(b.status).toBe(a.status);
+  });
+
+  it('a body that is not JSON, or names no session, is 400 at both doors', async () => {
+    const a = await restart(rawPost('/api/ai/plan-change/session/restart', '{not json'));
+    const b = await confirm(rawPost('/api/ai/plan-change/session/restart/confirm', '{not json'));
+    const c = await restart(post('/api/ai/plan-change/session/restart', { answer: 'keep' }));
+    expect([a.status, b.status, c.status]).toEqual([400, 400, 400]);
+  });
+});
