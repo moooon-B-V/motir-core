@@ -171,6 +171,9 @@ export interface AbandonedPlanSweepSummary {
  *  without a live motir-ai. Production uses the shipped one. */
 export interface AbandonedPlanDeps {
   resolveJobState: typeof resolveJobState;
+  /** The session end (MOTIR-7638), behind the same seam so a test can prove a
+   *  failed end leaves the sweep running. Absent means the shipped one. */
+  endSessionForAbandonedPlan?: typeof endSessionForAbandonedPlan;
 }
 
 const defaultDeps: AbandonedPlanDeps = {
@@ -344,8 +347,9 @@ export const abandonedPlanService = {
       // gives the session's cards back, and it is idempotent with the relay.
       // Best-effort: the plan's decline above is already committed, and the
       // lock sweep's lease still clears a hold this fails to release.
-      await endSessionForAbandonedPlan(plan).catch((err: unknown) =>
-        console.warn(`[abandoned-plan-sweep] ending the session of plan ${plan.id} failed`, err),
+      await (deps.endSessionForAbandonedPlan ?? endSessionForAbandonedPlan)(plan).catch(
+        (err: unknown) =>
+          console.warn(`[abandoned-plan-sweep] ending the session of plan ${plan.id} failed`, err),
       );
 
       // `warn`, not `info`: the repo's lint allows only warn/error, and the level

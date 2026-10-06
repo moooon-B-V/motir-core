@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { abandonedPlanService } from '@/lib/services/abandonedPlanService';
 import { planSessionEndService } from '@/lib/services/planSessionEndService';
@@ -156,6 +156,39 @@ describe('the abandoned-plan sweep — the backstop', () => {
       await abandonedPlanService.reconcileAbandoned();
 
       expect(await endOf(sessionId)).toEqual(first);
+    },
+  );
+
+  it(
+    'a session end that throws is logged, and the plan is still declined',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const card = await seedCard();
+      const sessionId = await openSession(card);
+      const plan = await abandonedPlanIn(sessionId);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await abandonedPlanService.reconcileAbandoned({
+        deps: {
+          resolveJobState: async () => {
+            throw new Error('unused: the plan has no source job');
+          },
+          endSessionForAbandonedPlan: async () => {
+            throw new Error('the end failed');
+          },
+        },
+      });
+
+      expect(result.declined).toBe(1);
+      expect((await adminDb.plan.findUniqueOrThrow({ where: { id: plan.id } })).status).toBe(
+        'declined',
+      );
+      // Nothing ended the session; the lock sweep's lease is what clears the hold.
+      expect((await endOf(sessionId)).endReason).toBeNull();
+      expect(
+        warn.mock.calls.some((c) => String(c[0]).includes(`ending the session of plan ${plan.id}`)),
+      ).toBe(true);
+      warn.mockRestore();
     },
   );
 });

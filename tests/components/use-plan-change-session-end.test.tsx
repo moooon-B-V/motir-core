@@ -170,6 +170,13 @@ describe('the pure readers', () => {
     ).toEqual({ target: 'ACME-40', holder: null, freesBy: null, holderSessionId: null });
     expect(targetHeldFrom(new PlanEditsClientError(500, null))).toBeNull();
     expect(targetHeldFrom(new Error('boom'))).toBeNull();
+    // A 409 with no body still reads as a refusal, with nothing named.
+    expect(targetHeldFrom(new PlanEditsClientError(409, 'PLAN_TARGET_LOCKED'))).toEqual({
+      target: '',
+      holder: null,
+      freesBy: null,
+      holderSessionId: null,
+    });
   });
 
   it('a session has ended only when the SERVER row says so', () => {
@@ -293,4 +300,48 @@ describe('Start a new session (AMENDMENT 23 §6)', () => {
     expect(result.current.state.errorCode).toBe('SESSION_UNAVAILABLE');
     expect(result.current.state.session?.id).toBe('s1');
   });
+
+  it('an ABORTED copy is no error at all, and the ended thread stays', async () => {
+    open.mockResolvedValue(ended(session(['Add recurring invoices.'])));
+    startCopied.mockRejectedValue(new DOMException('aborted', 'AbortError'));
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.startCopied();
+    });
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.session?.id).toBe('s1');
+  });
+
+  it.each([
+    ['answers', (d: Deferred) => d.resolve({ ...session([]), id: 's2' })],
+    ['fails', (d: Deferred) => d.reject(new PlanEditsClientError(500, null))],
+  ])('a copy that %s after the overlay closed writes nothing', async (_label, settle) => {
+    open.mockResolvedValue(ended(session(['Add recurring invoices.'])));
+    const pending = deferred();
+    startCopied.mockReturnValue(pending.promise);
+    const { result, unmount } = await mounted();
+    const copying = result.current.startCopied();
+    unmount();
+    settle(pending);
+    await act(async () => {
+      await copying;
+    });
+    expect(startCopied).toHaveBeenCalledWith('s1');
+  });
 });
+
+interface Deferred {
+  promise: Promise<unknown>;
+  resolve: (v: unknown) => void;
+  reject: (e: unknown) => void;
+}
+
+function deferred(): Deferred {
+  let resolve!: (v: unknown) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<unknown>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}

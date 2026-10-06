@@ -242,6 +242,33 @@ describe('BoardCardHeldRefusal — the PLAN refusal, in the footer slot (MOTIR-6
     );
   });
 
+  it('an open SESSION hold names the session, in both the marker and the sibling count (MOTIR-7640)', () => {
+    renderFooter({
+      kind: 'plan',
+      workItemId: 'wi_a',
+      itemKey: 'PROD-7',
+      plan: {
+        kind: 'session',
+        itemKey: 'PROD-7',
+        workItemId: 'wi_a',
+        planId: null,
+        planStatus: null,
+        sessionId: 'pcs_1',
+        anchorKey: 'PROD-10',
+        holderId: 'u_ada',
+        holderName: 'Ada Lovelace',
+        heldByViewer: false,
+      },
+      siblings: 2,
+    });
+    const footer = screen.getByTestId('footer');
+    expect(footer.textContent).toContain('Session · PROD-10');
+    expect(footer.textContent).toContain('2 other items on this board are in this session.');
+    expect(footer.querySelector('[data-plan-footer]')?.getAttribute('data-plan-footer')).toBe(
+      'session:pcs_1',
+    );
+  });
+
   it('a gate refusal never draws in the footer slot', () => {
     renderFooter({
       kind: 'gate',

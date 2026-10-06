@@ -8,6 +8,8 @@ import { usersService } from '@/lib/services/usersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
@@ -419,5 +421,63 @@ describe('the target lock between sessions of one scope (AMENDMENT 17 §6)', () 
     ).rejects.toBeInstanceOf(PlanTargetLockedError);
     // Refused whole: no session of mine was left behind holding nothing.
     expect(await adminDb.planChangeSession.count({ where: { createdById: fx.ownerId } })).toBe(0);
+  });
+});
+
+describe('the end and the scope notice, read by id (AMENDMENT 23 §1; MOTIR-6024)', () => {
+  it('names who ENDED a person-ended session, and nobody for an unknown id', async () => {
+    const started = await planChangeSessionsService.startWithFirstTurn(
+      pctxFor(fx.ownerId),
+      PROJECT_SCOPE,
+      'Split the import story.',
+    );
+    await planSessionEndService.endSession(started.id, 'declined', {
+      workspaceId: fx.workspaceId,
+      endedById: fx.ownerId,
+    });
+    const owner = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ownerId } });
+
+    const read = await planChangeSessionsService.getById(pctxFor(fx.ownerId), started.id);
+    expect(read.endReason).toBe('declined');
+    expect(read.endedBy).toEqual({ id: owner.id, name: owner.name });
+
+    await expect(
+      withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeSessionRepository.findEnder('pcs_missing', fx.workspaceId, tx),
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it('the scope notice skips the session it was asked to exclude', async () => {
+    const older = await planChangeSessionsService.startWithFirstTurn(
+      pctxFor(fx.ownerId),
+      PROJECT_SCOPE,
+      'First conversation.',
+    );
+    await endIt(older.id);
+    const newer = await planChangeSessionsService.startWithFirstTurn(
+      pctxFor(fx.ownerId),
+      PROJECT_SCOPE,
+      'Second conversation.',
+    );
+
+    const latest = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeSessionRepository.findLatestConversationInScope(
+        fx.projectId,
+        PROJECT_SCOPE.scopeKey,
+        fx.workspaceId,
+        newer.id,
+        tx,
+      ),
+    );
+    expect(latest?.id).toBe(older.id);
+  });
+
+  it('an empty hidden set withholds no plan and reads nothing', async () => {
+    await expect(
+      withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeSessionRepository.isPlanWithheld('plan_any', [], tx),
+      ),
+    ).resolves.toBe(false);
   });
 });
