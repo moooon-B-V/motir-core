@@ -7300,7 +7300,7 @@
         "notDecidable": "This plan can’t be decided yet — nobody has been asked to approve it. Nothing was changed.",
         "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it.",
         "askSilent": "Nothing came back. Try asking that a different way.",
-        "failedClosed": "That attempt didn't go through, so this session has closed. The cards it held are back where they were."
+        "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were."
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
       "correctToPlan": "Propose changes instead",
