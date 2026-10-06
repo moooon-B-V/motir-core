@@ -1,18 +1,20 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/plans',
   useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
-vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush: vi.fn(), shallowReplace: vi.fn() }));
+const { shallowPush } = vi.hoisted(() => ({ shallowPush: vi.fn() }));
+vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
 
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import {
   CopiedDivider,
   EndedComposerSlot,
+  RestartedDivider,
   SessionEndMarker,
   TakenBackNotice,
   TargetRefusal,
@@ -186,5 +188,21 @@ describe('EndedComposerSlot', () => {
       <EndedComposerSlot session={failed} readOnly={false} label="ACME-40" projectName="PayFlow" />,
     );
     expect(screen.getByTestId('planning-read-only').textContent).toContain('ACME-40');
+  });
+});
+
+describe('RestartedDivider', () => {
+  it.each([
+    ['a card session', 'ACME-40'],
+    ['a project session', null],
+  ] as const)('on %s, Open it reopens the ended session by id', (_name, anchorKey) => {
+    renderWithIntl(<RestartedDivider fromSessionId="s1" anchorKey={anchorKey} />);
+    expect(screen.getByTestId('planning-restart-earlier').textContent).toContain(
+      'Your earlier session is closed',
+    );
+    const link = screen.getByRole('link', { name: 'Open it' });
+    expect(link.getAttribute('href')).toContain('planSession=s1');
+    fireEvent.click(link);
+    expect(shallowPush).toHaveBeenLastCalledWith(expect.stringContaining('planSession=s1'));
   });
 });
