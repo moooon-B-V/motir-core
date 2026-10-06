@@ -1078,6 +1078,10 @@ export function usePlanChangeConversation({
         },
       );
       if (failed) {
+        // The run is OVER at the failure: release it before the end re-read, or
+        // a Try again pressed while the re-read waits would find a run still in
+        // flight and do nothing.
+        if (abortRef.current === controller) abortRef.current = null;
         if (mountedRef.current) await settleEnd(controller.signal);
         return;
       }
@@ -1474,6 +1478,8 @@ export function usePlanChangeConversation({
           () => {},
         );
         if (failed) {
+          // Released before the end re-read, as a plan run's failure is.
+          if (abortRef.current === controller) abortRef.current = null;
           if (mountedRef.current) await settleEnd(controller.signal);
           return;
         }

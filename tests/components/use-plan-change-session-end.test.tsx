@@ -221,6 +221,29 @@ describe('a failed attempt ENDS the session (AMENDMENT 23 §2)', () => {
     expect(result.current.state.errorCode).not.toBeNull();
   });
 
+  it('Try again works while the end re-read is still waiting — the failed run is over', async () => {
+    submitAsk.mockResolvedValue({ jobId: 'ask-1', turnId: 't0', session: session(['x']) });
+    rerunAsk.mockResolvedValue({ jobId: 'ask-2', turnId: 't0', session: session(['x']) });
+    streamAsk.mockImplementation(
+      async (_job: string, _signal: AbortSignal, onError: (code: string | null) => void) => {
+        onError('PLANNER_FAILED');
+      },
+    );
+    // The first re-read never answers, so the failed send is still settling.
+    readSession.mockImplementationOnce(() => new Promise(() => {}));
+    const { result } = await mounted();
+
+    await act(async () => {
+      void result.current.send('Split it.');
+    });
+    await waitFor(() => expect(result.current.state.errorCode).not.toBeNull());
+
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(rerunAsk).toHaveBeenCalledWith('t0', expect.anything(), expect.anything());
+  });
+
   it('takes NO Retry and NO send inside an ended session — the only way on is a new one', async () => {
     open.mockResolvedValue(ended(session(['Add recurring invoices.'])));
     const { result } = await mounted();
