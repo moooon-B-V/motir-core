@@ -51,6 +51,7 @@
     "coverage:platform-admin": "vitest run --config vitest.coverage.platform-admin.config.ts --coverage",
     "coverage:agent-instance-run": "vitest run --config vitest.coverage.agent-instance-run.config.ts --coverage",
     "coverage:pages": "vitest run --config vitest.coverage.pages.config.ts --coverage",
+    "coverage:session-lifecycle": "vitest run --config vitest.coverage.session-lifecycle.config.ts --coverage",
     "test:guards": "vitest run --config vitest.guards.config.ts",
     "test:docs-guards": "vitest run --config vitest.docs.config.ts",
     "test:watch": "vitest",
