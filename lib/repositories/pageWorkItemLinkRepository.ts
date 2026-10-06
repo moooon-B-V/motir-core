@@ -1,4 +1,4 @@
-import type { Prisma } from '@/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 
 // Page ↔ work-item link repository — single operations on `page_work_item_link`
 // (Story MOTIR-7565 · MOTIR-7571), `docs/decisions/pages.md` §8.1. The
@@ -24,6 +24,28 @@ export interface DerivedPageLinkRecord {
   source: DerivedPageLinkSourceValue;
   createdById: string | null;
   createdAt: Date;
+}
+
+/**
+ * One LIVE page that links to a work item, grouped from its link rows
+ * (MOTIR-7573): every source it links by, sorted, and what its place needs —
+ * the folder its topmost page is filed in, and its direct parent's title.
+ */
+export interface WorkItemPageLinkRecord {
+  pageId: string;
+  title: string;
+  updatedAt: Date;
+  sources: Array<'mention' | 'embed' | 'manual'>;
+  /** The folder the page's TOPMOST page is filed in (a sub-page carries none). */
+  placeFolderId: string | null;
+  /** The direct parent page's title; `null` for a top-level page. */
+  parentPageTitle: string | null;
+}
+
+/** The last page a page of the read served — the `(updated_at, id)` it seeks after. */
+export interface WorkItemPagesSeek {
+  updatedAt: Date;
+  id: string;
 }
 
 /** A row `createDerived` writes. */
@@ -78,5 +100,41 @@ export const pageWorkItemLinkRepository = {
       skipDuplicates: true,
     });
     return result.count;
+  },
+
+  /**
+   * The LIVE pages linking to one work item, ONE row per page however many link
+   * rows it has (MOTIR-7573), newest edit first and keyset-paged on
+   * `(updated_at, id)` descending. One statement: the link rows grouped by page,
+   * joined to the live page, and its topmost and parent page for its place. An
+   * archived page is left out; a deleted one has no rows (the FK cascade).
+   * `take` is the caller's page size plus its look-ahead.
+   */
+  async listPagesForWorkItem(
+    workItemId: string,
+    after: WorkItemPagesSeek | null,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemPageLinkRecord[]> {
+    const seek = after
+      ? Prisma.sql`AND (p."updated_at", p."id") < (${after.updatedAt}::timestamptz, ${after.id})`
+      : Prisma.empty;
+    return tx.$queryRaw<WorkItemPageLinkRecord[]>`
+      SELECT p."id" AS "pageId",
+             p."title",
+             p."updated_at" AS "updatedAt",
+             array_agg(DISTINCT l."source"::text ORDER BY l."source"::text) AS "sources",
+             COALESCE(top."folder_id", p."folder_id") AS "placeFolderId",
+             parent."title" AS "parentPageTitle"
+        FROM "page_work_item_link" l
+        JOIN "page" p ON p."id" = l."page_id" AND p."archived_at" IS NULL
+        LEFT JOIN "page" top ON top."id" = p."ancestor_page_ids"[1]
+        LEFT JOIN "page" parent
+          ON parent."id" = p."ancestor_page_ids"[cardinality(p."ancestor_page_ids")]
+       WHERE l."work_item_id" = ${workItemId}
+         ${seek}
+       GROUP BY p."id", top."folder_id", parent."title"
+       ORDER BY p."updated_at" DESC, p."id" DESC
+       LIMIT ${take}`;
   },
 };
