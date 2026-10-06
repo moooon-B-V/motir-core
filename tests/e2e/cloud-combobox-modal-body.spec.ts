@@ -116,10 +116,11 @@ test('the Add-a-model picker shows its whole menu inside the dialog and scrolls 
   expect(o.y + o.height).toBeLessThanOrEqual(l.y + l.height + 1);
 
   // And picking it works — the menu closes onto the chosen value.
+  const lastLabel = (await last.innerText()).trim();
   await last.click();
   await expect(listbox).toHaveCount(0);
   await expect(dialog.getByRole('combobox', { name: planning.add.modelLabel })).toContainText(
-    CANDIDATES[CANDIDATES.length - 1]!,
+    lastLabel,
   );
 });
 
