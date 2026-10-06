@@ -166,6 +166,87 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     expect(listbox.className).toContain('overflow-y-auto');
   });
 
+  // MOTIR-7655: the real Modal wraps its fields in `Modal.Body`, an
+  // `overflow-y-auto` SCROLL box inside the hard-clipping, transformed panel.
+  // An absolute menu there extended the body's scroll area and was cut at its
+  // visible edge — on the short Add-a-model dialog only one option showed. The
+  // menu must now lift out with `position: fixed` (laid out against the panel,
+  // which the centring transform makes its containing block), stay in the
+  // dialog's DOM, fit the panel, and never rise above the body's top (the
+  // dialog header).
+  function ScrollBodyDialogHost() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+      <div
+        role="dialog"
+        data-surface="modal"
+        data-testid="panel"
+        style={{ overflowY: 'hidden', transform: 'translate(-50%, -50%)' }}
+      >
+        <div data-testid="body" style={{ overflowY: 'auto' }}>
+          <Combobox
+            label="Model"
+            options={TALL_OPTIONS}
+            value={value}
+            onChange={setValue}
+            searchable
+          />
+        </div>
+      </div>
+    );
+  }
+
+  function openIn(panelRect: DOMRect, bodyRect: DOMRect, triggerRect: DOMRect) {
+    render(<ScrollBodyDialogHost />);
+    screen.getByTestId('panel').getBoundingClientRect = () => panelRect;
+    screen.getByTestId('body').getBoundingClientRect = () => bodyRect;
+    const trigger = screen.getByRole('combobox', { name: 'Model' });
+    trigger.getBoundingClientRect = () => triggerRect;
+    fireEvent.click(trigger);
+    fireEvent.resize(window);
+    const listbox = screen.getByRole('listbox', { name: 'Model' });
+    return { listbox, menu: listbox.parentElement as HTMLElement };
+  }
+
+  it('lifts the menu out of a scrolling Modal.Body with fixed positioning, below the trigger', () => {
+    // Panel 100–420; body 150–360; trigger near the body's top at 170–202.
+    const { listbox, menu } = openIn(rect(100, 420), rect(150, 360), rect(170, 202));
+
+    // Still INSIDE the dialog (focus scope, accessibility tree)…
+    expect(screen.getByTestId('panel').contains(listbox)).toBe(true);
+    // …but fixed, so the scroll body no longer clips it or grows a scrollbar.
+    expect(menu.style.position).toBe('fixed');
+    expect(menu.className).not.toContain('top-full');
+    expect(menu.className).not.toContain('absolute');
+    // Offsets are measured from the panel (the transformed containing block):
+    // trigger bottom 202 + 4px gap − panel top 100.
+    expect(menu.style.top).toBe('106px');
+    expect(menu.style.minWidth).toBe('360px');
+    // Clamped to the PANEL's room below the trigger (420 − 202 − 4 − 8 = 206),
+    // not the body's (360 − 202): the menu may overlay the dialog footer.
+    const maxH = parseInt(listbox.style.maxHeight, 10);
+    expect(maxH).toBeGreaterThan(0);
+    expect(maxH).toBeLessThanOrEqual(206);
+  });
+
+  it('flips above inside a scrolling Modal.Body without rising over the body top (the header)', () => {
+    // Trigger low in the panel: 56px of room below it, 158px above it down to
+    // the body's top (320 − 150 − 4 − 8).
+    const { listbox, menu } = openIn(rect(100, 420), rect(150, 360), rect(320, 352));
+
+    expect(menu.style.position).toBe('fixed');
+    expect(menu.className).not.toContain('bottom-full');
+    // Anchored by its bottom edge, measured from the panel's bottom (420):
+    // 420 − (320 − 4) = 104.
+    expect(menu.style.bottom).toBe('104px');
+    expect(menu.style.top).toBe('');
+    // The list fits the 158px above the trigger, so the menu's top stays at or
+    // below the body's top and never covers the dialog header.
+    const maxH = parseInt(listbox.style.maxHeight, 10);
+    expect(maxH).toBeGreaterThan(0);
+    expect(maxH).toBeLessThanOrEqual(158);
+  });
+
   // MOTIR-1346: the Advanced-filter builder is a NON-modal anchored Popover
   // (role="dialog" but NO data-surface="modal") whose overflow-hidden panel +
   // inner overflow-y-auto scroll body CLIP an inline menu — the field/operator
