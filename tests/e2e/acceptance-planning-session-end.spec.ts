@@ -35,6 +35,8 @@ import { signIn } from './_helpers/shell-session';
 import { seedPlanningAnchorTree, PLANNING_ANCHOR_PASSWORD } from './_helpers/planning-anchor-seed';
 import { latestPlanningSession } from './_helpers/planChangeConversation';
 import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { projectsService } from '@/lib/services/projectsService';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 import en from '@/messages/en.json';
 
@@ -316,20 +318,20 @@ test('a failed attempt closes its session, the conversation carries on, and the 
       password: PLANNING_ANCHOR_PASSWORD,
       name: 'Second Member',
     });
-    await adminDb.workspaceMembership.create({
-      data: {
-        userId: mate.id,
-        workspaceId: session.workspaceId,
-        workspaceRole: 'member',
-        activeProjectId: project.id,
-      },
-    });
+    // Through the service, so the cloud org membership comes with the workspace
+    // one: a member with no org cannot read the AI access the item page asks for.
+    await workspacesService.addMember({ userId: mate.id, workspaceId: session.workspaceId });
     await addToProjectAs({
       key: seed.projectKey,
       actorUserId: session.createdById,
       ctx: { userId: session.createdById, workspaceId: session.workspaceId },
       targetUserId: mate.id,
       role: 'member',
+    });
+    await projectsService.setActiveProject({
+      userId: mate.id,
+      workspaceId: session.workspaceId,
+      projectId: project.id,
     });
 
     await page.context().clearCookies();
