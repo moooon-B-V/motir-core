@@ -12,6 +12,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { PlanTargetLockedError } from '@/lib/planChange/errors';
+import { PlanTargetHeldError } from '@/lib/workItems/errors';
 import {
   PLANNING_STATUS_KEY,
   PLAN_TARGET_LOCK_LEASE_MS,
@@ -624,15 +625,19 @@ describe('release', () => {
     'treats a MANUAL move out of Planning as a manual release',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
-      // Nothing stops someone dragging a locked card out of the Planning column,
-      // and that is a legitimate escape hatch rather than a bug — a lock whose only
-      // exit is a background sweep is one a person cannot get out of. What must NOT
-      // happen is writing our remembered status back over their decision.
+      // AMENDMENT 23 §5 (MOTIR-7640): while an OPEN session holds the card, a
+      // person cannot drag it out of Planning — the move is refused, and ending
+      // the session is the way out. A status written outside that path (a direct
+      // write the guard does not see) is still honoured on release: what must NOT
+      // happen is writing our remembered status back over it.
       const story = await makeItem('story', 'Invoices');
       const session = await makeSession('A', [story.identifier]);
       await planTargetLockService.acquireForScope(session.id, [story.identifier], ctxFor(fx));
 
-      await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+      await expect(
+        workItemsService.updateStatus(story.id, 'in_progress', fx.ctx),
+      ).rejects.toBeInstanceOf(PlanTargetHeldError);
+      await adminDb.workItem.update({ where: { id: story.id }, data: { status: 'in_progress' } });
       const released = await planTargetLockService.releaseForSession(session.id, ctxFor(fx));
 
       expect(released).toEqual([{ workItemId: story.id, outcome: 'left_as_is' }]);
