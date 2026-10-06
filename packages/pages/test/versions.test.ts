@@ -472,3 +472,31 @@ describe('stateToUpdate', () => {
     expect(stateToMarkdown(a)).toBe(stateToMarkdown(b));
   });
 });
+
+describe('restore derives the RESTORED body’s links (MOTIR-7570)', () => {
+  it('passes the restored version’s mentions and the restoring actor, not the pre-restore ones', async () => {
+    const page = await createPage(store, clock, scope);
+    advance(MINUTE);
+    await write(page.id, 'A', 'Spec for [MOTIR-9](motir:ckrestored000000000000009).');
+    advance(11 * MINUTE);
+    await write(page.id, 'A', 'Mention removed.');
+    expect(store.calls.at(-1)).toEqual({ method: 'replaceDerivedLinks', args: [page.id, [], 'A'] });
+    advance(MINUTE);
+
+    await restorePageVersion(store, clock, { pageId: page.id, number: 1, actorId: 'B' });
+
+    expect(store.calls.at(-1)).toEqual({
+      method: 'replaceDerivedLinks',
+      args: [page.id, [{ workItemId: 'ckrestored000000000000009', source: 'mention' }], 'B'],
+    });
+  });
+
+  it('a refused restore writes no links', async () => {
+    const page = await createPage(store, clock, scope);
+    const before = store.called('replaceDerivedLinks');
+    await expect(
+      restorePageVersion(store, clock, { pageId: page.id, number: 99, actorId: 'B' }),
+    ).rejects.toBeInstanceOf(PageVersionNotFoundError);
+    expect(store.called('replaceDerivedLinks')).toBe(before);
+  });
+});

@@ -1,4 +1,4 @@
-import type { Extensions } from '@tiptap/core';
+import { Node, mergeAttributes, type Extensions } from '@tiptap/core';
 import { Image } from '@tiptap/extension-image';
 import { Link } from '@tiptap/extension-link';
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
@@ -19,6 +19,86 @@ import { StarterKit } from '@tiptap/starter-kit';
 // read on `origin/main` — headings 1–3, links that do not open on click, block
 // images with no base64 — and adds the table nodes that editor does not carry.
 // It cannot import that file: the package may not import `@/…`.
+
+/**
+ * The `motir:` href payload — a work-item cuid, non-empty. It is the same
+ * character set the app's `WORKITEM_TOKEN_RE` / `WORKITEM_HREF_RE`
+ * (`lib/mentions/workItemRefs.ts`) accept, restated because the package may
+ * not import the app.
+ */
+export const WORK_ITEM_MENTION_HREF_RE = /^motir:([A-Za-z0-9_-]+)$/;
+
+/**
+ * A MENTION of a work item (Story MOTIR-5747 · MOTIR-7570), the page schema's
+ * copy of the description editor's `workItemMention` node
+ * (`components/ui/markdownEditorMentions.tsx`): inline, atomic, `id` the work
+ * item's cuid and `label` its key when it was inserted. Its markdown is that
+ * editor's durable token, `[KEY](motir:<id>)` (`markdown.ts`), so a page body
+ * and a description carry mentions the same way, and a body write derives a
+ * `mention` link from every one (`links.ts`, `docs/decisions/pages.md` §8.1).
+ *
+ * Headless: the HTML rules below are what a paste and the schema need. The
+ * page editor gives it a live chip as a node view.
+ */
+/** A mention's attrs from a pasted element, or `false` when its href is not one. */
+function mentionAttrs(
+  href: string,
+  element: HTMLElement,
+): false | { id: string; label: string | null } {
+  const match = WORK_ITEM_MENTION_HREF_RE.exec(href);
+  if (!match) return false;
+  return { id: match[1]!, label: String(element.textContent).trim() || null };
+}
+
+export const WorkItemMention = Node.create({
+  name: 'workItemMention',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    // Not rendered as attributes of their own — an `id` attribute would collide
+    // with the DOM's — the node's `renderHTML` writes them.
+    return {
+      id: { default: null, rendered: false },
+      label: { default: null, rendered: false },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-work-item-id]',
+        getAttrs: (element) =>
+          mentionAttrs(`motir:${(element as HTMLElement).dataset.workItemId}`, element),
+      },
+      // Higher than the Link mark's `a[href]`, so a pasted `motir:` anchor is a
+      // mention and not a link the mark's protocol check would drop.
+      {
+        tag: 'a[href^="motir:"]',
+        priority: 1000,
+        getAttrs: (element) => mentionAttrs(String(element.getAttribute('href')), element),
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    const label = (node.attrs.label as string | null) ?? (node.attrs.id as string | null) ?? '';
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-type': 'workItemMention',
+        'data-work-item-id': node.attrs.id as string,
+      }),
+      label,
+    ];
+  },
+
+  renderText({ node }) {
+    return (node.attrs.label as string | null) ?? (node.attrs.id as string | null) ?? '';
+  },
+});
 
 export function pageExtensions(): Extensions {
   return [
@@ -51,5 +131,6 @@ export function pageExtensions(): Extensions {
     TableRow,
     TableHeader,
     TableCell,
+    WorkItemMention,
   ];
 }

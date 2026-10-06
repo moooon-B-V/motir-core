@@ -76,9 +76,17 @@ export interface PageInsert {
   readonly createdAt: Date;
 }
 
-/** A link a page body names (§8.1), written by the linking epic's extraction. */
+/**
+ * The sources a page body DERIVES a link from (§8.1): a work item mentioned in
+ * the text, or embedded as a card. `manual` is the third source the link table
+ * stores, and it is never derived — a body write leaves it alone.
+ */
+export type DerivedPageLinkSource = 'mention' | 'embed';
+
+/** A link a page body names (§8.1), as `extractLinks` derives it. */
 export interface DerivedPageLink {
   readonly workItemId: string;
+  readonly source: DerivedPageLinkSource;
 }
 
 /** A folder, as a placement under it needs it: its identity and its project. */
@@ -245,8 +253,16 @@ export interface PageStore {
    * `pages.md` AMENDMENT 3); `null` when none does.
    */
   findPageWithFrozenVersion(pageIds: readonly string[]): Promise<string | null>;
-  /** Rewrites a page's derived link rows (§8.1); a no-op until the linking epic lands. */
-  replaceDerivedLinks(pageId: string, links: readonly DerivedPageLink[]): Promise<void>;
+  /**
+   * Rewrites a page's DERIVED link rows (§8.1) to exactly `links`: rows of the
+   * derived sources the body no longer names go, new ones are written with
+   * `actorId` as their creator, and a `manual` row is never touched.
+   */
+  replaceDerivedLinks(
+    pageId: string,
+    links: readonly DerivedPageLink[],
+    actorId: string,
+  ): Promise<void>;
   /**
    * Stamps (or, with three `null`s, clears) the archive columns of every page in
    * `ids`, in ONE write (§7). Nothing else on the rows changes.

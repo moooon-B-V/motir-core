@@ -124,3 +124,46 @@ describe('markdown ↔ the page document', () => {
     expect(serializeMarkdown(s.node('doc', null, [p()]))).toBe('');
   });
 });
+
+describe('the work-item mention (MOTIR-7570)', () => {
+  it('parses the durable token into a workItemMention node and writes it back byte for byte', () => {
+    const line = 'See [MOTIR-12](motir:ck123) now';
+    const doc = parseMarkdown(line);
+    expect(doc.toJSON()).toEqual({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'See ' },
+            { type: 'workItemMention', attrs: { id: 'ck123', label: 'MOTIR-12' } },
+            { type: 'text', text: ' now' },
+          ],
+        },
+      ],
+    });
+    expect(serializeMarkdown(doc)).toBe(line);
+  });
+
+  it('leaves a plain link the Link mark, unchanged', () => {
+    const doc = parseMarkdown('[docs](https://x.y)');
+    const text = doc.child(0).child(0);
+    expect(text.isText).toBe(true);
+    expect(text.marks.map((m) => [m.type.name, m.attrs.href])).toEqual([['link', 'https://x.y']]);
+    expect(roundTrip('[docs](https://x.y)')).toBe('[docs](https://x.y)');
+  });
+
+  it('keeps a malformed motir: href an ordinary link, never a mention', () => {
+    const doc = parseMarkdown('[bad](motir:has%20space)');
+    expect(JSON.stringify(doc.toJSON())).not.toContain('workItemMention');
+  });
+
+  it('takes the label from formatted link text and round-trips mentions in a list and a table', () => {
+    expect(parseMarkdown('[**MOTIR-4**](motir:ck4)').child(0).child(0).attrs).toEqual({
+      id: 'ck4',
+      label: 'MOTIR-4',
+    });
+    const md = '- [MOTIR-5](motir:ck5)\n\n| a |\n| --- |\n| [MOTIR-6](motir:ck6) |';
+    expect(roundTrip(md)).toBe(md);
+  });
+});
