@@ -427,6 +427,9 @@ describe(`1 · the seam: route → relay → the real terminal server (${REAL_PT
     expect(await run(again, 'echo PID=$$')).toContain(`PID=${pid}`);
 
     // Two connections, two rows; the first closed by the browser, the second still open.
+    // The relay records an open without awaiting it (it dials the agent at once), so
+    // the second row can still be in flight after the shell has answered.
+    await until(async () => (await connections()).length === 2);
     const rows = await connections();
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
@@ -480,7 +483,10 @@ describe('2 · owner-only, against the real database', () => {
     replay.ws.send(JSON.stringify({ t: 'auth', ticket }));
     expect(await replay.closed).toBe(TERMINAL_CLOSE.badTicket);
 
-    // Only the owner's one connection was ever recorded or reached the machine.
+    // Only the owner's one connection was ever recorded or reached the machine. The
+    // relay records the open without awaiting it, so wait for the row to land; a
+    // second row would still fail the length check below.
+    await until(async () => (await connections()).length > 0);
     expect(await connections()).toHaveLength(1);
     expect((await connections())[0]).toMatchObject({ userId: fx.ownerId });
     expect(server.output().match(/connection opened/g)).toHaveLength(1);
