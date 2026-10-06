@@ -4260,6 +4260,12 @@
   --el-status-in-review: var(--color-primary);
   --el-status-planning: var(--color-accent-teal);
   --el-type-design: var(--color-accent);
+  /* 2026-10 redesign — the logo and showcase roles the motir and bright
+     palettes override, restated so a scoped amethyst tile keeps the base. */
+  --el-logo-mark: var(--color-primary-fill);
+  --el-logo-tile: color-mix(in srgb, var(--color-primary-fill) 14%, var(--color-background));
+  --el-showcase-highlight: color-mix(in srgb, var(--color-accent) 55%, var(--color-background));
+  --el-showcase-decision: color-mix(in srgb, var(--color-accent) 70%, var(--color-background));
 }
 
 /* The base palette's DARK arm — only the tokens the global dark block
@@ -4297,6 +4303,12 @@
   --color-tint-sky: #1a2a3a;
   --color-tint-yellow: #3a341a;
   --el-sidebar-item-bg-hover: #222222;
+  /* 2026-10 redesign — the dark logo and showcase roles, restated (see the
+     light arm above). */
+  --el-logo-mark: var(--color-primary);
+  --el-logo-tile: color-mix(in srgb, var(--color-primary) 18%, var(--color-background));
+  --el-showcase-highlight: color-mix(in srgb, var(--color-accent) 70%, var(--color-foreground));
+  --el-showcase-decision: var(--color-accent);
 }
 
 /* The `motir` BASE type pairing, re-asserted (MOTIR-3933) — same reason as
