@@ -7295,7 +7295,8 @@
         "stale": "这份计划在你阅读之后发生了变化。没有写入任何内容 —— 画布现在显示的是最新版本，请重新审阅后再决定。",
         "notDecidable": "这份计划暂时还不能决定 —— 还没有人被请求批准它。没有任何改动。",
         "discard": "放弃没有成功。提议仍在画布上等待处理 —— 可以重试，或直接确认。",
-        "askSilent": "没有得到任何回复。换一种方式提问试试。"
+        "askSilent": "没有得到任何回复。换一种方式提问试试。",
+        "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的卡片已恢复原状。"
       },
       "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
       "correctToPlan": "改为提出变更",
@@ -7465,7 +7466,38 @@
       "reopenedYours": "从计划页面重新打开 · 由你发起 · 最近活动 {when}",
       "readOnly": "你可以阅读此对话。继续对话需要使用 Motir AI 规划的权限。",
       "someone": "某人",
-      "mcpNoTurns": "此计划背后的对话发生在 {harness} 中，因此不会显示在这里。可在下方提出修改。"
+      "mcpNoTurns": "此计划背后的对话发生在 {harness} 中，因此不会显示在这里。可在下方提出修改。",
+      "end": {
+        "closed": "已关闭",
+        "declined": "已拒绝",
+        "approved": "已批准",
+        "reason": {
+          "failed": "尝试失败 · {when}",
+          "idle": "30 分钟无活动 · {when}",
+          "restarted": "你重新开始了 · {when}"
+        },
+        "by": "由 {name} · {when}"
+      },
+      "newSession": {
+        "gloss": "目前的对话会复制到新会话中。在你输入之前不会发送任何内容。",
+        "start": "开始新会话"
+      },
+      "copiedFrom": "复制自之前的会话",
+      "copiedFromOpen": "打开",
+      "takenBack": "你已有一个为 {label} 打开的会话，现已回到其中。没有新建会话。",
+      "takenBackProject": "你已有一个为 {project} 打开的会话，现已回到其中。没有新建会话。",
+      "refused": {
+        "sessionTitle": "{name} 正在另一个会话中规划 {key}",
+        "someoneTitle": "有其他人正在另一个会话中规划 {key}",
+        "sessionBody": "该会话结束后你就可以规划它——最迟约 {time} 释放。",
+        "planTitle": "{name} 为 {key} 制定的计划正在等待审批",
+        "someonePlanTitle": "{key} 的一个计划正在等待审批",
+        "planBody": "该计划被批准或拒绝后，你就可以规划它。",
+        "link": "在计划页面查看 {name} 的会话",
+        "placeholder": "{key} 被另一个会话占用"
+      },
+      "ended": "此会话已结束，无法继续。再次规划 {label} 将开始一个新会话。",
+      "endedProject": "此会话已结束，无法继续。再次规划 {project} 将开始一个新会话。"
     },
     "arrival": {
       "crumbTargetPrefix": "规划目标：",

@@ -11,12 +11,14 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { buildScope, MAX_SCOPE_TARGETS, type PlanChangeScope } from '@/lib/planChange/scope';
 import {
   PlanChangeSessionNotFoundError,
+  type PlanTargetLockedError,
   TooManyPlanChangeTargetsError,
 } from '@/lib/planChange/errors';
 import type {
   ContextualPlanResultDto,
   ContextualSessionResumeDto,
   PlanChangeSessionDto,
+  PlanTargetHeldByDto,
 } from '@/lib/dto/planChange';
 
 // CONTEXTUAL PLANNING — the motir-core side (7.12.3 · MOTIR-909).
@@ -156,6 +158,17 @@ async function requireAddressed(
   return id;
 }
 
+/** A lock refusal as the overlay reads it (AMENDMENT 23 §4) — the same fields the
+ *  `409 PLAN_TARGET_LOCKED` body carries. */
+function toHeldBy(err: PlanTargetLockedError): PlanTargetHeldByDto {
+  return {
+    target: err.targetIdentifier,
+    holder: err.holderName,
+    freesBy: err.freesBy?.toISOString() ?? null,
+    holderSessionId: err.holderSessionId,
+  };
+}
+
 export const contextualPlanningService = {
   /**
    * Open (or RESUME) the planning conversation anchored at the target set, append
@@ -262,11 +275,11 @@ export const contextualPlanningService = {
       // Nothing resumed — say where the scope's earlier conversation is, when
       // there is one (MOTIR-6024's notice). Never for a NAMED session.
       if (req.sessionId) return { session, planId: null };
-      const { earlier, copyable } = await planChangeSessionsService.findResumableWithEarlier(
-        pctx,
-        scope.scopeKey,
-      );
-      return { session, planId: null, earlier, copyable };
+      const [{ earlier, copyable }, held] = await Promise.all([
+        planChangeSessionsService.findResumableWithEarlier(pctx, scope.scopeKey),
+        planTargetLockService.readForeignHoldForScope(scope.targetKeys, pctx),
+      ]);
+      return { session, planId: null, earlier, copyable, heldBy: held ? toHeldBy(held) : null };
     }
 
     // The session's still-undecided plan, through the COLUMN (AMENDMENT 17 §5).

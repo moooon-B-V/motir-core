@@ -294,6 +294,7 @@ describe('GET /api/work-items/[id]/ai/plan — resume the item’s thread', () =
       planId: null,
       earlier: null,
       copyable: null,
+      heldBy: null,
     });
     expect(submitJobMock).not.toHaveBeenCalled();
   });

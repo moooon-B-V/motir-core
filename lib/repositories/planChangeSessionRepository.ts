@@ -252,6 +252,19 @@ export const planChangeSessionRepository = {
     return row?.createdBy ?? null;
   },
 
+  /** Who ENDED a session (AMENDMENT 23 §1), or null — Motir, or a departed member. */
+  async findEnder(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; name: string } | null> {
+    const row = await tx.planChangeSession.findFirst({
+      where: { id, workspaceId },
+      select: { endedBy: { select: { id: true, name: true } } },
+    });
+    return row?.endedBy ?? null;
+  },
+
   /** The ids of this member's OTHER OPEN sessions of the scope — the sessions a
    *  new SEEDED session may take a live target lease over from (AMENDMENT 17 §6,
    *  kept for §9 only by AMENDMENT 23 §3). */

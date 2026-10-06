@@ -737,6 +737,38 @@ export const planTargetLockService = {
    * Idempotent for the holding session: re-opening the same thread refreshes its
    * lease instead of failing, which is what makes the mount read safe to repeat.
    */
+  /**
+   * WHO ELSE holds one of the scope's cards right now (AMENDMENT 23 §4; MOTIR-7643)
+   * — the overlay's refusal, read on OPEN so the person is told before they type.
+   * A READ: it takes nothing. Called only when the caller resumed nothing, so any
+   * live lease is one a new session's acquire would be refused by — the same
+   * PlanTargetLockedError that refusal raises is built here, so the two say the
+   * same holder and the same `freesBy`.
+   */
+  async readForeignHoldForScope(
+    identifiers: readonly string[],
+    pctx: PlanTargetLockContext,
+    now: Date = new Date(),
+  ): Promise<PlanTargetLockedError | null> {
+    if (identifiers.length === 0) return null;
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        for (const item of await resolveTargets(identifiers, pctx.projectId, tx)) {
+          const lock = await planTargetLockRepository.findByWorkItemId(item.id, tx);
+          if (!lock || isExpired(lock.expiresAt, now)) continue;
+          return new PlanTargetLockedError(
+            item.identifier,
+            await holderName(lock.heldById, tx),
+            lock.expiresAt,
+            { sessionId: lock.sessionId, planId: lock.planId },
+          );
+        }
+        return null;
+      },
+    );
+  },
+
   async acquireForScope(
     sessionId: string,
     identifiers: readonly string[],

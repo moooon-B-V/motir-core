@@ -38,6 +38,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 }));
 
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
+const { contextualPlanningService } = await import('@/lib/services/contextualPlanningService');
 
 const MINUTE = 60 * 1000;
 
@@ -352,6 +353,42 @@ describe('the target lock between sessions of one scope (AMENDMENT 17 §6)', () 
     expect(back.id).toBe(mine.id);
     expect(back.turns.map((t) => t.body)).toEqual(['first', 'again']);
     expect(await adminDb.planChangeSession.count()).toBe(1);
+  });
+
+  it('the item’s resume NAMES another member’s hold on open, before anything is typed (MOTIR-7643)', async () => {
+    const key = await anchor();
+    const mate = await teammate();
+    const theirs = await planChangeSessionsService.startWithFirstTurn(
+      mate,
+      buildScope([key]),
+      'theirs',
+    );
+    const item = await adminDb.workItem.findFirstOrThrow({ where: { identifier: key } });
+    const lock = await adminDb.planTargetLock.findFirstOrThrow({ where: { workItemId: item.id } });
+
+    const read = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: item.id },
+      pctxFor(fx.ownerId),
+    );
+
+    // Nothing of theirs is resumed — it is named, with when it frees.
+    expect(read.session).toBeNull();
+    expect(read.heldBy).toEqual({
+      target: key,
+      holder: 'Teammate ' + seq,
+      freesBy: new Date(lock.expiresAt!.getTime() + 5 * MINUTE).toISOString(),
+      holderSessionId: theirs.id,
+    });
+    // Looking created nothing.
+    expect(await adminDb.planChangeSession.count()).toBe(1);
+
+    // Once their session ENDS the card is free, and the read says nothing is held.
+    await endIt(theirs.id);
+    const after = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: item.id },
+      pctxFor(fx.ownerId),
+    );
+    expect(after.heldBy).toBeNull();
   });
 
   it('refuses another member with WHO and FREES BY (AMENDMENT 23 §4)', async () => {

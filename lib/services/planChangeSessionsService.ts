@@ -662,7 +662,7 @@ export const planChangeSessionsService = {
     // A scope key IS its canonical target set (`buildScope`), so the take-back
     // needs no second argument; the project scope (`''`) holds no card.
     const targetKeys = scopeKey ? scopeKey.split(',') : [];
-    const row = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+    const found = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
       const own = await planChangeSessionRepository.findResumableForUser(
         pctx.projectId,
         scopeKey,
@@ -670,18 +670,20 @@ export const planChangeSessionsService = {
         pctx.workspaceId,
         tx,
       );
-      return (
-        own ??
-        planChangeSessionRepository.findOpenHoldingForUser(
-          pctx.projectId,
-          targetKeys,
-          pctx.userId,
-          pctx.workspaceId,
-          tx,
-        )
+      if (own) return { row: own, takenBack: false };
+      const holding = await planChangeSessionRepository.findOpenHoldingForUser(
+        pctx.projectId,
+        targetKeys,
+        pctx.userId,
+        pctx.workspaceId,
+        tx,
       );
+      return holding ? { row: holding, takenBack: true } : null;
     });
-    return row ? toDto(row, pctx) : null;
+    if (!found) return null;
+    // The take-back is SAID (MOTIR-7643): the overlay's notice tells the person
+    // they are back in the session they already had open, and nothing was started.
+    return { ...(await toDto(found.row, pctx)), takenBack: found.takenBack };
   },
 
   /**
@@ -697,10 +699,16 @@ export const planChangeSessionsService = {
     // The REOPEN extras (MOTIR-6024): the reopened line names who started it,
     // a member without `ai:plan` reads it read-only, and a still-undecided plan
     // comes back reviewable — the three things a Plans row's reopen needs.
-    const [startedBy, pending, viewerCanPlan] = await Promise.all([
+    const [startedBy, endedBy, pending, viewerCanPlan] = await Promise.all([
       withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
         planChangeSessionRepository.findStarter(row.id, pctx.workspaceId, tx),
       ),
+      // Who ENDED it (AMENDMENT 23 §1) — the end marker's `by {name}`.
+      row.endedById
+        ? withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+            planChangeSessionRepository.findEnder(row.id, pctx.workspaceId, tx),
+          )
+        : null,
       withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
         planRepository.findLatestBySession(row.id, tx),
       ),
@@ -717,6 +725,7 @@ export const planChangeSessionsService = {
     return {
       ...(await toDto(row, pctx)),
       startedBy,
+      endedBy,
       startedByViewer: row.createdById === pctx.userId,
       viewerCanPlan,
       pendingPlanId: undecided,

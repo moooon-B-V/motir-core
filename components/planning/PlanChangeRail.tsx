@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
 import {
@@ -60,6 +60,14 @@ import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { BrandMark } from '@/components/brand/BrandMark';
+import {
+  CopiedDivider,
+  copiedTurnCount,
+  EndedComposerSlot,
+  SessionEndMarker,
+  TakenBackNotice,
+  TargetRefusal,
+} from '@/components/planning/SessionEndParts';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
@@ -236,6 +244,12 @@ export interface PlanChangeRailProps {
    * true; the rail only draws it.
    */
   conversationElsewhere?: { harness: string } | null;
+  /**
+   * START A NEW SESSION carrying this ended one's conversation (AMENDMENT 23 §6;
+   * MOTIR-7643). Optional: a host that offers no copy draws the read-only line in
+   * its place.
+   */
+  onStartNewSession?: () => void;
 }
 
 export function PlanChangeRail({
@@ -267,6 +281,7 @@ export function PlanChangeRail({
   onConfirmDecline,
   staleRefused = false,
   conversationElsewhere = null,
+  onStartNewSession,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tp = useTranslations('approvalGate.planApproval');
@@ -295,6 +310,14 @@ export function PlanChangeRail({
   // shape, rather than in an effect: the error is a render input, not an event.
   const [seededSend, setSeededSend] = useState<string | null>(null);
   const [seenErrorCode, setSeenErrorCode] = useState(state.errorCode);
+  // THE REFUSED SEND KEEPS ITS WORDS (MOTIR-7643): a send another holder's card
+  // refused is put back in the — now disabled — field, so nothing typed is lost.
+  const [lastSent, setLastSent] = useState<string | null>(null);
+  const [seenHeld, setSeenHeld] = useState(state.targetHeld ?? null);
+  if ((state.targetHeld ?? null) !== seenHeld) {
+    setSeenHeld(state.targetHeld ?? null);
+    if (state.targetHeld && lastSent !== null && draft === '') setDraft(lastSent);
+  }
 
   const busy = state.phase === 'streaming' || state.phase === 'deciding';
   const turns = state.session?.turns ?? [];
@@ -385,13 +408,25 @@ export function PlanChangeRail({
   // A PENDING QUESTION outranks every other placeholder — including the re-plan
   // ask, which is itself a one-time prompt: the planner is blocked, and the one
   // thing the composer should be asking for is the answer that unblocks it.
-  const composerPlaceholder = question
-    ? tc('composerPlaceholderAnswer')
-    : askingForReason
-      ? tc('composerPlaceholderReplan')
-      : targets.length > 0
-        ? tc('composerPlaceholderTargets')
-        : tc('composerPlaceholder');
+  // THE ENDED SESSION (AMENDMENT 23 §1): read from the server's row, so a reload
+  // draws the same end. It accepts no turn — the composer slot says so instead.
+  const ended = Boolean(state.session?.endedAt);
+  // ANOTHER HOLDER'S CARD (AMENDMENT 23 §4) disables the composer while it is in
+  // the tray; taking it out of the tray (other targets remaining) re-enables it.
+  const held = state.targetHeld ?? null;
+  const heldBlocks =
+    held !== null &&
+    (targets.length === 0 || targets.some((target) => target.identifier === held.target));
+  const copied = copiedTurnCount(state.session);
+  const composerPlaceholder = heldBlocks
+    ? ts('refused.placeholder', { key: held.target })
+    : question
+      ? tc('composerPlaceholderAnswer')
+      : askingForReason
+        ? tc('composerPlaceholderReplan')
+        : targets.length > 0
+          ? tc('composerPlaceholderTargets')
+          : tc('composerPlaceholder');
 
   // What the THREAD is anchored at, per the server (`PlanChangeSessionDto`) —
   // not the local tray. A sent turn is scoped by the session it landed in, so
@@ -512,6 +547,13 @@ export function PlanChangeRail({
           <EarlierNotice earlier={state.earlier} projectName={projectName} />
         ) : null}
 
+        {/* TAKEN BACK (AMENDMENT 23 §3; MOTIR-7633 sheet 4): the open landed on the
+            person's own OPEN session that holds this card. Gone once they send,
+            because the session the send returns carries no take-back. */}
+        {state.session?.takenBack ? (
+          <TakenBackNotice label={state.session.targetKeys[0] ?? null} projectName={projectName} />
+        ) : null}
+
         {/* WHERE THE CONVERSATION WAS (MOTIR-6298; design §23.11 · sheet 10 B): an
             MCP agent planned this in its own harness. The reopened line's idiom,
             led by the `bot` glyph the plan page uses for `writtenByHarness`. */}
@@ -543,6 +585,10 @@ export function PlanChangeRail({
         </Bubble>
         {followUp ? <FollowUpCard pick={followUp} /> : null}
 
+        {/* REFUSED IN PLACE (AMENDMENT 23 §4; MOTIR-7633 sheet 5): another
+            person's session or plan holds the card. Nothing was sent. */}
+        {held ? <TargetRefusal held={held} /> : null}
+
         {/* The starter hints sit WITH the opener (design panel 6's `emptyhint`),
             not docked above the composer — they are a continuation of the
             opening line, and they PREFILL the composer rather than sending. */}
@@ -563,20 +609,29 @@ export function PlanChangeRail({
         ) : null}
 
         {turns.map((turn, i) => (
-          <Turn
-            key={turn.id}
-            turn={turn}
-            targetKeys={
-              turnTargetKeys.length > 0 ? turnTargetKeys : anchorKeysOf(turn, turnAnchors)
-            }
-            workItemRefs={state.session?.workItemRefs ?? {}}
-            debugOutcome={debugOutcomeFor(turn, turns, debugLandings, turnAnchors)}
-            disposition={dispositionMarkerFor(turns, i)}
-            isPending={question?.id === turn.id}
-            // Keyed on the ASSISTANT turn that carries it — `correction.turnId`
-            // names the USER turn the re-run replays, which is a different turn.
-            correction={latest && turn.id === latest.id ? correctable : null}
-          />
+          <Fragment key={turn.id}>
+            <Turn
+              turn={turn}
+              targetKeys={
+                turnTargetKeys.length > 0 ? turnTargetKeys : anchorKeysOf(turn, turnAnchors)
+              }
+              workItemRefs={state.session?.workItemRefs ?? {}}
+              debugOutcome={debugOutcomeFor(turn, turns, debugLandings, turnAnchors)}
+              disposition={dispositionMarkerFor(turns, i)}
+              isPending={question?.id === turn.id}
+              // Keyed on the ASSISTANT turn that carries it — `correction.turnId`
+              // names the USER turn the re-run replays, which is a different turn.
+              correction={latest && turn.id === latest.id ? correctable : null}
+            />
+            {/* THE COPIED DIVIDER (AMENDMENT 23 §6; MOTIR-7633 sheet 3), under the
+              last turn carried over from the ended session. */}
+            {copied > 0 && i === copied - 1 && state.session?.copiedFromSessionId ? (
+              <CopiedDivider
+                fromSessionId={state.session.copiedFromSessionId}
+                anchorKey={state.session.targetKeys[0] ?? null}
+              />
+            ) : null}
+          </Fragment>
         ))}
 
         {/* The RUN, narrated: the shipped drafting row + a polite live region fed
@@ -835,7 +890,22 @@ export function PlanChangeRail({
 
         {/* An ASKED plan's STALE and DECIDED-FIRST refusals are said in the review block
             itself, in the design's words (MOTIR-6037; Panels 5–6), not as a failure. */}
+        {/* THE ATTEMPT FAILED AND CLOSED THE SESSION (AMENDMENT 23 §2; MOTIR-7633
+            sheet 1): the failure line, with NO Try again — a retry would append to
+            a session that accepts no turn — then the end marker. */}
+        {ended && state.session?.endReason === 'failed' ? (
+          <p
+            role="alert"
+            data-testid="planning-failed-closed"
+            className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+          >
+            {tc('error.failedClosed')}
+          </p>
+        ) : null}
+        {ended && state.session ? <SessionEndMarker session={state.session} /> : null}
+
         {state.errorCode &&
+        !ended &&
         !(gated && (state.errorCode === 'stale' || state.errorCode === 'decided')) ? (
           <div className="flex flex-col items-start gap-2">
             <p
@@ -864,7 +934,16 @@ export function PlanChangeRail({
       {/* The composer carries the `@` TARGET picker + the tray (MOTIR-1491) — the
           message field and the target set are one control, because the targets
           scope the turn the field sends. */}
-      {state.readOnly ? (
+      {ended && state.session ? (
+        <EndedComposerSlot
+          session={state.session}
+          readOnly={state.readOnly}
+          label={state.session.targetKeys[0] ?? null}
+          projectName={projectName}
+          {...(onStartNewSession ? { onStartNew: onStartNewSession } : {})}
+          pending={busy}
+        />
+      ) : state.readOnly ? (
         // A member without `ai:plan` reads a reopened conversation and cannot
         // continue it — the composer is REPLACED by the reason (design §19.8,
         // panel 6), in the composer's own slot.
@@ -883,6 +962,7 @@ export function PlanChangeRail({
           onRemoveTarget={onRemoveTarget}
           onSubmit={(text) => {
             if (initialDraft && userTurns.length === 0) setSeededSend(text);
+            setLastSent(text);
             onSend(text);
           }}
           placeholder={composerPlaceholder}
@@ -898,7 +978,7 @@ export function PlanChangeRail({
           // `deciding` still locks it, and correctly: an approve or a discard is a
           // write against the plan, and a turn sent mid-decision would race it.
           // `loading` too — there is no thread to append to yet.
-          disabled={state.phase === 'loading' || state.phase === 'deciding'}
+          disabled={state.phase === 'loading' || state.phase === 'deciding' || heldBlocks}
           // The pending question travels to the composer, not to a header pill:
           // measured at the rail's real 22rem the header row is already full, and
           // the bar belongs beside the control whose behaviour actually changed.
