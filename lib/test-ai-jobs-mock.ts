@@ -105,6 +105,17 @@ export interface GuideJobOutcome {
   guideTurn?: unknown;
 }
 
+/**
+ * A PLANNING run's outcome (Story MOTIR-7630 · MOTIR-7645). Absent ⇒ the run
+ * progresses and closes as a plain success, which is every spec before this one.
+ * `failed` sends the terminal `status: failed` frame motir-ai sends for a run
+ * that died, and settles the job with its error — the frame the stream relays
+ * end the session on (AMENDMENT 23 §2).
+ */
+export interface PlanJobOutcome {
+  status?: 'succeeded' | 'failed';
+}
+
 export interface AiJobsFixture {
   /**
    * The `ask_project` outcomes, CONSUMED IN ORDER — one per ask job submitted.
@@ -136,6 +147,9 @@ export interface AiJobsFixture {
   /** The `guide_work_item` outcomes, CONSUMED IN ORDER — one per submit attempt,
    *  the last repeating (MOTIR-7468). */
   guide?: GuideJobOutcome[];
+  /** The `plan` run outcomes, CONSUMED IN ORDER — one per planning submit that
+   *  is not a routing run, the last repeating (MOTIR-7645). */
+  plan?: PlanJobOutcome[];
   /** Appended to by the mock: the job kind of every submit, in order — and
    *  whether it carried a repository set (`context.code`), which is how a walk
    *  shows a CODE-BLIND project's dispatch went without one (MOTIR-5853). */
@@ -217,6 +231,19 @@ function guideOutcomeAt(n: number): GuideJobOutcome {
   const queue = readFixture().guide ?? [];
   if (queue.length === 0) return {};
   return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** The outcome for the `n`-th planning run, with the last entry repeating. */
+function planOutcomeAt(n: number): PlanJobOutcome {
+  const queue = readFixture().plan ?? [];
+  if (queue.length === 0) return {};
+  return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** Whether this job is a planning run the fixture declared failed. */
+function planRunFails(jobId: string): boolean {
+  const { kind, index } = kindOf(jobId);
+  return kind === 'plan' && planOutcomeAt(index).status === 'failed';
 }
 
 /** The routing verdict for the `n`-th routing run, with the last entry repeating. */
@@ -347,11 +374,19 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
   // a run progressing and closing, exactly as motir-ai sends it.
   pool
     .intercept({ path: (p) => /^\/v1\/jobs\/[^/]+\/stream(\?|$)/.test(p), method: 'GET' })
-    .reply(() => ({
-      statusCode: 200,
-      data: `event: search\ndata: {}\n\nevent: done\ndata: {}\n\n`,
-      responseOptions: { headers: { 'content-type': 'text/event-stream' } },
-    }))
+    .reply((req) => {
+      const id = decodeURIComponent(req.path.split('?')[0]!.split('/').slice(-2)[0]!);
+      // A planning run the fixture declared FAILED ends the way motir-ai ends a
+      // dead run: a terminal `status: failed` frame, then the close.
+      const data = planRunFails(id)
+        ? `event: search\ndata: {}\n\nevent: status\ndata: {"status":"failed"}\n\nevent: done\ndata: {}\n\n`
+        : `event: search\ndata: {}\n\nevent: done\ndata: {}\n\n`;
+      return {
+        statusCode: 200,
+        data,
+        responseOptions: { headers: { 'content-type': 'text/event-stream' } },
+      };
+    })
     .persist();
 
   // GET /v1/jobs/:id — the settled result. `ask_project` reads its outcome from
@@ -369,6 +404,20 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       // exactly what the ENVELOPE contract says anyway (per-kind, additive).
       const outcome = askOutcomeAt(index);
       const routing = routingOutcomeAt(index);
+      if (planRunFails(id)) {
+        const data: Record<string, unknown> = {
+          status: 'failed',
+          result: null,
+          error: {
+            type: 'about:blank',
+            title: 'AI job failed',
+            status: 502,
+            code: 'ai_job_failed',
+            detail: 'The fixture declared this planning run failed.',
+          },
+        };
+        return { statusCode: 200, data, responseOptions: json };
+      }
       if (kind === 'author_bug') {
         const author = authorBugOutcomeAt(index);
         const status = author.status ?? 'succeeded';
