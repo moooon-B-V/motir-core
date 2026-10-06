@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  answerRestart,
   attachMidRunTurn,
   findResumableSession,
   getPlanChangeSession,
@@ -8,6 +9,7 @@ import {
   peekMailbox,
   stopPlanChangeRun,
   recordPlannerTurn,
+  requestRestartConfirm,
   rerunAskTurn,
   resubmitContextualPlan,
   resumeContextualSession,
@@ -666,5 +668,42 @@ describe('the mailbox doors', () => {
     expect(lastCall()[1].signal).toBe(controller.signal);
     await stopPlanChangeRun('s1', 'job-1', 'k', controller.signal);
     expect(lastCall()[1].signal).toBe(controller.signal);
+  });
+});
+
+describe('planChangeClient — Plan something new (Story MOTIR-7631 · MOTIR-7650)', () => {
+  it('the control raises the confirm as a POST { sessionId } and returns the session', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(SESSION));
+
+    await expect(requestRestartConfirm('s1')).resolves.toEqual(SESSION);
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/restart/confirm');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ sessionId: 's1' });
+  });
+
+  it('answers the confirm as a POST { sessionId, answer } — keep and confirm alike', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(SESSION));
+    await expect(answerRestart('s1', 'keep')).resolves.toEqual(SESSION);
+    let [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/restart');
+    expect(JSON.parse(init.body as string)).toEqual({ sessionId: 's1', answer: 'keep' });
+
+    const swapped = {
+      outcome: 'restarted',
+      endedSessionId: 's1',
+      session: { ...SESSION, id: 's2' },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(swapped));
+    await expect(answerRestart('s1', 'confirm')).resolves.toEqual(swapped);
+    [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/restart');
+    expect(JSON.parse(init.body as string)).toEqual({ sessionId: 's1', answer: 'confirm' });
+  });
+
+  it('a refused answer is the typed client error', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ code: 'PLAN_SESSION_ENDED' }, 409));
+    await expect(answerRestart('s1', 'confirm')).rejects.toBeInstanceOf(PlanEditsClientError);
   });
 });

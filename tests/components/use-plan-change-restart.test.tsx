@@ -243,3 +243,83 @@ describe('Confirm — the swap', () => {
     expect(onRestarted).not.toHaveBeenCalled();
   });
 });
+
+describe('the edges', () => {
+  it('does nothing with no session open', async () => {
+    open.mockResolvedValue(null);
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.requestRestart();
+      await result.current.answerRestartConfirm('keep');
+    });
+
+    expect(requestConfirm).not.toHaveBeenCalled();
+    expect(answer).not.toHaveBeenCalled();
+  });
+
+  it('a second press while one is in flight sends nothing', async () => {
+    let release: (s: PlanChangeSessionDto) => void = () => {};
+    requestConfirm.mockReturnValue(new Promise((r) => (release = r)));
+    const { result } = await mounted();
+
+    await act(async () => {
+      const first = result.current.requestRestart();
+      await result.current.requestRestart();
+      await result.current.answerRestartConfirm('confirm');
+      release(WITH_CONFIRM);
+      await first;
+    });
+
+    expect(requestConfirm).toHaveBeenCalledTimes(1);
+    expect(answer).not.toHaveBeenCalled();
+  });
+
+  it('an aborted call is not a session error', async () => {
+    const aborted = new DOMException('aborted', 'AbortError');
+    requestConfirm.mockRejectedValue(aborted);
+    answer.mockRejectedValue(aborted);
+    open.mockResolvedValue(WITH_CONFIRM);
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.requestRestart();
+      await result.current.answerRestartConfirm('confirm');
+    });
+
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.restarting).toBe(false);
+  });
+
+  it('swaps with no host callback to tell', async () => {
+    open.mockResolvedValue(WITH_CONFIRM);
+    answer.mockResolvedValue({ outcome: 'restarted', endedSessionId: 's1', session: FRESH });
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.answerRestartConfirm('confirm');
+    });
+
+    expect(result.current.state.session).toEqual(FRESH);
+    expect(result.current.state.restartedFrom).toBe('s1');
+  });
+
+  it('an answer that lands after unmount writes nothing', async () => {
+    let release: (s: PlanChangeSessionDto) => void = () => {};
+    open.mockResolvedValue(WITH_CONFIRM);
+    answer.mockReturnValue(new Promise((r) => (release = r)));
+    requestConfirm.mockReturnValue(new Promise(() => {}));
+    const onRestarted = vi.fn();
+    const hook = await mounted({ onRestarted });
+
+    let pending: Promise<void> = Promise.resolve();
+    act(() => {
+      pending = hook.result.current.answerRestartConfirm('keep');
+    });
+    hook.unmount();
+    release(KEPT);
+    await pending;
+
+    expect(onRestarted).not.toHaveBeenCalled();
+  });
+});
