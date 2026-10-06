@@ -168,6 +168,7 @@ export const TINTED_SURFACE_TOKENS: readonly string[] = [
   '--el-input-readonly-bg',
   '--el-muted',
   '--el-option-active-bg',
+  '--el-showcase-paper-soft',
   '--el-sidebar-bg',
   '--el-surface',
   '--el-surface-soft',

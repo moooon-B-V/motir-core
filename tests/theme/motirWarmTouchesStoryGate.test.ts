@@ -12,6 +12,10 @@ import { declaredIn, loadTokenLayer, resolveValue, type ThemeContext } from './p
 // branched from — `origin/main` at 047323ba0 — so a source token that moved more
 // than the design said, a light-only override, or a new role that shifted another
 // palette fails here even when every pair still clears its floor.
+//
+// The fixture has since gained the `--el-showcase-*` family (motir.co's
+// illustration fields) at its resolved values — merged in additively when those
+// tokens were born, so this gate keeps measuring the warm-touch change alone.
 
 const REPO = process.cwd();
 const THEMES = ['light', 'dark'] as const;

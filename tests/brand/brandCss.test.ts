@@ -44,8 +44,10 @@ function rule(selector: string): string {
 describe('the type pin (§3) — the raw FACE variable, never the ROLE token', () => {
   const word = rule('.brand-word');
 
-  it('names --font-sans-source', () => {
-    expect(word).toMatch(/font-family:[\s\S]*var\(--font-sans-source/);
+  it('names --font-grotesk-source first, Space Grotesk (2026-10 redesign)', () => {
+    // The face motir.co's type defaults to; Inter's `--font-sans-source` stays
+    // as the fallback for a surface that does not load Space Grotesk.
+    expect(word).toMatch(/font-family:\s*var\(--font-grotesk-source,\s*var\(--font-sans-source/);
   });
 
   it('never names --font-sans, which three [data-type] blocks re-point', () => {
@@ -56,7 +58,7 @@ describe('the type pin (§3) — the raw FACE variable, never the ROLE token', (
 
   it('is the weight and tracking the design pins', () => {
     expect(word).toMatch(/font-weight:\s*700/);
-    expect(word).toMatch(/letter-spacing:\s*-0\.02em/);
+    expect(word).toMatch(/letter-spacing:\s*-0\.03em/);
   });
 });
 
@@ -64,7 +66,7 @@ describe('every dimension derives from --brand-size (§3)', () => {
   it('computes the gap, the wordmark size and the stacked rhythm from it', () => {
     expect(rule('.brand-lockup')).toMatch(/gap:\s*calc\(var\(--brand-size[^)]*\)\s*\*\s*0\.33\)/);
     expect(rule('.brand-word')).toMatch(
-      /font-size:\s*calc\(var\(--brand-size[^)]*\)\s*\*\s*0\.72\)/,
+      /font-size:\s*calc\(var\(--brand-size[^)]*\)\s*\*\s*0\.74\)/,
     );
     expect(rule('.brand-stacked')).toMatch(/gap:\s*calc\(var\(--brand-size[^)]*\)\s*\*\s*0\.22\)/);
   });
