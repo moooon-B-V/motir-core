@@ -11,6 +11,7 @@ import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture, nextTestPosition } from '../../fixtures';
+import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -60,9 +61,10 @@ function signInAs(ctx: ServiceContext): void {
 }
 
 /** Call the route with the given `q` (omit to send no param at all). */
-function search(q?: string): Promise<Response> {
+function search(q?: string, projectId?: string): Promise<Response> {
   const url = new URL(`${BASE}/api/work-items/mention-search`);
   if (q !== undefined) url.searchParams.set('q', q);
+  if (projectId !== undefined) url.searchParams.set('projectId', projectId);
   return GET(new Request(url));
 }
 
@@ -233,6 +235,31 @@ describe('GET /api/work-items/mention-search — candidate read', () => {
     const body = await rows(await search('widget'));
     expect(body.length).toBeLessThanOrEqual(8);
     expect(body.length).toBe(8);
+  });
+
+  it('`?projectId=` narrows to that one project; without it both projects match (MOTIR-7572)', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'PROD' });
+    signInAs(fx.ctx);
+    const other = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'OTHR',
+    });
+    const here = await seedItem({ ...projectOf(fx), reporterId: fx.ownerId, title: 'gizmo here' });
+    const there = await seedItem({
+      workspaceId: fx.workspaceId,
+      projectId: other.id,
+      identifier: 'OTHR',
+      reporterId: fx.ownerId,
+      title: 'gizmo there',
+    });
+
+    expect((await rows(await search('gizmo'))).map((r) => r.id).sort()).toEqual(
+      [here.id, there.id].sort(),
+    );
+    expect((await rows(await search('gizmo', other.id))).map((r) => r.id)).toEqual([there.id]);
+    // An empty `projectId` is no narrowing at all.
+    expect(await rows(await search('gizmo', ''))).toHaveLength(2);
   });
 
   it('returns [] for a short, empty, whitespace, or missing query', async () => {

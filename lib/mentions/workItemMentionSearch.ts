@@ -67,11 +67,20 @@ export function toWorkItemMentionCandidate(row: WorkItemSummaryDto): WorkItemMen
  * MIN_QUERY_LENGTH guard) — and the picker also gates on the same minimum, so a
  * sub-threshold query never hits the network. A non-OK response resolves to `[]`
  * (the picker surfaces a no-results state rather than throwing into the editor).
+ * `opts.projectId` narrows the search to one project (MOTIR-7572 — the page
+ * editor's picker); without it the search spans every browsable project.
  */
-export async function searchWorkItemMentions(query: string): Promise<WorkItemMentionCandidate[]> {
-  const res = await fetch(`/api/work-items/mention-search?q=${encodeURIComponent(query)}`, {
-    headers: { accept: 'application/json' },
-  });
+export async function searchWorkItemMentions(
+  query: string,
+  opts: { projectId?: string } = {},
+): Promise<WorkItemMentionCandidate[]> {
+  const project = opts.projectId ? `&projectId=${encodeURIComponent(opts.projectId)}` : '';
+  const res = await fetch(
+    `/api/work-items/mention-search?q=${encodeURIComponent(query)}${project}`,
+    {
+      headers: { accept: 'application/json' },
+    },
+  );
   if (!res.ok) return [];
   const rows = (await res.json()) as WorkItemSummaryDto[];
   return rows.map(toWorkItemMentionCandidate);
