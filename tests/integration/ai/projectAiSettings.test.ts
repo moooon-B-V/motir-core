@@ -469,30 +469,31 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
   });
 });
 
-describe('the retired planner-model column (MOTIR-7228)', () => {
-  // The column stays in the database for the build still serving during this
-  // release's rollout; `@ignore` hides it from the client. These pin both halves:
-  // it exists, and the settings path neither reads it into the DTO nor writes it.
-  async function storedPlannerModel(projectId: string): Promise<string | null> {
-    const rows = await adminDb.$queryRawUnsafe<Array<{ ai_planner_model: string | null }>>(
-      'SELECT ai_planner_model FROM project WHERE id = $1',
-      projectId,
+describe('the retired planner-model column (MOTIR-7228 · dropped by MOTIR-7233)', () => {
+  // The three-release removal is complete: MOTIR-7228 stopped every reader and
+  // `@ignore`d the field, MOTIR-7230 verified that build was serving, and
+  // MOTIR-7233 dropped the column. These pin the end state: it is gone, and a
+  // client that still sends the key saves the rest of its patch.
+  async function plannerModelColumnCount(): Promise<number> {
+    const rows = await adminDb.$queryRawUnsafe<Array<{ n: number }>>(
+      `SELECT count(*)::int AS n FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'project'
+          AND column_name = 'ai_planner_model'`,
     );
-    expect(rows).toHaveLength(1);
-    return rows[0]!.ai_planner_model;
+    return rows[0]!.n;
   }
 
-  it('the column is still there, and the DTO carries no planner-model key', async () => {
+  it('the column is gone, and the DTO carries no planner-model key', async () => {
     const fx = await makeFixture();
-    expect(await storedPlannerModel(fx.projectId)).toBeNull();
+    expect(await plannerModelColumnCount()).toBe(0);
 
     const settings = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
     expect(Object.keys(settings).some((k) => /model/i.test(k))).toBe(false);
   });
 
-  it('a stale patch naming it saves the rest and leaves the column alone', async () => {
+  it('a stale patch naming it saves the rest', async () => {
     const fx = await makeFixture();
-    // A client built before this release still sends the key: TypeScript no
+    // A client built before the retirement still sends the key: TypeScript no
     // longer allows it, so the cast is the shape of that request at runtime.
     const stale = { aiPlannerModel: 'x', aiSprintLengthDays: 5 } as unknown as Parameters<
       typeof projectAiSettingsService.updateAiSettings
@@ -506,25 +507,5 @@ describe('the retired planner-model column (MOTIR-7228)', () => {
 
     expect(updated.aiSprintLengthDays).toBe(5);
     expect(updated).not.toHaveProperty('aiPlannerModel');
-    expect(await storedPlannerModel(fx.projectId)).toBeNull();
-  });
-
-  it('a value an older build wrote is not read back', async () => {
-    const fx = await makeFixture();
-    await adminDb.$executeRawUnsafe(
-      'UPDATE project SET ai_planner_model = $1 WHERE id = $2',
-      'deepseek-v4-pro',
-      fx.projectId,
-    );
-
-    const settings = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
-    expect(JSON.stringify(settings)).not.toContain('deepseek-v4-pro');
-    // And a save does not clear it: the column is the old build's, not ours.
-    await projectAiSettingsService.updateAiSettings(
-      fx.projectIdentifier,
-      { aiSprintLengthDays: 3 },
-      ctxFor(fx),
-    );
-    expect(await storedPlannerModel(fx.projectId)).toBe('deepseek-v4-pro');
   });
 });

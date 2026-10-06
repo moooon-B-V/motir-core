@@ -1922,15 +1922,6 @@ model Project {
   /// app-side, so a human-paced team can still stretch it to a fortnight
   /// without the column becoming a free-form integer.
   aiSprintLengthDays               Int                   @default(2) @map("ai_sprint_length_days")
-  /// RETIRED (Story MOTIR-7220 · MOTIR-7228). Was the per-project planner-model
-  /// override (MOTIR-915); it was stored and never sent to motir-ai. The model
-  /// that plans is now a PLATFORM setting per audience, chosen by a superadmin in
-  /// the operator console and stored in motir-ai — never a tenant setting.
-  /// `@ignore` hides the field from the generated client, so no query reads or
-  /// writes it, while the COLUMN stays for the build still serving during this
-  /// release's rollout. The column is dropped by a later release (MOTIR-7230's
-  /// verification, then the drop task) — the three-release column removal.
-  aiPlannerModel                   String?               @map("ai_planner_model") @ignore
   /// HOSTED-AGENT MODEL OVERRIDES per leaf DIFFICULTY (Story MOTIR-6989 ·
   /// MOTIR-6993). NULL — the default — means "use the platform default for that
   /// level", which motir-ai serves as `defaultsByDifficulty` on
