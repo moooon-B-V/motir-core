@@ -31,7 +31,15 @@ export type PlanChangeTurnRoleDto = 'user' | 'system' | 'assistant';
 // `user` turn of a conversation the Guide me through door opened. Fixed by the
 // DOOR, never classified, so it is never corrected (`intentCorrected` stays
 // false), and its `anchorKey` is always the guided card.
-export type PlanChangeTurnIntentDto = 'plan_change' | 'ask' | 'debug' | 'guide';
+//
+// `new_session` (MOTIR-7649; ADR AMENDMENT 3, A3.1): the turn asked to plan
+// something new. `ask_project` redirected it, NO job ran, and core wrote the
+// fixed confirm (see {@link PlanChangeTurnConfirmDto}) instead.
+export type PlanChangeTurnIntentDto = 'plan_change' | 'ask' | 'debug' | 'guide' | 'new_session';
+
+/** Wire form of the Prisma `PlanChangeTurnConfirm` enum (MOTIR-7649; ADR
+ *  AMENDMENT 3, A3.2) — which fixed confirm an `assistant` turn core wrote is. */
+export type PlanChangeTurnConfirmDto = 'new_session';
 
 /** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
  *  `system` submission marker and on an `assistant` turn (the job that produced
@@ -113,6 +121,15 @@ export interface PlanChangeTurnDto {
    * {@link anchorKey} is.
    */
   attachmentIds?: string[];
+  /**
+   * The fixed confirm core wrote on this `assistant` turn (MOTIR-7649; ADR
+   * AMENDMENT 3, A3.2): `new_session` is the Plan something new confirm, whose
+   * answers are the two controls Confirm and Keep planning. It is PENDING while it
+   * is the thread's latest turn and the session is open — see
+   * `pendingRestartConfirm` in `lib/planning/planChangeThread.ts`. Null on every
+   * other turn. Optional for the reason {@link anchorKey} is.
+   */
+  confirm?: PlanChangeTurnConfirmDto | null;
   authorId: string | null;
   createdAt: string;
 }
@@ -337,4 +354,18 @@ export interface DebugLandingDto {
    * bumps it when this is true.
    */
   createdInTriage: boolean;
+}
+
+/**
+ * What the Plan something new door answered on Confirm (MOTIR-7649; ADR
+ * `conversation-turn-intent.md` AMENDMENT 3, A3.3): the session it ended (or
+ * found already ended — nothing ends twice) and the NEW, empty conversation
+ * session for the same scope the overlay swaps to in place. `session` is the
+ * caller's own open session of that scope when they already had one (the
+ * take-back), so a second session is never created.
+ */
+export interface PlanSessionRestartResultDto {
+  outcome: 'restarted';
+  endedSessionId: string;
+  session: PlanChangeSessionDto;
 }

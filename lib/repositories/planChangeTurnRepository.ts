@@ -118,6 +118,22 @@ export const planChangeTurnRepository = {
     });
   },
 
+  /** The thread's LATEST turn (highest `seq`), or null on an empty thread — the
+   *  read that decides whether the Plan something new confirm is still PENDING
+   *  (MOTIR-7649; ADR AMENDMENT 3, A3.2: pending while it is the latest turn).
+   *  `tx` is required: every caller reads it under the session's row lock to
+   *  guard the append that follows. */
+  async findLatestInSession(
+    sessionId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeTurn | null> {
+    return tx.planChangeTurn.findFirst({
+      where: { sessionId, workspaceId },
+      orderBy: { seq: 'desc' },
+    });
+  },
+
   /** The session's FULL thread in `seq` order — the ordering contract every
    *  consumer (the resume payload, the accumulated intent) depends on, applied
    *  here ONCE rather than at each call site. Workspace-scoped: a session id from

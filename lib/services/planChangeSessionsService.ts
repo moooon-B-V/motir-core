@@ -2,6 +2,7 @@ import {
   Prisma,
   type PlanChangeSession,
   type PlanChangeTurn,
+  type PlanChangeTurnConfirm,
   type PlanChangeTurnIntent,
   type PlanChangeTurnRole,
 } from '@/generated/prisma/client';
@@ -42,6 +43,7 @@ import type {
   DebugLandingDto,
   PlanChangeSessionDto,
   PlanChangeSubmitResultDto,
+  PlanSessionRestartResultDto,
   ResumableSessionDto,
 } from '@/lib/dto/planChange';
 import { planRepository } from '@/lib/repositories/planRepository';
@@ -60,7 +62,8 @@ import {
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
 import { attachmentsService } from '@/lib/services/attachmentsService';
-import { endSession } from '@/lib/services/planSessionEndService';
+import { endSession, endSessionWithin } from '@/lib/services/planSessionEndService';
+import { KEEP_PLANNING_MARKER_BODY, NEW_SESSION_CONFIRM_BODY } from '@/lib/planChange/restart';
 
 /**
  * How a write ADDRESSES its session (AMENDMENT 17 §2, story MOTIR-6011): by its
@@ -288,6 +291,8 @@ interface AppendTurn {
   guideTurn?: GuideTurnRecord | null;
   /** A guide `user` turn's files (MOTIR-7484) — ids the caller already validated. */
   attachmentIds?: readonly string[];
+  /** The fixed confirm core writes on an `assistant` turn (MOTIR-7649). */
+  confirm?: PlanChangeTurnConfirm | null;
 }
 
 async function appendLocked(
@@ -354,6 +359,7 @@ async function appendWithin(
         citations: turn.citations ?? [],
         anchorKey: turn.anchorKey ?? null,
         attachmentIds: turn.attachmentIds ? [...turn.attachmentIds] : [],
+        confirm: turn.confirm ?? null,
         // An explicit literal, not the DTO itself: Prisma's JSON input wants an
         // indexable object, and spelling the four fields keeps the column's
         // shape exactly the DTO's.
@@ -624,6 +630,34 @@ async function resumeSeededOrStartWithin(
 const COPYABLE_END_REASONS: ReadonlySet<string> = new Set(['failed', 'idle']);
 
 /** The copyable read's answer for the caller's latest own conversation. */
+/** Whether the Plan something new confirm is PENDING on this thread
+ *  (MOTIR-7649; ADR AMENDMENT 3, A3.2): the latest turn is that confirm. Read
+ *  under the session's row lock by every caller, because it guards an append. */
+async function restartConfirmPendingWithin(
+  sessionId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const latest = await planChangeTurnRepository.findLatestInSession(sessionId, workspaceId, tx);
+  return latest?.role === 'assistant' && latest.confirm === 'new_session';
+}
+
+/** The confirm turn itself — one shape for the words and the button (A3.2). */
+const NEW_SESSION_CONFIRM_TURN: AppendTurn = {
+  role: 'assistant',
+  body: NEW_SESSION_CONFIRM_BODY,
+  confirm: 'new_session',
+};
+
+/** Plan something new acts only on the caller's OWN `conversation` session (A3.3):
+ *  another member's session, a guide conversation and a session opened by any
+ *  other door are `PLAN_SESSION_NOT_FOUND`, as the copy door answers. */
+function assertRestartable(session: PlanChangeSession, pctx: ProjectContext): void {
+  if (session.createdById !== pctx.userId || session.origin !== 'conversation') {
+    throw new PlanSessionNotFoundError(session.id);
+  }
+}
+
 function toCopyable(row: PlanChangeSession | null): CopyableSessionDto | null {
   if (!row?.endedAt || !row.endReason || !COPYABLE_END_REASONS.has(row.endReason)) return null;
   return {
@@ -1369,6 +1403,187 @@ export const planChangeSessionsService = {
           tx,
         );
         return toDto(fresh, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * File a `new_session` turn (MOTIR-7649; ADR AMENDMENT 3, A3.1/A3.2): the ask
+   * settle's fourth arm. In ONE transaction under the session's row lock it moves
+   * the turn `ask → new_session` (a compare-and-set, so a replayed settle writes
+   * nothing) and appends the fixed confirm — unless one is already pending, or
+   * the session has ended meanwhile, when the intent is still recorded and no
+   * confirm is written. No job is dispatched. Returns the fresh session, or
+   * `null` when another settle already filed this turn.
+   */
+  async recordNewSessionTurn(
+    turnId: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto | null> {
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const turn = await planChangeTurnRepository.findByIdInSession(
+          turnId,
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!turn) throw new PlanChangeTurnNotFoundError(turnId);
+        if (turn.intent !== 'ask') return null;
+        await planChangeTurnRepository.updateIntent(turn.id, { intent: 'new_session' }, tx);
+        const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
+        if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        if (fresh.endedAt || (await restartConfirmPendingWithin(fresh.id, pctx.workspaceId, tx))) {
+          const touched = await planChangeSessionRepository.update(
+            fresh.id,
+            { lastActivityAt: new Date() },
+            tx,
+          );
+          return toDto(touched, pctx, tx);
+        }
+        const row = await appendWithin(fresh.id, pctx, NEW_SESSION_CONFIRM_TURN, {}, tx);
+        return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * THE CONTROL (MOTIR-7649; ADR AMENDMENT 3, A3.3) — Plan something new pressed:
+   * append the SAME fixed confirm the words produce to the caller's own open
+   * conversation session. Idempotent: a confirm already pending returns the
+   * session unchanged. An ended session is `PLAN_SESSION_ENDED`.
+   */
+  async requestRestartConfirm(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto> {
+    const session = await requireSession(pctx, address);
+    assertRestartable(session, pctx);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
+        if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        // Checked under the lock: an end that commits first is always seen.
+        if (fresh.endedAt) throw new PlanSessionEndedError(fresh.id);
+        const row = await appendWithin(fresh.id, pctx, NEW_SESSION_CONFIRM_TURN, {}, tx, (t) =>
+          restartConfirmPendingWithin(fresh.id, pctx.workspaceId, t),
+        );
+        return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * KEEP PLANNING (MOTIR-7649; ADR AMENDMENT 3, A3.2): the confirm's second
+   * answer. Writes the `system` marker that answers a PENDING confirm and closes
+   * nothing. With no confirm pending (already answered, superseded by a later
+   * turn, or the session ended) it writes nothing and returns the thread.
+   */
+  async keepPlanning(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto> {
+    const session = await requireSession(pctx, address);
+    assertRestartable(session, pctx);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const row = await appendWithin(
+          session.id,
+          pctx,
+          { role: 'system', body: KEEP_PLANNING_MARKER_BODY },
+          {},
+          tx,
+          async (t) => {
+            const now = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, t);
+            if (!now || now.endedAt) return true;
+            return !(await restartConfirmPendingWithin(session.id, pctx.workspaceId, t));
+          },
+        );
+        return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * CONFIRM — Plan something new (MOTIR-7649; ADR AMENDMENT 3, A3.3/A3.4). In ONE
+   * transaction under the member's scope lock: end the caller's own conversation
+   * session `restarted` through AMENDMENT 23's one end operation (its `generating`
+   * plan discarded as the person's decision, every card it held given back), then
+   * return a NEW, empty `conversation` session for the same scope. It holds no
+   * lock until its first turn, which takes the scope as any first turn does.
+   *
+   * Two edges, both by the decision: a session that had ALREADY ended ends
+   * nothing and still gets a new session; and when the caller already has an
+   * open session for the scope — or one holding one of its cards (the take-back)
+   * — that session is returned and nothing is created.
+   */
+  async restart(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanSessionRestartResultDto> {
+    const session = await requireSession(pctx, address);
+    assertRestartable(session, pctx);
+    const now = new Date();
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        // The scope lock FIRST, as every start takes it: a first turn racing this
+        // restart for the same scope serialises behind it instead of creating a
+        // second open session beside the new one.
+        await planChangeSessionRepository.lockScopeForUser(
+          pctx.projectId,
+          session.scopeKey,
+          pctx.userId,
+          tx,
+        );
+        await endSessionWithin(tx, session.id, pctx.workspaceId, 'restarted', {
+          endedById: pctx.userId,
+          actor: { userId: pctx.userId, workspaceId: pctx.workspaceId },
+          now,
+        });
+        const open =
+          (await planChangeSessionRepository.findResumableForUser(
+            pctx.projectId,
+            session.scopeKey,
+            pctx.userId,
+            pctx.workspaceId,
+            tx,
+          )) ??
+          (await planChangeSessionRepository.findOpenHoldingForUser(
+            pctx.projectId,
+            session.targetKeys,
+            pctx.userId,
+            pctx.workspaceId,
+            tx,
+          ));
+        const next =
+          open ??
+          (await planChangeSessionRepository.create(
+            {
+              workspaceId: pctx.workspaceId,
+              projectId: pctx.projectId,
+              createdById: pctx.userId,
+              scopeKey: session.scopeKey,
+              targetKeys: session.targetKeys,
+              origin: 'conversation',
+              lastActivityAt: now,
+            },
+            tx,
+          ));
+        return {
+          outcome: 'restarted' as const,
+          endedSessionId: session.id,
+          session: await toDto(next, pctx, tx),
+        };
       },
     );
   },
