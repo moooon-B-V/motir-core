@@ -649,6 +649,39 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
   });
 });
 
+describe('PlanningWorkspaceHost — the session ENDS (MOTIR-7643)', () => {
+  it('an end releases the held cards, so the server surfaces refresh and the canvas re-keys', () => {
+    const view = renderHost({ mode: 'replan', from: 'project' });
+    expect(refresh).not.toHaveBeenCalled();
+
+    conversation.state = {
+      ...IDLE,
+      session: { ...IDLE.session!, endedAt: '2026-07-27T11:00:00.000Z', endReason: 'failed' },
+    };
+    view.rerender(hostElement({ mode: 'replan', from: 'project' }));
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    const key = screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!;
+    expect(key.startsWith('1:')).toBe(true);
+  });
+
+  it('a session that MOUNTS already ended refreshes nothing — nothing changed', () => {
+    renderHost(
+      { mode: 'replan', from: 'project' },
+      {
+        state: {
+          ...IDLE,
+          session: { ...IDLE.session!, endedAt: '2026-07-27T11:00:00.000Z', endReason: 'idle' },
+        },
+      },
+    );
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!.startsWith('0:')).toBe(
+      true,
+    );
+  });
+});
+
 describe('PlanningWorkspaceHost — the TARGET set is shared by both panes (MOTIR-1491)', () => {
   const TARGET: PlanningTarget = {
     id: 'wi-812',

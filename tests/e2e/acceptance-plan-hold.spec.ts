@@ -24,8 +24,9 @@
 // PARKS it: `planTargetLockService.acquireForPlanWithin`, AMENDMENT 16 D1) →
 // `markPlanned` — the sanctioned cross-layer reach `agent-authored-plan-seed.ts`
 // and `contextual-plan-seed.ts` use. Nothing stubs the park, the plan or a status
-// call; no model is called. The session-only case opens a conversation through
-// `planChangeSessionsService.openForScope`, the MCP / v1 open door.
+// call; no model is called. (The session-only case, "a card parked only by a
+// planning conversation still moves by hand", was retired by MOTIR-7630: an open
+// session now holds its card — AMENDMENT 23 §5; see docs/acceptance-lane-triage.md.)
 //
 // DETERMINISM (`motir-core/CLAUDE.md` § E2E): every wait is the board move's
 // response (status AND body), the decide route's response, a URL parameter, a
@@ -42,8 +43,6 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { plansService } from '@/lib/services/plansService';
-import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
-import { buildScope } from '@/lib/planChange/scope';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
@@ -386,32 +385,6 @@ test('a plan still being written holds the card too, and says so', async ({ page
   await expect(notice).toContainText(held.planHeld, { timeout: FIRST_PAINT_MS });
   await expect(notice).toContainText(held.planState.generating);
   await openDoor(page, plan.sessionId, held.reviewPlan);
-});
-
-test('a card parked only by a planning conversation, with no plan, still moves by hand', async ({
-  page,
-}) => {
-  const t = await seedTenant(`plan-hold-session-${Date.now()}@example.com`);
-  const card = await seedCard(t, 'Gift cards at checkout');
-  const project = await projectsService.getByKey(t.projectKey, t.ctx);
-  // A conversation opened on the card (the MCP / v1 open door): its SESSION lease
-  // parks the card at Planning, and no plan exists yet.
-  await planChangeSessionsService.openForScope(
-    { ...t.ctx, projectId: t.projectId, project },
-    buildScope([card.key]),
-  );
-  expect(await statusOf(card.id)).toBe('planning');
-
-  await page.setViewportSize(boardViewportWidth());
-  await signIn(page, t.email, PASSWORD);
-  await openBoard(page);
-  await inColumn(page, card.key, 'planning');
-  const move = await dragTo(page, card.key, 'in_progress');
-  expect(move.status()).toBe(200);
-  await expect(shell(page, card.key).getByText(held.planHeld)).toHaveCount(0);
-  await expect
-    .poll(() => statusOf(card.id), { timeout: 30_000, message: 'the drag commits' })
-    .toBe('in_progress');
 });
 
 test('an inline status edit on the /items row is refused in place, with the plan line', async ({

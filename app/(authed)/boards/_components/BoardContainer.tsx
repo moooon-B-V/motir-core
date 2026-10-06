@@ -51,10 +51,10 @@ import { SprintHeader } from './SprintHeader';
 import { SwimlaneBoard } from './SwimlaneBoard';
 import { BoardHeldRefusalProvider, planHoldName, type BoardHeldRefusal } from './BoardHeldRefusal';
 import { heldLineFromRefusal, readHeldRefusal } from '@/components/issues/heldRefusal';
-import { heldSentence } from '@/components/issues/StatusHeldNotice';
+import { heldSentence, sessionHolderSentence } from '@/components/issues/StatusHeldNotice';
 import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
 import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import { planHoldKey, type PlanHoldDTO } from '@/lib/dto/plans';
 import { UnmappedStatusesTray } from './UnmappedStatusesTray';
 import {
   cardIndex,
@@ -535,7 +535,7 @@ function BoardDnd({
   // outlined — a hovered / focused footer's, else an open plan refusal's. The
   // card body's own hover never sets it, so a pointer crossing a lane never flashes.
   const [hoverPlanId, setHoverPlanId] = useState<string | null>(null);
-  const highlightedPlanId = hoverPlanId ?? (held?.kind === 'plan' ? held.plan.planId : null);
+  const highlightedPlanId = hoverPlanId ?? (held?.kind === 'plan' ? planHoldKey(held.plan) : null);
   const showHeld = useCallback(
     (card: BoardCardDto, statusLabel: string, gate: ApprovalGatePendingPayloadDTO) => {
       const line = heldLineFromRefusal(statusLabel, statusLabel, gate);
@@ -566,14 +566,32 @@ function BoardDnd({
   // board was read before the hold) falls back to the loaded cards.
   const showPlanHeld = useCallback(
     (card: BoardCardDto, plan: PlanHoldDTO, loaded: BoardColumnDto[]) => {
-      const summary = board.planHolds[plan.planId];
+      const key = planHoldKey(plan);
+      const summary = board.planHolds[key];
       const siblings = summary
         ? Math.max(summary.heldCount - 1, 0)
         : loaded
             .flatMap((col) => col.cards)
-            .filter((c) => c.id !== card.id && c.planHold?.planId === plan.planId).length;
+            .filter((c) => c.id !== card.id && c.planHold && planHoldKey(c.planHold) === key)
+            .length;
       setHeld({ kind: 'plan', workItemId: card.id, itemKey: plan.itemKey, plan, siblings });
       const { name } = planHoldName(plan, board.planHolds, projectName);
+      // An open SESSION's hold (MOTIR-7640) reads its own sentences.
+      if (plan.kind === 'session') {
+        const line = [
+          tHeld('sessionHeld'),
+          sessionHolderSentence(plan, tHeld),
+          t('planHold.sessionSiblings', { count: siblings }),
+        ].join(' ');
+        setHeldAnnouncement(
+          t('announcementSessionHeld', {
+            key: card.identifier,
+            session: t('planHold.sessionMarker', { name }),
+            line,
+          }),
+        );
+        return;
+      }
       const line = [
         tHeld('planHeld'),
         tHeld(`planState.${plan.planStatus}`),

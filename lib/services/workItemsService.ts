@@ -3381,6 +3381,8 @@ export const workItemsService = {
       const hold = await readPlanHoldWithin(
         { id: workItemId, identifier: current.identifier, status: fromKey },
         tx,
+        new Date(),
+        ctx.userId,
       );
       if (hold) throw new PlanTargetHeldError({ statusKey: toStatusKey, ...hold });
     }

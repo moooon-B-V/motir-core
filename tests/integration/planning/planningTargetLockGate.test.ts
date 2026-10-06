@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -123,17 +124,29 @@ async function drainRound(): Promise<void> {
   if (pending) await pending.catch(() => undefined);
 }
 
-const session = { current: null as { user: { id: string; email: string; name: string } } | null };
+type SessionUser = { user: { id: string; email: string; name: string } };
+const session = { current: null as SessionUser | null };
 const activeCtx = { current: null as ProjectContext | null };
 
-vi.mock('@/lib/auth', () => ({ getSession: async () => session.current }));
-vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.current }));
+// ⚠️ THE CONTENDING OPENER IS A TEAMMATE, NOT THE SAME PERSON (MOTIR-7639). Since
+// AMENDMENT 23 §3 a member who opens a card their OWN open session holds TAKES IT
+// BACK — so the race below, two openers of one epic, is only a race between two
+// people. Both openers run at once, so a single global identity cannot tell them
+// apart: each call carries its own in an `AsyncLocalStorage`, which follows the
+// route through every await, and the globals are the default for every other call.
+type Caller = { session: SessionUser; ctx: ProjectContext };
+const caller = new AsyncLocalStorage<Caller>();
+const currentSession = () => caller.getStore()?.session ?? session.current;
+const currentCtx = () => caller.getStore()?.ctx ?? activeCtx.current;
+
+vi.mock('@/lib/auth', () => ({ getSession: async () => currentSession() }));
+vi.mock('@/lib/projects', () => ({ getActiveProject: async () => currentCtx() }));
 vi.mock('@/lib/workspaces', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/workspaces')>()),
-  getWorkspaceContext: async () =>
-    activeCtx.current
-      ? { userId: activeCtx.current.userId, workspaceId: activeCtx.current.workspaceId }
-      : null,
+  getWorkspaceContext: async () => {
+    const ctx = currentCtx();
+    return ctx ? { userId: ctx.userId, workspaceId: ctx.workspaceId } : null;
+  },
 }));
 
 // The motir-ai boundary — the one mock the no-mocks convention allows. Nothing
@@ -167,6 +180,8 @@ const { plansService } = await import('@/lib/services/plansService');
 const { planReviewService } = await import('@/lib/services/planReviewService');
 const { planTargetLockSweep } = await import('@/lib/jobs/definitions/planTargetLockSweep');
 const { PLANNING_STATUS_KEY } = await import('@/lib/planChange/targetLock');
+const { usersService } = await import('@/lib/services/usersService');
+const { addToProjectAs } = await import('../../helpers/workspaceRoleFixtures');
 
 const BASE = 'http://localhost:3000';
 
@@ -209,15 +224,50 @@ async function seedItem(
 /** A planning turn through the REAL anchored entrance — the route the panel
  *  posts to. Returns the response so a REFUSAL is inspectable rather than
  *  thrown away. */
-async function planFrom(anchorId: string, targetKeys?: string[]): Promise<Response> {
-  return contextualPlanRoute(
-    new Request(`${BASE}/api/work-items/${anchorId}/ai/plan`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ prompt: 'Break this down', ...(targetKeys ? { targetKeys } : {}) }),
-    }),
-    { params: Promise.resolve({ id: anchorId }) },
-  );
+async function planFrom(anchorId: string, targetKeys?: string[], as?: Caller): Promise<Response> {
+  const call = () =>
+    contextualPlanRoute(
+      new Request(`${BASE}/api/work-items/${anchorId}/ai/plan`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: 'Break this down', ...(targetKeys ? { targetKeys } : {}) }),
+      }),
+      { params: Promise.resolve({ id: anchorId }) },
+    );
+  return as ? caller.run(as, call) : call();
+}
+
+let teammateSeq = 0;
+
+/** A second member of the project holding `ai:plan` — the person who contends. */
+async function teammate(): Promise<Caller> {
+  teammateSeq += 1;
+  const email = `teammate-${teammateSeq}@example.com`;
+  const name = `Teammate ${teammateSeq}`;
+  const u = await usersService.createUser({
+    email,
+    password: 'correct-horse-battery-staple-9',
+    name,
+  });
+  await adminDb.workspaceMembership.create({
+    data: { userId: u.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
+  });
+  await addToProjectAs({
+    key: fx.project.identifier,
+    actorUserId: fx.ownerId,
+    ctx: fx.ctx,
+    targetUserId: u.id,
+    role: 'member',
+  });
+  return {
+    session: { user: { id: u.id, email, name } },
+    ctx: {
+      userId: u.id,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      project: fx.project,
+    },
+  };
 }
 
 async function planOk(
@@ -339,12 +389,13 @@ describe('1 · the race, with genuine concurrency', () => {
         };
         const epic = await seedItem('epic', `Billing ${round}`);
         const other = await seedItem('story', `Invoices ${round}`);
+        const mate = await teammate();
 
         // OVERLAPPING scopes, opened at the same instant through the real route.
         // Identical scopes resume ONE thread by design, so they are not the case the
         // lock exists for; `{epic}` versus `{epic, other}` is.
         const [a, b] = await trackRound(
-          Promise.all([planFrom(epic.id), planFrom(epic.id, [other.identifier])]),
+          Promise.all([planFrom(epic.id), planFrom(epic.id, [other.identifier], mate)]),
         );
 
         const statuses = [a.status, b.status].sort();
@@ -366,7 +417,7 @@ describe('1 · the race, with genuine concurrency', () => {
         // what a refusal names.
         expect(body.code).toBe('PLAN_TARGET_LOCKED');
         expect(body.target).toBe(epic.identifier);
-        expect(body.holder).toBe('Owner');
+        expect(body.holder).toBe(multiAnchorWon ? mate.session.user.name : 'Owner');
         expect(body.error).toContain(epic.identifier);
 
         // Exactly the WINNER's scope is held, by the WINNER's thread, and there is
@@ -408,7 +459,7 @@ describe('1b · all-or-nothing, forced rather than raced (MOTIR-2971)', () => {
       const other = await seedItem('story', 'Invoices');
 
       const winner = await planOk(epic.id, [other.identifier]);
-      const refused = await planFrom(epic.id);
+      const refused = await planFrom(epic.id, undefined, await teammate());
       expect(refused.status).toBe(409);
       expect(((await refused.json()) as { target: string }).target).toBe(epic.identifier);
 
@@ -433,7 +484,7 @@ describe('1b · all-or-nothing, forced rather than raced (MOTIR-2971)', () => {
       const other = await seedItem('story', 'Invoices');
 
       const winner = await planOk(epic.id);
-      const refused = await planFrom(epic.id, [other.identifier]);
+      const refused = await planFrom(epic.id, [other.identifier], await teammate());
       expect(refused.status).toBe(409);
 
       const leases = await heldLeases();
@@ -466,7 +517,7 @@ describe('1b · all-or-nothing, forced rather than raced (MOTIR-2971)', () => {
       const holder = await planOk(other.id);
       expect(await statusOf(other.id)).toBe(PLANNING_STATUS_KEY);
 
-      const refused = await planFrom(epic.id, [other.identifier]);
+      const refused = await planFrom(epic.id, [other.identifier], await teammate());
       expect(refused.status).toBe(409);
       expect(((await refused.json()) as { target: string }).target).toBe(other.identifier);
 

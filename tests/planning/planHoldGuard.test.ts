@@ -109,6 +109,7 @@ async function expectHeldRefusal(
   expect(err).toBeInstanceOf(PlanTargetHeldError);
   expect((err as PlanTargetHeldError).code).toBe('PLAN_TARGET_HELD');
   expect((err as PlanTargetHeldError).payload).toEqual({
+    kind: 'plan',
     itemKey: card.identifier,
     workItemId: card.id,
     planId,
@@ -209,20 +210,61 @@ describe('what is NOT held (§1’s exclusions)', () => {
     },
   );
 
-  it('a SESSION-held lock (no plan) never holds', { timeout: DB_TEST_TIMEOUT_MS }, async () => {
-    const card = await seedCard();
-    const planId = await plannedModify(card.id);
-    // Re-shape the lock as a session lease on the same card: planId null.
-    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
-    await adminDb.planTargetLock.update({
-      where: { workItemId: card.id },
-      data: { planId: null, sessionId: plan.sessionId },
-    });
+  it(
+    'a SESSION-held lock holds while its session is OPEN, and frees once it ends (AMENDMENT 23 §5)',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const card = await seedCard();
+      const planId = await plannedModify(card.id);
+      // Re-shape the lock as a session lease on the same card: planId null.
+      const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+      await adminDb.planTargetLock.update({
+        where: { workItemId: card.id },
+        data: { planId: null, sessionId: plan.sessionId },
+      });
 
-    await workItemsService.updateStatus(card.id, 'in_progress', fx.ctx);
-    expect(await statusOf(card.id)).toBe('in_progress');
-    expect(await planTargetLockService.readPlanHold(card.id, fx.ctx)).toBeNull();
-  });
+      const session = await adminDb.planChangeSession.findUniqueOrThrow({
+        where: { id: plan.sessionId! },
+      });
+      const err = await workItemsService
+        .updateStatus(card.id, 'in_progress', fx.ctx)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PlanTargetHeldError);
+      expect((err as PlanTargetHeldError).payload).toMatchObject({
+        kind: 'session',
+        itemKey: card.identifier,
+        workItemId: card.id,
+        planId: null,
+        planStatus: null,
+        sessionId: plan.sessionId,
+        holderId: session.createdById,
+        heldByViewer: session.createdById === fx.ctx.userId,
+      });
+      expect(await statusOf(card.id)).toBe(PLANNING_STATUS_KEY);
+      expect(await planTargetLockService.readPlanHold(card.id, fx.ctx)).toMatchObject({
+        kind: 'session',
+        sessionId: plan.sessionId,
+      });
+
+      // An EXPIRED lease on an open session still holds (§5: no override).
+      await adminDb.planTargetLock.update({
+        where: { workItemId: card.id },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
+      });
+      expect(await planTargetLockService.readPlanHold(card.id, fx.ctx)).toMatchObject({
+        kind: 'session',
+      });
+
+      // The session ENDS: the lock no longer holds, the card moves by hand.
+      await adminDb.planChangeSession.update({
+        where: { id: plan.sessionId! },
+        data: { endedAt: new Date(), endReason: 'idle' },
+      });
+      expect(await planTargetLockService.readPlanHold(card.id, fx.ctx)).toBeNull();
+      await workItemsService.updateStatus(card.id, 'in_progress', fx.ctx);
+      expect(await statusOf(card.id)).toBe('in_progress');
+    },
+  );
 
   it(
     'an EXPIRED lease on a `generating` plan does not hold',
@@ -332,6 +374,7 @@ describe('readPlanHold — the up-front read', () => {
     const planId = await plannedModify(card.id);
     const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
     expect(await planTargetLockService.readPlanHold(card.id, fx.ctx)).toEqual({
+      kind: 'plan',
       itemKey: card.identifier,
       workItemId: card.id,
       planId,

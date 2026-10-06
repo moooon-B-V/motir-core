@@ -76,7 +76,11 @@ describe('planChangeClient — the session calls hit the SHIPPED endpoints, by s
     fetchMock.mockResolvedValue(jsonResponse({ session: SESSION, earlier: EARLIER }));
 
     // `{ session, earlier }` (MOTIR-6024) — the earlier conversation rides along.
-    await expect(findResumableSession()).resolves.toEqual({ session: SESSION, earlier: EARLIER });
+    await expect(findResumableSession()).resolves.toEqual({
+      session: SESSION,
+      earlier: EARLIER,
+      copyable: null,
+    });
 
     const [url, init] = lastCall();
     expect(url).toBe('/api/ai/plan-change/session');
@@ -87,10 +91,18 @@ describe('planChangeClient — the session calls hit the SHIPPED endpoints, by s
 
   it('reads NO resumable session as a null session, not an error — and tolerates a bare null body', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ session: null, earlier: null }));
-    await expect(findResumableSession()).resolves.toEqual({ session: null, earlier: null });
+    await expect(findResumableSession()).resolves.toEqual({
+      session: null,
+      earlier: null,
+      copyable: null,
+    });
 
     fetchMock.mockResolvedValue(jsonResponse(null));
-    await expect(findResumableSession()).resolves.toEqual({ session: null, earlier: null });
+    await expect(findResumableSession()).resolves.toEqual({
+      session: null,
+      earlier: null,
+      copyable: null,
+    });
   });
 
   it('reopens ONE session by id, encoded into the query', async () => {
@@ -300,6 +312,8 @@ describe('planChangeClient — the planId echo is read DEFENSIVELY (MOTIR-1745)'
       session: SESSION,
       planId: 'plan_7',
       earlier: null,
+      copyable: null,
+      heldBy: null,
     });
 
     // No thread, and a response predating the field, both read as "nothing
@@ -309,6 +323,8 @@ describe('planChangeClient — the planId echo is read DEFENSIVELY (MOTIR-1745)'
       session: null,
       planId: null,
       earlier: null,
+      copyable: null,
+      heldBy: null,
     });
   });
 });
@@ -362,6 +378,8 @@ describe('the anchored transport — a work item’s own thread', () => {
       session: null,
       planId: null,
       earlier: null,
+      copyable: null,
+      heldBy: null,
     });
 
     const [url, init] = lastCall();

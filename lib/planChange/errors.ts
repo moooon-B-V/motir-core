@@ -29,6 +29,41 @@ export class PlanSessionNotFoundError extends Error {
 }
 
 /**
+ * A person's turn on a session that has ENDED (AMENDMENT 23 §3; MOTIR-7639). An
+ * ended session is never resumed: its cards are already given back, so a turn
+ * there would talk to a conversation that can no longer plan anything. → 409, a
+ * state conflict — the session exists, it is finished. Opening it is a read.
+ */
+export class PlanSessionEndedError extends Error {
+  readonly code = 'PLAN_SESSION_ENDED' as const;
+  constructor(readonly sessionId: string) {
+    super(`Planning session ${sessionId} has ended, so it can't be continued.`);
+    this.name = 'PlanSessionEndedError';
+  }
+}
+
+/**
+ * A copy asked of a session that cannot be copied (AMENDMENT 23 §6; MOTIR-7641):
+ * it is still open, or it ended `restarted` (the person asked for something new)
+ * or `approved` / `declined` (those were decisions). → 409, a state conflict.
+ * A session that is not the caller's is a 404 instead, so nothing is confirmed.
+ */
+export class PlanSessionNotCopyableError extends Error {
+  readonly code = 'PLAN_SESSION_NOT_COPYABLE' as const;
+  constructor(
+    readonly sessionId: string,
+    readonly endReason: string | null,
+  ) {
+    super(
+      endReason
+        ? `Planning session ${sessionId} ended ${endReason}, so its conversation can't be carried into a new one.`
+        : `Planning session ${sessionId} is still open, so there is nothing to carry over.`,
+    );
+    this.name = 'PlanSessionNotCopyableError';
+  }
+}
+
+/**
  * A concurrent append claimed the same position on the thread. Turn order is
  * allocated under the session row's `SELECT … FOR UPDATE` lock with a re-read
  * inside the transaction, so two concurrent appends normally SERIALIZE into two
@@ -89,18 +124,41 @@ export class TooManyPlanChangeTargetsError extends Error {
  */
 export class PlanTargetLockedError extends Error {
   readonly code = 'PLAN_TARGET_LOCKED' as const;
+  /**
+   * WHEN the card frees, at the latest (AMENDMENT 23 §4; MOTIR-7639). For a
+   * SESSION hold it is the lease's expiry plus one sweep interval — the idle
+   * close ends the session on the first pass after the lease runs out. For a
+   * PLAN hold it is null: a plan waiting for a decision frees when that plan is
+   * decided, and no clock says when.
+   */
+  readonly freesBy: Date | null;
+  /** The holding session, for a session hold — what the refusal links to. */
+  readonly holderSessionId: string | null;
   constructor(
     readonly targetIdentifier: string,
     readonly holderName: string | null,
     readonly expiresAt: Date,
+    holder: { sessionId?: string | null; planId?: string | null } = {},
   ) {
+    const heldByPlan = !!holder.planId;
+    const freesBy = heldByPlan
+      ? null
+      : new Date(expiresAt.getTime() + PLAN_TARGET_SWEEP_INTERVAL_MS);
     super(
       `${targetIdentifier} is being planned by ${holderName ?? 'another session'} right now. ` +
-        `The hold releases when that session finishes, or by ${expiresAt.toISOString()} at the latest.`,
+        (freesBy
+          ? `The hold releases when that session ends, or by ${freesBy.toISOString()} at the latest.`
+          : 'The hold releases when that plan is approved or declined.'),
     );
     this.name = 'PlanTargetLockedError';
+    this.freesBy = freesBy;
+    this.holderSessionId = heldByPlan ? null : (holder.sessionId ?? null);
   }
 }
+
+/** One lock-sweep interval (`planTargetLockSweep`, every 5 minutes) — the slack
+ *  between a session lease running out and the idle close ending the session. */
+export const PLAN_TARGET_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 /** The turn body was empty / blank. → 400 */
 export class EmptyPlanChangeTurnError extends Error {

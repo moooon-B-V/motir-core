@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -130,7 +131,7 @@ describe('GET /api/ai/plan-change/session — a look creates nothing (MOTIR-6023
     const res = await readSession(readReq());
     expect(res.status).toBe(200);
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
-    expect(await res.json()).toEqual({ session: null, earlier: null });
+    expect(await res.json()).toEqual({ session: null, earlier: null, copyable: null });
     expect(await adminDb.planChangeSession.count()).toBe(0);
   });
 
@@ -161,12 +162,10 @@ describe('GET /api/ai/plan-change/session — a look creates nothing (MOTIR-6023
     expect(await adminDb.planChangeSession.count()).toBe(before);
   });
 
-  it('past the window: no resumable conversation, and the EARLIER one to point to (MOTIR-6024)', async () => {
+  it('once ended: no resumable conversation, and the EARLIER one to point to (MOTIR-6024)', async () => {
     const id = await started();
-    await adminDb.planChangeSession.update({
-      where: { id },
-      data: { lastActivityAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
-    });
+    // AMENDMENT 23 §3: an open session resumes at any age; only its END stops it.
+    await planSessionEndService.endSession(id, 'idle', { workspaceId: fx.workspaceId });
     const before = await adminDb.planChangeSession.count();
 
     const body = (await (await readSession(readReq())).json()) as {
@@ -211,6 +210,34 @@ describe('POST /api/ai/plan-change/session — the first turn starts it', () => 
     };
     expect(again.id).toBe(opened.id);
     expect(again.turns).toHaveLength(2);
+  });
+
+  it('starts a COPY of the caller’s ended session from `copyFrom` (MOTIR-7641)', async () => {
+    const source = await started('Split the epic');
+    await planSessionEndService.endSession(source, 'failed', { workspaceId: fx.workspaceId });
+
+    const res = await startSession(startReq({ copyFrom: source }));
+    expect(res.status).toBe(200);
+    const copy = (await res.json()) as { id: string; turns: Array<{ body: string }> };
+    expect(copy.id).not.toBe(source);
+    expect(copy.turns.map((t) => t.body)).toEqual(['Split the epic']);
+  });
+
+  it('refuses a copy of a session a decision or a restart ended, and a malformed `copyFrom`', async () => {
+    const source = await started('Split the epic');
+    await planSessionEndService.endSession(source, 'restarted', {
+      workspaceId: fx.workspaceId,
+      endedById: fx.ownerId,
+      actorId: fx.ownerId,
+    });
+
+    const refused = await startSession(startReq({ copyFrom: source }));
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({
+      code: 'PLAN_SESSION_NOT_COPYABLE',
+      endReason: 'restarted',
+    });
+    expect((await startSession(startReq({ copyFrom: 42 }))).status).toBe(400);
   });
 
   it('400s malformed JSON and a missing first turn', async () => {
@@ -260,13 +287,34 @@ describe('POST /api/ai/plan-change/session/turns', () => {
 
   it('two sessions of one scope each hold only their own turns', async () => {
     const older = await started('older conversation');
-    // The older one goes quiet past the resume window, so the next first turn
-    // starts a second session of the same (project-wide) scope.
-    await adminDb.planChangeSession.update({
-      where: { id: older },
-      data: { lastActivityAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
+    // A second OPEN session of the same (project-wide) scope. The resume rule
+    // returns a member's open session at any age (AMENDMENT 23 §3), so it never
+    // starts this sibling itself — the row is written directly, because what is
+    // under test is that each session keeps its own turns.
+    const scopeKey = (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: older } }))
+      .scopeKey;
+    const newer = (
+      await adminDb.planChangeSession.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          createdById: fx.ownerId,
+          scopeKey,
+          targetKeys: [],
+          turnCount: 1,
+        },
+      })
+    ).id;
+    await adminDb.planChangeTurn.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        sessionId: newer,
+        seq: 0,
+        role: 'user',
+        body: 'newer conversation',
+        authorId: fx.ownerId,
+      },
     });
-    const newer = await started('newer conversation');
     expect(newer).not.toBe(older);
 
     await appendTurn(turnsReq({ sessionId: older, body: 'to the older one' }));

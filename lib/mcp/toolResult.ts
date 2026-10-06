@@ -89,6 +89,7 @@ import {
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanSessionNotFoundError,
+  PlanSessionEndedError,
   PlanTargetLockedError,
   TooManyPlanChangeTargetsError,
 } from '@/lib/planChange/errors';
@@ -671,7 +672,9 @@ export function toToolError(err: unknown): CallToolResult {
     // names the item, the holder and the lease expiry, which is what lets an
     // agent decide between waiting and planning something else instead of
     // retrying the same refused call.
-    err instanceof PlanTargetLockedError
+    err instanceof PlanTargetLockedError ||
+    // MOTIR-7639 — a turn on an ENDED session; the agent opens a new one.
+    err instanceof PlanSessionEndedError
   ) {
     return toolError(err.code, err.message);
   }

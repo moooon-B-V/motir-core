@@ -71,6 +71,9 @@ function views(n: number, from = 0): SessionRowView[] {
     latestPlan: null,
     planCount: 0,
     seed: null,
+    state: 'none' as const,
+    end: null,
+    copiedFrom: null,
   }));
 }
 

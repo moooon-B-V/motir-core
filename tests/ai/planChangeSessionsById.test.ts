@@ -2,12 +2,14 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { buildScope, PROJECT_SCOPE } from '@/lib/planChange/scope';
-import { PLAN_SESSION_RESUME_WINDOW_MS } from '@/lib/planChange/sessionWindow';
 import { PlanSessionNotFoundError, PlanTargetLockedError } from '@/lib/planChange/errors';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { usersService } from '@/lib/services/usersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
@@ -38,6 +40,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 }));
 
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
+const { contextualPlanningService } = await import('@/lib/services/contextualPlanningService');
 
 const MINUTE = 60 * 1000;
 
@@ -69,6 +72,10 @@ async function teammate(): Promise<ProjectContext> {
   return pctxFor(u.id);
 }
 
+async function endIt(sessionId: string) {
+  await planSessionEndService.endSession(sessionId, 'idle', { workspaceId: fx.workspaceId });
+}
+
 async function setActivity(sessionId: string, at: Date) {
   await adminDb.planChangeSession.update({
     where: { id: sessionId },
@@ -95,18 +102,21 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('findResumable — your own session in the scope, active within the window', () => {
-  it('resumes a session active 1h59m ago and not one active 2h01m ago', async () => {
+describe('findResumable — your own OPEN session in the scope, at any age', () => {
+  // AMENDMENT 23 §3 (MOTIR-7639): the 2-hour window is retired. Openness decides.
+  it('resumes an open session however old, and never an ended one however recent', async () => {
     const me = pctxFor(fx.ownerId);
     const started = await planChangeSessionsService.startWithFirstTurn(me, PROJECT_SCOPE, 'hi');
-    const now = new Date();
 
-    await setActivity(started.id, new Date(now.getTime() - 119 * MINUTE));
-    expect((await planChangeSessionsService.findResumable(me, '', now))?.id).toBe(started.id);
+    await setActivity(started.id, new Date(Date.now() - 48 * 60 * MINUTE));
+    expect((await planChangeSessionsService.findResumable(me, ''))?.id).toBe(started.id);
 
-    await setActivity(started.id, new Date(now.getTime() - 121 * MINUTE));
-    expect(await planChangeSessionsService.findResumable(me, '', now)).toBeNull();
-    expect(PLAN_SESSION_RESUME_WINDOW_MS).toBe(120 * MINUTE);
+    await adminDb.planChangeSession.update({
+      where: { id: started.id },
+      data: { endedAt: new Date(), endReason: 'failed' },
+    });
+    await setActivity(started.id, new Date());
+    expect(await planChangeSessionsService.findResumable(me, '')).toBeNull();
   });
 
   it('never resumes ANOTHER member’s session, however recent', async () => {
@@ -182,10 +192,10 @@ describe('startWithFirstTurn — a session exists from its first turn', () => {
     expect(second.turns.map((t) => t.body)).toEqual(['one', 'two']);
   });
 
-  it('starts FRESH once the member’s session has gone quiet past the window', async () => {
+  it('starts FRESH once the member’s session has ENDED (AMENDMENT 23 §3)', async () => {
     const me = pctxFor(fx.ownerId);
     const old = await planChangeSessionsService.startWithFirstTurn(me, PROJECT_SCOPE, 'old');
-    await setActivity(old.id, new Date(Date.now() - 3 * 60 * MINUTE));
+    await endIt(old.id);
 
     const fresh = await planChangeSessionsService.startWithFirstTurn(me, PROJECT_SCOPE, 'new');
 
@@ -247,7 +257,21 @@ describe('by-id writes', () => {
     const older = await planChangeSessionsService.startWithFirstTurn(me, PROJECT_SCOPE, 'older');
     const stale = new Date(Date.now() - 3 * 60 * MINUTE);
     await setActivity(older.id, stale);
-    const newer = await planChangeSessionsService.startWithFirstTurn(me, PROJECT_SCOPE, 'newer');
+    // A NEWER open sibling of the same scope. The resume rule never makes one for
+    // the same member any more (it returns their open session at any age), so the
+    // row is written directly — what is under test is the by-id address, not how
+    // the sibling came to exist.
+    const newer = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        createdById: fx.ownerId,
+        scopeKey: (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: older.id } }))
+          .scopeKey,
+        targetKeys: [],
+        turnCount: 1,
+      },
+    });
     expect(newer.id).not.toBe(older.id);
 
     // Address the OLDER one by id: the scope's most recent is `newer`.
@@ -294,15 +318,15 @@ describe('the target lock between sessions of one scope (AMENDMENT 17 §6)', () 
     return item.identifier;
   }
 
-  it('HANDS a live lease from the member’s own older session to the new one', async () => {
+  it('a member’s ENDED older session gave the card back, so the new one takes it', async () => {
+    // AMENDMENT 23 §3 retires the §6 hand-over: an open session is resumed at any
+    // age, and an ended one released its leases when it ended — so there is no
+    // live lease left to hand.
     const me = pctxFor(fx.ownerId);
     const key = await anchor();
     const scope = buildScope([key]);
     const older = await planChangeSessionsService.startWithFirstTurn(me, scope, 'first');
-    // The session goes quiet past the resume window while its lease is still
-    // live — the case where the member would otherwise be refused by their own
-    // earlier conversation.
-    await setActivity(older.id, new Date(Date.now() - 3 * 60 * MINUTE));
+    await endIt(older.id);
 
     const fresh = await planChangeSessionsService.startWithFirstTurn(me, scope, 'second');
 
@@ -313,6 +337,77 @@ describe('the target lock between sessions of one scope (AMENDMENT 17 §6)', () 
     expect(lock.sessionId).toBe(fresh.id);
     const item = await adminDb.workItem.findFirstOrThrow({ where: { identifier: key } });
     expect(item.status).toBe('planning');
+  });
+
+  it('TAKES BACK: a first turn on a card the member’s own open session holds returns THAT session (AMENDMENT 23 §3)', async () => {
+    const me = pctxFor(fx.ownerId);
+    const key = await anchor();
+    const other = await anchor();
+    const mine = await planChangeSessionsService.startWithFirstTurn(me, buildScope([key]), 'first');
+
+    // A DIFFERENT scope that includes the held card: no new session, no take-over.
+    const back = await planChangeSessionsService.startWithFirstTurn(
+      me,
+      buildScope([key, other]),
+      'again',
+    );
+
+    expect(back.id).toBe(mine.id);
+    expect(back.turns.map((t) => t.body)).toEqual(['first', 'again']);
+    expect(await adminDb.planChangeSession.count()).toBe(1);
+  });
+
+  it('the item’s resume NAMES another member’s hold on open, before anything is typed (MOTIR-7643)', async () => {
+    const key = await anchor();
+    const mate = await teammate();
+    const theirs = await planChangeSessionsService.startWithFirstTurn(
+      mate,
+      buildScope([key]),
+      'theirs',
+    );
+    const item = await adminDb.workItem.findFirstOrThrow({ where: { identifier: key } });
+    const lock = await adminDb.planTargetLock.findFirstOrThrow({ where: { workItemId: item.id } });
+
+    const read = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: item.id },
+      pctxFor(fx.ownerId),
+    );
+
+    // Nothing of theirs is resumed — it is named, with when it frees.
+    expect(read.session).toBeNull();
+    expect(read.heldBy).toEqual({
+      target: key,
+      holder: 'Teammate ' + seq,
+      freesBy: new Date(lock.expiresAt!.getTime() + 5 * MINUTE).toISOString(),
+      holderSessionId: theirs.id,
+    });
+    // Looking created nothing.
+    expect(await adminDb.planChangeSession.count()).toBe(1);
+
+    // Once their session ENDS the card is free, and the read says nothing is held.
+    await endIt(theirs.id);
+    const after = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: item.id },
+      pctxFor(fx.ownerId),
+    );
+    expect(after.heldBy).toBeNull();
+  });
+
+  it('refuses another member with WHO and FREES BY (AMENDMENT 23 §4)', async () => {
+    const key = await anchor();
+    const scope = buildScope([key]);
+    await planChangeSessionsService.startWithFirstTurn(await teammate(), scope, 'theirs');
+    const lock = await adminDb.planTargetLock.findFirstOrThrow({
+      where: { workItem: { identifier: key } },
+    });
+
+    const err = (await planChangeSessionsService
+      .startWithFirstTurn(pctxFor(fx.ownerId), scope, 'mine')
+      .catch((e: unknown) => e)) as PlanTargetLockedError;
+
+    expect(err).toBeInstanceOf(PlanTargetLockedError);
+    expect(err.holderSessionId).toBe(lock.sessionId);
+    expect(err.freesBy).toEqual(new Date(lock.expiresAt!.getTime() + 5 * MINUTE));
   });
 
   it('still REFUSES a different member whose session holds a live lease', async () => {
@@ -326,5 +421,63 @@ describe('the target lock between sessions of one scope (AMENDMENT 17 §6)', () 
     ).rejects.toBeInstanceOf(PlanTargetLockedError);
     // Refused whole: no session of mine was left behind holding nothing.
     expect(await adminDb.planChangeSession.count({ where: { createdById: fx.ownerId } })).toBe(0);
+  });
+});
+
+describe('the end and the scope notice, read by id (AMENDMENT 23 §1; MOTIR-6024)', () => {
+  it('names who ENDED a person-ended session, and nobody for an unknown id', async () => {
+    const started = await planChangeSessionsService.startWithFirstTurn(
+      pctxFor(fx.ownerId),
+      PROJECT_SCOPE,
+      'Split the import story.',
+    );
+    await planSessionEndService.endSession(started.id, 'declined', {
+      workspaceId: fx.workspaceId,
+      endedById: fx.ownerId,
+    });
+    const owner = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ownerId } });
+
+    const read = await planChangeSessionsService.getById(pctxFor(fx.ownerId), started.id);
+    expect(read.endReason).toBe('declined');
+    expect(read.endedBy).toEqual({ id: owner.id, name: owner.name });
+
+    await expect(
+      withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeSessionRepository.findEnder('pcs_missing', fx.workspaceId, tx),
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it('the scope notice skips the session it was asked to exclude', async () => {
+    const older = await planChangeSessionsService.startWithFirstTurn(
+      pctxFor(fx.ownerId),
+      PROJECT_SCOPE,
+      'First conversation.',
+    );
+    await endIt(older.id);
+    const newer = await planChangeSessionsService.startWithFirstTurn(
+      pctxFor(fx.ownerId),
+      PROJECT_SCOPE,
+      'Second conversation.',
+    );
+
+    const latest = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeSessionRepository.findLatestConversationInScope(
+        fx.projectId,
+        PROJECT_SCOPE.scopeKey,
+        fx.workspaceId,
+        newer.id,
+        tx,
+      ),
+    );
+    expect(latest?.id).toBe(older.id);
+  });
+
+  it('an empty hidden set withholds no plan and reads nothing', async () => {
+    await expect(
+      withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeSessionRepository.isPlanWithheld('plan_any', [], tx),
+      ),
+    ).resolves.toBe(false);
   });
 });

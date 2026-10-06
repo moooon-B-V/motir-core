@@ -165,14 +165,14 @@ export default async function PlansView({
   // page so it is on screen; the list skips it when its own page streams in.
   // One outside the filter in view is not pinned — the filter is what the
   // reader asked for.
-  const landingState = landing ? (landing.latestPlan?.status ?? 'none') : null;
+  const landingState = landing ? landing.state : null;
   const pinned =
     landing &&
     (planState === null || planState === landingState) &&
     !firstPage.sessions.some((s) => s.id === landing.id)
       ? [landing, ...firstPage.sessions]
       : firstPage.sessions;
-  const views = await buildSessionRowViews(pinned);
+  const views = await buildSessionRowViews(pinned, ctx.visitor ? null : ctx.userId);
   const aiConfigured = isMotirAiConfigured();
 
   // TWO EMPTINESSES, and they must not say the same thing (Part VII §6). The

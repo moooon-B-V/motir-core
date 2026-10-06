@@ -423,12 +423,16 @@ describe('getSessionForWorkItem — resuming the item’s thread (MOTIR-910)', (
       projectCtx(fx),
     );
     expect(fromOther.session?.targetKeys).toEqual([story.identifier, other.identifier].sort());
-    // …while the SINGLE-item thread is a different conversation entirely.
+    // …and the SINGLE-item door has no thread of its own, so it TAKES BACK the
+    // person's open session that holds the card, and says so (AMENDMENT 23 §3,
+    // MOTIR-7643) — it never starts a second session on a held card.
     const single = await contextualPlanningService.getSessionForWorkItem(
       { anchorId: story.id },
       projectCtx(fx),
     );
-    expect(single.session).toBeNull();
+    expect(single.session?.id).toBe(fromOther.session?.id);
+    expect(single.session?.takenBack).toBe(true);
+    expect(fromOther.session?.takenBack).toBe(false);
   });
 
   it('never resolves an anchor from another tenant — 404-shaped, not an empty read', async () => {

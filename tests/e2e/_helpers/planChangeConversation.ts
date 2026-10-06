@@ -92,11 +92,12 @@ export async function asConversationTurn<T>(
 
 // ── Session TIME, set rather than waited (Story MOTIR-6011 · MOTIR-6027) ─────
 //
-// The resume window is two hours (`PLAN_SESSION_RESUME_WINDOW_MS`), and a spec
-// never waits real time for it: it moves the session's `lastActivityAt` back.
-// That column is the ONLY input the window reads — `updatedAt` and the turns'
-// own timestamps are not consulted — so moving it is the product's own notion
-// of "a conversation you left three hours ago", not a simulation of one.
+// ⚠️ There is no resume WINDOW any more (AMENDMENT 23 §3, Story MOTIR-7630): an
+// open session is resumed at any age, and only an END stops a resume. What a
+// session's `lastActivityAt` still decides is the IDLE CLOSE — the lock sweep
+// ends an open session idle past the 30-minute lease — so a spec that needs "a
+// conversation left alone" moves that column back (`adminDb`) rather than
+// waiting real time.
 
 /** The member's most recently active planning conversation in the project. */
 export async function latestPlanningSession(
@@ -108,14 +109,6 @@ export async function latestPlanningSession(
     orderBy: { lastActivityAt: 'desc' },
   });
   return { id: session.id, workspaceId: session.workspaceId, createdById: user.id };
-}
-
-/** Move a conversation's last activity `ms` into the past. */
-export async function agePlanningSession(sessionId: string, ms: number): Promise<void> {
-  await adminDb.planChangeSession.update({
-    where: { id: sessionId },
-    data: { lastActivityAt: new Date(Date.now() - ms) },
-  });
 }
 
 /**

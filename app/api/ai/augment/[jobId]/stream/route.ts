@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
-import { failureReasonFrame } from '@/lib/ai/jobStream';
+import { failureReasonFrame, isTerminalFailureFrame } from '@/lib/ai/jobStream';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -90,6 +91,16 @@ export async function GET(
               reasonEmitted = true;
               controller.enqueue(encoder.encode(formatFrame(reason)));
             }
+          }
+          // A failed attempt ENDS its session here, server-side, before the
+          // stream closes (AMENDMENT 23 §2). Best-effort: the abandoned-plan
+          // sweep ends it as the backstop, so a write that fails here is not lost.
+          if (isTerminalFailureFrame(result.value)) {
+            await planSessionEndService
+              .endSessionForFailedJob(jobId, ctx)
+              .catch((err) =>
+                console.warn(`[stream] ending the session of job ${jobId} failed`, err),
+              );
           }
           result = await iterator.next();
         }

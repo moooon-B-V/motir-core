@@ -255,6 +255,7 @@ export const boardsService = {
     // Every read below binds the PROJECT's workspace and nothing about the actor.
     const readCtx = {
       workspaceId: member ? member.workspaceId : (ctx as VisitorReadContext).project.workspaceId,
+      userId: member ? member.userId : null,
     };
 
     const board = await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
@@ -436,10 +437,14 @@ export const boardsService = {
       allRows,
       readCtx,
     );
+    // Keyed by `planHoldKey`: the plan's id, or `session:<id>` for an OPEN session's
+    // hold (AMENDMENT 23 §5; MOTIR-7640).
     const planHolds: Record<string, BoardPlanHoldSummaryDto> = {};
-    for (const [planId, plan] of planHoldRead.plans) {
-      planHolds[planId] = {
-        planId,
+    for (const [key, plan] of planHoldRead.plans) {
+      planHolds[key] = {
+        kind: plan.kind,
+        planId: plan.planId,
+        sessionId: plan.sessionId,
         anchorKey: plan.anchorKey,
         title: plan.title,
         heldCount: plan.heldCount,

@@ -289,7 +289,13 @@ describe('GET /api/work-items/[id]/ai/plan — resume the item’s thread', () =
     // never planned has no thread and so nothing pending to confirm.
     // Never planned: nothing resumes and there is no earlier conversation to
     // point to (MOTIR-6024).
-    expect(await res.json()).toEqual({ session: null, planId: null, earlier: null });
+    expect(await res.json()).toEqual({
+      session: null,
+      planId: null,
+      earlier: null,
+      copyable: null,
+      heldBy: null,
+    });
     expect(submitJobMock).not.toHaveBeenCalled();
   });
 

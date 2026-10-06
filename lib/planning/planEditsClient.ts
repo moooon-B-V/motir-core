@@ -4,6 +4,9 @@ export class PlanEditsClientError extends Error {
   constructor(
     readonly status: number,
     readonly code: string | null,
+    /** The refusal's parsed body, when a caller needs more than its code — a
+     *  `409 PLAN_TARGET_LOCKED` names the holder and when it frees (MOTIR-7643). */
+    readonly body: unknown = null,
   ) {
     super(`Plan edits request failed (${status})`);
     this.name = 'PlanEditsClientError';

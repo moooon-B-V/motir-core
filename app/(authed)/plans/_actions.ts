@@ -44,7 +44,7 @@ export async function loadMoreSessionsAction(
       planState,
       view: 'project',
     });
-    return { views: await buildSessionRowViews(page.sessions), nextCursor: page.nextCursor };
+    return { views: await buildSessionRowViews(page.sessions, null), nextCursor: page.nextCursor };
   }
 
   const ctx = await getActiveProject();
@@ -63,5 +63,8 @@ export async function loadMoreSessionsAction(
     planState,
     view,
   });
-  return { views: await buildSessionRowViews(page.sessions), nextCursor: page.nextCursor };
+  return {
+    views: await buildSessionRowViews(page.sessions, ctx.userId),
+    nextCursor: page.nextCursor,
+  };
 }

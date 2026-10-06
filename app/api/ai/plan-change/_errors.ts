@@ -17,6 +17,8 @@ import {
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
+  PlanSessionEndedError,
+  PlanSessionNotCopyableError,
   PlanSessionNotFoundError,
   PlanTargetLockedError,
   TurnFilesGuideOnlyError,
@@ -75,6 +77,20 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   }
   // A lost append race and a submit with nothing to send are both conflicts with
   // the thread's current state, not malformed requests.
+  // A turn on an ENDED session (AMENDMENT 23 §3): the session exists and is finished.
+  if (err instanceof PlanSessionEndedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, sessionId: err.sessionId },
+      { status: 409 },
+    );
+  }
+  // A copy of a session that is still open or ended by a decision or a restart.
+  if (err instanceof PlanSessionNotCopyableError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, sessionId: err.sessionId, endReason: err.endReason },
+      { status: 409 },
+    );
+  }
   if (err instanceof PlanChangeTurnConflictError || err instanceof EmptyPlanChangeIntentError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
@@ -134,6 +150,10 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
         target: err.targetIdentifier,
         holder: err.holderName,
         expiresAt: err.expiresAt.toISOString(),
+        // AMENDMENT 23 §4: when it frees at the latest (null for a plan waiting
+        // for a decision), and the session holding it.
+        freesBy: err.freesBy?.toISOString() ?? null,
+        holderSessionId: err.holderSessionId,
       },
       { status: 409 },
     );

@@ -222,6 +222,7 @@ import {
   type DecidePlanInput,
 } from '@/lib/services/planGateDoor';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
+import { endSessionWithin } from '@/lib/services/planSessionEndService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
 // every planner produces into. A `Plan` bundles proposed `PlanItem` operations
@@ -7456,6 +7457,8 @@ async function approveWithin(
     { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },
     tx,
   );
+  // The decision ENDS the conversation that produced it (AMENDMENT 23 §2).
+  await endDecidedSession(tx, updated, 'approved', ctx);
   // The approval, on the plan's content trail (MOTIR-3535), inside the
   // very transaction that materialized the tree — so a rolled-back
   // approve (the in-transaction status re-read rejecting, or the budget
@@ -7676,6 +7679,32 @@ async function markStaleOnImmutableTarget(
 
 /** Decline's IN-TRANSACTION body (MOTIR-6035) — `declinePlan` and the plan gate's
  *  handler both run it; see `declinePlan` for every rule it keeps. */
+/**
+ * End the session a just-decided plan came from (AMENDMENT 23 §2) — in the
+ * decision's own transaction, by the decider, and only when the plan is that
+ * session's LATEST: deciding an earlier plan of a conversation that has since
+ * produced a newer one leaves the conversation open, the same rule the lock
+ * release applies after commit (`releasePlanTargetLocks`). The plan row is
+ * already locked here, so the end takes the session's lock second, in the order
+ * the end operation takes them.
+ *
+ * The cards are NOT given back here: the decision's after-commit step releases
+ * the plan's and the session's locks exactly as it always has.
+ */
+async function endDecidedSession(
+  tx: Prisma.TransactionClient,
+  plan: Plan,
+  reason: 'approved' | 'declined',
+  ctx: ServiceContext,
+): Promise<void> {
+  if (!plan.sessionId) return;
+  if ((await planRepository.findLatestIdBySession(plan.sessionId, tx)) !== plan.id) return;
+  await endSessionWithin(tx, plan.sessionId, ctx.workspaceId, reason, {
+    endedById: ctx.userId,
+    actor: ctx,
+  });
+}
+
 async function declineWithin(
   tx: Prisma.TransactionClient,
   planId: string,
@@ -7720,6 +7749,8 @@ async function declineWithin(
     },
     tx,
   );
+  // A person's decline ENDS the conversation that produced it (AMENDMENT 23 §2).
+  await endDecidedSession(tx, updated, 'declined', ctx);
   // The real count, read inside the same transaction — `markPlanned` above
   // does exactly this. The return used to be `toPlanDto(row, 0)`, a
   // hardcoded zero that was true only while the delete above existed; with

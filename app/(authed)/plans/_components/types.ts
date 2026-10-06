@@ -1,6 +1,10 @@
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import type { PlanStatusDto } from '@/lib/dto/plans';
-import type { PlanSessionSeedDto } from '@/lib/dto/planSessions';
+import type {
+  PlanSessionEndReasonDto,
+  PlanSessionSeedDto,
+  PlanSessionStateDto,
+} from '@/lib/dto/planSessions';
 
 // The serializable view-model a Plans-list SESSION row binds to (MOTIR-6025,
 // `design/ai-planning/design-notes.md` Part XIX §19.2). Built ON THE SERVER
@@ -24,6 +28,23 @@ export interface SessionRowView {
   latestPlan: { id: string; status: PlanStatusDto } | null;
   /** How many plans the session holds, the latest included. */
   planCount: number;
+  /** The session's state, END first (AMENDMENT 23 §1) — what the chip says. */
+  state: PlanSessionStateDto;
+  /** How it ENDED, or null while it is open (MOTIR-7642). The time is formatted on
+   *  the server: `HH:mm` today, else the short date; `fullLabel` is the whole
+   *  date-time, for the line's `title`. */
+  end: {
+    reason: PlanSessionEndReasonDto;
+    timeLabel: string;
+    fullLabel: string;
+    /** Who ended it; null when Motir did or the member is gone. */
+    endedByName: string | null;
+    /** Whether the reader ended it — the line then says *you*. */
+    endedByViewer: boolean;
+  } | null;
+  /** The session this one continues (AMENDMENT 23 §6), with its end time
+   *  formatted, or null. */
+  copiedFrom: { id: string; whenLabel: string } | null;
   /** The refused work item the session was seeded from (MOTIR-6209) — the row's
    *  `Re-plan of {KEY} · {verb}` link — or null, which draws nothing extra. */
   seed: PlanSessionSeedDto | null;

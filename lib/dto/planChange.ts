@@ -155,7 +155,7 @@ export interface PlanChangeSessionDto {
   lastJobId: string | null;
   lastSubmittedAt: string | null;
   /** When the session was last used — every turn and every submit moves it
-   *  (AMENDMENT 17 §3). The resume window and the Plans list read it. */
+   *  (AMENDMENT 17 §3). The Plans list orders by it; the idle close reads it (AMENDMENT 23 §2). */
   lastActivityAt: string;
   /** Which door opened the session (AMENDMENT 17 §4). */
   origin: PlanSessionOriginDto;
@@ -189,6 +189,35 @@ export interface PlanChangeSessionDto {
   startedByViewer?: boolean;
   viewerCanPlan?: boolean;
   pendingPlanId?: string | null;
+  /**
+   * The session's END (AMENDMENT 23 §1; MOTIR-7643) — when, why, and (on the by-id
+   * read) who ended it. All null while it is OPEN. Optional so a hand-built thread
+   * (every rail test) is an open one. The overlay reads them from the server, never
+   * from a stream error, so a reload shows the same end.
+   */
+  endedAt?: string | null;
+  endReason?: 'failed' | 'idle' | 'restarted' | 'declined' | 'approved' | null;
+  /** Who ended it — filled by the by-id read; null when Motir ended it. */
+  endedBy?: { id: string; name: string } | null;
+  /** The ENDED session this one carries over (AMENDMENT 23 §6), or null. Its
+   *  copied turns keep their own `createdAt`, so they are the turns written
+   *  before this session's own `createdAt`. */
+  copiedFromSessionId?: string | null;
+  /** The resume answered with the caller's OWN open session of ANOTHER scope that
+   *  holds this card — the take-back (AMENDMENT 23 §3). Set by the resume read only. */
+  takenBack?: boolean;
+}
+
+/**
+ * ANOTHER holder has one of the scope's cards (AMENDMENT 23 §4) — the overlay's
+ * refusal, read on open (`heldBy` on the anchored resume) or carried by a send's
+ * `409 PLAN_TARGET_LOCKED`. `freesBy` is null for a plan waiting for a decision.
+ */
+export interface PlanTargetHeldByDto {
+  target: string;
+  holder: string | null;
+  freesBy: string | null;
+  holderSessionId: string | null;
 }
 
 /**
@@ -240,6 +269,12 @@ export interface ContextualSessionResumeDto {
   /** When NOTHING resumed: the scope's most recent other conversation, for the
    *  fresh-start notice (MOTIR-6024). Absent/null otherwise. */
   earlier?: EarlierSessionDto | null;
+  /** When NOTHING resumed: the caller's own failed or idle-closed session of the
+   *  scope, which a new session may carry over (AMENDMENT 23 §6). */
+  copyable?: CopyableSessionDto | null;
+  /** When NOTHING resumed and another holder has one of the scope's cards: who,
+   *  and when it frees (AMENDMENT 23 §4). The overlay refuses in place. */
+  heldBy?: PlanTargetHeldByDto | null;
 }
 
 /**
@@ -262,6 +297,18 @@ export interface EarlierSessionDto {
 export interface ResumableSessionDto {
   session: PlanChangeSessionDto | null;
   earlier: EarlierSessionDto | null;
+  /** When nothing resumed and the caller's own latest conversation of the scope
+   *  ended `failed` or `idle`: that session, which a new one may carry over
+   *  (AMENDMENT 23 §6; MOTIR-7641). Absent/null otherwise. */
+  copyable?: CopyableSessionDto | null;
+}
+
+/** A session whose conversation a new session may carry over (AMENDMENT 23 §6). */
+export interface CopyableSessionDto {
+  id: string;
+  endReason: 'failed' | 'idle';
+  endedAt: string;
+  turnCount: number;
 }
 
 /**

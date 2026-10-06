@@ -4236,8 +4236,11 @@
     "noActiveSprintCta": "Go to Backlog",
     "announcementHeld": "{key} returned. {line}",
     "announcementPlanHeld": "{key} returned. It is held by {plan}. {line}",
+    "announcementSessionHeld": "{key} returned. It is held by {session}. {line}",
     "planHold": {
       "marker": "Plan · {name}",
+      "sessionMarker": "Session · {name}",
+      "sessionSiblings": "{count, plural, =0 {No other item on this board is in this session.} one {# other item on this board is in this session.} other {# other items on this board are in this session.}}",
       "siblings": "{count, plural, =0 {No other item on this board is in this plan.} one {# other item on this board is in this plan.} other {# other items on this board are in this plan.}}"
     }
   },
@@ -7138,7 +7141,8 @@
         "planned": "Waiting for approval",
         "stale": "Stale",
         "approved": "Approved",
-        "declined": "Declined"
+        "declined": "Declined",
+        "closed": "Closed"
       },
       "origin": {
         "mcp": "Agent plan",
@@ -7180,7 +7184,22 @@
         "pickLabel": "Follow-up to <mono>{key}</mono>",
         "chose": "chose {label}",
         "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})"
-      }
+      },
+      "end": {
+        "failed": "Closed · the attempt failed · {time}",
+        "idle": "Closed · idle · {time}",
+        "restartedYou": "Closed · you started something new · {time}",
+        "restartedBy": "Closed · {name} started something new · {time}",
+        "restarted": "Closed · started something new · {time}",
+        "declinedBy": "Declined by {name} · {time}",
+        "declinedYou": "Declined by you · {time}",
+        "declined": "Declined · {time}",
+        "approvedBy": "Approved by {name} · {time}",
+        "approvedYou": "Approved by you · {time}",
+        "approved": "Approved · {time}"
+      },
+      "continuedFrom": "Continued from the {when} conversation",
+      "continuedFromAria": "Open the conversation this one continues, closed {when}"
     }
   },
   "planningWorkspace": {
@@ -7280,7 +7299,8 @@
         "stale": "This plan changed since you read it. Nothing was written — the canvas now shows the current version; review it and decide again.",
         "notDecidable": "This plan can’t be decided yet — nobody has been asked to approve it. Nothing was changed.",
         "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it.",
-        "askSilent": "Nothing came back. Try asking that a different way."
+        "askSilent": "Nothing came back. Try asking that a different way.",
+        "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were."
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
       "correctToPlan": "Propose changes instead",
@@ -7450,7 +7470,38 @@
       "reopenedYours": "Reopened from the Plans page · started by you · last active {when}",
       "readOnly": "You can read this conversation. Continuing it needs permission to plan with Motir AI.",
       "someone": "someone",
-      "mcpNoTurns": "The conversation behind this plan happened in {harness}, so it isn’t shown here. Ask below to change the plan."
+      "mcpNoTurns": "The conversation behind this plan happened in {harness}, so it isn’t shown here. Ask below to change the plan.",
+      "end": {
+        "closed": "Closed",
+        "declined": "Declined",
+        "approved": "Approved",
+        "reason": {
+          "failed": "the attempt failed · {when}",
+          "idle": "no activity for 30 minutes · {when}",
+          "restarted": "you started over · {when}"
+        },
+        "by": "by {name} · {when}"
+      },
+      "newSession": {
+        "gloss": "Your conversation so far is copied into the new session. Nothing is sent until you write.",
+        "start": "Start a new session"
+      },
+      "copiedFrom": "Copied from an earlier session",
+      "copiedFromOpen": "Open it",
+      "takenBack": "You already have a session open for {label}, so you are back in it. Nothing new was started.",
+      "takenBackProject": "You already have a session open for {project}, so you are back in it. Nothing new was started.",
+      "refused": {
+        "sessionTitle": "{name} is planning {key} in another session",
+        "someoneTitle": "Someone else is planning {key} in another session",
+        "sessionBody": "You can plan it once that session ends — free by about {time} at the latest.",
+        "planTitle": "{name}'s plan for {key} is waiting for approval",
+        "someonePlanTitle": "A plan for {key} is waiting for approval",
+        "planBody": "You can plan it once that plan is approved or declined.",
+        "link": "See {name}'s session on the Plans page",
+        "placeholder": "{key} is held by another session"
+      },
+      "ended": "This session has ended, so it can't be continued. Planning {label} again starts a new session.",
+      "endedProject": "This session has ended, so it can't be continued. Planning {project} again starts a new session."
     },
     "arrival": {
       "crumbTargetPrefix": "Planning target:",
@@ -11688,6 +11739,12 @@
       },
       "reviewPlan": "Review plan",
       "planHeldOption": "held by plan",
+      "sessionHeld": "Being planned in a conversation — status can't change until it ends.",
+      "sessionBy": "{name} is planning it with Motir AI.",
+      "sessionByYou": "You are planning it with Motir AI.",
+      "sessionByUnknown": "A teammate is planning it with Motir AI.",
+      "openSession": "Open the session",
+      "sessionHeldOption": "held by session",
       "planAndGate": "A <strong>{decision}</strong> is waiting on this item too — it can be decided once the plan is."
     },
     "decision": {

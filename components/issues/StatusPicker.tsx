@@ -59,7 +59,10 @@ export interface StatusPickerProps {
    * A MARK (MOTIR-6676) locks every status outside the done category, each tagged
    * *held by mark*.
    */
-  held?: ReadonlyArray<{ statusKey: string; waitingOn: 'decision' | 'merge' | 'plan' | 'mark' }>;
+  held?: ReadonlyArray<{
+    statusKey: string;
+    waitingOn: 'decision' | 'merge' | 'plan' | 'session' | 'mark';
+  }>;
 }
 
 export function StatusPicker({
@@ -113,7 +116,9 @@ export function StatusPicker({
                     ? 'movesOnMerge'
                     : hold.waitingOn === 'plan'
                       ? 'planHeldOption'
-                      : 'needsApproval',
+                      : hold.waitingOn === 'session'
+                        ? 'sessionHeldOption'
+                        : 'needsApproval',
                 )}
           </span>
         ),

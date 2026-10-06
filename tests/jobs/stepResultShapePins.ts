@@ -420,6 +420,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/impersonationExpirySweep.ts',
     shape: '{ closed: number; scanned: number }',
   },
+  'close-idle-planning-sessions': {
+    file: 'lib/jobs/definitions/planTargetLockSweep.ts',
+    // Added by MOTIR-7638 (AMENDMENT 23 §2): the lock sweep closes an idle
+    // session before it releases expired leases.
+    shape: '{ closed: number; sessionIds: Array<string> }',
+  },
   'release-expired-planning-locks': {
     file: 'lib/jobs/definitions/planTargetLockSweep.ts',
     // `plan_awaiting_review` added by MOTIR-5647: a lock held by a plan that has

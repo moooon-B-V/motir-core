@@ -1241,14 +1241,32 @@ export const approvalGatePendingSchema = z.object({
 export const planTargetHeldSchema = z.object({
   code: z.literal('PLAN_TARGET_HELD'),
   error: z.string(),
-  plan: z.object({
-    itemKey: z.string(),
-    workItemId: z.string(),
-    planId: z.string(),
-    planStatus: z.enum(['generating', 'planned', 'stale']),
-    sessionId: z.string().nullable(),
-    anchorKey: z.string().nullable(),
-  }),
+  // A PLAN's hold, or — since 1.63.0 (AMENDMENT 23 §5; MOTIR-7640) — an OPEN
+  // SESSION's, told apart by `kind`. A session hold has no plan, so its
+  // `planId` / `planStatus` are null.
+  plan: z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('plan'),
+      itemKey: z.string(),
+      workItemId: z.string(),
+      planId: z.string(),
+      planStatus: z.enum(['generating', 'planned', 'stale']),
+      sessionId: z.string().nullable(),
+      anchorKey: z.string().nullable(),
+    }),
+    z.object({
+      kind: z.literal('session'),
+      itemKey: z.string(),
+      workItemId: z.string(),
+      planId: z.null(),
+      planStatus: z.null(),
+      sessionId: z.string(),
+      anchorKey: z.string().nullable(),
+      holderId: z.string().nullable(),
+      holderName: z.string().nullable(),
+      heldByViewer: z.boolean(),
+    }),
+  ]),
 });
 
 /**

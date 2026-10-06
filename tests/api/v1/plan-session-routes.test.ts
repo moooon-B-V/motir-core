@@ -430,16 +430,23 @@ describe('the conversation addressed BY ID (MOTIR-6028)', () => {
     vi.clearAllMocks();
   });
 
-  /** Two conversations of the project-wide scope: an OLDER one gone quiet past
-   *  the 2-hour window (so the next open starts a NEWER one), and that newer one. */
+  /** Two OPEN conversations of the project-wide scope, the NEWER one written
+   *  directly. An open session is resumed at any age (AMENDMENT 23 §3), so the
+   *  doors never start a second one for the same member — what is under test is
+   *  that an id addresses exactly its session, not how the sibling came to be. */
   async function twoConversations(caller: V1ProjectCaller) {
     const older = await json<V1PlanSession>(await open(caller));
     await append(caller, { sessionId: older.id, body: 'the older conversation' });
-    await adminDb.planChangeSession.update({
-      where: { id: older.id },
-      data: { lastActivityAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
+    const row = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: older.id } });
+    const newer = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: row.workspaceId,
+        projectId: row.projectId,
+        createdById: row.createdById,
+        scopeKey: row.scopeKey,
+        targetKeys: row.targetKeys,
+      },
     });
-    const newer = await json<V1PlanSession>(await open(caller));
     expect(newer.id).not.toBe(older.id);
     return { older, newer };
   }

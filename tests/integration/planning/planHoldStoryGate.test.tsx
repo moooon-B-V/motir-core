@@ -58,7 +58,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
 import { planRowDestination } from '@/lib/planning/planDestination';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { PlanHeldByPlanDTO, PlanHoldDTO } from '@/lib/dto/plans';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import { runTransitionStatus } from '@/lib/mcp/tools/transitionStatus';
 import { changeStatusAction } from '@/app/(authed)/items/[key]/edit/actions';
@@ -159,7 +159,7 @@ async function planFacts(planId: string) {
   });
   return {
     planId,
-    planStatus: plan.status as PlanHoldDTO['planStatus'],
+    planStatus: plan.status as PlanHeldByPlanDTO['planStatus'],
     sessionId: plan.sessionId,
     anchorKey: plan.session?.targetKeys[0] ?? null,
   };
@@ -241,7 +241,7 @@ const FOUR = (p: PlanHoldDTO) => ({
 });
 
 /** What the MCP text channel says about the plan state (`planHeldResult`). */
-const MCP_STATE: Record<PlanHoldDTO['planStatus'], string> = {
+const MCP_STATE: Record<PlanHeldByPlanDTO['planStatus'], string> = {
   generating: 'is still being written',
   planned: 'is waiting for approval',
   stale: 'is stale and needs attention before it can be approved',
@@ -388,10 +388,10 @@ describe('the writer → consumer seam — every door’s payload opens where th
   );
 });
 
-describe('a SESSION-only park (no plan) moves by hand on every door', () => {
+describe('a SESSION-only park (no plan) is held while the session is open (AMENDMENT 23 §5)', () => {
   /** A card at `planning` under a lock whose `planId` is NULL — a conversation's
-   *  lease, which AMENDMENT 21 §1 excludes by name. */
-  async function sessionParked(title: string): Promise<Card> {
+   *  lease, which holds the card while that session is OPEN. */
+  async function sessionParked(title: string): Promise<{ card: Card; sessionId: string }> {
     const card = await seedCard(fx, title);
     const planId = await heldBy(card);
     const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
@@ -400,26 +400,59 @@ describe('a SESSION-only park (no plan) moves by hand on every door', () => {
       data: { planId: null, sessionId: plan.sessionId },
     });
     expect(await statusOf(card.id)).toBe(PLANNING_STATUS_KEY);
-    expect(await planTargetLockService.readPlanHold(card.id, fx.ctx)).toBeNull();
-    return card;
+    expect(await planTargetLockService.readPlanHold(card.id, fx.ctx)).toMatchObject({
+      kind: 'session',
+      sessionId: plan.sessionId,
+    });
+    return { card, sessionId: plan.sessionId! };
   }
 
-  it('the board, v1, the status action and MCP all move it', T, async () => {
+  it('the board, v1, the status action and MCP all refuse it, naming the session', T, async () => {
     const { boardId, columns } = await boardColumns();
+    const { card, sessionId } = await sessionParked('Held');
 
-    const a = await sessionParked('Board');
+    const boardRes = await boardMove(boardId, card.id, columns.in_progress!);
+    expect(boardRes.status).toBe(409);
+    const boardBody = (await boardRes.json()) as { code: string; plan: PlanHoldDTO };
+    expect(boardBody.code).toBe('PLAN_TARGET_HELD');
+    expect(boardBody.plan).toMatchObject({ kind: 'session', sessionId, planId: null });
+
+    const v1Res = await v1Transition(card.identifier, 'in_progress');
+    expect(v1Res.status).toBe(422);
+    const v1Body = planTargetHeldSchema.parse(await v1Res.json());
+    expect(v1Body.plan).toMatchObject({ kind: 'session', sessionId });
+
+    const action = await changeStatusAction({ id: card.id, toStatusKey: 'in_progress' });
+    expect(action).toMatchObject({ ok: false, field: 'status', code: 'PLAN_TARGET_HELD' });
+
+    const mcp = await runTransitionStatus({ key: card.identifier, status: 'in_progress' }, fx.ctx);
+    expect(mcp.isError).toBe(true);
+    expect((mcp.content as Array<{ text: string }>)[0]!.text.startsWith('PLAN_TARGET_HELD: ')).toBe(
+      true,
+    );
+
+    expect(await statusOf(card.id)).toBe(PLANNING_STATUS_KEY);
+  });
+
+  it('once the session ENDS, every door moves it by hand', T, async () => {
+    const { boardId, columns } = await boardColumns();
+    const parked: Array<{ card: Card; sessionId: string }> = [];
+    for (const title of ['Board', 'V1', 'Action', 'MCP']) parked.push(await sessionParked(title));
+    await adminDb.planChangeSession.updateMany({
+      where: { id: { in: parked.map((p) => p.sessionId) } },
+      data: { endedAt: new Date(), endReason: 'idle' },
+    });
+    const [a, b, c, d] = parked.map((p) => p.card) as [Card, Card, Card, Card];
+
     expect((await boardMove(boardId, a.id, columns.in_progress!)).status).toBe(200);
     expect(await statusOf(a.id)).toBe('in_progress');
 
-    const b = await sessionParked('V1');
     expect((await v1Transition(b.identifier, 'in_progress')).status).toBe(200);
     expect(await statusOf(b.id)).toBe('in_progress');
 
-    const c = await sessionParked('Action');
     expect((await changeStatusAction({ id: c.id, toStatusKey: 'in_progress' })).ok).toBe(true);
     expect(await statusOf(c.id)).toBe('in_progress');
 
-    const d = await sessionParked('MCP');
     const mcp = await runTransitionStatus({ key: d.identifier, status: 'in_progress' }, fx.ctx);
     expect(mcp.isError).toBeFalsy();
     expect(await statusOf(d.id)).toBe('in_progress');

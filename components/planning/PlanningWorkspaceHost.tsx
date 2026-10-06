@@ -429,20 +429,37 @@ function PlanWorkspaceHost({
     closeBypassingGuard();
   }, [refresh, closeBypassingGuard]);
   const report = useOptionalReport();
-  const { state, send, retry, correctTurn, approve, discard, stop } = usePlanChangeConversation({
-    onApproved,
-    anchorId,
-    // A NAMED conversation (`planSession=`, a Plans row) reopens that one
-    // (MOTIR-6024).
-    sessionId: launch.sessionId ?? null,
-    // A refusal's seeded re-plan (MOTIR-6210): the resumed return, or the seed
-    // the first send carries.
-    sessionIsResume,
-    seedGateId,
-    // A debug turn that filed a bug into Triage (MOTIR-7049) bumps the inbox's
-    // refetch tick — the one surface `router.refresh()` cannot reach.
-    onTriageChanged: report?.notifySubmissionsChanged,
-  });
+  const { state, send, retry, correctTurn, approve, discard, stop, startCopied } =
+    usePlanChangeConversation({
+      onApproved,
+      anchorId,
+      // A NAMED conversation (`planSession=`, a Plans row) reopens that one
+      // (MOTIR-6024).
+      sessionId: launch.sessionId ?? null,
+      // A refusal's seeded re-plan (MOTIR-6210): the resumed return, or the seed
+      // the first send carries.
+      sessionIsResume,
+      seedGateId,
+      // A debug turn that filed a bug into Triage (MOTIR-7049) bumps the inbox's
+      // refetch tick — the one surface `router.refresh()` cannot reach.
+      onTriageChanged: report?.notifySubmissionsChanged,
+    });
+
+  // THE SESSION'S END (MOTIR-7643): an end releases the cards the session held at
+  // Planning, so the canvas re-reads them at their prior status — the same refetch
+  // a decline or an approve triggers. Fires on the transition only, never on a
+  // session that mounted already ended.
+  const endSessionId = state.session?.id ?? null;
+  const endedAt = state.session?.endedAt ?? null;
+  const seenEnd = useRef<{ id: string | null; endedAt: string | null } | null>(null);
+  useEffect(() => {
+    const before = seenEnd.current;
+    seenEnd.current = { id: endSessionId, endedAt };
+    if (!before || before.id === null || before.id !== endSessionId) return;
+    if (before.endedAt !== null || endedAt === null) return;
+    setTreeVersion((v) => v + 1);
+    refresh();
+  }, [endSessionId, endedAt, refresh]);
 
   // The rail sends TEXT; the anchors come from the set this host owns, so the
   // rail never has to know how a turn is scoped.
@@ -957,6 +974,7 @@ function PlanWorkspaceHost({
           onApprove={() => approveFrom('rail')}
           onDiscard={() => void discard()}
           onStop={stop}
+          onStartNewSession={() => void startCopied()}
           gateView={gateView}
           declining={declineFrom === 'rail'}
           onRequestDecline={() => setDeclineFrom('rail')}

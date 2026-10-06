@@ -81,5 +81,8 @@ export function toPlanChangeSessionDto(
     updatedAt: row.updatedAt.toISOString(),
     turns: turns.map(toPlanChangeTurnDto),
     workItemRefs,
+    endedAt: row.endedAt ? row.endedAt.toISOString() : null,
+    endReason: row.endReason ?? null,
+    copiedFromSessionId: row.copiedFromSessionId ?? null,
   };
 }
