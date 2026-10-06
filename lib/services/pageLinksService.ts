@@ -8,7 +8,7 @@ import {
   decodeWorkItemPagesCursor,
   encodeWorkItemPagesCursor,
   workItemPagesLimit,
-} from '@/lib/pageLinks/workItemPagesCursor';
+} from '@/lib/pages/workItemPagesCursor';
 import type { WorkItemPagesDto } from '@/lib/dto/pageLinks';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
