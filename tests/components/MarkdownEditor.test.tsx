@@ -650,6 +650,42 @@ describe('Unified @ picker — People + Work items (component, 5.8.5)', () => {
     expect(anchor.querySelector('[role="listbox"]')).toBeNull();
   });
 
+  // MOTIR-7574 — panel 3 state 6 of design/pages/page--work-item-mention.mock.html.
+  // A REJECTED search used to read as "No work items match"; it now says it
+  // failed and offers Try again, which re-runs the same query.
+  it('a rejected search shows the failure and Try again re-runs it', async () => {
+    const search = vi
+      .fn<(q: string) => Promise<WorkItemMentionCandidate[]>>()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('still offline'))
+      .mockResolvedValue(WORK_ITEMS);
+    const { editor, anchor } = await mount(search);
+    editor.commands.focus('end');
+    editor.commands.insertContent('@is');
+
+    await waitFor(() =>
+      expect(anchor.querySelector('[role="alert"]')?.textContent).toBe(
+        'Couldn’t search work items.',
+      ),
+    );
+    expect(anchor.textContent).not.toContain('No work items match');
+    // Isaac (the person) is row 0; Try again is the next option.
+    const retry = anchor.querySelectorAll('[role="option"]')[1]!;
+    expect(retry.textContent).toBe('Try again');
+    fireEvent.mouseEnter(retry);
+    expect(retry.getAttribute('aria-selected')).toBe('true');
+
+    // Enter on the active Try again retries…
+    fireEvent.keyDown(editor.view.dom, { key: 'Enter' });
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(anchor.querySelector('[role="alert"]')).toBeTruthy());
+    // …and so does a click.
+    fireEvent.mouseDown(anchor.querySelectorAll('[role="option"]')[1]!);
+    await waitFor(() => expect(anchor.querySelectorAll('[role="option"]').length).toBe(3));
+    expect(search).toHaveBeenCalledTimes(3);
+    expect(anchor.querySelector('[role="alert"]')).toBeNull();
+  });
+
   it('absent searchWorkItems → no Work items section (people-only fallback)', async () => {
     const { editor, anchor } = await mount(undefined);
     editor.commands.focus('end');

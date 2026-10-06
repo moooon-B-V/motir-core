@@ -14,6 +14,14 @@
 //  • the empty body shows its placeholder in `--el-text-muted`, which the notes
 //    allow only as placeholder ink directly on the white page.
 //
+//  • the work-item mention (MOTIR-7574, § _Mention a work item_): the typed
+//    `@query` keeps the description editor's `--el-tint-yellow` mark; a selected
+//    chip carries the focus ring; the archived chip's key and title are lifted
+//    from the shipped muted / faint to `--el-text-secondary` (AA); and the
+//    unavailable chip — deleted or hidden, drawn the same — is `.is-deleted`'s
+//    shape (no border, no fill, struck through, not a link) in
+//    `--el-text-secondary`. The live chip itself is the shipped `.wi-chip`.
+//
 // It is rendered as a React 19 hoisted `<style href precedence>`, so it is
 // unlayered like the shipped stylesheet and each rule is scoped one class
 // deeper (`.motir-page-editor .motir-prose …`), which is what lets it win.
@@ -32,4 +40,29 @@ export const PAGE_EDITOR_CSS = `
   pointer-events: none;
   color: var(--el-text-muted);
 }
+.motir-page-editor .motir-prose .suggestion {
+  background: var(--el-tint-yellow);
+  border-radius: var(--radius-kbd);
+  padding: 0 1px;
+  color: var(--el-text);
+}
+.motir-page-editor .motir-prose .motir-wi-mention.ProseMirror-selectednode {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+  border-radius: var(--radius-control);
+}
+.motir-page-editor .motir-prose .wi-chip.is-archived,
+.motir-page-editor .motir-prose .wi-chip.is-archived .wi-key,
+.motir-page-editor .motir-prose .wi-chip.is-archived .wi-title { color: var(--el-text-secondary); }
+.motir-page-editor .motir-prose .wi-chip.is-unavailable,
+.motir-page-editor .motir-prose .wi-chip.is-unavailable:hover {
+  padding-left: 0;
+  padding-right: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--el-text-secondary);
+  text-decoration: line-through;
+  cursor: default;
+}
+.motir-page-editor .motir-prose .wi-chip .wi-label { color: var(--el-text-secondary); text-decoration: line-through; }
 `;

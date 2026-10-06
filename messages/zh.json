@@ -148,6 +148,8 @@
     "mentionTypeToSearch": "继续输入以搜索工作项…",
     "mentionSearching": "搜索中…",
     "mentionNoResults": "没有与「{query}」匹配的工作项。",
+    "mentionSearchFailed": "无法搜索工作项。",
+    "mentionRetry": "重试",
     "codeLanguage": "语言"
   },
   "common": {
@@ -12879,7 +12881,11 @@
         "link": "链接",
         "linkPrompt": "链接地址",
         "image": "插入图片",
-        "table": "插入表格"
+        "table": "插入表格",
+        "workItem": "工作项",
+        "workItemLabel": "提及工作项",
+        "workItemTip": "提及工作项 — 或在正文中输入 @",
+        "workItemInCode": "代码块中不能提及工作项"
       },
       "table": {
         "addRow": "+ 行",
@@ -13042,6 +13048,10 @@
         "rootRequired": "无法恢复“{title}”",
         "rootRequiredBody": "“{title}”是作为“{root}”的一部分归档的。恢复“{root}”即可让它回来。"
       }
+    },
+    "mention": {
+      "unavailable": "不可用的工作项",
+      "unavailableTitle": "该工作项已删除，或你无权查看。"
     }
   }
 }

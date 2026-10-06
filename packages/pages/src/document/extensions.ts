@@ -47,7 +47,12 @@ function mentionAttrs(
 ): false | { id: string; label: string | null } {
   const match = WORK_ITEM_MENTION_HREF_RE.exec(href);
   if (!match) return false;
-  return { id: match[1]!, label: String(element.textContent).trim() || null };
+  const id = match[1]!;
+  const text = String(element.textContent).trim();
+  // A chip with no stored label renders its id as its text (MOTIR-7574: the
+  // page editor inserts the id ONLY), so pasting one back must not turn that id
+  // into a label.
+  return { id, label: text && text !== id ? text : null };
 }
 
 export const WorkItemMention = Node.create({

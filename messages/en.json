@@ -148,6 +148,8 @@
     "mentionTypeToSearch": "Keep typing to search work items…",
     "mentionSearching": "Searching…",
     "mentionNoResults": "No work items match “{query}”.",
+    "mentionSearchFailed": "Couldn’t search work items.",
+    "mentionRetry": "Try again",
     "codeLanguage": "Language"
   },
   "common": {
@@ -12883,7 +12885,11 @@
         "link": "Link",
         "linkPrompt": "Link URL",
         "image": "Insert image",
-        "table": "Insert table"
+        "table": "Insert table",
+        "workItem": "Work item",
+        "workItemLabel": "Mention a work item",
+        "workItemTip": "Mention a work item — or type @ in the text",
+        "workItemInCode": "Work items can’t be mentioned inside a code block"
       },
       "table": {
         "addRow": "+ Row",
@@ -13046,6 +13052,10 @@
         "rootRequired": "Couldn’t restore “{title}”",
         "rootRequiredBody": "“{title}” is archived as part of “{root}”. Restore “{root}” to bring it back."
       }
+    },
+    "mention": {
+      "unavailable": "Unavailable work item",
+      "unavailableTitle": "This work item was deleted, or you can’t see it."
     }
   }
 }

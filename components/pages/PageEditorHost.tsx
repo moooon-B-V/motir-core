@@ -5,10 +5,20 @@ import { useTranslations } from 'next-intl';
 import {
   PageBodyTooLargeError,
   PageEditor,
+  type AvailableWorkItemRefView,
   type PageEditorMessages,
   type SaveStatus,
 } from '@motir/pages';
+import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
+import {
+  WorkItemMentionRow,
+  type WorkItemMentionCandidate,
+} from '@/components/ui/markdownEditorMentions';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useOptionalTheme } from '@/lib/contexts/theme-context';
+import type { WorkItemKindDto, WorkItemRefMap } from '@/lib/dto/workItems';
+import { searchWorkItemMentions } from '@/lib/mentions/workItemMentionSearch';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
 import '@/components/ui/markdown-editor.css';
 
 // THE one client host for `@motir/pages`' editor (Story MOTIR-5752 · MOTIR-7280),
@@ -28,6 +38,14 @@ import '@/components/ui/markdown-editor.css';
 //    `markdownEditor.codeLanguage`.
 //  • `theme` — `useOptionalTheme()`'s resolved pattern, as `MarkdownEditor` reads it.
 //  • `initialState` — the DTO's base64 Yjs state, decoded once.
+//  • the work-item MENTION (MOTIR-7574, `design/pages/design-notes.md`
+//    § _Mention a work item_): `searchWorkItems` is the shipped mention search
+//    narrowed to the page's project (and rejecting on a refused search, so the
+//    picker can say it failed); `workItemRefs` is `PageDto.workItemRefs`; the
+//    chip is the shipped `motir:` chip (`WorkItemRefChip`, the one
+//    `lib/markdown/render.tsx` mounts) under a `{title} · {status}` tooltip; the
+//    picker row is `MentionList`'s (`WorkItemMentionRow`); and a read-only chip
+//    the shipped chip did not open itself opens the quick-view peek.
 //
 // ⚠️ IT IMPORTS NOTHING SERVER-ONLY. `@motir/pages` is imported from its barrel,
 // whose editor entry carries `'use client'`; `@/lib/pages` (the server
@@ -105,6 +123,7 @@ function usePageEditorMessages(): PageEditorMessages {
   const t = useTranslations('pages.editor');
   const tMarkdown = useTranslations('markdownEditor');
   const tArchive = useTranslations('pages.archive.refusal');
+  const tMention = useTranslations('pages.mention');
   return useMemo(
     () => ({
       bodyLabel: t('bodyLabel'),
@@ -126,6 +145,10 @@ function usePageEditorMessages(): PageEditorMessages {
         linkPrompt: t('toolbar.linkPrompt'),
         image: t('toolbar.image'),
         table: t('toolbar.table'),
+        workItem: t('toolbar.workItem'),
+        workItemLabel: t('toolbar.workItemLabel'),
+        workItemTip: t('toolbar.workItemTip'),
+        workItemInCode: t('toolbar.workItemInCode'),
       },
       table: {
         addRow: t('table.addRow'),
@@ -151,14 +174,60 @@ function usePageEditorMessages(): PageEditorMessages {
         reload: t('tooLarge.reload'),
         newPageNewTab: t('tooLarge.newPageNewTab'),
       },
+      mention: {
+        workItems: tMarkdown('mentionWorkItems'),
+        typeToSearch: tMarkdown('mentionTypeToSearch'),
+        searching: tMarkdown('mentionSearching'),
+        noResults: (query: string) => tMarkdown('mentionNoResults', { query }),
+        searchFailed: tMarkdown('mentionSearchFailed'),
+        retry: tMarkdown('mentionRetry'),
+        unavailable: tMention('unavailable'),
+        unavailableTitle: tMention('unavailableTitle'),
+      },
       archived: {
         title: tArchive('editingArchived'),
         body: tArchive('editingArchivedBody'),
         reload: tArchive('reload'),
       },
     }),
-    [t, tMarkdown, tArchive],
+    [t, tMarkdown, tArchive, tMention],
   );
+}
+
+/**
+ * A page chip, live or archived: the shipped `motir:` chip under the hover
+ * tooltip the notes draw — the full title and the status by name, so the status
+ * is not carried by the dot's hue alone.
+ */
+export function renderPageWorkItemChip(view: AvailableWorkItemRefView) {
+  const summary = {
+    ...view,
+    kind: view.kind as WorkItemKindDto,
+    status: view.status ? { ...view.status, key: view.status.key ?? '' } : null,
+  };
+  const tip = view.status ? `${view.title} · ${view.status.label}` : view.title;
+  return (
+    <Tooltip content={tip} side="bottom">
+      <span>
+        <WorkItemRefChip summary={summary} fallbackLabel={view.identifier} />
+      </span>
+    </Tooltip>
+  );
+}
+
+/** One picker row: `MentionList`'s work-item row. */
+export function renderPageMentionRow(candidate: WorkItemMentionCandidate, active: boolean) {
+  return <WorkItemMentionRow item={candidate} active={active} />;
+}
+
+/**
+ * Open a work item's quick-view peek (`?peek=<key>`, shallow), as the shipped
+ * chip's own click does — for a chip that did not open it itself.
+ */
+export function openWorkItemPeek(identifier: string): void {
+  const params = new URLSearchParams(window.location.search);
+  params.set('peek', identifier);
+  shallowPush(`${window.location.pathname}?${params.toString()}`);
 }
 
 /** The live editor's save status, for the page around it (`@motir/pages`' `SaveStatus`). */
@@ -175,13 +244,24 @@ export interface PageEditorHostProps {
    * page can hold a restore while edits are unsaved (MOTIR-7388).
    */
   onSaveStatusChange?: (status: SaveStatus) => void;
+  /**
+   * `PageDto.projectId` — the one project the work-item picker searches. Without
+   * it the editor offers no mention door at all, never a search across projects.
+   */
+  projectId?: string;
+  /** `PageDto.workItemRefs` — the live summary of every work item the body mentions. */
+  workItemRefs?: WorkItemRefMap;
 }
+
+const NO_REFS: WorkItemRefMap = {};
 
 export function PageEditorHost({
   pageId,
   bodyState,
   canEdit,
   onSaveStatusChange: onStatus,
+  projectId,
+  workItemRefs = NO_REFS,
 }: PageEditorHostProps) {
   const messages = usePageEditorMessages();
   const theme = useOptionalTheme()?.resolvedPattern ?? 'light';
@@ -190,6 +270,20 @@ export function PageEditorHost({
 
   const saveUpdate = useCallback((update: Uint8Array) => sendPageUpdate(pageId, update), [pageId]);
   const uploadImage = useCallback((file: File) => uploadPageImage(pageId, file), [pageId]);
+  const searchWorkItems = useMemo(
+    () =>
+      projectId
+        ? (query: string) => searchWorkItemMentions(query, { projectId, throwOnError: true })
+        : undefined,
+    [projectId],
+  );
+  const onOpenWorkItem = useCallback(
+    (id: string) => {
+      const ref = workItemRefs[id];
+      if (ref?.accessible) openWorkItemPeek(ref.identifier);
+    },
+    [workItemRefs],
+  );
 
   // ── The leave guard ───────────────────────────────────────────────────────
   const statusRef = useRef<SaveStatus>('saved');
@@ -249,6 +343,11 @@ export function PageEditorHost({
       onSaveStatusChange={onSaveStatusChange}
       onReloadSaved={onReloadSaved}
       onNewPage={onNewPage}
+      searchWorkItems={searchWorkItems}
+      workItemRefs={workItemRefs}
+      renderWorkItemChip={renderPageWorkItemChip}
+      renderPickerRow={renderPageMentionRow}
+      onOpenWorkItem={onOpenWorkItem}
     />
   );
 }

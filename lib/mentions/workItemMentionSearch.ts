@@ -39,15 +39,16 @@ function humanizeStatusKey(key: string): string {
  * terminal `cancelled` to a neutral chip) — and humanize any custom key under a
  * neutral chip.
  */
-function deriveStatus(
-  statusKey: string,
-): { label: string; tone: WorkItemMentionStatusTone } | null {
+function deriveStatus(statusKey: string): WorkItemMentionCandidate['status'] {
   if (!statusKey) return null;
   const def = STATUS_BY_KEY.get(statusKey);
   if (!def) return { label: humanizeStatusKey(statusKey), tone: 'neutral' };
-  if (statusKey === 'blocked') return { label: def.label, tone: 'warning' };
-  if (statusKey === 'cancelled') return { label: def.label, tone: 'neutral' };
-  return { label: def.label, tone: TONE_BY_CATEGORY[def.category] ?? 'neutral' };
+  // The category rides along for the page editor's chip (MOTIR-7574), whose dot
+  // reads it until the page is read again; a custom key has none to give.
+  const { category } = def;
+  if (statusKey === 'blocked') return { label: def.label, tone: 'warning', category };
+  if (statusKey === 'cancelled') return { label: def.label, tone: 'neutral', category };
+  return { label: def.label, tone: TONE_BY_CATEGORY[category] ?? 'neutral', category };
 }
 
 /** Map one summary row into the picker candidate (type icon · key · title · Pill). */
@@ -69,10 +70,11 @@ export function toWorkItemMentionCandidate(row: WorkItemSummaryDto): WorkItemMen
  * (the picker surfaces a no-results state rather than throwing into the editor).
  * `opts.projectId` narrows the search to one project (MOTIR-7572 — the page
  * editor's picker); without it the search spans every browsable project.
+ * `opts.throwOnError` rejects on a non-OK response instead (MOTIR-7574).
  */
 export async function searchWorkItemMentions(
   query: string,
-  opts: { projectId?: string } = {},
+  opts: { projectId?: string; throwOnError?: boolean } = {},
 ): Promise<WorkItemMentionCandidate[]> {
   const project = opts.projectId ? `&projectId=${encodeURIComponent(opts.projectId)}` : '';
   const res = await fetch(
@@ -81,7 +83,12 @@ export async function searchWorkItemMentions(
       headers: { accept: 'application/json' },
     },
   );
-  if (!res.ok) return [];
+  if (!res.ok) {
+    // `throwOnError` (the page editor, MOTIR-7574) lets a refused search reach
+    // the picker's "search failed" state; the other hosts keep "no results".
+    if (opts.throwOnError) throw new Error(`Work-item search failed with HTTP ${res.status}`);
+    return [];
+  }
   const rows = (await res.json()) as WorkItemSummaryDto[];
   return rows.map(toWorkItemMentionCandidate);
 }

@@ -166,4 +166,22 @@ describe('the work-item mention (MOTIR-7570)', () => {
     const md = '- [MOTIR-5](motir:ck5)\n\n| a |\n| --- |\n| [MOTIR-6](motir:ck6) |';
     expect(roundTrip(md)).toBe(md);
   });
+  // MOTIR-7574: the page editor stores the work item's id ONLY, so a chip it
+  // inserted has no label, and its token is `[](motir:<id>)` — no key in the body.
+  it('round-trips a mention with no stored label as an empty-label token', () => {
+    const doc = s.node('doc', null, [
+      s.node('paragraph', null, [
+        s.text('See '),
+        s.node('workItemMention', { id: 'ck7', label: null }),
+        s.text(' now'),
+      ]),
+    ]);
+    const md = serializeMarkdown(doc);
+    expect(md).toBe('See [](motir:ck7) now');
+    expect(parseMarkdown(md).child(0).child(1).attrs).toEqual({ id: 'ck7', label: null });
+    expect(serializeMarkdown(parseMarkdown(md))).toBe(md);
+    // In a list and a table too.
+    const nested = '- [](motir:ck8)\n\n| a |\n| --- |\n| [](motir:ck9) |';
+    expect(roundTrip(nested)).toBe(nested);
+  });
 });

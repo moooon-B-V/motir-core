@@ -156,6 +156,8 @@ export default defineConfig({
       'tests/components/page-view.test.tsx',
       'tests/components/page-view-edges.test.tsx',
       'tests/components/pages-index.test.tsx',
+      // A page mentions a work item (Story MOTIR-5747 · MOTIR-7574): the host's binding.
+      'tests/components/pageEditorHost.test.tsx',
       // A decision may be a page (Story MOTIR-5761 · MOTIR-7441): the story gate, then each
       // card's own suite over the files above.
       'tests/integration/decisionPageStoryGate.test.ts',

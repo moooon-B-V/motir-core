@@ -32,4 +32,8 @@ export {
   type PageEditorProps,
   type PageEditorTheme,
   type SaveStatus,
+  type AvailableWorkItemRefView,
+  type WorkItemCandidate,
+  type WorkItemRefView,
+  type WorkItemStatusCategory,
 } from './editor';

@@ -154,6 +154,36 @@ test.describe('@smoke the page at its own address', () => {
     await expect(sub.getByRole('link')).toHaveAttribute('href', `/pages/${subId}`);
   });
 
+  test('the toolbar offers Work item, which opens the work-item picker (MOTIR-7574)', async ({
+    page,
+  }) => {
+    await signUp(page, USER);
+    const created = await page.request.post('/api/pages');
+    expect(created.status(), await created.text()).toBe(201);
+    const { id } = (await created.json()) as { id: string };
+
+    const res = await page.goto(`/pages/${id}`);
+    expect(res?.status()).toBe(200);
+    await expect(page.getByRole('textbox', { name: 'Page body' })).toBeVisible();
+
+    // The page adds group's third control, after Insert image and Insert table.
+    const toolbar = page.getByRole('toolbar', { name: 'Formatting' });
+    const workItem = toolbar.getByRole('button', { name: 'Mention a work item' });
+    await expect(workItem).toBeVisible();
+    await expect(workItem).toHaveText('Work item');
+    await expect(workItem).toHaveAttribute('aria-haspopup', 'listbox');
+
+    // It writes an `@` at the caret and the picker opens there. A bare `@` is
+    // under the search minimum, so the picker asks for more and fetches nothing
+    // — its own rendered state is the signal, no request to wait on.
+    await page.getByRole('textbox', { name: 'Page body' }).click();
+    await workItem.click();
+    const picker = page.getByRole('listbox', { name: 'Mention a work item' });
+    await expect(picker).toBeVisible();
+    await expect(picker).toContainText('Keep typing to search work items…');
+    await expect(workItem).toHaveAttribute('aria-expanded', 'true');
+  });
+
   test('an address that names no page answers 404', async ({ page }) => {
     await signUp(page, USER);
     const res = await page.goto('/pages/00000000-0000-4000-8000-000000000000');

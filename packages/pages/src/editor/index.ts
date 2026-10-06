@@ -10,3 +10,9 @@
 export { PageEditor, type PageEditorProps, type PageEditorTheme } from './PageEditor';
 export type { PageEditorMessages } from './messages';
 export type { SaveStatus } from './autosave';
+export type {
+  AvailableWorkItemRefView,
+  WorkItemCandidate,
+  WorkItemRefView,
+  WorkItemStatusCategory,
+} from './workItemMention';

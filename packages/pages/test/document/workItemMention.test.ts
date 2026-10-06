@@ -70,6 +70,11 @@ describe('WorkItemMention', () => {
       type: 'workItemMention',
       attrs: { id: 'ck8', label: null },
     });
+    // A label-less chip renders its id as its text; pasting it back keeps it
+    // label-less rather than storing the id as a label (MOTIR-7574).
+    expect(
+      mentionIn('<p><span data-type="workItemMention" data-work-item-id="ck7">ck7</span></p>'),
+    ).toEqual({ type: 'workItemMention', attrs: { id: 'ck7', label: null } });
   });
 
   it('refuses a malformed id: neither rule makes a mention of it', () => {
