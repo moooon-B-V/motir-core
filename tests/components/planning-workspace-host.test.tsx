@@ -134,6 +134,9 @@ const { conversation } = vi.hoisted(() => ({
     onApproved: null as ((r: unknown) => void) | null,
     anchorId: null as string | null,
     seedGateId: null as string | null,
+    requestRestart: vi.fn(),
+    answerRestartConfirm: vi.fn(),
+    onRestarted: null as ((sessionId: string) => void) | null,
   },
 }));
 
@@ -142,12 +145,15 @@ vi.mock('@/lib/hooks/usePlanChangeConversation', () => ({
     onApproved,
     anchorId,
     seedGateId,
+    onRestarted,
   }: {
     onApproved?: (r: unknown) => void;
     anchorId?: string | null;
     seedGateId?: string | null;
+    onRestarted?: (sessionId: string) => void;
   } = {}) => {
     conversation.onApproved = onApproved ?? null;
+    conversation.onRestarted = onRestarted ?? null;
     conversation.anchorId = anchorId ?? null;
     conversation.seedGateId = seedGateId ?? null;
     return conversation;
@@ -679,6 +685,72 @@ describe('PlanningWorkspaceHost — the session ENDS (MOTIR-7643)', () => {
     expect(screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!.startsWith('0:')).toBe(
       true,
     );
+  });
+});
+
+describe('PlanningWorkspaceHost — Plan something new (MOTIR-7650)', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('wires the rail control and the confirm answers to the conversation', () => {
+    renderHost(
+      { mode: 'replan', from: 'project' },
+      {
+        state: {
+          ...IDLE,
+          session: {
+            ...IDLE.session!,
+            turns: [
+              {
+                id: 't0',
+                seq: 0,
+                role: 'assistant',
+                body: 'Start something new?',
+                jobId: null,
+                question: null,
+                confirm: 'new_session',
+                isAnswer: false,
+                intent: null,
+                intentCorrected: false,
+                citations: [],
+                authorId: null,
+                createdAt: '2026-01-01T00:00:00.000Z',
+              },
+            ],
+          },
+        },
+      },
+    );
+    fireEvent.click(screen.getByTestId('planning-restart-control'));
+    expect(conversation.requestRestart).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId('planning-restart-keep'));
+    expect(conversation.answerRestartConfirm).toHaveBeenCalledWith('keep');
+    fireEvent.click(screen.getByTestId('planning-restart-confirm'));
+    expect(conversation.answerRestartConfirm).toHaveBeenCalledWith('confirm');
+  });
+
+  it('the swap re-points an address that named the old session, re-keys the canvas and refreshes', () => {
+    window.history.replaceState(null, '', '/items/ACME-1?plan=replan&planSession=s1');
+    renderHost({ mode: 'replan', from: 'project' });
+
+    act(() => conversation.onRestarted!('s2'));
+
+    expect(new URL(window.location.href).searchParams.get('planSession')).toBe('s2');
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!.startsWith('1:')).toBe(
+      true,
+    );
+  });
+
+  it('an address that named no session is left alone', () => {
+    window.history.replaceState(null, '', '/items/ACME-1?plan=replan');
+    renderHost({ mode: 'replan', from: 'project' });
+
+    act(() => conversation.onRestarted!('s2'));
+
+    expect(new URL(window.location.href).searchParams.has('planSession')).toBe(false);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
 

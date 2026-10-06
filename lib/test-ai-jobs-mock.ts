@@ -40,7 +40,7 @@ import type { MockAgent } from 'undici';
 export interface AskJobOutcome {
   /** `debug` (Story MOTIR-7042 · MOTIR-7051): the classifier read the turn as a
    *  report of broken behaviour, so the settle dispatches ONE `debug_bug` job. */
-  intent: 'ask' | 'plan_change' | 'debug';
+  intent: 'ask' | 'plan_change' | 'debug' | 'new_session';
   answer?: string | null;
   citations?: string[];
   /** A `debug` verdict ECHOES the anchor the turn was sent with (A1.2), which the

@@ -7474,7 +7474,7 @@
         "reason": {
           "failed": "尝试失败 · {when}",
           "idle": "30 分钟无活动 · {when}",
-          "restarted": "你重新开始了 · {when}"
+          "restarted": "你开始了新的规划 · {when}"
         },
         "by": "由 {name} · {when}"
       },
@@ -7601,6 +7601,19 @@
         "typeMarkdown": "Markdown",
         "typeFile": "文件"
       }
+    },
+    "restart": {
+      "control": "规划新内容",
+      "confirm": {
+        "body": "开始新的规划？这会关闭当前的规划会话，并归还它占用的工作项。",
+        "yes": "确认",
+        "keep": "继续规划"
+      },
+      "kept": "已继续规划",
+      "earlier": "你之前的会话已关闭",
+      "earlierOpen": "打开",
+      "disabledStreaming": "本次运行结束后可用",
+      "swapped": "你之前的会话已关闭，新的会话已打开。"
     }
   },
   "codeHealth": {

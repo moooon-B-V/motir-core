@@ -7478,7 +7478,7 @@
         "reason": {
           "failed": "the attempt failed · {when}",
           "idle": "no activity for 30 minutes · {when}",
-          "restarted": "you started over · {when}"
+          "restarted": "you started something new · {when}"
         },
         "by": "by {name} · {when}"
       },
@@ -7605,6 +7605,19 @@
         "typeMarkdown": "Markdown",
         "typeFile": "File"
       }
+    },
+    "restart": {
+      "control": "Plan something new",
+      "confirm": {
+        "body": "Start something new? This closes the current planning session and gives its work items back.",
+        "yes": "Confirm",
+        "keep": "Keep planning"
+      },
+      "kept": "Kept planning",
+      "earlier": "Your earlier session is closed",
+      "earlierOpen": "Open it",
+      "disabledStreaming": "Available when this run finishes",
+      "swapped": "Your earlier session is closed. A new session is open."
     }
   },
   "codeHealth": {

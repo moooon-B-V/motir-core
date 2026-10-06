@@ -17,9 +17,10 @@
 
 /** What an `ask_project` result says, once read defensively. */
 export interface AskOutcome {
-  /** Which intent the turn RAN AS — `plan_change` and `debug` (MOTIR-7047 · the
-   *  ADR's AMENDMENT 1) are the two redirects. */
-  intent: 'ask' | 'plan_change' | 'debug';
+  /** Which intent the turn RAN AS — `plan_change`, `debug` (MOTIR-7047 · the
+   *  ADR's AMENDMENT 1) and `new_session` (MOTIR-7649 · AMENDMENT 3) are the
+   *  redirects. */
+  intent: 'ask' | 'plan_change' | 'debug' | 'new_session';
   /** The answer body, or null on a redirect and on an empty utterance. */
   answer: string | null;
   /** Work-item keys the answer rests on. Always `[]` on a redirect. */
@@ -106,6 +107,12 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
       citations: [],
       anchorKey: typeof anchor === 'string' && WORK_ITEM_KEY.test(anchor) ? anchor : null,
     };
+  }
+
+  // The third redirect (MOTIR-7649 · AMENDMENT 3, A3.1): the turn asked to plan
+  // something new. Nothing answered, nothing cited, no anchor echo.
+  if (ask['intent'] === 'new_session') {
+    return { intent: 'new_session', answer: null, citations: [] };
   }
 
   return {

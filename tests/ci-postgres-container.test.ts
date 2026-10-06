@@ -106,6 +106,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-7644's session-lifecycle coverage lane (Story MOTIR-7630): the end
       // operation, the sweeps and the copy it measures run against a real database.
       'ci.yml:story-7630-coverage',
+      // MOTIR-7652's Plan-something-new coverage lane (Story MOTIR-7631): the restart
+      // gate and its two doors run against a real database.
+      'ci.yml:story-7631-coverage',
       'ci.yml:test',
     ]);
   });
