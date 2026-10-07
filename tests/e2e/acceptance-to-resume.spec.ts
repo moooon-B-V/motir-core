@@ -84,9 +84,16 @@ const REVISE_REASON = 'The invite sheet needs the expiry date beside the role.';
 
 const fill = (text: string, vars: Record<string, string | number>) =>
   text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key]));
-/** A rich message as the page renders it: tags dropped, placeholders filled. */
-const plain = (text: string, vars: Record<string, string | number> = {}) =>
-  fill(text.replace(/<\/?[a-z]+>/g, ''), vars);
+/** A rich message as the page renders it: tags dropped (to a fixed point, so no removal
+ *  can leave a new tag behind), placeholders filled. */
+const plain = (text: string, vars: Record<string, string | number> = {}) => {
+  let stripped = text;
+  for (let previous = ''; previous !== stripped; ) {
+    previous = stripped;
+    stripped = stripped.replace(/<\/?[a-z]+>/g, '');
+  }
+  return fill(stripped, vars);
+};
 /** An ICU `{count, plural, …}` with one `#` item, as the page renders it for one. */
 const onePlural = (text: string, rendered: string) =>
   text.replace(/\{count, plural,.*\}\}/, rendered);
