@@ -27,6 +27,7 @@ import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import { toOpenRepairRuns } from '@/lib/mappers/repairRunMappers';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { gateResumeRepository } from '@/lib/repositories/gateResumeRepository';
+import { describeResumeRun } from '@/lib/services/resumeRunDetailService';
 import { resolveFixEntries, type FixEntry } from '@/lib/services/fixGroupService';
 import { fixGroupKeyOf } from '@/lib/workItems/fixReason';
 
@@ -448,7 +449,7 @@ export const homeService = {
    */
   async listToResume(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
     const pageSize = clampLimit(options.limit);
-    return withWorkspaceContext(ctx, async (tx): Promise<HomePageDto> => {
+    const page = await withWorkspaceContext(ctx, async (tx): Promise<HomePageDto> => {
       const projectScopes = await resolveActiveProjectScope(ctx, tx);
       const keyed = await workItemRepository.listToResumeRunKeysByAssigneeOrReporterInWorkspace(
         ctx.userId,
@@ -475,20 +476,54 @@ export const homeService = {
       for (const a of attempts) {
         if (!attemptOf.has(a.runId)) attemptOf.set(a.runId, toGateResumeAttemptDto(a));
       }
+      const entries = pageRuns.flatMap((runId) => {
+        const entry = toResumeEntryDto(
+          members.filter((m) => m.resumeRunId === runId),
+          scopeOf.get(runId) ?? null,
+          ctx.userId,
+        );
+        return entry ? [{ runId, entry }] : [];
+      });
+      // Each entry's run, as line 2's aside and the gate list draw it (MOTIR-7712).
+      // Sequential: one transaction's client runs one query at a time anyway.
+      const items: HomeWorkItemRowDto[] = [];
+      for (const { runId, entry } of entries) {
+        items.push({
+          ...entry,
+          resumeAttempt: attemptOf.get(runId) ?? null,
+          resumeRun: await describeResumeRun(runId, entry.id, tx),
+        });
+      }
       return {
-        items: pageRuns.flatMap((runId) => {
-          const entry = toResumeEntryDto(
-            members.filter((m) => m.resumeRunId === runId),
-            scopeOf.get(runId) ?? null,
-            ctx.userId,
-          );
-          return entry ? [{ ...entry, resumeAttempt: attemptOf.get(runId) ?? null }] : [];
-        }),
+        items,
         total: order.length,
         page: window.page,
         pageSize,
       };
     });
+    // THE CONTINUE DOOR (§ 35.5) — on an entry the approval released that did not resume
+    // by itself (*Ready to resume*, *Could not resume*), offered only where the reader may
+    // edit the card: To fix's rule, decided once per distinct project.
+    const continuable = page.items.filter(
+      (row) => row.resumeState === 'ready_to_resume' && row.resumeAttempt?.outcome !== 'started',
+    );
+    if (continuable.length === 0) return page;
+    const editable = new Set<string>();
+    for (const projectId of new Set(continuable.map((row) => row.project.id))) {
+      const held = await projectAccessService.getPermissions(projectId, {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      if (held.has('work_item:edit')) editable.add(projectId);
+    }
+    return {
+      ...page,
+      items: page.items.map((row) =>
+        continuable.includes(row) && editable.has(row.project.id)
+          ? { ...row, canContinueHosted: true }
+          : row,
+      ),
+    };
   },
 
   /**

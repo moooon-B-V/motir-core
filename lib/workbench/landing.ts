@@ -6,6 +6,7 @@ import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 //
 //   To approve  if anything awaits the reader's decision
 //   else To fix  if anything of theirs is stuck until repaired (MOTIR-6604, § 30)
+//   else To resume  if a run of theirs stopped at a gate (MOTIR-7712, § 35.3)
 //   else In progress  if anything of theirs is moving
 //   else To do  — TERMINAL, landed on even when it is empty too
 //
@@ -15,7 +16,7 @@ import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 // module only decides.
 //
 // Three properties the design states and this implements literally:
-//   · FOUR TABS ONLY (three until § 30 added To fix). Recently finished and Watching are never landed on, so
+//   · FIVE TABS ONLY (three until § 30 added To fix, four until § 35 added To resume). Recently finished and Watching are never landed on, so
 //     their counts are not even part of the input.
 //   · TO DO IS UNCONDITIONAL. There is no input for which this returns nothing,
 //     so the landing can never be a blank page.
@@ -23,7 +24,10 @@ import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 //     request: the page only asks when no known tab was named.
 
 /** The counts the cascade reads — the rungs, in order. */
-export type LandingCounts = Pick<HomeTabCountsDto, 'approvals' | 'toFix' | 'inProgress' | 'toDo'>;
+export type LandingCounts = Pick<
+  HomeTabCountsDto,
+  'approvals' | 'toFix' | 'toResume' | 'inProgress' | 'toDo'
+>;
 
 /** The tab a request that named no known tab lands on. */
 export function resolveWorkbenchLanding(counts: LandingCounts): WorkbenchTab {
@@ -31,6 +35,10 @@ export function resolveWorkbenchLanding(counts: LandingCounts): WorkbenchTab {
   // Right after To approve (MOTIR-6604; design § 30): a card stuck until you repair
   // it is waiting on you exactly as a decision is, and it is not on In progress.
   if (counts.toFix > 0) return 'to-fix';
+  // Then To resume (MOTIR-7712; design § 35.3): a gated run moves the moment its gate is
+  // approved, so it needs the reader less than a repair — and more than In progress,
+  // whose work moves without them.
+  if (counts.toResume > 0) return 'to-resume';
   if (counts.inProgress > 0) return 'in-progress';
   // ⚠️ `toDo` is deliberately NOT consulted: the last rung is taken whatever it
   // holds. A brand-new member lands here on the one empty state that carries a

@@ -289,6 +289,65 @@ describe('the Workbench partition', () => {
     expect(counts.myWork).toBe(counts.toDo + 1 + 3);
   });
 
+  it('the entry carries its run: where it ran, and each held gate as it stands now (MOTIR-7712)', async () => {
+    const { design, held } = await gatedStory();
+    const [waiting] = (await homeService.listToResume(hctx())).items;
+    expect(waiting!.resumeRun).toMatchObject({
+      ranWhere: 'terminal',
+      ranById: fx.ownerId,
+      gates: [
+        {
+          gateId: held.id,
+          kind: held.kind,
+          state: 'awaiting',
+          subjectKey: design.identifier,
+          subjectTitle: design.title,
+          deciderId: design.assigneeId ?? design.reporterId,
+          decidedById: null,
+          decidedAt: null,
+          notePreview: null,
+        },
+      ],
+    });
+    // Waiting: the claim would refuse, so no door is offered.
+    expect(waiting!.canContinueHosted).toBe(false);
+
+    await adminDb.approvalGate.update({
+      where: { id: held.id },
+      data: { state: 'approved', decidedById: fx.ownerId, decidedAt: new Date() },
+    });
+    await withWorkspaceContext(fx.ctx, async (tx) => {
+      for (const row of await adminDb.workItem.findMany({
+        where: { resumeRunId: { not: null } },
+      })) {
+        await recomputeWorkItemResumeState(row.id, tx);
+      }
+    });
+    const [ready] = (await homeService.listToResume(hctx())).items;
+    expect(ready!.resumeState).toBe('ready_to_resume');
+    // Ready, and the reader may edit: the Continue door is offered.
+    expect(ready!.canContinueHosted).toBe(true);
+  });
+
+  it('a gate sent back is drawn with its decider and the first line of its note', async () => {
+    const { held } = await gatedStory();
+    await adminDb.approvalGate.update({
+      where: { id: held.id },
+      data: {
+        state: 'changes_requested',
+        decidedById: fx.ownerId,
+        decidedAt: new Date(),
+        noteMd: 'Tighten the spacing\nsecond line',
+      },
+    });
+    const [sentBack] = (await homeService.listToResume(hctx())).items;
+    expect(sentBack!.resumeRun!.gates[0]).toMatchObject({
+      state: 'changes_requested',
+      decidedById: fx.ownerId,
+      notePreview: 'Tighten the spacing',
+    });
+  });
+
   it('To fix wins when a card somehow holds both', async () => {
     const { parent } = await gatedStory();
     await adminDb.workItem.update({

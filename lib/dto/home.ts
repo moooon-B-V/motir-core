@@ -1,5 +1,6 @@
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
+import type { ApprovalGateKindDTO, ApprovalGateStateDTO } from '@/lib/dto/approvalGate';
 import type {
   ExecutorDto,
   WorkItemKindDto,
@@ -116,6 +117,12 @@ export interface HomeWorkItemRowDto {
    * was not hosted, or a gate not yet approved) and on every other tab.
    */
   resumeAttempt?: GateResumeAttemptDto | null;
+  /**
+   * TO RESUME ONLY, on the entry's head (MOTIR-7712; `design/workbench/design-notes.md`
+   * § 35.4): who ran the gated run and where, its branch, and the gates that hold it, as
+   * they stand now. Absent on every other tab.
+   */
+  resumeRun?: ResumeRunDto | null;
   /** The OPEN repair on a sent-back row — the lock that replaces both repairs while it
    *  runs (`hosted-agent-run.md` §8.6). Read only by the To fix read; `null` elsewhere. */
   repairRun: OpenRepairRunDto | null;
@@ -229,6 +236,57 @@ export interface HomeTabCountsDto {
    */
   approvals: number;
   watching: number;
+}
+
+/** A gated run, as its To resume entry draws it (MOTIR-7712; § 35.4). */
+export interface ResumeRunDto {
+  /** Where it ran — the aside's *ran it on the hosted agent / from a terminal / with the
+   *  runbook / in {agent}*, read from the run's `origin` and who reported it. */
+  ranWhere: 'hosted' | 'terminal' | 'runbook' | 'instance';
+  ranById: string | null;
+  ranByName: string | null;
+  /** The agent instance's name, for `instance`; null otherwise. */
+  agentName: string | null;
+  /** The primary repository's branch the run left, or null when none is known. */
+  branch: string | null;
+  /** The gates holding it, decided first (approved, then sent back, then waiting). */
+  gates: ResumeGateDto[];
+}
+
+/** One gate a gated run stopped at, as it stands NOW (MOTIR-7703 · MOTIR-7712). */
+export interface ResumeGateDto {
+  /** The LATEST gate of its kind on its card — a republish's, not the superseded one. */
+  gateId: string;
+  kind: ApprovalGateKindDTO;
+  state: ApprovalGateStateDTO;
+  /** The card the gate is on. */
+  subjectKey: string;
+  subjectTitle: string;
+  /** Who decides it — the card's assignee, else its reporter (`docs/approval-gates.md`). */
+  deciderId: string | null;
+  decidedById: string | null;
+  /** The decider as recorded when no person decided (an agent, the system). */
+  decidedByLabel: string | null;
+  decidedAt: string | null;
+  /** The decision's note, first line, cut short — the sent-back quote. */
+  notePreview: string | null;
+}
+
+/**
+ * A card's gated run, as its item page's run section draws it (MOTIR-7713; `design/runs`
+ * § _Stopped at a gate_). The same run the card's To resume entry is about.
+ */
+export interface ItemGatedRunDto {
+  /** `resuming` — the card's current run is the continue an approval started (G3). */
+  state: 'waiting_on_gate' | 'ready_to_resume' | 'resuming';
+  /** The GATED run. */
+  runId: string;
+  /** The continue that carries it on, while `resuming`; null otherwise. */
+  resumedRunId: string | null;
+  /** The run's SCOPE when it is another card — this card was one of its legs (G6). */
+  parent: { key: string } | null;
+  run: ResumeRunDto;
+  attempt: GateResumeAttemptDto | null;
 }
 
 /** One automatic resume attempt, as the To resume entry reads it (MOTIR-7710). */

@@ -8531,6 +8531,92 @@
         "showMore": "Show {count, plural, one {# more work item} other {# more work items}}",
         "showFewer": "Show fewer"
       }
+    },
+    "toResume": {
+      "waiting": "Stopped at a gate · waiting on {count, plural, one {# approval} other {# approvals}}",
+      "ready": "Ready to resume · {name} approved the {kind} on {key} <when></when>",
+      "readyByYou": "Ready to resume · you approved the {kind} on {key} <when></when>",
+      "readyBare": "Ready to resume",
+      "readySome": "Ready to resume · {approved} of {total} approvals given",
+      "resuming": "Resuming on the hosted agent · started <when></when>",
+      "couldNot": "Could not resume by itself · <reason></reason>",
+      "ranBy": {
+        "hosted": "{name} ran it on the hosted agent",
+        "terminal": "{name} ran it from a terminal",
+        "runbook": "{name} ran it with the runbook",
+        "instance": "{name} ran it in {agent}"
+      },
+      "you": "you",
+      "someone": "Someone",
+      "branch": "branch <d>{branch}</d>",
+      "entry": {
+        "membersLabel": "Work items waiting with {key}"
+      },
+      "gatesLabel": "Gates holding {key}'s run",
+      "decider": "<b>{name}</b> decides",
+      "deciderYou": "<b>You</b> decide",
+      "decidedBy": "approved by <b>{name}</b> <when></when>",
+      "gate": {
+        "awaiting": "Awaiting",
+        "awaitingYou": "Awaiting you",
+        "approved": "Approved",
+        "chosen": "Chosen",
+        "confirmed": "Confirmed",
+        "markedDone": "Marked done",
+        "changesRequested": "Changes requested",
+        "declined": "Declined",
+        "overturned": "Overturned"
+      },
+      "open": "Open",
+      "review": "Review",
+      "state": {
+        "resuming": "Resuming",
+        "couldNot": "Didn't resume"
+      },
+      "seeRun": "See the run",
+      "next": {
+        "waitingHosted": "Once it is approved, this run carries on by itself on the hosted agent.",
+        "waitingHostedMany": "When any one is approved, this run carries on by itself on the hosted agent and stops again at the rest.",
+        "waitingLocal": "Once you approve it, continue the run from your terminal — the command appears here.",
+        "ready": "An agent picks the run up on its own branch, builds what the approval released, and stops again at any gate still waiting.",
+        "readySome": "Continuing now builds what the approved gate released, and stops again at the {count} still waiting.",
+        "couldNot": "Nothing was booted and nothing was charged. {repair}",
+        "changes_requested": "Nothing resumes. {key} is reworked first; its next version asks again, and this run keeps waiting.",
+        "declined": "Nothing resumes. The work this would have released needs a new plan — re-plan {key}, or set {head} to To Do to start over.",
+        "overturned": "Nothing resumes. The approval no longer stands, so the run waits for a new decision on {key}."
+      },
+      "back": {
+        "changes_requested": "{kind} sent back · changes requested by <b>{name}</b> — “{note}”",
+        "changes_requestedNoNote": "{kind} sent back · changes requested by <b>{name}</b>",
+        "declined": "Decision declined by <b>{name}</b> — “{note}”",
+        "declinedNoNote": "Decision declined by <b>{name}</b>",
+        "overturned": "Approval overturned by <b>{name}</b> — “{note}”",
+        "overturnedNoNote": "Approval overturned by <b>{name}</b>"
+      },
+      "skip": {
+        "out_of_credits": "the organization is out of credits",
+        "ci_credits_exhausted": "the organization's CI credits are used up",
+        "credits_unavailable": "Motir couldn't check the organization's credits",
+        "model_not_offered": "the model it ran with, {model}, is no longer offered",
+        "models_unavailable": "Motir couldn't load the list of models",
+        "no_project_access": "<b>{name}</b>, who started it, no longer has access to this project",
+        "dispatcher_gone": "<b>{name}</b>, who started it, is no longer in this workspace",
+        "dispatcher_goneAnon": "the person who started it is no longer in this workspace",
+        "repository_not_writable": "Motir can no longer push to {repo}",
+        "card_not_ready": "{key} is not ready to run — it is blocked or no longer in progress"
+      },
+      "repair": {
+        "out_of_credits": "Add credits in billing, then press Continue — or continue from your terminal.",
+        "ci_credits_exhausted": "Add CI credits in billing, then press Continue — or continue from your terminal.",
+        "credits_unavailable": "Press Continue to try again.",
+        "model_not_offered": "Pick another model and press Continue.",
+        "models_unavailable": "Press Continue to try again.",
+        "no_project_access": "Continue it yourself — it runs as you, on your organization's credits.",
+        "dispatcher_gone": "Continue it yourself — it runs as you, on your organization's credits.",
+        "repository_not_writable": "Reconnect the repository in the project's settings, then press Continue.",
+        "card_not_ready": "Clear what blocks {key} or move it back to In Progress, then press Continue."
+      },
+      "copyAria": "Copy the resume command for {key}"
     }
   },
   "approvalRecords": {

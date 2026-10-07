@@ -8527,6 +8527,92 @@
         "showMore": "再显示 {count} 个工作项",
         "showFewer": "收起"
       }
+    },
+    "toResume": {
+      "waiting": "停在审批处 · 等待 {count} 项审批",
+      "ready": "可以继续 · {name} 已于<when></when>批准 {key} 的{kind}",
+      "readyByYou": "可以继续 · 你已于<when></when>批准 {key} 的{kind}",
+      "readyBare": "可以继续",
+      "readySome": "可以继续 · {total} 项审批中已通过 {approved} 项",
+      "resuming": "正在托管代理上继续 · <when></when>开始",
+      "couldNot": "未能自动继续 · <reason></reason>",
+      "ranBy": {
+        "hosted": "{name} 在托管代理上运行",
+        "terminal": "{name} 在终端中运行",
+        "runbook": "{name} 通过运行手册运行",
+        "instance": "{name} 在 {agent} 中运行"
+      },
+      "you": "你",
+      "someone": "有人",
+      "branch": "分支 <d>{branch}</d>",
+      "entry": {
+        "membersLabel": "与 {key} 一起等待的工作项"
+      },
+      "gatesLabel": "使 {key} 的运行停下的审批",
+      "decider": "由 <b>{name}</b> 决定",
+      "deciderYou": "由<b>你</b>决定",
+      "decidedBy": "<b>{name}</b> 已于<when></when>批准",
+      "gate": {
+        "awaiting": "等待中",
+        "awaitingYou": "等你处理",
+        "approved": "已批准",
+        "chosen": "已选择",
+        "confirmed": "已确认",
+        "markedDone": "已标记完成",
+        "changesRequested": "已要求修改",
+        "declined": "已拒绝",
+        "overturned": "已推翻"
+      },
+      "open": "打开",
+      "review": "查看并决定",
+      "state": {
+        "resuming": "继续中",
+        "couldNot": "未继续"
+      },
+      "seeRun": "查看运行",
+      "next": {
+        "waitingHosted": "审批通过后，此运行会在托管代理上自动继续。",
+        "waitingHostedMany": "任一审批通过后，此运行会在托管代理上自动继续，并在其余审批处再次停下。",
+        "waitingLocal": "审批通过后，在终端中继续——命令会显示在这里。",
+        "ready": "智能体会在原分支上接手此运行，构建该审批放行的工作，并在仍需等待的审批处再次停下。",
+        "readySome": "现在继续会构建已通过审批放行的工作，并在仍在等待的 {count} 项审批处再次停下。",
+        "couldNot": "没有启动任何机器，也没有产生任何费用。{repair}",
+        "changes_requested": "不会继续。{key} 需先修改；新版本会再次请求审批，此运行继续等待。",
+        "declined": "不会继续。该审批原本放行的工作需要重新规划——重新规划 {key}，或将 {head} 设为待办以重新开始。",
+        "overturned": "不会继续。该批准已不再有效，此运行将等待对 {key} 的新决定。"
+      },
+      "back": {
+        "changes_requested": "{kind}被退回 · <b>{name}</b> 要求修改 ——“{note}”",
+        "changes_requestedNoNote": "{kind}被退回 · <b>{name}</b> 要求修改",
+        "declined": "决策被 <b>{name}</b> 拒绝 ——“{note}”",
+        "declinedNoNote": "决策被 <b>{name}</b> 拒绝",
+        "overturned": "批准被 <b>{name}</b> 推翻 ——“{note}”",
+        "overturnedNoNote": "批准被 <b>{name}</b> 推翻"
+      },
+      "skip": {
+        "out_of_credits": "组织的积分已用完",
+        "ci_credits_exhausted": "组织的 CI 积分已用完",
+        "credits_unavailable": "Motir 无法查询组织的积分",
+        "model_not_offered": "它使用的模型 {model} 已不再提供",
+        "models_unavailable": "Motir 无法加载模型列表",
+        "no_project_access": "启动它的 <b>{name}</b> 已无权访问此项目",
+        "dispatcher_gone": "启动它的 <b>{name}</b> 已不在此工作区",
+        "dispatcher_goneAnon": "启动它的人已不在此工作区",
+        "repository_not_writable": "Motir 已无法推送到 {repo}",
+        "card_not_ready": "{key} 尚不能运行——它被阻塞或已不在进行中"
+      },
+      "repair": {
+        "out_of_credits": "在账单中充值后按“继续”——或在终端中继续。",
+        "ci_credits_exhausted": "在账单中充值 CI 积分后按“继续”——或在终端中继续。",
+        "credits_unavailable": "按“继续”重试。",
+        "model_not_offered": "选择其他模型后按“继续”。",
+        "models_unavailable": "按“继续”重试。",
+        "no_project_access": "由你来继续——它将以你的身份运行，使用你所在组织的积分。",
+        "dispatcher_gone": "由你来继续——它将以你的身份运行，使用你所在组织的积分。",
+        "repository_not_writable": "在项目设置中重新连接代码仓库后按“继续”。",
+        "card_not_ready": "解除 {key} 的阻塞或将其移回进行中后按“继续”。"
+      },
+      "copyAria": "复制 {key} 的继续命令"
     }
   },
   "approvalRecords": {

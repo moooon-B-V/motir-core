@@ -139,33 +139,41 @@ describe('GUARD · every tab has a label, in `en` AND `zh`', () => {
 describe('GUARD · the cascade is TOTAL, and its order is its own', () => {
   const SAMPLES = [0, 1, 2, 7, 1_000];
 
-  it('resolves to one of its four rungs for EVERY point of the count space', () => {
+  it('resolves to one of its five rungs for EVERY point of the count space', () => {
     // Catches: an input for which the resolver returns nothing, or lands on a tab
     // that is not a rung. A property over the space, not four listed cases.
-    const rungs = new Set(['approvals', 'to-fix', 'in-progress', 'todo']);
+    const rungs = new Set(['approvals', 'to-fix', 'to-resume', 'in-progress', 'todo']);
     for (const approvals of SAMPLES)
       for (const toFix of SAMPLES)
-        for (const inProgress of SAMPLES)
-          for (const toDo of SAMPLES) {
-            const landed = resolveWorkbenchLanding({ approvals, toFix, inProgress, toDo });
-            expect(
-              rungs.has(landed),
-              `${approvals}/${toFix}/${inProgress}/${toDo} → ${landed}`,
-            ).toBe(true);
-          }
+        for (const toResume of SAMPLES)
+          for (const inProgress of SAMPLES)
+            for (const toDo of SAMPLES) {
+              const landed = resolveWorkbenchLanding({
+                approvals,
+                toFix,
+                toResume,
+                inProgress,
+                toDo,
+              });
+              expect(
+                rungs.has(landed),
+                `${approvals}/${toFix}/${toResume}/${inProgress}/${toDo} → ${landed}`,
+              ).toBe(true);
+            }
   });
 
-  it('the CASCADE order is To approve → To fix → In progress → To do, derived from the resolver', () => {
+  it('the CASCADE order is To approve → To fix → To resume → In progress → To do, derived from the resolver', () => {
     // Derived by probing, never read off `WORKBENCH_TABS`: a rung wins when it and
     // every rung after it are non-zero.
-    const all = { approvals: 1, toFix: 1, inProgress: 1, toDo: 1 };
+    const all = { approvals: 1, toFix: 1, toResume: 1, inProgress: 1, toDo: 1 };
     const order = [
       resolveWorkbenchLanding(all),
       resolveWorkbenchLanding({ ...all, approvals: 0 }),
       resolveWorkbenchLanding({ ...all, approvals: 0, toFix: 0 }),
-      resolveWorkbenchLanding({ ...all, approvals: 0, toFix: 0, inProgress: 0 }),
+      resolveWorkbenchLanding({ ...all, approvals: 0, toFix: 0, toResume: 0 }),
+      resolveWorkbenchLanding({ ...all, approvals: 0, toFix: 0, toResume: 0, inProgress: 0 }),
     ];
-    expect(order).toEqual(['approvals', 'to-fix', 'in-progress', 'todo']);
+    expect(order).toEqual(['approvals', 'to-fix', 'to-resume', 'in-progress', 'todo']);
   });
 
   it('the STRIP order is asserted separately, from `WORKBENCH_TABS`', () => {
