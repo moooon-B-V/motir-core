@@ -459,7 +459,7 @@ describe('the run detail’s edges (MOTIR-7712 · MOTIR-7713)', () => {
       where: { id: { in: [parent.id, design.id, code.id] } },
       data: { resumeState: null, resumeRunId: null },
     });
-    const continueRun = (opened: Record<string, unknown> | null) =>
+    const continueRun = (opened: { [key: string]: string | boolean } | null) =>
       adminDb.dispatchRun.create({
         data: {
           workspaceId: fx.workspaceId,

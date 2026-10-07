@@ -493,7 +493,7 @@ describe('the handler — at most one resume per decision and per run', () => {
       () =>
         new CiCreditsExhaustedError({
           organizationId: 'org',
-          state: 'exhausted',
+          state: 'ci_credits_exhausted',
           consumedMinutes: 600,
           poolMinutes: 500,
           balance: 0,
