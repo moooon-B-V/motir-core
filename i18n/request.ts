@@ -1,18 +1,49 @@
 import { getRequestConfig } from 'next-intl/server';
-import { cookies } from 'next/headers';
-import { defaultLocale, isLocale } from '@/lib/i18n/locales';
+import { cookies, headers } from 'next/headers';
+import { getSession } from '@/lib/auth';
+import { resolveLocale } from '@/lib/i18n/resolveLocale';
 
-// next-intl's per-request configuration (the "without i18n routing" setup). The
-// active locale is read from the NEXT_LOCALE cookie — there is no `[locale]`
-// route segment — so server components, server actions, and generateMetadata all
-// resolve the same locale for the request. createNextIntlPlugin() in
-// next.config.ts points at this file by default (./i18n/request.ts).
+// next-intl's per-request configuration (the "without i18n routing" setup).
+// There is no `[locale]` route segment: the active locale is RESOLVED here, so
+// server components, server actions, route handlers and generateMetadata all
+// agree on it for the request. createNextIntlPlugin() in next.config.ts points
+// at this file by default (./i18n/request.ts).
 //
-// Reading the cookie here opts request rendering into the dynamic path; every
-// (authed) route is already dynamic (session), so this adds no cost there.
+// The order (Story MOTIR-7730 · MOTIR-7743, `lib/i18n/resolveLocale.ts`): the
+// signed-in person's saved account language, then the browser's `NEXT_LOCALE`
+// choice, then the best `Accept-Language` match, then English. The saved
+// language rides on the session (a Better-Auth additional field), and
+// `getSession()` is memoised per render, so a signed-in page pays no extra
+// query for it.
+//
+// Reading cookies / headers here opts request rendering into the dynamic path;
+// every (authed) route is already dynamic (session), so this adds no cost there.
+async function savedAccountLocale(): Promise<string | null> {
+  // ⚠️ A FAILING SESSION READ MUST NOT FAIL THE PAGE. `getSession()` THROWS
+  // `SessionUnavailableError` when the database does not answer (and a staff
+  // session can throw its own gate errors). The language is not worth a 500:
+  // the request resolves by steps 2–4 instead, and whatever owns the session on
+  // this request meets the same failure and answers it in its own way.
+  try {
+    const session = await getSession();
+    const saved: unknown = session?.user.locale;
+    return typeof saved === 'string' ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
 export default getRequestConfig(async () => {
-  const cookieLocale = (await cookies()).get('NEXT_LOCALE')?.value;
-  const locale = isLocale(cookieLocale) ? cookieLocale : defaultLocale;
+  const [cookieStore, requestHeaders, saved] = await Promise.all([
+    cookies(),
+    headers(),
+    savedAccountLocale(),
+  ]);
+  const locale = resolveLocale({
+    saved,
+    cookie: cookieStore.get('NEXT_LOCALE')?.value,
+    acceptLanguage: requestHeaders.get('accept-language'),
+  });
 
   return {
     locale,
@@ -30,7 +61,7 @@ export default getRequestConfig(async () => {
     // (NextIntlClientProvider inherits it via getConfigNow()), so SSR and the
     // client agree and the warning + hydration churn stop across EVERY page —
     // a root-cause, whole-class fix, not a per-spec re-time. This request is
-    // already dynamic (it reads the NEXT_LOCALE cookie above), so evaluating
+    // already dynamic (it reads the cookies and headers above), so evaluating
     // `new Date()` here adds no rendering cost.
     now: new Date(),
     // The app pins UTC for absolute date/time formatting (lib/utils/datetime.ts;

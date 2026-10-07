@@ -124,6 +124,14 @@ export const authOptions: BetterAuthOptions & {
     ReturnType<typeof cimd>,
     ReturnType<typeof nextCookies>,
   ];
+  // Named so `Auth<typeof authOptions>` infers the saved language onto the
+  // session user (MOTIR-7743) — the annotation above would otherwise widen
+  // `user` to `BetterAuthOptions['user']` and drop the field from the type.
+  user: {
+    additionalFields: {
+      locale: { type: 'string'; required: false; input: false };
+    };
+  };
 } = {
   database: prismaAdapter(db, { provider: 'postgresql' }),
 
@@ -230,6 +238,19 @@ export const authOptions: BetterAuthOptions & {
         window: 3600,
         max: 3,
       },
+    },
+  },
+
+  // The person's saved interface language (Story MOTIR-7730 · MOTIR-7743) rides
+  // on the session through Better-Auth's own seam for extra user columns, so a
+  // signed-in render reads it from the session lookup it already pays for —
+  // `i18n/request.ts` resolves the request's locale from it without a second
+  // query. `input: false`: no sign-up or update-user BODY may set it. The writes
+  // are the product's (the Settings choice and the sign-up seed), never a
+  // client-supplied field.
+  user: {
+    additionalFields: {
+      locale: { type: 'string', required: false, input: false },
     },
   },
 

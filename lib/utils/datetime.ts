@@ -1,8 +1,9 @@
 // Locale-aware, hydration-safe date/time formatters. The formatting LOCALE is
 // the user's active locale (passed in by the caller — `useLocale()` in a client
 // component, `getLocale()` on the server), mapped to a BCP-47 tag below. Because
-// that locale comes from the NEXT_LOCALE cookie it is IDENTICAL on the server
-// and on the client, so passing it explicitly is hydration-safe — unlike a
+// that locale is resolved once per request by the request config
+// (`i18n/request.ts`) and handed to the client provider, it is IDENTICAL on the
+// server and on the client, so passing it explicitly is hydration-safe — unlike a
 // runtime default (`toLocaleString(undefined, …)`), which differs between the
 // two and triggers a React mismatch.
 //
