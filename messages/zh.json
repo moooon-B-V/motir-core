@@ -11146,6 +11146,28 @@
       }
     },
     "runDied": "此运行已中断——最后一次联系在<b><when></when></b>。其工作保留在分支上；请在下方“开发”中继续。",
+    "gated": {
+      "pill": "停在审批处",
+      "pillReady": "可以继续",
+      "gate": "{key} 的{kind}",
+      "waitingMany": "{count} 项审批",
+      "waitingHosted": "此运行停在审批处——正在等待<b>{gate}</b>。其工作保留在分支 <d>{branch}</d> 上，审批通过后会在托管代理上<b>自动继续</b>。",
+      "waitingHostedNoBranch": "此运行停在审批处——正在等待<b>{gate}</b>。其工作已保留，审批通过后会在托管代理上<b>自动继续</b>。",
+      "waitingLocal": "此运行停在审批处——正在等待<b>{gate}</b>。其工作保留在分支上；审批通过后，用 <d>{command}</d> 继续。",
+      "ready": "可以继续——<b>{total} 项审批中已通过 {approved} 项</b>。继续即可构建已批准的工作；它会在仍在等待的审批处再次停下：",
+      "resuming": "正在继续——<b>{name}</b> 已批准{gate}，新的运行正在同一分支上继续。<link>查看新运行</link>",
+      "resumingBare": "正在继续——新的运行正在同一分支上继续。<link>查看新运行</link>",
+      "couldNot": "<b>{name}</b> 已批准{gate}，但运行未能自动继续：<reason></reason>。请在工作台的<link>待继续</link>中继续，或使用 <d>{command}</d>。",
+      "sentBack": "此运行停在审批处——{gate}已被退回：<b>{name}</b> {outcome}。在新版本获批之前不会继续。",
+      "outcome": {
+        "changes_requested": "要求修改",
+        "declined": "已拒绝",
+        "overturned": "已推翻"
+      },
+      "child": "此工作项的运行属于 <link>{parent}</link>，它停在审批处——正在等待<b>{gate}</b>。审批通过后会从 {parent} 继续，此工作项也随之推进。",
+      "someone": "有人",
+      "gatesLabel": "使此运行停下的审批"
+    },
     "start": {
       "caption": "开始此工作项",
       "run": {

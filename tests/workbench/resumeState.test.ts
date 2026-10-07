@@ -348,6 +348,27 @@ describe('the Workbench partition', () => {
     });
   });
 
+  it('the item page reads the same gated run: the scope card, and a leg pointing up (MOTIR-7713)', async () => {
+    const { resumeRunDetailService } = await import('@/lib/services/resumeRunDetailService');
+    const { parent, code, design, runId } = await gatedStory();
+    const onParent = await resumeRunDetailService.readForWorkItem(parent.id, fx.ctx);
+    expect(onParent).toMatchObject({
+      state: 'waiting_on_gate',
+      runId,
+      parent: null,
+      resumedRunId: null,
+    });
+    expect(onParent!.run.gates.map((g) => g.subjectKey)).toEqual([design.identifier]);
+    const decider = design.assigneeId ?? design.reporterId;
+    expect(onParent!.names[decider]).toEqual(expect.any(String));
+
+    const onLeg = await resumeRunDetailService.readForWorkItem(code.id, fx.ctx);
+    expect(onLeg).toMatchObject({ runId, parent: { key: parent.identifier } });
+
+    const loose = await card('never ran', { kind: 'task' });
+    expect(await resumeRunDetailService.readForWorkItem(loose.id, fx.ctx)).toBeNull();
+  });
+
   it('To fix wins when a card somehow holds both', async () => {
     const { parent } = await gatedStory();
     await adminDb.workItem.update({

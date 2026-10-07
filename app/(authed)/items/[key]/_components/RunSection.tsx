@@ -23,6 +23,8 @@ import {
 import { drainSseFrames } from '@/lib/ai/sseFrames';
 import { formatRunDuration } from '@/lib/runs/runClock';
 import { StartBar } from './StartBar';
+import { GatedRunMarker, GatedRunPill, StoppedAtGatePill } from './GatedRunMarker';
+import type { ItemGatedRunDto } from '@/lib/dto/home';
 import { useHostedRun } from './HostedRunProvider';
 import type {
   DispatchRunCardDto,
@@ -97,6 +99,13 @@ export interface RunSectionProps {
   scopeRun?: DispatchRunListItemDto | null;
   /** `scopeRun`'s start, formatted on the server for the same reason. */
   scopeRunTime?: string | null;
+  /**
+   * The card's GATED run (MOTIR-7713; `design/runs` § _Stopped at a gate_), or null —
+   * the marker that takes the Run died line's slot when a run stopped at a gate.
+   */
+  gated?: ItemGatedRunDto | null;
+  /** The session's user — the gate rows read *You decide* for them. */
+  viewerId?: string | null;
 }
 
 export function RunSection({
@@ -106,6 +115,8 @@ export function RunSection({
   formattedTimes,
   scopeRun = null,
   scopeRunTime = null,
+  gated = null,
+  viewerId = null,
 }: RunSectionProps) {
   const routes = useReaderRoutes();
   const t = useTranslations('runs');
@@ -316,6 +327,12 @@ export function RunSection({
     return (
       <div className="flex flex-col gap-4">
         {notices}
+        {gated ? (
+          <div className="flex flex-col gap-2">
+            <GatedRunPill gated={gated} />
+            <GatedRunMarker gated={gated} itemKey={itemKey} viewerId={viewerId} />
+          </div>
+        ) : null}
         <ScopeBlock run={scopeRun} itemKey={itemKey} time={scopeRunTime} t={t} />
       </div>
     );
@@ -357,6 +374,9 @@ export function RunSection({
   const runTone = current ? RUN_STATUS_TONE[current.status] : 'queued';
   const legTone = leg ? DISPOSITION_TONE[leg.disposition] : 'queued';
   const otherCards = current ? current.cards.length : 0;
+  // The section's current run IS the gated one (G1, G2, G4–G6); while resuming it is
+  // the continue, whose own pill says Running (G3).
+  const gatedRunIsCurrent = gated !== null && current?.id === gated.runId;
 
   return (
     <div className="flex flex-col gap-4">
@@ -366,6 +386,10 @@ export function RunSection({
         {current ? (
           died && current.status === 'running' ? (
             <RunTonePill tone="timedout">{t('runStatus.died')}</RunTonePill>
+          ) : gated && gatedRunIsCurrent ? (
+            // A run that stopped at a gate is never *Run died* and never just
+            // *Succeeded* (§ _Stopped at a gate_ G1/G2).
+            <GatedRunPill gated={gated} />
           ) : (
             <RunTonePill tone={runTone}>{t(`runStatus.${current.status}`)}</RunTonePill>
           )
@@ -435,6 +459,10 @@ export function RunSection({
         </p>
       ) : null}
 
+      {gated && !died ? (
+        <GatedRunMarker gated={gated} itemKey={itemKey} viewerId={viewerId} />
+      ) : null}
+
       {hosted && current ? (
         <HostedRunBody
           run={current}
@@ -480,6 +508,10 @@ export function RunSection({
                   header pill does — the list never contradicts it. */}
               {run.status === 'running' && !isRunAlive(run, new Date(mountedAt)) ? (
                 <RunTonePill tone="timedout">{t('runStatus.died')}</RunTonePill>
+              ) : run.stopReason === 'gated' ? (
+                // A run that stopped at a gate keeps that word in its history row
+                // (§ _Stopped at a gate_ G1) — it did not just succeed.
+                <StoppedAtGatePill />
               ) : (
                 <RunTonePill tone={RUN_STATUS_TONE[run.status]}>
                   {t(`runStatus.${run.status}`)}
@@ -712,7 +744,13 @@ function ScopeBlock({
         {t(isLiveRun(run.status) ? 'scope.lineLive' : 'scope.linePast')}
       </p>
       <div className="flex min-w-0 items-center gap-2 py-(--spacing-control-y)">
-        <RunTonePill tone={RUN_STATUS_TONE[run.status]}>{t(`runStatus.${run.status}`)}</RunTonePill>
+        {run.stopReason === 'gated' ? (
+          <StoppedAtGatePill />
+        ) : (
+          <RunTonePill tone={RUN_STATUS_TONE[run.status]}>
+            {t(`runStatus.${run.status}`)}
+          </RunTonePill>
+        )}
         <Link
           className="shrink-0 text-(--el-link) underline"
           href={routes.view(runsHref({ scope: itemKey, run: run.id }))}

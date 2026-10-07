@@ -11150,6 +11150,28 @@
       }
     },
     "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it from Development below.",
+    "gated": {
+      "pill": "Stopped at a gate",
+      "pillReady": "Ready to resume",
+      "gate": "the {kind} on {key}",
+      "waitingMany": "{count} approvals",
+      "waitingHosted": "This run stopped at a gate — waiting on <b>{gate}</b>. Its work is kept on <d>{branch}</d>, and it <b>carries on by itself</b> on the hosted agent once the gate is approved.",
+      "waitingHostedNoBranch": "This run stopped at a gate — waiting on <b>{gate}</b>. Its work is kept, and it <b>carries on by itself</b> on the hosted agent once the gate is approved.",
+      "waitingLocal": "This run stopped at a gate — waiting on <b>{gate}</b>. Its work is kept on its branch; once the gate is approved, continue it with <d>{command}</d>.",
+      "ready": "Ready to resume — <b>{approved} of {total} approvals given</b>. Continue it to build what was approved; it stops again at any gate still waiting:",
+      "resuming": "Resuming — <b>{name}</b> approved {gate}, so a new run carries on on the same branch. <link>See the new run</link>",
+      "resumingBare": "Resuming — a new run carries on on the same branch. <link>See the new run</link>",
+      "couldNot": "<b>{name}</b> approved {gate}, but the run could not resume by itself: <reason></reason>. Continue it from <link>To resume</link> on the Workbench, or with <d>{command}</d>.",
+      "sentBack": "This run stopped at a gate — {gate} was sent back: {outcome} by <b>{name}</b>. Nothing resumes until a new version is approved.",
+      "outcome": {
+        "changes_requested": "changes requested",
+        "declined": "declined",
+        "overturned": "overturned"
+      },
+      "child": "This work item was run as part of <link>{parent}</link>, and that run stopped at a gate — waiting on <b>{gate}</b>. It carries on from {parent} once the gate is approved, and this work item with it.",
+      "someone": "Someone",
+      "gatesLabel": "Gates holding this run"
+    },
     "start": {
       "caption": "Start this work item",
       "run": {

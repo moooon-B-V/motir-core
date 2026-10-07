@@ -287,6 +287,8 @@ export interface ItemGatedRunDto {
   parent: { key: string } | null;
   run: ResumeRunDto;
   attempt: GateResumeAttemptDto | null;
+  /** The display name of every person the gates name (deciders and decided-bys), by id. */
+  names: Record<string, string>;
 }
 
 /** One automatic resume attempt, as the To resume entry reads it (MOTIR-7710). */

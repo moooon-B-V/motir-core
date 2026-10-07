@@ -1,4 +1,6 @@
 import 'server-only';
+import type { ItemGatedRunDto } from '@/lib/dto/home';
+import { resumeRunDetailService } from '@/lib/services/resumeRunDetailService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { commentsService } from '@/lib/services/commentsService';
@@ -230,6 +232,13 @@ export interface LateReads {
    * failed read: the block then renders as it did before the review agent existed.
    */
   agentReview: AgentReviewViewDto | null;
+  /**
+   * The card's GATED run (Story MOTIR-7701 · MOTIR-7713; `design/runs` § _Stopped at a
+   * gate_) — the run section's marker in the Run died line's slot: waiting, ready to
+   * resume, or resuming. `null` when the card does not wait, and on a failed read (the
+   * section then renders as it did before the marker existed).
+   */
+  gatedRun: ItemGatedRunDto | null;
 }
 
 export interface LateReadsInput {
@@ -388,6 +397,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       choiceGate,
       confirmGate,
       agentReview,
+      gatedRun,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -617,6 +627,13 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           return null;
         }
       })(),
+      (async () => {
+        try {
+          return await resumeRunDetailService.readForWorkItem(itemId, ctx);
+        } catch {
+          return null;
+        }
+      })(),
     ]);
 
     return {
@@ -647,6 +664,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       choiceGate,
       confirmGate,
       agentReview,
+      gatedRun,
     };
   })();
 }

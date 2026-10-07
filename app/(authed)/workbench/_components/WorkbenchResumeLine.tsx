@@ -62,7 +62,7 @@ const mono = (chunks: ReactNode) => (
 const bold = (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>;
 
 /** A state pill (§ 35.7 `tr-state--*`): the hue in the tint, the ink strong. */
-function StatePill({
+export function StatePill({
   tone,
   icon,
   children,
@@ -114,7 +114,11 @@ function gateStateLabel(t: Translate, gate: WorkbenchResumeGateView, viewerDecid
 }
 
 /** The shipped kind label (`workbench.approvals.kind.*`), lower-cased for running text. */
-function kindLabel(t: Translate, kind: WorkbenchResumeGateView['kind'], lower = false): string {
+export function kindLabel(
+  t: Translate,
+  kind: WorkbenchResumeGateView['kind'],
+  lower = false,
+): string {
   const label = t(`approvals.kind.${kind}` as 'approvals.kind.design_result');
   return lower ? label.toLowerCase() : label;
 }
@@ -168,23 +172,26 @@ function GateDoor({
   );
 }
 
-function GateList({
+export function GateList({
   headKey,
   gates,
   viewerId,
   when,
+  label,
 }: {
   headKey: string;
   gates: WorkbenchResumeGateView[];
   viewerId: string | null;
   when: (iso: string) => (chunks: ReactNode) => ReactNode;
+  /** The list's accessible name; the To resume entry's *Gates holding {key}'s run* by default. */
+  label?: string;
 }) {
   const t = useTranslations('workbench');
   if (gates.length === 0) return null;
   return (
     // The list never folds: a gate is why the entry is here (§ 35.4).
     <ul
-      aria-label={t('toResume.gatesLabel', { key: headKey })}
+      aria-label={label ?? t('toResume.gatesLabel', { key: headKey })}
       data-testid={`workbench-resume-gates-${headKey}`}
       className="m-0 flex list-none flex-col gap-1 p-0 pl-6 text-xs"
     >
@@ -467,7 +474,7 @@ export function WorkbenchResumeLine({
 }
 
 /** Line 2's `{reason}` for a skipped resume (§ 35.6 `skip.<reason>`). */
-function skipReasonText(
+export function skipReasonText(
   t: Translate,
   attempt: WorkbenchResumeView['attempt'],
   itemKey: string,

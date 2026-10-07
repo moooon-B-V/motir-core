@@ -2,6 +2,7 @@ import type { ApprovalGate, Prisma } from '@/generated/prisma/client';
 import type { ItemGatedRunDto, ResumeGateDto, ResumeRunDto } from '@/lib/dto/home';
 import { toGateResumeAttemptDto } from '@/lib/mappers/homeMappers';
 import { gateResumeRepository } from '@/lib/repositories/gateResumeRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -114,6 +115,7 @@ export const resumeRunDetailService = {
         parent: parent ? { key: parent.identifier } : null,
         run,
         attempt: attempt ? toGateResumeAttemptDto(attempt) : null,
+        names: await namesOf(run, tx),
       };
     });
   },
@@ -146,5 +148,20 @@ async function readResuming(
     parent: null,
     run,
     attempt: attempt ? toGateResumeAttemptDto(attempt) : null,
+    names: await namesOf(run, tx),
   };
+}
+
+/** Every person the gates name, by id — the item page has no member table to read. */
+async function namesOf(
+  run: ResumeRunDto,
+  tx: Prisma.TransactionClient,
+): Promise<Record<string, string>> {
+  const ids = [
+    ...new Set(
+      run.gates.flatMap((g) => [g.deciderId, g.decidedById]).filter((id): id is string => !!id),
+    ),
+  ];
+  const users = await userRepository.findByIds(ids, tx);
+  return Object.fromEntries(users.map((u) => [u.id, u.name]));
 }
