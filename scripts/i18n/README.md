@@ -63,6 +63,7 @@ says what the English says now — a reviewer's judgement, which is why it needs
 
 - `tests/i18n-message-shape.test.ts` — every committed translation keeps its
   source's shape. Old debt is listed in `KNOWN_SHAPE_DEBT` and can only shrink.
-- `tests/i18n-source-record.test.ts` — every catalogue is complete and current.
-  A locale in `UNTRACKED_LOCALES` may still carry untracked keys; that list can
-  only shrink too.
+- `tests/i18n-source-record.test.ts` — every record matches its catalogue, and
+  every catalogue has one, except a locale in `UNTRACKED_LOCALES` (that list can
+  only shrink too). Commit `messages/<l>.json` and `messages/sources/<l>.json`
+  together. A stale key does not fail it; `pnpm i18n:status` reports staleness.

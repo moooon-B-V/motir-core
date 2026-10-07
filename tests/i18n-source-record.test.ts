@@ -1,96 +1,170 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { listCatalogueLocales, status } from '../scripts/i18n/catalogue';
+import { flattenCatalogue } from '../scripts/i18n/sourceRecord';
 
-// MOTIR-7745 — every catalogue records the English it was translated from
-// (`messages/sources/<locale>.json`), and every key is CURRENT: its recorded
-// English equals today's `en.json`. A key whose English changed after it was
-// translated is STALE, and this gate fails until `pnpm i18n:extract` +
-// `pnpm i18n:merge` retranslate it — which is what stops a catalogue silently
-// saying last month's sentence. A key in en.json the catalogue lacks is
-// MISSING; a key the catalogue or record holds that en.json no longer does is
-// an ORPHAN. All three fail.
+// MOTIR-7745 — every catalogue records the English it was translated from, in
+// `messages/sources/<locale>.json`, and that record stays in step with the
+// catalogue: every key it records is a key en.json and the catalogue both hold,
+// and every key the catalogue holds is recorded. `pnpm i18n:merge` writes the
+// two files together, so a catalogue committed without its record (or a record
+// left behind by a hand edit) fails here.
 //
-// zh predates the record, so its keys are UNTRACKED (translated, source
-// unknown). MOTIR-7781 reviews zh's drift and baselines it, and takes zh out of
-// this list.
+// STALE keys do not fail this gate — an English edit would otherwise fail every
+// pull request until nine languages were re-translated. Staleness is what
+// `pnpm i18n:status` reports. MISSING keys are parity's concern, not this one.
+//
+// zh predates the record, so it has none. MOTIR-7781 reviews zh's drift and
+// baselines it, then takes zh out of UNTRACKED_LOCALES.
 
 const ROOT = process.cwd();
 
-/** Locales allowed to carry untracked keys. Asserted TIGHT below. */
+/** Catalogues allowed to have no source record. Asserted TIGHT: a listed locale
+ *  that gains a record fails. */
 const UNTRACKED_LOCALES: string[] = ['zh'];
 
-function findings(rootDir: string, untrackedAllowed: string[]): string[] {
+const isCatalogue = (f: string) => /^[a-z]{2,3}(-[A-Za-z0-9]+)?\.json$/.test(f) && f !== 'en.json';
+
+function readJson(file: string): unknown {
+  return JSON.parse(readFileSync(file, 'utf8'));
+}
+
+/** Every way the records under `rootDir/messages` disagree with their catalogues. */
+function recordFindings(rootDir: string, untrackedAllowed: string[]): string[] {
+  const messages = join(rootDir, 'messages');
+  const sourcesDir = join(messages, 'sources');
   const out: string[] = [];
-  for (const s of status({ rootDir }).locales) {
-    if (s.missing) out.push(`${s.locale}: ${s.missing} missing`);
-    if (s.stale) out.push(`${s.locale}: ${s.stale} stale (${s.staleKeys.slice(0, 5).join(', ')})`);
-    if (s.orphans) out.push(`${s.locale}: ${s.orphans} orphan`);
-    if (s.untracked && !untrackedAllowed.includes(s.locale)) {
-      out.push(`${s.locale}: ${s.untracked} untracked — run pnpm i18n:baseline only after review`);
+  const en = flattenCatalogue(readJson(join(messages, 'en.json')));
+  const records = existsSync(sourcesDir)
+    ? readdirSync(sourcesDir).filter((f) => f.endsWith('.json'))
+    : [];
+
+  for (const file of records) {
+    const locale = file.replace(/\.json$/, '');
+    const raw = readJson(join(sourcesDir, file));
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      out.push(`sources/${file}: not a flat object`);
+      continue;
+    }
+    const cataloguePath = join(messages, `${locale}.json`);
+    if (!existsSync(cataloguePath)) {
+      out.push(`sources/${file}: no messages/${locale}.json`);
+      continue;
+    }
+    const catalogue = flattenCatalogue(readJson(cataloguePath));
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof value !== 'string') out.push(`sources/${file}: ${key} is not a string`);
+      if (!en.has(key)) out.push(`sources/${file}: ${key} is not in en.json`);
+      if (!catalogue.has(key)) out.push(`sources/${file}: ${key} is not in ${locale}.json`);
+    }
+  }
+
+  for (const file of readdirSync(messages).filter(isCatalogue)) {
+    const locale = file.replace(/\.json$/, '');
+    const hasRecord = records.includes(file);
+    if (untrackedAllowed.includes(locale)) {
+      if (hasRecord)
+        out.push(
+          `${locale}: listed as untracked but has a record — drop it from UNTRACKED_LOCALES`,
+        );
+      continue;
+    }
+    if (!hasRecord) {
+      out.push(`${locale}: no messages/sources/${file} — commit what pnpm i18n:merge wrote`);
+      continue;
+    }
+    const recorded = new Set(
+      Object.keys(readJson(join(sourcesDir, file)) as Record<string, unknown>),
+    );
+    const unrecorded = [...flattenCatalogue(readJson(join(messages, file))).keys()].filter(
+      (k) => en.has(k) && !recorded.has(k),
+    );
+    if (unrecorded.length) {
+      out.push(
+        `${locale}: ${unrecorded.length} key(s) with no recorded source (${unrecorded.slice(0, 5).join(', ')})`,
+      );
     }
   }
   return out;
 }
 
 describe('i18n source record (MOTIR-7745)', () => {
-  it('every catalogue is complete and current against en.json', () => {
-    expect(findings(ROOT, UNTRACKED_LOCALES)).toEqual([]);
+  it('every record matches its catalogue, and every catalogue outside UNTRACKED_LOCALES has one', () => {
+    expect(recordFindings(ROOT, UNTRACKED_LOCALES)).toEqual([]);
   });
 
-  it('UNTRACKED_LOCALES is tight: each listed locale exists and still has untracked keys', () => {
-    const byLocale = new Map(status({ rootDir: ROOT }).locales.map((s) => [s.locale, s]));
-    const stale = UNTRACKED_LOCALES.filter((l) => !byLocale.get(l)?.untracked);
-    expect(stale).toEqual([]);
+  it('every UNTRACKED_LOCALES entry is a real catalogue', () => {
+    const catalogues = readdirSync(join(ROOT, 'messages')).filter(isCatalogue);
+    expect(UNTRACKED_LOCALES.filter((l) => !catalogues.includes(`${l}.json`))).toEqual([]);
   });
 
-  it('checks every catalogue in messages/, zh among them', () => {
-    expect(listCatalogueLocales(ROOT)).toContain('zh');
-  });
-
-  describe('fails on a temp catalogue that is', () => {
-    function fixture(xx: unknown, record: unknown): string {
+  describe('on a temp tree', () => {
+    function fixture(files: Record<string, unknown>): string {
       const dir = mkdtempSync(join(tmpdir(), 'i18n-record-'));
       mkdirSync(join(dir, 'messages', 'sources'), { recursive: true });
-      const w = (rel: string, v: unknown) =>
+      const all: Record<string, unknown> = {
+        'en.json': { a: { one: 'One', two: 'Two' } },
+        ...files,
+      };
+      for (const [rel, v] of Object.entries(all)) {
         writeFileSync(join(dir, 'messages', rel), `${JSON.stringify(v, null, 2)}\n`);
-      w('en.json', { a: { one: 'One', two: 'Two' } });
-      w('xx.json', xx);
-      if (record) w('sources/xx.json', record);
+      }
       return dir;
     }
-    const cases: [string, unknown, unknown, RegExp][] = [
-      ['stale', { a: { one: 'Uno', two: 'Dos' } }, { 'a.one': 'One', 'a.two': 'Old two' }, /stale/],
-      ['missing a key', { a: { one: 'Uno' } }, { 'a.one': 'One' }, /missing/],
-      [
-        'holding an orphan',
-        { a: { one: 'Uno', two: 'Dos', three: 'Tres' } },
-        { 'a.one': 'One', 'a.two': 'Two' },
-        /orphan/,
-      ],
-      ['untracked and unlisted', { a: { one: 'Uno', two: 'Dos' } }, null, /untracked/],
-    ];
-    for (const [name, xx, record, expected] of cases) {
-      it(name, () => {
-        const dir = fixture(xx, record);
-        try {
-          const f = findings(dir, []);
-          expect(f.join('\n')).toMatch(expected);
-        } finally {
-          rmSync(dir, { recursive: true, force: true });
-        }
-      });
-    }
-
-    it('and passes when complete and current', () => {
-      const dir = fixture({ a: { one: 'Uno', two: 'Dos' } }, { 'a.one': 'One', 'a.two': 'Two' });
+    function run(files: Record<string, unknown>, untracked: string[] = []): string[] {
+      const dir = fixture(files);
       try {
-        expect(findings(dir, [])).toEqual([]);
+        return recordFindings(dir, untracked);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    }
+    const xx = { a: { one: 'Uno', two: 'Dos' } };
+
+    it('fails a catalogue without a record', () => {
+      expect(run({ 'xx.json': xx }).join('\n')).toMatch(/xx: no messages\/sources\/xx\.json/);
+    });
+
+    it('fails a record key the catalogue lacks', () => {
+      const f = run({
+        'xx.json': { a: { one: 'Uno' } },
+        'sources/xx.json': { 'a.one': 'One', 'a.two': 'Two' },
+      });
+      expect(f.join('\n')).toMatch(/a\.two is not in xx\.json/);
+    });
+
+    it('fails a listed untracked locale that has a record', () => {
+      const f = run({ 'xx.json': xx, 'sources/xx.json': { 'a.one': 'One', 'a.two': 'Two' } }, [
+        'xx',
+      ]);
+      expect(f.join('\n')).toMatch(/listed as untracked/);
+    });
+
+    it('fails a catalogue key with no recorded source', () => {
+      expect(run({ 'xx.json': xx, 'sources/xx.json': { 'a.one': 'One' } }).join('\n')).toMatch(
+        /no recorded source/,
+      );
+    });
+
+    it('passes a stale key — staleness is a status report, not a gate', () => {
+      expect(
+        run({ 'xx.json': xx, 'sources/xx.json': { 'a.one': 'One', 'a.two': 'Old two' } }),
+      ).toEqual([]);
+    });
+
+    it("passes a catalogue missing a key — that is parity's concern", () => {
+      expect(
+        run({ 'xx.json': { a: { one: 'Uno' } }, 'sources/xx.json': { 'a.one': 'One' } }),
+      ).toEqual([]);
     });
   });
 });
