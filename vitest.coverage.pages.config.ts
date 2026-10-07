@@ -118,6 +118,9 @@ const STORY_FILES = [
   'lib/pages/workItemPagesCursor.ts',
   'lib/mappers/pageLinkMappers.ts',
   'app/api/work-items/*/pages/route.ts',
+  // The work item page's Pages section (MOTIR-7575) and its fetch helper.
+  'app/**/items/*/_components/PagesSection.tsx',
+  'lib/workItems/pageLinksClient.ts',
 ] as const;
 
 const SHARED_FILES = [
@@ -185,6 +188,8 @@ export default defineConfig({
       // `tests/pages/*.test.ts` above) and the Pages read's own suites.
       'tests/services/pageLinksService.test.ts',
       'tests/api/workItemPagesRoute.test.ts',
+      // The work item page's Pages section (MOTIR-7575).
+      'tests/components/pagesSection.test.tsx',
     ],
     coverage: {
       provider: 'v8',

@@ -708,12 +708,15 @@ describe('permission shaping travels WITH the section (MOTIR-3437)', () => {
   // is that the actor's caps reach the section UNMODIFIED — a page that
   // narrowed or defaulted them on the way is how a read-only viewer gets
   // offered a composer that will 403.
-  const callLower = async (caps: {
-    canComment: boolean;
-    canModerate: boolean;
-    canCreate: boolean;
-    canDeleteAll: boolean;
-  }) => {
+  const callLower = async (
+    caps: {
+      canComment: boolean;
+      canModerate: boolean;
+      canCreate: boolean;
+      canDeleteAll: boolean;
+    },
+    canViewPages = false,
+  ) => {
     const { LateLowerSections } =
       await import('@/app/(authed)/items/[key]/_components/LateSections');
     const reads = Promise.resolve({
@@ -733,6 +736,8 @@ describe('permission shaping travels WITH the section (MOTIR-3437)', () => {
     return (await LateLowerSections({
       reads: reads as never,
       itemId: 'i1',
+      itemIdentifier: 'PROD-1',
+      canViewPages,
       currentUserId: 'u1',
       currentUserName: 'Yue',
       workflowStatuses: [] as never,
@@ -748,7 +753,7 @@ describe('permission shaping travels WITH the section (MOTIR-3437)', () => {
       canCreate: false,
       canDeleteAll: false,
     });
-    const [attachments, activity] = el.props.children;
+    const [, attachments, activity] = el.props.children;
     expect(attachments).toBeDefined();
     expect(activity).toBeDefined();
     expect(attachments!.props.canCreate).toBe(false);
@@ -763,11 +768,32 @@ describe('permission shaping travels WITH the section (MOTIR-3437)', () => {
       canCreate: true,
       canDeleteAll: false,
     });
-    const [attachments, activity] = el.props.children;
+    const [, attachments, activity] = el.props.children;
     expect(attachments).toBeDefined();
     expect(activity).toBeDefined();
     expect(attachments!.props.canCreate).toBe(true);
     expect((activity!.props.comments as { canComment: boolean }).canComment).toBe(true);
+  });
+
+  // MOTIR-7575 — the Pages section opens the lower half, and is ABSENT (not
+  // disabled) for a reader the page found without `page:view` or on the Visitor
+  // path: no element, so no client island and no read of the Pages route.
+  const NO_CAPS = { canComment: false, canModerate: false, canCreate: false, canDeleteAll: false };
+
+  it('mounts the Pages section FIRST, before Attachments, for a reader holding page:view', async () => {
+    const { PagesSection } = await import('@/app/(authed)/items/[key]/_components/PagesSection');
+    const el = await callLower(NO_CAPS, true);
+    const [pages] = el.props.children as unknown as { type: unknown; props: unknown }[];
+    expect(pages!.type).toBe(PagesSection);
+    expect(pages!.props).toEqual({ workItemId: 'i1', identifier: 'PROD-1' });
+  });
+
+  it('renders NO Pages section when the reader is withheld', async () => {
+    const el = await callLower(NO_CAPS, false);
+    const [pages, attachments, activity] = el.props.children;
+    expect(pages).toBeNull();
+    expect(attachments).toBeDefined();
+    expect(activity).toBeDefined();
   });
 });
 
@@ -827,5 +853,46 @@ describe('the header’s decision-waiting marker (MOTIR-5878)', () => {
       new Map([['i1', { state: 'others', kind: 'acceptance_result', routedToId: 'gone' }]]),
     );
     expect(markers[0]!.routedToName).toBeNull();
+  });
+});
+describe('the Pages section’s capability is threaded from the page (MOTIR-7575)', () => {
+  const findAll = (node: unknown, type: unknown, out: Record<string, unknown>[] = []) => {
+    if (Array.isArray(node)) {
+      for (const n of node) findAll(n, type, out);
+    } else if (node && typeof node === 'object' && '$$typeof' in node) {
+      const el = node as unknown as { type: unknown; props: Record<string, unknown> };
+      if (el.type === type) out.push(el.props);
+      for (const value of Object.values(el.props ?? {})) findAll(value, type, out);
+    }
+    return out;
+  };
+
+  const lowerHalf = async (held: string[]) => {
+    const { LateLowerSections, LateLowerFallback } =
+      await import('@/app/(authed)/items/[key]/_components/LateSections');
+    getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue' } });
+    getActiveProject.mockResolvedValue(PROJECT);
+    getIssueDetail.mockResolvedValue(detailFor());
+    getPermissions.mockResolvedValue(new Set(held));
+    releaseAll();
+    const tree = await callPage();
+    return {
+      sections: findAll(tree, LateLowerSections),
+      fallbacks: findAll(tree, LateLowerFallback),
+    };
+  };
+
+  it('a reader holding page:view gets the section and its reserved skeleton', async () => {
+    const { sections, fallbacks } = await lowerHalf(['page:view']);
+    expect(sections).toHaveLength(1);
+    expect(sections[0]!.canViewPages).toBe(true);
+    expect(sections[0]!.itemIdentifier).toBe('MOTIR-1');
+    expect(fallbacks[0]!.withPages).toBe(true);
+  });
+
+  it('a reader without page:view gets neither — no section, no skeleton that vanishes', async () => {
+    const { sections, fallbacks } = await lowerHalf(['work_item:edit']);
+    expect(sections[0]!.canViewPages).toBe(false);
+    expect(fallbacks[0]!.withPages).toBe(false);
   });
 });

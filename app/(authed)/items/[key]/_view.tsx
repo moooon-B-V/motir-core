@@ -164,6 +164,12 @@ export default async function ItemView({
   // history asserts, and that history is not filtered for a private epic's
   // descendants; the Plans room is the Visitor's plan surface (MOTIR-6645).
   const canViewPlans = held.has('plan:view_any') && !isVisitor;
+  // `canViewPages` (`page:view`) — whether the Pages section (Story MOTIR-7565 ·
+  // MOTIR-7575) mounts at all, and whether the late fallback reserves its card.
+  // ABSENT, not disabled, for a reader without it and for every Visitor (design
+  // § *The Pages section* panel 6): even an empty section would tell them whether
+  // pages point here, and the section's read is never made.
+  const canViewPages = held.has('page:view') && !isVisitor;
 
   // The Activity tab (Story 5.5 · 5.5.4): URL-driven via `?activity=`
   // (default Comments — the Jira default); the server fetches ONLY the
@@ -787,14 +793,19 @@ export default async function ItemView({
               (the reserved Epic-5 slot, per the attachments mockup's panel 0;
               content-width and multi-row, so the left column — the rail is
               for scalars). */}
-                    {/* THE LATE STACK, lower half — Attachments · Activity. KEYED on the
+                    {/* THE LATE STACK, lower half — Pages · Attachments · Activity. KEYED on the
               activity tab so switching `?activity=` re-shows the fallback
               instead of freezing on the previous tab's content (the shipped
               `/items` pattern). */}
-                    <Suspense key={activityTab} fallback={<LateLowerFallback />}>
+                    <Suspense
+                      key={activityTab}
+                      fallback={<LateLowerFallback withPages={canViewPages} />}
+                    >
                       <LateLowerSections
                         reads={lateReads}
                         itemId={item.id}
+                        itemIdentifier={item.identifier}
+                        canViewPages={canViewPages}
                         currentUserId={ctx.userId}
                         currentUserName={pageCtx.actorName ?? ''}
                         workflowStatuses={detail.workflow.statuses}

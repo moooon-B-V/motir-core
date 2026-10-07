@@ -11,6 +11,7 @@ import { DecidedGateStatusBridge } from './DecidedGateStatusBridge';
 import { queueAgainAutoAction, retryApproveAndMergeMemberAction } from '../approvalGateActions';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
 import { AttachmentsPanel } from './AttachmentsPanel';
+import { PagesSection } from './PagesSection';
 import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
 import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDevelopmentSlot';
@@ -265,10 +266,16 @@ export function LateUpperFallback() {
   );
 }
 
-/** The fallback for the LOWER half — Attachments, Activity. */
-export function LateLowerFallback() {
+/** The fallback for the LOWER half — Pages, Attachments, Activity.
+ *
+ *  The Pages card (Story MOTIR-7565 · MOTIR-7575; design § *The Pages section*,
+ *  panel 4) is reserved ONLY for a reader who will get the section — `page:view`
+ *  and not a Visitor, which the page knows in tier two. A withheld reader never
+ *  sees a skeleton that then disappears (the upper fallback's Errors reasoning). */
+export function LateLowerFallback({ withPages = false }: { withPages?: boolean }) {
   return (
     <>
+      {withPages ? <SectionCardSkeleton rows={2} /> : null}
       <SectionCardSkeleton rows={2} />
       <SectionCardSkeleton rows={4} />
     </>
@@ -742,13 +749,15 @@ export async function LateUpperSections({
 }
 
 /**
- * Attachments · Activity — the late sections BELOW `ChildPanel`. Awaits the same
- * promise as the upper half, so the two flush together and the reader sees one
- * settle.
+ * Pages · Attachments · Activity — the late sections BELOW `ChildPanel` (and
+ * Plans). Awaits the same promise as the upper half, so the two flush together
+ * and the reader sees one settle.
  */
 export async function LateLowerSections({
   reads,
   itemId,
+  itemIdentifier,
+  canViewPages,
   currentUserId,
   currentUserName,
   workflowStatuses,
@@ -757,6 +766,11 @@ export async function LateLowerSections({
 }: {
   reads: Promise<LateReads>;
   itemId: string;
+  /** The `PROD-N` key, for the Pages list's accessible name. */
+  itemIdentifier: string;
+  /** `page:view` on the item's project AND not a Visitor (MOTIR-7575): without
+   *  it the Pages section is ABSENT — no card, no read — not disabled. */
+  canViewPages: boolean;
   currentUserId: string;
   currentUserName: string;
   workflowStatuses: React.ComponentProps<typeof ActivitySection>['workflowStatuses'];
@@ -766,6 +780,9 @@ export async function LateLowerSections({
   const r = await reads;
   return (
     <>
+      {canViewPages ? (
+        <PagesSection key={itemId} workItemId={itemId} identifier={itemIdentifier} />
+      ) : null}
       <AttachmentsPanel
         workItemId={itemId}
         canCreate={r.attachmentCaps.canCreate}
