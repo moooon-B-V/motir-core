@@ -14,6 +14,7 @@ import {
   isIdeaCategory,
   isIdeaKind,
 } from '@/lib/ideas/categories';
+import { IDEA_LIMITS } from '@/lib/ideas/limits';
 import {
   IdeaNotActiveError,
   IdeaNotFoundError,
@@ -81,24 +82,6 @@ const STAFF_PAGE_DEFAULT = 50;
 const STAFF_PAGE_MAX = 200;
 const RUNS_DEFAULT = 10;
 const RUNS_MAX = 100;
-
-/** Field length limits — the same numbers the route schemas enforce (`lib/ideas/schemas.ts`). */
-export const IDEA_LIMITS = {
-  title: 120,
-  pitch: 400,
-  longText: 600,
-  tags: 6,
-  capabilities: 8,
-  capability: 300,
-  evidence: 10,
-  claim: 400,
-  sourceName: 200,
-  url: 2000,
-  tagLabel: 60,
-  tagDescription: 400,
-  reportMd: 20000,
-  areas: 40,
-} as const;
 
 function isUniqueViolation(err: unknown): boolean {
   return (
