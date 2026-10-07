@@ -7286,7 +7286,7 @@ export const workItemsService = {
   async quickSearch(
     query: string,
     ctx: ServiceContext,
-    opts: { limit?: number; excludeIds?: string[] } = {},
+    opts: { limit?: number; excludeIds?: string[]; projectId?: string } = {},
   ): Promise<WorkItemSummaryDto[]> {
     const trimmed = query.trim();
     if (trimmed.length < QUICK_SEARCH_MIN_QUERY_LENGTH) return [];
@@ -7300,11 +7300,17 @@ export const workItemsService = {
       projectRepository.findByWorkspace(ctx.workspaceId, tx),
     );
     const browsable = await projectAccessService.filterBrowsable(projects, ctx);
-    if (browsable.length === 0) return [];
+    // `projectId` narrows the search to ONE project (MOTIR-7572) — the page
+    // editor's picker, whose link rows are same-project only. It narrows WITHIN
+    // the browsable set, so a project the actor may not browse (or one outside
+    // the workspace) fails closed to `[]` rather than widening anything.
+    const scoped =
+      opts.projectId === undefined ? browsable : browsable.filter((p) => p.id === opts.projectId);
+    if (scoped.length === 0) return [];
     const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.quickSearch(
         ctx.workspaceId,
-        browsable.map((p) => p.id),
+        scoped.map((p) => p.id),
         trimmed,
         limit,
         opts.excludeIds ?? [],

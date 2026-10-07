@@ -423,6 +423,82 @@ describe('workItemsService.quickSearch — permission scope (Story 6.4)', () => 
   });
 });
 
+describe('workItemsService.quickSearch — one project (MOTIR-7572)', () => {
+  it('narrows to the named project, and to [] for a project the actor may not browse', async () => {
+    const owner = await usersService.createUser({
+      email: 'owner-qsp@ex.com',
+      password: PASSWORD,
+      name: 'Owner',
+    });
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'QSP WS',
+      ownerUserId: owner.id,
+    });
+    const ownerCtx: ServiceContext = { userId: owner.id, workspaceId: workspace.id };
+    const alpha = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Alpha',
+      identifier: 'ALP',
+    });
+    const beta = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Beta',
+      identifier: 'BET',
+    });
+    await projectMembersService.setAccessMode({
+      key: beta.identifier,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      mode: 'members',
+    });
+    const outsider = await usersService.createUser({
+      email: 'outsider-qsp@ex.com',
+      password: PASSWORD,
+      name: 'Outsider',
+    });
+    await workspacesService.addMember({ userId: outsider.id, workspaceId: workspace.id });
+    const outsiderCtx: ServiceContext = { userId: outsider.id, workspaceId: workspace.id };
+
+    const a = await seedItem({
+      workspaceId: workspace.id,
+      projectId: alpha.id,
+      identifier: 'ALP',
+      reporterId: owner.id,
+      title: 'gadget in alpha',
+    });
+    const b = await seedItem({
+      workspaceId: workspace.id,
+      projectId: beta.id,
+      identifier: 'BET',
+      reporterId: owner.id,
+      title: 'gadget in beta',
+    });
+
+    // Unnarrowed, the owner finds both — today's behaviour.
+    const all = await workItemsService.quickSearch('gadget', ownerCtx);
+    expect(all.map((r) => r.id).sort()).toEqual([a.id, b.id].sort());
+
+    const onlyBeta = await workItemsService.quickSearch('gadget', ownerCtx, { projectId: beta.id });
+    expect(onlyBeta.map((r) => r.id)).toEqual([b.id]);
+    const onlyAlpha = await workItemsService.quickSearch('gadget', outsiderCtx, {
+      projectId: alpha.id,
+    });
+    expect(onlyAlpha.map((r) => r.id)).toEqual([a.id]);
+
+    // A project the outsider may not browse fails closed, as does an unknown id.
+    expect(
+      await workItemsService.quickSearch('gadget', outsiderCtx, { projectId: beta.id }),
+    ).toEqual([]);
+    expect(
+      await workItemsService.quickSearch('gadget', ownerCtx, {
+        projectId: 'ckunknownproject00000000',
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe('workItemRepository.quickSearch — direct', () => {
   // Both cases assert a SHORT-CIRCUIT — the repository returning [] without a
   // query — so the tenant is incidental. They are still bound (MOTIR-2830): an

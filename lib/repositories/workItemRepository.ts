@@ -1231,6 +1231,25 @@ export const workItemRepository = {
    * Read-only path → `db` singleton. Empty input short-circuits to `[]` so
    * we never issue a degenerate `IN ()`.
    */
+  /**
+   * The subset of `ids` that are work items of `projectId`, archived ones
+   * INCLUDED — the same-project filter a page's derived links pass through
+   * (MOTIR-7571, `docs/decisions/pages.md` §8.1). Runs inside the page save's
+   * transaction. An empty input short-circuits to `[]`.
+   */
+  async findIdsInProject(
+    projectId: string,
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await tx.workItem.findMany({
+      where: { projectId, id: { in: [...ids] } },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  },
+
   async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<WorkItem[]> {
     if (ids.length === 0) return [];
     const client = tx ?? dbRead;

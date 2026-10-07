@@ -12,6 +12,8 @@ import {
   type ArchivedPageInfo,
 } from '@/components/pages/archive/PageArchivedBanner';
 import type { RestorePageVersionResultDto } from '@/lib/dto/pages';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import { IssueQuickViewController } from '@/app/(authed)/items/_components/IssueQuickViewController';
 import { cn } from '@/lib/utils/cn';
 import { HistoryNotice, PageHistoryPanel } from './PageHistoryPanel';
 import { PageActionsMenu } from './PageActionsMenu';
@@ -47,6 +49,10 @@ export interface PageViewPage {
   archived?: (Omit<ArchivedPageInfo, 'id' | 'title'> & { subPageCount: number }) | null;
   /** Its parent's title (the breadcrumb's last page), for the restored-elsewhere reason. */
   parentTitle?: string | null;
+  /** `PageDto.projectId` — the one project the work-item picker searches (MOTIR-7574). */
+  projectId?: string;
+  /** `PageDto.workItemRefs` — the live data of every work item the body mentions. */
+  workItemRefs?: WorkItemRefMap;
 }
 
 export interface PageViewProps {
@@ -265,6 +271,8 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
               bodyState={bodyState}
               canEdit={page.canEdit}
               onSaveStatusChange={setSaveStatus}
+              projectId={page.projectId}
+              workItemRefs={page.workItemRefs}
             />
           </div>
           {comparing ? (
@@ -336,6 +344,10 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
           }
         />
       ) : null}
+      {/* A chip's click opens the item's quick-view peek (`?peek=<key>`), as it
+          does on a description (MOTIR-7574) — the same controller /items, the
+          board and the approvals room mount. */}
+      <IssueQuickViewController />
     </div>
   );
 }

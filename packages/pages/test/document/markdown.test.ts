@@ -124,3 +124,64 @@ describe('markdown ↔ the page document', () => {
     expect(serializeMarkdown(s.node('doc', null, [p()]))).toBe('');
   });
 });
+
+describe('the work-item mention (MOTIR-7570)', () => {
+  it('parses the durable token into a workItemMention node and writes it back byte for byte', () => {
+    const line = 'See [MOTIR-12](motir:ck123) now';
+    const doc = parseMarkdown(line);
+    expect(doc.toJSON()).toEqual({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'See ' },
+            { type: 'workItemMention', attrs: { id: 'ck123', label: 'MOTIR-12' } },
+            { type: 'text', text: ' now' },
+          ],
+        },
+      ],
+    });
+    expect(serializeMarkdown(doc)).toBe(line);
+  });
+
+  it('leaves a plain link the Link mark, unchanged', () => {
+    const doc = parseMarkdown('[docs](https://x.y)');
+    const text = doc.child(0).child(0);
+    expect(text.isText).toBe(true);
+    expect(text.marks.map((m) => [m.type.name, m.attrs.href])).toEqual([['link', 'https://x.y']]);
+    expect(roundTrip('[docs](https://x.y)')).toBe('[docs](https://x.y)');
+  });
+
+  it('keeps a malformed motir: href an ordinary link, never a mention', () => {
+    const doc = parseMarkdown('[bad](motir:has%20space)');
+    expect(JSON.stringify(doc.toJSON())).not.toContain('workItemMention');
+  });
+
+  it('takes the label from formatted link text and round-trips mentions in a list and a table', () => {
+    expect(parseMarkdown('[**MOTIR-4**](motir:ck4)').child(0).child(0).attrs).toEqual({
+      id: 'ck4',
+      label: 'MOTIR-4',
+    });
+    const md = '- [MOTIR-5](motir:ck5)\n\n| a |\n| --- |\n| [MOTIR-6](motir:ck6) |';
+    expect(roundTrip(md)).toBe(md);
+  });
+  // MOTIR-7574: the page editor stores the work item's id ONLY, so a chip it
+  // inserted has no label, and its token is `[](motir:<id>)` — no key in the body.
+  it('round-trips a mention with no stored label as an empty-label token', () => {
+    const doc = s.node('doc', null, [
+      s.node('paragraph', null, [
+        s.text('See '),
+        s.node('workItemMention', { id: 'ck7', label: null }),
+        s.text(' now'),
+      ]),
+    ]);
+    const md = serializeMarkdown(doc);
+    expect(md).toBe('See [](motir:ck7) now');
+    expect(parseMarkdown(md).child(0).child(1).attrs).toEqual({ id: 'ck7', label: null });
+    expect(serializeMarkdown(parseMarkdown(md))).toBe(md);
+    // In a list and a table too.
+    const nested = '- [](motir:ck8)\n\n| a |\n| --- |\n| [](motir:ck9) |';
+    expect(roundTrip(nested)).toBe(nested);
+  });
+});

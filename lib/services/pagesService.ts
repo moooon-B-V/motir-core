@@ -5,6 +5,7 @@ import { pageRepository } from '@/lib/repositories/pageRepository';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { decisionPagePublicationRepository } from '@/lib/repositories/decisionPagePublicationRepository';
+import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import {
   toBase64,
   toLockedPageRow,
@@ -30,6 +31,7 @@ import {
   PageNotFoundError,
   PageVersionNotFoundError,
   archivePage as archivePageProcedure,
+  extractLinks,
   createPage as createPageProcedure,
   deletePage as deletePageProcedure,
   movePage as movePageProcedure,
@@ -455,34 +457,52 @@ export const pagesService = {
    * `page:view`. The read takes no row lock, so it never waits on a save. An
    * ARCHIVED page still opens here (§7), read-only whatever the role, with who
    * archived it and its archive root — a sub-page's banner links to the root,
-   * the only page of the set that restores or deletes (MOTIR-7421).
+   * the only page of the set that restores or deletes (MOTIR-7421). It carries
+   * the live chip data for every work item the body mentions (MOTIR-7572),
+   * resolved after the page read by the same resolver a comment's chips use, so
+   * a chip shows the item's current key, title and status without a page save.
    */
   async getPage(ctx: ServiceContext, input: GetPageInput): Promise<PageDto> {
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
-      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
-      const record = await pageRepository.findWithBodyById(input.pageId, tx);
-      if (!record || record.projectId !== input.projectId) {
-        throw new PageNotFoundError(input.pageId);
-      }
-      const { canEditPages, canDeletePages } = await projectAccessService.getPageCapabilities(
-        input.projectId,
-        ctx,
-        tx,
-      );
-      const names: { archiver?: string; archiveRootTitle?: string } = {};
-      if (record.archivedById !== null) {
-        const [archiver] = await userRepository.findByIds([record.archivedById], tx);
-        names.archiver = archiver?.name;
-      }
-      if (record.archiveRootId !== null && record.archiveRootId !== record.id) {
-        names.archiveRootTitle = (await pageRepository.findById(record.archiveRootId, tx))?.title;
-      }
-      return toPageDto(
-        toLockedPageRow(record),
-        { canEdit: canEditPages, canDelete: canDeletePages },
-        names,
-      );
-    });
+    const { page, mentionedIds } = await withWorkspaceContext(
+      scopeTo(ctx, input.projectId),
+      async (tx) => {
+        await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+        const record = await pageRepository.findWithBodyById(input.pageId, tx);
+        if (!record || record.projectId !== input.projectId) {
+          throw new PageNotFoundError(input.pageId);
+        }
+        const { canEditPages, canDeletePages } = await projectAccessService.getPageCapabilities(
+          input.projectId,
+          ctx,
+          tx,
+        );
+        const names: { archiver?: string; archiveRootTitle?: string } = {};
+        if (record.archivedById !== null) {
+          const [archiver] = await userRepository.findByIds([record.archivedById], tx);
+          names.archiver = archiver?.name;
+        }
+        if (record.archiveRootId !== null && record.archiveRootId !== record.id) {
+          names.archiveRootTitle = (await pageRepository.findById(record.archiveRootId, tx))?.title;
+        }
+        const links = extractLinks(record.bodyJson as Parameters<typeof extractLinks>[0]);
+        return {
+          page: {
+            row: toLockedPageRow(record),
+            caps: { canEdit: canEditPages, canDelete: canDeletePages },
+            names,
+          },
+          mentionedIds: links.map((l) => l.workItemId),
+        };
+      },
+    );
+    // `{}` with no query for a page that mentions nothing (the resolver's own
+    // short-circuit).
+    const workItemRefs = await resolveWorkItemRefSummaries(
+      { ids: mentionedIds, keys: [] },
+      input.projectId,
+      ctx,
+    );
+    return toPageDto(page.row, page.caps, page.names, workItemRefs);
   },
 
   /**

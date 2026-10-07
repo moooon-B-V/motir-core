@@ -16,6 +16,7 @@ import {
   applyUpdate,
   createPage,
   emptyState,
+  extractLinks,
   markdownToUpdate,
   renamePage,
   parseMarkdown,
@@ -265,7 +266,10 @@ describe('savePageUpdate', () => {
     });
     expect(stored.bodyMarkdown).toBe(stateToMarkdown(stored.bodyState));
     expect((stored.bodyJson as { content: unknown[] }).content).toHaveLength(2);
-    expect(store.calls.at(-1)).toEqual({ method: 'replaceDerivedLinks', args: [page.id, []] });
+    expect(store.calls.at(-1)).toEqual({
+      method: 'replaceDerivedLinks',
+      args: [page.id, [], 'u2'],
+    });
   });
 
   it('keeps both of two independent edits, in either order', async () => {
@@ -436,7 +440,10 @@ describe('savePageMarkdown (§3, §8.2, MOTIR-7408)', () => {
       updatedAt: clock.current,
     });
     expect(store.called('insertVersion') + store.called('updateVersion')).toBe(versionWrites + 1);
-    expect(store.calls.at(-1)).toEqual({ method: 'replaceDerivedLinks', args: [page.id, []] });
+    expect(store.calls.at(-1)).toEqual({
+      method: 'replaceDerivedLinks',
+      args: [page.id, [], 'u2'],
+    });
   });
 
   it('still saves an identical body: the revision moves, and the version is extended', async () => {
@@ -647,5 +654,81 @@ describe('every write leaves a version (§6, MOTIR-5754)', () => {
       });
       expect(store.called('insertVersion') + store.called('updateVersion')).toBe(before + 1);
     }
+  });
+});
+
+describe('derived links (MOTIR-7570)', () => {
+  const A = 'ckitema00000000000000000a';
+  const B = 'ckitemb00000000000000000b';
+  const body = `See [MOTIR-1](motir:${A}) and [MOTIR-2](motir:${B}), then [MOTIR-1](motir:${A}) again.`;
+  const expected = [
+    { workItemId: A, source: 'mention' },
+    { workItemId: B, source: 'mention' },
+  ];
+
+  it('createPage derives nothing: its body is empty', async () => {
+    const page = await createPage(store, clock, scope);
+    expect(store.called('replaceDerivedLinks')).toBe(0);
+    expect(extractLinks(store.pages.get(page.id)!.bodyJson as never)).toEqual([]);
+  });
+
+  it('savePageUpdate hands the saved body’s links and the actor to the port once, after the body and the version', async () => {
+    const page = await createPage(store, clock, scope);
+    await savePageUpdate(store, clock, {
+      pageId: page.id,
+      actorId: 'u2',
+      update: markdownToUpdate(emptyState(), body),
+    });
+
+    expect(store.called('replaceDerivedLinks')).toBe(1);
+    const methods = store.calls.map((call) => call.method);
+    const linksAt = methods.lastIndexOf('replaceDerivedLinks');
+    expect(methods.lastIndexOf('updateBody')).toBeLessThan(linksAt);
+    expect(
+      Math.max(methods.lastIndexOf('insertVersion'), methods.lastIndexOf('updateVersion')),
+    ).toBeLessThan(linksAt);
+    expect(store.calls[linksAt]).toEqual({
+      method: 'replaceDerivedLinks',
+      args: [page.id, expected, 'u2'],
+    });
+  });
+
+  it('savePageMarkdown does the same for a markdown write carrying the token', async () => {
+    const page = await createPage(store, clock, scope);
+    await savePageMarkdown(store, clock, {
+      pageId: page.id,
+      actorId: 'agent',
+      markdown: body,
+      expectedRevision: 1,
+    });
+    expect(store.calls.at(-1)).toEqual({
+      method: 'replaceDerivedLinks',
+      args: [page.id, expected, 'agent'],
+    });
+    // Removing the mention derives the empty set: the port clears the rows.
+    await savePageMarkdown(store, clock, {
+      pageId: page.id,
+      actorId: 'agent',
+      markdown: 'No mention left.',
+      expectedRevision: 2,
+    });
+    expect(store.calls.at(-1)).toEqual({
+      method: 'replaceDerivedLinks',
+      args: [page.id, [], 'agent'],
+    });
+  });
+
+  it('an archived page’s save is refused before any link is written', async () => {
+    const page = await createPage(store, clock, scope);
+    store.pages.set(page.id, { ...store.pages.get(page.id)!, archivedAt: clock.current });
+    await expect(
+      savePageMarkdown(store, clock, {
+        pageId: page.id,
+        actorId: 'u1',
+        markdown: body,
+        expectedRevision: 1,
+      }),
+    ).rejects.toThrow();
+    expect(store.called('replaceDerivedLinks')).toBe(0);
   });
 });

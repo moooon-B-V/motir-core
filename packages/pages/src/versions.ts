@@ -1,5 +1,6 @@
 import { PAGE_BODY_MAX_BYTES, PAGE_VERSION_CAP, PAGE_VERSION_WINDOW_MS } from './constants';
 import { applyUpdate, deriveFormats, stateToUpdate } from './document/convert';
+import { extractLinks } from './document/links';
 import {
   PageArchivedError,
   PageBodyTooLargeError,
@@ -162,6 +163,7 @@ export async function restorePageVersion(
     restoredFromNumber: source.number,
   });
   await applyCap(store, input.pageId);
-  await store.replaceDerivedLinks(input.pageId, []);
+  // The RESTORED body's links replace the pre-restore ones (§8.1).
+  await store.replaceDerivedLinks(input.pageId, extractLinks(formats.json), input.actorId);
   return { revision, version };
 }

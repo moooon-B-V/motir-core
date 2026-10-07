@@ -127,6 +127,7 @@ export type PersonalDataDelegate =
   | 'page'
   | 'pageVersion'
   | 'decisionPagePublication'
+  | 'pageWorkItemLink'
   | 'monitorConnection'
   | 'approvalGate'
   | 'planRevision';
@@ -539,6 +540,18 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'tenant',
     basis: 'Decision pages the reader published to a work item.',
     where: (userId) => ({ publishedById: userId }),
+  },
+  {
+    // `created_by_id` attributes an act — the save that wrote a page's link to a
+    // work item — to a person, the same SetNull-preserved shape as
+    // `decision_page_publication.published_by_id` directly above, so it is
+    // EXPORTED (Story MOTIR-7565 · MOTIR-7571). The row carries ids, a source and
+    // a time, no content.
+    table: 'page_work_item_link',
+    model: 'pageWorkItemLink',
+    tier: 'tenant',
+    basis: 'Links between pages and work items the reader created by saving a page.',
+    where: (userId) => ({ createdById: userId }),
   },
   {
     // `bound_by_user_id` attributes an act — binding a monitored project to this

@@ -45,6 +45,7 @@
     "@tiptap/pm": "^3.24.0",
     "@tiptap/react": "^3.24.0",
     "@tiptap/starter-kit": "^3.24.0",
+    "@tiptap/suggestion": "^3.26.0",
     "@tiptap/y-tiptap": "^3.0.4",
     "fractional-indexing": "^3.2.0",
     "lucide-react": "^1.16.0",

@@ -19,6 +19,7 @@ export * from './document/extensions';
 export * from './document/schema';
 export { parseMarkdown, serializeMarkdown } from './document/markdown';
 export * from './document/convert';
+export { extractLinks } from './document/links';
 export * from './store';
 export * from './save';
 export * from './move';
@@ -31,4 +32,8 @@ export {
   type PageEditorProps,
   type PageEditorTheme,
   type SaveStatus,
+  type AvailableWorkItemRefView,
+  type WorkItemCandidate,
+  type WorkItemRefView,
+  type WorkItemStatusCategory,
 } from './editor';

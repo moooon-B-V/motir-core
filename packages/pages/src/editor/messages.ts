@@ -46,6 +46,14 @@ export interface PageEditorMessages {
     linkPrompt: string;
     image: string;
     table: string;
+    /** `pages.editor.toolbar.workItem` — the Work item button's visible label (MOTIR-7574). */
+    workItem: string;
+    /** `pages.editor.toolbar.workItemLabel` — its `aria-label`, and the picker's. */
+    workItemLabel: string;
+    /** `pages.editor.toolbar.workItemTip` — its tooltip, which teaches the `@` door. */
+    workItemTip: string;
+    /** `pages.editor.toolbar.workItemInCode` — its tooltip while disabled in a code block. */
+    workItemInCode: string;
   };
   /** `pages.editor.table.*` — the group shown while the caret is in a table. */
   table: {
@@ -58,6 +66,30 @@ export interface PageEditorMessages {
     deleteColumn: string;
     deleteColumnLabel: string;
     deleteTable: string;
+  };
+  /**
+   * The work-item mention (Story MOTIR-5747 · MOTIR-7574), to
+   * `design/pages/design-notes.md` § _Mention a work item_. The picker's copy is
+   * the description editor's (`markdownEditor.mention*`, with the two strings
+   * that section adds), and the unavailable chip's is `pages.mention.*`.
+   */
+  mention: {
+    /** `markdownEditor.mentionWorkItems` — the picker's section label. */
+    workItems: string;
+    /** `markdownEditor.mentionTypeToSearch` — a query under two characters. */
+    typeToSearch: string;
+    /** `markdownEditor.mentionSearching`. */
+    searching: string;
+    /** `markdownEditor.mentionNoResults`, with the query filled in. */
+    noResults: (query: string) => string;
+    /** `markdownEditor.mentionSearchFailed`. */
+    searchFailed: string;
+    /** `markdownEditor.mentionRetry`. */
+    retry: string;
+    /** `pages.mention.unavailable` — the chip of a deleted or unreadable item. */
+    unavailable: string;
+    /** `pages.mention.unavailableTitle` — that chip's tooltip. */
+    unavailableTitle: string;
   };
   /** `pages.editor.status.*` — the save indicator. */
   status: {

@@ -148,6 +148,8 @@
     "mentionTypeToSearch": "Keep typing to search work items…",
     "mentionSearching": "Searching…",
     "mentionNoResults": "No work items match “{query}”.",
+    "mentionSearchFailed": "Couldn’t search work items.",
+    "mentionRetry": "Try again",
     "codeLanguage": "Language"
   },
   "common": {
@@ -1414,6 +1416,16 @@
     "planHistoryShowMore": "Show more plans",
     "planHistoryError": "Couldn't load plans.",
     "planHistoryLoadMoreError": "Couldn't load more plans.",
+    "pagesTitle": "Pages",
+    "pagesGloss": "where this item is written about",
+    "pagesListAria": "Pages that link to {key}",
+    "pagesSourceMention": "Mentioned",
+    "pagesSourceEmbed": "Embedded",
+    "pagesSourceManual": "Linked",
+    "pagesEmpty": "No page links to this work item yet.",
+    "pagesShowMore": "Show more pages",
+    "pagesError": "Couldn't load pages.",
+    "pagesLoadMoreError": "Couldn't load more pages.",
     "edit": "Edit",
     "description": "Description",
     "descriptionGloss": "what to do",
@@ -12883,7 +12895,11 @@
         "link": "Link",
         "linkPrompt": "Link URL",
         "image": "Insert image",
-        "table": "Insert table"
+        "table": "Insert table",
+        "workItem": "Work item",
+        "workItemLabel": "Mention a work item",
+        "workItemTip": "Mention a work item — or type @ in the text",
+        "workItemInCode": "Work items can’t be mentioned inside a code block"
       },
       "table": {
         "addRow": "+ Row",
@@ -13046,6 +13062,10 @@
         "rootRequired": "Couldn’t restore “{title}”",
         "rootRequiredBody": "“{title}” is archived as part of “{root}”. Restore “{root}” to bring it back."
       }
+    },
+    "mention": {
+      "unavailable": "Unavailable work item",
+      "unavailableTitle": "This work item was deleted, or you can’t see it."
     }
   }
 }

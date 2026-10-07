@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
-// GET /api/work-items/mention-search?q=<text> (Story 5.8 · Subtask 5.8.4) — the
+// GET /api/work-items/mention-search?q=<text>[&projectId=<id>] (Story 5.8 ·
+// Subtask 5.8.4; `projectId` MOTIR-7572) — the
 // candidate read behind the `@`-mention picker in the rich-text editor. A thin
 // HTTP layer over the SHARED `workItemsService.quickSearch` (the same key+title
 // pg_trgm, workspace + Story-6.4-browsable-project scoped, bounded read the
@@ -15,7 +16,9 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // NO DB round-trip (the MIN_QUERY_LENGTH guard) and enforces the browsable-project
 // permission scope — this route re-implements neither. The only failure mode is
 // 401 (no session / no resolvable workspace); a too-short query is a normal empty
-// `[]`, never an error.
+// `[]`, never an error. An optional `projectId` narrows the search to that one
+// project (the page editor's picker: a page links only its own project's items);
+// the service fails it closed to `[]` when the actor may not browse it.
 
 // The mention dropdown shows a small, fixed list — a tighter cap than the link
 // picker's default page.
@@ -26,7 +29,12 @@ export async function GET(req: Request): Promise<Response> {
   if (!gate.ok) return gate.response;
   const { ctx } = gate;
 
-  const q = new URL(req.url).searchParams.get('q') ?? '';
-  const results = await workItemsService.quickSearch(q, ctx, { limit: MENTION_SEARCH_LIMIT });
+  const params = new URL(req.url).searchParams;
+  const q = params.get('q') ?? '';
+  const projectId = params.get('projectId') || undefined;
+  const results = await workItemsService.quickSearch(q, ctx, {
+    limit: MENTION_SEARCH_LIMIT,
+    projectId,
+  });
   return NextResponse.json(results);
 }

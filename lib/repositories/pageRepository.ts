@@ -5,6 +5,7 @@ import {
   type PageLevelRecord,
   type PageLockedRecord,
   type PageMarkdownRecord,
+  type PageReadRecord,
   type PageRecord,
 } from '@/lib/mappers/pageMappers';
 import {
@@ -171,15 +172,14 @@ export const pageRepository = {
    * Read one page WITH its body state and no lock — the read model's door
    * (`pagesService.getPage`). A reader never blocks a save, and a save never
    * waits on a reader. `null` when absent or invisible. Archived pages included:
-   * an archived page opens read-only at its own address (§7).
+   * an archived page opens read-only at its own address (§7). The derived JSON
+   * rides along so the read can resolve the work items the body mentions
+   * (MOTIR-7572) without decoding the Yjs state.
    */
-  async findWithBodyById(
-    id: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<PageLockedRecord | null> {
+  async findWithBodyById(id: string, tx: Prisma.TransactionClient): Promise<PageReadRecord | null> {
     return tx.page.findUnique({
       where: { id },
-      select: { ...PAGE_RECORD_SELECT, bodyState: true },
+      select: { ...PAGE_RECORD_SELECT, bodyState: true, bodyJson: true },
     });
   },
 
