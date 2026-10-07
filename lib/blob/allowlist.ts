@@ -24,6 +24,9 @@ export const ALLOWED_FILE_TYPES: readonly string[] = [
   'text/plain',
   'text/csv',
   'text/markdown',
+  // Structured records (MOTIR-7723): the planner's `planning-record.json` on the
+  // planning bug it files. Plain text with a type — inert on the private store.
+  'application/json',
   'application/zip',
   // Common office docs.
   'application/msword',
