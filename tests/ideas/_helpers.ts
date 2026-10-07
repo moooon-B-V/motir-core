@@ -85,7 +85,8 @@ const SEED_MIGRATION = path.join(
 /**
  * Re-apply the idea SEED migration (MOTIR-7674). It is idempotent by contract,
  * so a suite that truncated the store gets today's 15 back, and running it twice
- * proves the contract. Statement by statement, as the migration engine does.
+ * proves the contract. The file is ONE statement (a DO block) so one raw execute
+ * applies all of it.
  */
 export async function applyIdeaSeed(): Promise<void> {
   await adminDb.$executeRawUnsafe(readFileSync(SEED_MIGRATION, 'utf8'));
