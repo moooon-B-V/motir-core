@@ -109,6 +109,13 @@ export interface HomeWorkItemRowDto {
    * the member list under the entry, as `fixMembers` is on To fix. Empty elsewhere.
    */
   resumeMembers: HomeWorkItemRowDto[];
+  /**
+   * TO RESUME ONLY, on the entry's head: the newest AUTOMATIC resume an approval
+   * attempted for its gated run (MOTIR-7710) — `started` reads *Resuming*, `skipped`
+   * *Could not resume* with its reason. Absent when none was attempted (a run that
+   * was not hosted, or a gate not yet approved) and on every other tab.
+   */
+  resumeAttempt?: GateResumeAttemptDto | null;
   /** The OPEN repair on a sent-back row — the lock that replaces both repairs while it
    *  runs (`hosted-agent-run.md` §8.6). Read only by the To fix read; `null` elsewhere. */
   repairRun: OpenRepairRunDto | null;
@@ -222,4 +229,28 @@ export interface HomeTabCountsDto {
    */
   approvals: number;
   watching: number;
+}
+
+/** One automatic resume attempt, as the To resume entry reads it (MOTIR-7710). */
+export interface GateResumeAttemptDto {
+  outcome: 'started' | 'skipped';
+  /** Why nothing started — null exactly when `outcome` is `started`. */
+  skipReason:
+    | 'dispatcher_gone'
+    | 'no_project_access'
+    | 'ci_credits_exhausted'
+    | 'out_of_credits'
+    | 'credits_unavailable'
+    | 'model_not_offered'
+    | 'models_unavailable'
+    | 'repository_not_writable'
+    | 'card_not_ready'
+    | 'already_resumed'
+    | 'not_resumable'
+    | null;
+  /** What the line names (the dispatcher, the model, the repository, the refusal). */
+  detail: string | null;
+  /** The hosted continue it started. */
+  resumedRunId: string | null;
+  createdAt: string;
 }

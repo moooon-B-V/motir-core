@@ -1,6 +1,7 @@
 import { Prisma, type WorkItem } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { resumeStateService } from '@/lib/services/resumeStateService';
+import { requestGateResumeAfterDecision } from '@/lib/services/gateResumeRequest';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -884,6 +885,13 @@ async function persistEvidence(
     // `resumeStateService.afterGateDecided` says why. A publish that only asked the
     // question moves nothing, and costs one read.
     await resumeStateService.afterGateDecided(args.item.id, ctx);
+    // …and asks for the hosted resume of the run it released (MOTIR-7710), only when
+    // the publish's gate is APPROVED — the read decides, so a publish that asked the
+    // question enqueues nothing.
+    await requestGateResumeAfterDecision(
+      { workItemId: args.item.id, kind: 'design_result' },
+      ctx.workspaceId,
+    );
     return persisted;
   });
 }

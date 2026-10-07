@@ -1551,6 +1551,7 @@ model Workspace {
   /// Automatic hosted re-runs after a design Revise (MOTIR-700).
   designAutoReruns            DesignAutoRerun[]
   dispatchRunHeldGates        DispatchRunHeldGate[]
+  gateResumes                 GateResume[]
   boards                      Board[]
   boardColumns                BoardColumn[]
   boardColumnStatuses         BoardColumnStatus[]
@@ -5631,6 +5632,8 @@ model ApprovalGate {
   designAutoRerun    DesignAutoRerun?
   /// The runs that closed `gated` waiting on this gate (MOTIR-7703).
   heldRuns           DispatchRunHeldGate[]
+  /// What its approval did about resuming the hosted run it held (MOTIR-7710).
+  gateResume         GateResume?
   /// The page versions this gate FROZE at its approval (Story MOTIR-5761 ·
   /// MOTIR-7428). SetNull on the version side: the freeze outlives the row.
   frozenPageVersions PageVersion[]         @relation("PageVersionFrozenByGate")
@@ -11316,6 +11319,10 @@ model DispatchRun {
   /// The approval gates this run stopped at, when it closed `gated` (MOTIR-7703).
   heldGates        DispatchRunHeldGate[]
   resumingItems    WorkItem[]                 @relation("WorkItemResumeRun")
+  /// The automatic resumes an approval attempted for this gated run (MOTIR-7710).
+  gateResumes      GateResume[]               @relation("GateResumeRun")
+  /// The approval whose automatic resume started this run, if one did (MOTIR-7710).
+  resumedByGate    GateResume[]               @relation("GateResumeResumedRun")
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.
@@ -11373,6 +11380,72 @@ model DispatchRunHeldGate {
   @@index([workItemId])
   @@index([workspaceId])
   @@map("dispatch_run_held_gate")
+}
+
+/// WHAT ONE APPROVAL DID ABOUT RESUMING A HOSTED RUN (Story MOTIR-7701 · MOTIR-7710).
+/// A gated run on Motir's hosted agent resumes itself when a gate it stopped at is
+/// approved: the `run/gate-resume.requested` job starts a hosted continue as the run's
+/// dispatcher, and records here what it did. One row per approved gate, keyed on it —
+/// a redelivered event writes nothing more. A run that was not hosted gets no row.
+model GateResume {
+  id           String                @id @default(cuid())
+  /// Tenant of record — RLS does not traverse foreign keys.
+  workspaceId  String                @map("workspace_id")
+  /// The approved gate this attempt answers. Unique: one approval, one attempt.
+  gateId       String                @unique @map("gate_id")
+  /// The `gated` run the gate held.
+  runId        String                @map("run_id")
+  /// The hosted continue it started. `SET NULL`: the record outlives the run.
+  resumedRunId String?               @map("resumed_run_id")
+  outcome      GateResumeOutcome
+  /// Why nothing started. Null exactly when `outcome` is `started`.
+  skipReason   GateResumeSkipReason? @map("skip_reason")
+  /// What the skipped line names — the dispatcher, the model, the repository, or the
+  /// continue claim's refusal — captured when it was written.
+  detail       String?
+  createdAt    DateTime              @default(now()) @map("created_at")
+
+  workspace  Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  gate       ApprovalGate @relation(fields: [gateId], references: [id], onDelete: Cascade)
+  run        DispatchRun  @relation("GateResumeRun", fields: [runId], references: [id], onDelete: Cascade)
+  resumedRun DispatchRun? @relation("GateResumeResumedRun", fields: [resumedRunId], references: [id], onDelete: SetNull)
+
+  /// The To resume entry's line: a run's newest attempt.
+  @@index([runId, createdAt])
+  @@index([resumedRunId])
+  @@map("gate_resume")
+}
+
+enum GateResumeOutcome {
+  /// A hosted continue was started, as the gated run's dispatcher, with its model.
+  started
+  /// Nothing started; `skipReason` says why, and the run waits on To resume.
+  skipped
+
+  @@map("gate_resume_outcome")
+}
+
+/// Why an automatic resume did not start. The start-path refusals mean what
+/// `DesignAutoRerunSkipReason`'s do.
+enum GateResumeSkipReason {
+  /// The run's dispatcher account no longer exists.
+  dispatcher_gone
+  /// The dispatcher can no longer edit the project.
+  no_project_access
+  ci_credits_exhausted
+  out_of_credits
+  credits_unavailable
+  /// The run's model is not offered any more (or the run recorded none).
+  model_not_offered
+  models_unavailable
+  repository_not_writable
+  card_not_ready
+  /// A continue already holds the run — another approval's resume, or a person's.
+  already_resumed
+  /// The continue claim refused it for another reason (`detail` names it).
+  not_resumable
+
+  @@map("gate_resume_skip_reason")
 }
 
 /// A GitHub INSTALLATION TOKEN handed to a hosted run (Story MOTIR-683 · MOTIR-6449;

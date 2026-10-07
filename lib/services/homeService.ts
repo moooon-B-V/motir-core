@@ -15,12 +15,18 @@ import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
-import type { HomePageDto, HomeTabCountsDto, HomeWorkItemRowDto } from '@/lib/dto/home';
+import { toGateResumeAttemptDto, toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
+import type {
+  GateResumeAttemptDto,
+  HomePageDto,
+  HomeTabCountsDto,
+  HomeWorkItemRowDto,
+} from '@/lib/dto/home';
 import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import { toOpenRepairRuns } from '@/lib/mappers/repairRunMappers';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { gateResumeRepository } from '@/lib/repositories/gateResumeRepository';
 import { resolveFixEntries, type FixEntry } from '@/lib/services/fixGroupService';
 import { fixGroupKeyOf } from '@/lib/workItems/fixReason';
 
@@ -453,7 +459,7 @@ export const homeService = {
       const order = orderedResumeRunIds(keyed);
       const window = windowFor(order.length, options.page, pageSize);
       const pageRuns = order.slice(window.skip, window.skip + pageSize);
-      const [members, scopes] = await Promise.all([
+      const [members, scopes, attempts] = await Promise.all([
         workItemRepository.findResumeMembers(
           ctx.workspaceId,
           projectScopes.map((scope) => scope.projectId),
@@ -461,8 +467,14 @@ export const homeService = {
           tx,
         ),
         dispatchRunRepository.findScopesByIds(pageRuns, tx),
+        gateResumeRepository.listByRunIds(pageRuns, tx),
       ]);
       const scopeOf = new Map(scopes.map((run) => [run.id, run.scopeWorkItemId]));
+      // Newest first, so the first attempt seen per run is the one the entry reads.
+      const attemptOf = new Map<string, GateResumeAttemptDto>();
+      for (const a of attempts) {
+        if (!attemptOf.has(a.runId)) attemptOf.set(a.runId, toGateResumeAttemptDto(a));
+      }
       return {
         items: pageRuns.flatMap((runId) => {
           const entry = toResumeEntryDto(
@@ -470,7 +482,7 @@ export const homeService = {
             scopeOf.get(runId) ?? null,
             ctx.userId,
           );
-          return entry ? [entry] : [];
+          return entry ? [{ ...entry, resumeAttempt: attemptOf.get(runId) ?? null }] : [];
         }),
         total: order.length,
         page: window.page,

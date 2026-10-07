@@ -102,6 +102,7 @@ import { readPlanGateHeld } from '@/lib/approvalGates/planApprovalHandler';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { recomputeWorkItemFixReason } from './fixReasonService';
 import { resumeStateService } from './resumeStateService';
+import { requestGateResumeAfterDecision } from './gateResumeRequest';
 import { isRunHoldingGateKind } from '@/lib/dispatchRuns/heldGates';
 import { designAutoRerunRepository } from '@/lib/repositories/designAutoRerunRepository';
 import { toDesignAutoRerunDto } from '@/lib/mappers/designAutoRerunMappers';
@@ -2140,6 +2141,11 @@ export const approvalGatesService = {
     // `resumeStateService.afterGateDecided` says why.
     if (preread.gate.workItemId !== null && isRunHoldingGateKind(preread.gate.kind)) {
       await resumeStateService.afterGateDecided(preread.gate.workItemId, ctx);
+      // …and an APPROVAL asks for the hosted resume of the run it released
+      // (MOTIR-7710). Never fails the decision; the job decides if anything starts.
+      if (DECISION_STATE[input.decision] === 'approved') {
+        await requestGateResumeAfterDecision(preread.gate, ctx.workspaceId);
+      }
     }
     return { ...decidedResult, effect };
 

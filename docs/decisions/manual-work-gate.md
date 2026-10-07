@@ -138,6 +138,14 @@ Withdrawal is a supersede: `state: superseded`, no actor, no note (§6b).
 
 The parent run does not resume when the gate is decided. The person runs it again.
 
+> **AMENDED 2026-10-07 (MOTIR-7710, Story MOTIR-7701).** A parent run that stops because its
+> remaining work waits on gates now closes `gated` and names them (MOTIR-7703). When one is decided
+> (Mark done, an approval, a choice, a confirmation), a run on Motir's **hosted** agent resumes
+> itself: the `run/gate-resume.requested` job starts a hosted continue on the run's own branch, as
+> its dispatcher with its model, and records what it did (`gate_resume`). Any other run waits on the
+> Workbench's **To resume** tab for `motir continue <KEY>`. The sentence above is kept as the record
+> of what this decision first said; it now holds only for a run that is not hosted.
+
 ### 7. Listing
 
 | surface                    | pinned value                                                                                                                                                                                |
@@ -181,7 +189,9 @@ MOTIR-7473's.
 
 - **The tab's name.** MOTIR-7458 decided it; this record only uses it.
 - **Copy, layout, the overlay port, empty and error states.** MOTIR-7473.
-- **A parent run continuing by itself once the gate clears.** MOTIR-6858.
+- **A parent run continuing by itself once the gate clears.** MOTIR-6858. _(Amended 2026-10-07:
+  a HOSTED parent run now does, MOTIR-7710 — see the amendment under §6. Anything beyond resuming
+  that one run stays MOTIR-6858's.)_
 - **The Approvals room's name or shape** (MOTIR-5299), beyond whether this kind's decisions are listed.
 - **Whether the scoped claim should reassign a manual card it skips.** The claim assigns every member
   to the starter today (`scopeClaimService.claimScope`), so a pre-assigned manual card may already

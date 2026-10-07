@@ -60,4 +60,23 @@ export const dispatchRunHeldGateRepository = {
     });
     return rows.map((r) => r.dispatchRunId);
   },
+
+  /**
+   * The runs that stopped at a gate of this KIND on this card (MOTIR-7710) — what an
+   * approval of that kind released. By card and kind, not gate id, so the approval of
+   * a republished design still reaches the run its first version held.
+   */
+  async listRunIdsByWorkItemAndKind(
+    workItemId: string,
+    kind: ApprovalGateKind,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.dispatchRunHeldGate.findMany({
+      where: { workItemId, kind },
+      select: { dispatchRunId: true },
+      distinct: ['dispatchRunId'],
+      orderBy: { dispatchRunId: 'asc' },
+    });
+    return rows.map((r) => r.dispatchRunId);
+  },
 };

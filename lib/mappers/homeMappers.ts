@@ -1,5 +1,6 @@
 import type { HomeWorkItemRow } from '@/lib/repositories/workItemRepository';
-import type { HomeWorkItemRowDto } from '@/lib/dto/home';
+import type { GateResume } from '@/generated/prisma/client';
+import type { GateResumeAttemptDto, HomeWorkItemRowDto } from '@/lib/dto/home';
 import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
 
 // Prisma → DTO converters for the Home domain (Story MOTIR-2649 · Subtask
@@ -55,5 +56,16 @@ export function toHomeWorkItemRowDto(row: HomeWorkItemRow, viewerId: string): Ho
     },
     viewerIsAssignee: row.assigneeId === viewerId,
     viewerIsReporter: row.reporterId === viewerId,
+  };
+}
+
+/** An automatic resume attempt as the To resume entry reads it (MOTIR-7710). */
+export function toGateResumeAttemptDto(row: GateResume): GateResumeAttemptDto {
+  return {
+    outcome: row.outcome,
+    skipReason: row.skipReason,
+    detail: row.detail,
+    resumedRunId: row.resumedRunId,
+    createdAt: row.createdAt.toISOString(),
   };
 }
