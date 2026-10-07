@@ -441,7 +441,7 @@ describe('(a) a gated close through the agent door names its gates and moves its
     const started = (await runStartWorkItemRun(
       { key: parent.identifier, harness: 'Claude Code', model: MODEL },
       fx.ctx,
-    )) as { structuredContent: { runId: string; outcome: string } };
+    )) as unknown as { structuredContent: { runId: string; outcome: string } };
     expect(started.structuredContent.outcome).toBe('started');
     const runId = started.structuredContent.runId;
     // The agent integrated nothing yet but cut its session branch on the first leg it
@@ -453,7 +453,7 @@ describe('(a) a gated close through the agent door names its gates and moves its
         events: [{ kind: 'checkout_ready', data: { branch: AGENT_BRANCH } }],
       },
       fx.ctx,
-    )) as { structuredContent: { accepted: number; refused: unknown[] } };
+    )) as unknown as { structuredContent: { accepted: number; refused: unknown[] } };
     expect(reported.structuredContent).toMatchObject({ accepted: 2, refused: [] });
     await publish(design, 'v1');
     return { parent, design, code, runId };
@@ -466,7 +466,10 @@ describe('(a) a gated close through the agent door names its gates and moves its
     const closed = (await runCloseWorkItemRun(
       { key: parent.identifier, runId, outcome: 'gated' },
       fx.ctx,
-    )) as { isError?: boolean; structuredContent: { stopReason: string; status: string } };
+    )) as unknown as {
+      isError?: boolean;
+      structuredContent: { stopReason: string; status: string };
+    };
     expect(closed.isError).toBeFalsy();
     expect(closed.structuredContent).toMatchObject({ status: 'succeeded', stopReason: 'gated' });
 

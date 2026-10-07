@@ -2,7 +2,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApprovalGateState, WorkItem } from '@/generated/prisma/client';
 import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { db } from '@/lib/db';
-import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { shaFor } from '../helpers/commitShaFixtures';
 import { truncateAuthTables } from '../helpers/db';
@@ -32,6 +33,7 @@ const { manualWorkGateService } = await import('@/lib/services/manualWorkGateSer
 const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
 const { homeService } = await import('@/lib/services/homeService');
+const { workspacesService } = await import('@/lib/services/workspacesService');
 const { readHeldGateVerdict, recomputeWorkItemResumeState, resumeStateService } =
   await import('@/lib/services/resumeStateService');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
@@ -368,6 +370,64 @@ describe('the Workbench partition', () => {
 
     const loose = await card('never ran', { kind: 'task' });
     expect(await resumeRunDetailService.readForWorkItem(loose.id, fx.ctx)).toBeNull();
+  });
+
+  it('a page mixes states: the door is offered only on a released entry the reader may edit, read off its newest attempt', async () => {
+    const waiting = await gatedStory();
+    const ready = await gatedStory();
+    await adminDb.approvalGate.update({
+      where: { id: ready.held.id },
+      data: { state: 'approved', decidedById: fx.ownerId, decidedAt: new Date() },
+    });
+    await recompute(ready.parent.id);
+    // Two attempts on the ready run — the NEWER one is what the entry reads.
+    const older = await gate(ready.design, 'approved');
+    await adminDb.gateResume.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        gateId: older.id,
+        runId: ready.runId,
+        outcome: 'skipped',
+        skipReason: 'models_unavailable',
+        createdAt: new Date(Date.now() - 60_000),
+      },
+    });
+    await adminDb.gateResume.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        gateId: ready.held.id,
+        runId: ready.runId,
+        outcome: 'skipped',
+        skipReason: 'out_of_credits',
+      },
+    });
+
+    const items = (await homeService.listToResume(hctx())).items;
+    const byId = new Map(items.map((row) => [row.id, row]));
+    expect(byId.get(ready.parent.id)).toMatchObject({
+      resumeState: 'ready_to_resume',
+      resumeAttempt: { outcome: 'skipped', skipReason: 'out_of_credits' },
+      canContinueHosted: true,
+    });
+    expect(byId.get(waiting.parent.id)!.canContinueHosted).toBe(false);
+
+    // A reader who may NOT edit the project sees the entries and no door.
+    const viewer = await createTestUser({ email: `viewer-${Date.now()}@example.com` });
+    await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
+    await adminDb.workItem.updateMany({
+      where: { id: { in: [waiting.parent.id, ready.parent.id] } },
+      data: { assigneeId: viewer.id },
+    });
+    const asViewer = await homeService.listToResume({
+      userId: viewer.id,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
+    expect(asViewer.items.map((row) => row.id).sort()).toEqual(
+      [waiting.parent.id, ready.parent.id].sort(),
+    );
+    expect(asViewer.items.every((row) => !row.canContinueHosted)).toBe(true);
   });
 
   it('To fix wins when a card somehow holds both', async () => {
