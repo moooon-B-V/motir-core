@@ -490,6 +490,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // under-estimating unbalances the bin-packer. RE-MEASURE from the first green
   // bulk artifact that includes it.
   'admin-fleet-selfhost.spec.ts': 4.0,
+  // Story MOTIR-7664 · MOTIR-7680 — the Ideas console smoke: one sign-up, the
+  // list, one detail and the tenant 404. ESTIMATED from its nearest neighbour by
+  // shape (`admin-fleet-selfhost.spec.ts`, above), rounded UP for the same
+  // reason. RE-MEASURE from the first green bulk artifact that includes it.
+  'admin-ideas-smoke.spec.ts': 4.0,
   'app-role-surfaces.spec.ts': 1.3,
   'ai-callout-gate.spec.ts': 1.9,
   'ai-plan-generation.spec.ts': 10.0,

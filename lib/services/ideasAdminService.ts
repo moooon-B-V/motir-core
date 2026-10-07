@@ -35,7 +35,7 @@ import type {
 } from '@/lib/ideas/types';
 import { toIdeaResearchRunDto, toStaffIdeaDto, toStaffIdeaTagDto } from '@/lib/mappers/ideaMappers';
 import { platformRoleAtLeast } from '@/lib/platform/auth';
-import { withPlatformWrite } from '@/lib/platform/context';
+import { withPlatformRead, withPlatformWrite } from '@/lib/platform/context';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
 import { PRISMA_UNIQUE_VIOLATION } from '@/lib/prisma/uniqueViolation';
 import {
@@ -45,6 +45,7 @@ import {
   type IdeaWithRelations,
 } from '@/lib/repositories/ideaRepository';
 import { ideaResearchRunRepository } from '@/lib/repositories/ideaResearchRunRepository';
+import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogRepository';
 import { ideaTagRepository } from '@/lib/repositories/ideaTagRepository';
 import type { Prisma } from '@/generated/prisma/client';
 
@@ -61,6 +62,13 @@ import type { Prisma } from '@/generated/prisma/client';
  * method re-checks the ACTOR's role against its own level instead (§2's
  * 2026-10-07 amendment).
  *
+ * THE LEVELS: the three staff READS (`listForStaff`, `getForStaff`, `listTags`)
+ * are `support`, so every staff role can look over the store in the console's
+ * Ideas page (MOTIR-7680, design `platform-admin` § Ideas → The roles); every
+ * write is `operator`, and `deleteIdea` is `superadmin`. The HTTP door asks for
+ * more than the service does — `/api/platform/ideas` reads at `operator` — and
+ * that is the route's choice, not this file's: a gate above may only narrow.
+ *
  * EVERY WRITE IS ONE TRANSACTION WITH ITS AUDIT ROWS (`withPlatformWrite`): the
  * chain lock is taken first, the change is made, and one `idea.*` row per
  * changed thing is appended — so a failed write leaves neither the change nor a
@@ -73,6 +81,7 @@ import type { Prisma } from '@/generated/prisma/client';
  *    touches no row for the loser (`IdeaNotActiveError`).
  */
 
+const LEVEL_READ = 'support' as const;
 const LEVEL_WRITE = 'operator' as const;
 const LEVEL_DELETE = 'superadmin' as const;
 
@@ -91,7 +100,10 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-function assertLevel(actor: IdeaActor, level: typeof LEVEL_WRITE | typeof LEVEL_DELETE): void {
+function assertLevel(
+  actor: IdeaActor,
+  level: typeof LEVEL_READ | typeof LEVEL_WRITE | typeof LEVEL_DELETE,
+): void {
   if (!platformRoleAtLeast(actor.role, level)) throw new NotPlatformStaffError();
 }
 
@@ -646,7 +658,7 @@ export const ideasAdminService = {
 
   /** Ideas of every status (unless one is named), newest first, keyset-paged. */
   async listForStaff(actor: IdeaActor, filters: StaffIdeaFilters = {}): Promise<StaffIdeaListDto> {
-    assertLevel(actor, LEVEL_WRITE);
+    assertLevel(actor, LEVEL_READ);
     const limit = clampLimit(filters.limit, STAFF_PAGE_DEFAULT, STAFF_PAGE_MAX);
     const rows = await ideaRepository.findAllForStaff({
       status: filters.status,
@@ -666,15 +678,39 @@ export const ideasAdminService = {
 
   /** One idea of any status. */
   async getForStaff(actor: IdeaActor, slug: string): Promise<StaffIdeaDto> {
-    assertLevel(actor, LEVEL_WRITE);
+    assertLevel(actor, LEVEL_READ);
     const row = await ideaRepository.findBySlugForStaff(slug);
     if (!row) throw new IdeaNotFoundError(slug);
     return toStaffIdeaDto(row);
   },
 
+  /**
+   * Who retired an idea — the console's Retired box names them (design
+   * `platform-admin` § Ideas, Panel 8c). `StaffIdeaDto` carries the reason and
+   * the date but no actor, so this reads the idea's newest `idea.retire` row.
+   * The audit log is a platform table, so the read runs in a platform context
+   * and is itself audited `estate.read` on the idea, the way `lastStop` reads
+   * the fleet's. Null for an active idea (no read is made) and for a retire
+   * with no row behind it.
+   */
+  async retiredBy(
+    actor: IdeaActor,
+    idea: Pick<StaffIdeaDto, 'id' | 'slug' | 'status'>,
+  ): Promise<string | null> {
+    assertLevel(actor, LEVEL_READ);
+    if (idea.status !== 'retired') return null;
+    const row = await withPlatformRead(
+      actor,
+      { action: 'estate.read', ...auditTarget(idea) },
+      (tx) =>
+        platformAuditLogRepository.findLatestByTargetAndAction('idea', idea.id, 'idea.retire', tx),
+    );
+    return row?.actor?.name || row?.actor?.email || null;
+  },
+
   /** The whole tag vocabulary, with how many ideas of any status carry each tag. */
   async listTags(actor: IdeaActor): Promise<StaffIdeaTagDto[]> {
-    assertLevel(actor, LEVEL_WRITE);
+    assertLevel(actor, LEVEL_READ);
     const rows = await ideaTagRepository.listAll();
     return rows.map(toStaffIdeaTagDto);
   },

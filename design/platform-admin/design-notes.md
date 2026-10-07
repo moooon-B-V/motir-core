@@ -19,6 +19,7 @@ closest existing usage surface.
 
 | **ORG lookup · ORG page · the internal-billing CLASSIFICATION control** (AMENDMENT 2026-09-05) | **`console.mock.html`** (HTML mockup, Panels 10 · 10b · 11 · 12) | The ORG level of the reserved **Tenants** row. Four panels: the **org lookup** (a GET form, the shipped user-lookup grammar one entity over) · its **three states** (idle · query too short · no results) · the **org page** (identity, plan tier, balance, the `isMeta` and `internalBilling` chips drawn SEPARATELY, MOTIR-733's panels as RESERVED regions, and the allocation table) · the **classification control** in six states (not-classified · classified · confirm with a mandatory reason · reason-missing · already-in-that-state · generic failure) with the `PlatformAuditLog` row rendered back on the same surface. **Gates MOTIR-4566 and MOTIR-4568** (Story MOTIR-4337). Draws to `docs/decisions/internal-billing-classification.md`. |
 | **The OPS TOOLKIT — org Operations tab · credits & plan · org suspend · kill-switches · View as · the audit log** (AMENDMENT 2026-10-03) | **`console--ops-toolkit.mock.html`** (delta, Panels 1–8) | Story 10.3’s governance writes on the shipped org and user pages, plus the hash-chained audit log at `/admin/audit-log`. **Gates MOTIR-747 … MOTIR-752.** |
+| **IDEAS — the rail row · the list (status / kind / category / tag / text filters in the URL, keyset pages) · the detail · edit with evidence rows · retire with a reason · a superadmin’s delete · support read-only** (AMENDMENT 2026-10-07) | **`console--ideas.mock.html`** (delta, Panels 1–12) | A new Operations page at `/admin/ideas` where staff review, correct, retire and delete the ideas motir.co shows. **Gates MOTIR-7680 and MOTIR-7681.** |
 
 ## What this area is
 
@@ -2105,3 +2106,271 @@ submit a blank id; the action's server-side guard stays and reads as the generic
 
 Colour, shape and roles are Panel 6's: the foot line and the nothing line are `--el-text-secondary`,
 the refusal line `--el-danger-on-surface`. Only a superadmin sees **Add model** (unchanged).
+
+---
+
+## Ideas — AMENDMENT 2026-10-07 (MOTIR-7679 · story MOTIR-7664)
+
+**Design system check (first).** The project is on Motir Design (`@motir/design-system`
+`workspace:*`, imported by `app/globals.css`); the root layout applies the person's own
+`data-style` / `data-palette` / `data-type`, so the mock draws the base values and routes every
+element through a token. **Nothing the package lacks is needed.** The mock is composed the way every
+console delta in this area is, because the console shell, table and pager are the console's own
+markup.
+
+**Mock (a DELTA):** [`console--ideas.mock.html`](console--ideas.mock.html), twelve panels.
+**Amends:** `console.mock.html` Panel 2 / 13 (the shell) — the rail gains one row. The rail is drawn
+as `AdminShell.tsx` ships it on `main` TODAY (Platform: Overview · Usage & cost · Tenants · Users;
+Operations: Monitoring · AI planning · Hosted-run models · Planning lessons · Audit log for a
+superadmin). `console--enterprise-requests.mock.html` (MOTIR-7604) adds a Platform row that is not
+on `main` yet; the two rows are in different groups and do not interact. Panel 12: the 404, by
+reference. The older mocks are records and are not edited.
+
+**Composed, not redrawn.** The token block, primitive CSS and lucide sprite are spliced verbatim
+from `console--enterprise-requests.mock.html` (approved). The list is the console's `Card` + the
+planning-lessons filter bar (`lookup-field` search, a `Segmented`, three `Combobox` triggers) + the
+at-scale table + the pager. The detail is the console's `detail-head` + cards + `kv`. The edit form
+is `FormField` + `Input` / `Textarea` / `Segmented` / `Combobox` / `MultiSelectPicker` /
+`Checkbox`. Retire and delete are the console's `Modal role="alertdialog"`. The additions block at
+the end of the mock's `<style>` holds only the status and kind pills, the list cells, the tag chip,
+the evidence list and row editor, the retired box, the role grid, the narrow cards, and six lucide
+glyphs (`Lightbulb`, `Trash2`, `Plus`, `X`, `Archive`, `Tag`).
+
+**Gates:** **MOTIR-7680** (the rail row, the list and the read-only detail) and **MOTIR-7681** (edit,
+retire, delete). Both build over `ideasAdminService` (`lib/services/ideasAdminService.ts`, MOTIR-7671)
+in server actions; nothing here goes through `/api/platform/ideas`.
+
+### What this page is
+
+Where platform staff look over the **idea store** — the ideas motir.co shows under _Ideas to build_ —
+and fix one by hand: correct its fields, retire it with a reason, or (a superadmin) delete one that
+was a mistake. **It adds no idea**: new ideas come from the `motir-ideas` research skill's batch add,
+and the empty state says so. It manages no tag vocabulary (it assigns existing tags only) and shows
+no research-run log. Staff-facing only: for a non-staff user both routes are the app 404.
+
+### The access path — a new rail row (Panel 1)
+
+**Operations → Ideas**, directly **after Planning lessons** and before the superadmin's Audit log.
+
+- **Icon:** `Lightbulb` (lucide).
+- **Route:** `/admin/ideas`; active when `pathname.startsWith('/admin/ideas')`, so a detail keeps
+  it lit. Detail: `/admin/ideas/<slug>` (the slug is the idea's stable, readable id).
+- **Visibility:** a LIVE row for **every staff role** (`support` reads the page).
+- **Label:** a new `navIdeas` in `AdminShellLabels`, beside `navPlanningLessons`.
+
+It sits in **Operations** beside Planning lessons because both are curated content Motir's own
+staff keep, not a view of the estate's customers (the Platform group).
+
+### The roles
+
+| Staff role               | Reads                       | Edit | Retire | Delete |
+| ------------------------ | --------------------------- | ---- | ------ | ------ |
+| `support`                | the list and every detail   | —    | —      | —      |
+| `operator`               | the list and every detail   | ✓    | ✓      | —      |
+| `superadmin`             | the list and every detail   | ✓    | ✓      | ✓      |
+| not staff (owners incl.) | the app 404 (Panel 12 → 7a) | —    | —      | —      |
+
+A control a role may not use is **absent, not disabled**; support sees one line instead (_Read-only
+for support…_). The missing buttons are presentation; the service is the rule.
+
+⚠️ **The service's READS are gated at `operator` today** — `listForStaff`, `getForStaff` and
+`listTags` all `assertLevel(actor, 'operator')`. The story asks for `support` to read, so
+**MOTIR-7680 lowers those three reads to `support`** (`platformRoleAtLeast(role, 'support')`) and
+leaves every write where it is (`operator`; `deleteIdea` at `superadmin`). Without that change a
+support viewer gets the page's error state, not a read-only page.
+
+### The value sets (a CHECKLIST — every value is drawn)
+
+| field  | value        | label (en / zh)              | pill (`--el-*`)                                        |
+| ------ | ------------ | ---------------------------- | ------------------------------------------------------ |
+| status | `active`     | Active / 生效中              | `--el-tint-mint` + `--el-text-strong`                  |
+| status | `retired`    | Retired / 已下线             | `--el-surface` + `--el-border` + `--el-text-secondary` |
+| kind   | `motir_buys` | Motir would buy / Motir 会买 | `--el-tint-lavender` + `--el-text-strong`              |
+| kind   | `direction`  | Direction / 方向             | `--el-tint-sky` + `--el-text-strong`                   |
+
+Category labels are `IDEA_CATEGORY_LABELS` (`lib/ideas/categories.ts`), shown as a neutral pill on
+the detail and as text in the list; the Category picker lists them in the enum's grouped order.
+
+### The panels (review EACH)
+
+1. **The list, populated.** Inside the shell, the new row active, an operator. Page title _Ideas_,
+   the subtitle and the audited line. One `Card`: title _Ideas_ with _Newest first. **15** shown._,
+   the filter bar, the table, the pager foot. Columns: **Idea** (title, slug in mono beneath),
+   **Kind** (pill), **Category**, **Tags** (up to three chips, then _+n_), **Status** (pill),
+   **Added** (date), a chevron; the whole row opens the detail. All 15 seeded ideas.
+2. **Filters.** (a) Category → E-commerce: two rows. (b) + Search _returns_: one row. Every filter
+   in force is repeated as a chip that removes only it; **Clear all** resets to the default.
+   (c) No match: the filter-shaped empty state with **Clear all filters**. (d) Status → Retired: a
+   retired row carries _Retired {date} — "{reason}"_ under its title. (e) A later page.
+3. **States.** (a) Loading: card, title and filters paint at once, five skeleton rows, no count.
+   (b) Empty store. (c) Error with Retry. An unknown slug is the app 404 (not redrawn).
+4. **Detail, operator, an active direction.** Back link, the title as heading, status / kind /
+   category pills, and the role's actions (operator: **Edit** · **Retire**). LEFT, _The idea_:
+   Pitch, What it does, The gap, Why now — an empty optional field reads in italic (_No capabilities
+   listed._ / _Not written._) rather than vanishing; then **Evidence**, numbered in order, each
+   claim with source, date and a link out (opens in a new tab). RIGHT: **Tags**, and **Record**
+   (slug, added, last edited, last reviewed, whether motir.co shows it).
+5. **Kind and status checklists.** (a) A Motir-would-buy idea adds **Why Motir would buy it** and
+   **Who else needs it**. (b) Both statuses in a list row and in the detail header.
+6. **Edit (operator · superadmin).** **Edit** turns the detail into the form in place. Fields, in
+   order: Title (`Input`, counted to 120) · Pitch (`Textarea`, 400) · Kind (`Segmented`) · Category
+   (`Combobox`) · Tags (`MultiSelectPicker` over EXISTING tags, at most 6, each option with how many
+   ideas carry it; the panel foot says new tags come from the research skill) · What it does
+   (ordered lines, up to 8, each 300) · Evidence (rows of Claim · Source · Source date
+   `YYYY-MM-DD` or empty · Link; add, remove, move up / down; up to 10; a direction needs one) ·
+   The gap · Why now (600 each) · on a `motir_buys` idea also Why Motir would buy it · Who else needs
+   it (600 each). On a direction those two are hidden and a line says why; switching Kind shows them
+   (and switching back to Direction clears them, because the service refuses them on a direction).
+   Foot: **Mark as reviewed today** (`Checkbox`, sends `reviewed: true`) · **Cancel** · **Save
+   changes**. No reason field: the audit row's reason is the service's own _Edited in the operator
+   console_.
+7. **A save refused, then accepted.** (a) `INVALID_IDEA_INPUT`: the form stays open with what was
+   typed; a `toast-err` summary (_Not saved — {n} fields need fixing. Nothing was changed._); each
+   field its own message in place, in `--el-danger-on-surface`, with `aria-invalid` on the input.
+   `UNKNOWN_TAG` (a tag deleted meanwhile) shows on the Tags field the same way. (b) Saved: the form
+   closes, a `toast-ok`, and the detail renders the DTO the action returned (new pitch, both
+   evidence rows, the new one marked _New_ until the page is left).
+8. **Retire (operator · superadmin).** (a) The alertdialog with a REQUIRED reason; **Retire idea**
+   is disabled until one is typed. (b) Typed. (c) Retired: Retired pill, no Retire button (Edit
+   stays), the **Retired box**: _Retired — {reason}_ and _{date, time} · {who} · no longer on
+   motir.co_. (d) `IDEA_NOT_ACTIVE` from a second tab: a `toast-warn` callout (`role="alert"`) and
+   the page re-reads the idea, showing (c) beneath it.
+9. **Delete (superadmin only).** (a) The header adds **Delete** in danger ink. (b) The alertdialog:
+   what is lost, a pointer to Retire, a REQUIRED reason and the slug typed back; the danger button is
+   disabled until both are there. (c) Filled. (d) Back on the list with a confirmation; 14 rows.
+10. **Roles.** One header per role (support · operator · superadmin), then a support viewer's whole
+    detail.
+11. **Narrow (390px).** Rail hidden, the bar keeps the staff marker; filters stack; one stacked row
+    per idea (title + status; slug; kind · category · added); the detail is one column with
+    full-width actions.
+12. **Not staff** — by reference to `console.mock.html` Panel 7a.
+
+### Copy (the `platformAdmin.ideas` namespace, with a `zh` twin each)
+
+The console is translated today — every `platformAdmin.*` key has a `zh` twin in `messages/zh.json`
+— so the story's "English-only" premise does not match shipped reality; the code cards add both.
+
+| key                                                    | en                                                                                                                                                                                                                                                          | zh                                                                                                                                                    |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shell.navIdeas`                                       | Ideas                                                                                                                                                                                                                                                       | 创意                                                                                                                                                  |
+| `ideas.title`                                          | Ideas                                                                                                                                                                                                                                                       | 创意                                                                                                                                                  |
+| `ideas.subtitle`                                       | The ideas motir.co shows under Ideas to build, active and retired. Correct an idea, or retire it with a reason; the research skill adds new ones.                                                                                                           | motir.co“值得做的创意”中展示的创意，包括生效中和已下线的。你可以修改创意，或填写原因将其下线；新创意由研究技能添加。                                  |
+| `ideas.auditLine`                                      | Every change is audited. Saving, retiring and deleting each write a row to the audit log with your name. motir.co picks a change up within the hour.                                                                                                        | 每次更改都会被审计。保存、下线和删除都会以你的名义写入审计日志。motir.co 会在一小时内同步更改。                                                       |
+| `ideas.count`                                          | Newest first. {count} shown.                                                                                                                                                                                                                                | 最新的在前。显示 {count} 条。                                                                                                                         |
+| `ideas.search.label` / `.placeholder`                  | Search / Search title, pitch, gap or tag                                                                                                                                                                                                                    | 搜索 / 搜索标题、简介、空白点或标签                                                                                                                   |
+| `ideas.filter.status` / `.kind` / `.category` / `.tag` | Status / Kind / Category / Tag                                                                                                                                                                                                                              | 状态 / 类型 / 分类 / 标签                                                                                                                             |
+| `ideas.filter.any*`                                    | Any kind / Any category / Any tag                                                                                                                                                                                                                           | 任意类型 / 任意分类 / 任意标签                                                                                                                        |
+| `ideas.filter.all`                                     | All                                                                                                                                                                                                                                                         | 全部                                                                                                                                                  |
+| `ideas.filtered` / `.clearAll`                         | Filtered by / Clear all                                                                                                                                                                                                                                     | 筛选条件 / 全部清除                                                                                                                                   |
+| `ideas.col.*`                                          | Idea · Kind · Category · Tags · Status · Added                                                                                                                                                                                                              | 创意 · 类型 · 分类 · 标签 · 状态 · 添加时间                                                                                                           |
+| `ideas.status.*` / `ideas.kind.*`                      | Active · Retired / Motir would buy · Direction                                                                                                                                                                                                              | 生效中 · 已下线 / Motir 会买 · 方向                                                                                                                   |
+| `ideas.retiredLine`                                    | Retired {date} — “{reason}”                                                                                                                                                                                                                                 | {date} 下线——“{reason}”                                                                                                                               |
+| `ideas.pager.note` / `.first` / `.next`                | Newest first · 50 a page / First page / Next page                                                                                                                                                                                                           | 最新的在前 · 每页 50 条 / 第一页 / 下一页                                                                                                             |
+| `ideas.empty.title` / `.body`                          | No ideas yet / Ideas are added in batches by the motir-ideas research skill, not on this page. Once a batch lands, every idea shows here for review.                                                                                                        | 还没有创意 / 创意由 motir-ideas 研究技能批量添加，而不是在此页面添加。批次添加后，所有创意都会显示在这里以供审阅。                                    |
+| `ideas.emptyFilter.title` / `.action`                  | No ideas match these filters / Clear all filters                                                                                                                                                                                                            | 没有符合筛选条件的创意 / 清除所有筛选                                                                                                                 |
+| `ideas.error.title` / `.body`                          | Couldn’t load the ideas / Something went wrong reading the idea store, so none is shown. Nothing has changed.                                                                                                                                               | 无法加载创意 / 读取创意库时出错，因此没有显示任何创意。没有任何更改。                                                                                 |
+| `ideas.detail.back`                                    | Back to ideas                                                                                                                                                                                                                                               | 返回创意列表                                                                                                                                          |
+| `ideas.detail.*` (sections)                            | The idea · Pitch · What it does · The gap · Why now · Why Motir would buy it · Who else needs it · Evidence · Tags · Record                                                                                                                                 | 创意 · 简介 · 功能 · 空白点 · 为什么是现在 · Motir 为什么会买 · 还有谁需要 · 证据 · 标签 · 记录                                                       |
+| `ideas.detail.none.*`                                  | No capabilities listed. / Not written.                                                                                                                                                                                                                      | 未列出功能。/ 未填写。                                                                                                                                |
+| `ideas.detail.sources`                                 | {n, plural, one {# source} other {# sources}}                                                                                                                                                                                                               | {n} 个来源                                                                                                                                            |
+| `ideas.record.*`                                       | Slug · Added · Last edited · Last reviewed · On motir.co · Not yet reviewed · Yes, in {category} · No — retired                                                                                                                                             | 标识 · 添加时间 · 最后编辑 · 最后审阅 · 是否在 motir.co · 尚未审阅 · 是，在{category} · 否——已下线                                                    |
+| `ideas.action.edit` / `.retire` / `.delete`            | Edit / Retire / Delete                                                                                                                                                                                                                                      | 编辑 / 下线 / 删除                                                                                                                                    |
+| `ideas.readOnly`                                       | Read-only for support. Editing, retiring and deleting ideas is an operator’s or a superadmin’s job.                                                                                                                                                         | 支持人员只读。编辑、下线和删除创意需由运维人员或超级管理员操作。                                                                                      |
+| `ideas.edit.title`                                     | Edit idea                                                                                                                                                                                                                                                   | 编辑创意                                                                                                                                              |
+| `ideas.edit.field.*`                                   | Title · Pitch · Kind · Category · Tags · What it does · Evidence · The gap · Why now · Why Motir would buy it · Who else needs it                                                                                                                           | 标题 · 简介 · 类型 · 分类 · 标签 · 功能 · 证据 · 空白点 · 为什么是现在 · Motir 为什么会买 · 还有谁需要                                                |
+| `ideas.edit.evidence.*`                                | Claim · Source · Source date · Link · YYYY-MM-DD, or empty · Add evidence · Move evidence {n} up · Move evidence {n} down · Remove evidence {n}                                                                                                             | 论据 · 来源 · 来源日期 · 链接 · YYYY-MM-DD，或留空 · 添加证据 · 上移证据 {n} · 下移证据 {n} · 删除证据 {n}                                            |
+| `ideas.edit.addLine` / `.limit`                        | Add a line / {n} of {max}                                                                                                                                                                                                                                   | 添加一行 / {n}/{max}                                                                                                                                  |
+| `ideas.edit.tags.hint`                                 | Existing tags only · at most 6 · new tags come from the research skill                                                                                                                                                                                      | 仅限已有标签 · 最多 6 个 · 新标签由研究技能添加                                                                                                       |
+| `ideas.edit.motirOnly`                                 | Why Motir would buy it and Who else needs it belong to a Motir-would-buy idea only. Switch Kind to show them.                                                                                                                                               | “Motir 为什么会买”和“还有谁需要”仅适用于 Motir 会买的创意。切换类型即可显示。                                                                         |
+| `ideas.edit.reviewed`                                  | Mark as reviewed today                                                                                                                                                                                                                                      | 标记为今天已审阅                                                                                                                                      |
+| `ideas.edit.cancel` / `.save`                          | Cancel / Save changes                                                                                                                                                                                                                                       | 取消 / 保存更改                                                                                                                                       |
+| `ideas.edit.refused`                                   | Not saved — {n, plural, one {one field needs} other {# fields need}} fixing. Nothing was changed. The fields are marked below.                                                                                                                              | 未保存——有 {n} 个字段需要修改。没有任何更改。相关字段已在下方标出。                                                                                   |
+| `ideas.edit.saved`                                     | Saved. Your changes show here now and on motir.co within the hour.                                                                                                                                                                                          | 已保存。更改已在此显示，motir.co 会在一小时内同步。                                                                                                   |
+| `ideas.retire.title` / `.body`                         | Retire “{title}”? / It leaves motir.co within the hour and moves under Retired here, with your reason. Nothing is deleted.                                                                                                                                  | 下线“{title}”？/ 它会在一小时内从 motir.co 移除，并带着你的原因移到这里的“已下线”中。不会删除任何内容。                                               |
+| `ideas.retire.reason` / `.placeholder`                 | Reason — required, shown on the idea and written to the audit log / Why is this idea no longer worth building?                                                                                                                                              | 原因——必填，显示在创意上并写入审计日志 / 为什么这个创意不再值得做？                                                                                   |
+| `ideas.retire.confirm`                                 | Retire idea                                                                                                                                                                                                                                                 | 下线创意                                                                                                                                              |
+| `ideas.retired.box`                                    | Retired — {reason} / {date, time} · {who} · no longer on motir.co                                                                                                                                                                                           | 已下线——{reason} / {date, time} · {who} · 已不在 motir.co 上                                                                                          |
+| `ideas.retire.already`                                 | Not retired — this idea was already retired. Someone retired it while you had the page open, so your reason was not recorded. The page now shows who retired it and why.                                                                                    | 未下线——此创意已被下线。在你打开页面期间有人将其下线，因此你的原因未被记录。页面现在显示了下线人和原因。                                              |
+| `ideas.delete.title` / `.body`                         | Delete “{title}” for good? / Deleting removes the idea, its evidence and its tags and cannot be undone. Use it for an idea that was added by mistake; to take a real idea down, retire it instead. The audit log keeps the slug, the title and your reason. | 永久删除“{title}”？/ 删除会移除该创意及其证据和标签，且无法撤销。仅用于误加的创意；要撤下真实的创意，请改为下线。审计日志会保留标识、标题和你的原因。 |
+| `ideas.delete.reason` / `.placeholder`                 | Reason — required, written to the audit log / Why is this idea being deleted?                                                                                                                                                                               | 原因——必填，写入审计日志 / 为什么要删除这个创意？                                                                                                     |
+| `ideas.delete.typeSlug`                                | Type the slug to confirm: {slug}                                                                                                                                                                                                                            | 输入标识以确认：{slug}                                                                                                                                |
+| `ideas.delete.confirm` / `.done`                       | Delete idea / Deleted “{title}”. It is gone from the store and from motir.co; the audit log keeps the record.                                                                                                                                               | 删除创意 / 已删除“{title}”。它已从创意库和 motir.co 中移除；审计日志保留了记录。                                                                      |
+
+**Field messages** — the service's `INVALID_IDEA_INPUT` issues carry a `field` path
+(`title`, `pitch`, `evidence[1].url`, …) and an English `message` written for API callers; the page
+maps each `field` to its control and shows its own sentence, never the raw message:
+
+| issue field                               | en                                                                                          | zh                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `title` / `pitch`                         | Give the idea a title of at most 120 characters. / Write a pitch of at most 400 characters. | 标题必填，最多 120 个字符。/ 简介必填，最多 400 个字符。 |
+| `gap` · `whyNow` · `whyMotir` · `whoElse` | Keep this to 600 characters.                                                                | 最多 600 个字符。                                        |
+| `evidence`                                | A direction needs at least one evidence row. / At most 10 rows.                             | 方向类创意至少需要一条证据。/ 最多 10 条。               |
+| `evidence[i].claim` / `.sourceName`       | Write the claim (at most 400). / Name the source (at most 200).                             | 请填写论据（最多 400）。/ 请填写来源（最多 200）。       |
+| `evidence[i].url`                         | Use a full link that starts with https://.                                                  | 请使用以 https:// 开头的完整链接。                       |
+| `evidence[i].sourceDate`                  | Use a real date as YYYY-MM-DD, or leave it empty.                                           | 请使用 YYYY-MM-DD 格式的真实日期，或留空。               |
+| `capabilities[i]`                         | Write the line (at most 300), or remove it.                                                 | 请填写这一行（最多 300），或将其删除。                   |
+| `tags` / `UNKNOWN_TAG`                    | At most 6 tags. / {tag} is no longer a tag; remove it.                                      | 最多 6 个标签。/ {tag} 已不是标签，请移除。              |
+| `reason` (retire, delete)                 | Write a reason (at most 2000 characters).                                                   | 请填写原因（最多 2000 个字符）。                         |
+
+### Data — what each element reads and calls
+
+| element                        | source                                                                                                                                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| list rows, next page           | `listForStaff(actor, { status, kind, category, tag, q, cursor })` — 50 a page, newest first, `nextCursor` (no total)                                                                     |
+| URL ↔ filters                  | `?q=&status=active\|retired\|all&kind=&category=&tag=&cursor=`; `status` absent = Active; `all` = no status filter; a changed filter drops `cursor`                                      |
+| Tag picker, Tag filter options | `listTags(actor)` — label + count of ideas of any status                                                                                                                                 |
+| detail                         | `getForStaff(actor, slug)` — `StaffIdeaDto`                                                                                                                                              |
+| Retired box — who              | the idea's newest `idea.retire` row in `PlatformAuditLog` (`targetKind: 'idea'`, `targetId`); `StaffIdeaDto` carries reason and date but no actor, so MOTIR-7680 reads it beside the DTO |
+| save                           | `updateIdea(actor, slug, patch)` — sends only the changed fields; `reviewed: true` when ticked                                                                                           |
+| retire                         | `retireIdea(actor, slug, reason)`; `IDEA_NOT_ACTIVE` → Panel 8d + re-read                                                                                                                |
+| delete                         | `deleteIdea(actor, slug, reason)` (superadmin); then redirect to the list with the confirmation                                                                                          |
+| the actor                      | the console session → `IdeaActor` with `credential: session`, so every audit row reads `session`                                                                                         |
+
+Two edits racing on one idea are **last write wins** — `updateIdea` has no version check, and this
+asset draws no stale-edit refusal. A concurrent retire is the one race the page shows (8d).
+
+### Allocation — which card builds what
+
+| element                                                                                                                                                                                                                              | card           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| rail row (`AdminShell.tsx`, `navIdeas`), list page, filters + URL, pager, loading / empty / error, read-only detail (Panels 1–5, 10’s support view, 11), lowering the three service reads to `support`                               | **MOTIR-7680** |
+| the Edit / Retire / Delete buttons by role, the edit form, field errors, save confirmation, retire dialog + Retired box + already-retired callout, delete dialog + post-delete list (Panels 6–9, 10’s operator / superadmin headers) | **MOTIR-7681** |
+
+### Colour and shape roles (`--el-*` only)
+
+- Pills: the value-set table above (hue in a `--el-tint-*` background with `--el-text-strong`); the
+  category is `pill-neutral`. Radius `--radius-badge`, padding `--spacing-chip-x/y`.
+- Every secondary ink (slugs aside, which are `--el-text-identifier`) is `--el-text-secondary`: the
+  count line, the retired note, the tag chips (on `--el-surface-soft`), the Record keys, the
+  unwritten-field italic, the read-only line. `--el-text-faint` and `--el-text-muted` carry no text
+  this asset adds.
+- Field errors and the Delete button's ink: `--el-danger-on-surface` (never `--el-danger-text`); the
+  dialog's **Delete idea** is the `Button` danger variant (`bg-(--el-danger) text-(--el-danger-text)`).
+  Retire is a secondary button with `--el-text`: retiring is the normal end of an idea, not a danger.
+- Callouts: saved `--el-tint-mint`, refused `--el-tint-rose`, already-retired `--el-tint-yellow`, all
+  with `--el-text-strong`. The Retired box is `--el-surface-soft` with `--el-border`. Links:
+  `--el-link`.
+- Buttons `--radius-btn` / `--height-btn-md` (row tools `--height-btn-sm` + `--radius-control`);
+  inputs `--radius-input` / `--height-input`; cards and evidence rows `--radius-card`; dialogs
+  `--radius-modal` + `--shadow-modal`.
+
+### A11y
+
+- The filter bar is `role="search"` labelled _Filter ideas_; Status is a `radiogroup`.
+- The skeleton table is `aria-busy`.
+- Each evidence-row tool has its own label (_Move evidence 2 up_, _Remove evidence 2_); a disabled
+  move (first row up, last row down) is `aria-disabled`.
+- A refused field sets `aria-invalid` and its message is linked with `aria-describedby`; the summary
+  callout is `role="alert"`, and focus moves to the first invalid field.
+- Retire and delete are `alertdialog`s labelled by their title; the already-retired callout is
+  `role="alert"`; the save and delete confirmations are `role="status"`.
+- The support line is real text, not a tooltip on a disabled button.
+- An evidence link out opens in a new tab and says so to assistive tech (_opens in a new tab_).
+
+### What this amendment does NOT draw
+
+- Adding an idea by hand (the research skill's batch add), un-retiring one (no service method),
+  creating or editing tags, and the research-run log.
+- What motir.co shows after a change (MOTIR-7665), and any cache purge — the hourly revalidate is the
+  agreed bound, which the page states.
+- A stale-edit refusal (the service has none; last write wins).
