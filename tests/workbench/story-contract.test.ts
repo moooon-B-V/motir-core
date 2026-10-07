@@ -32,6 +32,7 @@ const ROOT = resolve(__dirname, '..', '..');
 const EVERY_TAB: Readonly<Record<WorkbenchTab, true>> = {
   approvals: true,
   'to-fix': true,
+  'to-resume': true,
   'in-progress': true,
   todo: true,
   finished: true,
@@ -174,6 +175,9 @@ describe('GUARD · the cascade is TOTAL, and its order is its own', () => {
     expect(WORKBENCH_TABS).toEqual([
       'approvals',
       'to-fix',
+      // To resume sits beside To fix: a stopped run is the other half of "a run
+      // left this" (MOTIR-7707).
+      'to-resume',
       'in-progress',
       'todo',
       'finished',

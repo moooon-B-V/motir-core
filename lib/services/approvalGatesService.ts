@@ -101,6 +101,8 @@ import { planGateStampInputs, planSubjectVersion } from '@/lib/approvalGates/pla
 import { readPlanGateHeld } from '@/lib/approvalGates/planApprovalHandler';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { resumeStateService } from './resumeStateService';
+import { isRunHoldingGateKind } from '@/lib/dispatchRuns/heldGates';
 import { designAutoRerunRepository } from '@/lib/repositories/designAutoRerunRepository';
 import { toDesignAutoRerunDto } from '@/lib/mappers/designAutoRerunMappers';
 
@@ -2133,6 +2135,12 @@ export const approvalGatesService = {
     // that rolled back. Stripped from the result so it never crosses the wire.
     const { afterCommit, ...effect } = decidedResult.effect;
     if (afterCommit) await afterCommit();
+    // TO RESUME (MOTIR-7707): a decision on a gate a parent run stopped at moves the
+    // cards waiting on that run. After the commit, in the close's lock order —
+    // `resumeStateService.afterGateDecided` says why.
+    if (preread.gate.workItemId !== null && isRunHoldingGateKind(preread.gate.kind)) {
+      await resumeStateService.afterGateDecided(preread.gate.workItemId, ctx);
+    }
     return { ...decidedResult, effect };
 
     async function decideUnderLock(tx: Prisma.TransactionClient): Promise<DecideGateResult> {

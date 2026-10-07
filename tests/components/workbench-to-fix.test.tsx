@@ -105,6 +105,9 @@ function stuck(
     canContinueHosted: false,
     fixGroupKind: null,
     fixMembers: [],
+    resumeState: null,
+    resumeRunId: null,
+    resumeMembers: [],
     canFixHosted: false,
     repairRun: null,
   };

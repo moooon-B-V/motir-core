@@ -97,6 +97,7 @@ import { availableRoomViews, holdsAnyOf, RUN_ACT_PERMISSIONS } from '@/lib/rooms
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { uniqueViolationConstraints } from '@/lib/prisma/uniqueViolation';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { recomputeWorkItemResumeState } from './resumeStateService';
 import { manualWorkGateService } from './manualWorkGateService';
 import { CANCELLED_STATUS_KEY } from '@/lib/workItems/provenanceBackfill';
 import { ladderKeysFrom, rankOfStatus, RUNG_RANK } from '@/lib/workItems/statusLadder';
@@ -683,6 +684,10 @@ async function recomputeCovered(
 ): Promise<void> {
   if (covered.scope) await recomputeWorkItemFixReason(covered.scope, tx);
   for (const id of covered.legs) await recomputeWorkItemFixReason(id, tx);
+  // …and To resume (MOTIR-7707): a `gated` close puts the cards on it, and the next
+  // open on them — a continue, a fresh run — takes them off.
+  if (covered.scope) await recomputeWorkItemResumeState(covered.scope, tx);
+  for (const id of covered.legs) await recomputeWorkItemResumeState(id, tx);
 }
 
 /**

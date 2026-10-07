@@ -29,6 +29,7 @@ const reading = (
   inProgress: pair(1, '2026-09-17T09:00:00.000Z'),
   // To fix (MOTIR-6604) — its own reading, the other half of In progress's category.
   toFix: pair(1, '2026-09-17T09:30:00.000Z'),
+  toResume: pair(0, null),
   recentlyFinished: pair(0, null),
   approvals: pair(2, '2026-09-17T11:30:00.000Z'),
   watching: pair(5, '2026-09-16T08:15:00.000Z'),

@@ -46,4 +46,18 @@ export const dispatchRunHeldGateRepository = {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
   },
+
+  /**
+   * The runs that stopped at a gate on this card (MOTIR-7707) — the read a gate
+   * decision follows to the cards waiting on it. By CARD, not by gate id, so a gate
+   * superseded by a republish still reaches the run its first version held.
+   */
+  async listRunIdsByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.dispatchRunHeldGate.findMany({
+      where: { workItemId },
+      select: { dispatchRunId: true },
+      distinct: ['dispatchRunId'],
+    });
+    return rows.map((r) => r.dispatchRunId);
+  },
 };

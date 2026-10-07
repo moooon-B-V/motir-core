@@ -8333,6 +8333,7 @@
       "toDo": "To do",
       "inProgress": "In progress",
       "toFix": "To fix",
+      "toResume": "To resume",
       "recentlyFinished": "Recently finished",
       "watching": "Watching",
       "toApprove": "Waiting on you"
@@ -8369,6 +8370,10 @@
       "toFix": {
         "title": "Nothing to fix",
         "body": "When a run that died, a merge queue, a conflict, a failing check or a reviewer stops one of your work items, it shows up here with what repairs it."
+      },
+      "toResume": {
+        "title": "Nothing to resume",
+        "body": "When a run stops at an approval it needs, it waits here until the approval is given — then it carries on by itself on the hosted agent, or with motir continue from your terminal."
       },
       "recentlyFinished": {
         "title": "Nothing finished this week",

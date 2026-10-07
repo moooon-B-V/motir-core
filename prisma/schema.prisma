@@ -3013,6 +3013,19 @@ model WorkItem {
   // card's open pull requests are affected. Written with `fixReason`, `null`
   // exactly when it is.
   fixDetail             Json?
+  // WHETHER a card waits To resume (Story MOTIR-7701 · MOTIR-7707) — a SIBLING
+  // of `fixReason`, never a sixth value of it: To fix means a repair would claim
+  // the card, and a run stopped at an approval gate is not broken. Set while the
+  // LATEST run covering the card closed `gated`; `waiting_on_gate` until one of
+  // its held gates is approved, then `ready_to_resume`. RECOMPUTED by
+  // `resumeStateService.recomputeWorkItemResumeState`, never stamped; `null` off
+  // the `in_progress` category, on an archived card, and once a newer run opens.
+  resumeState           WorkItemResumeState?
+  // The gated run the state is about — the To resume tab's ENTRY key, as To fix
+  // groups by run (MOTIR-7589). Written with `resumeState`, `null` exactly when it
+  // is; `SetNull` so a pruned run can never leave a dangling pointer.
+  resumeRunId           String?                       @map("resume_run_id")
+  resumeRun             DispatchRun?                  @relation("WorkItemResumeRun", fields: [resumeRunId], references: [id], onDelete: SetNull)
   // WHEN this item finished (Story MOTIR-4777 · MOTIR-4780) — the moment it
   // ENTERED a `done`-CATEGORY status, cleared the moment it leaves one. The
   // Workbench's "Recently finished" tab is the first reader; it is also the
@@ -3245,6 +3258,9 @@ model WorkItem {
   // `fixReason` is NULL on nearly every row, so the non-null range is a handful of
   // entries and the membership predicate filters those rather than the project.
   @@index([projectId, fixReason])
+  // The TO RESUME read (Story MOTIR-7701 · MOTIR-7707) — the same shape as To fix's.
+  @@index([projectId, resumeState])
+  @@index([resumeRunId])
   // pg_trgm GIN over the free-text contains-match columns (Story 6.1 · 6.1.1,
   // finding #57): the filter builder's `text contains` compiles to ILIKE over
   // title + description, which must not table-scan at 10k issues. A multicolumn
@@ -3746,6 +3762,17 @@ enum WorkItemFixReason {
   changes_requested
 
   @@map("work_item_fix_reason")
+}
+
+/// WHERE a card waiting on a gated run stands (Story MOTIR-7701 · MOTIR-7707) —
+/// `WorkItem.resumeState`. The *resuming* and *could not resume* sub-states are
+/// NOT values: they are read from the per-decision resume record, so this column
+/// stays a pure function of runs and gates.
+enum WorkItemResumeState {
+  waiting_on_gate
+  ready_to_resume
+
+  @@map("work_item_resume_state")
 }
 
 /// A per-project, customizable issue status (Story 2.2). Every project owns an
@@ -11288,6 +11315,7 @@ model DispatchRun {
   designAutoReruns DesignAutoRerun[]
   /// The approval gates this run stopped at, when it closed `gated` (MOTIR-7703).
   heldGates        DispatchRunHeldGate[]
+  resumingItems    WorkItem[]                 @relation("WorkItemResumeRun")
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.

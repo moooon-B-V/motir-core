@@ -8329,6 +8329,7 @@
       "toDo": "待开始",
       "inProgress": "进行中",
       "toFix": "待修复",
+      "toResume": "待继续",
       "recentlyFinished": "最近完成",
       "watching": "关注中",
       "toApprove": "等你处理"
@@ -8365,6 +8366,10 @@
       "toFix": {
         "title": "没有需要修复的工作",
         "body": "当中断的运行、合并队列、冲突、未通过的检查或审阅者卡住你的某个工作项时，它会带着修复方法显示在这里。"
+      },
+      "toResume": {
+        "title": "没有待继续的运行",
+        "body": "当运行停在它所需的审批处时，会在这里等待，直到审批通过——随后在托管代理上自动继续，或在终端中用 motir continue 继续。"
       },
       "recentlyFinished": {
         "title": "本周还没有完成的工作",

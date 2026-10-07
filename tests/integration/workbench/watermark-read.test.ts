@@ -521,7 +521,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
     'one documented exception — `watcher` carries no `updatedAt`, so its freshness lives ' +
     'across a relation Prisma cannot `_max` through.';
 
-  it('is ONE transaction of thirteen statements, and the shape is the point', async () => {
+  it('is ONE transaction of fourteen statements, and the shape is the point', async () => {
     for (let i = 0; i < 10; i += 1) await card(`Bulk ${i}`);
     await gateOn({ title: 'Decide me', assigneeId: fx.ownerId });
 
@@ -539,9 +539,10 @@ describe('COST — this read runs once a second per open Workbench', () => {
       'project.findUnique',
       'workspaceMembership.findUnique',
       'workflowStatus.findMany',
-      // The six tabs. Four work tabs, one aggregate each — To fix (MOTIR-6604) is
-      // the fourth, one more slice of the same membership read and so one more
-      // aggregate rather than a second round trip…
+      // The seven tabs. Five work tabs, one aggregate each — To fix (MOTIR-6604)
+      // and To resume (MOTIR-7707) are each one more slice of the same membership
+      // read and so one more aggregate rather than a second round trip…
+      'workItem.aggregate',
       'workItem.aggregate',
       'workItem.aggregate',
       'workItem.aggregate',
@@ -560,9 +561,9 @@ describe('COST — this read runs once a second per open Workbench', () => {
     const watermark = await statementsOf(() => workbenchWatermarkService.read(ctx()));
     const counts = await statementsOf(() => homeService.tabCounts(ctx()));
 
-    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Thirteen statements is
+    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Fourteen statements is
     // not obviously cheap or expensive in the abstract; what settles it is that
-    // the strip ALREADY issues twelve to render its badges, and this read
+    // the strip ALREADY issues thirteen to render its badges, and this read
     // answers strictly more — every tab's freshness as well as its size — for
     // one more.
     expect(watermark.length - counts.length).toBe(1);
@@ -574,7 +575,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
       if (i % 3 === 0) await watch(row.id, fx.ownerId);
     }
     const big = await statementsOf(() => workbenchWatermarkService.read(ctx()));
-    expect(big).toHaveLength(13);
+    expect(big).toHaveLength(14);
   });
 
   it('runs on indexes that are actually present', async () => {

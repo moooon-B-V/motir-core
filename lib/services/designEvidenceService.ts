@@ -1,5 +1,6 @@
 import { Prisma, type WorkItem } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { resumeStateService } from '@/lib/services/resumeStateService';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -876,6 +877,14 @@ async function persistEvidence(
     // Non-null by construction: the row was created in THIS transaction, a few
     // statements above, and nothing between can remove it.
     return (await designEvidenceRepository.findById(evidence.id, tx))!;
+  }).then(async (persisted) => {
+    // TO RESUME (MOTIR-7707): with design approval switched off the gate above was
+    // approved by the system, which releases a parent run that stopped at this
+    // design. After the commit, in the close's lock order —
+    // `resumeStateService.afterGateDecided` says why. A publish that only asked the
+    // question moves nothing, and costs one read.
+    await resumeStateService.afterGateDecided(args.item.id, ctx);
+    return persisted;
   });
 }
 

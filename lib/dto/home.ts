@@ -95,6 +95,20 @@ export interface HomeWorkItemRowDto {
    * alone, and on every other tab.
    */
   fixMembers: HomeWorkItemRowDto[];
+  /**
+   * Whether the card waits To resume (Story MOTIR-7701 · MOTIR-7707): its latest run
+   * stopped at an approval gate, `waiting_on_gate` until one of the gates that held it
+   * is approved and `ready_to_resume` after. `null` when it does not wait.
+   */
+  resumeState: 'waiting_on_gate' | 'ready_to_resume' | null;
+  /** The gated run that state is about — the To resume entry's key. `null` exactly when
+   *  `resumeState` is. */
+  resumeRunId: string | null;
+  /**
+   * TO RESUME ONLY: the OTHER cards waiting on the same gated run, in the entry's order —
+   * the member list under the entry, as `fixMembers` is on To fix. Empty elsewhere.
+   */
+  resumeMembers: HomeWorkItemRowDto[];
   /** The OPEN repair on a sent-back row — the lock that replaces both repairs while it
    *  runs (`hosted-agent-run.md` §8.6). Read only by the To fix read; `null` elsewhere. */
   repairRun: OpenRepairRunDto | null;
@@ -185,6 +199,9 @@ export interface HomeTabCountsDto {
   /** Stuck until something is repaired — the in-progress cards whose `fixReason` is set
    *  (MOTIR-6604). Counted with the list's own slice, so it equals `listToFix().total`. */
   toFix: number;
+  /** Waiting on an approval gate — one per gated RUN whose cards wait To resume
+   *  (MOTIR-7707), the same number `listToResume().total` returns. Carved out of In progress. */
+  toResume: number;
   /** Finished inside the rolling window (`HOME_FINISHED_WINDOW_DAYS`). */
   recentlyFinished: number;
   /**
