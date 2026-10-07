@@ -236,6 +236,14 @@ describe('the reason rule', () => {
     // A platform admin's stop of one organisation's fleet (Story MOTIR-6905 ·
     // MOTIR-7317) — destructive and cross-tenant, so `superadmin` with a reason.
     'fleet.stop': 'required',
+    // The idea store (Story MOTIR-7662 · MOTIR-7671): retiring and deleting say
+    // why an idea left the public list; the rest carry the caller's context.
+    'idea.add': 'inherited',
+    'idea.update': 'inherited',
+    'idea.retire': 'required',
+    'idea.delete': 'required',
+    'idea.tag_add': 'inherited',
+    'idea.research_run': 'inherited',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {
