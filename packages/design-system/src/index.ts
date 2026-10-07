@@ -36,6 +36,7 @@ export * from './appearance';
 
 // ── The classname helper ─────────────────────────────────────────────────────
 export * from './utils/cn';
+export * from './utils/fullscreen';
 
 // ── Theme provider + pickers + preview specimen ──────────────────────────────
 export * from './contexts/theme-context';
