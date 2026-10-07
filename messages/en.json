@@ -8570,6 +8570,7 @@
       "exitToApp": "Exit to app",
       "navAiPlanning": "AI planning",
       "navPlanningLessons": "Planning lessons",
+      "navIdeas": "Ideas",
       "navRunModels": "Hosted-run models"
     },
     "nav": {
@@ -10331,6 +10332,108 @@
         "title": "Couldn’t load hosted-run models",
         "body": "motir-ai didn’t respond, so whether each listed model is offered is unknown and no list is shown. Nothing has changed."
       }
+    },
+    "ideas": {
+      "breadcrumb": "Operations · Ideas",
+      "title": "Ideas",
+      "subtitle": "The ideas motir.co shows under Ideas to build, active and retired. Correct an idea, or retire it with a reason; the research skill adds new ones.",
+      "auditLead": "Every change is audited.",
+      "auditBody": "Saving, retiring and deleting each write a row to the audit log with your name. motir.co picks a change up within the hour.",
+      "card": {
+        "title": "Ideas",
+        "count": "Newest first. {count} shown."
+      },
+      "search": {
+        "label": "Search",
+        "placeholder": "Search title, pitch, gap or tag"
+      },
+      "filter": {
+        "label": "Filter ideas",
+        "status": "Status",
+        "kind": "Kind",
+        "category": "Category",
+        "tag": "Tag",
+        "anyKind": "Any kind",
+        "anyCategory": "Any category",
+        "anyTag": "Any tag",
+        "all": "All",
+        "filtered": "Filtered by",
+        "clearAll": "Clear all",
+        "remove": "Remove {filter}"
+      },
+      "col": {
+        "idea": "Idea",
+        "kind": "Kind",
+        "category": "Category",
+        "tags": "Tags",
+        "status": "Status",
+        "added": "Added"
+      },
+      "status": {
+        "active": "Active",
+        "retired": "Retired"
+      },
+      "kind": {
+        "motir_buys": "Motir would buy",
+        "direction": "Direction"
+      },
+      "retiredLine": "Retired {date} — “{reason}”",
+      "moreTags": "+{n}",
+      "pager": {
+        "label": "Pages",
+        "note": "Newest first · 50 a page",
+        "first": "First page",
+        "next": "Next page"
+      },
+      "empty": {
+        "title": "No ideas yet",
+        "body": "Ideas are added in batches by the motir-ideas research skill, not on this page. Once a batch lands, every idea shows here for review."
+      },
+      "emptyFilter": {
+        "title": "No ideas match these filters",
+        "action": "Clear all filters"
+      },
+      "error": {
+        "title": "Couldn’t load the ideas",
+        "body": "Something went wrong reading the idea store, so none is shown. Nothing has changed.",
+        "retry": "Retry"
+      },
+      "detail": {
+        "back": "Back to ideas",
+        "idea": "The idea",
+        "pitch": "Pitch",
+        "capabilities": "What it does",
+        "gap": "The gap",
+        "whyNow": "Why now",
+        "whyMotir": "Why Motir would buy it",
+        "whoElse": "Who else needs it",
+        "evidence": "Evidence",
+        "tags": "Tags",
+        "record": "Record",
+        "noCapabilities": "No capabilities listed.",
+        "notWritten": "Not written.",
+        "noTags": "No tags.",
+        "noEvidence": "No evidence rows.",
+        "sources": "{n, plural, one {# source} other {# sources}}",
+        "newTab": "(opens in a new tab)",
+        "newRow": "New"
+      },
+      "record": {
+        "slug": "Slug",
+        "added": "Added",
+        "lastEdited": "Last edited",
+        "lastReviewed": "Last reviewed",
+        "onSite": "On motir.co",
+        "notReviewed": "Not yet reviewed",
+        "onSiteYes": "Yes, in {category}",
+        "onSiteNo": "No — retired"
+      },
+      "retiredBox": {
+        "title": "Retired — {reason}",
+        "meta": "{when} · no longer on motir.co",
+        "metaBy": "{when} · {who} · no longer on motir.co"
+      },
+      "readOnly": "Read-only for support. Editing, retiring and deleting ideas is an operator’s or a superadmin’s job."
     }
   },
   "legal": {

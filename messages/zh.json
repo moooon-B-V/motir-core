@@ -8566,6 +8566,7 @@
       "exitToApp": "返回应用",
       "navAiPlanning": "AI 规划",
       "navPlanningLessons": "规划经验",
+      "navIdeas": "创意",
       "navRunModels": "托管运行模型"
     },
     "nav": {
@@ -10327,6 +10328,108 @@
         "title": "无法加载托管运行模型",
         "body": "motir-ai 没有响应，因此无法确定每个已列入模型是否可用，不显示列表。没有任何更改。"
       }
+    },
+    "ideas": {
+      "breadcrumb": "运营·创意",
+      "title": "创意",
+      "subtitle": "motir.co“值得做的创意”中展示的创意，包括生效中和已下线的。你可以修改创意，或填写原因将其下线；新创意由研究技能添加。",
+      "auditLead": "每次更改都会被审计。",
+      "auditBody": "保存、下线和删除都会以你的名义写入审计日志。motir.co 会在一小时内同步更改。",
+      "card": {
+        "title": "创意",
+        "count": "最新的在前。显示 {count} 条。"
+      },
+      "search": {
+        "label": "搜索",
+        "placeholder": "搜索标题、简介、空白点或标签"
+      },
+      "filter": {
+        "label": "筛选创意",
+        "status": "状态",
+        "kind": "类型",
+        "category": "分类",
+        "tag": "标签",
+        "anyKind": "任意类型",
+        "anyCategory": "任意分类",
+        "anyTag": "任意标签",
+        "all": "全部",
+        "filtered": "筛选条件",
+        "clearAll": "全部清除",
+        "remove": "移除{filter}"
+      },
+      "col": {
+        "idea": "创意",
+        "kind": "类型",
+        "category": "分类",
+        "tags": "标签",
+        "status": "状态",
+        "added": "添加时间"
+      },
+      "status": {
+        "active": "生效中",
+        "retired": "已下线"
+      },
+      "kind": {
+        "motir_buys": "Motir 会买",
+        "direction": "方向"
+      },
+      "retiredLine": "{date} 下线——“{reason}”",
+      "moreTags": "+{n}",
+      "pager": {
+        "label": "分页",
+        "note": "最新的在前 · 每页 50 条",
+        "first": "第一页",
+        "next": "下一页"
+      },
+      "empty": {
+        "title": "还没有创意",
+        "body": "创意由 motir-ideas 研究技能批量添加，而不是在此页面添加。批次添加后，所有创意都会显示在这里以供审阅。"
+      },
+      "emptyFilter": {
+        "title": "没有符合筛选条件的创意",
+        "action": "清除所有筛选"
+      },
+      "error": {
+        "title": "无法加载创意",
+        "body": "读取创意库时出错，因此没有显示任何创意。没有任何更改。",
+        "retry": "重试"
+      },
+      "detail": {
+        "back": "返回创意列表",
+        "idea": "创意",
+        "pitch": "简介",
+        "capabilities": "功能",
+        "gap": "空白点",
+        "whyNow": "为什么是现在",
+        "whyMotir": "Motir 为什么会买",
+        "whoElse": "还有谁需要",
+        "evidence": "证据",
+        "tags": "标签",
+        "record": "记录",
+        "noCapabilities": "未列出功能。",
+        "notWritten": "未填写。",
+        "noTags": "没有标签。",
+        "noEvidence": "没有证据。",
+        "sources": "{n} 个来源",
+        "newTab": "（在新标签页中打开）",
+        "newRow": "新"
+      },
+      "record": {
+        "slug": "标识",
+        "added": "添加时间",
+        "lastEdited": "最后编辑",
+        "lastReviewed": "最后审阅",
+        "onSite": "是否在 motir.co",
+        "notReviewed": "尚未审阅",
+        "onSiteYes": "是，在{category}",
+        "onSiteNo": "否——已下线"
+      },
+      "retiredBox": {
+        "title": "已下线——{reason}",
+        "meta": "{when} · 已不在 motir.co 上",
+        "metaBy": "{when} · {who} · 已不在 motir.co 上"
+      },
+      "readOnly": "支持人员只读。编辑、下线和删除创意需由运维人员或超级管理员操作。"
     }
   },
   "legal": {

@@ -9,6 +9,7 @@ import {
   Bot,
   Building2,
   Coins,
+  Lightbulb,
   LogOut,
   ScrollText,
   Search,
@@ -56,6 +57,8 @@ export interface AdminShellLabels {
   /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
   navAiPlanning: string;
   navPlanningLessons: string;
+  /** Operations → Ideas (MOTIR-7680), visible to every staff role. */
+  navIdeas: string;
   /** Operations → Hosted-run models (MOTIR-7528), visible to every staff role. */
   navRunModels: string;
   /** Operations → Audit log (MOTIR-752), superadmin only. */
@@ -171,6 +174,17 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           label: labels.navPlanningLessons,
           href: '/admin/planning-lessons',
           active: pathname.startsWith('/admin/planning-lessons'),
+        },
+        // The idea store motir.co shows under Ideas to build (MOTIR-7680, design
+        // `platform-admin` § Ideas, MOTIR-7679), directly after Planning lessons:
+        // both are curated content Motir's own staff keep. Every staff role reads
+        // it; the writes on its detail are the operator's. `startsWith` so an
+        // idea's detail keeps it lit.
+        {
+          icon: <Lightbulb />,
+          label: labels.navIdeas,
+          href: '/admin/ideas',
+          active: pathname.startsWith('/admin/ideas'),
         },
         // The reserved `Governance · 10.3` row goes LIVE as the audit log
         // (design `platform-admin` AMENDMENT 2026-10-03 § 3, MOTIR-752). Every

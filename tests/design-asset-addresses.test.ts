@@ -255,22 +255,6 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
-  // ── FORWARD-LOOKING: the Ideas console (MOTIR-7679), built by MOTIR-7680 ──
-  {
-    file: 'design/platform-admin/console--ideas.mock.html',
-    address: '/admin/ideas',
-    why: 'FORWARD-LOOKING (MOTIR-7679, story MOTIR-7664): the Ideas console is drawn before MOTIR-7680 builds it. Delete this row when app/(admin)/admin/ideas/ lands.',
-  },
-  {
-    file: 'design/platform-admin/console--ideas.mock.html',
-    address: '/admin/ideas/[slug]',
-    why: 'FORWARD-LOOKING (MOTIR-7679, story MOTIR-7664): the Ideas console is drawn before MOTIR-7680 builds it. Delete this row when app/(admin)/admin/ideas/ lands.',
-  },
-  {
-    file: 'design/platform-admin/design-notes.md',
-    address: '/admin/ideas',
-    why: 'FORWARD-LOOKING (MOTIR-7679, story MOTIR-7664): the Ideas console is drawn before MOTIR-7680 builds it. Delete this row when app/(admin)/admin/ideas/ lands.',
-  },
   // ── ✅ RETIRED 2026-09-11 (MOTIR-5170, under Bug MOTIR-4925) ──────────────
   //  Three FORWARD-LOOKING rows stood here for `/settings/project/approvals` —
   //  MOTIR-4942's design named the room's address in `design/projects/`,

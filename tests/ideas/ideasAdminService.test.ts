@@ -543,6 +543,31 @@ describe('staff reads', () => {
       IdeaNotFoundError,
     );
   });
+
+  // MOTIR-7680: the console's Ideas page is read by EVERY staff role, so the
+  // three reads sit at `support` while every write stays at `operator`.
+  it('lets a support actor read the list, one idea and the tags, and nothing more', async () => {
+    await seedTags('smb');
+    const operator = await staffActor('operator');
+    await ideasAdminService.addIdeas(operator, [directionInput('seen', { tags: ['smb'] })]);
+    const support = await staffActor('support');
+
+    expect((await ideasAdminService.listForStaff(support)).items.map((i) => i.slug)).toEqual([
+      'seen',
+    ]);
+    expect((await ideasAdminService.getForStaff(support, 'seen')).slug).toBe('seen');
+    expect((await ideasAdminService.listTags(support)).map((t) => t.slug)).toEqual(['smb']);
+
+    await expect(
+      ideasAdminService.updateIdea(support, 'seen', { title: 'Changed' }),
+    ).rejects.toBeInstanceOf(NotPlatformStaffError);
+    await expect(ideasAdminService.retireIdea(support, 'seen', 'No')).rejects.toBeInstanceOf(
+      NotPlatformStaffError,
+    );
+    await expect(ideasAdminService.listResearchRuns(support)).rejects.toBeInstanceOf(
+      NotPlatformStaffError,
+    );
+  });
 });
 
 describe('withPlatformWrite', () => {
