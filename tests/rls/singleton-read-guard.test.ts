@@ -298,6 +298,45 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public',
     'platform_run_model_read + platform_run_model_list_read (20261004120000) · platformRunModelOfferRead.test "the offer read" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
+  // ── the IDEA STORE (Story MOTIR-7662 · MOTIR-7672 / MOTIR-7671) ──────────
+  // The public routes read with NO GUC bound — an anonymous visitor has no
+  // tenant and no platform standing — and so do the staff reads outside a write
+  // (the console list, one idea, the vocabulary, the run log). Every table's
+  // SELECT arm is `USING (true)`: the ideas are Motir's own published content,
+  // the platform run-model list's posture. Writes stay behind
+  // `app.platform_staff`, which the same test proves refuses an unbound write.
+  'ideaPublicRepository.ts#listActive': [
+    'public',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'ideaPublicRepository.ts#categoryCounts': [
+    'public',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'ideaPublicRepository.ts#tagCounts': [
+    'public',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'ideaPublicRepository.ts#findActiveBySlug': [
+    'public',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'ideaRepository.ts#findBySlugForStaff': [
+    'public',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'ideaRepository.ts#findAllForStaff': [
+    'public',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'ideaTagRepository.ts#listAll': [
+    'public',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'ideaResearchRunRepository.ts#listRecent': [
+    'public',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
 };
 
 /**

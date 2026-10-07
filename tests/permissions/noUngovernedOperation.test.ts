@@ -375,6 +375,11 @@ const PERMANENTLY_UNGATED = new Set([
   'token-scoped', // narrowed by API-token scopes instead
   'no-gate', // no actor at all — serviceAuth, job runner, webhook
   'finding', // logged as a defect rather than silently permitted
+  // Gated by platform standing (`requirePlatformStaff*` on the `User.platformRole`
+  // ladder), never by a project key — the first ROUTE handlers to carry it are
+  // the idea store's `/api/platform/ideas` (Story MOTIR-7662, R91). Kept in step
+  // with `inventoryCoverage.test.ts`'s NON_PERMISSION set, which already admits it.
+  'platform-scoped',
 ]);
 
 /**

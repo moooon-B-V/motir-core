@@ -78,6 +78,9 @@ const DEPRECATED: Record<string, string> = {
 
 /** The operation count `1.5.0` served — a deprecation adds no operation and removes none. */
 const OPERATIONS_AT_1_5_0 = 18;
+// 1.7.0 (MOTIR-7676) added three operations — the idea store's public reads —
+// and deprecated none, so the five above are still the only deprecated ones.
+const OPERATIONS_ADDED_SINCE = 3;
 
 type Operation = Record<string, unknown> & { operationId: string };
 
@@ -102,17 +105,17 @@ describe('the SERVED contract document — GET /api/openapi/public.json', () => 
     }
   });
 
-  it('reads 1.6.0, with the operation count 1.5.0 served', async () => {
+  it('reads 1.7.0, with the operation count 1.5.0 served plus the three added since', async () => {
     const { doc, operations } = await servedOperations();
-    expect(doc.info.version).toBe('1.6.0');
-    expect(PUBLIC_CONTRACT_VERSION).toBe('1.6.0');
-    expect(operations).toHaveLength(OPERATIONS_AT_1_5_0);
+    expect(doc.info.version).toBe('1.7.0');
+    expect(PUBLIC_CONTRACT_VERSION).toBe('1.7.0');
+    expect(operations).toHaveLength(OPERATIONS_AT_1_5_0 + OPERATIONS_ADDED_SINCE);
   });
 
   it('carries NO `deprecated` on any operation the story left alone', async () => {
     const { operations } = await servedOperations();
     const untouched = operations.filter((o) => !(o.operationId in DEPRECATED));
-    expect(untouched).toHaveLength(OPERATIONS_AT_1_5_0 - 5);
+    expect(untouched).toHaveLength(OPERATIONS_AT_1_5_0 + OPERATIONS_ADDED_SINCE - 5);
     for (const op of untouched) expect(op, op.operationId).not.toHaveProperty('deprecated');
   });
 });

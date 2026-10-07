@@ -8751,6 +8751,14 @@
           },
           "fleet": {
             "stop": "Stopped the fleet containers"
+          },
+          "idea": {
+            "add": "Added an idea",
+            "update": "Edited an idea",
+            "retire": "Retired an idea",
+            "delete": "Deleted an idea",
+            "tag_add": "Added an idea tag",
+            "research_run": "Recorded an idea research run"
           }
         }
       }

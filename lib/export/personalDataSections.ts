@@ -729,6 +729,12 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'only from the platform tier, not a record about the operator as a data subject — ' +
     '`OrgFeatureFlag`’s argument; every add and remove is recorded in the audit log ' +
     '(`ai.run_model_list.add` / `ai.run_model_list.remove`) with the same actor.',
+  IdeaResearchRun:
+    'A row of the idea store’s research-run log (MOTIR-7662) whose only User FK is ' +
+    'the moooon B.V. operator who recorded the run. Motir’s own content, written only ' +
+    'from the platform tier, not a record about the operator as a data subject — ' +
+    '`PlatformRunModel`’s argument; every run is recorded in the audit log ' +
+    '(`idea.research_run`) with the same actor.',
   PlanTargetLock:
     'A planning lease measured in minutes, held by a session and released by a sweep. ' +
     'It carries no fact about the person beyond "a lock existed", and is gone before ' +

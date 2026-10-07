@@ -47,6 +47,21 @@ export class MissingAuditReasonError extends Error {
 }
 
 /**
+ * A `withPlatformWrite` transaction finished without recording a single audit
+ * row (Story MOTIR-7662). The transaction is rolled back: a platform write that
+ * would commit with no row in the chain is a defect in the caller, never a
+ * state to persist (`docs/decisions/platform-staff-auth.md` §3a).
+ */
+export class PlatformWriteUnauditedError extends Error {
+  readonly code = 'PLATFORM_WRITE_UNAUDITED';
+
+  constructor() {
+    super('A platform write transaction recorded no audit row');
+    this.name = 'PlatformWriteUnauditedError';
+  }
+}
+
+/**
  * The account an operator asked for does not exist (MOTIR-1167).
  *
  * Carries the id, like `MissingAuditReasonError` and unlike

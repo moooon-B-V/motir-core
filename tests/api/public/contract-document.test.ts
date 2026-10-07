@@ -198,7 +198,9 @@ describe('the public contract document', () => {
   });
 
   it('bumps the MINOR for the deprecations — the document grew, the wire did not move', () => {
-    expect(PUBLIC_CONTRACT_VERSION).toBe('1.6.0');
+    // 1.6.0 was the deprecations; 1.7.0 (MOTIR-7676) added the three idea-store
+    // reads, another MINOR. Neither moved anything on the wire.
+    expect(PUBLIC_CONTRACT_VERSION).toBe('1.7.0');
   });
 });
 

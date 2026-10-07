@@ -80,6 +80,7 @@ describe('presentMe', () => {
       grant: ['project:browse', 'work_item:edit'],
       projectId: null,
       dispatchRunId: null,
+      tokenId: 'tok_1',
     } as Parameters<typeof presentMe>[0]);
 
     expect(payload).toEqual({
@@ -100,6 +101,7 @@ describe('presentMe', () => {
       grant: [],
       projectId: null,
       dispatchRunId: null,
+      tokenId: 'tok_1',
     } as Parameters<typeof presentMe>[0]);
 
     expect(Object.keys(payload.user).sort()).toEqual(['email', 'id', 'name']);
@@ -122,6 +124,7 @@ describe('presentMe', () => {
       grant: [],
       projectId: null,
       dispatchRunId: null,
+      tokenId: 'tok_1',
     } as Parameters<typeof presentMe>[0]);
 
     expect(() => meSchema.parse(payload)).not.toThrow();
