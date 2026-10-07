@@ -16,6 +16,8 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
 import { planRevisionsService } from '@/lib/services/planRevisionsService';
 import type { PlanRevisionAgentActor } from '@/lib/services/planRevisionsService';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { attachmentsService } from '@/lib/services/attachmentsService';
+import type { AttachmentDTO } from '@/lib/dto/attachments';
 
 // The AI bug-filing write path (MOTIR-1450) — the ONE service method the
 // internal `POST /api/internal/ai/work-items` route calls. The AI self-learning
@@ -105,6 +107,31 @@ export const aiWorkItemsService = {
       },
       ctx,
     );
+  },
+
+  /**
+   * Attach ONE file to a work item, AS the system principal (MOTIR-7723) — the
+   * service-bearer twin of `POST /api/v1/work-items/{key}/attachments`, for the
+   * caller that holds no PAT: motir-ai, putting `planning-record.json` on the
+   * planning bug it has just filed through {@link fileBug}.
+   *
+   * Resolves the KEY the way `fileBug` resolves its parent — the project inside
+   * the principal's workspace (404-not-403), then the item by identifier — and
+   * hands the id to `attachmentsService.attachToWorkItem`, the ONE upload
+   * implementation (`attachment-api-door.md` §1). Every gate runs there
+   * unchanged: `attachment:create`, size, MIME, the per-user throttle and the
+   * org storage cap. The row is stamped `api`, the source every non-panel
+   * upload entrance writes.
+   */
+  async attachFile(
+    input: { identifier: string; file: File },
+    ctx: ServiceContext,
+  ): Promise<AttachmentDTO> {
+    const identifier = input.identifier.trim().toUpperCase();
+    const dash = identifier.lastIndexOf('-');
+    const project = await resolveServiceProjectByKey(identifier.slice(0, dash), ctx);
+    const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
+    return attachmentsService.attachToWorkItem(item.id, input.file, ctx, 'api');
   },
 
   /**
