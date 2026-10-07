@@ -70,6 +70,9 @@ const NEVER_A_REVISION_KEY: Record<string, string> = {
   fixReason: 'recomputed by fixReasonService from the delivery set, never a revision (MOTIR-6600)',
   fixDetail: 'written with fixReason by the same recompute, never a revision (MOTIR-6600)',
   completedAt: 'derived from the status category',
+  resumeState:
+    'derived from the latest run’s end by resumeStateService, never a revision (MOTIR-7707)',
+  resumeRunId: 'written with resumeState by the same derivation, never a revision (MOTIR-7707)',
 };
 
 type Disposition = 'shape' | 'ignored' | 'unclassified' | 'both';
