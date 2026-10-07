@@ -1984,7 +1984,24 @@
    dividers inside a wavy card): the full-box `.border`, and the single-side
    dividers `.border-b` / `.border-t` (table rows, section rules) — the latter
    scoped INSIDE `[data-surface]` panels to bound the count to real surfaces (and
-   their rows are virtualised, so only ~viewport-many overlays ever render). */
+   their rows are virtualised, so only ~viewport-many overlays ever render).
+
+   ⚠️ THE INK IS AN `outline`, NOT A `border`, AND THE OVERLAY BOX NEVER LEAVES ITS
+   HOST'S PADDING BOX (MOTIR-7693). The line has to straddle the host's padding
+   edge — 1px out, 1px in — to sit on the real border it roughens. Drawn as a
+   2px border on an overlay at `inset: -1px`, that put the overlay's BOX one
+   pixel past its host on every side, and when the host is also a scroll
+   container (`.border` + `overflow-*-auto`: framed tables, pickers, code blocks)
+   its own `::after` is part of its scrollable overflow — `scrollWidth` /
+   `scrollHeight` one past the client box, so the browser drew a vertical AND a
+   horizontal scroll bar on content that fits. An outline is ink, not layout: it
+   never counts toward scrollable overflow. So the overlay box sits at `inset: 0`
+   and `outline-offset: -1px` puts the 2px line back on exactly the same pixels.
+   The dividers are the same move — a 0-height box ON the edge, a 1px outline
+   either side of it (the line it replaces was 2px straddling the edge), and
+   `left`/`right: 1px` to cancel the outline's run past the box's ends; their
+   `bottom: -1px` overflowed a scroller whose last row drops its real border.
+   tests/e2e/hand-drawn-scroll-frame.spec.ts measures it in Chromium. */
 @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
   .border {
     border-width: 2px;
@@ -1999,9 +2016,10 @@
   .border::after {
     content: '';
     position: absolute;
-    inset: -1px;
+    inset: 0;
     pointer-events: none;
-    border: 2px solid var(--el-border-strong);
+    outline: 2px solid var(--el-border-strong);
+    outline-offset: -1px;
     border-radius: inherit;
     filter: url(#hd-rough);
   }
@@ -2020,12 +2038,12 @@
   [data-surface] .border-b:not(.border)::after {
     content: '';
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -1px;
+    left: 1px;
+    right: 1px;
+    bottom: 0;
     height: 0;
     pointer-events: none;
-    border-bottom: 2px solid var(--el-border-strong);
+    outline: 1px solid var(--el-border-strong);
     filter: url(#hd-rough);
   }
 }
@@ -2033,12 +2051,12 @@
   [data-surface] .border-t:not(.border)::after {
     content: '';
     position: absolute;
-    left: 0;
-    right: 0;
-    top: -1px;
+    left: 1px;
+    right: 1px;
+    top: 0;
     height: 0;
     pointer-events: none;
-    border-top: 2px solid var(--el-border-strong);
+    outline: 1px solid var(--el-border-strong);
     filter: url(#hd-rough);
   }
 }

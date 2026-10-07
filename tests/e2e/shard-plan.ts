@@ -643,6 +643,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // Recorded at ~1.5x per the calibration note. Re-measure from the first green
   // `playwright-report-bulk-*` artifact with it.
   'graph-too-large.spec.ts': 30.0,
+  // MOTIR-7693 — framed scroll containers under hand-drawn-indie, on the public
+  // /tokens page (no sign-up). Measured LOCALLY (1 test, 1.8 s against `next dev`),
+  // not from a green CI run. Rounded UP; re-measure from its first green bulk leg.
+  'hand-drawn-scroll-frame.spec.ts': 5.0,
   'hero-ai-control-styles.spec.ts': 12.0,
   // MOTIR-5487. Promoted from the acceptance lane (it was
   // `acceptance-how-to-test.spec.ts`). NOT measured in this lane: estimated from the
