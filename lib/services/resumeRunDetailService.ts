@@ -23,7 +23,7 @@ import { notePreviewOf } from '@/lib/workItems/fixReason';
 // the run stopped shows the version a person is actually asked about.
 
 /** Where the run ran, in the aside's four words (§ 35.6 `workbench.toResume.ranBy.*`). */
-function ranWhereOf(header: {
+export function ranWhereOf(header: {
   origin: 'local' | 'hosted' | 'instance';
   reportedBy: 'cli' | 'agent';
 }): ResumeRunDto['ranWhere'] {
@@ -68,13 +68,17 @@ export async function describeResumeRun(
     branch,
     gates: refs.map((ref, i): ResumeGateDto => {
       const card = cardOf.get(ref.workItemId);
+      /* v8 ignore next -- one gate read per ref, in order */
       const gate = gates[i] ?? null;
       return {
         gateId: ref.gateId,
         kind: ref.kind,
         state: ref.state,
         subjectKey: ref.key,
+        // The cards were read for exactly these refs.
+        /* v8 ignore next */
         subjectTitle: card?.title ?? '',
+        /* v8 ignore next */
         deciderId: card ? (card.assigneeId ?? card.reporterId) : null,
         decidedById: gate?.decidedById ?? null,
         decidedByLabel: gate?.decidedByLabel ?? null,
@@ -100,12 +104,14 @@ export const resumeRunDetailService = {
       }
       const runId = item.resumeRunId;
       const [scope] = await dispatchRunRepository.findScopesByIds([runId], tx);
+      /* v8 ignore next -- the stored run id names an existing run */
       const scopeId = scope?.scopeWorkItemId ?? null;
       const parent =
         scopeId !== null && scopeId !== item.id
           ? await workItemRepository.findById(scopeId, tx)
           : null;
       const run = await describeResumeRun(runId, scopeId ?? item.id, tx);
+      /* v8 ignore next -- as above */
       if (!run) return null;
       const [attempt] = await gateResumeRepository.listByRunIds([runId], tx);
       return {
@@ -139,6 +145,7 @@ async function readResuming(
   } | null;
   if (data?.resumesGated !== true || typeof data.continuesRunId !== 'string') return null;
   const run = await describeResumeRun(data.continuesRunId, itemId, tx);
+  /* v8 ignore next -- a continue's `continuesRunId` names the run it claimed */
   if (!run) return null;
   const [attempt] = await gateResumeRepository.listByRunIds([data.continuesRunId], tx);
   return {

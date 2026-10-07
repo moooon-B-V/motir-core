@@ -95,9 +95,13 @@ export const gateResumeService = {
           const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
           if (!run || run.status !== 'succeeded' || run.stopReason !== 'gated') continue;
           // The card the run was pointed at: its scope, or its one leg.
+          // A run that held a gate recorded the leg the gate is on, so one is found.
+          /* v8 ignore next */
           const targetId = run.scopeWorkItemId ?? run.cards[0]?.workItemId ?? null;
+          /* v8 ignore next */
           if (targetId === null) continue;
           const latest = await dispatchRunRepository.findLatestForWorkItem(targetId, tx);
+          /* v8 ignore next -- `run` is one of the target's runs, so it has a latest */
           if (!latest) continue;
           if (latest.id !== run.id) {
             // Something newer holds the card. A continue is somebody's resume of this
@@ -111,6 +115,7 @@ export const gateResumeService = {
           // run in a user's agent itself).
           if (run.origin !== 'hosted') return null;
           const target = await workItemRepository.findById(targetId, tx);
+          /* v8 ignore next -- the run's own card, read in the same transaction */
           if (!target) continue;
           return { run, target };
         }
@@ -150,6 +155,7 @@ export const gateResumeService = {
         } else {
           skipReason = skipReasonFor(err);
           if (err instanceof HostedRunRepositoryNotWritableError) {
+            /* v8 ignore next -- the refusal always names at least one repository */
             detail = err.refusals[0]?.repository ?? null;
           } else if (err instanceof HostedContinueRefusedError && skipReason === 'not_resumable') {
             detail = err.reason;
@@ -163,9 +169,11 @@ export const gateResumeService = {
     // ── 4 · Record it — once per approval. ────────────────────────────────────
     const record = await withWorkspaceServiceContext(workspaceId, async (tx) => {
       const raced = await gateResumeRepository.findByGateId(gateId, tx);
+      /* v8 ignore next -- race-only: a redelivery recorded between the start and here */
       if (raced) return raced;
       // WHAT THE LINE NAMES, captured now — a record of the moment.
       if (skipReason === 'no_project_access' && run.createdById) {
+        /* v8 ignore next -- the dispatcher was read a moment ago, when the start refused */
         detail = (await userRepository.findById(run.createdById, tx))?.name ?? null;
       } else if (skipReason === 'model_not_offered') {
         detail = run.model;
@@ -184,12 +192,5 @@ export const gateResumeService = {
       );
     });
     return { outcome: 'recorded', record };
-  },
-
-  /** Several gated runs' attempts, newest first — the To resume entries' line. */
-  async listForRuns(runIds: string[], workspaceId: string): Promise<GateResume[]> {
-    return withWorkspaceServiceContext(workspaceId, (tx) =>
-      gateResumeRepository.listByRunIds(runIds, tx),
-    );
   },
 };

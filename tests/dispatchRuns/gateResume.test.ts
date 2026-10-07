@@ -41,8 +41,19 @@ const { homeService } = await import('@/lib/services/homeService');
 const { recomputeWorkItemResumeState } = await import('@/lib/services/resumeStateService');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 const { gateResume } = await import('@/lib/jobs/definitions/gateResume');
-const { HostedContinueRefusedError, HostedModelNotOfferedError, HostedRunOutOfCreditsError } =
-  await import('@/lib/hostedRuns/errors');
+const { requestGateResumeAfterDecision } = await import('@/lib/services/gateResumeRequest');
+const { dispatchRunHeldGateRepository } =
+  await import('@/lib/repositories/dispatchRunHeldGateRepository');
+const {
+  HostedContinueRefusedError,
+  HostedModelNotOfferedError,
+  HostedModelsUnavailableError,
+  HostedRunBootFailedError,
+  HostedRunCardNotReadyError,
+  HostedRunCreditsUnavailableError,
+  HostedRunOutOfCreditsError,
+} = await import('@/lib/hostedRuns/errors');
+const { CiCreditsExhaustedError } = await import('@/lib/ciMetering/errors');
 
 const MODEL = 'claude-sonnet-5-5';
 
@@ -347,6 +358,44 @@ describe('the trigger — every approving decision, through both doors', () => {
   });
 });
 
+describe('the ask itself', () => {
+  it('asks nothing for a card-less gate or a kind that never holds a run', async () => {
+    const story = await card('a story', { kind: 'story' });
+    await requestGateResumeAfterDecision(
+      { workItemId: null, kind: 'design_result' },
+      fx.workspaceId,
+    );
+    await requestGateResumeAfterDecision(
+      { workItemId: story.id, kind: 'pull_request_approval' },
+      fx.workspaceId,
+    );
+    expect(events.filter((e) => e.name === 'run/gate-resume.requested')).toEqual([]);
+  });
+
+  it('a read that throws is logged and swallowed — the committed decision stands', async () => {
+    const story = await card('a story', { kind: 'story' });
+    const failing = vi
+      .spyOn(dispatchRunHeldGateRepository, 'listRunIdsByWorkItemAndKind')
+      .mockRejectedValueOnce(new Error('db is gone'));
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(
+        requestGateResumeAfterDecision(
+          { workItemId: story.id, kind: 'design_result' },
+          fx.workspaceId,
+        ),
+      ).resolves.toBeUndefined();
+      expect(quiet).toHaveBeenCalledWith(
+        '[gate-resume] enqueue failed after a committed decision',
+        expect.any(Error),
+      );
+    } finally {
+      failing.mockRestore();
+      quiet.mockRestore();
+    }
+  });
+});
+
 describe('the handler — at most one resume per decision and per run', () => {
   async function hostedStory(opts: Parameters<typeof gatedRun>[2] = {}) {
     const parent = await card('a story', { kind: 'story' });
@@ -436,6 +485,20 @@ describe('the handler — at most one resume per decision and per run', () => {
     ['model_not_offered', () => new HostedModelNotOfferedError(MODEL)],
     ['already_resumed', () => new HostedContinueRefusedError('MOTIR-1', 'taken')],
     ['not_resumable', () => new HostedContinueRefusedError('MOTIR-1', 'no_branch')],
+    ['models_unavailable', () => new HostedModelsUnavailableError('motir-ai is down')],
+    ['credits_unavailable', () => new HostedRunCreditsUnavailableError()],
+    ['card_not_ready', () => new HostedRunCardNotReadyError('MOTIR-1', 'archived')],
+    [
+      'ci_credits_exhausted',
+      () =>
+        new CiCreditsExhaustedError({
+          organizationId: 'org',
+          state: 'exhausted',
+          consumedMinutes: 600,
+          poolMinutes: 500,
+          balance: 0,
+        } as ConstructorParameters<typeof CiCreditsExhaustedError>[0]),
+    ],
   ] as const)('a start refused %s records the skip and starts nothing', async (reason, make) => {
     const { runId, designGate } = await hostedStory();
     await approve(designGate);
@@ -447,6 +510,80 @@ describe('the handler — at most one resume per decision and per run', () => {
       await adminDb.gateResume.findUniqueOrThrow({ where: { gateId: designGate } }),
     ).toMatchObject({ runId, outcome: 'skipped', skipReason: reason, resumedRunId: null });
     expect(await adminDb.dispatchRun.count({ where: { command: 'continue' } })).toBe(0);
+  });
+
+  it('a run that recorded no model records model_not_offered, without asking to start', async () => {
+    const { designGate } = await hostedStory({ model: null });
+    await approve(designGate);
+
+    await attempt(designGate);
+
+    expect(startSpy).not.toHaveBeenCalled();
+    expect(
+      await adminDb.gateResume.findUniqueOrThrow({ where: { gateId: designGate } }),
+    ).toMatchObject({ outcome: 'skipped', skipReason: 'model_not_offered', detail: null });
+  });
+
+  it('a container that never booted still STARTED a run: the record links to it', async () => {
+    const { runId, designGate } = await hostedStory();
+    await approve(designGate);
+    const failed = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        command: 'continue',
+        origin: 'hosted',
+        status: 'failed',
+        endedAt: new Date(),
+      },
+    });
+    startSpy.mockRejectedValueOnce(new HostedRunBootFailedError(failed.id, 'fleet at ceiling'));
+
+    await attempt(designGate);
+
+    expect(
+      await adminDb.gateResume.findUniqueOrThrow({ where: { gateId: designGate } }),
+    ).toMatchObject({ runId, outcome: 'started', skipReason: null, resumedRunId: failed.id });
+  });
+
+  it('a LEAF run (no scope) resumes through its one leg', async () => {
+    const leaf = await card('a leaf with a design gate', { kind: 'story' });
+    const run = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        command: 'run',
+        origin: 'hosted',
+        model: MODEL,
+        createdById: fx.ownerId,
+        status: 'succeeded',
+        stopReason: 'gated',
+        endedAt: new Date(),
+        cards: {
+          create: {
+            workspaceId: fx.workspaceId,
+            workItemId: leaf.id,
+            workItemKey: leaf.identifier,
+            position: 0,
+          },
+        },
+      },
+    });
+    const gateId = await heldGate(run.id, leaf, 'design_result');
+    await approve(gateId);
+
+    await attempt(gateId);
+
+    expect(startSpy.mock.calls[0]![0]).toMatchObject({ workItemKey: leaf.identifier });
+  });
+
+  it('a held gate whose run did not close `gated` (it was cancelled) is not a candidate', async () => {
+    const { runId, designGate } = await hostedStory();
+    await adminDb.dispatchRun.update({ where: { id: runId }, data: { status: 'cancelled' } });
+    await approve(designGate);
+
+    expect(await attempt(designGate)).toEqual({ outcome: 'not_a_candidate' });
+    expect(startSpy).not.toHaveBeenCalled();
   });
 
   it('a dispatcher whose account is gone records dispatcher_gone, without asking to start', async () => {

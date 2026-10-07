@@ -4,7 +4,6 @@ import type {
   GateResumeSkipReason,
   Prisma,
 } from '@/generated/prisma/client';
-import { dbRead } from '@/lib/db';
 
 // THE AUTOMATIC-RESUME RECORD (Story MOTIR-7701 · MOTIR-7710) — one row per approved
 // gate a `gated` hosted run held, keyed on the gate. `designAutoRerunRepository`'s
@@ -33,10 +32,9 @@ export const gateResumeRepository = {
   },
 
   /** Several runs' attempts, newest first — the To resume entries' line. */
-  async listByRunIds(runIds: string[], tx?: Prisma.TransactionClient): Promise<GateResume[]> {
+  async listByRunIds(runIds: string[], tx: Prisma.TransactionClient): Promise<GateResume[]> {
     if (runIds.length === 0) return [];
-    const client = tx ?? dbRead;
-    return client.gateResume.findMany({
+    return tx.gateResume.findMany({
       where: { runId: { in: runIds } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });

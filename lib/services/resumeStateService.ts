@@ -126,11 +126,16 @@ export async function readHeldGateVerdict(
     if (seen.has(slot)) continue;
     seen.add(slot);
     const latest = await approvalGateRepository.findLatestByWorkItem(row.workItemId, row.kind, tx);
+    // The fallbacks are unreachable: the held row's own gate is a gate of this kind on
+    // this card, and the card was read above.
     const ref: HeldGateRef = {
+      /* v8 ignore next */
       gateId: latest?.id ?? row.gateId,
       workItemId: row.workItemId,
+      /* v8 ignore next */
       key: keyOf.get(row.workItemId) ?? row.workItemId,
       kind: row.kind,
+      /* v8 ignore next */
       state: latest?.state ?? 'awaiting',
     };
     if (ref.state === 'approved') released.push(ref);
@@ -188,6 +193,7 @@ export const resumeStateService = {
     for (const runId of runIds) {
       await withWorkspaceContext(ctx, async (tx) => {
         const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
+        /* v8 ignore next -- a held row cascades away with its run */
         if (!run) return;
         const legs = [
           ...new Set(

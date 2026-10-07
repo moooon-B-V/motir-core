@@ -1,5 +1,4 @@
 import type { ApprovalGateKind, DispatchRunHeldGate, Prisma } from '@/generated/prisma/client';
-import { dbRead } from '@/lib/db';
 
 // THE HELD-GATE RECORD (Story MOTIR-7701 · MOTIR-7703;
 // `docs/decisions/dispatch-run-record.md` AMENDMENT 2026-10-07) — one row per
@@ -29,19 +28,17 @@ export const dispatchRunHeldGateRepository = {
   /** A run's held gates, in the order they were recorded. */
   async listByRun(
     dispatchRunId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<DispatchRunHeldGate[]> {
-    const client = tx ?? dbRead;
-    return client.dispatchRunHeldGate.findMany({
+    return tx.dispatchRunHeldGate.findMany({
       where: { dispatchRunId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
   },
 
   /** The runs a gate held — the decide door's read. */
-  async listByGate(gateId: string, tx?: Prisma.TransactionClient): Promise<DispatchRunHeldGate[]> {
-    const client = tx ?? dbRead;
-    return client.dispatchRunHeldGate.findMany({
+  async listByGate(gateId: string, tx: Prisma.TransactionClient): Promise<DispatchRunHeldGate[]> {
+    return tx.dispatchRunHeldGate.findMany({
       where: { gateId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });

@@ -280,6 +280,48 @@ describe('G6 · a child card of the gated parent run', () => {
   });
 });
 
+describe('the words when a name or a run is missing', () => {
+  it('a decider nobody can name and a sent-back gate nobody named read “someone”', () => {
+    mount(
+      gated({ names: {} }, [
+        gate('ACME-13', { state: 'declined', decidedAt: AGO, deciderId: 'u-ghost' }),
+      ]),
+    );
+    expect(line().textContent).toContain('declined by Someone');
+    expect(screen.getByTestId('workbench-resume-gate-ACME-13').textContent).not.toContain(
+      'decides',
+    );
+  });
+
+  it('Resuming with no new run recorded links the gated run; a system approval is “someone”', () => {
+    mount(
+      gated({ state: 'resuming', resumedRunId: null }, [
+        gate('ACME-13', { state: 'approved', decidedAt: AGO }),
+      ]),
+    );
+    expect(line().textContent).toContain('Someone approved the design result on ACME-13');
+    expect(screen.getByRole('link', { name: 'See the new run' }).getAttribute('href')).toContain(
+      'run=run_gated',
+    );
+  });
+
+  it('a waiting run whose held gates were withdrawn still names them', () => {
+    mount(gated({}, [gate('ACME-13', { state: 'superseded' })]));
+    expect(line().textContent).toContain('waiting on the design result on ACME-13');
+  });
+
+  it('a child card of a parent whose gate is approved points up all the same', () => {
+    mount(
+      gated({ parent: { key: 'ACME-12' }, state: 'ready_to_resume' }, [
+        gate('ACME-13', { state: 'approved', decidedById: 'u-dana', decidedAt: AGO }),
+      ]),
+      [run({ cards: [{ ...run().cards[0]!, key: 'ACME-14' }] })],
+    );
+    expect(line().textContent).toContain('This work item was run as part of ACME-12');
+    expect(screen.queryByRole('button', { name: /Copy the resume command/ })).toBeNull();
+  });
+});
+
 describe('zh', () => {
   it('G1 in zh', () => {
     mount(gated(), [run()], { locale: 'zh', messages: zhMessages });

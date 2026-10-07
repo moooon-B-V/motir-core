@@ -32,7 +32,8 @@ const { manualWorkGateService } = await import('@/lib/services/manualWorkGateSer
 const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
 const { homeService } = await import('@/lib/services/homeService');
-const { recomputeWorkItemResumeState } = await import('@/lib/services/resumeStateService');
+const { readHeldGateVerdict, recomputeWorkItemResumeState, resumeStateService } =
+  await import('@/lib/services/resumeStateService');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 
 let fx: WorkItemFixture;
@@ -404,6 +405,103 @@ async function publish(design: WorkItem, label: string): Promise<string> {
   return evidence.id;
 }
 
+describe('the run detail’s edges (MOTIR-7712 · MOTIR-7713)', () => {
+  it('names where a run ran in four words', async () => {
+    const { ranWhereOf } = await import('@/lib/services/resumeRunDetailService');
+    expect(ranWhereOf({ origin: 'hosted', reportedBy: 'cli' })).toBe('hosted');
+    expect(ranWhereOf({ origin: 'instance', reportedBy: 'cli' })).toBe('instance');
+    expect(ranWhereOf({ origin: 'local', reportedBy: 'agent' })).toBe('runbook');
+    expect(ranWhereOf({ origin: 'local', reportedBy: 'cli' })).toBe('terminal');
+  });
+
+  it('an unknown run, a head off the run, and a dispatcher gone read as nothing to name', async () => {
+    const { describeResumeRun } = await import('@/lib/services/resumeRunDetailService');
+    const { design, runId } = await gatedStory();
+    const loose = await card('not on the run', { kind: 'task' });
+    await adminDb.workItem.update({ where: { id: design.id }, data: { assigneeId: null } });
+    await adminDb.dispatchRun.update({ where: { id: runId }, data: { createdById: null } });
+    await withWorkspaceContext(fx.ctx, async (tx) => {
+      expect(await describeResumeRun('no-such-run', loose.id, tx)).toBeNull();
+      const off = await describeResumeRun(runId, loose.id, tx);
+      expect(off).toMatchObject({ branch: null, ranById: null, ranByName: null });
+      // Unassigned: the reporter decides.
+      expect(off!.gates[0]!.deciderId).toBe(design.reporterId);
+    });
+  });
+
+  it('a LEAF gated run is read on its own card, and an unknown card reads null', async () => {
+    const { resumeRunDetailService } = await import('@/lib/services/resumeRunDetailService');
+    const leaf = await card('a leaf', { kind: 'task' });
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        reportedBy: 'cli',
+        cards: [{ key: leaf.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await gate(leaf);
+    await dispatchRunService.close(run.id, { stopReason: 'gated' }, fx.ctx);
+    expect(await resumeRunDetailService.readForWorkItem(leaf.id, fx.ctx)).toMatchObject({
+      state: 'waiting_on_gate',
+      runId: run.id,
+      parent: null,
+    });
+    expect(await resumeRunDetailService.readForWorkItem('no-such-card', fx.ctx)).toBeNull();
+  });
+
+  it('Resuming is read only from a live continue that says it resumes a gated run', async () => {
+    const { resumeRunDetailService } = await import('@/lib/services/resumeRunDetailService');
+    const { parent, design, code, runId } = await gatedStory();
+    // The continue claim clears the column; the live continue is what remains.
+    await adminDb.workItem.updateMany({
+      where: { id: { in: [parent.id, design.id, code.id] } },
+      data: { resumeState: null, resumeRunId: null },
+    });
+    const continueRun = (opened: Record<string, unknown> | null) =>
+      adminDb.dispatchRun.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          command: 'continue',
+          origin: 'local',
+          status: 'running',
+          createdById: fx.ownerId,
+          scopeWorkItemId: parent.id,
+          cards: {
+            create: {
+              workspaceId: fx.workspaceId,
+              workItemId: parent.id,
+              workItemKey: parent.identifier,
+              position: 0,
+            },
+          },
+          ...(opened
+            ? {
+                events: {
+                  create: { workspaceId: fx.workspaceId, seq: 1, kind: 'run_opened', data: opened },
+                },
+              }
+            : {}),
+        },
+      });
+    const read = () => resumeRunDetailService.readForWorkItem(parent.id, fx.ctx);
+
+    await continueRun(null);
+    expect(await read()).toBeNull();
+    await continueRun({ continuesRunId: runId, resumesGated: false });
+    expect(await read()).toBeNull();
+    const live = await continueRun({ continuesRunId: runId, resumesGated: true });
+    expect(await read()).toMatchObject({
+      state: 'resuming',
+      runId,
+      resumedRunId: live.id,
+      attempt: null,
+    });
+  });
+});
+
 describe('the backfill', () => {
   it('the dry run reports the cards it would set, writes nothing, and the apply is idempotent', async () => {
     const { workItemResumeStateBackfillService } =
@@ -443,5 +541,79 @@ describe('the backfill', () => {
     });
     expect(again.changed).toEqual([]);
     expect(again.failed).toEqual([]);
+  });
+
+  it('with no workspace named it scans every workspace, and a card that throws is reported', async () => {
+    const { workItemResumeStateBackfillService } =
+      await import('@/lib/services/workItemResumeStateBackfillService');
+    const { workItemRepository } = await import('@/lib/repositories/workItemRepository');
+    const { parent } = await gatedStory();
+    await adminDb.workItem.update({
+      where: { id: parent.id },
+      data: { resumeState: null, resumeRunId: null },
+    });
+    const real = workItemRepository.findById.bind(workItemRepository);
+    const spy = vi
+      .spyOn(workItemRepository, 'findById')
+      .mockImplementation(async (id: string, tx?: Parameters<typeof real>[1]) => {
+        if (id === parent.id) throw new Error('row is unreadable');
+        return real(id, tx);
+      });
+    try {
+      const report = await workItemResumeStateBackfillService.backfillResumeState({ dryRun: true });
+      expect(report.failed).toEqual([{ workItemId: parent.id, error: 'row is unreadable' }]);
+      expect(report.scanned).toBeGreaterThan(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('the derivation’s edges', () => {
+  it('a card that does not exist recomputes to nothing', async () => {
+    expect(await recompute('no-such-card')).toEqual({ resumeState: null, resumeRunId: null });
+  });
+
+  it('two held rows for one card and kind are one gate — the latest', async () => {
+    const { design, runId, held } = await gatedStory();
+    const second = await gate(design, 'approved');
+    await adminDb.approvalGate.update({ where: { id: held.id }, data: { state: 'superseded' } });
+    await adminDb.dispatchRunHeldGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        dispatchRunId: runId,
+        gateId: second.id,
+        workItemId: design.id,
+        kind: 'design_result',
+      },
+    });
+    const verdict = await withWorkspaceContext(fx.ctx, (tx) => readHeldGateVerdict(runId, tx));
+    expect(verdict.verdict).toBe('released');
+    expect(verdict.released.map((r) => r.gateId)).toEqual([second.id]);
+    expect([...verdict.waiting, ...verdict.sentBack]).toEqual([]);
+  });
+
+  it('a decision on a LEAF run’s gate recomputes the leaf (no scope)', async () => {
+    const leaf = await card('a leaf', { kind: 'task' });
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        reportedBy: 'cli',
+        cards: [{ key: leaf.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    const held = await gate(leaf);
+    await dispatchRunService.close(run.id, { stopReason: 'gated' }, fx.ctx);
+    expect((await stateOf(leaf.id)).resumeState).toBe('waiting_on_gate');
+    await adminDb.approvalGate.update({
+      where: { id: held.id },
+      data: { state: 'approved', decidedById: fx.ownerId, decidedAt: new Date() },
+    });
+
+    await resumeStateService.afterGateDecided(leaf.id, fx.ctx);
+
+    expect(await stateOf(leaf.id)).toEqual({ resumeState: 'ready_to_resume', resumeRunId: run.id });
   });
 });

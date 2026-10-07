@@ -210,14 +210,13 @@ export function GatedRunMarker({
     });
   } else {
     Glyph = Undo2;
-    const outcome = (refused?.state ?? 'changes_requested') as
-      | 'changes_requested'
-      | 'declined'
-      | 'overturned';
+    // `sentBack` is only reached with a refused gate (`gatedMarkerStateOf`).
+    const back = refused!;
+    const outcome = back.state as 'changes_requested' | 'declined' | 'overturned';
     line = t.rich('gated.sentBack', {
-      gate: refused ? gatePhrase(t, tw, [refused]) : '',
+      gate: gatePhrase(t, tw, [back]),
       outcome: t(`gated.outcome.${outcome}`),
-      name: refused?.decidedByName ?? t('gated.someone'),
+      name: back.decidedByName ?? t('gated.someone'),
       b: bold,
     });
   }

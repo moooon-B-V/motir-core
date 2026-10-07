@@ -329,9 +329,10 @@ export function WorkbenchResumeLine({
       sentence = t('toResume.readyBare');
     }
   } else if (state === 'resuming') {
+    // Resuming is read off an attempt (`resumeLineStateOf`), so one is always here.
     sentence = attempt
       ? t.rich('toResume.resuming', { when: when(attempt.createdAt) })
-      : t('toResume.state.resuming');
+      : /* v8 ignore next */ t('toResume.state.resuming');
     pill = (
       <StatePill tone="resuming" testId={`workbench-resume-state-${itemKey}`}>
         {t('toResume.state.resuming')}
@@ -453,7 +454,7 @@ export function WorkbenchResumeLine({
         {hostedTarget ? (
           <div className="relative z-10 basis-full empty:hidden">
             <ContinueHostedAnswer
-              continueTarget={held ? null : hostedTarget}
+              continueTarget={hostedTarget}
               refusal={press.refusal}
               viewerId={viewerId}
             />

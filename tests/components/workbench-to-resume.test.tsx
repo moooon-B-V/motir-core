@@ -544,6 +544,108 @@ describe('To resume — a gate sent back (§ 35.5, Panel 6)', () => {
   });
 });
 
+describe('To resume — the words when a name or a detail is missing', () => {
+  const ago = (over: Partial<ResumeGateDto> = {}) =>
+    gate('ACME-13', { state: 'approved', decidedAt: AGO, ...over });
+
+  it('a decider nobody can name draws no decider; a dispatcher nobody can name is “someone”', () => {
+    render(
+      list([
+        entry(
+          'ACME-12',
+          run([gate('ACME-13', { deciderId: 'u-ghost' })], {
+            ranById: 'u-ghost',
+            ranByName: null,
+          }),
+        ),
+      ]),
+    );
+    expect(gates('ACME-12').textContent).not.toContain('decides');
+    expect(screen.getByTestId('workbench-resume-aside-ACME-12').textContent).toContain(
+      'Someone ran it on the hosted agent',
+    );
+  });
+
+  it('a waiting entry whose held gate was withdrawn still counts it', () => {
+    render(list([entry('ACME-12', run([gate('ACME-13', { state: 'superseded' })]))]));
+    expect(line('ACME-12').dataset.resumeState).toBe('waiting');
+    expect(line('ACME-12').textContent).toContain('waiting on 1 approval');
+  });
+
+  it('a system approval (nobody named) reads “someone approved”', () => {
+    render(
+      list([
+        entry('ACME-12', run([ago({ decidedById: null })]), { resumeState: 'ready_to_resume' }),
+      ]),
+    );
+    expect(line('ACME-12').textContent).toMatch(
+      /^Ready to resume · Someone approved the design result/,
+    );
+  });
+
+  it('an already_resumed attempt has no run to link', () => {
+    render(
+      list([
+        entry(
+          'ACME-12',
+          run([ago({ decidedById: 'u-dana' })]),
+          { resumeState: 'ready_to_resume' },
+          {
+            outcome: 'skipped',
+            skipReason: 'already_resumed',
+            detail: null,
+            resumedRunId: null,
+            createdAt: AGO,
+          },
+        ),
+      ]),
+    );
+    expect(line('ACME-12').dataset.resumeState).toBe('resuming');
+    expect(screen.queryByRole('link', { name: 'See the run' })).toBeNull();
+  });
+
+  it.each([
+    ['model_not_offered', 'the model it ran with, —, is no longer offered'],
+    ['no_project_access', '—, who started it, no longer has access to this project'],
+    ['repository_not_writable', 'Motir can no longer push to —'],
+  ] as const)('Could not resume · %s without its detail names a dash', (skipReason, reason) => {
+    render(
+      list([
+        entry(
+          'ACME-12',
+          run([ago({ decidedById: 'u-dana' })]),
+          { resumeState: 'ready_to_resume' },
+          { outcome: 'skipped', skipReason, detail: null, resumedRunId: null, createdAt: AGO },
+        ),
+      ]),
+    );
+    expect(line('ACME-12').textContent).toContain(reason);
+  });
+
+  it('a gate sent back by nobody named reads “someone”', () => {
+    render(list([entry('ACME-12', run([gate('ACME-13', { state: 'declined', decidedAt: AGO })]))]));
+    expect(line('ACME-12').textContent).toContain('Decision declined by Someone');
+  });
+
+  it('pressing Continue on a ready entry starts the hosted continue', async () => {
+    const fetchMock = stubModels();
+    render(
+      list([
+        entry('ACME-12', run([ago({ decidedById: 'u-dana' })]), {
+          resumeState: 'ready_to_resume',
+          canContinueHosted: true,
+        }),
+      ]),
+    );
+    const door = await screen.findByTestId('continue-hosted-door');
+    const button = within(door).getAllByRole('button')[0]!;
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain('/api/hosted-runs/models');
+  });
+});
+
 describe('To resume — the empty tab and zh (§ 35.6, Panel 8)', () => {
   it('an empty tab draws only the empty state', () => {
     render(list([]));
