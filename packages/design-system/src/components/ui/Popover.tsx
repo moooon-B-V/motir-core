@@ -3,6 +3,7 @@
 import { forwardRef, type ComponentPropsWithoutRef, type ReactNode } from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { cn } from '../../utils/cn';
+import { useFullscreenElement } from '../../utils/fullscreen';
 
 /**
  * Popover — anchored, click-outside-dismissable, focus-managed floating
@@ -81,8 +82,11 @@ const PopoverContent = forwardRef<
   },
   ref,
 ) {
+  // Into the element in native full screen while there is one, else <body>
+  // (MOTIR-7658 — the browser paints nothing outside a full-screen element).
+  const fullscreenElement = useFullscreenElement();
   return (
-    <RadixPopover.Portal>
+    <RadixPopover.Portal container={fullscreenElement ?? undefined}>
       <RadixPopover.Content
         ref={ref}
         align={align}

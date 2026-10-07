@@ -61,6 +61,9 @@ describe('no colour moves — resolved --el-* tokens against the pre-rename shee
   // Regenerated once so far: MOTIR-7584 (the motir warm touches, design MOTIR-7583
   // §8), which moved motir's warm roles and added `--el-progress-fill` /
   // `--el-editor-focus` to every palette at the value their consumers painted.
+  // And once more, additively: the `--el-showcase-*` family (motir.co's
+  // illustration fields) was merged in at its resolved values — new tokens only,
+  // no existing value moved.
   const before = JSON.parse(
     readFileSync(join(process.cwd(), 'tests/fixtures/paletteRename6471.before.json'), 'utf8'),
   ) as Record<string, Record<string, string>>;

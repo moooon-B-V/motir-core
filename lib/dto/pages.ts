@@ -3,6 +3,8 @@
 // Yjs state, so the read model hands the editor THAT, and every other format is
 // derived from it on the far side.
 
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
+
 /** One page, as `pagesService.getPage` returns it. */
 export interface PageDto {
   id: string;
@@ -44,6 +46,15 @@ export interface PageDto {
    * neither action and links to its root instead.
    */
   canRestore: boolean;
+  /**
+   * The LIVE chip data for every work item the body mentions (MOTIR-7572),
+   * resolved under the reader's own access exactly as a comment's chips are:
+   * keyed by work-item id (and, when accessible, its current key). An archived
+   * item carries `archived: true`; one in a project the reader may not browse is
+   * `{ accessible: false, id }` with no title or key; a deleted one is absent.
+   * `{}` for a page that mentions nothing.
+   */
+  workItemRefs: WorkItemRefMap;
 }
 
 /**

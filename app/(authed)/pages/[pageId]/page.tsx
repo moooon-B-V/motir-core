@@ -197,6 +197,8 @@ export default async function PageAtItsAddress({ params }: Params) {
             title: page.title,
             bodyState: page.bodyState,
             canEdit: page.canEdit,
+            projectId: page.projectId,
+            workItemRefs: page.workItemRefs,
             parentTitle: trail?.pages.at(-1)?.title ?? null,
             archived:
               page.archivedAt === null

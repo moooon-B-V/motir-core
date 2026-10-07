@@ -13,6 +13,7 @@ import type {
   PageVersionListItemDto,
 } from '@/lib/dto/pages';
 import type { FolderTreeRow } from '@/lib/mappers/folderMappers';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { LockedPageRow, PageRow, PageVersionRow, PageVersionWithBody } from '@/lib/pages';
 
 // Page rows ↔ `@motir/pages`' port rows (Story MOTIR-5752 · MOTIR-7276).
@@ -32,6 +33,15 @@ export type PageRecord = Omit<Page, 'bodyState' | 'bodyJson' | 'bodyMarkdown' | 
 /** The raw `SELECT … FOR UPDATE` row `pageRepository.lockById` returns. */
 export interface PageLockedRecord extends PageRecord {
   bodyState: Uint8Array;
+}
+
+/**
+ * The read model's row (`pageRepository.findWithBodyById`): the Yjs state the
+ * editor mounts, plus the derived ProseMirror JSON the work-item chips are read
+ * from (MOTIR-7572). The JSON is opaque here; `extractLinks` walks it.
+ */
+export interface PageReadRecord extends PageLockedRecord {
+  bodyJson: unknown;
 }
 
 /** A page read with its derived markdown and no Yjs state (MOTIR-7409). */
@@ -233,6 +243,7 @@ export function toPageDto(
   row: LockedPageRow,
   caps: { canEdit: boolean; canDelete: boolean },
   names: { archiver?: string; archiveRootTitle?: string } = {},
+  workItemRefs: WorkItemRefMap = {},
 ): PageDto {
   const archived = row.archivedAt !== null;
   return {
@@ -255,6 +266,7 @@ export function toPageDto(
           },
     archivedBy:
       row.archivedById === null ? null : { id: row.archivedById, name: names.archiver ?? '' },
+    workItemRefs,
   };
 }
 

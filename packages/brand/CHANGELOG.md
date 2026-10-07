@@ -1,5 +1,23 @@
 # @motir/brand
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [c406df6]
+  - @motir/design-system@0.10.0
+
+## 0.4.0
+
+### Minor Changes
+
+- d758ffa: The wordmark is set in Space Grotesk (`--font-grotesk-source`), the face motir.co's type defaults to, instead of Inter, a touch tighter (−0.03em) and larger (0.74 of the lockup size). It stays pinned to the face, so a user's Appearance type pairing never re-letters it, and it falls back to Inter where Space Grotesk is not loaded.
+
+### Patch Changes
+
+- Updated dependencies [d758ffa]
+  - @motir/design-system@0.9.0
+
 ## 0.3.3
 
 ### Patch Changes

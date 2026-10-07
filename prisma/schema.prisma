@@ -433,6 +433,7 @@ model User {
   // Decision pages this person published (Story MOTIR-5761). Restrict, as
   // `PageVersion.author`: publishing is durable attribution.
   decisionPagePublications         DecisionPagePublication[]     @relation("DecisionPagePublisher")
+  pageWorkItemLinksCreated         PageWorkItemLink[]            @relation("PageWorkItemLinkCreator")
   // Monitor connections this person BOUND (Story MOTIR-4926 · MOTIR-4929 ·
   // MOTIR-5576) — whose identity the reconciler files each monitor bug as.
   // SetNull, NOT Cascade: removing the person must not remove the binding; the
@@ -1684,6 +1685,7 @@ model Workspace {
   pages                       Page[]
   pageVersions                PageVersion[]
   decisionPagePublications    DecisionPagePublication[]
+  pageWorkItemLinks           PageWorkItemLink[]
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
@@ -2172,6 +2174,7 @@ model Project {
   pages                         Page[]
   pageVersions                  PageVersion[]
   decisionPagePublications      DecisionPagePublication[]
+  pageWorkItemLinks             PageWorkItemLink[]
   /// The folder this project's filed bugs land in (Story MOTIR-4927 · MOTIR-4934).
   /// NULL MEANS THE PROJECT ROOT, CHOSEN — nullable with no default, and never to
   /// be made required. `NoAction`, the `Folder.parentFolder` idiom: a folder this
@@ -3119,6 +3122,8 @@ model WorkItem {
   approvalGates            ApprovalGate[]
   /// Decision pages this work item published (Story MOTIR-5761). Cascade.
   decisionPagePublications DecisionPagePublication[]
+  // The pages that link this work item (MOTIR-7571). Cascade.
+  pageWorkItemLinks        PageWorkItemLink[]
   /// What each Revise on this design card did about an automatic hosted re-run
   /// (MOTIR-700) — the "re-running" / "skipped" line.
   designAutoReruns         DesignAutoRerun[]
@@ -12177,6 +12182,8 @@ model Page {
   versions             PageVersion[]
   // Decision publications of this page (Story MOTIR-5761). Cascade.
   decisionPublications DecisionPagePublication[]
+  // The work items this page links (Story MOTIR-7565 · MOTIR-7571). Cascade.
+  workItemLinks        PageWorkItemLink[]
 
   @@index([projectId, parentPageId, position, id])
   @@index([projectId, folderId, position, id])
@@ -12265,6 +12272,46 @@ model DecisionPagePublication {
   @@index([pageVersionId])
   @@index([workspaceId])
   @@map("decision_page_publication")
+}
+
+// PAGE ↔ WORK ITEM LINKS (Epic MOTIR-5747 · Story MOTIR-7565 · MOTIR-7571).
+//
+// `docs/decisions/pages.md` §8.1. One row per `(page, work item, source)`:
+// `mention` and `embed` are DERIVED from the page body on every save (the
+// adapter's `replaceDerivedLinks`, in the save's transaction); `manual` is
+// written by an explicit action and never touched by a body write. Page and work
+// item share the row's project (the `trg_page_work_item_link_cotenancy`
+// trigger); RLS is the `page` pair. `createdBy` is who FIRST linked it — a
+// re-save that keeps a link keeps its row.
+model PageWorkItemLink {
+  id          String                 @id @default(cuid())
+  workspaceId String                 @map("workspace_id")
+  projectId   String                 @map("project_id")
+  pageId      String                 @map("page_id")
+  workItemId  String                 @map("work_item_id")
+  source      PageWorkItemLinkSource
+  createdById String?                @map("created_by_id")
+  createdAt   DateTime               @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  // SET NULL: deleting the user forgets who linked it, never the link.
+  createdBy User?     @relation("PageWorkItemLinkCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([pageId, workItemId, source])
+  @@index([workItemId, pageId])
+  @@index([workspaceId])
+  @@map("page_work_item_link")
+}
+
+enum PageWorkItemLinkSource {
+  mention
+  embed
+  manual
+
+  @@map("page_work_item_link_source")
 }
 
 model MonitorInstallation {

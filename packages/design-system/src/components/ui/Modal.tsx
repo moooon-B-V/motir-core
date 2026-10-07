@@ -5,6 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../utils/cn';
+import { useFullscreenElement } from '../../utils/fullscreen';
 
 /**
  * Modal — accessible dialog wrapping @radix-ui/react-dialog.
@@ -114,6 +115,13 @@ export interface ModalProps extends VariantProps<typeof contentVariants> {
    * Defaults to `'Dialog'`. See `closeLabel` for the i18n rationale.
    */
   dialogLabel?: string;
+  /**
+   * The element the dialog portals into. Defaults to the element in NATIVE full
+   * screen while there is one (`document.fullscreenElement` — the browser paints
+   * nothing outside it, so a body-portalled dialog would open invisibly,
+   * MOTIR-7658), else `document.body`. Pass `null` to force `document.body`.
+   */
+  container?: Element | null;
 }
 
 function ModalRoot({
@@ -130,10 +138,14 @@ function ModalRoot({
   children,
   closeLabel = 'Close',
   dialogLabel = 'Dialog',
+  container,
 }: ModalProps) {
+  const fullscreenElement = useFullscreenElement();
+  // `undefined` lets Radix fall back to `document.body`.
+  const portalContainer = container === undefined ? (fullscreenElement ?? undefined) : container;
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
+      <Dialog.Portal container={portalContainer}>
         {/* `data-surface="overlay"` lets the glassmorphism style turn this dark
             scrim into a LIGHT, page-blurring backdrop, so the frosted modal
             refracts the (blurred) page behind it instead of darkness — the

@@ -8,6 +8,9 @@ import {
 } from '@/lib/mappers/pageMappers';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
+import { pageWorkItemLinkRepository } from '@/lib/repositories/pageWorkItemLinkRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { diffDerivedLinks } from '@/lib/pages/derivedLinks';
 
 // The `PageStore` ADAPTER (Story MOTIR-5752 · MOTIR-7276; placement MOTIR-5753 ·
 // MOTIR-7369), `docs/decisions/pages.md` §2: the package's port bound to ONE
@@ -166,9 +169,36 @@ export function createPageStore(tx: Prisma.TransactionClient): PageStore {
       await pageVersionRepository.deleteOldestUnmarked(pageId, keep, tx);
     },
 
-    // ADR §2: "a no-op adapter until then" — the derived link rows are the
-    // linking epic's (MOTIR-5747), which replaces this body with its writer.
-    async replaceDerivedLinks() {},
+    // The derived link rows (§8.1, MOTIR-7571), rewritten as a DIFF under the
+    // save's page lock: only work items of the page's own project are kept — a
+    // cross-project or unknown id is dropped silently, archived items stay —
+    // and a `manual` row is never read or written.
+    async replaceDerivedLinks(pageId, links, actorId) {
+      const page = await pageRepository.findById(pageId, tx);
+      if (!page) return;
+      const inProject = new Set(
+        await workItemRepository.findIdsInProject(
+          page.projectId,
+          [...new Set(links.map((link) => link.workItemId))],
+          tx,
+        ),
+      );
+      const named = links.filter((link) => inProject.has(link.workItemId));
+      const stored = await pageWorkItemLinkRepository.findDerivedByPage(pageId, tx);
+      const diff = diffDerivedLinks(stored, named);
+      await pageWorkItemLinkRepository.deleteDerivedByIds(pageId, diff.deleteIds, tx);
+      await pageWorkItemLinkRepository.createDerived(
+        diff.insert.map((link) => ({
+          workspaceId: page.workspaceId,
+          projectId: page.projectId,
+          pageId,
+          workItemId: link.workItemId,
+          source: link.source,
+          createdById: actorId,
+        })),
+        tx,
+      );
+    },
 
     // ── Archive (Story MOTIR-5755 · MOTIR-7418 port, MOTIR-7420 Postgres). ──
 

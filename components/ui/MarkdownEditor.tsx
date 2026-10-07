@@ -277,6 +277,8 @@ export function MarkdownEditor({
               typeToSearch: tMention('mentionTypeToSearch'),
               searching: tMention('mentionSearching'),
               noResults: (query: string) => tMention('mentionNoResults', { query }),
+              searchFailed: tMention('mentionSearchFailed'),
+              retry: tMention('mentionRetry'),
             },
           },
         }

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useEditorState, type Editor } from '@tiptap/react';
 import {
   Bold,
+  CircleDot,
   Code2,
   Heading2,
   Image as ImageIcon,
@@ -61,6 +62,14 @@ export interface PageEditorToolbarProps {
   messages: PageEditorMessages;
   /** Opens the image picker; the host's `uploadImage` does the rest. */
   onInsertImage: () => void;
+  /**
+   * Opens the work-item picker at the caret (MOTIR-7574). The **Work item**
+   * button is drawn only when the host wires a search, so the editor it is
+   * passed to is the editable page.
+   */
+  onMentionWorkItem?: () => void;
+  /** Whether the work-item picker is open — the button's `aria-expanded`. */
+  mentionOpen?: boolean;
   /** Rendered at the trailing end — the save indicator. */
   trailing?: ReactNode;
 }
@@ -69,6 +78,8 @@ export function PageEditorToolbar({
   editor,
   messages,
   onInsertImage,
+  onMentionWorkItem,
+  mentionOpen = false,
   trailing,
 }: PageEditorToolbarProps) {
   const t = messages.toolbar;
@@ -77,6 +88,12 @@ export function PageEditorToolbar({
   const inTable = useEditorState({
     editor,
     selector: ({ editor: e }) => e.isActive('table'),
+  });
+  // A mention is not allowed in a code block, so the Work item button is off
+  // while the caret is in one.
+  const inCodeBlock = useEditorState({
+    editor,
+    selector: ({ editor: e }) => e.isActive('codeBlock'),
   });
 
   const chain = () => editor.chain().focus();
@@ -204,6 +221,24 @@ export function PageEditorToolbar({
       {shipped.map(iconButton)}
       <Separator />
       {pageAdds.map(iconButton)}
+      {onMentionWorkItem ? (
+        // The page adds group's third control, after Insert image and Insert
+        // table (`page--work-item-mention.mock.html` panel 1): the text-button
+        // grammar with the rail's Work Items glyph and a visible label.
+        <button
+          type="button"
+          aria-label={t.workItemLabel}
+          aria-haspopup="listbox"
+          aria-expanded={mentionOpen}
+          title={inCodeBlock ? t.workItemInCode : t.workItemTip}
+          disabled={inCodeBlock}
+          onClick={onMentionWorkItem}
+          className={`${TEXT_BUTTON} gap-1.5 disabled:cursor-not-allowed disabled:text-(--el-text-faint) disabled:hover:bg-transparent`}
+        >
+          <CircleDot className="h-3.5 w-3.5" aria-hidden />
+          {t.workItem}
+        </button>
+      ) : null}
       {inTable ? (
         <>
           <Separator />

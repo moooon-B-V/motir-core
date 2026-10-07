@@ -221,10 +221,10 @@ describe('pageStoreFor(tx) — the package procedures on real Postgres', () => {
     expect(locked!.revision).toBe(2);
   });
 
-  it('answers the trivial port calls: no links writer yet, null for a missing page', async () => {
+  it('answers the trivial port calls: no links for a missing page, null for a missing page', async () => {
     const t = await makeTenant('trivial');
     await expect(
-      inTenant(t, (tx) => pageStoreFor(tx).replaceDerivedLinks('p', [])),
+      inTenant(t, (tx) => pageStoreFor(tx).replaceDerivedLinks('p', [], 'u')),
     ).resolves.toBeUndefined();
     expect(await inTenant(t, (tx) => pageStoreFor(tx).lockPage('missing'))).toBeNull();
     expect(await inTenant(t, (tx) => pageStoreFor(tx).findPage('missing'))).toBeNull();
