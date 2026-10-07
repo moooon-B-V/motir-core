@@ -363,6 +363,9 @@ export const apiTokensService = {
      * makes it a RUN token, which every bearer door refuses unless the route
      * opted in (`authenticateApiToken`'s `acceptsRunToken`, `verifyMcpToken`). */
     dispatchRunId: string | null;
+    /** The token row's id (MOTIR-7673) — what an audit row names as the
+     * credential. Never the secret. Every caller before the ideas gate ignores it. */
+    tokenId: string;
     /** @deprecated SCAFFOLDING — the raw column, for the two gates that have
      * not moved yet. Removed by MOTIR-2576 (MCP) / MOTIR-2577 (`/api/v1`). */
     scopes: string[];
@@ -415,6 +418,7 @@ export const apiTokensService = {
         workspaceId: row.workspaceId,
         projectId: row.projectId,
         dispatchRunId: row.dispatchRunId,
+        tokenId: row.id,
         grant,
         // The raw stored values, less the mint path's marker (MOTIR-6329), which is
         // bookkeeping for `expandStoredGrant` and never a value a caller acts on.
