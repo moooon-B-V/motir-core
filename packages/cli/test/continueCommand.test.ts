@@ -343,6 +343,8 @@ describe('renderContinueRefusal — each reason names what to do instead', () =>
     ['no_branch', 'set it to To Do'],
     ['run_alive', 'still alive'],
     ['no_dead_run', 'no run of it has died'],
+    ['gate_awaiting', 'still waiting for approval'],
+    ['gate_sent_back', 'was sent back, not approved'],
   ] as const)('%s', (reason, words) => {
     expect(
       renderContinueRefusal(claim({ outcome: 'not_continuable', reason, parentKey: 'PROD-2' })),
@@ -388,6 +390,27 @@ describe('renderContinueRefusal — each reason names what to do instead', () =>
     expect(renderContinueRefusal(claim({ outcome: 'not_continuable', reason: null }))).toContain(
       'the server refused the continue',
     );
+  });
+});
+
+describe('a gated run — resumed or refused by its gates (MOTIR-7708)', () => {
+  const gates = [{ key: 'PROD-9', kind: 'design_result', state: 'awaiting' }];
+
+  it('a refusal names the gates that still hold the run', () => {
+    expect(
+      renderContinueRefusal(claim({ outcome: 'not_continuable', reason: 'gate_awaiting', gates })),
+    ).toContain('(PROD-9: design_result)');
+  });
+
+  it('a resume says it resumes after an approval, never that a run died', () => {
+    const line = renderTakeover(
+      claim({ resumesGated: true, gates: [{ ...gates[0]!, state: 'approved' }] }),
+    );
+    expect(line).toBe(
+      'Took PROD-7 over from Mara S. — resuming its run after an approval ' +
+        `(PROD-9: design_result).\nResuming on ${BRANCH}.`,
+    );
+    expect(line).not.toContain('last heard from');
   });
 });
 

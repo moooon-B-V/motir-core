@@ -977,8 +977,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   claim_work_item_continue: {
     summary:
-      'Take over a work item whose last run died, as `motir continue` does: its branch and pull requests, not a fresh start.',
-    descriptionFingerprint: 'f825bce8044b',
+      'Take over a work item whose last run died or stopped at a gate that is now approved, as `motir continue` does: its branch and pull requests, not a fresh start.',
+    descriptionFingerprint: 'fe56eebf7af2',
   },
   touch_work_item_continue: {
     summary:
@@ -1003,7 +1003,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   close_work_item_run: {
     summary:
       'End your run of a card with how it went; a delivered close records you as the implementer.',
-    descriptionFingerprint: '3a01cd1a9f43',
+    descriptionFingerprint: 'f9b55d5e5987',
   },
   add_comment: {
     summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',

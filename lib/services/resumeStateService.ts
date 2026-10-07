@@ -1,4 +1,9 @@
-import type { Prisma, WorkItemResumeState } from '@/generated/prisma/client';
+import type {
+  ApprovalGateKind,
+  ApprovalGateState,
+  Prisma,
+  WorkItemResumeState,
+} from '@/generated/prisma/client';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { dispatchRunHeldGateRepository } from '@/lib/repositories/dispatchRunHeldGateRepository';
@@ -64,23 +69,79 @@ export async function deriveResumeState(
   const run = await dispatchRunRepository.findLatestForWorkItem(item.id, tx);
   if (!run || run.status !== 'succeeded' || run.stopReason !== 'gated') return NOTHING_TO_RESUME;
 
-  const ready: ResumeStateValue = { resumeState: 'ready_to_resume', resumeRunId: run.id };
-  const held = await dispatchRunHeldGateRepository.listByRun(run.id, tx);
+  const { verdict } = await readHeldGateVerdict(run.id, tx);
+  // Sent back stays waiting: a refusal releases nothing, and the entry says so
+  // (MOTIR-7712).
+  return {
+    resumeState: verdict === 'released' ? 'ready_to_resume' : 'waiting_on_gate',
+    resumeRunId: run.id,
+  };
+}
+
+/** One gate a `gated` run stopped on, as it stands NOW. */
+export interface HeldGateRef {
+  /** The LATEST gate of this kind on the card — a republish's, not the superseded one. */
+  gateId: string;
+  workItemId: string;
+  /** The card's key (`MOTIR-7`). */
+  key: string;
+  kind: ApprovalGateKind;
+  state: ApprovalGateState;
+}
+
+/**
+ * Where a `gated` run's held gates stand (MOTIR-7707 · MOTIR-7708):
+ *
+ * - `released` — at least one is approved (a decision chosen, a direction
+ *   confirmed, manual work marked done all write `approved`), or the run recorded
+ *   none: there is work to resume.
+ * - `sent_back` — none approved, and at least one was refused (changes requested,
+ *   declined, overturned): resuming would build on an answer nobody gave.
+ * - `awaiting` — every one is still waiting on its person.
+ *
+ * ONE reading, shared by the To resume column and the continue claim, so the
+ * Workbench never offers a resume the claim would refuse.
+ */
+export async function readHeldGateVerdict(
+  runId: string,
+  tx: Prisma.TransactionClient,
+): Promise<{
+  verdict: 'released' | 'sent_back' | 'awaiting';
+  released: HeldGateRef[];
+  sentBack: HeldGateRef[];
+  waiting: HeldGateRef[];
+}> {
+  const held = await dispatchRunHeldGateRepository.listByRun(runId, tx);
+  const released: HeldGateRef[] = [];
+  const sentBack: HeldGateRef[] = [];
+  const waiting: HeldGateRef[] = [];
   // A `gated` close that found no awaiting gate (it was decided in the same minute)
   // has nothing left to wait on (MOTIR-7703).
-  if (held.length === 0) return ready;
+  if (held.length === 0) return { verdict: 'released', released, sentBack, waiting };
+  const cards = await workItemRepository.findByIds([...new Set(held.map((r) => r.workItemId))], tx);
+  const keyOf = new Map(cards.map((card) => [card.id, card.identifier]));
   const seen = new Set<string>();
   for (const row of held) {
     const slot = `${row.workItemId}:${row.kind}`;
     if (seen.has(slot)) continue;
     seen.add(slot);
     const latest = await approvalGateRepository.findLatestByWorkItem(row.workItemId, row.kind, tx);
-    if (latest?.state === 'approved') return ready;
+    const ref: HeldGateRef = {
+      gateId: latest?.id ?? row.gateId,
+      workItemId: row.workItemId,
+      key: keyOf.get(row.workItemId) ?? row.workItemId,
+      kind: row.kind,
+      state: latest?.state ?? 'awaiting',
+    };
+    if (ref.state === 'approved') released.push(ref);
+    else if (SENT_BACK.has(ref.state)) sentBack.push(ref);
+    else waiting.push(ref);
   }
-  // Every held gate still awaiting — or sent back, which stays waiting: a refusal
-  // releases nothing, and the entry says so (MOTIR-7712).
-  return { resumeState: 'waiting_on_gate', resumeRunId: run.id };
+  const verdict = released.length > 0 ? 'released' : sentBack.length > 0 ? 'sent_back' : 'awaiting';
+  return { verdict, released, sentBack, waiting };
 }
+
+const SENT_BACK = new Set<ApprovalGateState>(['changes_requested', 'declined', 'overturned']);
 
 /**
  * RECOMPUTE one card's stored `resumeState` / `resumeRunId`, and write them if they

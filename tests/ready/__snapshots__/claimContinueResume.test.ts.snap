@@ -1,0 +1,21 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`dispatch_prompt { continueFrom } on a gated run > renders the RESUME block — after an approval, never a death 1`] = `
+"RESUME — you are resuming a run that STOPPED AT A GATE, after an approval
+
+  The previous run (<RUN>) was run by Owner.
+  It stopped because the rest of its work waited on these approval gates, and
+  these are now approved: <KEY> (design_result).
+  Still waiting: <KEY> (manual_work) — awaiting.
+  Its work is on the branch subtask/<KEY>-work.
+
+  You are RESUMING this run, not starting fresh:
+    - re-read each approved gate's verdict (get_approval_gate, get_design) before
+      building on it — build what the approval released, as it was approved;
+    - read \`git log origin/main..HEAD\` and \`git status\` FIRST, and keep what is
+      already done; do not redo finished work;
+    - do NOT create a new branch — the GIT WORKFLOW below checks this one out;
+    - do NOT open a second pull request — reuse the one that is open, if any;
+    - work that still waits on a gate is NOT yours to build: when only such work
+      is left, stop again and close the run \`gated\`."
+`;

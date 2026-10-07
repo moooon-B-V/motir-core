@@ -10,6 +10,7 @@ import {
   type FindingsPolicy,
 } from '@/lib/dispatch/promptTemplate';
 import { ContinueFromInvalidError } from '@/lib/dispatchRuns/errors';
+import { readHeldGateVerdict } from '@/lib/services/resumeStateService';
 import {
   endedHow,
   resolveContinueBranch,
@@ -294,7 +295,17 @@ async function resolveContinueFrom(
     const run = await dispatchRunRepository.findForWorkItemById(runId, itemId, tx);
     if (!run) throw new ContinueFromInvalidError(runId, 'unknown');
     if (run.status === 'running') throw new ContinueFromInvalidError(runId, 'still_running');
-    if (run.status === 'succeeded') throw new ContinueFromInvalidError(runId, 'succeeded');
+    // A run that STOPPED AT A GATE is resumed once a gate it stopped on is approved
+    // (MOTIR-7708) — the continue claim's own reading of its held gates.
+    const held =
+      run.status === 'succeeded' && run.stopReason === 'gated'
+        ? await readHeldGateVerdict(run.id, tx)
+        : null;
+    if (held?.verdict === 'awaiting') throw new ContinueFromInvalidError(runId, 'gate_awaiting');
+    if (held?.verdict === 'sent_back') throw new ContinueFromInvalidError(runId, 'gate_sent_back');
+    if (run.status === 'succeeded' && held === null) {
+      throw new ContinueFromInvalidError(runId, 'succeeded');
+    }
     const { branch, branches, pullRequest } = await resolveContinueBranch(
       itemId,
       run,
@@ -319,6 +330,16 @@ async function resolveContinueFrom(
       })),
       pullRequest: pullRequest
         ? { repo: pullRequest.repo, number: pullRequest.number, url: pullRequest.url }
+        : null,
+      resume: held
+        ? {
+            approved: held.released.map((g) => ({ key: g.key, kind: g.kind })),
+            stillWaiting: [...held.waiting, ...held.sentBack].map((g) => ({
+              key: g.key,
+              kind: g.kind,
+              state: g.state,
+            })),
+          }
         : null,
     };
   });

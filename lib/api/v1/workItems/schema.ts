@@ -1682,6 +1682,7 @@ const _gateCausesTotal: AssertTotal<
 
 /** Which vocabulary of decision verbs a gate carries (ADR §1). */
 export const approvalGateKindSchema = z.enum(APPROVAL_GATE_KIND_VALUES);
+export const approvalGateStateSchema = z.enum(APPROVAL_GATE_STATE_VALUES);
 
 /**
  * ONE gate's decision record.
@@ -1696,7 +1697,7 @@ export const approvalGateKindSchema = z.enum(APPROVAL_GATE_KIND_VALUES);
 export const approvalGateDecisionSchema = z.object({
   id: z.string(),
   kind: approvalGateKindSchema,
-  state: z.enum(APPROVAL_GATE_STATE_VALUES),
+  state: approvalGateStateSchema,
   /** Why they said yes, or WHAT THEY SENT BACK. Null while `awaiting`. */
   noteMd: z.string().nullable(),
   decidedAt: isoDateTimeSchema.nullable(),

@@ -1,5 +1,7 @@
 import type { ClaimActorDto } from '@/lib/dto/claim';
 import type {
+  ApprovalGateKind,
+  ApprovalGateState,
   DispatchCommand,
   DispatchRunOrigin,
   DispatchRunStatus,
@@ -42,6 +44,12 @@ export type WorkItemContinueOutcome = 'claimed' | 'mine' | 'taken' | 'not_contin
  *   legs; the parent is continued as a whole (`parentKey`).
  * - `no_dead_run` — no run on this item ended without success.
  * - `no_branch` — the dead run left no branch to continue on; start over instead.
+ * - `gate_awaiting` — the last run STOPPED AT A GATE (closed `gated`, MOTIR-7708)
+ *   and every gate it stopped on still waits on its person (`gates` names them).
+ *   Approving one is what makes it resumable.
+ * - `gate_sent_back` — the gated run's gates were answered, but none approved: at
+ *   least one was sent back (`gates` names them), so there is nothing released to
+ *   build.
  */
 export type WorkItemContinueRefusal =
   | 'run_alive'
@@ -49,7 +57,18 @@ export type WorkItemContinueRefusal =
   | 'not_in_progress'
   | 'continue_the_parent'
   | 'no_dead_run'
-  | 'no_branch';
+  | 'no_branch'
+  | 'gate_awaiting'
+  | 'gate_sent_back';
+
+/** One gate a `gated` run stopped on, as the continue claim names it (MOTIR-7708). */
+export interface ContinueGateDto {
+  /** The card the gate is on. */
+  key: string;
+  kind: ApprovalGateKind;
+  /** Where it stands now — `approved` on a resume, else why it still holds. */
+  state: ApprovalGateState;
+}
 
 /** The run that died — what the continuing agent is told it is continuing. */
 export interface DeadRunDto {
@@ -133,6 +152,15 @@ export interface WorkItemContinueClaimDto {
    *  the caller by this claim. The ready set lists only To Do leaves, so these are
    *  named here for the resumed drain to run again. Empty for a card. */
   resumedKeys: string[];
+  /**
+   * The gates of a `gated` run (MOTIR-7708). On `claimed` / `mine` of a RESUME, the
+   * approved ones it resumes after; on `gate_awaiting` / `gate_sent_back`, the
+   * ones still holding it. Empty for a continue of a run that died.
+   */
+  gates: ContinueGateDto[];
+  /** True when the claim RESUMES a run that stopped at a gate, rather than one
+   *  that died (MOTIR-7708). */
+  resumesGated: boolean;
 }
 
 /** How a run ended without success, as the *run died* marker's reason line says it. */

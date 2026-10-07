@@ -367,6 +367,17 @@ export interface ContinueFromForPrompt {
    * for a caller that predates it) renders exactly the single-branch text.
    */
   branches?: ContinueFromBranch[];
+  /**
+   * Set when the run did NOT die: it STOPPED AT A GATE (closed `gated`) and is
+   * resumed because a gate it stopped on was approved (MOTIR-7708). The prompt
+   * then says it is resuming after an approval, never that a run died.
+   */
+  resume?: {
+    /** The gates now approved — the work they released is what to build. */
+    approved: { key: string; kind: string }[];
+    /** The gates it stopped on that still wait (or were sent back). */
+    stillWaiting: { key: string; kind: string; state: string }[];
+  } | null;
 }
 
 /** One repository's share of a dead run's work, as the CONTINUE prompt names it. */
@@ -1504,6 +1515,7 @@ const REFUSAL_VERDICT_LINE: Record<NonNullable<LatestRefusalDTO['refusalVerdict'
  */
 function continueSection(cf: ContinueFromForPrompt | null): string[] {
   if (cf === null) return [];
+  if (cf.resume) return resumeSection(cf, cf.resume);
   return [
     '',
     'CONTINUE — you are carrying on a run that DIED, not starting fresh',
@@ -1527,6 +1539,53 @@ function continueSection(cf: ContinueFromForPrompt | null): string[] {
           '    - do NOT create a new branch — the GIT WORKFLOW below checks this one out;',
           '    - do NOT open a second pull request — reuse the one that is open, if any.',
         ]),
+  ];
+}
+
+/**
+ * RESUME AFTER AN APPROVAL (Story MOTIR-7701 · MOTIR-7708) — the CONTINUE lane for a
+ * run that stopped cleanly at a gate. Nothing died: the previous run did everything
+ * it could and stopped because the rest waited on a person. Some of that is now
+ * approved, so the agent re-reads the verdicts, builds what they released, and stops
+ * at a gate again on anything still waiting.
+ */
+function resumeSection(
+  cf: ContinueFromForPrompt,
+  resume: NonNullable<ContinueFromForPrompt['resume']>,
+): string[] {
+  const gate = (g: { key: string; kind: string }) => `${g.key} (${g.kind})`;
+  return [
+    '',
+    'RESUME — you are resuming a run that STOPPED AT A GATE, after an approval',
+    '',
+    `  The previous run (${cf.deadRunId}) was run by ${cf.dispatcherName ?? 'somebody no longer resolvable'}.`,
+    '  It stopped because the rest of its work waited on these approval gates, and',
+    `  these are now approved: ${resume.approved.length > 0 ? resume.approved.map(gate).join(', ') : 'none were recorded'}.`,
+    ...(resume.stillWaiting.length > 0
+      ? [
+          `  Still waiting: ${resume.stillWaiting.map((g) => `${gate(g)} — ${g.state}`).join(', ')}.`,
+        ]
+      : []),
+    ...continueWhereLines(cf),
+    '',
+    '  You are RESUMING this run, not starting fresh:',
+    "    - re-read each approved gate's verdict (get_approval_gate, get_design) before",
+    '      building on it — build what the approval released, as it was approved;',
+    '    - read `git log origin/main..HEAD` and `git status` FIRST, and keep what is',
+    '      already done; do not redo finished work;',
+    ...(continueRepoSet(cf)
+      ? [
+          '    - do NOT create a new branch in any repository — the GIT WORKFLOW below',
+          '      checks each one out;',
+          '    - do NOT open a second pull request in any repository — reuse the one',
+          '      that is open there, if any;',
+        ]
+      : [
+          '    - do NOT create a new branch — the GIT WORKFLOW below checks this one out;',
+          '    - do NOT open a second pull request — reuse the one that is open, if any;',
+        ]),
+    '    - work that still waits on a gate is NOT yours to build: when only such work',
+    '      is left, stop again and close the run `gated`.',
   ];
 }
 

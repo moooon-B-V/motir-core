@@ -792,6 +792,8 @@ export interface WorkItemContinueClaim {
     | 'continue_the_parent'
     | 'no_dead_run'
     | 'no_branch'
+    | 'gate_awaiting'
+    | 'gate_sent_back'
     | null;
   parentKey: string | null;
   runId: string | null;
@@ -822,6 +824,14 @@ export interface WorkItemContinueClaim {
   landedKeys: string[];
   /** The dead scope run's legs still in flight, now the caller's — run again. */
   resumedKeys: string[];
+  /**
+   * The gates of a run that STOPPED AT A GATE (MOTIR-7708): the approved ones a
+   * resume picks up after, or the ones still holding it on a refusal. Optional
+   * because a server older than contract 1.64.0 does not send it.
+   */
+  gates?: { key: string; kind: string; state: string }[];
+  /** True when the claim RESUMES a gated run rather than continuing a dead one. */
+  resumesGated?: boolean;
 }
 
 export interface WorkItemRepairClaim {

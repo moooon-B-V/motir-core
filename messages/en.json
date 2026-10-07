@@ -6976,6 +6976,8 @@
             "notInProgress": "Not started — this work item is not In Progress any more.",
             "noDeadRun": "Not started — no run of this work item died.",
             "theParent": "Not started — this is part of <link>{key}</link>'s run, so it is continued from there.",
+            "gateAwaiting": "Not started — the run stopped at a gate that is still waiting for approval. It resumes once the gate is approved.",
+            "gateSentBack": "Not started — the run stopped at a gate that was sent back, not approved, so there is nothing to resume.",
             "outOfCredits": {
               "body": "Nothing was booted and nothing was charged. Continue works again once the organization has credits — or carry it on from your terminal."
             }

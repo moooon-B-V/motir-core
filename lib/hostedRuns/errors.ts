@@ -266,7 +266,9 @@ export type HostedContinueRefusal =
   | 'use_fix'
   | 'not_in_progress'
   | 'no_dead_run'
-  | 'continue_the_parent';
+  | 'continue_the_parent'
+  | 'gate_awaiting'
+  | 'gate_sent_back';
 
 const HOSTED_CONTINUE_CODE = {
   taken: 'hosted_continue_taken',
@@ -276,6 +278,8 @@ const HOSTED_CONTINUE_CODE = {
   not_in_progress: 'hosted_continue_not_in_progress',
   no_dead_run: 'hosted_continue_no_dead_run',
   continue_the_parent: 'hosted_continue_the_parent',
+  gate_awaiting: 'hosted_continue_gate_awaiting',
+  gate_sent_back: 'hosted_continue_gate_sent_back',
 } as const satisfies Record<HostedContinueRefusal, string>;
 
 const HOSTED_CONTINUE_WHY: Record<HostedContinueRefusal, string> = {
@@ -286,6 +290,8 @@ const HOSTED_CONTINUE_WHY: Record<HostedContinueRefusal, string> = {
   not_in_progress: 'it is not In Progress',
   no_dead_run: 'no run of it died',
   continue_the_parent: 'it is a leg of a parent run; continue the parent',
+  gate_awaiting: 'its run stopped at a gate that is still waiting for approval',
+  gate_sent_back: 'its run stopped at a gate that was sent back, not approved',
 };
 
 /**
