@@ -1,8 +1,9 @@
 /**
  * The LOGIC half of `scripts/push-release-tags.mjs` (MOTIR-3970).
  *
- * WHAT IT ANSWERS: after a **Version Packages** pull request has merged, which
- * release tags does `main` now need, and which does it already have?
+ * WHAT IT ANSWERS: which release tags does `main` now need, which does it
+ * already have, and which commit does each new one belong on? It runs on every
+ * push to `main` and acts only when a published version moved (MOTIR-7717).
  *
  * ⚠️ THE TAG FORMAT IS DELIBERATELY *NOT* THE TOOL'S DEFAULT. Changesets' own
  * tagging emits `@motir/cli@0.4.0`. This repository releases on
@@ -150,11 +151,75 @@ export function deriveTags({ versions, existingTags, packages = PUBLISHED_PACKAG
   return { create, skipped, problems };
 }
 
+/**
+ * The commit at which a manifest most recently BECAME `version` (MOTIR-7717).
+ *
+ * WHY A TAG DOES NOT GO ON `HEAD`. The lane used to tag only in the run whose
+ * changesets sync found nothing pending, on the theory that such a run is the
+ * one in which the Version Packages pull request merged — so `HEAD` was the
+ * release commit. A changeset that reached `main` before that merge broke the
+ * theory: the merge run reported `hasChangesets: true`, skipped the tag step,
+ * stayed green, and 0.9.0 / 0.4.0 never published. Tagging now runs on EVERY
+ * push, and on a push that is not the release commit `HEAD` can already carry
+ * source changes whose changeset is still pending. A tag on `HEAD` would ship
+ * them under the older version number, so each tag goes on the commit that
+ * moved its version instead.
+ *
+ * @param {object} input
+ * @param {string} input.version              the version the ref declares
+ * @param {string[]} input.shas               the commits that touched the manifest,
+ *                                            NEWEST FIRST, along the ref's first-parent
+ *                                            history (`git log --first-parent -- <manifest>`)
+ * @param {(sha: string) => unknown} input.versionAt  the manifest's version AT a commit
+ * @returns {string | null}  the oldest commit of the newest unbroken run declaring
+ *                           `version`, or `null` when no listed commit declares it
+ *
+ * A commit that touched the manifest without moving the version (a dependency
+ * bump) extends the run rather than ending it, which is why this walks to the
+ * first DIFFERENT version rather than stopping at the newest commit. It stops
+ * there, so the cost is the length of the run, not of the history.
+ */
+export function introducedAt({ version, shas, versionAt }) {
+  let found = null;
+  for (const sha of shas) {
+    if (versionAt(sha) !== version) break;
+    found = sha;
+  }
+  return found;
+}
+
+/**
+ * Pin every tag in `plan.create` to the commit that set its version.
+ *
+ * A tag whose commit cannot be found is moved to `problems` rather than
+ * defaulted to `HEAD` — defaulting is exactly the mistake `introducedAt`
+ * exists to prevent, and the runner pushes nothing while any problem stands.
+ *
+ * @param {ReturnType<typeof deriveTags>} plan
+ * @param {(entry: {name: string, version: string, tag: string}) => string | null} locate
+ */
+export function pinTags(plan, locate) {
+  const create = [];
+  const problems = [...plan.problems];
+  for (const entry of plan.create) {
+    const commit = locate(entry);
+    if (commit) create.push({ ...entry, commit });
+    else
+      problems.push(
+        `${entry.name}: no commit on this ref's first-parent history sets version ${entry.version} — refusing to guess where ${entry.tag} belongs`,
+      );
+  }
+  return { create, skipped: plan.skipped, problems };
+}
+
 /** The one-screen report, for the log and the run summary. */
 export function formatPlan({ create, skipped, problems }) {
   const lines = [];
   for (const p of problems) lines.push(`REFUSED  ${p}`);
-  for (const t of create) lines.push(`tag      ${t.tag}  (${t.name}) — fires ${t.lane}`);
+  for (const t of create) {
+    const at = t.commit ? ` at ${t.commit.slice(0, 12)}` : '';
+    lines.push(`tag      ${t.tag}${at}  (${t.name}) — fires ${t.lane}`);
+  }
   for (const t of skipped) lines.push(`skip     ${t.tag}  (${t.name}) — already exists`);
   if (lines.length === 0) lines.push('nothing to do — no published package was found');
   return lines.join('\n');

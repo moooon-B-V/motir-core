@@ -2,11 +2,21 @@
 /**
  * Push the release tags for whatever versions are now on `main` (MOTIR-3970).
  *
- * Run it from a FULL-DEPTH checkout, after a **Version Packages** pull request
- * has merged:
+ * Run it from a FULL-DEPTH checkout, on any commit of `main` — it only acts
+ * when a published version has moved (MOTIR-7717):
  *
  *   node scripts/push-release-tags.mjs
  *   node scripts/push-release-tags.mjs --dry-run
+ *   node scripts/push-release-tags.mjs --ref <commit> [--dry-run]
+ *
+ * ⚠️ THE VERSIONS ARE READ FROM `--ref` (default `HEAD`), NEVER FROM THE WORKING
+ * TREE, AND EACH TAG GOES ON THE COMMIT THAT SET ITS VERSION. In the release
+ * lane this runs after `changesets/action`, which — whenever changesets are
+ * pending — checks out `changeset-release/main` and writes the NEXT versions
+ * into the manifests. A working-tree read there would tag versions that have
+ * not merged. The lane passes `--ref "$GITHUB_SHA"`, the commit that was
+ * pushed to `main`; `introducedAt` in `releaseTags.mjs` then finds, along that
+ * ref's first-parent history, the commit each version arrived in.
  *
  * WHAT IT DOES, and why the decision is not in this file: see
  * `scripts/releaseTags.mjs`, which holds the whole derivation and is the file
@@ -35,8 +45,7 @@
  */
 /* eslint-disable no-console -- this is a CLI script; stdout is its interface. */
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { appendFileSync } from 'node:fs';
 import {
   EXIT_BLIND_READ,
   EXIT_OK,
@@ -46,26 +55,35 @@ import {
   classifyTagRead,
   deriveTags,
   formatPlan,
+  introducedAt,
+  pinTags,
 } from './releaseTags.mjs';
-
-const ROOT = process.cwd();
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 
-/** Every package's declared version, or `undefined` where the manifest cannot be read. */
-function readVersions(packages) {
-  const versions = {};
-  for (const pkg of packages) {
-    try {
-      versions[pkg.name] = JSON.parse(
-        readFileSync(join(ROOT, pkg.dir, 'package.json'), 'utf8'),
-      ).version;
-    } catch {
-      // Left undefined on purpose: `deriveTags` turns that into a REFUSAL that
-      // names the package, which is more useful than a stack trace here.
-      versions[pkg.name] = undefined;
-    }
+const manifestOf = (pkg) => `${pkg.dir}/package.json`;
+
+/** A manifest's `version` at a commit, or `undefined` where it cannot be read there. */
+function versionAt(sha, pkg) {
+  try {
+    return JSON.parse(
+      execFileSync('git', ['show', `${sha}:${manifestOf(pkg)}`], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }),
+    ).version;
+  } catch {
+    return undefined;
   }
+}
+
+/** Every package's declared version at `sha`, or `undefined` where the manifest cannot be read. */
+function readVersions(packages, sha) {
+  const versions = {};
+  // An unreadable manifest is left `undefined` on purpose: `deriveTags` turns
+  // that into a REFUSAL that names the package, which is more useful than a
+  // stack trace here.
+  for (const pkg of packages) versions[pkg.name] = versionAt(sha, pkg);
   return versions;
 }
 
@@ -77,14 +95,34 @@ function summarize(text) {
   appendFileSync(path, `### Release tags\n\n\`\`\`\n${text}\n\`\`\`\n`, 'utf8');
 }
 
+const USAGE = 'usage: node scripts/push-release-tags.mjs [--ref <commit>] [--dry-run]';
+
 function main(argv) {
-  const dryRun = argv.includes('--dry-run');
-  const unknown = argv.filter((a) => a !== '--dry-run');
-  if (unknown.length > 0) {
-    console.error(`unknown argument: ${unknown[0]}`);
-    console.error('usage: node scripts/push-release-tags.mjs [--dry-run]');
+  let dryRun = false;
+  let ref = 'HEAD';
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--dry-run') dryRun = true;
+    else if (arg === '--ref' && argv[i + 1] && !argv[i + 1].startsWith('--')) ref = argv[++i];
+    else {
+      console.error(arg === '--ref' ? '--ref needs a commit' : `unknown argument: ${arg}`);
+      console.error(USAGE);
+      return EXIT_USAGE;
+    }
+  }
+
+  let sha;
+  try {
+    sha = git('rev-parse', '--verify', '--quiet', `${ref}^{commit}`);
+  } catch {
+    sha = '';
+  }
+  if (!sha) {
+    console.error(`--ref ${ref} does not name a commit in this checkout`);
+    console.error(USAGE);
     return EXIT_USAGE;
   }
+  console.log(`reading versions at ${sha}`);
 
   const read = classifyTagRead(git('tag', '-l').split('\n').filter(Boolean));
   if (read.blind) {
@@ -94,9 +132,18 @@ function main(argv) {
   }
   console.log(read.summary);
 
-  const plan = deriveTags({
-    versions: readVersions(PUBLISHED_PACKAGES),
+  const derived = deriveTags({
+    versions: readVersions(PUBLISHED_PACKAGES, sha),
     existingTags: git('tag', '-l').split('\n').filter(Boolean),
+  });
+  // Only a tag that is about to be CREATED needs its commit, so a run in which
+  // no version moved walks no history at all.
+  const plan = pinTags(derived, ({ name, version }) => {
+    const pkg = PUBLISHED_PACKAGES.find((p) => p.name === name);
+    const shas = git('log', '--first-parent', '--format=%H', sha, '--', manifestOf(pkg))
+      .split('\n')
+      .filter(Boolean);
+    return introducedAt({ version, shas, versionAt: (c) => versionAt(c, pkg) });
   });
 
   const report = formatPlan(plan);
@@ -105,16 +152,16 @@ function main(argv) {
 
   if (plan.problems.length > 0) return EXIT_REFUSED;
 
-  for (const { tag } of plan.create) {
+  for (const { tag, commit } of plan.create) {
     if (dryRun) {
-      console.log(`--dry-run: would push ${tag}`);
+      console.log(`--dry-run: would push ${tag} at ${commit}`);
       continue;
     }
     // A LIGHTWEIGHT tag, which is what the release procedure every lane's header
     // documents does by hand (`git tag cli-v<x.y.z> && git push origin <tag>`).
     // It also needs no `user.name` / `user.email`, so this step does not depend
     // on an identity some earlier step happened to configure.
-    git('tag', tag);
+    git('tag', tag, commit);
     git('push', 'origin', tag);
     console.log(`pushed ${tag}`);
   }
