@@ -140,6 +140,34 @@ export const aiWorkItemsService = {
   },
 
   /**
+   * Replace the description of a bug the SYSTEM PRINCIPAL ITSELF FILED
+   * (MOTIR-7723). The planning alarm files its bug with the machine record
+   * inline, attaches the record through {@link attachFile}, and then settles the
+   * body to say which of the two the reader should open — a fact it only has
+   * after the bug exists.
+   *
+   * ⚠️ THE BOUND IS THE REPORTER. The service bearer may target any project in
+   * the meta workspace, so without this check it could rewrite a card a person
+   * wrote. Anything that is not a `bug` reported by this principal reads as
+   * `WorkItemNotFoundError` (404) — the same answer an unknown key gets, so the
+   * route says nothing about cards it may not touch. Every edit guard
+   * (`updateWorkItem`'s edit gate, the row lock, the revision) runs unchanged.
+   */
+  async updateFiledBugDescription(
+    input: { identifier: string; descriptionMd: string },
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto> {
+    const identifier = input.identifier.trim().toUpperCase();
+    const dash = identifier.lastIndexOf('-');
+    const project = await resolveServiceProjectByKey(identifier.slice(0, dash), ctx);
+    const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
+    if (item.kind !== 'bug' || item.reporterId !== ctx.userId) {
+      throw new WorkItemNotFoundError(identifier);
+    }
+    return workItemsService.updateWorkItem(item.id, { descriptionMd: input.descriptionMd }, ctx);
+  },
+
+  /**
    * File ONE `bug` into the JOB'S OWN project, as the job token's user (Story
    * MOTIR-4053 · Subtask MOTIR-4076) — the planner's `log_bug` sink, and the
    * FIRST non-proposal a planning run writes into a customer's tenant.
