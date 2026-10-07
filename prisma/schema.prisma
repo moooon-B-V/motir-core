@@ -383,6 +383,7 @@ model User {
   // (Story MOTIR-7521 · MOTIR-7525). SetNull: the entry outlives the account,
   // and the hash-chained audit log keeps WHO for ever.
   platformRunModelsAdded           PlatformRunModel[]            @relation("PlatformRunModelAddedBy")
+  ideaResearchRuns                 IdeaResearchRun[]
   // Organizations this platform operator SUSPENDED and that are still suspended
   // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
   // role must not block, or cascade into, a tenant's suspension state — the
@@ -475,6 +476,9 @@ enum PlatformAuditTargetKind {
   project
   user
   platform
+  /// An idea in the platform idea store (Story MOTIR-7662) — `targetId` is the
+  /// idea's id and `targetLabel` its slug; the row outlives a deleted idea.
+  idea
 
   @@map("platform_audit_target_kind")
 }
@@ -13057,4 +13061,191 @@ model AgentInstanceBootStep {
   @@index([bootAttemptId, seq])
   @@index([workspaceId])
   @@map("agent_instance_boot_step")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE IDEA STORE (Story MOTIR-7662 · MOTIR-7670)
+//
+// Platform-owned content, not tenant data: platform staff curate the ideas
+// (the console, the private `motir-ideas` skill over `/api/platform/ideas`),
+// and anyone reads the ACTIVE ones over `/api/public/ideas`. No tenant column
+// anywhere — RLS reads are unconditional and writes are `app.platform_staff`
+// only, the posture `platform_run_model` set (see the migration). Every write
+// lands with its hash-chained `PlatformAuditLog` row (`targetKind: idea`).
+//
+// ⚠️ Not `IdeaDraft` — that is the unrelated pre-auth draft hand-off.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Who an idea is for. `motir_buys` is an idea Motir itself would buy (the
+/// "Motir would buy" band); `direction` is a researched direction with evidence.
+enum IdeaKind {
+  motir_buys
+  direction
+
+  @@map("idea_kind")
+}
+
+/// Retiring is the normal end of an idea — it leaves every public read and keeps
+/// its reason. Hard delete is a superadmin's correction of a mistake.
+enum IdeaStatus {
+  active
+  retired
+
+  @@map("idea_status")
+}
+
+/// The FIXED category list — adding one is a migration, which is what "fixed"
+/// means. Labels live in `lib/ideas/categories.ts`, held total by the compiler.
+enum IdeaCategory {
+  // ── Business functions
+  /// Legal
+  legal
+  /// Finance
+  finance
+  /// Security & compliance
+  security_compliance
+  /// Customer support
+  customer_support
+  /// Localization
+  localization
+  /// Growth & marketing
+  growth_marketing
+  /// Sales
+  sales
+  /// People & HR
+  people_hr
+  /// Operations
+  operations
+  /// Engineering
+  engineering
+  // ── Verticals
+  /// E-commerce
+  ecommerce
+  /// Healthcare
+  healthcare
+  /// Education
+  education
+  /// Financial services
+  financial_services
+  /// Real estate
+  real_estate
+  /// Logistics
+  logistics
+  /// Construction
+  construction
+  /// Agriculture
+  agriculture
+  /// Pets
+  pets
+  /// Family care
+  family_care
+  /// Public sector
+  public_sector
+  // ── Consumer
+  /// Personal growth
+  personal_growth
+  /// Personal finance
+  personal_finance
+  /// Health & wellness
+  health_wellness
+  // ── Platform
+  /// AI infrastructure
+  ai_infrastructure
+
+  @@map("idea_category")
+}
+
+/// One idea. A CHECK in the migration holds `retired_reason` and `retired_at`
+/// both set exactly when `status = 'retired'`.
+model Idea {
+  id             String       @id @default(cuid())
+  slug           String       @unique
+  title          String
+  pitch          String
+  kind           IdeaKind
+  category       IdeaCategory
+  /// What the product does — the ordered "does" bullets.
+  capabilities   String[]
+  /// What nobody serves yet (directions).
+  gap            String?
+  whyNow         String?      @map("why_now")
+  /// Why Motir itself would buy it (`motir_buys` only — enforced in the service).
+  whyMotir       String?      @map("why_motir")
+  /// Who else needs it (`motir_buys` only — enforced in the service).
+  whoElse        String?      @map("who_else")
+  status         IdeaStatus   @default(active)
+  retiredReason  String?      @map("retired_reason")
+  retiredAt      DateTime?    @map("retired_at")
+  addedAt        DateTime     @default(now()) @map("added_at")
+  lastReviewedAt DateTime?    @map("last_reviewed_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  evidence IdeaEvidence[]
+  tags     IdeaTagAssignment[]
+
+  @@index([status, category])
+  @@index([status, kind])
+  @@map("idea")
+}
+
+/// One sourced claim behind an idea, ordered by `position`. A child table, not
+/// JSON, so each source is addressable and correctable on its own.
+model IdeaEvidence {
+  id         String    @id @default(cuid())
+  ideaId     String    @map("idea_id")
+  position   Int
+  claim      String
+  sourceName String    @map("source_name")
+  url        String
+  sourceDate DateTime? @map("source_date") @db.Date
+
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@unique([ideaId, position])
+  @@map("idea_evidence")
+}
+
+/// The curated tag vocabulary. `description` is the stated reason a tag exists.
+model IdeaTag {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  label       String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  assignments IdeaTagAssignment[]
+
+  @@map("idea_tag")
+}
+
+/// An idea ↔ tag join. Deleting an idea drops its assignments; a tag still in
+/// use cannot be deleted (Restrict).
+model IdeaTagAssignment {
+  ideaId String @map("idea_id")
+  tagId  String @map("tag_id")
+
+  idea Idea    @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  tag  IdeaTag @relation(fields: [tagId], references: [id], onDelete: Restrict)
+
+  @@id([ideaId, tagId])
+  @@index([tagId])
+  @@map("idea_tag_assignment")
+}
+
+/// The research-run log the `motir-ideas` skill writes, so its coverage map
+/// survives across machines.
+model IdeaResearchRun {
+  id           String   @id @default(cuid())
+  ranAt        DateTime @default(now()) @map("ran_at")
+  actorUserId  String   @map("actor_user_id")
+  areasCovered String[] @map("areas_covered")
+  addedCount   Int      @map("added_count")
+  retiredCount Int      @map("retired_count")
+  reportMd     String   @map("report_md")
+
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([ranAt])
+  @@index([actorUserId])
+  @@map("idea_research_run")
 }

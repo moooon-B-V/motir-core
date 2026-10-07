@@ -53,9 +53,15 @@ export type ResetExecutor = Pick<typeof db, '$executeRawUnsafe'>;
 // a seeded row has no user, and an added one only NULLs its adder when the user
 // goes, so neither is reached by the cascade — and a marker left behind would
 // stop the next suite's first read from seeding.
+//
+// `idea` / `idea_tag` (Story MOTIR-7662) are platform content with no FK to any
+// tenant or user, so no cascade reaches them; `idea_evidence` and
+// `idea_tag_assignment` go with them, and `idea_research_run` with `user`. The
+// SEEDED ideas go too — a suite that needs today's 15 re-applies the seed
+// migration (`tests/ideas/_helpers.ts`), which is idempotent by contract.
 export async function truncateAuthTables(executor: ResetExecutor = db): Promise<void> {
   await executor.$executeRawUnsafe(
-    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "platform_run_model", "platform_run_model_list", "user" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "platform_run_model", "platform_run_model_list", "idea", "idea_tag", "user" RESTART IDENTITY CASCADE',
   );
 }
 
