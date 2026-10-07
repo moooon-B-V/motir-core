@@ -118,7 +118,7 @@ describe('the public contract is TOTAL over the shipped route tree', () => {
     expect(disagreements, disagreements.join('; ')).toEqual([]);
   });
 
-  it('counts FOUR session-required operations and fourteen anonymous ones — the number, pinned', () => {
+  it('counts FOUR session-required operations and seventeen anonymous ones — the number, pinned', () => {
     // Pinned because it is the fact the ADR got wrong: it read "exactly one".
     // Pinning it means a fifth gate, or a gate removed, is a decision somebody
     // states rather than a change nobody notices.
@@ -140,7 +140,10 @@ describe('the public contract is TOTAL over the shipped route tree', () => {
     // called by another server before a page exists, so there is no user for a
     // session to belong to. It reads no session at all, which is stronger than
     // the reads beside it (they read one to personalise).
-    expect(shippedMethods().filter((r) => !r.gated)).toHaveLength(14);
+    //
+    // 14 → 17: MOTIR-7676's three idea-store reads — `GET /api/public/ideas`,
+    // `…/ideas/tags` and `…/ideas/{slug}` — all anonymous, none reading a session.
+    expect(shippedMethods().filter((r) => !r.gated)).toHaveLength(17);
   });
 
   it('names the route file in its failure — a guard nobody can act on is a guard nobody keeps', () => {
