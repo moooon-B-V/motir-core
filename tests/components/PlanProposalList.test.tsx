@@ -589,3 +589,29 @@ describe('closing the quick view', () => {
     expect(document.activeElement).toBe(second);
   });
 });
+
+describe('the list reserves the floating confirm bar (MOTIR-7726)', () => {
+  // On the planning surface the confirm bar FLOATS over the pane's bottom edge and
+  // the host publishes its height as `--canvas-foot-inset` (MOTIR-6186). A scroller
+  // that ignores it ends its scroll range UNDER the bar — a list that fits the box
+  // but not the space above the bar has no scrollbar at all, and its last rows
+  // cannot be reached. happy-dom lays nothing out, so the geometry is pinned by
+  // `acceptance-plan-surface-views.spec.ts`; this pins the wiring, both boxes, and
+  // the `0px` fallback that keeps the plan page (which sets no inset) unchanged.
+  const INSET = 'var(--canvas-foot-inset,0px)';
+
+  it('the scroller pads its own end by the inset, on top of its resting padding', () => {
+    renderWithIntl(<PlanProposalList items={[add()]} outcome={null} />);
+
+    const list = screen.getByTestId('plan-proposal-list');
+    expect(list.className).toContain('overflow-y-auto');
+    expect(list.className).toContain(`pb-[calc(--spacing(3)+${INSET})]`);
+  });
+
+  it('the empty state centres itself in the space ABOVE the bar, not under it', () => {
+    renderWithIntl(<PlanProposalList items={[]} outcome={null} />);
+
+    const box = screen.getByText('No proposals').closest('div.h-full');
+    expect(box?.className).toContain(`pb-[calc(--spacing(8)+${INSET})]`);
+  });
+});
