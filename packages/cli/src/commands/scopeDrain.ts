@@ -161,6 +161,11 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
   const heldGates = await readHeldGates(client, members, edges);
   /** The standing `blocked_in_scope` skip of each card, while it stands. */
   const blockedSkips = new Map<string, BlockedSkip>();
+  /**
+   * The manual cards this run skipped `needs_human`. Each one is a `manual_work`
+   * gate (MOTIR-7458), so a card waiting on one is HELD, as a gate's dependent is.
+   */
+  const manualSkips = new Set<string>();
   /** Named while still held — every key passed here is in `heldGates`. */
   const gateLabel = (keys: readonly string[]): string =>
     keys.map((k) => `${heldGates.get(k) as GateKind} ${k}`).join(', ');
@@ -227,12 +232,15 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
             };
             skipped.push(record);
             blockedSkips.set(key, record);
+            // The gates among the blockers, told apart from blockers that simply
+            // did not land (MOTIR-7704), so the record says which skips wait on a person.
+            const heldBy = heldByOf(open);
             reporter.event({
               kind: 'card_skipped',
               workItemKey: item.key,
               disposition: 'skipped',
               skipReason: 'blocked_in_scope',
-              data: { blockedBy: open },
+              data: heldBy.length > 0 ? { blockedBy: open, heldBy } : { blockedBy: open },
             });
           }
           const gates = open.filter((dep) => heldGates.has(dep));
@@ -260,6 +268,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
           // through `listReadyForDispatch(ownerId)`, so every one is unassigned or
           // the starter's own — no `waitingOn` to name.
           skipped.push({ key: item.key, title: item.title, reason: disposition });
+          if (disposition === 'needs_human') manualSkips.add(item.key);
           reporter.event({
             kind: 'card_skipped',
             workItemKey: item.key,
@@ -520,6 +529,60 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
     );
   }
 
+  /** Each blocker of a held card that is a gate, with its kind. */
+  function heldByOf(blockers: readonly string[]): HeldBy[] {
+    return blockers.flatMap((dep): HeldBy[] => {
+      const kind = heldGates.get(dep);
+      if (kind) return [{ key: dep, kind }];
+      return manualSkips.has(dep) ? [{ key: dep, kind: 'manual' }] : [];
+    });
+  }
+
+  // ⚠️ A STOP AT A GATE IS `gated`, NEVER `drained` (Story MOTIR-7701 · MOTIR-7704).
+  // When the only cards left are waiting on a PERSON — a design or decision still
+  // awaiting after the re-read, or a manual card — the run closes `gated`, so the
+  // server records the gates and the story waits To resume rather than reading as
+  // a run that ran out of work. One card left for any OTHER reason (a failure, a
+  // card needing planning, a claim refused) keeps today's outcome.
+  const gatedOn = stopReason === 'drained' ? gateStop() : null;
+  if (gatedOn) {
+    stopReason = 'gated';
+    info(`Stopped at a gate — waiting on ${gatedOn.join(', ')}.`);
+  }
+
+  /**
+   * The gates the run stopped at, or `null` when something other than a gate
+   * holds a card that did not land. A card is held when every blocker it waits on
+   * is a gate or is itself held — so a chain behind one design counts.
+   */
+  function gateStop(): string[] | null {
+    if (skipped.length === 0) return null;
+    if (records.some((r) => r.outcome === 'failed')) return null;
+    const held = new Set<string>([...heldGates.keys(), ...manualSkips]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const record of blockedSkips.values()) {
+        if (held.has(record.key)) continue;
+        if (record.blockedBy.every((dep) => held.has(dep))) {
+          held.add(record.key);
+          grew = true;
+        }
+      }
+    }
+    const allHeld = skipped.every(
+      (s) => s.reason === 'needs_human' || (s.reason === 'blocked_in_scope' && held.has(s.key)),
+    );
+    if (!allHeld) return null;
+    const gates = new Set<string>();
+    for (const s of skipped) {
+      if (s.reason === 'needs_human') gates.add(s.key);
+      for (const dep of blockedSkips.get(s.key)?.blockedBy ?? []) {
+        if (heldGates.has(dep)) gates.add(dep);
+      }
+    }
+    return [...gates];
+  }
+
   /** Each held gate a standing skip waits on, with one member that waits on it. */
   function heldGatesWaitedOn(): Map<string, string> {
     const waiting = new Map<string, string>();
@@ -547,6 +610,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
     // never makes a lane decision — there is nothing here that could fill this.
     lanes: [],
     stopReason,
+    ...(gatedOn ? { gatedOn } : {}),
   };
 }
 
@@ -611,6 +675,12 @@ export type GateKind = 'decision' | 'design';
 
 /** A `blocked_in_scope` skip, whose blockers are always named. */
 type BlockedSkip = SkipRecord & { blockedBy: string[] };
+
+/** A gate a held card waits on, as `card_skipped`'s `data.heldBy` names it. */
+interface HeldBy {
+  key: string;
+  kind: GateKind | 'manual';
+}
 
 /**
  * The GATES, outside the claimed set, that a member waits on and that nobody

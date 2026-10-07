@@ -16,8 +16,14 @@ import { parseAgentCommand } from '../src/agentProfiles.js';
 import { resolveFakeClaim } from './helpers/fakeClaim.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
 import type { AgentRunResult } from '../src/agentRun.js';
-import type { DispatchItem, DispatchPrompt, MotirClient } from '../src/client.js';
+import type {
+  DispatchItem,
+  DispatchPrompt,
+  DispatchRunEventInput,
+  MotirClient,
+} from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
+import { nullDispatchRunReporter } from '../src/dispatchRunReporter.js';
 
 // The DRAIN of a claimed scope (Story MOTIR-3001 · MOTIR-3199), driven
 // end-to-end against a scripted client + agent — the fixture shape
@@ -241,6 +247,8 @@ async function drive(
     run?: CommandRunner;
     /** Wrap the scripted client, to fail one read on purpose. */
     client?: (c: MotirClient) => MotirClient;
+    /** Collects the run's events, for the assertions on what the record says. */
+    events?: DispatchRunEventInput[];
   } = {},
 ): Promise<AutoSummary> {
   const s = session();
@@ -252,6 +260,14 @@ async function drive(
     max: over.max ?? null,
     agent: { parsed: parseAgentCommand('fake-agent')!, source: 'flag' },
     runId: 'x',
+    ...(over.events
+      ? {
+          reporter: {
+            ...nullDispatchRunReporter,
+            event: (e: DispatchRunEventInput) => void over.events!.push(e),
+          },
+        }
+      : {}),
     branch: 'motir/auto-x',
     run: over.run ?? GIT,
     clock: () => 0,
@@ -1339,5 +1355,117 @@ describe('readGateReleased', () => {
     } as unknown as MotirClient;
 
     expect(await readGateReleased(client, 'PROD-2', 'decision', 'PROD-3')).toBe(released);
+  });
+});
+
+describe('a drain stopped only by gates closes `gated`, never `drained` (MOTIR-7704)', () => {
+  const design = (key: string): DispatchItem => member(key, { type: 'design' });
+  const skipsOf = (events: DispatchRunEventInput[]) =>
+    events.filter((e) => e.kind === 'card_skipped');
+
+  it('a design that lands and stays awaiting holds its dependent: `gated`, naming the design', async () => {
+    verdictOf.set('PROD-2', 'not_approved');
+    const events: DispatchRunEventInput[] = [];
+
+    const summary = await drive(
+      [design('PROD-2'), member('PROD-3')],
+      { 'PROD-3': ['PROD-2'] },
+      {
+        events,
+      },
+    );
+
+    expect(fake.dispatched).toEqual(['PROD-2']);
+    expect(summary.stopReason).toBe('gated');
+    expect(summary.gatedOn).toEqual(['PROD-2']);
+    expect(autoExitCode(summary)).toBe(0);
+    expect(skipsOf(events)).toEqual([
+      expect.objectContaining({
+        workItemKey: 'PROD-3',
+        data: { blockedBy: ['PROD-2'], heldBy: [{ key: 'PROD-2', kind: 'design' }] },
+      }),
+    ]);
+    expect(renderAutoSummary(summary)).toContain('Run x — stopped at a gate — waiting on PROD-2.');
+  });
+
+  it('the same design approved at the final re-read builds the dependent and drains as today', async () => {
+    verdictOf.set('PROD-2', 'not_approved');
+    approveOnDispatch.set('PROD-4', 'PROD-2');
+
+    const summary = await drive([design('PROD-2'), member('PROD-3'), member('PROD-4')], {
+      'PROD-3': ['PROD-2'],
+    });
+
+    expect(fake.dispatched).toEqual(['PROD-2', 'PROD-4', 'PROD-3']);
+    expect(summary.stopReason).toBe('drained');
+    expect(summary.gatedOn).toBeUndefined();
+  });
+
+  it('a chain behind the gate is held too, and the stop is still `gated`', async () => {
+    const summary = await drive([design('PROD-2'), member('PROD-3'), member('PROD-4')], {
+      'PROD-3': ['PROD-2'],
+      'PROD-4': ['PROD-3'],
+    });
+
+    expect(summary.stopReason).toBe('gated');
+    expect(summary.gatedOn).toEqual(['PROD-2']);
+  });
+
+  it('one card held by a gate and another that failed to land is NOT `gated`', async () => {
+    const events: DispatchRunEventInput[] = [];
+    const summary = await drive(
+      [design('PROD-2'), member('PROD-3'), member('PROD-4'), member('PROD-5')],
+      { 'PROD-3': ['PROD-2'], 'PROD-5': ['PROD-4'] },
+      {
+        events,
+        opts: { keepGoing: true },
+        agentResults: (key) =>
+          key === 'PROD-4' ? { exitCode: 1, signal: null } : { exitCode: 0, signal: null },
+      },
+    );
+
+    expect(summary.stopReason).toBe('drained');
+    // The ordinary blocked skip carries no `heldBy`; the gate-held one does.
+    const byKey = new Map(skipsOf(events).map((e) => [e.workItemKey, e.data]));
+    expect(byKey.get('PROD-5')).toEqual({ blockedBy: ['PROD-4'] });
+    expect(byKey.get('PROD-3')).toEqual({
+      blockedBy: ['PROD-2'],
+      heldBy: [{ key: 'PROD-2', kind: 'design' }],
+    });
+  });
+
+  it('a card left needing planning is NOT `gated`, even beside a held one', async () => {
+    const summary = await drive(
+      [design('PROD-2'), member('PROD-3'), member('PROD-4', { kind: 'story' })],
+      { 'PROD-3': ['PROD-2'] },
+    );
+
+    expect(summary.skipped.map((s) => s.reason).sort()).toEqual([
+      'blocked_in_scope',
+      'needs_planning',
+    ]);
+    expect(summary.stopReason).toBe('drained');
+  });
+
+  it('a scope stopped only by a manual card closes `gated`, and its dependent is held by it', async () => {
+    const events: DispatchRunEventInput[] = [];
+    const summary = await drive(
+      [member('PROD-2'), member('PROD-3', { type: 'manual', executor: 'human' }), member('PROD-4')],
+      { 'PROD-4': ['PROD-3'] },
+      { events },
+    );
+
+    expect(fake.dispatched).toEqual(['PROD-2']);
+    expect(summary.stopReason).toBe('gated');
+    expect(summary.gatedOn).toEqual(['PROD-3']);
+    expect(skipsOf(events).find((e) => e.workItemKey === 'PROD-4')?.data).toEqual({
+      blockedBy: ['PROD-3'],
+      heldBy: [{ key: 'PROD-3', kind: 'manual' }],
+    });
+  });
+
+  it('a drain that skipped nothing still closes `drained`', async () => {
+    const summary = await drive([member('PROD-2'), member('PROD-3')], {});
+    expect(summary.stopReason).toBe('drained');
   });
 });
