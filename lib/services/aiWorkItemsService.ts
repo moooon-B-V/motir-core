@@ -10,11 +10,8 @@ import {
   PLANNER_BUG_FILED_CHANGE_KIND,
   PLANNER_BUGS_PER_JOB,
 } from '@/lib/ai/plannerTenantBug';
-import {
-  FiledBugClosedError,
-  NoPlanForJobError,
-  PlannerBugCapExceededError,
-} from '@/lib/plans/errors';
+import { NoPlanForJobError, PlannerBugCapExceededError } from '@/lib/plans/errors';
+import { FiledBugClosedError } from '@/lib/ai/filedBugErrors';
 import { commentsService } from '@/lib/services/commentsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';

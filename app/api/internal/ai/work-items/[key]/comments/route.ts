@@ -8,7 +8,7 @@ import { aiWorkItemsService } from '@/lib/services/aiWorkItemsService';
 import { enforceInternalServiceRateLimit } from '@/lib/rateLimit/aiGuard';
 import { ProjectNotFoundError, ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { FiledBugClosedError } from '@/lib/plans/errors';
+import { FiledBugClosedError } from '@/lib/ai/filedBugErrors';
 import { CommentForbiddenError, EmptyCommentBodyError } from '@/lib/comments/errors';
 
 // POST /api/internal/ai/work-items/{key}/comments (MOTIR-7722) — how motir-ai
