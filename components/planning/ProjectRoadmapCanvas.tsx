@@ -899,6 +899,10 @@ export function ProjectRoadmapCanvas({
     if (!expanded) return;
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
+      // An overlay open over the canvas (the quick view, a menu) already took this
+      // Esc to close itself — Radix marks it handled — so it must not ALSO leave
+      // full screen (MOTIR-7658).
+      if (e.defaultPrevented) return;
       e.preventDefault();
       exitFullScreen();
     }

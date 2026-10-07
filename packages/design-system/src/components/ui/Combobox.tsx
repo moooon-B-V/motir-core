@@ -16,6 +16,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { useFullscreenElement } from '../../utils/fullscreen';
 
 // Run layout effects on the client, fall back to useEffect during SSR (the menu
 // only mounts client-side anyway — see the `mounted` gate below).
@@ -269,6 +270,10 @@ export function Combobox<T extends string>({
   // keyed on the modal surface, NOT `role`, so those popovers escape the clip
   // too. Only render the portal once mounted, since createPortal needs document.body.
   const mounted = useMounted();
+  // The portal target: the element in native full screen while there is one,
+  // else <body> — the browser paints nothing outside a full-screen element
+  // (MOTIR-7658).
+  const fullscreenElement = useFullscreenElement();
   // Viewport-anchored position for the portaled menu + the listbox's available
   // height, recomputed from the trigger rect on open / scroll / resize.
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
@@ -808,7 +813,13 @@ export function Combobox<T extends string>({
         <ChevronsUpDown className="text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0" aria-hidden />
       </button>
 
-      {open ? (inDialog ? menu : mounted ? createPortal(menu, document.body) : null) : null}
+      {open
+        ? inDialog
+          ? menu
+          : mounted
+            ? createPortal(menu, fullscreenElement ?? document.body)
+            : null
+        : null}
     </div>
   );
 }
