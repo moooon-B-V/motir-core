@@ -566,18 +566,16 @@ function refused(
 }
 
 /** A held gate as the claim names it. */
-function toGateDto(gate: HeldGateRef): ContinueGateDto {
+function toGateDto(gate: Pick<HeldGateRef, 'key' | 'kind' | 'state'>): ContinueGateDto {
   return { key: gate.key, kind: gate.kind, state: gate.state };
 }
 
-/** The gates a `run_opened` recorded for a resume, or `[]`. */
+/**
+ * The gates a `run_opened` recorded for a resume, or `[]`. This service is the
+ * one writer of that array (`claimContinue`), so its elements are read as written.
+ */
 function gatesOf(value: unknown): ContinueGateDto[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((g: { key?: unknown; kind?: unknown; state?: unknown } | null) =>
-    g && typeof g.key === 'string' && typeof g.kind === 'string' && typeof g.state === 'string'
-      ? [{ key: g.key, kind: g.kind, state: g.state } as ContinueGateDto]
-      : [],
-  );
+  return Array.isArray(value) ? (value as ContinueGateDto[]).map(toGateDto) : [];
 }
 
 /** A JSON array of strings, or `[]` for anything else. */
