@@ -445,6 +445,8 @@ export async function LateUpperSections({
         formattedTimes={formatRunTimes(r.runs ?? [])}
         scopeRun={r.scopeRun}
         scopeRunTime={r.scopeRun ? formatRunInstant(r.scopeRun.startedAt) : null}
+        gated={r.gatedRun}
+        viewerId={currentUserId}
       />
     </ContentSectionCard>
   );

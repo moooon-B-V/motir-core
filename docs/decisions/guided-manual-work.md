@@ -136,6 +136,14 @@ nothing to approve or decline.
 runs it again. A parent run that continues on its own belongs to MOTIR-6858
 (Autonomous project lead), not here.
 
+> **AMENDED 2026-10-07 (MOTIR-7710, Story MOTIR-7701).** A parent run that stops because its
+> remaining work waits on gates now closes `gated` and names them (MOTIR-7703). When one is decided
+> (Mark done, an approval, a choice, a confirmation), a run on Motir's **hosted** agent resumes
+> itself: the `run/gate-resume.requested` job starts a hosted continue on the run's own branch, as
+> its dispatcher with its model, and records what it did (`gate_resume`). Any other run waits on the
+> Workbench's **To resume** tab for `motir continue <KEY>`. The paragraph above is kept as the record
+> of what this decision first said; it now holds only for a run that is not hosted.
+
 ### §10 — The Workbench tab **To approve** is renamed **Waiting on you**
 
 The tab that lists gates now holds **work to do** (§9) as well as **decisions to
@@ -196,6 +204,7 @@ LABEL is an action and the SLUG is a set"_), so only the label moves.
   not under this record. A later runner, once Motir has a secret store, is
   MOTIR-6856's question and is not reopened here.
 - **A parent run that resumes by itself** when a gate clears. That is
-  MOTIR-6858's.
+  MOTIR-6858's. _(Amended 2026-10-07: a HOSTED parent run now does, MOTIR-7710 — see the
+  amendment under the gate's section. Anything beyond resuming that one run stays MOTIR-6858's.)_
 - **Renaming the `approvals` slug, or any other Workbench tab.**
 - **Retiring the CLI `motir guide` skill.**

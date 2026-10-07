@@ -477,6 +477,8 @@ describe('typed wrappers — each names its operation and forwards its arguments
       mode: 'parent',
       landedKeys: ['PROD-2'],
       resumedKeys: ['PROD-3'],
+      gates: [],
+      resumesGated: false,
     };
     server.scriptV1({ 'POST /api/v1/work-items/{key}/continue': { body } });
 
@@ -484,6 +486,39 @@ describe('typed wrappers — each names its operation and forwards its arguments
 
     expect(server.v1Calls[0]?.path).toBe('/api/v1/work-items/PROD-1/continue');
     expect(claim).toEqual(body);
+  });
+
+  it('a gate refusal restates the gates that hold the run (MOTIR-7708)', async () => {
+    server.scriptV1({
+      'POST /api/v1/work-items/{key}/continue': {
+        body: {
+          key: 'PROD-8',
+          title: 'Widget',
+          outcome: 'not_continuable',
+          reason: 'gate_awaiting',
+          parentKey: null,
+          runId: null,
+          holder: null,
+          startedAt: null,
+          deadRun: null,
+          branch: null,
+          branches: [],
+          pullRequest: null,
+          previousAssignee: null,
+          mode: 'card',
+          landedKeys: [],
+          resumedKeys: [],
+          gates: [{ key: 'PROD-9', kind: 'design_result', state: 'awaiting' }],
+          resumesGated: false,
+        },
+      },
+    });
+
+    const claim = await connected().claimWorkItemContinue('PROD-8');
+
+    expect(claim.reason).toBe('gate_awaiting');
+    expect(claim.gates).toEqual([{ key: 'PROD-9', kind: 'design_result', state: 'awaiting' }]);
+    expect(claim.resumesGated).toBe(false);
   });
 
   it('a refused continue carries no dead run, branch, pull request or assignee', async () => {
@@ -506,6 +541,8 @@ describe('typed wrappers — each names its operation and forwards its arguments
           mode: 'card',
           landedKeys: [],
           resumedKeys: [],
+          gates: [],
+          resumesGated: false,
         },
       },
     });

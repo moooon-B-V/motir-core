@@ -160,7 +160,9 @@ const closeInputSchema = {
       'How the run ended: "completed" (the work is delivered), "drained" (a parent run finished ' +
         'every child it could), "max" (it stopped at a card limit), "halted" (you stopped on ' +
         'something you could not get past), "interrupted" (the person stopped you), "replanned" ' +
-        '(the card went to Planning) or "gated" (it stopped at an approval gate).',
+        '(the card went to Planning) or "gated" (the remaining work waits on an approval gate — ' +
+        'a design, decision, choice, confirmation or manual card not yet decided; Motir records ' +
+        'which gates held the run, and a stop at such a gate is never "halted").',
     ),
 };
 
@@ -406,8 +408,11 @@ export function registerWorkItemRun(server: McpServer, resolveContext: McpContex
         'answered; only the person who opened a run may close it. A "completed" or "drained" ' +
         'close records your harness and model as the implementer of each card the run took to ' +
         'Implemented or later, and answers those keys in `stamped`. Idempotent: closing a run ' +
-        'that is already closed answers it unchanged. Does not change any card’s status. Needs ' +
-        'permission to edit the work item.',
+        'that is already closed answers it unchanged. "gated" is the outcome for a run that ' +
+        'stopped because its remaining work waits on an approval gate (a design, decision, ' +
+        'choice, confirmation or manual card not yet decided): Motir records which gates held it ' +
+        'and lists it To resume, and such a stop is never "halted". Does not change any card’s ' +
+        'status. Needs permission to edit the work item.',
       inputSchema: closeInputSchema,
     },
     async (args, extra) => runCloseWorkItemRun(args, resolveContext(extra)),

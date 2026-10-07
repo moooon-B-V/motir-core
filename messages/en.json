@@ -6988,6 +6988,8 @@
             "notInProgress": "Not started — this work item is not In Progress any more.",
             "noDeadRun": "Not started — no run of this work item died.",
             "theParent": "Not started — this is part of <link>{key}</link>'s run, so it is continued from there.",
+            "gateAwaiting": "Not started — the run stopped at a gate that is still waiting for approval. It resumes once the gate is approved.",
+            "gateSentBack": "Not started — the run stopped at a gate that was sent back, not approved, so there is nothing to resume.",
             "outOfCredits": {
               "body": "Nothing was booted and nothing was charged. Continue works again once the organization has credits — or carry it on from your terminal."
             }
@@ -8345,6 +8347,7 @@
       "toDo": "To do",
       "inProgress": "In progress",
       "toFix": "To fix",
+      "toResume": "To resume",
       "recentlyFinished": "Recently finished",
       "watching": "Watching",
       "toApprove": "Waiting on you"
@@ -8381,6 +8384,10 @@
       "toFix": {
         "title": "Nothing to fix",
         "body": "When a run that died, a merge queue, a conflict, a failing check or a reviewer stops one of your work items, it shows up here with what repairs it."
+      },
+      "toResume": {
+        "title": "Nothing to resume",
+        "body": "When a run stops at an approval it needs, it waits here until the approval is given — then it carries on by itself on the hosted agent, or with motir continue from your terminal."
       },
       "recentlyFinished": {
         "title": "Nothing finished this week",
@@ -8524,6 +8531,92 @@
         "showMore": "Show {count, plural, one {# more work item} other {# more work items}}",
         "showFewer": "Show fewer"
       }
+    },
+    "toResume": {
+      "waiting": "Stopped at a gate · waiting on {count, plural, one {# approval} other {# approvals}}",
+      "ready": "Ready to resume · {name} approved the {kind} on {key} <when></when>",
+      "readyByYou": "Ready to resume · you approved the {kind} on {key} <when></when>",
+      "readyBare": "Ready to resume",
+      "readySome": "Ready to resume · {approved} of {total} approvals given",
+      "resuming": "Resuming on the hosted agent · started <when></when>",
+      "couldNot": "Could not resume by itself · <reason></reason>",
+      "ranBy": {
+        "hosted": "{name} ran it on the hosted agent",
+        "terminal": "{name} ran it from a terminal",
+        "runbook": "{name} ran it with the runbook",
+        "instance": "{name} ran it in {agent}"
+      },
+      "you": "you",
+      "someone": "Someone",
+      "branch": "branch <d>{branch}</d>",
+      "entry": {
+        "membersLabel": "Work items waiting with {key}"
+      },
+      "gatesLabel": "Gates holding {key}'s run",
+      "decider": "<b>{name}</b> decides",
+      "deciderYou": "<b>You</b> decide",
+      "decidedBy": "approved by <b>{name}</b> <when></when>",
+      "gate": {
+        "awaiting": "Awaiting",
+        "awaitingYou": "Awaiting you",
+        "approved": "Approved",
+        "chosen": "Chosen",
+        "confirmed": "Confirmed",
+        "markedDone": "Marked done",
+        "changesRequested": "Changes requested",
+        "declined": "Declined",
+        "overturned": "Overturned"
+      },
+      "open": "Open",
+      "review": "Review",
+      "state": {
+        "resuming": "Resuming",
+        "couldNot": "Didn't resume"
+      },
+      "seeRun": "See the run",
+      "next": {
+        "waitingHosted": "Once it is approved, this run carries on by itself on the hosted agent.",
+        "waitingHostedMany": "When any one is approved, this run carries on by itself on the hosted agent and stops again at the rest.",
+        "waitingLocal": "Once you approve it, continue the run from your terminal — the command appears here.",
+        "ready": "An agent picks the run up on its own branch, builds what the approval released, and stops again at any gate still waiting.",
+        "readySome": "Continuing now builds what the approved gate released, and stops again at the {count} still waiting.",
+        "couldNot": "Nothing was booted and nothing was charged. {repair}",
+        "changes_requested": "Nothing resumes. {key} is reworked first; its next version asks again, and this run keeps waiting.",
+        "declined": "Nothing resumes. The work this would have released needs a new plan — re-plan {key}, or set {head} to To Do to start over.",
+        "overturned": "Nothing resumes. The approval no longer stands, so the run waits for a new decision on {key}."
+      },
+      "back": {
+        "changes_requested": "{kind} sent back · changes requested by <b>{name}</b> — “{note}”",
+        "changes_requestedNoNote": "{kind} sent back · changes requested by <b>{name}</b>",
+        "declined": "Decision declined by <b>{name}</b> — “{note}”",
+        "declinedNoNote": "Decision declined by <b>{name}</b>",
+        "overturned": "Approval overturned by <b>{name}</b> — “{note}”",
+        "overturnedNoNote": "Approval overturned by <b>{name}</b>"
+      },
+      "skip": {
+        "out_of_credits": "the organization is out of credits",
+        "ci_credits_exhausted": "the organization's CI credits are used up",
+        "credits_unavailable": "Motir couldn't check the organization's credits",
+        "model_not_offered": "the model it ran with, {model}, is no longer offered",
+        "models_unavailable": "Motir couldn't load the list of models",
+        "no_project_access": "<b>{name}</b>, who started it, no longer has access to this project",
+        "dispatcher_gone": "<b>{name}</b>, who started it, is no longer in this workspace",
+        "dispatcher_goneAnon": "the person who started it is no longer in this workspace",
+        "repository_not_writable": "Motir can no longer push to {repo}",
+        "card_not_ready": "{key} is not ready to run — it is blocked or no longer in progress"
+      },
+      "repair": {
+        "out_of_credits": "Add credits in billing, then press Continue — or continue from your terminal.",
+        "ci_credits_exhausted": "Add CI credits in billing, then press Continue — or continue from your terminal.",
+        "credits_unavailable": "Press Continue to try again.",
+        "model_not_offered": "Pick another model and press Continue.",
+        "models_unavailable": "Press Continue to try again.",
+        "no_project_access": "Continue it yourself — it runs as you, on your organization's credits.",
+        "dispatcher_gone": "Continue it yourself — it runs as you, on your organization's credits.",
+        "repository_not_writable": "Reconnect the repository in the project's settings, then press Continue.",
+        "card_not_ready": "Clear what blocks {key} or move it back to In Progress, then press Continue."
+      },
+      "copyAria": "Copy the resume command for {key}"
     }
   },
   "approvalRecords": {
@@ -11065,6 +11158,28 @@
       }
     },
     "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it from Development below.",
+    "gated": {
+      "pill": "Stopped at a gate",
+      "pillReady": "Ready to resume",
+      "gate": "the {kind} on {key}",
+      "waitingMany": "{count} approvals",
+      "waitingHosted": "This run stopped at a gate — waiting on <b>{gate}</b>. Its work is kept on <d>{branch}</d>, and it <b>carries on by itself</b> on the hosted agent once the gate is approved.",
+      "waitingHostedNoBranch": "This run stopped at a gate — waiting on <b>{gate}</b>. Its work is kept, and it <b>carries on by itself</b> on the hosted agent once the gate is approved.",
+      "waitingLocal": "This run stopped at a gate — waiting on <b>{gate}</b>. Its work is kept on its branch; once the gate is approved, continue it with <d>{command}</d>.",
+      "ready": "Ready to resume — <b>{approved} of {total} approvals given</b>. Continue it to build what was approved; it stops again at any gate still waiting:",
+      "resuming": "Resuming — <b>{name}</b> approved {gate}, so a new run carries on on the same branch. <link>See the new run</link>",
+      "resumingBare": "Resuming — a new run carries on on the same branch. <link>See the new run</link>",
+      "couldNot": "<b>{name}</b> approved {gate}, but the run could not resume by itself: <reason></reason>. Continue it from <link>To resume</link> on the Workbench, or with <d>{command}</d>.",
+      "sentBack": "This run stopped at a gate — {gate} was sent back: {outcome} by <b>{name}</b>. Nothing resumes until a new version is approved.",
+      "outcome": {
+        "changes_requested": "changes requested",
+        "declined": "declined",
+        "overturned": "overturned"
+      },
+      "child": "This work item was run as part of <link>{parent}</link>, and that run stopped at a gate — waiting on <b>{gate}</b>. It carries on from {parent} once the gate is approved, and this work item with it.",
+      "someone": "Someone",
+      "gatesLabel": "Gates holding this run"
+    },
     "start": {
       "caption": "Start this work item",
       "run": {

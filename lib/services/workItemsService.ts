@@ -342,6 +342,7 @@ import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { writeDerivedRepoSet, writeRepoRefs } from '@/lib/workItems/repoSetWrites';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { recomputeWorkItemResumeState } from './resumeStateService';
 import { fixGroupPointersFor, fixHeadKeysFor } from './fixGroupService';
 
 // ⚠️ `assertSingleTargetRepoInput` MOVED to `lib/workItems/targetRepo.ts`
@@ -3876,6 +3877,8 @@ export const workItemsService = {
     // under the card lock this method already holds. SYSTEM moves included: the cascade,
     // the merge sync and the CI promotion all come through here.
     await recomputeWorkItemFixReason(workItemId, tx);
+    // …and so is it of To resume's (MOTIR-7707): leaving the category takes the card off.
+    await recomputeWorkItemResumeState(workItemId, tx);
 
     return {
       dto: toWorkItemDto(row),
@@ -4344,8 +4347,9 @@ export const workItemsService = {
       // withdrawn — gates first, in the decide door's lock order (MOTIR-7109).
       await withdrawQuestionsOnArchive(id, tx);
       const row = await workItemRepository.archive(id, tx); // throws WorkItemNotFoundError if absent
-      // An archived card is waiting on no repair (MOTIR-6602).
+      // An archived card is waiting on no repair (MOTIR-6602), nor on a gate (MOTIR-7707).
       await recomputeWorkItemFixReason(id, tx);
+      await recomputeWorkItemResumeState(id, tx);
 
       // The container ROLLUP (MOTIR-2978, §A6): an ARCHIVED descendant contributes
       // nothing to its ancestors' union — a parent is not waiting on work archived
@@ -4400,8 +4404,9 @@ export const workItemsService = {
 
       const wasArchivedAt = current.archivedAt?.toISOString() ?? null;
       const row = await workItemRepository.unarchive(id, tx); // throws WorkItemNotFoundError if absent
-      // …and a restored one may be again (MOTIR-6602).
+      // …and a restored one may be again (MOTIR-6602, MOTIR-7707).
       await recomputeWorkItemFixReason(id, tx);
+      await recomputeWorkItemResumeState(id, tx);
 
       // …and unarchiving puts it back, which is the same trigger in reverse.
       await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);

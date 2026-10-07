@@ -45,6 +45,7 @@ export default defineConfig({
       // suites and the item page's door.
       'tests/ready/claimWorkItemContinue.test.ts',
       'tests/ready/continueViewReasons.test.ts',
+      'tests/ready/claimContinueResume.test.ts',
       'tests/components/ContinueHostedDoor.test.tsx',
       'tests/components/continue-part.test.tsx',
       'tests/components/RunHostedDoor.test.tsx',

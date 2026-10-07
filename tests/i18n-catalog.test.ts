@@ -371,6 +371,10 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // `Pull-request merge`) and needs no note to be unambiguous.
     'workbench.approvals.review':
       'disclosure verb on the Approvals row — opens the approval frame; the row renders no type chip',
+    // The same verb on a To resume gate line (MOTIR-7712; design § 35.4) — the viewer's
+    // own decision door, a primary button beside the gate's KIND chip and its state pill.
+    'workbench.toResume.review':
+      'disclosure verb on a To resume gate line — opens the approval overlay; the line names the gate kind, not a type',
     'issueViews.provenanceSourceManual':
       'provenance ORIGIN chip on the item detail rail — framed by FieldCard label "Planning"/"Implementation"',
 

@@ -758,7 +758,7 @@ export interface paths {
         put?: never;
         /**
          * Claim the continue of a work item whose last run died
-         * @description Take over a work item whose last run DIED (`motir continue <key>`), for any member who may edit the project, and hand back what the continuing agent needs: the dead run, the branch its work is on, and its open pull request. In ONE transaction the item’s row is locked and, in order: an open dispatch run with command `continue` already holding the item answers `mine` (yours — same `runId`, the branch again) or `taken` (named, with its start); a run that is still ALIVE (a local run that heartbeat within 5 minutes, an open hosted run) is `not_continuable` (`run_alive`, naming its dispatcher); an item at Implemented / In Review / Approved is `use_fix` (its pull request is open — CI or `motir fix` owns it); any other status but In Progress is `not_in_progress`; a leg of a dead PARENT run is `continue_the_parent` (naming `parentKey`); no run that ended without success is `no_dead_run`; a dead run that left no branch is `no_branch`. Otherwise a LAPSED run still reading `running` is closed `abandoned`, the item is RE-ASSIGNED to the caller, and a `continue` run is opened: `claimed`. ⚠️ A refusal is a 200 with an `outcome`, not an error. ⚠️ The item’s STATUS is never written. Heartbeat the run (`heartbeatDispatchRun`) and CLOSE it (`closeDispatchRun`) when the continue ends.
+         * @description Take over a work item whose last run DIED (`motir continue <key>`), for any member who may edit the project, and hand back what the continuing agent needs: the dead run, the branch its work is on, and its open pull request. In ONE transaction the item’s row is locked and, in order: an open dispatch run with command `continue` already holding the item answers `mine` (yours — same `runId`, the branch again) or `taken` (named, with its start); a run that is still ALIVE (a local run that heartbeat within 5 minutes, an open hosted run) is `not_continuable` (`run_alive`, naming its dispatcher); an item at Implemented / In Review / Approved is `use_fix` (its pull request is open — CI or `motir fix` owns it); any other status but In Progress is `not_in_progress`; a leg of a dead PARENT run is `continue_the_parent` (naming `parentKey`); no run that ended without success is `no_dead_run`; a run that STOPPED AT A GATE (closed `gated`) whose gates all still wait is `gate_awaiting`, and one whose gates were sent back and none approved is `gate_sent_back` (both naming `gates`); a dead run that left no branch is `no_branch`. A gated run with an APPROVED gate is taken over like a dead one, as a resume (`resumesGated`, the approved `gates`). Otherwise a LAPSED run still reading `running` is closed `abandoned`, the item is RE-ASSIGNED to the caller, and a `continue` run is opened: `claimed`. ⚠️ A refusal is a 200 with an `outcome`, not an error. ⚠️ The item’s STATUS is never written. Heartbeat the run (`heartbeatDispatchRun`) and CLOSE it (`closeDispatchRun`) when the continue ends.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -2194,7 +2194,7 @@ export interface components {
             title: string;
             /** @enum {string} */
             outcome: "claimed" | "mine" | "taken" | "not_continuable";
-            reason: ("run_alive" | "use_fix" | "not_in_progress" | "continue_the_parent" | "no_dead_run" | "no_branch") | null;
+            reason: ("run_alive" | "use_fix" | "not_in_progress" | "continue_the_parent" | "no_dead_run" | "no_branch" | "gate_awaiting" | "gate_sent_back") | null;
             parentKey: string | null;
             runId: string | null;
             holder: {
@@ -2243,6 +2243,14 @@ export interface components {
             mode: "card" | "parent";
             landedKeys: string[];
             resumedKeys: string[];
+            gates: {
+                key: string;
+                /** @enum {string} */
+                kind: "design_result" | "decision_approval" | "pull_request_approval" | "pull_request_merge" | "acceptance_result" | "decision_choice" | "decision_confirmation" | "plan_approval" | "agent_review" | "manual_work";
+                /** @enum {string} */
+                state: "awaiting" | "approved" | "changes_requested" | "superseded" | "overturned" | "declined";
+            }[];
+            resumesGated: boolean;
         };
         ScopeClaim: {
             scope: {

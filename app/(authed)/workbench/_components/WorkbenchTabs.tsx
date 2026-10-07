@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Circle, CircleCheck, CircleDot, Inbox, Star, Wrench } from 'lucide-react';
+import { Circle, CircleCheck, CircleDot, CirclePause, Inbox, Star, Wrench } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils/cn';
@@ -85,6 +85,15 @@ export async function WorkbenchTabs({
       label: t('tabs.toFix'),
       icon: <Wrench className="h-3.5 w-3.5" />,
       count: counts.toFix,
+    },
+    {
+      // TO RESUME (§ 35.3) — third: a run that stopped at a gate waits on an approval,
+      // which needs the reader less than a repair does and more than work that moves
+      // without them. The landing cascade's third rung; its count is entries (runs).
+      key: 'to-resume',
+      label: t('tabs.toResume'),
+      icon: <CirclePause className="h-3.5 w-3.5" />,
+      count: counts.toResume,
     },
     {
       key: 'in-progress',

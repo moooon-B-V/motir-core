@@ -120,6 +120,10 @@ The union of `autoLoop.ts`'s `StopReason` (`drained` · `max` · `halted` ·
   was killed leaves `running` for ever otherwise, and a `running` run that is not
   running is the state that makes every other number on the page a lie.
 
+- **`gated`** was `motir batch`'s between-iteration stop. Since AMENDMENT 5 it is
+  ALSO the stop of a parent run whose remaining children wait on an awaiting
+  approval gate, and the close records which gates held it.
+
 `replanned` stays distinct from `halted` for the reason `autoLoop.ts` gives: a
 re-plan is a CORRECT outcome that exits 0, and a run summary that calls it a
 failure teaches the operator to ignore failures.
@@ -507,3 +511,29 @@ The two reads that carry a leg — `GET /api/v1/dispatch-runs/{id}` (`cards[].mo
 browser's run DTO (`DispatchRunCardDto.model`) — return it. Nothing renders it yet;
 showing and comparing models across runs belongs to the reporting work that reads this
 column.
+
+## AMENDMENT 5 — `gated` is a parent run stopped at an approval gate, and the close names the gates (MOTIR-7703, 2026-10-07)
+
+Story [MOTIR-7701](motir:cmuxemwju005vhvshdxfzq38v). Q2 defined `gated` as `motir batch`'s
+between-iteration stop and nothing else. That left a parent run that ended because every
+remaining child waited on a person's approval with two wrong words: the runbook closed it
+`halted` (a _failed_ run, read as **Run died** and listed on To fix), and the CLI's scoped drain
+closed it `drained` (indistinguishable from running out of work). This amends the definition:
+
+- **`gated` is ALSO the stop of a run whose remaining work waits on an awaiting approval gate** —
+  a parent run's design, decision, choice, confirmation or manual-work stopper still undecided at
+  its final re-read. It stays `succeeded` (`statusForStopReason` is unchanged), which is what keeps
+  it out of the died statuses. A stop at such a gate is never `halted`.
+- **The close DERIVES the held gates and records them** in `dispatch_run_held_gate` — one row per
+  gate `{ runId, gateId, workItemId, kind }`, unique on `(runId, gateId)`. On a `gated` close, in
+  the close's own transaction and after its locks, it reads every `awaiting` gate of the kinds
+  `design_result`, `decision_approval`, `decision_choice`, `decision_confirmation` and `manual_work`
+  on the run's legs and, for a run pointed at a container, on that container's children. Every door
+  closes through `closeWithin`, so the ingest close, `close_work_item_run` and the hosted end all
+  write the same record, and **no reporter supplies a gate**.
+- **A `gated` close that finds no awaiting gate** (it was decided in the same minute) writes no rows
+  and still closes `succeeded`; the resume column reads it as ready. No other stop reason writes
+  rows.
+- **What reads the rows** is To resume and the gate-resume (MOTIR-7707, MOTIR-7708, MOTIR-7710) —
+  not this record. `pull_request_approval`, `pull_request_merge`, `acceptance_result`,
+  `plan_approval` and `agent_review` never stop a parent run mid-story and are not recorded.

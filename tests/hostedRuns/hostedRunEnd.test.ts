@@ -257,7 +257,7 @@ const lastLog = (dispatchRunId: string) =>
 /** The CLI in the container closing the run it adopted, as a local run closes. */
 async function cliCloses(
   dispatchRunId: string,
-  close: { stopReason: 'completed' | 'halted'; status: 'succeeded' | 'failed' },
+  close: { stopReason: 'completed' | 'halted' | 'gated'; status: 'succeeded' | 'failed' },
 ): Promise<void> {
   const run = await runOf(dispatchRunId);
   await dispatchRunService.close(dispatchRunId, close, {
@@ -333,6 +333,36 @@ describe('success is the CLI’s — the end path only tears down and revokes', 
     expect(await adminDb.workItemDelivery.count()).toBe(deliveries);
     await expectNothingAlive(data.dispatchRunId);
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+  });
+});
+
+describe('a hosted run the CLI closed `gated` keeps the gates that held it (MOTIR-7703)', () => {
+  it('the end path neither re-closes it nor drops its held-gate rows', async () => {
+    const { data, handleId, cardId } = await startRun();
+    const gate = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: cardId,
+        kind: 'design_result',
+        subjectId: 'ev-hosted-held',
+      },
+    });
+    await cliCloses(data.dispatchRunId, { stopReason: 'gated', status: 'succeeded' });
+
+    fakeOrchestrator.completeJob(handleId, { exitCode: 0 });
+    expect(await superviseToEnd(data)).toEqual({ outcome: 'settled', reason: 'job_completed' });
+
+    expect(await runOf(data.dispatchRunId)).toMatchObject({
+      status: 'succeeded',
+      stopReason: 'gated',
+    });
+    const held = await adminDb.dispatchRunHeldGate.findMany({
+      where: { dispatchRunId: data.dispatchRunId },
+    });
+    expect(held.map((r) => [r.gateId, r.workItemId, r.kind])).toEqual([
+      [gate.id, cardId, 'design_result'],
+    ]);
   });
 });
 

@@ -302,7 +302,14 @@ export type StopReason =
    * Distinct from `halted` on purpose: `halted` means something went wrong and
    * `autoExitCode` reports it; this is a correct outcome and exits 0.
    */
-  | 'replanned';
+  | 'replanned'
+  /**
+   * A scoped drain stopped because every child left waits on a PERSON's gate — a
+   * design, a decision or a manual card nobody has approved yet (Story MOTIR-7701
+   * · MOTIR-7704). A correct outcome, never `halted`: the server records the
+   * gates and the run waits To resume. {@link AutoSummary.gatedOn} names them.
+   */
+  | 'gated';
 
 export interface PrReport {
   repoName: string | null;
@@ -359,6 +366,8 @@ export interface AutoSummary {
    */
   outstanding?: { containerKey: string; keys: string[] };
   stopReason: StopReason;
+  /** On a `gated` stop: the gate cards still awaiting a person, in order. */
+  gatedOn?: string[];
 }
 
 /** The review surface for a submitted plan — `<server>/plans/<id>`, the same
@@ -411,6 +420,7 @@ const STOP_LABEL: Record<StopReason, string> = {
   halted: 'halted on the first agent failure (--keep-going continues past one)',
   interrupted: 'interrupted (Ctrl-C)',
   replanned: 'an agent refused its work item and submitted a re-plan — waiting for you in Motir',
+  gated: 'stopped at a gate',
 };
 
 /**
@@ -707,7 +717,11 @@ const SUMMARY_HEADERS = ['ITEM', 'OUTCOME', 'TIME', 'BRANCH', 'TITLE'];
  *  did NOT do — which is the half a human has to act on. */
 export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string {
   const blocks: string[] = [];
-  blocks.push(`Run ${summary.runId} — stopped: ${STOP_LABEL[summary.stopReason]}.`);
+  blocks.push(
+    summary.stopReason === 'gated' && summary.gatedOn && summary.gatedOn.length > 0
+      ? `Run ${summary.runId} — stopped at a gate — waiting on ${summary.gatedOn.join(', ')}.`
+      : `Run ${summary.runId} — stopped: ${STOP_LABEL[summary.stopReason]}.`,
+  );
 
   if (summary.records.length === 0) {
     blocks.push('No work items were dispatched.');

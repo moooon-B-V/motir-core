@@ -467,6 +467,80 @@ describe('what the agent reads — each outcome said as an instruction', () => {
     );
   });
 
+  it('a run that stopped at a gate: refused while it waits or was sent back, claimed as a RESUME once approved (MOTIR-7708)', async () => {
+    const fx = await makeWorkItemFixture();
+    const gatedCard = async (
+      title: string,
+      state: 'awaiting' | 'changes_requested' | 'approved' | null,
+    ) => {
+      const card = await createTestWorkItem(fx, { kind: 'task', title });
+      await setStatus(card.id, 'in_progress');
+      await adminDb.workItem.update({ where: { id: card.id }, data: { assigneeId: fx.ownerId } });
+      const { run } = await dispatchRunService.open(
+        {
+          projectKey: fx.projectIdentifier,
+          command: 'run',
+          reportedBy: 'cli',
+          cards: [{ key: card.identifier, disposition: 'queued' }],
+        },
+        fx.ctx,
+      );
+      await dispatchRunService.appendEvents(
+        run.id,
+        [
+          {
+            kind: 'checkout_ready',
+            workItemKey: card.identifier,
+            disposition: 'running',
+            data: { branch: `subtask/${card.identifier}-work` },
+          },
+        ],
+        fx.ctx,
+      );
+      await dispatchRunService.close(run.id, { stopReason: 'gated' }, fx.ctx);
+      if (state === null) return card;
+      const gate = await adminDb.approvalGate.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          workItemId: card.id,
+          kind: 'design_result',
+          subjectId: `subject-${randomToken()}`,
+          state,
+          ...(state === 'awaiting' ? {} : { decidedById: fx.ownerId, decidedAt: new Date() }),
+        },
+      });
+      await adminDb.dispatchRunHeldGate.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          dispatchRunId: run.id,
+          gateId: gate.id,
+          workItemId: card.id,
+          kind: 'design_result',
+        },
+      });
+      return card;
+    };
+
+    const waiting = await gatedCard('still waiting', 'awaiting');
+    expect(text(await runClaimWorkItemContinue({ key: waiting.identifier }, fx.ctx))).toContain(
+      `still waiting for approval (${waiting.identifier} design_result (awaiting))`,
+    );
+    const sentBack = await gatedCard('sent back', 'changes_requested');
+    expect(text(await runClaimWorkItemContinue({ key: sentBack.identifier }, fx.ctx))).toContain(
+      'was sent back, not approved',
+    );
+    const approved = await gatedCard('approved', 'approved');
+    const resumed = text(await runClaimWorkItemContinue({ key: approved.identifier }, fx.ctx));
+    expect(resumed).toContain(`Claimed the RESUME of ${approved.identifier}`);
+    expect(resumed).toContain(`${approved.identifier} design_result (approved)`);
+    // A gated run that recorded no gates resumes too, and says so.
+    const unrecorded = await gatedCard('no gates recorded', null);
+    expect(text(await runClaimWorkItemContinue({ key: unrecorded.identifier }, fx.ctx))).toContain(
+      'now approved: none recorded',
+    );
+  });
+
   it('a PARENT continue names what already landed and what is still to run', async () => {
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'the story' });

@@ -10,6 +10,7 @@ describe('WORKBENCH_TABS — the strip order (MOTIR-5217)', () => {
     expect(WORKBENCH_TABS).toEqual([
       'approvals',
       'to-fix',
+      'to-resume',
       'in-progress',
       'todo',
       'finished',
@@ -24,6 +25,7 @@ describe('WORKBENCH_TABS — the strip order (MOTIR-5217)', () => {
     expect(WORKBENCH_TABS.map((tab) => workbenchTabHref(tab))).toEqual([
       '/workbench?tab=approvals',
       '/workbench?tab=to-fix',
+      '/workbench?tab=to-resume',
       '/workbench?tab=in-progress',
       '/workbench?tab=todo',
       '/workbench?tab=finished',

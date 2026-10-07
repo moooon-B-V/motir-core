@@ -151,6 +151,9 @@ function workbenchRow(status: string): HomeWorkItemRowDto {
     repairRun: null,
     fixGroupKind: null,
     fixMembers: [],
+    resumeState: null,
+    resumeRunId: null,
+    resumeMembers: [],
   };
 }
 

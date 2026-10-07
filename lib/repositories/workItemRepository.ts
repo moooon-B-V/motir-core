@@ -14,6 +14,7 @@ import {
   type WorkItemObsolescence,
   type WorkItemPlanningSource,
   type WorkItemPriority,
+  type WorkItemResumeState,
   type WorkItemType,
 } from '@/generated/prisma/client';
 import { db, dbRead } from '@/lib/db';
@@ -203,6 +204,10 @@ export interface HomeWorkItemRow {
    *  In the shared projection for the reason `ciState` is. */
   fixReason: WorkItemFixReason | null;
   fixDetail: Prisma.JsonValue | null;
+  /** Whether the card waits To resume, and on which gated run (`WorkItem.resumeState`
+   *  / `resumeRunId`, MOTIR-7707). In the shared projection for the reason `ciState` is. */
+  resumeState: WorkItemResumeState | null;
+  resumeRunId: string | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -238,6 +243,9 @@ export const HOME_WORK_ITEM_SELECT = {
   // every tab's rows through this ONE projection for the reason `ciState` is.
   fixReason: true,
   fixDetail: true,
+  // The card's To resume answer (MOTIR-7707), carried the same way.
+  resumeState: true,
+  resumeRunId: true,
   priority: true,
   assigneeId: true,
   reporterId: true,
@@ -395,6 +403,13 @@ export type HomeCategorySlice = (
    * this, so a card is on exactly one of them by construction.
    */
   fixReason?: 'set' | 'unset';
+  /**
+   * The TO RESUME axis (Story MOTIR-7701 · MOTIR-7707) — the same shape over
+   * `resumeState`. In progress takes it `unset` and To resume `set`, so a card
+   * waiting on a gated run is on exactly one of them; To resume also takes
+   * `fixReason` `unset`, so To fix wins if both somehow hold.
+   */
+  resumeState?: 'set' | 'unset';
 };
 
 /**
@@ -434,12 +449,23 @@ export function homeProjectScopeWhere(
           : slice.fixReason === 'unset'
             ? { fixReason: null }
             : {};
+      const resume =
+        slice.resumeState === 'set'
+          ? { resumeState: { not: null } }
+          : slice.resumeState === 'unset'
+            ? { resumeState: null }
+            : {};
       return 'in' in slice
-        ? { projectId, status: { in: named }, ...fix }
+        ? { projectId, status: { in: named }, ...fix, ...resume }
         : // An empty exclusion is an unfiltered clause, NOT a never-matching
           // one: `notIn: []` and "no constraint" are the same predicate, and
           // Prisma renders the former as a tautology anyway.
-          { projectId, ...(named.length > 0 ? { status: { notIn: named } } : {}), ...fix };
+          {
+            projectId,
+            ...(named.length > 0 ? { status: { notIn: named } } : {}),
+            ...fix,
+            ...resume,
+          };
     }),
   };
 }
@@ -511,6 +537,8 @@ export const HOME_SLICE_TODO: HomeCategorySlice = { notIn: ['in_progress', 'done
 export const HOME_SLICE_IN_PROGRESS: HomeCategorySlice = {
   in: ['in_progress'],
   fixReason: 'unset',
+  // ⚠️ MINUS TO RESUME (MOTIR-7707): a card waiting on a gated run is listed there.
+  resumeState: 'unset',
 };
 
 /**
@@ -518,6 +546,17 @@ export const HOME_SLICE_IN_PROGRESS: HomeCategorySlice = {
  * · MOTIR-6604): `fixReason IS NOT NULL`, the other half of {@link HOME_SLICE_IN_PROGRESS}.
  */
 export const HOME_SLICE_TO_FIX: HomeCategorySlice = { in: ['in_progress'], fixReason: 'set' };
+
+/**
+ * TO RESUME — the in-progress cards whose latest run stopped at an approval gate
+ * (Story MOTIR-7701 · MOTIR-7707): `resumeState IS NOT NULL`, minus To fix, which
+ * wins if both hold, so the three slices partition the category.
+ */
+export const HOME_SLICE_TO_RESUME: HomeCategorySlice = {
+  in: ['in_progress'],
+  fixReason: 'unset',
+  resumeState: 'set',
+};
 
 /** RECENTLY FINISHED — the terminal slice; the caller adds the window. */
 export const HOME_SLICE_DONE: HomeCategorySlice = { in: ['done'] };
@@ -1456,6 +1495,56 @@ export const workItemRepository = {
   },
 
   /**
+   * TO RESUME's ENTRY KEYS, in the tab's order (Story MOTIR-7701 · MOTIR-7707) — every
+   * card on the reader's To resume slice, as `{ id, resumeRunId }`. The tab lists one
+   * entry per gated RUN, as To fix does per dead run, so the service groups these by
+   * `resumeRunId` before it pages. Unwindowed for the reason To fix's is.
+   */
+  async listToResumeRunKeysByAssigneeOrReporterInWorkspace(
+    userId: string,
+    workspaceId: string,
+    projectScopes: readonly HomeProjectScope[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; resumeRunId: string | null }[]> {
+    if (projectScopes.length === 0) return [];
+    return tx.workItem.findMany({
+      where: homeMembershipWhere(userId, workspaceId, projectScopes, {
+        slice: HOME_SLICE_TO_RESUME,
+      }),
+      select: { id: true, resumeRunId: true },
+      orderBy: homeOrderBy('updatedAt'),
+    });
+  },
+
+  /**
+   * Every card waiting on one of these gated runs — whoever holds it, in the given
+   * projects (Story MOTIR-7701 · MOTIR-7707). An entry's members are every card the
+   * run carried, and the reader holds only some of them. Archived and triaged rows
+   * are excluded, like every list read.
+   */
+  async findResumeMembers(
+    workspaceId: string,
+    projectIds: readonly string[],
+    runIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<HomeWorkItemRow[]> {
+    if (projectIds.length === 0 || runIds.length === 0) return [];
+    return tx.workItem.findMany({
+      where: {
+        workspaceId,
+        projectId: { in: [...projectIds] },
+        archivedAt: null,
+        triagedAt: null,
+        fixReason: null,
+        resumeState: { not: null },
+        resumeRunId: { in: [...runIds] },
+      },
+      select: HOME_WORK_ITEM_SELECT,
+      orderBy: homeOrderBy('updatedAt'),
+    });
+  },
+
+  /**
    * The ids of every STUCK card in these To fix entries (MOTIR-7589; § 34.2) — whoever
    * holds them, in the given projects. An entry's members are the cards one dead run
    * carried, or every card one pull-request set delivers, and the reader holds only some
@@ -1726,6 +1815,27 @@ export const workItemRepository = {
           ON s."project_id" = w."projectId" AND s."key" = w."status"
        WHERE w."workspaceId" = ${workspaceId}
          AND (s."category" = 'in_progress' OR w."fixReason" IS NOT NULL)
+       ORDER BY w."id" ASC`);
+    return rows.map((r) => r.id);
+  },
+
+  /**
+   * The To resume backfill's candidates (Story MOTIR-7701 · MOTIR-7707) — the fix-reason
+   * backfill's set over the other column: every card in an `in_progress`-CATEGORY status,
+   * plus any card still carrying a `resumeState`, so a stale one is cleared. The caller
+   * binds `workspaceId` first.
+   */
+  async listResumeStateBackfillCandidateIds(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT w."id"
+        FROM "work_item" w
+        LEFT JOIN "workflow_status" s
+          ON s."project_id" = w."projectId" AND s."key" = w."status"
+       WHERE w."workspaceId" = ${workspaceId}
+         AND (s."category" = 'in_progress' OR w."resumeState" IS NOT NULL)
        ORDER BY w."id" ASC`);
     return rows.map((r) => r.id);
   },
@@ -4984,6 +5094,22 @@ export const workItemRepository = {
    * uses. A cleared detail writes SQL NULL through `Prisma.DbNull`, never the JSON value
    * `null`, so `fixDetail IS NULL` holds exactly when `fixReason` does.
    */
+  /**
+   * Write a card's `resumeState` and the gated run it is about, together (Story
+   * MOTIR-7701 · MOTIR-7707). The only writer is
+   * `resumeStateService.recomputeWorkItemResumeState`.
+   */
+  async updateResumeState(
+    id: string,
+    value: { resumeState: WorkItemResumeState | null; resumeRunId: string | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.workItem.update({
+      where: { id },
+      data: { resumeState: value.resumeState, resumeRunId: value.resumeRunId },
+    });
+  },
+
   async updateFixReason(
     id: string,
     value: { fixReason: WorkItemFixReason | null; fixDetail: FixDetailDto | null },

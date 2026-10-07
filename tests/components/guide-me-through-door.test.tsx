@@ -94,6 +94,7 @@ function reads(): LateReads {
     choiceGate: { ...NO_GATE, body: null },
     confirmGate: { ...NO_GATE, body: null },
     agentReview: null,
+    gatedRun: null,
   } as LateReads;
 }
 

@@ -954,5 +954,18 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.63.0` after MOTIR-7474's
  *   `1.62.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.64.0` — MOTIR-7708 (Story MOTIR-7701) lets the continue claim RESUME a run that
+ *   stopped at a gate (closed `gated`) once a gate it stopped on is approved. The
+ *   claim's refusal `reason` gains `gate_awaiting` and `gate_sent_back`, and
+ *   `WorkItemContinueClaim` gains `gates` (`{ key, kind, state }[]`, the gates a gated
+ *   run stopped on) and `resumesGated` (true on a resume).
+ *
+ *   Additive: new members of an enum every client must tolerate, and two new fields on
+ *   an existing shape (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.64.0` after MOTIR-7640's
+ *   `1.63.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
+ *   MEMBERS and the FIELDS.
  */
-export const V1_CONTRACT_VERSION = '1.63.0';
+export const V1_CONTRACT_VERSION = '1.64.0';

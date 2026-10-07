@@ -198,6 +198,36 @@ async function deadCard(
   return { card, deadRunId: run.id };
 }
 
+/**
+ * A card whose one run STOPPED AT A GATE (MOTIR-7708): closed `gated`, holding one
+ * `design_result` gate on the card in `state`.
+ */
+async function gatedCard(fx: WorkItemFixture, state: 'awaiting' | 'changes_requested') {
+  const { card, deadRunId } = await deadCard(fx);
+  await dispatchRunService.close(deadRunId, { stopReason: 'gated' }, fx.ctx);
+  const gate = await adminDb.approvalGate.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      workItemId: card.id,
+      kind: 'design_result',
+      subjectId: `subject-${card.id}`,
+      state,
+      ...(state === 'awaiting' ? {} : { decidedById: fx.ownerId, decidedAt: new Date() }),
+    },
+  });
+  await adminDb.dispatchRunHeldGate.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      dispatchRunId: deadRunId,
+      gateId: gate.id,
+      workItemId: card.id,
+      kind: 'design_result',
+    },
+  });
+  return { card, deadRunId };
+}
+
 /** A dead PARENT run over a story, with this card one of its legs. */
 async function deadParentLeg(fx: WorkItemFixture) {
   const story = await createTestWorkItem(fx, { kind: 'story', title: 'the story' });
@@ -303,6 +333,14 @@ const REFUSAL_SEEDS: Record<WorkItemContinueRefusal, Seed> = {
   },
   no_branch: async (fx, owner) => {
     const { card } = await deadCard(fx, { branch: null });
+    return { key: card.identifier, claimant: owner, names: {} };
+  },
+  gate_awaiting: async (fx, owner) => {
+    const { card } = await gatedCard(fx, 'awaiting');
+    return { key: card.identifier, claimant: owner, names: {} };
+  },
+  gate_sent_back: async (fx, owner) => {
+    const { card } = await gatedCard(fx, 'changes_requested');
     return { key: card.identifier, claimant: owner, names: {} };
   },
 };

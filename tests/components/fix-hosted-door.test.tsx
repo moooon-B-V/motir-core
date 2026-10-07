@@ -742,6 +742,9 @@ function row(
     canContinueHosted: false,
     fixGroupKind: null,
     fixMembers: [],
+    resumeState: null,
+    resumeRunId: null,
+    resumeMembers: [],
     canFixHosted: flags.canFixHosted ?? true,
     repairRun: flags.repairRun ?? null,
   };

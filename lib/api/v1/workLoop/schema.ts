@@ -1,6 +1,8 @@
 import { z } from 'zod/v4';
 import {
   actorRefSchema,
+  approvalGateKindSchema,
+  approvalGateStateSchema,
   commentThreadSchema,
   workItemKeySchema,
 } from '@/lib/api/v1/workItems/schema';
@@ -2446,6 +2448,8 @@ export const workItemContinueRefusalSchema = z.enum([
   'continue_the_parent',
   'no_dead_run',
   'no_branch',
+  'gate_awaiting',
+  'gate_sent_back',
 ]);
 
 /**
@@ -2520,6 +2524,18 @@ export const workItemContinueClaimSchema = z.object({
   /** The dead scope run's legs still in flight — In Progress and now the caller's.
    *  The ready set lists only To Do leaves, so the resumed drain runs these too. */
   resumedKeys: z.array(workItemKeySchema),
+  /** The gates of a run that STOPPED AT A GATE (MOTIR-7708): on a resume, the
+   *  approved ones it resumes after; with `gate_awaiting` / `gate_sent_back`, the
+   *  ones still holding it. Empty for a continue of a run that died. */
+  gates: z.array(
+    z.object({
+      key: workItemKeySchema,
+      kind: approvalGateKindSchema,
+      state: approvalGateStateSchema,
+    }),
+  ),
+  /** True when this RESUMES a run that stopped at a gate, not one that died. */
+  resumesGated: z.boolean(),
 });
 export type V1WorkItemContinueClaim = z.infer<typeof workItemContinueClaimSchema>;
 
@@ -2563,5 +2579,7 @@ export function presentWorkItemContinueClaim(
     mode: dto.mode,
     landedKeys: [...dto.landedKeys],
     resumedKeys: [...dto.resumedKeys],
+    gates: dto.gates.map((g) => ({ key: g.key, kind: g.kind, state: g.state })),
+    resumesGated: dto.resumesGated,
   };
 }

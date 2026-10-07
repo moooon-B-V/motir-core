@@ -247,6 +247,7 @@ describe('THE FRAMES', () => {
       'toDo',
       'inProgress',
       'toFix',
+      'toResume',
       'recentlyFinished',
       'approvals',
       'watching',

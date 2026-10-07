@@ -4,6 +4,7 @@ import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
 import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
+import { gateResumeService } from '@/lib/services/gateResumeService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
@@ -176,6 +177,8 @@ export const jobServices = {
   agentReviewStart: agentReviewStartService,
   // The automatic hosted re-run after a design Revise (MOTIR-700).
   designAutoRerun: designAutoRerunService,
+  // The automatic hosted resume after a held gate is approved (MOTIR-7710).
+  gateResume: gateResumeService,
   // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch
   // withdraws the approve-and-merge question over any pull request it put in conflict.
   pullRequestMergeability: pullRequestMergeabilityService,

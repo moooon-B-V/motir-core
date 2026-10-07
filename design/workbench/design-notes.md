@@ -3586,3 +3586,223 @@ Colour only through `--el-*`; shape only through element-semantic tokens. The de
 | **MOTIR-7589** (the build) | PREMISE: `fixDetail.groupKey` and its rules (§ 34.2), the grouped read, the DISTINCT count, the expression index. ELEMENT: the entry, its clause, the member list and its fold, the held states, every string in § 34.6 and work-items § _ONE ENTRY PER RUN_. | **PREMISE CORRECTED:** pull-request reasons do not fan out to the legs of a story run with a How to test record (§ 34.1). |
 | **MOTIR-6599** (§ 30)      | Nothing                                                                                                                                                                                                                                                       | The tab's count and pager now count entries, not cards.                                                                   |
 | **MOTIR-6878** (§ 31)      | Nothing                                                                                                                                                                                                                                                       | State 3 (one row per leg) is RETIRED; `runDiedParent` leaves the Workbench.                                               |
+
+## 35 · TO RESUME — a run that stopped at a gate waits here, not dead, until the gate is decided — MOTIR-7702
+
+**The asset:** [`workbench--to-resume.mock.html`](./workbench--to-resume.mock.html), a new delta mock, Panels
+**0–9** and the zh panel. **It edits no existing mock.** It amends **§ 21** (the strip order and the landing
+cascade, `workbench.mock.html`, MOTIR-5216, as § 30 amended it) and it **composes** § 34's per-run entry
+([`workbench--to-fix--per-run.mock.html`](./workbench--to-fix--per-run.mock.html), MOTIR-7590) rather than
+redrawing it. The run section's half — the _Stopped at a gate_ marker in the slot where _Run died_ stood — is
+`design/runs/design-notes.md` § _Stopped at a gate_ and
+[`design/runs/run-section--gated.mock.html`](../runs/run-section--gated.mock.html); its summary is § 35.8 below,
+so this one note carries both halves. Card **MOTIR-7702** (Story **MOTIR-7701**), the design gate of
+**MOTIR-7712** (this tab) and **MOTIR-7713** (the run section). Rendered against motir-core `origin/main` @
+`3e0c981`.
+
+### 35.1 What was wrong
+
+A parent run whose remaining work waits on an approval gate is not broken: its work is committed on its branch
+and the next step belongs to a person. Today nothing records which gates held it, so its cards sit on **In
+progress** (which reads as alive and busy) or, once the run is read as dead, on **To fix** as _Run died_ (which
+reads as broken). Neither says the one true thing — _this run is waiting for an approval, and here is what
+happens when it is given._
+
+### 35.2 Where the behaviour comes from — cite per element
+
+| element                                                                                 | specified by                                                                                                         |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| a run that stops at a gate closes `gated` and names its HELD GATES (the gate list)      | **MOTIR-7703** — `DispatchRunHeldGate`, derived server-side at the close                                             |
+| the five gate kinds a run can be held by                                                | **MOTIR-7703** — `design_result` · `decision_approval` · `decision_choice` · `decision_confirmation` · `manual_work` |
+| which cards are on the tab; _waiting on a gate_ vs _ready to resume_; one entry per run | **MOTIR-7707** — `WorkItem.resumeState` + `resumeRunId`, `HOME_SLICE_TO_RESUME`, `listToResume`, `tabCounts`         |
+| a sent-back gate stays _waiting_, never _ready_                                         | **MOTIR-7707** §2                                                                                                    |
+| what _Ready to resume_ runs — `motir continue <KEY>` and the Continue door              | **MOTIR-7708** — `evaluate()` → `resumable`; refusals `gate_awaiting` / `gate_sent_back`                             |
+| _Resuming_ and _Could not resume_, and every skip reason                                | **MOTIR-7710** — the `GateResume` record (`started` / `skipped` + `skipReason`)                                      |
+| the Continue door (picker + button)                                                     | **MOTIR-6789** (`design/runs/development--continue-hosted.mock.html`), labelled _Continue_ by § 34                   |
+| the approval overlay the gate link opens                                                | **MOTIR-5222** (§ 22) — not redrawn                                                                                  |
+
+### 35.3 The strip and the landing cascade (Panel 0)
+
+- **To resume is THIRD**: Waiting on you · To fix · **To resume** · In progress · To do · Recently finished ·
+  Watching. `WORKBENCH_TABS` gains `to-resume` after `to-fix` (MOTIR-7707); the address is `?tab=to-resume`.
+- **The cascade gains the same rung, in the same place**: Waiting on you → To fix → **To resume** → In progress
+  → To do (terminal). `resolveWorkbenchLanding` adds `if (counts.toResume > 0) return 'to-resume'` between the
+  To fix and In progress rungs.
+- **Why there.** It needs the reader LESS than the two rungs above it: the decision itself is already on Waiting
+  on you (where the reader acts), and a To fix entry does not move without a repair, while a gated run moves the
+  moment its gate is approved. It needs the reader MORE than In progress, whose work moves without them: a
+  non-hosted run that is ready waits for `motir continue`, and a hosted one that could not resume waits for a
+  person. One order for the strip and the cascade, so the strip still explains where the reader landed.
+- **The count is ENTRIES (runs)**, like To fix since § 34: `COUNT(DISTINCT resumeRunId)` over the reader's slice.
+- **The glyph** is lucide `circle-pause` (a run that paused). The badge is the shipped count chip.
+
+### 35.4 The entry (Panels 1, 2)
+
+One entry per gated run (`resumeRunId`), § 34's anatomy:
+
+- **Line 1** — the HEAD: the gated run's scope card, in `WorkbenchList`'s row, unchanged.
+- **Line 2** — `WorkbenchFixLine`'s line with a calm reason: the state's glyph (`--el-icon-muted`, aria-hidden),
+  the sentence (`--el-text`), an optional state pill, then the aside in `--el-text-secondary`: **who ran it and
+  where** (hosted agent · terminal · runbook · agent instance, read from the run's `origin` / `command`), the
+  branch (mono), and § 34's _N more work items in this run_.
+- **The gate list** (`tr-gates`, NEW) — one line per held gate: the kind chip (the SHIPPED
+  `workbench.approvals.kind.*` label), the subject's key (mono, `--el-text-secondary`) and title (`--el-text`,
+  truncated at 28ch), the decider, the gate's state pill, and the door:
+  - **The decider** is the gate's assignee, else its reporter (`docs/approval-gates.md`). _Dana P. decides_.
+  - **The viewer decides** → _You decide_, the pill _Awaiting you_, and the door is a primary **Review** button
+    (their action, not a link); a manual-work gate they own offers the shipped **Guide me through** (§ 33).
+  - **Anyone else decides** → **Open**, a `--el-link` link.
+  - Both push `?approval=<key>&approvalKind=<kind>` with `shallowPush` and open the shipped approval overlay
+    (§ 22, MOTIR-5222) over this tab.
+  - The list never folds: a gate is why the entry is here.
+- **The next-step line** (`tr-next`, 12px, `--el-text-secondary`) — what happens next, per state.
+- **The member list and its fold** — § 34's, verbatim (labelled _Work items waiting with {key}_).
+
+### 35.5 The five states (Panels 1, 3, 4, 5, 6, 7)
+
+| state                              | read from                                                                         | line 2                                                                           | state pill                                                                 | repairs                                                    | next-step line                                                                                                               |
+| ---------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Waiting on a gate** (Panel 1, 2) | `resumeState = waiting_on_gate`, every held gate awaiting (MOTIR-7707)            | glyph `circle-pause` · _Stopped at a gate · waiting on N approval(s)_            | none on line 2; each gate _Awaiting_ / _Awaiting you_ (`--el-tint-yellow`) | **none** — the claim refuses `gate_awaiting` (MOTIR-7708)  | hosted: _carries on by itself_ (MOTIR-7710) · otherwise: _continue from your terminal — the command appears here_            |
+| **Ready to resume** (Panel 3, 7)   | `resumeState = ready_to_resume`, a non-hosted run (MOTIR-7707)                    | glyph `circle-check` · _Ready to resume · {who} approved {kind} on {key} {when}_ | the approved gate _Approved_ (`--el-tint-mint`)                            | § 34's two: the Continue door + `motir continue <KEY>`     | _An agent picks the run up on its own branch, builds what the approval released, and stops again at any gate still waiting._ |
+| **Resuming** (Panel 4)             | the newest `GateResume` is `started` (MOTIR-7710)                                 | glyph `circle-ellipsis` · _Resuming on the hosted agent · started {when}_        | _Resuming_ (`--el-tint-sky`)                                               | replaced by _See the run_ (`--el-link`); the entry is HELD | none                                                                                                                         |
+| **Could not resume** (Panel 5)     | the newest `GateResume` is `skipped` + `skipReason` (MOTIR-7710)                  | glyph `circle-slash` · _Could not resume by itself · {reason}_                   | _Didn't resume_ (neutral chip)                                             | § 34's two                                                 | _Nothing was booted and nothing was charged._ + the reason's own repair (§ 35.6)                                             |
+| **Gate sent back** (Panel 6)       | a held gate `changes_requested` / `declined` / `overturned`; column stays waiting | glyph `undo-2` · the decision quoted, the way To fix quotes a Request changes    | the gate's pill names the outcome (neutral chip)                           | **none** — the claim refuses `gate_sent_back` (MOTIR-7708) | per outcome (§ 35.6). Nothing resumes.                                                                                       |
+
+- **Held (Resuming)** is § 26 / § 34's hold: `tf-held` (reason ink `--el-text-secondary`, member titles dimmed)
+  until the refetch drops the entry — the continue claim nulls the column (MOTIR-7707) and the cards return to
+  In progress. The badge falls by ONE. No toast and no notification (MOTIR-7710 sends none).
+- **Several gates, some decided** (Panel 7): one approved gate is enough for _ready_; line 2 reads _Ready to
+  resume · 1 of 3 approvals given_; the list shows every gate with its own pill, decided first; the next-step
+  line says continuing now stops again at the rest (MOTIR-7708 §4). A HOSTED run in that mix resumed itself on
+  the first approval (Resuming).
+- **A hosted run is never drawn _Ready to resume_ for long**: its auto-resume moves it to Resuming or Could not
+  resume. `already_resumed` is Resuming; `not_a_candidate` writes no record and the run is Ready to resume.
+- **The tone is calm everywhere**: no danger or warning token, no `triangle-alert`. These runs are waiting.
+- **Empty** (Panel 8): the shipped `EmptyState`, glyph `circle-pause`, no action.
+- **Narrow** (Panel 9): `WorkbenchList`'s `< md` stacked row (workbench.mock.html Panel 7); the strip scrolls;
+  line 2, the gate lines and the repairs wrap; the aside may wrap (`.tr-narrow .tf-aside { flex-shrink: 1 }`).
+
+### 35.6 Copy (en + zh)
+
+| key (proposed)                                                             | en                                                                                                                                                                                 | zh                                                                                                                   |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `workbench.tabs.toResume`                                                  | To resume                                                                                                                                                                          | 待继续                                                                                                               |
+| `workbench.empty.toResume.title`                                           | Nothing to resume                                                                                                                                                                  | 没有待继续的运行                                                                                                     |
+| `workbench.empty.toResume.body`                                            | When a run stops at an approval it needs, it waits here until the approval is given — then it carries on by itself on the hosted agent, or with motir continue from your terminal. | 当运行停在它所需的审批处时，会在这里等待，直到审批通过——随后在托管代理上自动继续，或在终端中用 motir continue 继续。 |
+| `workbench.toResume.waiting`                                               | Stopped at a gate · waiting on {count, plural, one {# approval} other {# approvals}}                                                                                               | 停在审批处 · 等待 {count} 项审批                                                                                     |
+| `workbench.toResume.ready`                                                 | Ready to resume · {name} approved the {kind} on {key} <when></when>                                                                                                                | 可以继续 · {name} 已于<when></when>批准 {key} 的{kind}                                                               |
+| `workbench.toResume.readyByYou`                                            | Ready to resume · you approved the {kind} on {key} <when></when>                                                                                                                   | 可以继续 · 你已于<when></when>批准 {key} 的{kind}                                                                    |
+| `workbench.toResume.readySome`                                             | Ready to resume · {approved} of {total} approvals given                                                                                                                            | 可以继续 · {total} 项审批中已通过 {approved} 项                                                                      |
+| `workbench.toResume.resuming`                                              | Resuming on the hosted agent · started <when></when>                                                                                                                               | 正在托管代理上继续 · <when></when>开始                                                                               |
+| `workbench.toResume.couldNot`                                              | Could not resume by itself · {reason}                                                                                                                                              | 未能自动继续 · {reason}                                                                                              |
+| `workbench.toResume.ranBy.hosted`                                          | {name} ran it on the hosted agent                                                                                                                                                  | {name} 在托管代理上运行                                                                                              |
+| `workbench.toResume.ranBy.terminal`                                        | {name} ran it from a terminal                                                                                                                                                      | {name} 在终端中运行                                                                                                  |
+| `workbench.toResume.ranBy.runbook`                                         | {name} ran it with the runbook                                                                                                                                                     | {name} 通过运行手册运行                                                                                              |
+| `workbench.toResume.ranBy.instance`                                        | {name} ran it in {agent}                                                                                                                                                           | {name} 在 {agent} 中运行                                                                                             |
+| (`{name}` for the viewer)                                                  | you                                                                                                                                                                                | 你                                                                                                                   |
+| `workbench.toResume.branch`                                                | branch <d>{branch}</d>                                                                                                                                                             | 分支 <d>{branch}</d>                                                                                                 |
+| `workbench.toResume.entry.membersLabel`                                    | Work items waiting with {key}                                                                                                                                                      | 与 {key} 一起等待的工作项                                                                                            |
+| `workbench.toResume.gatesLabel`                                            | Gates holding {key}'s run                                                                                                                                                          | 使 {key} 的运行停下的审批                                                                                            |
+| `workbench.toResume.decider`                                               | <b>{name}</b> decides                                                                                                                                                              | 由 <b>{name}</b> 决定                                                                                                |
+| `workbench.toResume.deciderYou`                                            | <b>You</b> decide                                                                                                                                                                  | 由<b>你</b>决定                                                                                                      |
+| `workbench.toResume.decidedBy`                                             | approved by <b>{name}</b> <when></when>                                                                                                                                            | <b>{name}</b> 已于<when></when>批准                                                                                  |
+| `workbench.toResume.gate.awaiting`                                         | Awaiting                                                                                                                                                                           | 等待中                                                                                                               |
+| `workbench.toResume.gate.awaitingYou`                                      | Awaiting you                                                                                                                                                                       | 等你处理                                                                                                             |
+| `workbench.toResume.gate.approved` · `chosen` · `confirmed` · `markedDone` | Approved · Chosen · Confirmed · Marked done                                                                                                                                        | 已批准 · 已选择 · 已确认 · 已标记完成                                                                                |
+| `workbench.toResume.gate.changesRequested` · `declined` · `overturned`     | Changes requested · Declined · Overturned                                                                                                                                          | 已要求修改 · 已拒绝 · 已推翻                                                                                         |
+| `workbench.toResume.open`                                                  | Open                                                                                                                                                                               | 打开                                                                                                                 |
+| `workbench.toResume.review`                                                | Review                                                                                                                                                                             | 查看并决定                                                                                                           |
+| (shipped, § 33) manual work's door                                         | Guide me through                                                                                                                                                                   | 带我完成                                                                                                             |
+| `workbench.toResume.state.resuming`                                        | Resuming                                                                                                                                                                           | 继续中                                                                                                               |
+| `workbench.toResume.state.couldNot`                                        | Didn't resume                                                                                                                                                                      | 未继续                                                                                                               |
+| `workbench.toResume.seeRun`                                                | See the run                                                                                                                                                                        | 查看运行                                                                                                             |
+| `workbench.toResume.next.waitingHosted`                                    | Once it is approved, this run carries on by itself on the hosted agent.                                                                                                            | 审批通过后，此运行会在托管代理上自动继续。                                                                           |
+| `workbench.toResume.next.waitingHostedMany`                                | When any one is approved, this run carries on by itself on the hosted agent and stops again at the rest.                                                                           | 任一审批通过后，此运行会在托管代理上自动继续，并在其余审批处再次停下。                                               |
+| `workbench.toResume.next.waitingLocal`                                     | Once you approve it, continue the run from your terminal — the command appears here.                                                                                               | 审批通过后，在终端中继续——命令会显示在这里。                                                                         |
+| `workbench.toResume.next.ready`                                            | An agent picks the run up on its own branch, builds what the approval released, and stops again at any gate still waiting.                                                         | 智能体会在原分支上接手此运行，构建该审批放行的工作，并在仍需等待的审批处再次停下。                                   |
+| `workbench.toResume.next.readySome`                                        | Continuing now builds what the approved gate released, and stops again at the {count} still waiting.                                                                               | 现在继续会构建已通过审批放行的工作，并在仍在等待的 {count} 项审批处再次停下。                                        |
+| `workbench.toResume.next.couldNot`                                         | Nothing was booted and nothing was charged. {repair}                                                                                                                               | 没有启动任何机器，也没有产生任何费用。{repair}                                                                       |
+| `workbench.toResume.copyAria`                                              | Copy the resume command for {key}                                                                                                                                                  | 复制 {key} 的继续命令                                                                                                |
+| (shipped, § 34) the door's button                                          | Continue                                                                                                                                                                           | 继续                                                                                                                 |
+
+**Every skip reason MOTIR-7710 records** — `workbench.toResume.skip.<reason>` (line 2's `{reason}`) and
+`workbench.toResume.repair.<reason>` (the next-step line's `{repair}`):
+
+| `skipReason`              | reason — en                                                         | reason — zh                              | repair — en                                                                      | repair — zh                                            |
+| ------------------------- | ------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `out_of_credits`          | the organization is out of credits                                  | 组织的积分已用完                         | Add credits in billing, then press Continue — or continue from your terminal.    | 在账单中充值后按“继续”——或在终端中继续。               |
+| `ci_credits_exhausted`    | the organization's CI credits are used up                           | 组织的 CI 积分已用完                     | Add CI credits in billing, then press Continue — or continue from your terminal. | 在账单中充值 CI 积分后按“继续”——或在终端中继续。       |
+| `credits_unavailable`     | Motir couldn't check the organization's credits                     | Motir 无法查询组织的积分                 | Press Continue to try again.                                                     | 按“继续”重试。                                         |
+| `model_not_offered`       | the model it ran with, {model}, is no longer offered                | 它使用的模型 {model} 已不再提供          | Pick another model and press Continue.                                           | 选择其他模型后按“继续”。                               |
+| `models_unavailable`      | Motir couldn't load the list of models                              | Motir 无法加载模型列表                   | Press Continue to try again.                                                     | 按“继续”重试。                                         |
+| `no_project_access`       | <b>{name}</b>, who started it, no longer has access to this project | 启动它的 <b>{name}</b> 已无权访问此项目  | Continue it yourself — it runs as you, on your organization's credits.           | 由你来继续——它将以你的身份运行，使用你所在组织的积分。 |
+| `dispatcher_gone`         | <b>{name}</b>, who started it, is no longer in this workspace       | 启动它的 <b>{name}</b> 已不在此工作区    | Continue it yourself — it runs as you, on your organization's credits.           | 由你来继续——它将以你的身份运行，使用你所在组织的积分。 |
+| `repository_not_writable` | Motir can no longer push to {repo}                                  | Motir 已无法推送到 {repo}                | Reconnect the repository in the project's settings, then press Continue.         | 在项目设置中重新连接代码仓库后按“继续”。               |
+| `card_not_ready`          | {key} is not ready to run — it is blocked or no longer in progress  | {key} 尚不能运行——它被阻塞或已不在进行中 | Clear what blocks {key} or move it back to In Progress, then press Continue.     | 解除 {key} 的阻塞或将其移回进行中后按“继续”。          |
+
+**Gate sent back** — `workbench.toResume.back.<outcome>` (line 2) and `workbench.toResume.next.<outcome>`:
+
+| outcome             | line 2 — en                                                      | line 2 — zh                                      | next — en                                                                                                                  | next — zh                                                                                    |
+| ------------------- | ---------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `changes_requested` | {kind} sent back · changes requested by <b>{name}</b> — “{note}” | {kind}被退回 · <b>{name}</b> 要求修改 ——“{note}” | Nothing resumes. {key} is reworked first; its next version asks again, and this run keeps waiting.                         | 不会继续。{key} 需先修改；新版本会再次请求审批，此运行继续等待。                             |
+| `declined`          | Decision declined by <b>{name}</b> — “{note}”                    | 决策被 <b>{name}</b> 拒绝 ——“{note}”             | Nothing resumes. The work this would have released needs a new plan — re-plan {key}, or set {head} to To Do to start over. | 不会继续。该审批原本放行的工作需要重新规划——重新规划 {key}，或将 {head} 设为待办以重新开始。 |
+| `overturned`        | Approval overturned by <b>{name}</b> — “{note}”                  | 批准被 <b>{name}</b> 推翻 ——“{note}”             | Nothing resumes. The approval no longer stands, so the run waits for a new decision on {key}.                              | 不会继续。该批准已不再有效，此运行将等待对 {key} 的新决定。                                  |
+
+`{kind}` takes the shipped `workbench.approvals.kind.*` label (Design result · Decision approval · Choice · Confirm
+decision · Manual work / 设计成果 · 决策审批 · 选择 · 确认决策 · 人工工作), lower-cased in running en text.
+`<when>` is `relativeLabel` on a `<time datetime>`, as § 31.
+
+### 35.7 Tokens
+
+Colour only through `--el-*`; shape only through element-semantic tokens. The delta block (`tr-*`) names no raw
+hue and no raw shape utility:
+
+| element                        | colour                                                                                                                                                                    | shape                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| reason glyph (`tr-glyph`)      | `--el-icon-muted` (aria-hidden)                                                                                                                                           | 14px                                   |
+| state pill (`tr-state--*`)     | waiting `--el-tint-yellow` · ready `--el-tint-mint` · resuming `--el-tint-sky`, ink `--el-text-strong`; quiet `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary` | `--radius-badge`, `--spacing-chip-x/y` |
+| kind chip (`tr-kind`)          | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                                                                                                               | `--radius-badge`, `--spacing-chip-x/y` |
+| gate key · decider             | `--el-text-secondary` (name in `--el-text`)                                                                                                                               | —                                      |
+| gate title                     | `--el-text`                                                                                                                                                               | —                                      |
+| Open / See the run (`tr-link`) | `--el-link`                                                                                                                                                               | —                                      |
+| Review / Guide me through      | the shipped primary `Button` (`btn-primary`)                                                                                                                              | `--radius-btn`, `--height-btn-sm`      |
+| next-step line (`tr-next`)     | `--el-text-secondary`, emphasis `--el-text`                                                                                                                               | —                                      |
+| empty glyph                    | `--el-icon-muted`                                                                                                                                                         | —                                      |
+
+Every text ink is `--el-text`, `--el-text-strong` or `--el-text-secondary` (links `--el-link`); none is muted or
+faint, so the rows clear AA on the page and on the `:hover` `--el-surface` fill alike.
+
+### 35.8 The run section's half — `design/runs/` § _Stopped at a gate_ (summary)
+
+[`run-section--gated.mock.html`](../runs/run-section--gated.mock.html), Panels **G1–G6** + zh, amends
+`run-section--run-died.mock.html` Panel R1 (MOTIR-6529). Built by **MOTIR-7713**.
+
+- **The marker, in the Run died line's slot**: the RUN pill reads **Stopped at a gate** (`--el-tint-yellow`,
+  `circle-pause`) — never _Run died_ — and the line says _This run stopped at a gate — waiting on {gate}._ with
+  what happens on approval (hosted: carries on by itself; otherwise `motir continue <KEY>`). The held gates follow,
+  one row each, with _Open_ (MOTIR-7703).
+- **Ready to resume** shows the copyable `motir continue <KEY>`; **Resuming** links to the new run (_See the new
+  run_); **Could not resume** names the reason in § 35.6's words and points to To resume; **Sent back** says
+  nothing resumes (MOTIR-7707 / 7708 / 7710).
+- **Its run-history row** carries the _Stopped at a gate_ pill; the resumed continue's row says _resumed after an
+  approval_.
+- **A CHILD card** of the gated parent run says the same about the parent's run and points UP to it
+  (`corner-left-up`), with _part of {parent}_ on its history row.
+- A genuinely died run keeps MOTIR-6529's copy, unchanged.
+
+### What this asset does NOT decide
+
+- **The approval overlay** the gate link opens (§ 22, MOTIR-5222), and **the Continue door** (MOTIR-6789) — placed,
+  not redrawn.
+- **To fix's per-run entry** (§ 34) — composed, unchanged. A died run stays on To fix as _Run died_.
+- **Whether a resume notifies anyone** — MOTIR-7710 sends nothing.
+
+### GIVES / TAKES
+
+| card                         | GIVES                                                                                                                                                          | TAKES                                                                                         |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| **MOTIR-7712** (the tab)     | ELEMENT: the strip slot and count, the entry in five states, the gate list and its doors, the mixed case, the empty state, the narrow reflow, § 35.6's strings | the column and its reads from MOTIR-7707; the resume record from MOTIR-7710                   |
+| **MOTIR-7713** (run section) | ELEMENT: the marker, its history row, the Resuming line, the child variant (§ 35.8 / runs § _Stopped at a gate_)                                               | the held gates (MOTIR-7703); the resumed-after-approval mark on the continue run (MOTIR-7708) |
+| **MOTIR-7707** (the column)  | PREMISE: the tab id `to-resume` sits after `to-fix` in `WORKBENCH_TABS`; the cascade rung (§ 35.3); the count is entries                                       | nothing new                                                                                   |
+| **MOTIR-7710** (auto-resume) | PREMISE: each `skipReason` has words and a repair (§ 35.6); `already_resumed` reads as Resuming; `not_a_candidate` is Ready to resume                          | nothing new                                                                                   |
+| **§ 21 / MOTIR-5216**        | Nothing                                                                                                                                                        | The strip gains a seventh tab, and the cascade a rung between To fix and In progress.         |

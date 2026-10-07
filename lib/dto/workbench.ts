@@ -22,6 +22,8 @@ export const WORKBENCH_TAB_KEYS = [
   // TO FIX (MOTIR-6604) — another slice of the SAME membership read, carved out of
   // In progress, so it takes the work tabs' predicate rather than a new one.
   'toFix',
+  // TO RESUME (MOTIR-7707) — the third slice of In progress's category.
+  'toResume',
   'recentlyFinished',
   'approvals',
   'watching',
