@@ -353,6 +353,11 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
    * `autoGrow`, so each is a field whose height a user still drags.
    */
   const FIXED = [
+    // The console Ideas edit form and its retire / delete reason fields
+    // (MOTIR-7681): fixed editors, per design platform-admin § Ideas.
+    'app/(admin)/admin/ideas/[slug]/_components/DeleteIdeaDialog.tsx',
+    'app/(admin)/admin/ideas/[slug]/_components/IdeaEditForm.tsx',
+    'app/(admin)/admin/ideas/[slug]/_components/RetireIdeaDialog.tsx',
     // The platform lessons console's why / how-to-apply editors (MOTIR-1411).
     'app/(admin)/admin/planning-lessons/_components/LessonCurate.tsx',
     // The ops reason field (MOTIR-752): a fixed three-row editor.
