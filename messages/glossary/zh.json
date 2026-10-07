@@ -1,0 +1,186 @@
+{
+  "locale": "zh",
+  "register": {
+    "formality": "Plain declarative (no 您/你 where avoidable), as messages/zh.json already writes.",
+    "quotes": "“…” (nested ‘…’)",
+    "note": "REFERENCE COLUMN ONLY — records the terms messages/zh.json already uses and states no new decision."
+  },
+  "terms": {
+    "Motir": {
+      "translation": "Motir",
+      "doNotTranslate": true,
+      "source": "Product name (story MOTIR-7730 copy rules)"
+    },
+    "Motir AI": {
+      "translation": "Motir AI",
+      "doNotTranslate": true,
+      "source": "Product name (story MOTIR-7730 copy rules)"
+    },
+    "Sprint": {
+      "translation": "Sprint",
+      "source": "messages/zh.json issueViews.sprint",
+      "note": "Known zh drift: dashboards.*.statistic.sprint says 冲刺. Reported to the planner; not corrected here."
+    },
+    "work item": {
+      "translation": "工作项",
+      "source": "messages/zh.json shell.nav.issues",
+      "banned": ["问题", "卡片"],
+      "allowedSenses": "'card' (and its translation) stays correct for a PAYMENT card (billing) and a UI PANEL (a dashboard or board card component) — the same senses tests/i18n-catalog.test.ts's CARD_SENSE_ALLOWLIST allows in en and zh. It is banned only as a name for a work item."
+    },
+    "item": {
+      "translation": "工作项",
+      "source": "messages/zh.json markdownEditor.mentionWorkItems"
+    },
+    "epic": {
+      "translation": "篇章",
+      "source": "messages/zh.json labels.issueType.epic"
+    },
+    "story": {
+      "translation": "故事",
+      "source": "messages/zh.json labels.issueType.story"
+    },
+    "task": {
+      "translation": "任务",
+      "source": "messages/zh.json labels.issueType.task"
+    },
+    "bug": {
+      "translation": "缺陷",
+      "source": "messages/zh.json labels.issueType.bug"
+    },
+    "subtask": {
+      "translation": "子任务",
+      "source": "messages/zh.json labels.issueType.subtask"
+    },
+    "To do": {
+      "translation": "待办",
+      "source": "messages/zh.json labels.defaultStatus.todo"
+    },
+    "Blocked": {
+      "translation": "受阻",
+      "source": "messages/zh.json labels.defaultStatus.blocked"
+    },
+    "Planning": {
+      "translation": "规划中",
+      "source": "messages/zh.json labels.defaultStatus.planning"
+    },
+    "In progress": {
+      "translation": "进行中",
+      "source": "messages/zh.json labels.defaultStatus.in_progress"
+    },
+    "Implemented": {
+      "translation": "已实现",
+      "source": "messages/zh.json labels.defaultStatus.implemented"
+    },
+    "In review": {
+      "translation": "评审中",
+      "source": "messages/zh.json labels.defaultStatus.in_review"
+    },
+    "Done": {
+      "translation": "已完成",
+      "source": "messages/zh.json labels.defaultStatus.done"
+    },
+    "backlog": {
+      "translation": "待办列表",
+      "source": "messages/zh.json shell.nav.backlog"
+    },
+    "board": {
+      "translation": "面板",
+      "source": "messages/zh.json settings.board.title"
+    },
+    "dashboard": {
+      "translation": "工作台",
+      "source": "messages/zh.json dashboards.title"
+    },
+    "story points": {
+      "translation": "故事点",
+      "source": "messages/zh.json issueViews.storyPoints"
+    },
+    "estimate": {
+      "translation": "预估工时",
+      "source": "messages/zh.json issueViews.estimate"
+    },
+    "assignee": {
+      "translation": "负责人",
+      "source": "messages/zh.json issueViews.assignee",
+      "note": "Known zh drift: dashboards.* says 经办人 in places. Not corrected here."
+    },
+    "reporter": {
+      "translation": "创建人",
+      "source": "messages/zh.json issueViews.reporter",
+      "note": "Known zh drift: dashboards.* says 报告人 in places. Not corrected here."
+    },
+    "priority": {
+      "translation": "优先级",
+      "source": "messages/zh.json issueViews.colPriority"
+    },
+    "label": {
+      "translation": "标签",
+      "source": "messages/zh.json issueViews.labelsField"
+    },
+    "component": {
+      "translation": "模块",
+      "source": "messages/zh.json issueViews.advancedFieldComponent",
+      "note": "Known zh drift: reports.statistic.component and dashboards.statistic.component say 组件. Reported to the planner; not corrected here."
+    },
+    "folder": {
+      "translation": "文件夹",
+      "source": "messages/zh.json folders.fieldLabel"
+    },
+    "project": {
+      "translation": "项目",
+      "source": "messages/zh.json permissions.domain.project"
+    },
+    "workspace": {
+      "translation": "工作区",
+      "source": "messages/zh.json settings.workspace.nav.workspace"
+    },
+    "organization": {
+      "translation": "组织",
+      "source": "messages/zh.json settings.apiTokens.createModal.orgField"
+    },
+    "member": {
+      "translation": "成员",
+      "source": "messages/zh.json settings.members.role.member"
+    },
+    "plan": {
+      "translation": "计划",
+      "source": "messages/zh.json shell.nav.plans"
+    },
+    "proposal": {
+      "translation": "提案",
+      "source": "messages/zh.json planReview.event_appended"
+    },
+    "approve": {
+      "translation": "批准",
+      "source": "messages/zh.json approvalGate.verb.approve"
+    },
+    "approval": {
+      "translation": "审批",
+      "source": "messages/zh.json settings.nav.approvals"
+    },
+    "acceptance criteria": {
+      "translation": "验收标准",
+      "source": "messages/zh.json approvalGate.refusal.stale.noun.criteria"
+    },
+    "agent": {
+      "translation": "智能体",
+      "source": "messages/zh.json runs.colAgent"
+    },
+    "run": {
+      "translation": "运行",
+      "source": "messages/zh.json runs.title"
+    },
+    "pull request": {
+      "translation": "拉取请求",
+      "source": "messages/zh.json github.development.pullRequestsGroup"
+    },
+    "design result": {
+      "translation": "设计结果",
+      "source": "messages/zh.json designResult.title"
+    },
+    "acceptance video": {
+      "translation": "验收视频",
+      "source": "messages/zh.json approvalGate.acceptanceResult.kindLabel"
+    }
+  }
+}
