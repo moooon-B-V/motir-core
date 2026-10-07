@@ -37,9 +37,7 @@ import { FLEET_CONTAINER_SIZE, fakeOrchestrator, type ContainerHandle } from '@m
 // sweep, this calls the SHIPPED `ciLiveChargeService.tick` in-process with a
 // chosen `now`. Everything from the service down is real: the accrual, the
 // rollup, the charge through `chargeForMeteredRun`, the stop through
-// `fleetStopService`. The lane's job worker cannot fire the same cron behind the
-// spec's back: it inherits the runner's env from `globalSetup`, before this file
-// sets `GITHUB_FALLBACK_ORG`, so the CI meter is inert there.
+// `fleetStopService`.
 //
 // ⚠️ THE FAR SIDES ARE FAKED WHERE THE EXISTING BILLING E2E FAKES THEM. motir-ai
 // is `lib/test-billing-mock.ts`, installed in THIS process too — the same file
@@ -48,11 +46,21 @@ import { FLEET_CONTAINER_SIZE, fakeOrchestrator, type ContainerHandle } from '@m
 // org owns no Motir-hosted repository, so the stop has no workflow run to cancel
 // there, and the container record is the run as Motir knows it.
 //
-// ⚠️ THE CLOCK IS PINNED INSIDE THE CURRENT MONTH. A tick's accrual is a sum over
-// `startedAt`, and its idempotency key is the debit period — so two ticks must
-// sit in two different periods, and both must meter into the month the page
-// reads. Anchoring on the first instant of the current month satisfies both on
-// every day of the year, without waiting on a real five minutes.
+// ⚠️ THE CLOCK IS PINNED INSIDE THE CURRENT MONTH, AND AHEAD OF THE WALL CLOCK.
+// A tick's accrual is a sum over `startedAt`, and its idempotency key is the
+// debit period — so two ticks must sit in two different periods, and both must
+// meter into the month the page reads.
+//
+// The run also starts in the FUTURE, because the real `system.ci-live-charge`
+// cron (every five minutes, `tick(new Date())`) can fire while a test runs.
+// When this file anchored on the first instant of the month, such a tick charged
+// the run for every minute since then: merge-queue run 37693551297 showed
+// "9,975 of 1,000 minutes" where the spec expected 19, which was the
+// wall-clock minute count since the 1st (MOTIR-7794). A run whose `startedAt` is
+// still ahead of the wall clock accrues nothing on a real tick
+// (`ciLiveChargeService.accrueContainer` floors negative elapsed time at zero).
+// The anchor falls back to the month's first instant only in the last hour of
+// the month, where the lead would carry the ticks into the next one.
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -64,8 +72,17 @@ const MOTIR_AI_URL = 'http://motir-ai.e2e.local';
 const POOL_MINUTES = 1_000;
 
 const MONTH_START = periodStartFor(new Date());
-/** `MONTH_START + minutes`. */
-const at = (minutes: number): Date => new Date(MONTH_START.getTime() + minutes * 60_000);
+/** How far ahead of the wall clock the spec's clock starts. Longer than any test here runs. */
+const WALL_CLOCK_LEAD_MS = 30 * 60_000;
+/** The last offset any test passes to `at`, plus a margin. */
+const LATEST_OFFSET_MS = 30 * 60_000;
+const CLOCK_BASE = ((): Date => {
+  const ahead = new Date(Math.ceil(Date.now() / 60_000) * 60_000 + WALL_CLOCK_LEAD_MS);
+  const lastTick = new Date(ahead.getTime() + LATEST_OFFSET_MS);
+  return periodStartFor(lastTick).getTime() === MONTH_START.getTime() ? ahead : MONTH_START;
+})();
+/** `CLOCK_BASE + minutes`. */
+const at = (minutes: number): Date => new Date(CLOCK_BASE.getTime() + minutes * 60_000);
 
 // ── This process's boundaries, scoped to this file ──────────────────────────
 //
