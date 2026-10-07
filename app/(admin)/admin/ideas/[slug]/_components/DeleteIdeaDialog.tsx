@@ -31,12 +31,11 @@ export function DeleteIdeaDialog({ idea, open, onOpenChange, onDone }: DeleteIde
   const [pending, startTransition] = useTransition();
   const ready = reason.trim().length > 0 && typed.trim() === idea.slug;
 
+  // Opening and closing both start from an empty form, so no state outlives it.
   function close(next: boolean) {
-    if (!next) {
-      setReason('');
-      setTyped('');
-      setError(undefined);
-    }
+    setReason('');
+    setTyped('');
+    setError(undefined);
     onOpenChange(next);
   }
 

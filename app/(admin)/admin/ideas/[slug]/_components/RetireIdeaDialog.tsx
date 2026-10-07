@@ -28,11 +28,10 @@ export function RetireIdeaDialog({ idea, open, onOpenChange, onDone }: RetireIde
   const [error, setError] = useState<string | undefined>();
   const [pending, startTransition] = useTransition();
 
+  // Opening and closing both start from an empty form, so no state outlives it.
   function close(next: boolean) {
-    if (!next) {
-      setReason('');
-      setError(undefined);
-    }
+    setReason('');
+    setError(undefined);
     onOpenChange(next);
   }
 
