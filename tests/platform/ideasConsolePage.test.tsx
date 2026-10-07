@@ -227,8 +227,27 @@ describe('the detail', () => {
     expect(html).toContain('1 source');
     expect(html).toContain('Yes, in E-commerce');
     expect(html).toContain('Not yet reviewed');
-    // An operator sees no support line (the actions are MOTIR-7681's).
+    // An operator gets Edit and Retire, no Delete, and no support line.
     expect(html).not.toContain('Read-only for support');
+    expect(html).toContain('data-testid="idea-actions"');
+    expect(html).toMatch(/>Edit<\/button>|>Edit</);
+    expect(html).toContain('Retire');
+    expect(html).not.toMatch(/>Delete</);
+  });
+
+  it('adds Delete for a superadmin (MOTIR-7681)', async () => {
+    await seedStore();
+    await signInAs('superadmin');
+    const html = await detail('stop-returns');
+    expect(html).toMatch(/>Delete</);
+  });
+
+  it('names who retired an idea in its Retired box (MOTIR-7681)', async () => {
+    await seedStore();
+    await signInAs('operator');
+    const html = await detail('pet-sitter');
+    expect(html).toContain('data-testid="idea-retired-box"');
+    expect(html).toMatch(/ · [^<·]+ · no longer on motir\.co/);
   });
 
   it('adds the Motir-would-buy fields on that kind', async () => {

@@ -10433,7 +10433,101 @@
         "meta": "{when} · no longer on motir.co",
         "metaBy": "{when} · {who} · no longer on motir.co"
       },
-      "readOnly": "Read-only for support. Editing, retiring and deleting ideas is an operator’s or a superadmin’s job."
+      "readOnly": "Read-only for support. Editing, retiring and deleting ideas is an operator’s or a superadmin’s job.",
+      "action": {
+        "edit": "Edit",
+        "retire": "Retire",
+        "delete": "Delete"
+      },
+      "edit": {
+        "title": "Edit idea",
+        "field": {
+          "title": "Title",
+          "pitch": "Pitch",
+          "kind": "Kind",
+          "category": "Category",
+          "tags": "Tags",
+          "capabilities": "What it does",
+          "evidence": "Evidence",
+          "gap": "The gap",
+          "whyNow": "Why now",
+          "whyMotir": "Why Motir would buy it",
+          "whoElse": "Who else needs it"
+        },
+        "evidence": {
+          "claim": "Claim",
+          "source": "Source",
+          "sourceDate": "Source date",
+          "link": "Link",
+          "datePlaceholder": "YYYY-MM-DD, or empty",
+          "add": "Add evidence",
+          "up": "Move evidence {n} up",
+          "down": "Move evidence {n} down",
+          "remove": "Remove evidence {n}",
+          "row": "Evidence {n}"
+        },
+        "addLine": "Add a line",
+        "line": "Line {n}",
+        "removeLine": "Remove line {n}",
+        "limit": "{n} of {max}",
+        "tags": {
+          "hint": "Existing tags only · at most 6 · new tags come from the research skill",
+          "placeholder": "Add a tag",
+          "remove": "Remove {label}",
+          "empty": "No tag matches",
+          "option": "{label} ({count})"
+        },
+        "motirOnly": "Why Motir would buy it and Who else needs it belong to a Motir-would-buy idea only. Switch Kind to show them.",
+        "reviewed": "Mark as reviewed today",
+        "cancel": "Cancel",
+        "save": "Save changes",
+        "unchanged": "Nothing to save — change a field, or tick Mark as reviewed today.",
+        "refused": "Not saved — {n, plural, one {one field needs} other {# fields need}} fixing. Nothing was changed. The fields are marked below.",
+        "saved": "Saved. Your changes show here now and on motir.co within the hour."
+      },
+      "fieldError": {
+        "title": "Give the idea a title of at most 120 characters.",
+        "pitch": "Write a pitch of at most 400 characters.",
+        "long": "Keep this to 600 characters.",
+        "motirOnly": "Clear this on a direction, or switch Kind to Motir would buy.",
+        "evidenceRequired": "A direction needs at least one evidence row.",
+        "evidenceMax": "At most 10 rows.",
+        "claim": "Write the claim (at most 400).",
+        "sourceName": "Name the source (at most 200).",
+        "url": "Use a full link that starts with https://.",
+        "sourceDate": "Use a real date as YYYY-MM-DD, or leave it empty.",
+        "capability": "Write the line (at most 300), or remove it.",
+        "capabilities": "At most 8 lines.",
+        "tags": "At most 6 tags.",
+        "unknownTag": "{tag} is no longer a tag; remove it.",
+        "reason": "Write a reason (at most 2000 characters).",
+        "generic": "Check this field."
+      },
+      "retire": {
+        "title": "Retire “{title}”?",
+        "body": "It leaves motir.co within the hour and moves under Retired here, with your reason. Nothing is deleted.",
+        "reason": "Reason — required, shown on the idea and written to the audit log",
+        "placeholder": "Why is this idea no longer worth building?",
+        "confirm": "Retire idea",
+        "cancel": "Cancel",
+        "already": "Not retired — this idea was already retired. Someone retired it while you had the page open, so your reason was not recorded. The page now shows who retired it and why.",
+        "done": "Retired. It leaves motir.co within the hour."
+      },
+      "delete": {
+        "title": "Delete “{title}” for good?",
+        "body": "Deleting removes the idea, its evidence and its tags and cannot be undone. Use it for an idea that was added by mistake; to take a real idea down, retire it instead. The audit log keeps the slug, the title and your reason.",
+        "reason": "Reason — required, written to the audit log",
+        "placeholder": "Why is this idea being deleted?",
+        "typeSlug": "Type the slug to confirm: {slug}",
+        "confirm": "Delete idea",
+        "cancel": "Cancel",
+        "done": "Deleted “{title}”. It is gone from the store and from motir.co; the audit log keeps the record."
+      },
+      "refused": {
+        "notPermitted": "Not done — your staff role does not allow this. Nothing was changed.",
+        "notFound": "This idea no longer exists. Someone deleted it while you had the page open.",
+        "failed": "Something went wrong, so nothing was changed. Try again."
+      }
     }
   },
   "legal": {

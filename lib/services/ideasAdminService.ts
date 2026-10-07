@@ -35,7 +35,7 @@ import type {
 } from '@/lib/ideas/types';
 import { toIdeaResearchRunDto, toStaffIdeaDto, toStaffIdeaTagDto } from '@/lib/mappers/ideaMappers';
 import { platformRoleAtLeast } from '@/lib/platform/auth';
-import { withPlatformWrite } from '@/lib/platform/context';
+import { withPlatformRead, withPlatformWrite } from '@/lib/platform/context';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
 import { PRISMA_UNIQUE_VIOLATION } from '@/lib/prisma/uniqueViolation';
 import {
@@ -45,6 +45,7 @@ import {
   type IdeaWithRelations,
 } from '@/lib/repositories/ideaRepository';
 import { ideaResearchRunRepository } from '@/lib/repositories/ideaResearchRunRepository';
+import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogRepository';
 import { ideaTagRepository } from '@/lib/repositories/ideaTagRepository';
 import type { Prisma } from '@/generated/prisma/client';
 
@@ -681,6 +682,30 @@ export const ideasAdminService = {
     const row = await ideaRepository.findBySlugForStaff(slug);
     if (!row) throw new IdeaNotFoundError(slug);
     return toStaffIdeaDto(row);
+  },
+
+  /**
+   * Who retired an idea — the console's Retired box names them (design
+   * `platform-admin` § Ideas, Panel 8c). `StaffIdeaDto` carries the reason and
+   * the date but no actor, so this reads the idea's newest `idea.retire` row.
+   * The audit log is a platform table, so the read runs in a platform context
+   * and is itself audited `estate.read` on the idea, the way `lastStop` reads
+   * the fleet's. Null for an active idea (no read is made) and for a retire
+   * with no row behind it.
+   */
+  async retiredBy(
+    actor: IdeaActor,
+    idea: Pick<StaffIdeaDto, 'id' | 'slug' | 'status'>,
+  ): Promise<string | null> {
+    assertLevel(actor, LEVEL_READ);
+    if (idea.status !== 'retired') return null;
+    const row = await withPlatformRead(
+      actor,
+      { action: 'estate.read', ...auditTarget(idea) },
+      (tx) =>
+        platformAuditLogRepository.findLatestByTargetAndAction('idea', idea.id, 'idea.retire', tx),
+    );
+    return row?.actor?.name || row?.actor?.email || null;
   },
 
   /** The whole tag vocabulary, with how many ideas of any status carry each tag. */

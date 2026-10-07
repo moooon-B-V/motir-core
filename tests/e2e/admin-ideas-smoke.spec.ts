@@ -73,5 +73,5 @@ test('@smoke platform staff reach the Ideas list and an idea; a tenant user gets
   await expect(
     page.getByRole('heading', { name: 'Stop returns before they happen', level: 1 }),
   ).toBeVisible();
-  await expect(page.getByText('Read-only for support.')).toBeVisible();
+  await expect(page.getByRole('main').getByText('Read-only for support.')).toBeVisible();
 });
