@@ -10,7 +10,15 @@ import {
   PLANNER_BUG_FILED_CHANGE_KIND,
   PLANNER_BUGS_PER_JOB,
 } from '@/lib/ai/plannerTenantBug';
-import { NoPlanForJobError, PlannerBugCapExceededError } from '@/lib/plans/errors';
+import {
+  FiledBugClosedError,
+  NoPlanForJobError,
+  PlannerBugCapExceededError,
+} from '@/lib/plans/errors';
+import { commentsService } from '@/lib/services/commentsService';
+import { workflowsService } from '@/lib/services/workflowsService';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import type { CommentDTO } from '@/lib/dto/comments';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { planRevisionsService } from '@/lib/services/planRevisionsService';
@@ -232,6 +240,34 @@ export const aiWorkItemsService = {
         return { key: dto.identifier, id: dto.id };
       },
     );
+  },
+  /**
+   * Comment on a bug Motir filed itself (MOTIR-7722) — how a REPEAT planning
+   * failure lands: the same error code, session kind and model inside motir-ai's
+   * 24-hour window adds its record to the open bug rather than filing another.
+   *
+   * The door is deliberately narrow. The item must be a `bug` the SYSTEM
+   * principal reported, so the service bearer cannot comment on a person's
+   * card; anything else answers 404, the same as a key that does not exist. A
+   * bug that is archived or in its project's done category answers
+   * `FiledBugClosedError` (409), and motir-ai files a new bug instead. The
+   * comment itself goes through `commentsService.addComment`, unbypassed.
+   */
+  async commentOnFiledBug(
+    input: { identifier: string; bodyMd: string },
+    ctx: ServiceContext,
+  ): Promise<CommentDTO> {
+    const identifier = input.identifier.trim().toUpperCase();
+    const projectKey = identifier.slice(0, identifier.lastIndexOf('-'));
+    const project = await resolveServiceProjectByKey(projectKey, ctx);
+    const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
+    if (item.kind !== 'bug' || item.reporterId !== ctx.userId) {
+      throw new WorkItemNotFoundError(identifier);
+    }
+    if (item.archivedAt !== null) throw new FiledBugClosedError(identifier);
+    const terminal = await workflowsService.getTerminalStatusKeys(project.id, ctx.workspaceId);
+    if (terminal.has(item.status)) throw new FiledBugClosedError(identifier);
+    return commentsService.addComment(item.id, { bodyMd: input.bodyMd }, ctx);
   },
 };
 
