@@ -21,8 +21,7 @@ export const ideaResearchRunRepository = {
   },
 
   /** The most recent runs, newest first. */
-  async listRecent(limit: number, tx?: Prisma.TransactionClient): Promise<IdeaResearchRun[]> {
-    const client = tx ?? dbRead;
-    return client.ideaResearchRun.findMany({ orderBy: { ranAt: 'desc' }, take: limit });
+  async listRecent(limit: number): Promise<IdeaResearchRun[]> {
+    return dbRead.ideaResearchRun.findMany({ orderBy: { ranAt: 'desc' }, take: limit });
   },
 };

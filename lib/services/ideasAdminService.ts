@@ -407,7 +407,7 @@ export const ideasAdminService = {
     const credential = credentialMetadata(actor);
 
     return withPlatformWrite(actor, async (tx, record) => {
-      const current = await ideaRepository.findBySlugForStaff(slug, tx);
+      const current = await ideaRepository.findBySlugInTx(slug, tx);
       if (!current) throw new IdeaNotFoundError(slug);
 
       const update: IdeaRowUpdate = {};
@@ -491,7 +491,7 @@ export const ideasAdminService = {
 
     return withPlatformWrite(actor, async (tx, record) => {
       const touched = await ideaRepository.retireBySlug(slug, stated, new Date(), tx);
-      const row = await ideaRepository.findBySlugForStaff(slug, tx);
+      const row = await ideaRepository.findBySlugInTx(slug, tx);
       if (!row) throw new IdeaNotFoundError(slug);
       if (touched === 0) throw new IdeaNotActiveError(slug);
       await record({
@@ -515,7 +515,7 @@ export const ideasAdminService = {
     const credential = credentialMetadata(actor);
 
     await withPlatformWrite(actor, async (tx, record) => {
-      const row = await ideaRepository.findBySlugForStaff(slug, tx);
+      const row = await ideaRepository.findBySlugInTx(slug, tx);
       if (!row) throw new IdeaNotFoundError(slug);
       await ideaRepository.deleteById(row.id, tx);
       await record({

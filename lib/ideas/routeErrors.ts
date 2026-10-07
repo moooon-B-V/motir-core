@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { ZodError, ZodType, z } from 'zod';
-import { MissingAuditReasonError, NotPlatformStaffError } from '@/lib/platform/errors';
+import { NotPlatformStaffError } from '@/lib/platform/errors';
 import {
   IdeaNotActiveError,
   IdeaNotFoundError,
@@ -76,7 +76,6 @@ export function ideasErrorResponse(err: unknown): NextResponse {
     return ideasJson({ code: err.code, field: err.field }, 400);
   }
   if (err instanceof UnknownIdeaTagError) return ideasJson({ code: err.code, tags: err.tags }, 400);
-  if (err instanceof MissingAuditReasonError) return ideasJson({ code: err.code }, 400);
   if (err instanceof IdeaNotFoundError) return ideasJson({ code: err.code }, 404);
   if (err instanceof IdeaSlugTakenError)
     return ideasJson({ code: err.code, slugs: err.slugs }, 409);

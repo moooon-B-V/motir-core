@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET as listGET } from '@/app/api/public/ideas/route';
 import { GET as detailGET } from '@/app/api/public/ideas/[slug]/route';
 import { GET as tagsGET } from '@/app/api/public/ideas/tags/route';
 import { ideasAdminService } from '@/lib/services/ideasAdminService';
+import { ideasPublicService } from '@/lib/services/ideasPublicService';
 import { runAsCloudBuild } from '../helpers/cloudBuild';
 import { truncateAuthTables } from '../helpers/db';
 import { stripSourceComments } from '../helpers/stripSourceComments';
@@ -112,6 +113,24 @@ describe('GET /api/public/ideas/{slug}', () => {
     expect([unknown.status, retired.status]).toEqual([404, 404]);
     expect(await unknown.json()).toEqual({ code: 'IDEA_NOT_FOUND' });
     expect(await retired.json()).toEqual({ code: 'IDEA_NOT_FOUND' });
+  });
+});
+
+describe('an unexpected failure', () => {
+  it('propagates from the slug read as a 500, never as a 404', async () => {
+    const spy = vi
+      .spyOn(ideasPublicService, 'getBySlug')
+      .mockRejectedValueOnce(new Error('db down'));
+    await expect(detailGET(get('/x'), slugCtx('x'))).rejects.toThrow('db down');
+    spy.mockRestore();
+  });
+
+  it('propagates from the list as a 500, including the cap being reached', async () => {
+    const spy = vi
+      .spyOn(ideasPublicService, 'listActive')
+      .mockRejectedValueOnce(new Error('cap reached'));
+    await expect(listGET(get(''))).rejects.toThrow('cap reached');
+    spy.mockRestore();
   });
 });
 

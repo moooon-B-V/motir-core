@@ -13,7 +13,7 @@ import { adminDb } from '../helpers/adminDb';
 export async function staffActor(
   role: PlatformRole,
   credential: IdeaCredential = { kind: 'session' },
-  label = role,
+  label: string = role,
 ): Promise<IdeaActor> {
   const user = await createTestUser({
     email: `ops+ideas-${label}@moooon.net`,

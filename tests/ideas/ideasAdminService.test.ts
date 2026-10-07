@@ -178,6 +178,83 @@ describe('addIdeas', () => {
   });
 });
 
+describe('validation, field by field', () => {
+  it('names every rule a new idea breaks, in one refusal', async () => {
+    const actor = await staffActor('operator');
+    const long = (n: number) => 'x'.repeat(n + 1);
+    const attempt = ideasAdminService.addIdeas(actor, [
+      {
+        slug: 'all-wrong',
+        title: long(120),
+        pitch: '   ',
+        kind: 'maybe' as never,
+        category: 'astrology' as never,
+        capabilities: [...Array.from({ length: 8 }, () => 'ok'), ' '],
+        tags: ['a', 'b', 'c', 'd', 'e', 'f', 'a'],
+        evidence: [
+          ...Array.from({ length: 10 }, () => ({
+            claim: 'c',
+            sourceName: 's',
+            url: 'https://ok.example',
+          })),
+          { claim: ' ', sourceName: '', url: 'http://plain.example', sourceDate: '2026-02-30' },
+          { claim: 'c', sourceName: 's', url: 'not a url', sourceDate: 'May 2026' },
+        ],
+        gap: long(600),
+      },
+    ]);
+    await expect(attempt).rejects.toBeInstanceOf(InvalidIdeaInputError);
+    const err = (await attempt.catch((e: unknown) => e)) as InvalidIdeaInputError;
+    expect(new Set(err.issues.map((i) => i.field))).toEqual(
+      new Set([
+        'title',
+        'pitch',
+        'kind',
+        'category',
+        'gap',
+        'capabilities',
+        'capabilities[8]',
+        'tags',
+        'evidence',
+        'evidence[10].claim',
+        'evidence[10].sourceName',
+        'evidence[10].url',
+        'evidence[10].sourceDate',
+        'evidence[11].url',
+        'evidence[11].sourceDate',
+      ]),
+    );
+    expect(await adminDb.idea.count()).toBe(0);
+  });
+
+  it('refuses a tag with a bad slug, no label or no description, naming each', async () => {
+    const actor = await staffActor('operator');
+    const attempt = ideasAdminService.addTag(actor, {
+      slug: 'Not A Slug',
+      label: ' ',
+      description: '',
+    });
+    const err = (await attempt.catch((e: unknown) => e)) as InvalidIdeaInputError;
+    expect(err).toBeInstanceOf(InvalidIdeaInputError);
+    expect(err.issues.map((i) => i.field)).toEqual(['slug', 'label', 'description']);
+    const blank = (await ideasAdminService
+      .addTag(actor, { slug: '', label: 'L', description: 'D' })
+      .catch((e: unknown) => e)) as InvalidIdeaInputError;
+    expect(blank.issues).toEqual([expect.objectContaining({ slug: null, field: 'slug' })]);
+  });
+
+  it('refuses a research run covering more areas than the cap', async () => {
+    const actor = await staffActor('operator');
+    const attempt = ideasAdminService.recordResearchRun(actor, {
+      areasCovered: Array.from({ length: 41 }, (_, i) => `area-${i}`),
+      addedCount: 0,
+      retiredCount: 0,
+      reportMd: '# Run',
+    });
+    await expect(attempt).rejects.toBeInstanceOf(InvalidIdeaInputError);
+  });
+});
+
 describe('updateIdea', () => {
   it('applies a sparse patch, replaces evidence and tags, stamps the review and names the fields', async () => {
     await seedTags('smb', 'consumer');

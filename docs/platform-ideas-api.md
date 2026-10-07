@@ -72,17 +72,16 @@ A tag's `description` is required: a new tag needs a stated purpose.
 
 ## Errors
 
-| Status | `code`                 | When                                                                                            | Extra fields                         |
-| ------ | ---------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------ |
-| 404    | `NOT_FOUND`            | not admitted (see above)                                                                        | —                                    |
-| 400    | `INVALID_REQUEST`      | the body is not JSON, or fails its schema; a bad query param                                    | `issues: { path, message }[]`        |
-| 400    | `INVALID_IDEA_INPUT`   | a rule the service owns (kind-specific fields, a direction with no evidence, an unknown cursor) | `issues: { slug, field, message }[]` |
-| 400    | `UNKNOWN_TAG`          | a tag slug not in the vocabulary                                                                | `tags: string[]`                     |
-| 400    | `MISSING_AUDIT_REASON` | a write whose audit row needs a reason and got none                                             | —                                    |
-| 404    | `IDEA_NOT_FOUND`       | no idea with that slug                                                                          | —                                    |
-| 409    | `IDEA_SLUG_TAKEN`      | a slug already in the store, or repeated in the batch                                           | `slugs: string[]`                    |
-| 409    | `IDEA_NOT_ACTIVE`      | retiring an idea already retired                                                                | —                                    |
-| 409    | `IDEA_TAG_TAKEN`       | a tag slug already in the vocabulary                                                            | `slug`                               |
+| Status | `code`               | When                                                                                            | Extra fields                         |
+| ------ | -------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------ |
+| 404    | `NOT_FOUND`          | not admitted (see above)                                                                        | —                                    |
+| 400    | `INVALID_REQUEST`    | the body is not JSON, or fails its schema; a bad query param                                    | `issues: { path, message }[]`        |
+| 400    | `INVALID_IDEA_INPUT` | a rule the service owns (kind-specific fields, a direction with no evidence, an unknown cursor) | `issues: { slug, field, message }[]` |
+| 400    | `UNKNOWN_TAG`        | a tag slug not in the vocabulary                                                                | `tags: string[]`                     |
+| 404    | `IDEA_NOT_FOUND`     | no idea with that slug                                                                          | —                                    |
+| 409    | `IDEA_SLUG_TAKEN`    | a slug already in the store, or repeated in the batch                                           | `slugs: string[]`                    |
+| 409    | `IDEA_NOT_ACTIVE`    | retiring an idea already retired                                                                | —                                    |
+| 409    | `IDEA_TAG_TAKEN`     | a tag slug already in the vocabulary                                                            | `slug`                               |
 
 Anything else is a 500.
 

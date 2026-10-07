@@ -112,16 +112,13 @@ export async function withPlatformRead<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
   options: PlatformTransactionOptions = {},
 ): Promise<T> {
-  return db.$transaction(
+  return inPlatformTransaction(
+    principal,
     async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.platform_staff', 'true', true)`;
-      await tx.$executeRaw`SELECT set_config('app.user_id', ${principal.userId}, true)`;
-
       await appendChainedEntry(principal, entry, tx);
-
       return fn(tx);
     },
-    options.timeoutMs === undefined ? undefined : { timeout: options.timeoutMs },
+    options,
   );
 }
 
@@ -153,10 +150,9 @@ export async function withPlatformWrite<T>(
   fn: (tx: Prisma.TransactionClient, record: PlatformAuditRecorder) => Promise<T>,
   options: PlatformTransactionOptions = {},
 ): Promise<T> {
-  return db.$transaction(
+  return inPlatformTransaction(
+    principal,
     async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.platform_staff', 'true', true)`;
-      await tx.$executeRaw`SELECT set_config('app.user_id', ${principal.userId}, true)`;
       await platformAuditLogRepository.lockChainHead(tx);
 
       let recorded = 0;
@@ -171,6 +167,26 @@ export async function withPlatformWrite<T>(
       const result = await fn(tx, record);
       if (recorded === 0) throw new PlatformWriteUnauditedError();
       return result;
+    },
+    options,
+  );
+}
+
+/**
+ * The ONE transaction opener both platform contexts share: binds
+ * `app.platform_staff` and `app.user_id` first, so every statement after — the
+ * audit append included — passes the platform tables' own policies.
+ */
+async function inPlatformTransaction<T>(
+  principal: PlatformPrincipal,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options: PlatformTransactionOptions,
+): Promise<T> {
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.platform_staff', 'true', true)`;
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${principal.userId}, true)`;
+      return fn(tx);
     },
     options.timeoutMs === undefined ? undefined : { timeout: options.timeoutMs },
   );

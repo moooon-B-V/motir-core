@@ -164,22 +164,22 @@ export const ideaRepository = {
     await tx.idea.delete({ where: { id } });
   },
 
-  /** One idea of any status, or null. */
-  async findBySlugForStaff(
+  /** One idea of any status, or null — the staff console's and skill's read. */
+  async findBySlugForStaff(slug: string): Promise<IdeaWithRelations | null> {
+    return dbRead.idea.findUnique({ where: { slug }, include: IDEA_WITH_RELATIONS });
+  },
+
+  /** The same read inside a write transaction — the row a write is about to change. */
+  async findBySlugInTx(
     slug: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<IdeaWithRelations | null> {
-    const client = tx ?? dbRead;
-    return client.idea.findUnique({ where: { slug }, include: IDEA_WITH_RELATIONS });
+    return tx.idea.findUnique({ where: { slug }, include: IDEA_WITH_RELATIONS });
   },
 
   /** One page of ideas of any status, newest first, keyset on `(addedAt, id)`. */
-  async findAllForStaff(
-    query: StaffIdeaQuery,
-    tx?: Prisma.TransactionClient,
-  ): Promise<IdeaWithRelations[]> {
-    const client = tx ?? dbRead;
-    return client.idea.findMany({
+  async findAllForStaff(query: StaffIdeaQuery): Promise<IdeaWithRelations[]> {
+    return dbRead.idea.findMany({
       where: staffWhere(query),
       orderBy: [{ addedAt: 'desc' }, { id: 'desc' }],
       take: query.limit,
@@ -187,10 +187,9 @@ export const ideaRepository = {
     });
   },
 
-  /** Which of these slugs are already in the store (any status). */
-  async existingSlugs(slugs: string[], tx?: Prisma.TransactionClient): Promise<string[]> {
-    const client = tx ?? dbRead;
-    const rows = await client.idea.findMany({
+  /** Which of these slugs are already in the store (any status) — the batch-add guard. */
+  async existingSlugs(slugs: string[], tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.idea.findMany({
       where: { slug: { in: slugs } },
       select: { slug: true },
     });

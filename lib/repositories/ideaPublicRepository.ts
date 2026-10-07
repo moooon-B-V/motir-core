@@ -15,7 +15,7 @@ import { IDEA_WITH_RELATIONS, type IdeaWithRelations } from './ideaRepository';
 /** The public list's query. `tags` are AND-combined: an idea must carry every one. */
 export interface PublicIdeaQuery {
   category?: IdeaCategory;
-  tags?: string[];
+  tags: string[];
   q?: string;
   kind?: IdeaKind;
 }
@@ -37,7 +37,7 @@ function activeWhere(query: PublicIdeaQuery): Prisma.IdeaWhereInput {
   const and: Prisma.IdeaWhereInput[] = [{ status: 'active' }];
   if (query.category) and.push({ category: query.category });
   if (query.kind) and.push({ kind: query.kind });
-  for (const slug of query.tags ?? []) and.push({ tags: { some: { tag: { slug } } } });
+  for (const slug of query.tags) and.push({ tags: { some: { tag: { slug } } } });
   if (query.q) {
     const contains = { contains: query.q, mode: 'insensitive' as const };
     and.push({
