@@ -13,7 +13,8 @@
   the estate overview, the usage/cost rollups, the drill-down), **MOTIR-734 / MOTIR-735**
   (10.1.7–10.1.8 — the gating tests), all of Story **10.2** (MOTIR-736) and Story
   **10.3** (MOTIR-745, in particular MOTIR-749's impersonation and MOTIR-751's audit-log
-  view).
+  view), and Story **MOTIR-7662** (the idea store — the ideas-endpoints token exception
+  amended into §2 by MOTIR-7669, built by MOTIR-7673).
 
 > Structured **Status → Context → Decision → Consequences**, with the load-bearing
 > shapes pinned in explicit tables so every downstream subtask implements against one
@@ -203,6 +204,51 @@ The gate is asserted at **two** layers, and both are required: the `(admin)` lay
 and **every platform-scoped service method** independently (§3). The layout protects the
 pages; the service check protects against a future route handler, server action or job
 that reaches the platform tier without passing through a layout.
+
+> **⚠️ AMENDED 2026-10-07 (Story MOTIR-7662 · MOTIR-7669) — the ideas endpoints accept a staff
+> member's personal access token.** Decided by the owner on 2026-10-06 and recorded as a published,
+> approved decision page on [MOTIR-7661](https://app.motir.co/items/MOTIR-7661) (page
+> `cmuxral3u00n2hvoih84no58b`, version 1). It amends the **Input** row above at ONE door; the table is
+> deliberately left as it was, and every other clause of this section stands.
+>
+> - **What is allowed.** On `/api/platform/ideas/**` — and nowhere else — the gate also accepts
+>   `Authorization: Bearer motir_pat_…`: a token `apiTokensService.verify` resolves, whose **OWNER**
+>   currently holds a `platformRole` at or above the route's level — `operator` for every read and
+>   write (list, add, update, retire, add a tag, record a research run), `superadmin` for the hard
+>   `DELETE`. The owner's standing is read fresh from the database on every request, exactly as the
+>   Lookup row says. **No token scope or permission is consulted and none is introduced**: the
+>   owner's standing is the whole test, so a token carries no more platform reach than the person
+>   who minted it holds at the moment it is used. A request with no bearer header falls back to the
+>   operator's console session, unchanged.
+> - **What stays forbidden.** Every `/admin` page, every console server action and every other
+>   platform route keeps `getSession()` as the gate's only input — `requirePlatformStaff` itself
+>   still reads no header, and never will. On the ideas endpoints a RUN token (a token bound to a
+>   dispatch run), a revoked, expired or unknown token, a token of a suspended organization and an
+>   OAuth connection are all refused, and so is a token whose owner is not staff at the route's
+>   level. **Every refusal is the same 404 as the Failure row** — a token is never told which of
+>   these it was.
+> - **Where it is enforced.** A SEPARATE gate, `requirePlatformStaffForIdeas(req, minimum)` in
+>   `lib/platform/ideasGate.ts`, beside `requirePlatformStaff` — never a flag on the shared gate,
+>   which would leave every caller one argument away from accepting tokens. It may be imported only
+>   from `app/api/platform/ideas/**`; `tests/platform/platformTokenBoundary.test.ts` fails when any
+>   other file imports it, and proves a bearer header alone never satisfies `requirePlatformStaff`.
+> - **The service-level check, on a token request.** The rule above that _"every platform-scoped
+>   service method"_ asserts the gate independently cannot mean calling `requirePlatformStaff` on a
+>   token request — that gate reads the session, which a token request does not have, so it would
+>   refuse every legitimate call. The ideas service instead re-checks the principal the ideas gate
+>   already resolved (its `role` against the method's level, e.g. `superadmin` for a delete), and
+>   accepts that principal only as an argument the gate produced.
+> - **The audit consequence (§3b).** Every write through the ideas endpoints appends its
+>   `PlatformAuditLog` row in the same transaction, `targetKind: 'idea'`, and its `metadata` names
+>   the credential beside the person: `credential: { kind: 'session' }`, or
+>   `credential: { kind: 'token', apiTokenId }` with the token row's id. The token's secret, prefix
+>   and hash are never recorded.
+> - **Not a precedent.** A further platform route that needs a token is a new decision, not an
+>   extension of this one.
+>
+> Consumed by Story **MOTIR-7662** (the idea store): **MOTIR-7673** (the gate and the boundary
+> test), **MOTIR-7671** (the audit metadata), **MOTIR-7675** (the routes), **MOTIR-7677** (the
+> platform-wide boundary tests).
 
 ### 3. Cross-tenant reads — an explicit platform tier, and an audit row written in the same transaction
 
@@ -734,4 +780,6 @@ column. Adding a row here is what that check produces when the answer is _absent
 - `lib/ai/motirAiClient.ts` · `lib/services/aiUsageService.ts` · `docs/ai-boundary.md` —
   the 7.1 read-through pattern §5 extends.
 - `app/api/%5Ftest/_helpers.ts` — the shipped 404-not-403 precedent (`productionGate`).
+- MOTIR-7661 — the published decision page (`cmuxral3u00n2hvoih84no58b`) behind §2's
+  ideas-endpoints amendment.
 - MOTIR-2582 · MOTIR-2897 — the planning bugs that consolidated ownership onto MOTIR-2896.
