@@ -2008,7 +2008,12 @@ writes nothing.
 | `runId`   | string | yes      | The `runId` `start_work_item_run` answered.                                   |
 | `outcome` | enum   | yes      | `completed`, `drained`, `max`, `halted`, `interrupted`, `replanned`, `gated`. |
 
-`abandoned` is refused: only the 60-minute reap writes it. A **`completed`** or
+`abandoned` is refused: only the 60-minute reap writes it. **`gated`** is the
+outcome for a run that stopped because its remaining work waits on an approval
+gate — a design, decision, choice, confirmation or manual card not yet decided —
+and such a stop is **never `halted`** (`halted` reads as _Run died_). Motir
+records which gates held the run itself, from the awaiting gates on the run's
+cards (MOTIR-7703); you name none. A **`completed`** or
 **`drained`** close records your harness and model as the implementer of every
 leg card the run took to Implemented or later, and answers those keys in
 `stamped`; any other outcome stamps nothing. **No outcome changes a card's

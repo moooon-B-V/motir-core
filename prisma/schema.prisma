@@ -1550,6 +1550,7 @@ model Workspace {
   approvalGates               ApprovalGate[]
   /// Automatic hosted re-runs after a design Revise (MOTIR-700).
   designAutoReruns            DesignAutoRerun[]
+  dispatchRunHeldGates        DispatchRunHeldGate[]
   boards                      Board[]
   boardColumns                BoardColumn[]
   boardColumnStatuses         BoardColumnStatus[]
@@ -3107,6 +3108,8 @@ model WorkItem {
   /// What each Revise on this design card did about an automatic hosted re-run
   /// (MOTIR-700) — the "re-running" / "skipped" line.
   designAutoReruns         DesignAutoRerun[]
+  /// The gated runs held by a gate on this card (MOTIR-7703).
+  heldRunGates             DispatchRunHeldGate[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
   // the issue: label/component joins are pure association rows, watcher rows
   // are notification substrate.
@@ -5599,9 +5602,11 @@ model ApprovalGate {
   /// caller it was added for.
   /// The automatic hosted re-run a Revise on this gate caused or skipped (MOTIR-700).
   designAutoRerun    DesignAutoRerun?
+  /// The runs that closed `gated` waiting on this gate (MOTIR-7703).
+  heldRuns           DispatchRunHeldGate[]
   /// The page versions this gate FROZE at its approval (Story MOTIR-5761 ·
   /// MOTIR-7428). SetNull on the version side: the freeze outlives the row.
-  frozenPageVersions PageVersion[]    @relation("PageVersionFrozenByGate")
+  frozenPageVersions PageVersion[]         @relation("PageVersionFrozenByGate")
 
   @@index([workspaceId, state])
   /// THE ROUTING READ's index (MOTIR-4791) — the Approvals tab asks for one
@@ -11281,6 +11286,8 @@ model DispatchRun {
   gitCredentials   DispatchRunGitCredential[]
   /// The design refusal that started this run automatically, if one did (MOTIR-700).
   designAutoReruns DesignAutoRerun[]
+  /// The approval gates this run stopped at, when it closed `gated` (MOTIR-7703).
+  heldGates        DispatchRunHeldGate[]
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.
@@ -11301,6 +11308,43 @@ model DispatchRun {
   /// as the index above.
   @@index([status, lastHeartbeatAt])
   @@map("dispatch_run")
+}
+
+/// A GATE THAT HELD A RUN (Story MOTIR-7701 · MOTIR-7703;
+/// `docs/decisions/dispatch-run-record.md` AMENDMENT 2026-10-07).
+///
+/// When a run closes `gated`, the close DERIVES — server-side, for every reporter —
+/// each approval gate that is `awaiting` on a card in the run's scope and is one of
+/// the kinds a parent run's stoppers raise (`design_result`, `decision_approval`,
+/// `decision_choice`, `decision_confirmation`, `manual_work`), and writes one row
+/// per gate in the close's own transaction. No client names a gate: the runbook,
+/// the CLI and a hosted container all get the same record. A `gated` close that
+/// finds none writes none. The rows are what To resume and the auto-resume read.
+model DispatchRunHeldGate {
+  id            String           @id @default(cuid())
+  /// Tenant of record — RLS does not traverse foreign keys.
+  workspaceId   String           @map("workspace_id")
+  dispatchRunId String           @map("dispatch_run_id")
+  gateId        String           @map("gate_id")
+  /// The card the gate is ON, captured at the close.
+  workItemId    String           @map("work_item_id")
+  /// The gate's kind, captured at the close — one of the five stopper kinds.
+  kind          ApprovalGateKind
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dispatchRun DispatchRun  @relation(fields: [dispatchRunId], references: [id], onDelete: Cascade)
+  gate        ApprovalGate @relation(fields: [gateId], references: [id], onDelete: Cascade)
+  workItem    WorkItem     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  /// One row per gate per run.
+  @@unique([dispatchRunId, gateId])
+  /// The decide door's read: which gated runs does this gate hold?
+  @@index([gateId])
+  /// A card's held-run read.
+  @@index([workItemId])
+  @@index([workspaceId])
+  @@map("dispatch_run_held_gate")
 }
 
 /// A GitHub INSTALLATION TOKEN handed to a hosted run (Story MOTIR-683 · MOTIR-6449;
