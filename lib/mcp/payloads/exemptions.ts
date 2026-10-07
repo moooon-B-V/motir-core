@@ -60,6 +60,11 @@ export const EXEMPT_TOOLS = {
     'Reports a project’s PLANNING PRECONDITIONS (established?, code connected + indexed?, ' +
     'repo set, onboarding run) — an agent-facing readiness report assembled for dispatch, ' +
     'with no REST client asking for it.',
+  get_code_health:
+    'Reports each repository’s CODE HEALTH for PLANNING (index state, latest audit summary, ' +
+    'derived convention, each section present / absent / unavailable) — a planning read ' +
+    'assembled for an agent, the same reason `get_project_state` gives. No `/api/v1` ' +
+    'operation returns it, and no REST client has asked for it (MOTIR-7793).',
   publish_design_result:
     'Returns the published RESULT\u2019s receipt \u2014 `{ id, workItemKey, assetCount, ' +
     'noteTruncated, createdAt }`. \u26a0\ufe0f `/api/v1` NOW PUBLISHES DESIGN COMPONENTS ' +

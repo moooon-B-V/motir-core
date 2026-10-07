@@ -591,6 +591,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
     descriptionFingerprint: '77241589544a',
   },
+  get_code_health: {
+    summary:
+      "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
+    descriptionFingerprint: 'ab6d4bd4fd37',
+  },
   skeleton: {
     // Re-pinned for MOTIR-5410: the description now names the folder placement
     // (`folderId` on a filed row, the project's `folders`) the read carries.
