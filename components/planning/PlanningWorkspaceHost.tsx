@@ -899,6 +899,10 @@ function PlanWorkspaceHost({
                 onCanvasLevelChange={noteReaderLevel}
                 live={paneLive}
                 liveFailing={state.liveFailing}
+                // The progress line (MOTIR-7829) — on the review's own `progress`,
+                // which is null once the plan leaves `generating` (the hand-over).
+                progress={paneReview.progress ?? null}
+                progressFailing={state.liveFailing}
                 discarded={paneDiscarded}
                 // The plan BESIDE the reader's level offers the trip (MOTIR-6223).
                 offerPlanElsewhere

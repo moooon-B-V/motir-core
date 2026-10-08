@@ -370,7 +370,7 @@ describe('the copy keys §16.5 names ship in BOTH catalogs (AC 7)', () => {
       'railRemoveDeclined',
       'railAddDeclined',
     ]) {
-      expect((t as Record<string, string>)[key], `en.${key}`).toBeTruthy();
+      expect((t as unknown as Record<string, string>)[key], `en.${key}`).toBeTruthy();
       expect(zh.planReview[key], `zh.${key}`).toBeTruthy();
     }
     // §16.3 and §16.4 add none: the chip fuses a shipped pair and the link out
