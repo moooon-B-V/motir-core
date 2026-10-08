@@ -25,6 +25,7 @@ const LABELS = {
   navUsage: 'Usage & cost',
   navTenants: 'Tenants',
   navUsers: 'Users',
+  navEnterpriseRequests: 'Enterprise requests',
   navMonitoring: 'Monitoring',
   navAiPlanning: 'AI planning',
   navPlanningLessons: 'Planning lessons',
