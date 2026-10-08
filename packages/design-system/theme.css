@@ -141,7 +141,7 @@
      re-declared, unlayered, in the FONT SETS section, which is where it is
      explained. The -source variables are set by next/font in app/fonts.ts. */
   --font-sans:
-    var(--font-sans-pairing, -apple-system),
+    var(--font-sans-pairing, 'Segoe UI'),
     var(--font-script-sans, var(--font-sans-tail, sans-serif)), var(--font-sans-tail, sans-serif);
   --font-serif:
     var(--font-serif-pairing, Georgia), var(--font-script-serif, var(--font-serif-tail, serif)),
@@ -274,11 +274,13 @@
 /* The BASE (motir) pairing's chains for the three roles (MOTIR-7845). Kept
    outside @theme so Tailwind does not mint font-sans-pairing utilities, and
    placed before every [data-type] block so each pairing overrides it. The
-   pairing chain names faces only; its generic keywords live in the tail. */
+   pairing chain names faces only; its generic keywords live in the tail, and
+   so do -apple-system and BlinkMacSystemFont, which name the platform's UI font
+   with its own CJK cascade (PingFang, Hiragino) and would draw the commonest
+   Han glyphs ahead of the font set's face (MOTIR-7880). */
 :root {
-  --font-sans-pairing:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto;
-  --font-sans-tail: sans-serif;
+  --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
   --font-serif-pairing: var(--font-serif-source, Georgia);
   --font-serif-tail: serif;
   --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
@@ -4358,9 +4360,8 @@
 [data-appearance-scope][data-type='motir'] {
   --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
   --font-mono-tail: monospace;
-  --font-sans-pairing:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto;
-  --font-sans-tail: sans-serif;
+  --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
   --font-serif-pairing: var(--font-serif-source, Georgia);
   --font-serif-tail: serif;
 }
@@ -4994,18 +4995,16 @@
 
 [data-type='motir-sans'] {
   /* Sans headlines — re-point the editorial serif role at the sans stack. */
-  --font-serif-pairing:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto;
-  --font-serif-tail: sans-serif;
+  --font-serif-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-serif-tail: -apple-system, BlinkMacSystemFont, sans-serif;
   /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
        inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
        nested scope: this pairing under a mono ancestor rendered mono. Unlike the
        colour axis there is no `[data-appearance-scope]` layer to fall back
        through — `--font-*` are role tokens, not `--el-*` — so every
        `[data-type]` block must be TOTAL over the three roles. */
-  --font-sans-pairing:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto;
-  --font-sans-tail: sans-serif;
+  --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
   --font-mono-tail: monospace;
 }
@@ -6073,9 +6072,8 @@
        colour axis there is no `[data-appearance-scope]` layer to fall back
        through — `--font-*` are role tokens, not `--el-*` — so every
        `[data-type]` block must be TOTAL over the three roles. */
-  --font-sans-pairing:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto;
-  --font-sans-tail: sans-serif;
+  --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
   --font-mono-tail: monospace;
 }
@@ -6137,7 +6135,7 @@
 [data-font-set-serif],
 [data-font-set-mono] {
   --font-sans:
-    var(--font-sans-pairing, -apple-system),
+    var(--font-sans-pairing, 'Segoe UI'),
     var(--font-script-sans, var(--font-sans-tail, sans-serif)), var(--font-sans-tail, sans-serif);
   --font-serif:
     var(--font-serif-pairing, Georgia), var(--font-script-serif, var(--font-serif-tail, serif)),

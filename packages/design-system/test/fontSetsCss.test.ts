@@ -57,8 +57,13 @@ const ROLE_GENERIC = { sans: 'sans-serif', serif: 'serif', mono: 'monospace' } a
 
 // Every CSS generic family keyword (CSS Fonts 4 §generic families), plus the
 // `ui-*` and `system-ui` aliases. A generic maps to ONE system font, which on a
-// CJK system covers CJK and would pre-empt the font set's face.
+// CJK system covers CJK and would pre-empt the font set's face. The two
+// vendor spellings of `system-ui` behave the same way and are listed with it:
+// they name the platform UI font together with its own fallback cascade, which
+// drew 的 色 直 ahead of Noto Sans SC / JP on a production build (MOTIR-7880).
 const GENERICS = new Set([
+  '-apple-system',
+  'blinkmacsystemfont',
   'serif',
   'sans-serif',
   'monospace',
