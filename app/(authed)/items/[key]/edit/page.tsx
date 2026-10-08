@@ -83,7 +83,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   // the read view pays one discarded read. That is deliberate: the redirect is
   // the rare path, and the alternative charges a second round trip to every
   // successful edit.
-  const [{ canEdit }, members, heldTransitions, planHold, { canViewPages }] = await Promise.all([
+  const [{ canEdit }, members, heldTransitions, planHold, pageCaps] = await Promise.all([
     projectAccessService.getCapabilities(ctx.projectId, serviceCtx),
     assignableMembersService.list({
       projectId: ctx.projectId,
@@ -114,7 +114,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
         heldTransitions={heldTransitions}
         planHold={planHold}
         aiConfigured={isMotirAiConfigured()}
-        canViewPages={canViewPages}
+        canViewPages={pageCaps.canViewPages}
       />
       <RelationshipsPanel
         blockedBy={detail.blockedBy}
