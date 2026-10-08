@@ -12429,6 +12429,8 @@ enum PageWorkItemLinkSource {
   mention
   embed
   manual
+  description
+  explanation
 
   @@map("page_work_item_link_source")
 }

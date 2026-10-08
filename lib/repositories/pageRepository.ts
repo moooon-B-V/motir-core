@@ -244,6 +244,27 @@ export const pageRepository = {
   },
 
   /**
+   * Which of `ids` are pages of `projectId` — ARCHIVED ONES INCLUDED — in ONE
+   * query (MOTIR-7696). The work-item save keeps a `motir-page:` tag's link row
+   * only for a page this returns, so a pasted token naming another project's
+   * page, or an id that never existed, is skipped rather than aborting the save
+   * on the same-project trigger. Archived pages count: their row is kept so a
+   * restore brings the link back, and the Pages read already hides them.
+   */
+  async findIdsInProject(
+    ids: readonly string[],
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await tx.page.findMany({
+      where: { id: { in: [...ids] }, projectId },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  },
+
+  /**
    * Serialise every PLACEMENT write in one project — a create, a move, a subtree
    * rewrite — for the length of the caller's transaction (MOTIR-7369).
    *

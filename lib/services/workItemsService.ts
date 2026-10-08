@@ -303,6 +303,7 @@ import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
+import { syncBodyPageLinks } from '@/lib/workItems/bodyPageLinks';
 import type { SprintBlockerDto, ValidityCondition } from '@/lib/dto/sprints';
 import { DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
@@ -2138,6 +2139,16 @@ export const workItemsService = {
       // roll back together.
       await recomputeAncestorRepoSets(row.id, workspaceId, tx);
 
+      // Page tags (MOTIR-7696): a `motir-page:` token in either birth body
+      // derives its `description` / `explanation` link row in the SAME
+      // transaction, so a created item is never tagged without its row.
+      await syncBodyPageLinks(
+        { id: row.id, workspaceId, projectId: input.projectId },
+        { descriptionMd: row.descriptionMd, explanationMd: row.explanationMd },
+        ctx.userId,
+        tx,
+      );
+
       // Initial revision: the created-row state as a { from: null, to: value }
       // diff (1.4.6 finalized the shape 1.4.4 deferred — see buildCreatedDiff).
       // Its id is the idempotency scope of any description-mention event below.
@@ -2870,6 +2881,22 @@ export const workItemsService = {
         : null;
       const revisionDiff: Record<string, unknown> = diff;
       if (attachmentsCell) revisionDiff['attachments'] = attachmentsCell;
+
+      // Page tags (MOTIR-7696): re-derive the `description` / `explanation`
+      // link rows for each body this edit CHANGED, in the same transaction. A
+      // body the patch left alone keeps its rows — an omitted field is not an
+      // empty one. Derived rows write no History entry, as on the page side.
+      if (bodyChanged) {
+        await syncBodyPageLinks(
+          { id: row.id, workspaceId: current.workspaceId, projectId: current.projectId },
+          {
+            ...(diff['descriptionMd'] !== undefined ? { descriptionMd: row.descriptionMd } : {}),
+            ...(diff['explanationMd'] !== undefined ? { explanationMd: row.explanationMd } : {}),
+          },
+          ctx.userId,
+          tx,
+        );
+      }
 
       const revisionId = await workItemRevisionsService.recordRevision(
         { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff: revisionDiff },

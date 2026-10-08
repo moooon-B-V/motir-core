@@ -1462,6 +1462,8 @@
     "pagesSourceMention": "Mentioned",
     "pagesSourceEmbed": "Embedded",
     "pagesSourceManual": "Linked",
+    "pagesSourceDescription": "Tagged in description",
+    "pagesSourceExplanation": "Tagged in explanation",
     "pagesEmpty": "No page links to this work item yet.",
     "pagesShowMore": "Show more pages",
     "pagesError": "Couldn't load pages.",

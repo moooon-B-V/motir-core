@@ -1462,6 +1462,8 @@
     "pagesSourceMention": "已提及",
     "pagesSourceEmbed": "已嵌入",
     "pagesSourceManual": "已链接",
+    "pagesSourceDescription": "已在描述中标记",
+    "pagesSourceExplanation": "已在说明中标记",
     "pagesEmpty": "尚无页面链接到此工作项。",
     "pagesShowMore": "显示更多页面",
     "pagesError": "无法加载页面。",
