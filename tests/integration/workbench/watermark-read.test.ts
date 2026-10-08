@@ -563,10 +563,17 @@ describe('COST — this read runs once a second per open Workbench', () => {
 
     // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Fourteen statements is
     // not obviously cheap or expensive in the abstract; what settles it is that
-    // the strip ALREADY issues thirteen to render its badges, and this read
-    // answers strictly more — every tab's freshness as well as its size — for
-    // one more.
-    expect(watermark.length - counts.length).toBe(1);
+    // the strip ALREADY issues thirteen to render its badges for the tabs this
+    // read covers, and this read answers strictly more — every tab's freshness as
+    // well as its size — for one more.
+    //
+    // The strip's Planning badge (MOTIR-7828) is left out of the comparison: the
+    // Planning tab carries no freshness (design/workbench § 36 draws no dot — its
+    // rows move on their own poll), so the watermark has no slice for it and its
+    // `plan.count` is not a statement this read could share.
+    expect(counts.filter((s) => s === 'plan.count')).toHaveLength(1);
+    const comparable = counts.filter((s) => s !== 'plan.count');
+    expect(watermark.length - comparable.length).toBe(1);
   });
 
   it('is bounded by the PROJECT, not by its size', async () => {
