@@ -60,6 +60,7 @@ SUMMARIES = {
     "list_projects": "Every project this token can reach, each with the projectKey every other tool takes.",
     "get_project_state": "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
     "get_code_health": "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
+    "read_file": "One file's text from a project repository at a ref — capped, line-ranged, every absence a named outcome.",
     "list_sprints": "A project's sprints with state, goal, window and issue count, and the ids the sprint tools take.",
     "validate_sprint": "Is this sprint finishable? Names every in-sprint item still gated by work outside it.",
     "validate_work_item": "Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.",

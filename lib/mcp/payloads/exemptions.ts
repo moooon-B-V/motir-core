@@ -65,6 +65,11 @@ export const EXEMPT_TOOLS = {
     'derived convention, each section present / absent / unavailable) — a planning read ' +
     'assembled for an agent, the same reason `get_project_state` gives. No `/api/v1` ' +
     'operation returns it, and no REST client has asked for it (MOTIR-7793).',
+  read_file:
+    'Returns one repository FILE\u2019s TEXT at a git ref, plus a named `outcome` (found / not_found / ' +
+    'ref_not_found / too_large / binary / \u2026 / repo_not_in_project) \u2014 a read made against the ' +
+    'git host for an agent planning over the MCP. No `/api/v1` operation returns repository file ' +
+    'text, and no REST client has asked for it (MOTIR-7861).',
   publish_design_result:
     'Returns the published RESULT\u2019s receipt \u2014 `{ id, workItemKey, assetCount, ' +
     'noteTruncated, createdAt }`. \u26a0\ufe0f `/api/v1` NOW PUBLISHES DESIGN COMPONENTS ' +

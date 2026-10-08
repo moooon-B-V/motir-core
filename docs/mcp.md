@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **92 tools**.
+`initialize` handshake and registers **93 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -5039,6 +5039,63 @@ refresh stay on `ai:configure`, and are not reachable here.
 
 **Read-only.** No write, no model job. `projectKey` selects **within** the token's
 workspace; another tenant's key reads as a plain not-found.
+
+#### `read_file`
+
+The **text of one file** in one of the project's repositories, as the git host
+holds it at a ref — the read the hosted planner's own `read_file` makes
+(motir-ai `src/llm/codeReadTools.ts`, served by
+`app/api/internal/ai/repo-file`), for an agent planning over the MCP. Reach for it
+to CHECK a code fact before writing it into a card.
+
+**Input**
+
+| Field        | Type    | Required | Notes                                                                                                |
+| ------------ | ------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `projectKey` | string  | yes      | Project key, e.g. `"ACME"`.                                                                          |
+| `repo`       | string  | yes      | A repository in the project's set: the bare name (`motir-core`) or `owner/name`, case-insensitively. |
+| `path`       | string  | yes      | Relative to the repository root. No URL, no absolute path, no `..` segment.                          |
+| `ref`        | string  | no       | Branch, tag or commit. Omitted ⇒ the repository's default branch, as stored on its row.              |
+| `startLine`  | integer | no       | 1-based, inclusive. With `endLine`, the range is clamped to the file and headed `lines a-b of N`.    |
+| `endLine`    | integer | no       | 1-based, inclusive. Omit with `startLine` set to read to the end of the file.                        |
+
+**The cap and the range.** The text returned — the range when one is asked for,
+else the whole file — is capped at **24,000 characters**, motir-ai's
+`FILE_CONTENT_CAP`. Over the cap it is cut, and ends with a SENTENCE, never a
+bare ellipsis: _the first 24000 of N characters; the file continues; re-read with
+startLine / endLine_. The cap, the marker and the range semantics are copied from
+the planner's tool, so both planners read the same evidence in the same shape.
+
+**Output** — `structuredContent.outcome` names what happened, and every outcome is
+a **non-error** result with its own summary sentence:
+
+| `outcome`              | Meaning                                                                                | Extra fields                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `found`                | The file's text (ranged, then capped).                                                 | `repoRef`, `path`, `ref`, `bytes`, `lines`, `truncated`, `text` |
+| `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository. | `repoRef`, `path`, `ref`                                        |
+| `ref_not_found`        | The ref does not exist. Says nothing about the path.                                   | `repoRef`, `path`, `ref`                                        |
+| `too_large`            | The file exists and is over what the host serves inline.                               | `repoRef`, `path`, `ref`, `limitBytes`                          |
+| `binary`               | The file exists and holds a NUL character, so no text is returned.                     | `repoRef`, `path`, `ref`, `bytes`                               |
+| `unauthorized`         | The host refused the stored credential. The file's existence is unknown.               | `repoRef`, `path`, `ref`                                        |
+| `invalid_path`         | The path was refused before any request.                                               | `repoRef`, `path`, `reason`                                     |
+| `unreachable`          | The host did not answer — a failure to ASK, not an answer.                             | `repoRef`, `path`, `ref`, `failure`                             |
+| `repo_not_connected`   | The repository is in the set but not connected to the organisation.                    | `repoRef`                                                       |
+| `provider_unavailable` | The repository's git provider cannot be used on this deployment.                       | `repoRef`, `detail`                                             |
+| `repo_not_in_project`  | `repo` matches no repository in the project's set. Answered **before** any host call.  | `repo`, `repoSet`                                               |
+
+None of them means the project has no code, and none carries a provider
+credential or a download URL.
+
+**Permission: `ai:plan`, at the door and in the service** — the same gate as
+`get_code_health`, on the same argument: the hosted planner already shows this
+text to every `ai:plan` holder (`docs/decisions/member-facing-permissions.md`
+AMENDMENT 3). **The project's set is the boundary**, not the organisation's
+connections: a repository another project of the same organisation connected
+reads as `repo_not_in_project`.
+
+**Read-only**, but **open-world**: the read calls the third-party git host.
+`projectKey` selects **within** the token's workspace; another tenant's key reads
+as a plain not-found.
 
 #### `skeleton`
 

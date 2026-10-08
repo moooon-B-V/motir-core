@@ -102,6 +102,7 @@ import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
 import { GET_PROJECT_STATE_TOOL_NAME, registerGetProjectState } from './tools/getProjectState';
 import { GET_CODE_HEALTH_TOOL_NAME, registerGetCodeHealth } from './tools/getCodeHealth';
+import { READ_FILE_TOOL_NAME, registerReadFile } from './tools/readFile';
 import { SKELETON_TOOL_NAME, registerSkeleton } from './tools/skeleton';
 import { LIST_FOLDERS_TOOL_NAME, registerListFolders } from './tools/listFolders';
 import { CREATE_FOLDER_TOOL_NAME, registerCreateFolder } from './tools/createFolder';
@@ -237,6 +238,7 @@ export const MCP_TOOL_NAMES = [
   LIST_PROJECTS_TOOL_NAME,
   GET_PROJECT_STATE_TOOL_NAME,
   GET_CODE_HEALTH_TOOL_NAME,
+  READ_FILE_TOOL_NAME,
   SKELETON_TOOL_NAME,
   LIST_FOLDERS_TOOL_NAME,
   CREATE_FOLDER_TOOL_NAME,
@@ -464,6 +466,10 @@ export function registerMcpTools(
   // audit summary and derived convention: what the hosted planner reads for
   // every session, for an agent planning over the MCP. Gated on `ai:plan`.
   registerGetCodeHealth(target, resolveContext);
+  // MOTIR-7861 — one file's TEXT from one of the project's repositories at a
+  // ref: the read the hosted planner's `read_file` makes, for an agent planning
+  // over the MCP. Gated on `ai:plan`; the repo resolves against the PROJECT's set.
+  registerReadFile(target, resolveContext);
   // The ORIENTING read (MOTIR-3100) — the whole project's tree shape in one
   // call, over the same `aiBoundaryService.readPlanTree` the internal
   // `plan-tree` / `skeleton` routes serve. A third consumer, not a refactor.

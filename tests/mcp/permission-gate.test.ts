@@ -107,11 +107,13 @@ describe('permissionDenial — pure decision over the whole registry', () => {
     }
   });
 
-  it('withholding ai:plan stops the billable submits and the planning code-health read, and NOTHING else', () => {
+  it('withholding ai:plan stops the billable submits and the two planning code reads, and NOTHING else', () => {
     // The separation the six scopes could not express: a token that files work
     // items but cannot spend the owner's AI credits. MOTIR-7793 adds ONE read to
     // the set — `get_code_health`, which shows what the hosted planner reads, to
     // the actors who may plan (`member-facing-permissions.md` AMENDMENT 3).
+    // MOTIR-7861 adds `read_file` on the same argument: the hosted planner's own
+    // `read_file` already shows every `ai:plan` holder that file text.
     const noPlanning = GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:plan');
     const blocked = MCP_TOOL_NAMES.filter((n) => permissionDenial(n, noPlanning) !== null);
     expect([...blocked].sort()).toEqual(
@@ -120,6 +122,7 @@ describe('permissionDenial — pure decision over the whole registry', () => {
         'expand_item',
         'get_code_health',
         'open_plan_session',
+        'read_file',
         'submit_plan_session',
       ].sort(),
     );

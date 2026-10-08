@@ -565,6 +565,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         get_project_state: { projectKey: 'PROD' },
         // MOTIR-7793 — a project with no repository set: `repos: []`, no boundary call.
         get_code_health: { projectKey: 'PROD' },
+        // MOTIR-7861 — no repository set, so `repo_not_in_project`: a named,
+        // non-error outcome answered before any host call.
+        read_file: { projectKey: 'PROD', repo: 'motir-core', path: 'README.md' },
         skeleton: { projectKey: 'PROD' },
         // MOTIR-5409 — `list_folders` is a browse read that executes on the caller's own
         // project; the three writes are `work_item:edit`-gated, and a folder id that

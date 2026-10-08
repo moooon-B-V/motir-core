@@ -2065,6 +2065,49 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  read_file: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository to read from — one in this project’s set, by its bare name ("motir-core") or as `owner/name`, case-insensitively. `get_code_health` and `get_project_state` list the set.',
+      },
+      path: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The file path RELATIVE TO THE REPOSITORY ROOT, e.g. "lib/git/provider.ts". Not a URL, not an absolute path, and never containing "..".',
+      },
+      ref: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The branch, tag or commit to read at. Omit for the repository’s default branch — the MERGED code. To read a card’s UNMERGED code, pass the branch its pull request is on.',
+      },
+      startLine: {
+        type: 'integer',
+        minimum: 1,
+        description: 'OPTIONAL, 1-based and inclusive. Read from this line.',
+      },
+      endLine: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          'OPTIONAL, 1-based and inclusive. Read up to this line. Omit with `startLine` set to read to the end of the file.',
+      },
+    },
+    required: ['projectKey', 'repo', 'path'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   record_plan_revision_reason: {
     type: 'object',
     properties: {
@@ -3597,6 +3640,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   publish_decision_page: 'Publish decision page',
   publish_design_result: 'Publish design result',
   publish_test_instructions: 'Publish How to test',
+  read_file: 'Read a file',
   record_plan_revision_reason: 'Record WHY a plan had to change',
   reinforce_lesson: 'Reinforce a lesson',
   report_action: 'Report your next step',
@@ -3955,6 +3999,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: true,
     openWorldHint: false,
   },
+  read_file: { title: 'Read a file', readOnlyHint: true, openWorldHint: true },
   record_plan_revision_reason: {
     title: 'Record WHY a plan had to change',
     readOnlyHint: false,

@@ -459,6 +459,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   get_project_state: { readOnlyHint: true, openWorldHint: false },
   // R: getCodeHealth.ts → aiConventionService.getPlanningCodeHealth (Motir's own index columns + motir-ai's audit/convention stores over the private boundary — no third-party call)
   get_code_health: { readOnlyHint: true, openWorldHint: false },
+  // R: readFile.ts → repoFileReadService.readProjectFile → GitProvider.readFileAtRef (the THIRD-PARTY git host — open world, unlike get_code_health)
+  read_file: { readOnlyHint: true, openWorldHint: true },
   // R: skeleton.ts → aiBoundaryService.readPlanTree
   skeleton: { readOnlyHint: true, openWorldHint: false },
   // R: listFolders.ts → foldersService.listProjectFolders

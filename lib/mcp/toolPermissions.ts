@@ -375,6 +375,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // planner already shows this content to every `ai:plan` holder —
   // `docs/decisions/member-facing-permissions.md` AMENDMENT 3 to §4.
   get_code_health: 'ai:plan',
+  // MOTIR-7861 — a file's text from a project repository at a ref. The hosted
+  // planner's `read_file` already shows exactly this to every `ai:plan` holder;
+  // the same AMENDMENT 3 to §4 names it as a second instance.
+  read_file: 'ai:plan',
 
   // ── ai:view_plan — the plan AUTHOR write that has a door ─────────────────
   // `plansService.addProposals` (and `markPlanned`, which `final: true` also
