@@ -149,13 +149,18 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'plan) or already done; these arrive in `blockers`, each naming the gated item and the ' +
         'work gating it. The two need OPPOSITE repairs: a rejection means the plan is ' +
         'malformed, a blocker means it reaches outside itself. (3) COVERED — every same-level ' +
-        'blocked_by between items under DIFFERENT parents is carried by their parents too ' +
-        '(the parents directly blocked_by each other); an uncovered one arrives in ' +
-        '`invalidEdges` as `{ item, blockedBy, itemParent, blockerParent }` — a verdict only, ' +
-        'the append and approve do not refuse it. (4) SAME-LEVEL — a COMMITTED blocked_by the ' +
-        'plan leaves in place that joins two levels (the link door writes one; a PROPOSED one ' +
-        'is a `cross_level` rejection) arrives in `crossLevelEdges` as `{ item, blockedBy, ' +
-        'itemDepth, blockedByDepth, reason: "blocked_elsewhere", explanation }`. Returns ' +
+        'blocked_by between items under DIFFERENT parents that this plan introduces is carried ' +
+        'by their parents too (the parents directly blocked_by each other); an uncovered one ' +
+        'arrives in `invalidEdges` as `{ item, blockedBy, itemParent, blockerParent }` — a ' +
+        'verdict only, the append and approve do not refuse it. (4) SAME-LEVEL — a COMMITTED ' +
+        'blocked_by this plan introduces into its findings that joins two levels (the link door ' +
+        'writes one; a PROPOSED one is a `cross_level` rejection) arrives in `crossLevelEdges` ' +
+        'as `{ item, blockedBy, itemDepth, blockedByDepth, reason: "blocked_elsewhere", ' +
+        'explanation }`. (3) and (4) report only the edges the PLAN introduces: an edge whose ' +
+        'item or blocker, or an ancestor of either, the plan adds, re-parents, re-wires ' +
+        '(`blockedByAdd` / `blockedByRemove`) or removes. An old bad edge the plan touches ' +
+        'nothing of is not this plan’s finding — `validate_work_item` without a `planId` still ' +
+        'reports it. Returns ' +
         '`{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...], ' +
         'crossLevelEdges: [...] }`; an item named ' +
         '`planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +

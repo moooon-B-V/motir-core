@@ -158,3 +158,33 @@ export class CapLockUnavailableError extends Error {
     this.name = 'CapLockUnavailableError';
   }
 }
+
+/**
+ * The org already has an OPEN Enterprise request (`new`, `contacted` or
+ * `offer_sent`) — a second Contact-sales send, or the loser of two tabs sending
+ * at once (Story MOTIR-7602 · Subtask MOTIR-7605). Carries the open request's id
+ * so the card can show THAT request instead of a second form. Maps to 409.
+ */
+export class EnterpriseRequestOpenError extends Error {
+  readonly code = 'ENTERPRISE_REQUEST_OPEN' as const;
+  constructor(readonly openRequestId: string | null) {
+    super('This organization already has an open Enterprise request.');
+    this.name = 'EnterpriseRequestOpenError';
+  }
+}
+
+/**
+ * A Contact-sales body that fails the request's input schema — the note missing,
+ * a number out of range, an answer outside its set. Maps to 400 with the field
+ * that failed, so the form can mark it.
+ */
+export class EnterpriseRequestValidationError extends Error {
+  readonly code = 'ENTERPRISE_REQUEST_INVALID' as const;
+  constructor(
+    readonly field: string,
+    detail: string,
+  ) {
+    super(detail);
+    this.name = 'EnterpriseRequestValidationError';
+  }
+}

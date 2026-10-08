@@ -183,7 +183,7 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
   const dialTimeoutMs = deps.dialTimeoutMs ?? DEFAULT_DIAL_TIMEOUT_MS;
   const throttle = new ActivityThrottle(deps.now, deps.throttleMs);
   const live = new Map<string, (code: number, reason: AgentTerminalCloseReason) => Promise<void>>();
-  /** Close records still being written — a shutdown waits for them. */
+  /** Close records and activity touches still being written — a shutdown waits for them. */
   const recording = new Set<Promise<void>>();
   /** The rows this relay holds open, by connection — what the heartbeat refreshes. */
   const openRows = new Map<string, { id: string; workspaceId: string }>();
@@ -238,9 +238,15 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
 
   function bump(instanceId: string): void {
     if (!throttle.take(instanceId)) return;
-    deps.touchActivity(instanceId).catch((err: unknown) => {
+    // Not awaited — a frame never waits on the database — but TRACKED, so a
+    // shutdown waits for a touch already writing (MOTIR-7815): a touch re-arms
+    // the idle timer through the job queue, and one left running would outlive
+    // the relay that started it.
+    const touch = deps.touchActivity(instanceId).catch((err: unknown) => {
       deps.reportError(scrubbedError('relay: touchActivity failed', err));
     });
+    recording.add(touch);
+    void touch.finally(() => recording.delete(touch));
   }
 
   function handleConnection(

@@ -548,7 +548,10 @@ export function registerValidateWorkItem(
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
         'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
         'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +
-        'subtree you have PROPOSED before anybody reviews it. ' +
+        'subtree you have PROPOSED before anybody reviews it. With a `planId`, `invalidEdges` ' +
+        'and `crossLevelEdges` hold only the findings the PLAN introduces — an edge whose item ' +
+        'or blocker, or an ancestor of either, the plan adds, re-parents, re-wires or removes; ' +
+        'an old bad edge it touches nothing of is reported only without a `planId`. ' +
         TEMP_REF_HELP +
         ' Use `validate_plan` for the whole plan at once — do not loop this call per root, ' +
         'because an edge between two sibling roots is valid there and a false positive here. ' +

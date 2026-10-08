@@ -119,7 +119,7 @@ Parked at Blocked with no edge, the card was claimable and invisible to readines
 | ---------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `link_work_items`, the REST link route, create-with-links  | refused `CROSS_LEVEL_LINK`, nothing written      | **written**; the edge holds the item out of the ready set like any `blocked_by`                                                          |
 | `validate_work_item` (committed and `planId`-projected)    | a `cross-level-edge` ADVISORY, `valid` unmoved   | a `crossLevelEdges` entry `{ item, blockedBy, itemDepth, blockedByDepth, reason: "blocked_elsewhere", explanation }`, and `valid: false` |
-| `validate_plan`                                            | not reported                                     | the same `crossLevelEdges` entry for a COMMITTED cross-level edge the plan leaves in place, and `valid: false`                           |
+| `validate_plan`                                            | not reported                                     | the same `crossLevelEdges` entry for a COMMITTED cross-level edge the plan owns, and `valid: false` (MOTIR-7727 — see below)             |
 | the plan gate (`add_plan_items`, `validate_plan`, approve) | refused `INVALID_PLAN_REF_GRAPH` / `cross_level` | **unchanged** — the planner still may not author one                                                                                     |
 
 `crossLevelEdges` is a sibling of `invalidEdges`, not a member of it, because the
@@ -141,6 +141,16 @@ until somebody re-wires it or accepts it. What a planner does when its own
 validation reports a committed cross-level edge it cannot re-wire is not decided
 here; the edge-check in the motir-ai planner (MOTIR-6412) is out of this
 amendment's scope.
+
+**Which validation OWNS the finding (MOTIR-7727, 2026-10-07).** The row above
+originally read _"a COMMITTED cross-level edge the plan leaves in place"_, and the
+projected validators reported every such edge in the project, so one old edge
+turned every plan on the project `valid: false`. This record rules on what a
+cross-level edge IS, and that stands; which verdict reports it is narrowed: a
+plan validation (`validate_plan`, `validate_work_item` with a `planId`) reports
+the edges the plan touches — either end, or an ancestor of either, added,
+re-parented, re-wired or removed — and the committed `validate_work_item` reports
+the rest, as before. `docs/mcp.md` § `validate_plan` states the rule.
 
 ## Options rejected
 

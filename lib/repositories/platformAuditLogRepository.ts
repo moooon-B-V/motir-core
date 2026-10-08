@@ -264,4 +264,23 @@ export const platformAuditLogRepository = {
       take: limit,
     });
   },
+
+  /**
+   * Every row of one action whose `metadata.<key>` equals `value`, OLDEST
+   * first, with the actor's display fields — the Enterprise request's History
+   * (MOTIR-7608), read from its `enterprise_request.transition` rows by
+   * `requestId`. The action filter narrows the scan before the JSON path does.
+   */
+  async listByActionAndMetadata(
+    action: string,
+    key: string,
+    value: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlatformAuditLogWithActor[]> {
+    return tx.platformAuditLog.findMany({
+      where: { action, metadata: { path: [key], equals: value } },
+      orderBy: { seq: 'asc' },
+      include: { actor: { select: { name: true, email: true } } },
+    });
+  },
 };

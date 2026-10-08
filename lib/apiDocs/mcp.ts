@@ -749,7 +749,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // SUMMARY REWRITTEN for MOTIR-6509: `valid` gained a THIRD question — a
     // cross-level edge is no longer an advisory but a `crossLevelEdges` verdict
     // ("blocked elsewhere") — so a line naming two questions described two thirds.
-    descriptionFingerprint: '0d207b8c5b1c',
+    // Re-pinned for MOTIR-7727, summary UNCHANGED: with a `planId` the two edge
+    // lists now hold only the findings the plan introduces. The questions are the
+    // same; which edges a PLAN answers for is the description's to say.
+    descriptionFingerprint: '1d37986b153f',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -770,7 +773,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // gains the epic tier (an epic is blocked only by another epic).
     // SUMMARY REWRITTEN for MOTIR-6509: "All three" became false when `valid`
     // gained a FOURTH question (`crossLevelEdges`, a committed edge across levels).
-    descriptionFingerprint: 'ddaf8db5c2dc',
+    // Re-pinned for MOTIR-7727, summary UNCHANGED and now more exactly true: "its
+    // cross-parent edges" are the plan's own — the two edge lists hold only the
+    // findings the plan introduces, not every old edge in the project.
+    descriptionFingerprint: 'e5bc9d691542',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool
