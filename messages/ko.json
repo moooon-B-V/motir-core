@@ -289,6 +289,39 @@
     "liveWriting": "작성 중",
     "liveReconnecting": "다시 연결 중 — 마지막 업데이트를 표시합니다",
     "liveAnnounce": "계획에 {count, plural, other {항목 #개}} 추가됨",
+    "liveStarting": "시작하는 중…",
+    "liveStalled": "정체됨",
+    "progress": {
+      "settling": "대화 정리 중",
+      "layingChildrenOf": "배치 중: {title}",
+      "layingTopLevel": "프로젝트 최상위 수준 배치 중",
+      "authoring": "작성 중: {title}",
+      "draftingNew": "새 항목 초안 작성 중",
+      "moreSteps": "외 {count}개",
+      "authored": "{proposed}개 중 {authored}개 작성됨",
+      "elapsedUnderMinute": "1분 미만",
+      "elapsedMinutes": "{minutes}분",
+      "elapsedHours": "{hours}시간 {minutes}분",
+      "lastActivityJustNow": "마지막 활동: 방금",
+      "lastActivitySeconds": "마지막 활동: {seconds}초 전",
+      "lastActivityAgo": "마지막 활동: {duration} 전",
+      "stalledFor": "{duration} 동안 활동 없음",
+      "detailsAria": "계획 진행 상세 정보",
+      "detailsNow": "지금 작업 중",
+      "detailsNoSteps": "보고된 단계가 없습니다 — 이 계획 도구는 단계를 보고하지 않을 수 있습니다.",
+      "detailsStarted": "{time}에 시작 · {duration} 동안 실행 중",
+      "detailsLastActivity": "마지막 활동 {time}",
+      "detailsStalled": "{duration} 동안 작성되거나 보고된 내용이 없습니다. 계획이 중지되었을 수 있습니다.",
+      "pointer": "워크벤치에서 따라가기",
+      "pointerSentence": "이 페이지를 떠나도 계획은 계속 작성됩니다. 워크벤치 › 계획 중에서 따라가세요."
+    },
+    "cue": {
+      "drafting": "초안 작성 중",
+      "draftingName": "지금 초안 작성 중",
+      "laying": "하위 항목 배치 중",
+      "layingName": "지금 하위 항목을 배치하는 중",
+      "layingHere": "이 수준 배치 중"
+    },
     "listWritingTitle": "아직 제안 없음",
     "listWritingBody": "계획이 작성되는 대로 항목이 여기에 표시됩니다.",
     "abandonedOutcome": "생성이 끝나지 않아 이 계획이 자동으로 종료되었습니다",
@@ -7682,6 +7715,10 @@
       "goToTarget": "계획은 {identifier}에 있습니다 · 이동",
       "arrivedIn": "{identifier}에 새 항목 {count}개 · 이동",
       "arrivedAcross": "다른 위치에 새 항목 {count}개 · 최신 항목은 {identifier}에 있음 · 이동",
+      "draftingIn": "{identifier}에서 {count}개 초안 작성 중 · 이동",
+      "layingIn": "{identifier} 배치 중 · 이동",
+      "newAndDraftingIn": "{identifier}에 새 항목 {arrived}개 · {drafting}개 초안 작성 중 · 이동",
+      "draftingAcross": "다른 위치에서 {count}개 초안 작성 중 · 첫 항목은 {identifier}에 있음 · 이동",
       "levelChange": {
         "srPrefix": "이 수준의 보류 중인 변경:",
         "changed": "이 수준",
@@ -8512,14 +8549,17 @@
       "toResume": "재개 필요",
       "recentlyFinished": "최근 완료",
       "watching": "지켜보는 중",
-      "toApprove": "나를 기다리는 항목"
+      "toApprove": "나를 기다리는 항목",
+      "planning": "계획 중"
     },
     "columns": {
       "title": "제목",
       "role": "내 역할",
       "assignee": "담당자",
       "status": "상태",
-      "finished": "완료일"
+      "finished": "완료일",
+      "plan": "계획",
+      "planner": "계획 도구"
     },
     "row": {
       "unassigned": "담당자 없음",
@@ -8562,6 +8602,11 @@
       "approvals": {
         "title": "나를 기다리는 항목이 없습니다",
         "body": "내 결정이 필요한 승인과 실행이 나에게 넘긴 작업이 여기에 표시됩니다."
+      },
+      "planning": {
+        "title": "작성 중인 계획이 없습니다",
+        "body": "Motir AI나 에이전트에게 계획을 요청하면, 작성되는 동안 진행 상황과 함께 여기에 표시되고, 검토할 준비가 되면 나를 기다리는 항목으로 이동합니다. 다른 사람이 요청한 계획은 계획 페이지에 있습니다.",
+        "action": "AI로 계획하기"
       }
     },
     "approvals": {
@@ -8779,6 +8824,28 @@
         "card_not_ready": "{key}을(를) 차단하는 요인을 해결하거나 다시 진행 중으로 옮긴 다음 이어서 하기를 누르세요."
       },
       "copyAria": "{key}의 재개 명령 복사"
+    },
+    "planning": {
+      "scope": "<project>{name}</project>에서 내가 요청했고 아직 작성 중인 계획입니다. 다른 사람이 요청한 계획은 <link>계획 페이지</link>에 있습니다.",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "MCP 에이전트",
+        "agentModel": "MCP 에이전트 · <mono>{model}</mono>"
+      },
+      "rowAria": "작성 중인 계획 열기 — {sentence}",
+      "reopened": "계획 중에서 다시 열림 · 내가 시작함 · 마지막 활동 {when}",
+      "left": {
+        "planned": "작성 완료",
+        "plannedLine": "검토할 준비가 되었습니다.",
+        "plannedLink": "나를 기다리는 항목에서 보기",
+        "discarded": "종료됨",
+        "discardedLine": "제안되기 전에 종료되었습니다 — 추가된 것이 없습니다.",
+        "abandoned": "중지됨",
+        "abandonedLine": "계획 도구가 중지되어 계획이 닫혔습니다 — 추가된 것이 없습니다.",
+        "unknownLine": "더 이상 작성되고 있지 않습니다."
+      },
+      "ceiling": "작성 중인 계획 중 최신 {shown}개를 표시합니다. 나머지 {rest}개는 <link>계획 페이지</link>에 있습니다."
     }
   },
   "approvalRecords": {

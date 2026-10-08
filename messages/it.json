@@ -289,6 +289,39 @@
     "liveWriting": "In fase di stesura",
     "liveReconnecting": "Riconnessione in corso: viene mostrato l’ultimo aggiornamento",
     "liveAnnounce": "{count, plural, one {# elemento aggiunto} other {# elementi aggiunti}} al piano",
+    "liveStarting": "Avvio in corso…",
+    "liveStalled": "In stallo",
+    "progress": {
+      "settling": "Riordino della conversazione",
+      "layingChildrenOf": "Disposizione: {title}",
+      "layingTopLevel": "Disposizione del livello superiore del progetto",
+      "authoring": "Stesura: {title}",
+      "draftingNew": "Stesura di un nuovo elemento",
+      "moreSteps": "+{count} altri",
+      "authored": "{authored} di {proposed} redatti",
+      "elapsedUnderMinute": "<1 min",
+      "elapsedMinutes": "{minutes} min",
+      "elapsedHours": "{hours} h {minutes} min",
+      "lastActivityJustNow": "ultima attività proprio ora",
+      "lastActivitySeconds": "ultima attività {seconds} s fa",
+      "lastActivityAgo": "ultima attività {duration} fa",
+      "stalledFor": "nessuna attività da {duration}",
+      "detailsAria": "Dettagli dell’avanzamento del piano",
+      "detailsNow": "In lavorazione ora",
+      "detailsNoSteps": "Nessun passaggio segnalato: il pianificatore potrebbe non segnalare i suoi passaggi.",
+      "detailsStarted": "Avviato {time} · in esecuzione da {duration}",
+      "detailsLastActivity": "Ultima attività {time}",
+      "detailsStalled": "Da {duration} non è stato scritto né segnalato nulla. Il piano potrebbe essersi fermato.",
+      "pointer": "Segui dal banco di lavoro",
+      "pointerSentence": "Puoi uscire: la stesura di questo piano continua. Seguilo da Banco di lavoro › In pianificazione."
+    },
+    "cue": {
+      "drafting": "Stesura in corso",
+      "draftingName": "In fase di stesura ora",
+      "laying": "Disposizione degli elementi figli",
+      "layingName": "I suoi elementi figli sono in fase di disposizione",
+      "layingHere": "Disposizione di questo livello"
+    },
     "listWritingTitle": "Ancora nessuna proposta",
     "listWritingBody": "Gli elementi compaiono qui man mano che il piano viene scritto.",
     "abandonedOutcome": "La generazione non si è mai conclusa: questo piano è stato chiuso automaticamente",
@@ -7688,6 +7721,10 @@
       "goToTarget": "Il piano è in {identifier} · Vai",
       "arrivedIn": "{count} nuovi in {identifier} · Vai",
       "arrivedAcross": "{count} nuovi altrove · il più recente in {identifier} · Vai",
+      "draftingIn": "{count} in stesura in {identifier} · Vai",
+      "layingIn": "Disposizione di {identifier} · Vai",
+      "newAndDraftingIn": "{arrived} nuovi · {drafting} in stesura in {identifier} · Vai",
+      "draftingAcross": "{count} in stesura altrove · il primo in {identifier} · Vai",
       "levelChange": {
         "srPrefix": "Modifica in sospeso a questo livello:",
         "changed": "Questo livello",
@@ -8518,14 +8555,17 @@
       "toResume": "Da riprendere",
       "recentlyFinished": "Completati di recente",
       "watching": "Seguiti",
-      "toApprove": "In attesa di te"
+      "toApprove": "In attesa di te",
+      "planning": "In pianificazione"
     },
     "columns": {
       "title": "Titolo",
       "role": "Il tuo ruolo",
       "assignee": "Responsabile",
       "status": "Stato",
-      "finished": "Completato"
+      "finished": "Completato",
+      "plan": "Piano",
+      "planner": "Pianificatore"
     },
     "row": {
       "unassigned": "Non assegnato",
@@ -8568,6 +8608,11 @@
       "approvals": {
         "title": "Niente in attesa di te",
         "body": "Qui compaiono le approvazioni che richiedono una tua decisione e il lavoro che un’esecuzione ti ha affidato."
+      },
+      "planning": {
+        "title": "Nessun piano in fase di stesura",
+        "body": "Quando chiedi un piano a Motir AI o a un agente, attende qui mentre viene scritto, con il suo avanzamento, e passa a In attesa di te quando è pronto per la tua revisione. I piani richiesti da altri si trovano nella pagina Piani.",
+        "action": "Pianifica con l’AI"
       }
     },
     "approvals": {
@@ -8785,6 +8830,28 @@
         "card_not_ready": "Rimuovi ciò che blocca {key} o riportalo In corso, poi premi Continua."
       },
       "copyAria": "Copia il comando di ripresa per {key}"
+    },
+    "planning": {
+      "scope": "I piani che hai richiesto in <project>{name}</project> e che sono ancora in fase di stesura. I piani richiesti da altri si trovano nella <link>pagina Piani</link>.",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "Agente MCP",
+        "agentModel": "Agente MCP · <mono>{model}</mono>"
+      },
+      "rowAria": "Apri il piano in fase di stesura: {sentence}",
+      "reopened": "Riaperto da In pianificazione · avviato da te · ultima attività {when}",
+      "left": {
+        "planned": "Scritto",
+        "plannedLine": "Pronto per la tua revisione.",
+        "plannedLink": "Vedilo in In attesa di te",
+        "discarded": "Terminato",
+        "discardedLine": "Terminato prima di essere proposto: non è stato aggiunto nulla.",
+        "abandoned": "Interrotto",
+        "abandonedLine": "Il suo pianificatore si è fermato, quindi il piano è stato chiuso: non è stato aggiunto nulla.",
+        "unknownLine": "Non più in fase di stesura."
+      },
+      "ceiling": "Vengono mostrati i tuoi {shown} piani in fase di stesura più recenti. Gli altri {rest} si trovano nella <link>pagina Piani</link>."
     }
   },
   "approvalRecords": {

@@ -289,6 +289,39 @@
     "liveWriting": "作成中",
     "liveReconnecting": "再接続中です。最後の更新を表示しています",
     "liveAnnounce": "{count, plural, other {# 件の項目}}が計画に追加されました",
+    "liveStarting": "開始中…",
+    "liveStalled": "停滞中",
+    "progress": {
+      "settling": "会話を整理しています",
+      "layingChildrenOf": "配置中: {title}",
+      "layingTopLevel": "プロジェクトの最上位階層を配置しています",
+      "authoring": "作成中: {title}",
+      "draftingNew": "新しい項目を下書きしています",
+      "moreSteps": "ほか {count} 件",
+      "authored": "{proposed} 件中 {authored} 件を作成済み",
+      "elapsedUnderMinute": "1 分未満",
+      "elapsedMinutes": "{minutes} 分",
+      "elapsedHours": "{hours} 時間 {minutes} 分",
+      "lastActivityJustNow": "最終アクティビティ: たった今",
+      "lastActivitySeconds": "最終アクティビティ: {seconds} 秒前",
+      "lastActivityAgo": "最終アクティビティ: {duration}前",
+      "stalledFor": "{duration}間アクティビティなし",
+      "detailsAria": "計画の進行状況の詳細",
+      "detailsNow": "現在の作業",
+      "detailsNoSteps": "報告されたステップはありません。このプランナーはステップを報告しない可能性があります。",
+      "detailsStarted": "{time}に開始 · 実行時間 {duration}",
+      "detailsLastActivity": "最終アクティビティ {time}",
+      "detailsStalled": "{duration}の間、何も書き込まれず、報告もされていません。計画が停止した可能性があります。",
+      "pointer": "ワークベンチで追跡",
+      "pointerSentence": "このページを離れても、計画の作成は続きます。「ワークベンチ › 計画中」から追跡できます。"
+    },
+    "cue": {
+      "drafting": "下書き中",
+      "draftingName": "現在下書き中",
+      "laying": "子項目を配置中",
+      "layingName": "子項目を現在配置中",
+      "layingHere": "この階層を配置中"
+    },
     "listWritingTitle": "まだ提案はありません",
     "listWritingBody": "計画の作成が進むと、ここに項目が表示されます。",
     "abandonedOutcome": "生成が完了しなかったため、この計画は自動的に終了しました",
@@ -7685,6 +7718,10 @@
       "goToTarget": "計画は {identifier} にあります · 移動",
       "arrivedIn": "{identifier} に {count} 件の新規 · 移動",
       "arrivedAcross": "別の場所に {count} 件の新規 · 最新は {identifier} · 移動",
+      "draftingIn": "{identifier} で {count} 件を下書き中 · 移動",
+      "layingIn": "{identifier} を配置中 · 移動",
+      "newAndDraftingIn": "{identifier} に {arrived} 件の新規 · {drafting} 件を下書き中 · 移動",
+      "draftingAcross": "別の場所で {count} 件を下書き中 · 最初は {identifier} · 移動",
       "levelChange": {
         "srPrefix": "この階層への保留中の変更:",
         "changed": "この階層",
@@ -8515,14 +8552,17 @@
       "toResume": "再開待ち",
       "recentlyFinished": "最近完了",
       "watching": "ウォッチ中",
-      "toApprove": "あなた待ち"
+      "toApprove": "あなた待ち",
+      "planning": "計画中"
     },
     "columns": {
       "title": "タイトル",
       "role": "あなたの役割",
       "assignee": "担当者",
       "status": "ステータス",
-      "finished": "完了日"
+      "finished": "完了日",
+      "plan": "計画",
+      "planner": "プランナー"
     },
     "row": {
       "unassigned": "未割り当て",
@@ -8565,6 +8605,11 @@
       "approvals": {
         "title": "あなたを待っているものはありません",
         "body": "あなたの判断が必要な承認と、実行からあなたに任された作業がここに表示されます。"
+      },
+      "planning": {
+        "title": "作成中の計画はありません",
+        "body": "Motir AI やエージェントに計画を依頼すると、作成中の計画は進行状況とともにここに表示され、レビューの準備ができると「あなた待ち」に移動します。他のメンバーが依頼した計画は計画ページにあります。",
+        "action": "AI で計画"
       }
     },
     "approvals": {
@@ -8782,6 +8827,28 @@
         "card_not_ready": "{key} をブロックしているものを解消するか、「進行中」に戻してから「続行」を押してください。"
       },
       "copyAria": "{key} の再開コマンドをコピー"
+    },
+    "planning": {
+      "scope": "<project>{name}</project> であなたが依頼し、まだ作成中の計画です。他のメンバーが依頼した計画は<link>計画ページ</link>にあります。",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "MCP エージェント",
+        "agentModel": "MCP エージェント · <mono>{model}</mono>"
+      },
+      "rowAria": "作成中の計画を開く — {sentence}",
+      "reopened": "「計画中」から再表示 · あなたが開始 · 最終アクティビティ {when}",
+      "left": {
+        "planned": "作成完了",
+        "plannedLine": "レビューの準備ができました。",
+        "plannedLink": "「あなた待ち」で表示",
+        "discarded": "終了",
+        "discardedLine": "提案される前に終了しました。何も追加されていません。",
+        "abandoned": "停止",
+        "abandonedLine": "プランナーが停止したため、計画は閉じられました。何も追加されていません。",
+        "unknownLine": "現在は作成されていません。"
+      },
+      "ceiling": "作成中の計画のうち、新しい {shown} 件を表示しています。残りの {rest} 件は<link>計画ページ</link>にあります。"
     }
   },
   "approvalRecords": {

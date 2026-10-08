@@ -289,6 +289,39 @@
     "liveWriting": "Wird geschrieben",
     "liveReconnecting": "Verbindung wird wiederhergestellt – letzte Aktualisierung wird angezeigt",
     "liveAnnounce": "{count, plural, one {# Element} other {# Elemente}} zum Plan hinzugefügt",
+    "liveStarting": "Wird gestartet…",
+    "liveStalled": "Stockt",
+    "progress": {
+      "settling": "Gespräch wird geordnet",
+      "layingChildrenOf": "Wird angelegt: {title}",
+      "layingTopLevel": "Oberste Ebene des Projekts wird angelegt",
+      "authoring": "Wird geschrieben: {title}",
+      "draftingNew": "Neues Element wird entworfen",
+      "moreSteps": "+{count} weitere",
+      "authored": "{authored} von {proposed} geschrieben",
+      "elapsedUnderMinute": "<1 Min.",
+      "elapsedMinutes": "{minutes} Min.",
+      "elapsedHours": "{hours} Std. {minutes} Min.",
+      "lastActivityJustNow": "letzte Aktivität gerade eben",
+      "lastActivitySeconds": "letzte Aktivität vor {seconds} s",
+      "lastActivityAgo": "letzte Aktivität vor {duration}",
+      "stalledFor": "seit {duration} keine Aktivität",
+      "detailsAria": "Details zum Planfortschritt",
+      "detailsNow": "Gerade in Arbeit",
+      "detailsNoSteps": "Kein Schritt gemeldet – der Planer meldet seine Schritte möglicherweise nicht.",
+      "detailsStarted": "Gestartet {time} · läuft seit {duration}",
+      "detailsLastActivity": "Letzte Aktivität {time}",
+      "detailsStalled": "Seit {duration} wurde nichts geschrieben oder gemeldet. Der Plan wurde möglicherweise angehalten.",
+      "pointer": "In der Werkbank verfolgen",
+      "pointerSentence": "Sie können diese Seite verlassen – der Plan wird weiter geschrieben. Verfolgen Sie ihn unter Werkbank › In Planung."
+    },
+    "cue": {
+      "drafting": "Wird entworfen",
+      "draftingName": "Wird gerade entworfen",
+      "laying": "Untergeordnete Elemente werden angelegt",
+      "layingName": "Seine untergeordneten Elemente werden gerade angelegt",
+      "layingHere": "Diese Ebene wird angelegt"
+    },
     "listWritingTitle": "Noch nichts vorgeschlagen",
     "listWritingBody": "Elemente erscheinen hier, während der Plan geschrieben wird.",
     "abandonedOutcome": "Die Generierung wurde nie abgeschlossen – dieser Plan wurde automatisch beendet",
@@ -7688,6 +7721,10 @@
       "goToTarget": "Plan ist in {identifier} · Dorthin wechseln",
       "arrivedIn": "{count} neu in {identifier} · Dorthin wechseln",
       "arrivedAcross": "{count} neu an anderer Stelle · zuletzt in {identifier} · Dorthin wechseln",
+      "draftingIn": "{count} werden in {identifier} entworfen · Dorthin wechseln",
+      "layingIn": "{identifier} wird angelegt · Dorthin wechseln",
+      "newAndDraftingIn": "{arrived} neu · {drafting} werden in {identifier} entworfen · Dorthin wechseln",
+      "draftingAcross": "{count} werden an anderer Stelle entworfen · zuerst in {identifier} · Dorthin wechseln",
       "levelChange": {
         "srPrefix": "Ausstehende Änderung an dieser Ebene:",
         "changed": "Diese Ebene",
@@ -8518,14 +8555,17 @@
       "toResume": "Fortzusetzen",
       "recentlyFinished": "Kürzlich abgeschlossen",
       "watching": "Beobachtet",
-      "toApprove": "Wartet auf Sie"
+      "toApprove": "Wartet auf Sie",
+      "planning": "In Planung"
     },
     "columns": {
       "title": "Titel",
       "role": "Ihre Rolle",
       "assignee": "Verantwortlich",
       "status": "Status",
-      "finished": "Abgeschlossen"
+      "finished": "Abgeschlossen",
+      "plan": "Plan",
+      "planner": "Planer"
     },
     "row": {
       "unassigned": "Nicht zugewiesen",
@@ -8568,6 +8608,11 @@
       "approvals": {
         "title": "Nichts wartet auf Sie",
         "body": "Genehmigungen, die Ihre Entscheidung erfordern, und Arbeit, die ein Lauf Ihnen übergeben hat, erscheinen hier."
+      },
+      "planning": {
+        "title": "Es werden keine Pläne geschrieben",
+        "body": "Wenn Sie Motir AI oder einen Agenten um einen Plan bitten, wartet er hier mit seinem Fortschritt, während er geschrieben wird, und wechselt zu „Wartet auf Sie“, sobald er für Ihre Prüfung bereit ist. Pläne, die andere angefordert haben, finden Sie auf der Seite „Pläne“.",
+        "action": "Mit KI planen"
       }
     },
     "approvals": {
@@ -8785,6 +8830,28 @@
         "card_not_ready": "Beseitigen Sie, was {key} blockiert, oder setzen Sie es zurück auf „In Arbeit“, und klicken Sie dann auf „Fortsetzen“."
       },
       "copyAria": "Fortsetzungsbefehl für {key} kopieren"
+    },
+    "planning": {
+      "scope": "Pläne, die Sie in <project>{name}</project> angefordert haben und die noch geschrieben werden. Pläne, die andere angefordert haben, finden Sie auf der <link>Seite „Pläne“</link>.",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "MCP-Agent",
+        "agentModel": "MCP-Agent · <mono>{model}</mono>"
+      },
+      "rowAria": "Plan öffnen, der gerade geschrieben wird – {sentence}",
+      "reopened": "Aus „In Planung“ erneut geöffnet · von Ihnen gestartet · zuletzt aktiv {when}",
+      "left": {
+        "planned": "Geschrieben",
+        "plannedLine": "Bereit für Ihre Prüfung.",
+        "plannedLink": "In „Wartet auf Sie“ ansehen",
+        "discarded": "Beendet",
+        "discardedLine": "Beendet, bevor er vorgeschlagen wurde – es wurde nichts hinzugefügt.",
+        "abandoned": "Gestoppt",
+        "abandonedLine": "Sein Planer wurde gestoppt, daher wurde der Plan geschlossen – es wurde nichts hinzugefügt.",
+        "unknownLine": "Wird nicht mehr geschrieben."
+      },
+      "ceiling": "Ihre {shown} neuesten Pläne, die gerade geschrieben werden, werden angezeigt. Die übrigen {rest} finden Sie auf der <link>Seite „Pläne“</link>."
     }
   },
   "approvalRecords": {

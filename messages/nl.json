@@ -289,6 +289,39 @@
     "liveWriting": "Wordt geschreven",
     "liveReconnecting": "Opnieuw verbinden — de laatste update wordt getoond",
     "liveAnnounce": "{count, plural, one {# item} other {# items}} aan het plan toegevoegd",
+    "liveStarting": "Bezig met starten…",
+    "liveStalled": "Vastgelopen",
+    "progress": {
+      "settling": "Gesprek wordt geordend",
+      "layingChildrenOf": "Indelen: {title}",
+      "layingTopLevel": "Het hoogste niveau van het project indelen",
+      "authoring": "Schrijven: {title}",
+      "draftingNew": "Een nieuw item opstellen",
+      "moreSteps": "+{count} meer",
+      "authored": "{authored} van {proposed} geschreven",
+      "elapsedUnderMinute": "<1 min",
+      "elapsedMinutes": "{minutes} min",
+      "elapsedHours": "{hours} u {minutes} min",
+      "lastActivityJustNow": "laatste activiteit zojuist",
+      "lastActivitySeconds": "laatste activiteit {seconds} s geleden",
+      "lastActivityAgo": "laatste activiteit {duration} geleden",
+      "stalledFor": "al {duration} geen activiteit",
+      "detailsAria": "Details van de voortgang van het plan",
+      "detailsNow": "Nu mee bezig",
+      "detailsNoSteps": "Geen stap gemeld — de planner meldt zijn stappen mogelijk niet.",
+      "detailsStarted": "Gestart {time} · loopt al {duration}",
+      "detailsLastActivity": "Laatste activiteit {time}",
+      "detailsStalled": "Er is al {duration} niets geschreven of gemeld. Het plan is mogelijk gestopt.",
+      "pointer": "Volgen vanuit de werkbank",
+      "pointerSentence": "Je kunt weggaan — dit plan wordt verder geschreven. Volg het vanuit Werkbank › In planning."
+    },
+    "cue": {
+      "drafting": "Wordt opgesteld",
+      "draftingName": "Wordt nu opgesteld",
+      "laying": "Onderliggende items indelen",
+      "layingName": "De onderliggende items worden nu ingedeeld",
+      "layingHere": "Dit niveau indelen"
+    },
     "listWritingTitle": "Nog niets voorgesteld",
     "listWritingBody": "Items verschijnen hier terwijl het plan wordt geschreven.",
     "abandonedOutcome": "Het genereren is nooit afgerond — dit plan is automatisch beëindigd",
@@ -7685,6 +7718,10 @@
       "goToTarget": "Plan staat in {identifier} · Ga erheen",
       "arrivedIn": "{count} nieuw in {identifier} · Ga erheen",
       "arrivedAcross": "{count} nieuw elders · nieuwste in {identifier} · Ga erheen",
+      "draftingIn": "{count} worden opgesteld in {identifier} · Ga erheen",
+      "layingIn": "{identifier} indelen · Ga erheen",
+      "newAndDraftingIn": "{arrived} nieuw · {drafting} worden opgesteld in {identifier} · Ga erheen",
+      "draftingAcross": "{count} worden elders opgesteld · eerste in {identifier} · Ga erheen",
       "levelChange": {
         "srPrefix": "Openstaande wijziging op dit niveau:",
         "changed": "Dit niveau",
@@ -8515,14 +8552,17 @@
       "toResume": "Te hervatten",
       "recentlyFinished": "Onlangs afgerond",
       "watching": "Volgend",
-      "toApprove": "Wacht op jou"
+      "toApprove": "Wacht op jou",
+      "planning": "In planning"
     },
     "columns": {
       "title": "Titel",
       "role": "Je rol",
       "assignee": "Verantwoordelijke",
       "status": "Status",
-      "finished": "Afgerond"
+      "finished": "Afgerond",
+      "plan": "Plan",
+      "planner": "Planner"
     },
     "row": {
       "unassigned": "Niet toegewezen",
@@ -8565,6 +8605,11 @@
       "approvals": {
         "title": "Er wacht niets op jou",
         "body": "Goedkeuringen waarover jij moet beslissen, en werk dat een run aan jou heeft overgedragen, verschijnen hier."
+      },
+      "planning": {
+        "title": "Er worden geen plannen geschreven",
+        "body": "Wanneer je Motir AI of een agent om een plan vraagt, wacht het hier terwijl het wordt geschreven, met hoe ver het is, en gaat het naar Wacht op jou zodra het klaar is voor je beoordeling. Plannen die anderen hebben aangevraagd, staan op de pagina Plannen.",
+        "action": "Plannen met AI"
       }
     },
     "approvals": {
@@ -8782,6 +8827,28 @@
         "card_not_ready": "Hef op wat {key} blokkeert of zet het terug op Bezig, en druk dan op Voortzetten."
       },
       "copyAria": "De hervatopdracht voor {key} kopiëren"
+    },
+    "planning": {
+      "scope": "Plannen die je in <project>{name}</project> hebt aangevraagd en die nog worden geschreven. Plannen die anderen hebben aangevraagd, staan op de <link>pagina Plannen</link>.",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "MCP-agent",
+        "agentModel": "MCP-agent · <mono>{model}</mono>"
+      },
+      "rowAria": "Het plan openen dat wordt geschreven — {sentence}",
+      "reopened": "Heropend vanuit In planning · door jou gestart · laatst actief {when}",
+      "left": {
+        "planned": "Geschreven",
+        "plannedLine": "Klaar voor je beoordeling.",
+        "plannedLink": "Bekijken in Wacht op jou",
+        "discarded": "Beëindigd",
+        "discardedLine": "Beëindigd voordat het werd voorgesteld — er is niets toegevoegd.",
+        "abandoned": "Gestopt",
+        "abandonedLine": "De planner is gestopt, dus het plan is gesloten — er is niets toegevoegd.",
+        "unknownLine": "Wordt niet meer geschreven."
+      },
+      "ceiling": "Je {shown} nieuwste plannen die worden geschreven, worden getoond. De andere {rest} staan op de <link>pagina Plannen</link>."
     }
   },
   "approvalRecords": {
