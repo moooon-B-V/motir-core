@@ -18,6 +18,12 @@ import {
 // planning run writes into a customer's tenant; whether it may, and under what
 // bound, is `motir-ai/docs/decisions/planner-files-tenant-bug.md`.
 //
+// It serves EVERY phase of a planning run — the conversation (PART 1), lay and
+// author — not only lay and author (Story MOTIR-7797 · MOTIR-7799). A PART 1 run
+// always has its plan open before the model can call `log_bug`, so the
+// conversation needs no arm of its own and a job with no plan stays 404: see the
+// PLANLESS JOBS paragraph on `aiWorkItemsService.filePlannerBug`.
+//
 // ⚠️ NOT the system-principal route. `POST /api/internal/ai/work-items`
 // (MOTIR-1450) authenticates with the service bearer ALONE, acts as the Motir
 // SYSTEM principal and resolves `projectKey` only inside Motir's own workspace —
@@ -32,6 +38,10 @@ import {
 // the body carries NO project argument at all, so a foreign project is
 // unexpressible rather than refused; the job's plan must sit in that project
 // or the job resolves to no plan (404, the no-leak posture).
+//
+// `explanationMd` (optional, MOTIR-7799; decision MOTIR-7798 "How a filed bug
+// gets its explanation"): the bug's explanation, written at birth by the same
+// create in the same transaction. Absent means none.
 //
 // Thin transport (the 4-layer rule): authenticate → validate the body → ONE
 // service call (`aiWorkItemsService.filePlannerBug`) → map typed errors. The
@@ -71,7 +81,7 @@ export async function POST(req: Request): Promise<Response> {
     return fail('LOG_BUG_INVALID', 'request body must be valid JSON', 400);
   }
   const b = (body ?? {}) as Record<string, unknown>;
-  const { jobId, title, descriptionMd, parentKey, model } = b;
+  const { jobId, title, descriptionMd, explanationMd, parentKey, model } = b;
 
   if (typeof jobId !== 'string' || jobId.trim() === '') {
     return fail('LOG_BUG_INVALID', '`jobId` is required.', 400);
@@ -81,6 +91,9 @@ export async function POST(req: Request): Promise<Response> {
   }
   if (descriptionMd != null && typeof descriptionMd !== 'string') {
     return fail('LOG_BUG_INVALID', '`descriptionMd` must be a string.', 400);
+  }
+  if (explanationMd != null && typeof explanationMd !== 'string') {
+    return fail('LOG_BUG_INVALID', '`explanationMd` must be a string.', 400);
   }
   if (parentKey != null && typeof parentKey !== 'string') {
     return fail('LOG_BUG_INVALID', '`parentKey` must be a string.', 400);
@@ -95,6 +108,7 @@ export async function POST(req: Request): Promise<Response> {
         jobId,
         title: title.trim(),
         descriptionMd: descriptionMd ?? null,
+        explanationMd: explanationMd ?? null,
         parentKey: parentKey ?? null,
         model: model ?? null,
       },

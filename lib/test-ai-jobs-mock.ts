@@ -114,6 +114,28 @@ export interface GuideJobOutcome {
  */
 export interface PlanJobOutcome {
   status?: 'succeeded' | 'failed';
+  /**
+   * The planner's UTTERANCE for a succeeded run (Story MOTIR-7797 · MOTIR-7809),
+   * returned as `result.turn` — the shape `readPlanningTurn`
+   * (`lib/planning/plannerTurn.ts`) reads. Absent ⇒ `result` is `{}`, as before,
+   * so the run records no narration.
+   */
+  turn?: { message: string; question?: string | null };
+}
+
+/** One recorded `POST /v1/jobs` (diagnostic; the spec owns the fixture file). */
+export interface SubmittedJob {
+  kind: string;
+  hasCode?: boolean;
+  refused?: boolean;
+  /** The id this seam answered with — absent on a refused submit. */
+  jobId?: string;
+  /**
+   * The job token motir-core minted into the envelope (`readBackToken`), kept
+   * for a `plan` submit (MOTIR-7809) so a spec can call a job-token route —
+   * `POST /api/internal/ai/log-bug` — exactly as motir-ai would for that job.
+   */
+  readBackToken?: string;
 }
 
 export interface AiJobsFixture {
@@ -153,7 +175,7 @@ export interface AiJobsFixture {
   /** Appended to by the mock: the job kind of every submit, in order — and
    *  whether it carried a repository set (`context.code`), which is how a walk
    *  shows a CODE-BLIND project's dispatch went without one (MOTIR-5853). */
-  submitted?: { kind: string; hasCode?: boolean; refused?: boolean }[];
+  submitted?: SubmittedJob[];
 }
 
 const json = { headers: { 'content-type': 'application/json' } } as const;
@@ -181,13 +203,20 @@ function submitOrdinal(kind: string): number {
 }
 
 /** Record a submit so the SPEC can read back which job kinds actually ran. */
-function recordSubmit(kind: string, hasCode: boolean, refused = false): number {
+function recordSubmit(kind: string, rawBody: string, refused = false): number {
   const p = fixturePath();
   const f = readFixture();
   const index = (f.submitted ?? []).filter((s) => s.kind === kind).length;
   if (!p) return index;
   try {
-    f.submitted = [...(f.submitted ?? []), { kind, hasCode, ...(refused ? { refused } : {}) }];
+    const token = kind === 'plan' && !refused ? readBackTokenOf(rawBody) : null;
+    const entry: SubmittedJob = {
+      kind,
+      hasCode: submitCarriesCode(rawBody),
+      ...(refused ? { refused } : { jobId: jobIdFor(kind, index) }),
+      ...(token ? { readBackToken: token } : {}),
+    };
+    f.submitted = [...(f.submitted ?? []), entry];
     writeFixtureFileSync(p, JSON.stringify(f, null, 2));
   } catch {
     // Recording is diagnostic only — never fail the request over it.
@@ -200,6 +229,16 @@ function askOutcomeAt(n: number): AskJobOutcome {
   const queue = readFixture().ask ?? [];
   if (queue.length === 0) return { intent: 'ask', answer: 'No answer was declared.' };
   return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** The job token the envelope carried (`readBackToken`), or null. */
+function readBackTokenOf(rawBody: string): string | null {
+  try {
+    const token = (JSON.parse(rawBody) as { readBackToken?: unknown }).readBackToken;
+    return typeof token === 'string' && token !== '' ? token : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Whether a submit body carried a repository set — `context.code`. */
@@ -347,7 +386,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
         (kind === 'guide_work_item' &&
           guideOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits')
       ) {
-        recordSubmit(kind, submitCarriesCode(rawBody), true);
+        recordSubmit(kind, rawBody, true);
         const problem: Record<string, unknown> = {
           type: 'about:blank',
           title: 'Out of credits',
@@ -361,7 +400,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
           responseOptions: { headers: { 'content-type': 'application/problem+json' } },
         };
       }
-      const index = recordSubmit(kind, submitCarriesCode(rawBody));
+      const index = recordSubmit(kind, rawBody);
       const accepted: Record<string, unknown> = { jobId: jobIdFor(kind, index) };
       return { statusCode: 202, data: accepted, responseOptions: json };
     })
@@ -475,7 +514,10 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                       ...(routing.missing ? { missing: routing.missing } : {}),
                     },
                   }
-                : {};
+                : kind === 'plan' && planOutcomeAt(index).turn
+                  ? // The planner's utterance (MOTIR-7809), read by `readPlanningTurn`.
+                    { turn: planOutcomeAt(index).turn }
+                  : {};
       const settled: Record<string, unknown> = { status: 'succeeded', result };
       return { statusCode: 200, data: settled, responseOptions: json };
     })

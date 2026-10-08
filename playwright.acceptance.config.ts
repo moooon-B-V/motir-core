@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { E2E_GITHUB_WEBHOOK_SECRET } from './tests/e2e/_helpers/github-const';
 import { E2E_AI_TO_CORE_SERVICE_TOKEN } from './tests/e2e/_helpers/billing-push';
+import { E2E_CORE_CALLBACK_SECRET } from './tests/e2e/_helpers/log-bug-as-ai';
 import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
 import { generateKeyPairSync } from 'node:crypto';
 import os from 'node:os';
@@ -515,6 +516,12 @@ export default defineConfig({
         // The seat push the agent-billing walk makes (MOTIR-6924) — the literal
         // lives with the helper that signs with it.
         MOTIR_AI_TO_CORE_SERVICE_TOKEN: E2E_AI_TO_CORE_SERVICE_TOKEN,
+        // The §4a service bearer the job-token routes check (Story MOTIR-7797 ·
+        // MOTIR-7809): the confirmed-bug walk plays motir-ai's `log_bug` through
+        // the REAL `POST /api/internal/ai/log-bug`, which fails closed — every
+        // call 401 — while this is unset. The literal lives with the helper that
+        // presents it.
+        CORE_CALLBACK_SECRET: E2E_CORE_CALLBACK_SECRET,
         MOTIR_AI_BILLING_FIXTURE_PATH,
         E2E_TEST_PLATFORM_USAGE: '1',
         MOTIR_AI_PLATFORM_FIXTURE_PATH,

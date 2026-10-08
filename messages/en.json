@@ -7750,7 +7750,10 @@
         "movedTemp": "Moved a step on this walk. Not saved to the work item.",
         "edited": "Edited the {fields} of <chip>{key}</chip>.",
         "commented": "Commented on <chip>{key}</chip>: “{reason}”",
-        "closed": "Moved <chip>{key}</chip> to Done, and added this summary as a comment."
+        "closed": "Moved <chip>{key}</chip> to Done, and added this summary as a comment.",
+        "filed": "Filed <bug>{bugKey}</bug>.",
+        "filedBlocking": "Filed <bug>{bugKey}</bug>. <chip>{key}</chip> is blocked until it is fixed.",
+        "alreadyFiled": "Already filed as <bug>{bugKey}</bug>, so nothing new was filed."
       },
       "files": {
         "attach": "Attach files",
