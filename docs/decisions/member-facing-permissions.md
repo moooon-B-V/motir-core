@@ -344,6 +344,41 @@ added }, each row's set written out.
 
 ---
 
+## AMENDMENT 3 (2026-10-07) — §4: reading the convention and audit summary FOR PLANNING is `ai:plan` (MOTIR-7793, Story MOTIR-7782)
+
+**Source:** Subtask MOTIR-7793, which adds the `get_code_health` MCP tool — each repository's index
+state, latest audit health summary and current derived coding convention, for an agent planning over
+the MCP.
+
+§4 kept the coding-convention operations admin-only by re-pointing them at `ai:configure`. That
+stands, unchanged, for every operation it named: the `/code-health` page's reads
+(`aiConventionService.getAudit` / `getConvention`, `auditCoverageService.getCoverage`) and every
+re-audit and refresh (`aiConventionService.reaudit`). What this amendment adds is ONE further read,
+on a different key, and the reason the difference is not an oversight:
+
+- **Reading a repository's derived convention and its latest audit SUMMARY for planning is gated on
+  `ai:plan`** (`aiConventionService.getPlanningCodeHealth`; `TOOL_PERMISSIONS.get_code_health`).
+- **The content is already shown to exactly that set of actors.** The hosted planner composes both
+  into every planning session it runs (motir-ai `src/llm/retrievalTools.ts` `code_health` →
+  `conventionTools.ts`), and that job is submitted under `ai:plan`. A member who can plan already
+  reads this through their own plan; the tool gives an agent planning over the MCP the same evidence,
+  and widens nobody's reach.
+- **It is narrower than the page, not a second door to it.** No findings page and no convention
+  version history cross it, and it re-runs nothing — §4's argument was about an operation that
+  RE-RUNS an audit and spends credits, which this read cannot do.
+- **Why not `project:browse` with `ai:configure` checked inside.** A token's grant is checked at the
+  door, and the service's role check reads the token's OWNER, so a browse-only token minted by an
+  admin would then read what the browser reserves for `ai:configure` — the narrowing the token was
+  issued for would not apply (`token-permissions.md` §3: one key per tool, the key its own service
+  asserts).
+- **Why not `ai:configure` at the door.** That key is ungrantable to any token today — no tool and no
+  `/api/v1` operation asserts it — and this tool would make it grantable, refusing every planning
+  token already minted until an admin re-minted it. It would also gate a planning read on a
+  configuration key.
+
+So the door and the service ask the same question, `ai:plan`, which is already grantable and already
+in `CLI_TOKEN_GRANT`: no grant widens, and `ai:configure` stays in `UNGRANTABLE_PERMISSIONS`.
+
 ## References
 
 - `lib/permissions/catalog.ts` — `PERMISSIONS`, and the `planned` /

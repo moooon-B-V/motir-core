@@ -4,6 +4,7 @@
 // ISO strings (they crossed the wire as JSON and the UI only formats them).
 
 import type { RepoAuditRowState } from '@/lib/codeHealth/repoAuditRows';
+import type { CodeContextRepoDTO } from '@/lib/dto/codeContext';
 
 export interface ConventionProvenanceDTO {
   ruleId: string;
@@ -194,4 +195,56 @@ export interface ReauditRepoJobsDTO {
 // the new audit lands.
 export interface ReauditResultDTO {
   repos: ReauditRepoJobsDTO[];
+}
+
+// ── The PLANNING read (MOTIR-7793) ───────────────────────────────────────────
+// What `get_code_health` returns: every realized repository in the project's set,
+// with its index state, its latest audit's health SUMMARY and its current derived
+// convention — the same three things the hosted planner composes into every
+// `ai:plan` session (motir-ai `code_health`).
+//
+// Each section has THREE states and they must stay distinguishable, or a
+// consumer cannot tell "no audit yet" from "motir-ai is down":
+//
+//   present      → the store has one; the content rides along.
+//   absent       → the read SUCCEEDED and the store has nothing yet (no audit
+//                  run, no convention derived). Never an error.
+//   unavailable  → this repository's boundary read FAILED (`MotirAiError`); the
+//                  code is the error's own. It degrades THIS section only — the
+//                  call and every sibling section still answer.
+//
+// No field is re-declared: the index facts are picked off `CodeContextRepoDTO`
+// (the one code-context join), and the content reuses `CodeHealthSummaryDTO` /
+// `CodingConventionDTO`. There is deliberately NO findings page and NO version
+// history — a planner gets the summary, the `/code-health` page owns the paging.
+
+export type PlanningCodeHealthSectionUnavailableDTO = { state: 'unavailable'; code: string };
+
+export type PlanningCodeHealthAuditDTO =
+  | {
+      state: 'present';
+      healthSummary: CodeHealthSummaryDTO;
+      createdAt: string;
+      codeGraphRef: string | null;
+    }
+  | { state: 'absent' }
+  | PlanningCodeHealthSectionUnavailableDTO;
+
+export type PlanningCodeHealthConventionDTO =
+  | { state: 'present'; convention: CodingConventionDTO }
+  | { state: 'absent' }
+  | PlanningCodeHealthSectionUnavailableDTO;
+
+export interface PlanningCodeHealthRepoDTO extends Pick<
+  CodeContextRepoDTO,
+  'repoRef' | 'indexState' | 'indexedAt' | 'commitsBehind' | 'refreshFailing'
+> {
+  audit: PlanningCodeHealthAuditDTO;
+  convention: PlanningCodeHealthConventionDTO;
+}
+
+export interface PlanningCodeHealthDTO {
+  project: { key: string; name: string };
+  /** One entry per REALIZED repository in the project's set, in set order. `[]` when none. */
+  repos: PlanningCodeHealthRepoDTO[];
 }
