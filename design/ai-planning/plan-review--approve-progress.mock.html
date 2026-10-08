@@ -20,20 +20,16 @@
           --font-sans:
             var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto,
             sans-serif;
-          --font-serif: var(--font-serif-source, Georgia), serif;
           --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
           --spacing: 0.25rem;
           --text-xs: 0.75rem;
           --text-xs--line-height: calc(1 / 0.75);
           --text-sm: 0.875rem;
           --text-sm--line-height: calc(1.25 / 0.875);
-          --text-lg: 1.125rem;
-          --text-lg--line-height: calc(1.75 / 1.125);
           --text-2xl: 1.5rem;
           --text-2xl--line-height: calc(2 / 1.5);
           --font-weight-medium: 500;
           --font-weight-semibold: 600;
-          --font-weight-bold: 700;
           --tracking-wide: 0.025em;
           --leading-relaxed: 1.625;
           --animate-spin: spin 1s linear infinite;
@@ -81,12 +77,10 @@
           --radius-btn: 8px;
           --radius-card: 12px;
           --radius-badge: 9999px;
-          --radius-control: 6px;
           --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
           --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
           --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
           --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
-          --spacing-btn-x: 18px;
           --spacing-card-padding: 24px;
           --spacing-control-x: 10px;
           --spacing-control-y: 6px;
@@ -348,10 +342,6 @@
         .inline-flex {
           display: inline-flex;
         }
-        .size-1\.5 {
-          width: calc(var(--spacing) * 1.5);
-          height: calc(var(--spacing) * 1.5);
-        }
         .size-3\.5 {
           width: calc(var(--spacing) * 3.5);
           height: calc(var(--spacing) * 3.5);
@@ -359,9 +349,6 @@
         .size-4 {
           width: calc(var(--spacing) * 4);
           height: calc(var(--spacing) * 4);
-        }
-        .h-\(--height-btn-md\) {
-          height: var(--height-btn-md);
         }
         .h-\(--height-btn-sm\) {
           height: var(--height-btn-sm);
@@ -372,14 +359,8 @@
         .h-\[26rem\] {
           height: 26rem;
         }
-        .h-\[30rem\] {
-          height: 30rem;
-        }
         .h-\[36rem\] {
           height: 36rem;
-        }
-        .h-\[40rem\] {
-          height: 40rem;
         }
         .h-full {
           height: 100%;
@@ -396,9 +377,6 @@
         .w-4 {
           width: calc(var(--spacing) * 4);
         }
-        .w-\[22rem\] {
-          width: 22rem;
-        }
         .w-\[55rem\] {
           width: 55rem;
         }
@@ -411,9 +389,6 @@
         .max-w-\[64rem\] {
           max-width: 64rem;
         }
-        .max-w-full {
-          max-width: 100%;
-        }
         .min-w-0 {
           min-width: calc(var(--spacing) * 0);
         }
@@ -425,9 +400,6 @@
         }
         .shrink-0 {
           flex-shrink: 0;
-        }
-        .animate-none {
-          animation: none;
         }
         .animate-spin {
           animation: var(--animate-spin);
@@ -456,9 +428,6 @@
         .justify-end {
           justify-content: flex-end;
         }
-        .gap-1\.5 {
-          gap: calc(var(--spacing) * 1.5);
-        }
         .gap-2 {
           gap: calc(var(--spacing) * 2);
         }
@@ -477,12 +446,6 @@
         .gap-8 {
           gap: calc(var(--spacing) * 8);
         }
-        .gap-x-3 {
-          column-gap: calc(var(--spacing) * 3);
-        }
-        .gap-y-1 {
-          row-gap: calc(var(--spacing) * 1);
-        }
         .self-start {
           align-self: flex-start;
         }
@@ -493,9 +456,6 @@
         }
         .overflow-hidden {
           overflow: hidden;
-        }
-        .overflow-x-hidden {
-          overflow-x: hidden;
         }
         .overflow-y-auto {
           overflow-y: auto;
@@ -508,9 +468,6 @@
         }
         .rounded-\(--radius-card\) {
           border-radius: var(--radius-card);
-        }
-        .rounded-\(--radius-control\) {
-          border-radius: var(--radius-control);
         }
         .rounded-full {
           border-radius: calc(infinity * 1px);
@@ -546,9 +503,6 @@
         .bg-\(--el-accent\) {
           background-color: var(--el-accent);
         }
-        .bg-\(--el-border-strong\) {
-          background-color: var(--el-border-strong);
-        }
         .bg-\(--el-page-bg\) {
           background-color: var(--el-page-bg);
         }
@@ -576,14 +530,8 @@
         .p-4 {
           padding: calc(var(--spacing) * 4);
         }
-        .p-5 {
-          padding: calc(var(--spacing) * 5);
-        }
         .p-8 {
           padding: calc(var(--spacing) * 8);
-        }
-        .px-\(--spacing-btn-x\) {
-          padding-inline: var(--spacing-btn-x);
         }
         .px-\(--spacing-chip-x\) {
           padding-inline: var(--spacing-chip-x);
@@ -591,26 +539,17 @@
         .px-\(--spacing-control-x\) {
           padding-inline: var(--spacing-control-x);
         }
-        .px-2 {
-          padding-inline: calc(var(--spacing) * 2);
-        }
         .px-3 {
           padding-inline: calc(var(--spacing) * 3);
         }
         .px-4 {
           padding-inline: calc(var(--spacing) * 4);
         }
-        .px-5 {
-          padding-inline: calc(var(--spacing) * 5);
-        }
         .py-\(--spacing-chip-y\) {
           padding-block: var(--spacing-chip-y);
         }
         .py-\(--spacing-control-y\) {
           padding-block: var(--spacing-control-y);
-        }
-        .py-0\.5 {
-          padding-block: calc(var(--spacing) * 0.5);
         }
         .py-2 {
           padding-block: calc(var(--spacing) * 2);
@@ -621,12 +560,6 @@
         .py-4 {
           padding-block: calc(var(--spacing) * 4);
         }
-        .pt-4 {
-          padding-top: calc(var(--spacing) * 4);
-        }
-        .pb-\[calc\(var\(--spacing-control-y\)\+var\(--shell-bottom-clearance\,1\.5rem\)\)\] {
-          padding-bottom: calc(var(--spacing-control-y) + var(--shell-bottom-clearance, 1.5rem));
-        }
         .text-center {
           text-align: center;
         }
@@ -636,16 +569,9 @@
         .font-sans {
           font-family: var(--font-sans);
         }
-        .font-serif {
-          font-family: var(--font-serif);
-        }
         .text-2xl {
           font-size: var(--text-2xl);
           line-height: var(--tw-leading, var(--text-2xl--line-height));
-        }
-        .text-lg {
-          font-size: var(--text-lg);
-          line-height: var(--tw-leading, var(--text-lg--line-height));
         }
         .text-sm {
           font-size: var(--text-sm);
@@ -658,17 +584,9 @@
         .text-\[11px\] {
           font-size: 11px;
         }
-        .leading-none {
-          --tw-leading: 1;
-          line-height: 1;
-        }
         .leading-relaxed {
           --tw-leading: var(--leading-relaxed);
           line-height: var(--leading-relaxed);
-        }
-        .font-bold {
-          --tw-font-weight: var(--font-weight-bold);
-          font-weight: var(--font-weight-bold);
         }
         .font-medium {
           --tw-font-weight: var(--font-weight-medium);
@@ -677,10 +595,6 @@
         .font-semibold {
           --tw-font-weight: var(--font-weight-semibold);
           font-weight: var(--font-weight-semibold);
-        }
-        .tracking-\[0\.05em\] {
-          --tw-tracking: 0.05em;
-          letter-spacing: 0.05em;
         }
         .tracking-wide {
           --tw-tracking: var(--tracking-wide);
@@ -694,9 +608,6 @@
         }
         .text-\(--el-accent-text\) {
           color: var(--el-accent-text);
-        }
-        .text-\(--el-danger-on-surface\) {
-          color: var(--el-danger-on-surface);
         }
         .text-\(--el-text\) {
           color: var(--el-text);
@@ -4408,674 +4319,10 @@
       </h1>
       <section
         class="flex flex-col gap-3"
-        aria-label="0 · The access path — the door is the Approve that ships today, on both hosts"
+        aria-label="0 · OVERLAY — the canvas bar: creating, still going (bar height unchanged: 3.5rem)"
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          0 · The access path — the door is the Approve that ships today, on both hosts
-        </h2>
-        <div
-          class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
-        >
-          <div class="flex flex-col gap-4">
-            <p class="max-w-[46rem] text-xs leading-relaxed text-(--el-text-secondary)">
-              Nothing new opens this surface. On the plan page it is the rail footer’s primary
-              <em>Approve — add 33 items to your backlog</em>; in the planning overlay it is the
-              confirm bar’s <em>Approve</em> at the canvas foot, or its mirror in the rail’s review
-              block. Both are the real components rendered on origin/main, at rest. Pressing either
-              is the only way into panels 1–4.
-            </p>
-            <div class="flex flex-wrap items-start gap-6">
-              <div class="flex flex-col gap-2">
-                <span
-                  class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
-                  >page · /plans/[id] · rail at rest (shipped)</span
-                >
-                <div
-                  class="h-[30rem] w-[22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
-                >
-                  <aside
-                    aria-label="Plan review"
-                    class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                  >
-                    <div
-                      data-testid="plan-review-transcript"
-                      class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                    >
-                      <header class="flex min-w-0 flex-col gap-2">
-                        <span
-                          data-testid="plan-status-pill"
-                          class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                          >Ready to review</span
-                        >
-                        <h2
-                          class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                        >
-                          Stripe Connect payouts
-                        </h2>
-                        <p
-                          class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                        >
-                          <span>33 proposed items</span>
-                        </p>
-                      </header>
-                      <section class="flex flex-col gap-2">
-                        <h3
-                          class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                        >
-                          History
-                        </h3>
-                        <ol class="flex flex-col gap-2">
-                          <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                            <span
-                              class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                              aria-hidden="true"
-                            ></span
-                            >Awaiting your review
-                          </li>
-                        </ol>
-                      </section>
-                    </div>
-                    <div
-                      class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                    >
-                      <button
-                        type="button"
-                        data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
-                      >
-                        <span aria-hidden="true" class="inline-flex"
-                          ><svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-check size-4"
-                            aria-hidden="true"
-                          >
-                            <path d="M20 6 9 17l-5-5"></path></svg></span
-                        ><span>Approve — add 33 items to your backlog</span></button
-                      ><button
-                        type="button"
-                        data-variant="ghost"
-                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
-                      >
-                        <span aria-hidden="true" class="inline-flex"
-                          ><svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-x size-4"
-                            aria-hidden="true"
-                          >
-                            <path d="M18 6 6 18"></path>
-                            <path d="m6 6 12 12"></path></svg></span
-                        ><span>Decline</span>
-                      </button>
-                      <p class="text-center text-xs text-(--el-text-secondary)">
-                        Approve materializes the proposals into your backlog.
-                      </p>
-                    </div>
-                  </aside>
-                </div>
-              </div>
-              <div class="flex flex-col gap-2">
-                <span
-                  class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
-                  >overlay · confirm bar + review block at rest (shipped)</span
-                >
-                <div
-                  class="grid h-[26rem] w-[55rem] grid-cols-[1fr_22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
-                >
-                  <div class="relative min-h-0 overflow-hidden bg-(--el-page-bg)">
-                    <p class="p-4 text-xs text-(--el-text-secondary)">
-                      The plan canvas — unchanged by this design, not redrawn.
-                    </p>
-                    <div class="absolute inset-x-0 bottom-0 z-20">
-                      <div>
-                        <div class="flex shrink-0 flex-col">
-                          <div
-                            data-testid="plan-change-confirm-bar"
-                            class="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
-                            style="min-height: 3.5rem"
-                          >
-                            <span class="flex min-w-0 flex-col"
-                              ><span class="truncate text-sm font-semibold text-(--el-text)"
-                                >15 added, 2 changed, 1 removed</span
-                              ><span
-                                id="plan-change-bar-line"
-                                class="truncate text-xs text-(--el-text-secondary)"
-                                >Approving adds these to your backlog. Declining ends the plan and
-                                changes nothing.</span
-                              ></span
-                            >
-                            <div class="ml-auto flex shrink-0 items-center gap-2">
-                              <button
-                                type="button"
-                                data-variant="ghost"
-                                class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
-                              >
-                                <span>Decline</span></button
-                              ><button
-                                type="button"
-                                data-variant="primary"
-                                class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
-                              >
-                                <span aria-hidden="true" class="inline-flex"
-                                  ><svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="24"
-                                    height="24"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    class="lucide lucide-check size-4"
-                                    aria-hidden="true"
-                                  >
-                                    <path d="M20 6 9 17l-5-5"></path></svg></span
-                                ><span>Approve</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <aside
-                    class="flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                  >
-                    <div
-                      role="log"
-                      class="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-4 py-4"
-                    >
-                      <div
-                        data-testid="plan-change-review"
-                        class="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
-                      >
-                        <span class="text-xs font-semibold text-(--el-text-strong)"
-                          >Nothing saved yet</span
-                        ><span class="text-xs text-(--el-text-secondary)"
-                          >Approving adds these to your backlog. Declining ends the plan and changes
-                          nothing.</span
-                        >
-                      </div>
-                    </div>
-                  </aside>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      <section
-        class="flex flex-col gap-3"
-        aria-label="1 · PAGE RAIL (22rem) — creating (0–8 s) and still going (≥ 8 s)"
-      >
-        <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          1 · PAGE RAIL (22rem) — creating (0–8 s) and still going (≥ 8 s)
-        </h2>
-        <div
-          class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
-        >
-          <div class="flex flex-col gap-4">
-            <p class="max-w-[46rem] text-xs leading-relaxed text-(--el-text-secondary)">
-              The progress REPLACES the verbs and their hint — one control per state, the rail’s own
-              rule (the decline band does the same). No button is left to press twice, and no label
-              still counts work that has not happened. At 8 s the lower line swaps to the
-              reassurance; the upper line and the spinner do not change.
-            </p>
-            <div class="flex flex-wrap items-start gap-6">
-              <div class="flex flex-col gap-2">
-                <span
-                  class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
-                  >creating · 0–8 s</span
-                >
-                <div
-                  class="h-[30rem] w-[22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
-                >
-                  <aside
-                    aria-label="Plan review"
-                    class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                  >
-                    <div
-                      data-testid="plan-review-transcript"
-                      class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                    >
-                      <header class="flex min-w-0 flex-col gap-2">
-                        <span
-                          data-testid="plan-status-pill"
-                          class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                          >Ready to review</span
-                        >
-                        <h2
-                          class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                        >
-                          Stripe Connect payouts
-                        </h2>
-                        <p
-                          class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                        >
-                          <span>33 proposed items</span>
-                        </p>
-                      </header>
-                      <section class="flex flex-col gap-2">
-                        <h3
-                          class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                        >
-                          History
-                        </h3>
-                        <ol class="flex flex-col gap-2">
-                          <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                            <span
-                              class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                              aria-hidden="true"
-                            ></span
-                            >Awaiting your review
-                          </li>
-                        </ol>
-                      </section>
-                    </div>
-                    <div
-                      class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                    >
-                      <div
-                        data-testid="plan-approve-progress"
-                        data-place="rail"
-                        role="status"
-                        aria-live="polite"
-                        class="flex flex-col gap-2"
-                      >
-                        <div
-                          class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
-                        >
-                          <span
-                            role="status"
-                            aria-label="Loading"
-                            class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
-                            aria-hidden="true"
-                          ></span
-                          ><span
-                            class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
-                            >Adding 33 items to your backlog…</span
-                          >
-                        </div>
-                        <p class="text-center text-xs text-(--el-text-secondary)">
-                          They all arrive together when it finishes.
-                        </p>
-                      </div>
-                    </div>
-                  </aside>
-                </div>
-              </div>
-              <div class="flex flex-col gap-2">
-                <span
-                  class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
-                  >still going · ≥ 8 s</span
-                >
-                <div
-                  class="h-[30rem] w-[22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
-                >
-                  <aside
-                    aria-label="Plan review"
-                    class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                  >
-                    <div
-                      data-testid="plan-review-transcript"
-                      class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                    >
-                      <header class="flex min-w-0 flex-col gap-2">
-                        <span
-                          data-testid="plan-status-pill"
-                          class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                          >Ready to review</span
-                        >
-                        <h2
-                          class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                        >
-                          Stripe Connect payouts
-                        </h2>
-                        <p
-                          class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                        >
-                          <span>33 proposed items</span>
-                        </p>
-                      </header>
-                      <section class="flex flex-col gap-2">
-                        <h3
-                          class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                        >
-                          History
-                        </h3>
-                        <ol class="flex flex-col gap-2">
-                          <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                            <span
-                              class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                              aria-hidden="true"
-                            ></span
-                            >Awaiting your review
-                          </li>
-                        </ol>
-                      </section>
-                    </div>
-                    <div
-                      class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                    >
-                      <div
-                        data-testid="plan-approve-progress"
-                        data-place="rail"
-                        role="status"
-                        aria-live="polite"
-                        class="flex flex-col gap-2"
-                      >
-                        <div
-                          class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
-                        >
-                          <span
-                            role="status"
-                            aria-label="Loading"
-                            class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
-                            aria-hidden="true"
-                          ></span
-                          ><span
-                            class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
-                            >Adding 33 items to your backlog…</span
-                          >
-                        </div>
-                        <p class="text-center text-xs text-(--el-text-secondary)">
-                          Still working — a large plan takes longer. There’s no need to press again.
-                        </p>
-                      </div>
-                    </div>
-                  </aside>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      <section
-        class="flex flex-col gap-3"
-        aria-label="2 · PAGE RAIL — TIMED OUT beside FAILED OTHERWISE (side by side, on purpose)"
-      >
-        <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          2 · PAGE RAIL — TIMED OUT beside FAILED OTHERWISE (side by side, on purpose)
-        </h2>
-        <div
-          class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
-        >
-          <div class="flex flex-col gap-4">
-            <p class="max-w-[46rem] text-xs leading-relaxed text-(--el-text-secondary)">
-              Tell them apart at a glance: the timeout is a yellow band with a timer glyph that
-              opens with “Nothing was created” and ends with “safe to approve again”; any other
-              failure is the shipped single red line with neither promise. A band means press again;
-              a bare red line means read before you press.
-            </p>
-            <div class="flex flex-wrap items-start gap-6">
-              <div class="flex flex-col gap-2">
-                <span
-                  class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
-                  >timed out · PLAN_APPROVE_TIMED_OUT · NEW</span
-                >
-                <div
-                  class="h-[30rem] w-[22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
-                >
-                  <aside
-                    aria-label="Plan review"
-                    class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                  >
-                    <div
-                      data-testid="plan-review-transcript"
-                      class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                    >
-                      <header class="flex min-w-0 flex-col gap-2">
-                        <span
-                          data-testid="plan-status-pill"
-                          class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                          >Ready to review</span
-                        >
-                        <h2
-                          class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                        >
-                          Stripe Connect payouts
-                        </h2>
-                        <p
-                          class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                        >
-                          <span>33 proposed items</span>
-                        </p>
-                      </header>
-                      <section class="flex flex-col gap-2">
-                        <h3
-                          class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                        >
-                          History
-                        </h3>
-                        <ol class="flex flex-col gap-2">
-                          <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                            <span
-                              class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                              aria-hidden="true"
-                            ></span
-                            >Awaiting your review
-                          </li>
-                        </ol>
-                      </section>
-                    </div>
-                    <div
-                      class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                    >
-                      <p
-                        role="alert"
-                        data-testid="plan-approve-timed-out"
-                        class="flex items-start gap-1.5 rounded-(--radius-control) bg-(--el-tint-yellow) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-timer-off mt-px size-3.5 flex-none"
-                          aria-hidden="true"
-                        >
-                          <path d="M10 2h4"></path>
-                          <path d="M4.6 11a8 8 0 0 0 1.7 8.7 8 8 0 0 0 8.7 1.7"></path>
-                          <path d="M7.4 7.4a8 8 0 0 1 10.3 1 8 8 0 0 1 .9 10.2"></path>
-                          <path d="m2 2 20 20"></path>
-                          <path d="M12 12v-2"></path></svg
-                        ><span
-                          ><span class="font-semibold"
-                            >Nothing was created — approving took too long.</span
-                          >
-                          This plan still awaits your decision, unchanged. It’s safe to approve
-                          again.</span
-                        >
-                      </p>
-                      <button
-                        type="button"
-                        data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
-                      >
-                        <span aria-hidden="true" class="inline-flex"
-                          ><svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-check size-4"
-                            aria-hidden="true"
-                          >
-                            <path d="M20 6 9 17l-5-5"></path></svg></span
-                        ><span>Approve — add 33 items to your backlog</span></button
-                      ><button
-                        type="button"
-                        data-variant="ghost"
-                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
-                      >
-                        <span aria-hidden="true" class="inline-flex"
-                          ><svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-x size-4"
-                            aria-hidden="true"
-                          >
-                            <path d="M18 6 6 18"></path>
-                            <path d="m6 6 12 12"></path></svg></span
-                        ><span>Decline</span>
-                      </button>
-                      <p class="text-center text-xs text-(--el-text-secondary)">
-                        Approve materializes the proposals into your backlog.
-                      </p>
-                    </div>
-                  </aside>
-                </div>
-              </div>
-              <div class="flex flex-col gap-2">
-                <span
-                  class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
-                  >failed otherwise · UNCHANGED (shipped)</span
-                >
-                <div
-                  class="h-[30rem] w-[22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
-                >
-                  <aside
-                    aria-label="Plan review"
-                    class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                  >
-                    <div
-                      data-testid="plan-review-transcript"
-                      class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                    >
-                      <header class="flex min-w-0 flex-col gap-2">
-                        <span
-                          data-testid="plan-status-pill"
-                          class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                          >Ready to review</span
-                        >
-                        <h2
-                          class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                        >
-                          Stripe Connect payouts
-                        </h2>
-                        <p
-                          class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                        >
-                          <span>33 proposed items</span>
-                        </p>
-                      </header>
-                      <section class="flex flex-col gap-2">
-                        <h3
-                          class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                        >
-                          History
-                        </h3>
-                        <ol class="flex flex-col gap-2">
-                          <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                            <span
-                              class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                              aria-hidden="true"
-                            ></span
-                            >Awaiting your review
-                          </li>
-                        </ol>
-                      </section>
-                    </div>
-                    <div
-                      class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                    >
-                      <p role="alert" class="text-xs font-medium text-(--el-danger-on-surface)">
-                        Something went wrong. Please try again.
-                      </p>
-                      <button
-                        type="button"
-                        data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
-                      >
-                        <span aria-hidden="true" class="inline-flex"
-                          ><svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-check size-4"
-                            aria-hidden="true"
-                          >
-                            <path d="M20 6 9 17l-5-5"></path></svg></span
-                        ><span>Approve — add 33 items to your backlog</span></button
-                      ><button
-                        type="button"
-                        data-variant="ghost"
-                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
-                      >
-                        <span aria-hidden="true" class="inline-flex"
-                          ><svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-x size-4"
-                            aria-hidden="true"
-                          >
-                            <path d="M18 6 6 18"></path>
-                            <path d="m6 6 12 12"></path></svg></span
-                        ><span>Decline</span>
-                      </button>
-                      <p class="text-center text-xs text-(--el-text-secondary)">
-                        Approve materializes the proposals into your backlog.
-                      </p>
-                    </div>
-                  </aside>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      <section
-        class="flex flex-col gap-3"
-        aria-label="3 · OVERLAY — the canvas bar: creating, still going (bar height unchanged: 3.5rem)"
-      >
-        <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          3 · OVERLAY — the canvas bar: creating, still going (bar height unchanged: 3.5rem)
+          0 · OVERLAY — the canvas bar: creating, still going (bar height unchanged: 3.5rem)
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
@@ -5252,10 +4499,10 @@
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="4 · OVERLAY — TIMED OUT beside FAILED OTHERWISE"
+        aria-label="1 · OVERLAY — TIMED OUT beside FAILED OTHERWISE"
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          4 · OVERLAY — TIMED OUT beside FAILED OTHERWISE
+          1 · OVERLAY — TIMED OUT beside FAILED OTHERWISE
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
@@ -5487,251 +4734,20 @@
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="5 · NARROW (&lt; md, 375px) — both hosts, running and timed out"
+        aria-label="2 · NARROW (&lt; md, 375px) — the overlay, running and timed out"
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          5 · NARROW (&lt; md, 375px) — both hosts, running and timed out
+          2 · NARROW (&lt; md, 375px) — the overlay, running and timed out
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
         >
           <div class="flex flex-col gap-4">
             <p class="max-w-[46rem] text-xs leading-relaxed text-(--el-text-secondary)">
-              Below md both frames are one column, canvas over rail (PLANNING_FRAME_STACKED_ROWS).
-              The page rail keeps its footer at full width; the overlay bar lets its second line
-              WRAP rather than truncate, because “There’s no need to press again” is the sentence
-              that matters.
+              Below md the overlay is one column, canvas over rail (PLANNING_FRAME_STACKED_ROWS).
+              The bar lets its second line WRAP rather than truncate, because “There’s no need to
+              press again” is the sentence that matters.
             </p>
-            <div class="flex flex-wrap items-start gap-6">
-              <div class="flex flex-col gap-2">
-                <span
-                  class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
-                  >page · still going</span
-                >
-                <div
-                  class="grid h-[40rem] w-[375px] grid-rows-[minmax(0,3fr)_minmax(12rem,2fr)] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
-                >
-                  <p class="p-4 text-xs text-(--el-text-secondary)">
-                    The plan canvas — unchanged by this design, not redrawn.
-                  </p>
-                  <div class="min-h-0">
-                    <aside
-                      aria-label="Plan review"
-                      class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                    >
-                      <div
-                        data-testid="plan-review-transcript"
-                        class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                      >
-                        <header class="flex min-w-0 flex-col gap-2">
-                          <span
-                            data-testid="plan-status-pill"
-                            class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                            >Ready to review</span
-                          >
-                          <h2
-                            class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                          >
-                            Stripe Connect payouts
-                          </h2>
-                          <p
-                            class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                          >
-                            <span>33 proposed items</span>
-                          </p>
-                        </header>
-                        <section class="flex flex-col gap-2">
-                          <h3
-                            class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                          >
-                            History
-                          </h3>
-                          <ol class="flex flex-col gap-2">
-                            <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                              <span
-                                class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                                aria-hidden="true"
-                              ></span
-                              >Awaiting your review
-                            </li>
-                          </ol>
-                        </section>
-                      </div>
-                      <div
-                        class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                      >
-                        <div
-                          data-testid="plan-approve-progress"
-                          data-place="rail"
-                          role="status"
-                          aria-live="polite"
-                          class="flex flex-col gap-2"
-                        >
-                          <div
-                            class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
-                          >
-                            <span
-                              role="status"
-                              aria-label="Loading"
-                              class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
-                              aria-hidden="true"
-                            ></span
-                            ><span
-                              class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
-                              >Adding 33 items to your backlog…</span
-                            >
-                          </div>
-                          <p class="text-center text-xs text-(--el-text-secondary)">
-                            Still working — a large plan takes longer. There’s no need to press
-                            again.
-                          </p>
-                        </div>
-                      </div>
-                    </aside>
-                  </div>
-                </div>
-              </div>
-              <div class="flex flex-col gap-2">
-                <span
-                  class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
-                  >page · timed out</span
-                >
-                <div
-                  class="grid h-[40rem] w-[375px] grid-rows-[minmax(0,3fr)_minmax(12rem,2fr)] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
-                >
-                  <p class="p-4 text-xs text-(--el-text-secondary)">
-                    The plan canvas — unchanged by this design, not redrawn.
-                  </p>
-                  <div class="min-h-0">
-                    <aside
-                      aria-label="Plan review"
-                      class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                    >
-                      <div
-                        data-testid="plan-review-transcript"
-                        class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                      >
-                        <header class="flex min-w-0 flex-col gap-2">
-                          <span
-                            data-testid="plan-status-pill"
-                            class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                            >Ready to review</span
-                          >
-                          <h2
-                            class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                          >
-                            Stripe Connect payouts
-                          </h2>
-                          <p
-                            class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                          >
-                            <span>33 proposed items</span>
-                          </p>
-                        </header>
-                        <section class="flex flex-col gap-2">
-                          <h3
-                            class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                          >
-                            History
-                          </h3>
-                          <ol class="flex flex-col gap-2">
-                            <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                              <span
-                                class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                                aria-hidden="true"
-                              ></span
-                              >Awaiting your review
-                            </li>
-                          </ol>
-                        </section>
-                      </div>
-                      <div
-                        class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                      >
-                        <p
-                          role="alert"
-                          data-testid="plan-approve-timed-out"
-                          class="flex items-start gap-1.5 rounded-(--radius-control) bg-(--el-tint-yellow) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-timer-off mt-px size-3.5 flex-none"
-                            aria-hidden="true"
-                          >
-                            <path d="M10 2h4"></path>
-                            <path d="M4.6 11a8 8 0 0 0 1.7 8.7 8 8 0 0 0 8.7 1.7"></path>
-                            <path d="M7.4 7.4a8 8 0 0 1 10.3 1 8 8 0 0 1 .9 10.2"></path>
-                            <path d="m2 2 20 20"></path>
-                            <path d="M12 12v-2"></path></svg
-                          ><span
-                            ><span class="font-semibold"
-                              >Nothing was created — approving took too long.</span
-                            >
-                            This plan still awaits your decision, unchanged. It’s safe to approve
-                            again.</span
-                          >
-                        </p>
-                        <button
-                          type="button"
-                          data-variant="primary"
-                          class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
-                        >
-                          <span aria-hidden="true" class="inline-flex"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-check size-4"
-                              aria-hidden="true"
-                            >
-                              <path d="M20 6 9 17l-5-5"></path></svg></span
-                          ><span>Approve — add 33 items to your backlog</span></button
-                        ><button
-                          type="button"
-                          data-variant="ghost"
-                          class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
-                        >
-                          <span aria-hidden="true" class="inline-flex"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-x size-4"
-                              aria-hidden="true"
-                            >
-                              <path d="M18 6 6 18"></path>
-                              <path d="m6 6 12 12"></path></svg></span
-                          ><span>Decline</span>
-                        </button>
-                        <p class="text-center text-xs text-(--el-text-secondary)">
-                          Approve materializes the proposals into your backlog.
-                        </p>
-                      </div>
-                    </aside>
-                  </div>
-                </div>
-              </div>
-            </div>
             <div class="flex flex-wrap items-start gap-6">
               <div class="flex flex-col gap-2">
                 <span
@@ -5940,10 +4956,10 @@
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="6 · REDUCED MOTION — the words stay, the motion stops"
+        aria-label="3 · REDUCED MOTION — the words stay, the motion stops"
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          6 · REDUCED MOTION — the words stay, the motion stops
+          3 · REDUCED MOTION — the words stay, the motion stops
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
@@ -5951,7 +4967,7 @@
           <div class="flex flex-col gap-4">
             <p class="max-w-[46rem] text-xs leading-relaxed text-(--el-text-secondary)">
               Under prefers-reduced-motion: reduce the Spinner carries motion-reduce:animate-none
-              and stands still as a static ring (aria-hidden). Every word is identical to panel 1,
+              and stands still as a static ring (aria-hidden). Every word is identical to panel 0,
               and the 8 s swap still happens — it is a change of text, not a motion.
             </p>
             <div class="flex flex-wrap items-start gap-6">
@@ -5961,77 +4977,74 @@
                   >reduced · creating</span
                 >
                 <div
-                  class="h-[30rem] w-[22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
+                  class="grid h-[26rem] w-[55rem] grid-cols-[1fr_22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
                 >
-                  <aside
-                    aria-label="Plan review"
-                    class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                  >
-                    <div
-                      data-testid="plan-review-transcript"
-                      class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                    >
-                      <header class="flex min-w-0 flex-col gap-2">
-                        <span
-                          data-testid="plan-status-pill"
-                          class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                          >Ready to review</span
-                        >
-                        <h2
-                          class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                        >
-                          Stripe Connect payouts
-                        </h2>
-                        <p
-                          class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                        >
-                          <span>33 proposed items</span>
-                        </p>
-                      </header>
-                      <section class="flex flex-col gap-2">
-                        <h3
-                          class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                        >
-                          History
-                        </h3>
-                        <ol class="flex flex-col gap-2">
-                          <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                            <span
-                              class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                              aria-hidden="true"
-                            ></span
-                            >Awaiting your review
-                          </li>
-                        </ol>
-                      </section>
-                    </div>
-                    <div
-                      class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                    >
+                  <div class="relative min-h-0 overflow-hidden bg-(--el-page-bg)">
+                    <p class="p-4 text-xs text-(--el-text-secondary)">
+                      The plan canvas — unchanged by this design, not redrawn.
+                    </p>
+                    <div class="absolute inset-x-0 bottom-0 z-20">
                       <div
                         data-testid="plan-approve-progress"
-                        data-place="rail"
+                        data-place="bar"
                         role="status"
                         aria-live="polite"
-                        class="flex flex-col gap-2"
+                        class="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5 min-h-14"
                       >
-                        <div
-                          class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
-                        >
-                          <span
-                            role="status"
-                            aria-label="Loading"
-                            class="inline-block rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none animate-none"
-                            aria-hidden="true"
+                        <span
+                          role="status"
+                          aria-label="Loading"
+                          class="inline-block rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
+                          aria-hidden="true"
+                        ></span
+                        ><span class="flex min-w-0 flex-col"
+                          ><span class="text-sm font-semibold text-(--el-text) wrap-anywhere"
+                            >Applying 18 changes to your backlog…</span
+                          ><span class="text-xs text-(--el-text-secondary)"
+                            >They all arrive together when it finishes.</span
                           ></span
-                          ><span
-                            class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
-                            >Adding 33 items to your backlog…</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <aside
+                    class="flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
+                  >
+                    <div
+                      role="log"
+                      class="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-4 py-4"
+                    >
+                      <div
+                        data-testid="plan-change-review"
+                        class="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
+                      >
+                        <span class="text-xs font-semibold text-(--el-text-strong)"
+                          >Nothing saved yet</span
+                        >
+                        <div
+                          data-testid="plan-approve-progress"
+                          data-place="rail"
+                          aria-hidden="true"
+                          class="flex flex-col gap-2"
+                        >
+                          <div
+                            class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
                           >
+                            <span
+                              role="status"
+                              aria-label="Loading"
+                              class="inline-block rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
+                              aria-hidden="true"
+                            ></span
+                            ><span
+                              class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
+                              >Applying 18 changes to your backlog…</span
+                            >
+                          </div>
+                          <p class="text-center text-xs text-(--el-text-secondary)">
+                            They all arrive together when it finishes.
+                          </p>
                         </div>
-                        <p class="text-center text-xs text-(--el-text-secondary)">
-                          They all arrive together when it finishes.
-                        </p>
                       </div>
                     </div>
                   </aside>
@@ -6043,77 +5056,76 @@
                   >reduced · still going</span
                 >
                 <div
-                  class="h-[30rem] w-[22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
+                  class="grid h-[26rem] w-[55rem] grid-cols-[1fr_22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
                 >
-                  <aside
-                    aria-label="Plan review"
-                    class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                  >
-                    <div
-                      data-testid="plan-review-transcript"
-                      class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                    >
-                      <header class="flex min-w-0 flex-col gap-2">
-                        <span
-                          data-testid="plan-status-pill"
-                          class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                          >Ready to review</span
-                        >
-                        <h2
-                          class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                        >
-                          Stripe Connect payouts
-                        </h2>
-                        <p
-                          class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                        >
-                          <span>33 proposed items</span>
-                        </p>
-                      </header>
-                      <section class="flex flex-col gap-2">
-                        <h3
-                          class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                        >
-                          History
-                        </h3>
-                        <ol class="flex flex-col gap-2">
-                          <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                            <span
-                              class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                              aria-hidden="true"
-                            ></span
-                            >Awaiting your review
-                          </li>
-                        </ol>
-                      </section>
-                    </div>
-                    <div
-                      class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                    >
+                  <div class="relative min-h-0 overflow-hidden bg-(--el-page-bg)">
+                    <p class="p-4 text-xs text-(--el-text-secondary)">
+                      The plan canvas — unchanged by this design, not redrawn.
+                    </p>
+                    <div class="absolute inset-x-0 bottom-0 z-20">
                       <div
                         data-testid="plan-approve-progress"
-                        data-place="rail"
+                        data-place="bar"
                         role="status"
                         aria-live="polite"
-                        class="flex flex-col gap-2"
+                        class="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5 min-h-14"
                       >
-                        <div
-                          class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
-                        >
-                          <span
-                            role="status"
-                            aria-label="Loading"
-                            class="inline-block rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none animate-none"
-                            aria-hidden="true"
+                        <span
+                          role="status"
+                          aria-label="Loading"
+                          class="inline-block rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
+                          aria-hidden="true"
+                        ></span
+                        ><span class="flex min-w-0 flex-col"
+                          ><span class="text-sm font-semibold text-(--el-text) wrap-anywhere"
+                            >Applying 18 changes to your backlog…</span
+                          ><span class="text-xs text-(--el-text-secondary)"
+                            >Still working — a large plan takes longer. There’s no need to press
+                            again.</span
                           ></span
-                          ><span
-                            class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
-                            >Adding 33 items to your backlog…</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <aside
+                    class="flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
+                  >
+                    <div
+                      role="log"
+                      class="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-4 py-4"
+                    >
+                      <div
+                        data-testid="plan-change-review"
+                        class="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
+                      >
+                        <span class="text-xs font-semibold text-(--el-text-strong)"
+                          >Nothing saved yet</span
+                        >
+                        <div
+                          data-testid="plan-approve-progress"
+                          data-place="rail"
+                          aria-hidden="true"
+                          class="flex flex-col gap-2"
+                        >
+                          <div
+                            class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
                           >
+                            <span
+                              role="status"
+                              aria-label="Loading"
+                              class="inline-block rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
+                              aria-hidden="true"
+                            ></span
+                            ><span
+                              class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
+                              >Applying 18 changes to your backlog…</span
+                            >
+                          </div>
+                          <p class="text-center text-xs text-(--el-text-secondary)">
+                            Still working — a large plan takes longer. There’s no need to press
+                            again.
+                          </p>
                         </div>
-                        <p class="text-center text-xs text-(--el-text-secondary)">
-                          Still working — a large plan takes longer. There’s no need to press again.
-                        </p>
                       </div>
                     </div>
                   </aside>
@@ -6125,305 +5137,279 @@
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="7 · 中文 (zh) — creating, still going, timed out"
+        aria-label="4 · 中文 (zh) — creating, still going, timed out"
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          7 · 中文 (zh) — creating, still going, timed out
+          4 · 中文 (zh) — creating, still going, timed out
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
         >
           <div class="flex flex-wrap items-start gap-6">
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-col gap-2" lang="zh">
               <span
                 class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
                 >zh · creating</span
               >
               <div
-                class="h-[30rem] w-[22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
+                class="grid h-[26rem] w-[55rem] grid-cols-[1fr_22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
               >
-                <aside
-                  aria-label="计划审阅"
-                  class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                >
-                  <div
-                    data-testid="plan-review-transcript"
-                    class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                  >
-                    <header class="flex min-w-0 flex-col gap-2">
-                      <span
-                        data-testid="plan-status-pill"
-                        class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                        >待审阅</span
-                      >
-                      <h2
-                        class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                      >
-                        Stripe Connect payouts
-                      </h2>
-                      <p
-                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                      >
-                        <span>33 个建议工作项</span>
-                      </p>
-                    </header>
-                    <section class="flex flex-col gap-2">
-                      <h3
-                        class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                      >
-                        历史记录
-                      </h3>
-                      <ol class="flex flex-col gap-2">
-                        <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                          <span
-                            class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                            aria-hidden="true"
-                          ></span
-                          >等待你的审阅
-                        </li>
-                      </ol>
-                    </section>
-                  </div>
-                  <div
-                    class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                  >
+                <div class="relative min-h-0 overflow-hidden bg-(--el-page-bg)">
+                  <p class="p-4 text-xs text-(--el-text-secondary)">
+                    The plan canvas — unchanged by this design, not redrawn.
+                  </p>
+                  <div class="absolute inset-x-0 bottom-0 z-20">
                     <div
                       data-testid="plan-approve-progress"
-                      data-place="rail"
+                      data-place="bar"
                       role="status"
                       aria-live="polite"
-                      class="flex flex-col gap-2"
+                      class="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5 min-h-14"
                     >
-                      <div
-                        class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
-                      >
-                        <span
-                          role="status"
-                          aria-label="Loading"
-                          class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
-                          aria-hidden="true"
+                      <span
+                        role="status"
+                        aria-label="Loading"
+                        class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="flex min-w-0 flex-col"
+                        ><span class="text-sm font-semibold text-(--el-text) wrap-anywhere"
+                          >正在应用 18 项变更…</span
+                        ><span class="text-xs text-(--el-text-secondary)"
+                          >完成后它们会一起出现。</span
                         ></span
-                        ><span class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
-                          >正在将 33 个工作项加入待办列表…</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <aside
+                  class="flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
+                >
+                  <div
+                    role="log"
+                    class="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-4 py-4"
+                  >
+                    <div
+                      data-testid="plan-change-review"
+                      class="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
+                    >
+                      <span class="text-xs font-semibold text-(--el-text-strong)">尚未保存</span>
+                      <div
+                        data-testid="plan-approve-progress"
+                        data-place="rail"
+                        aria-hidden="true"
+                        class="flex flex-col gap-2"
+                      >
+                        <div
+                          class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
                         >
+                          <span
+                            role="status"
+                            aria-label="Loading"
+                            class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
+                            aria-hidden="true"
+                          ></span
+                          ><span
+                            class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
+                            >正在应用 18 项变更…</span
+                          >
+                        </div>
+                        <p class="text-center text-xs text-(--el-text-secondary)">
+                          完成后它们会一起出现。
+                        </p>
                       </div>
-                      <p class="text-center text-xs text-(--el-text-secondary)">
-                        完成后它们会一起出现。
-                      </p>
                     </div>
                   </div>
                 </aside>
               </div>
             </div>
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-col gap-2" lang="zh">
               <span
                 class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
                 >zh · still going</span
               >
               <div
-                class="h-[30rem] w-[22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
+                class="grid h-[26rem] w-[55rem] grid-cols-[1fr_22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
               >
-                <aside
-                  aria-label="计划审阅"
-                  class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
-                >
-                  <div
-                    data-testid="plan-review-transcript"
-                    class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
-                  >
-                    <header class="flex min-w-0 flex-col gap-2">
-                      <span
-                        data-testid="plan-status-pill"
-                        class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                        >待审阅</span
-                      >
-                      <h2
-                        class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                      >
-                        Stripe Connect payouts
-                      </h2>
-                      <p
-                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                      >
-                        <span>33 个建议工作项</span>
-                      </p>
-                    </header>
-                    <section class="flex flex-col gap-2">
-                      <h3
-                        class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                      >
-                        历史记录
-                      </h3>
-                      <ol class="flex flex-col gap-2">
-                        <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                          <span
-                            class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                            aria-hidden="true"
-                          ></span
-                          >等待你的审阅
-                        </li>
-                      </ol>
-                    </section>
-                  </div>
-                  <div
-                    class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                  >
+                <div class="relative min-h-0 overflow-hidden bg-(--el-page-bg)">
+                  <p class="p-4 text-xs text-(--el-text-secondary)">
+                    The plan canvas — unchanged by this design, not redrawn.
+                  </p>
+                  <div class="absolute inset-x-0 bottom-0 z-20">
                     <div
                       data-testid="plan-approve-progress"
-                      data-place="rail"
+                      data-place="bar"
                       role="status"
                       aria-live="polite"
-                      class="flex flex-col gap-2"
+                      class="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5 min-h-14"
                     >
-                      <div
-                        class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
-                      >
-                        <span
-                          role="status"
-                          aria-label="Loading"
-                          class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
-                          aria-hidden="true"
+                      <span
+                        role="status"
+                        aria-label="Loading"
+                        class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="flex min-w-0 flex-col"
+                        ><span class="text-sm font-semibold text-(--el-text) wrap-anywhere"
+                          >正在应用 18 项变更…</span
+                        ><span class="text-xs text-(--el-text-secondary)"
+                          >仍在处理 —— 计划越大，耗时越长。无需再次点击。</span
                         ></span
-                        ><span class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
-                          >正在将 33 个工作项加入待办列表…</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <aside
+                  class="flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
+                >
+                  <div
+                    role="log"
+                    class="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-4 py-4"
+                  >
+                    <div
+                      data-testid="plan-change-review"
+                      class="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
+                    >
+                      <span class="text-xs font-semibold text-(--el-text-strong)">尚未保存</span>
+                      <div
+                        data-testid="plan-approve-progress"
+                        data-place="rail"
+                        aria-hidden="true"
+                        class="flex flex-col gap-2"
+                      >
+                        <div
+                          class="flex min-h-(--height-btn-md) items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
                         >
+                          <span
+                            role="status"
+                            aria-label="Loading"
+                            class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px] mt-0.5 shrink-0 text-(--el-accent-on-surface) motion-reduce:animate-none"
+                            aria-hidden="true"
+                          ></span
+                          ><span
+                            class="min-w-0 text-sm font-semibold text-(--el-text) wrap-anywhere"
+                            >正在应用 18 项变更…</span
+                          >
+                        </div>
+                        <p class="text-center text-xs text-(--el-text-secondary)">
+                          仍在处理 —— 计划越大，耗时越长。无需再次点击。
+                        </p>
                       </div>
-                      <p class="text-center text-xs text-(--el-text-secondary)">
-                        仍在处理 —— 计划越大，耗时越长。无需再次点击。
-                      </p>
                     </div>
                   </div>
                 </aside>
               </div>
             </div>
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-col gap-2" lang="zh">
               <span
                 class="inline-flex self-start rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] font-semibold text-(--el-text-strong)"
                 >zh · timed out</span
               >
               <div
-                class="h-[30rem] w-[22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
+                class="grid h-[26rem] w-[55rem] grid-cols-[1fr_22rem] overflow-hidden border border-(--el-border) bg-(--el-page-bg)"
               >
+                <div class="relative min-h-0 overflow-hidden bg-(--el-page-bg)">
+                  <p class="p-4 text-xs text-(--el-text-secondary)">
+                    The plan canvas — unchanged by this design, not redrawn.
+                  </p>
+                  <div class="absolute inset-x-0 bottom-0 z-20">
+                    <div class="flex shrink-0 flex-col">
+                      <div
+                        role="alert"
+                        data-testid="plan-approve-timed-out"
+                        class="flex items-start gap-2 border-t border-(--el-border) bg-(--el-tint-yellow) px-4 py-2.5 text-xs leading-relaxed text-(--el-text-strong)"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-timer-off mt-px size-3.5 flex-none"
+                          aria-hidden="true"
+                        >
+                          <path d="M10 2h4"></path>
+                          <path d="M4.6 11a8 8 0 0 0 1.7 8.7 8 8 0 0 0 8.7 1.7"></path>
+                          <path d="M7.4 7.4a8 8 0 0 1 10.3 1 8 8 0 0 1 .9 10.2"></path>
+                          <path d="m2 2 20 20"></path>
+                          <path d="M12 12v-2"></path></svg
+                        ><span
+                          ><span class="font-semibold">未创建任何内容 —— 批准耗时过长。</span>
+                          这份计划仍在等待你的决定，内容未变。可以放心再次批准。</span
+                        >
+                      </div>
+                      <div>
+                        <div class="flex shrink-0 flex-col">
+                          <div
+                            data-testid="plan-change-confirm-bar"
+                            class="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
+                            style="min-height: 3.5rem"
+                          >
+                            <span class="flex min-w-0 flex-col"
+                              ><span class="truncate text-sm font-semibold text-(--el-text)"
+                                >新增 15，修改 2，移除 1</span
+                              ><span
+                                id="plan-change-bar-line"
+                                class="truncate text-xs text-(--el-text-secondary)"
+                                >批准后，这些内容会加入你的待办列表。拒绝会结束此计划，不做任何改动。</span
+                              ></span
+                            >
+                            <div class="ml-auto flex shrink-0 items-center gap-2">
+                              <button
+                                type="button"
+                                data-variant="ghost"
+                                class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              >
+                                <span>拒绝</span></button
+                              ><button
+                                type="button"
+                                data-variant="primary"
+                                class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                              >
+                                <span aria-hidden="true" class="inline-flex"
+                                  ><svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    class="lucide lucide-check size-4"
+                                    aria-hidden="true"
+                                  >
+                                    <path d="M20 6 9 17l-5-5"></path></svg></span
+                                ><span>批准</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <aside
-                  aria-label="计划审阅"
-                  class="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
+                  class="flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
                 >
                   <div
-                    data-testid="plan-review-transcript"
-                    class="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
+                    role="log"
+                    class="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-4 py-4"
                   >
-                    <header class="flex min-w-0 flex-col gap-2">
-                      <span
-                        data-testid="plan-status-pill"
-                        class="inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold bg-(--el-tint-lavender) text-(--el-text-strong)"
-                        >待审阅</span
-                      >
-                      <h2
-                        class="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)"
-                      >
-                        Stripe Connect payouts
-                      </h2>
-                      <p
-                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)"
-                      >
-                        <span>33 个建议工作项</span>
-                      </p>
-                    </header>
-                    <section class="flex flex-col gap-2">
-                      <h3
-                        class="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase"
-                      >
-                        历史记录
-                      </h3>
-                      <ol class="flex flex-col gap-2">
-                        <li class="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-                          <span
-                            class="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                            aria-hidden="true"
-                          ></span
-                          >等待你的审阅
-                        </li>
-                      </ol>
-                    </section>
-                  </div>
-                  <div
-                    class="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]"
-                  >
-                    <p
-                      role="alert"
-                      data-testid="plan-approve-timed-out"
-                      class="flex items-start gap-1.5 rounded-(--radius-control) bg-(--el-tint-yellow) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+                    <div
+                      data-testid="plan-change-review"
+                      class="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-timer-off mt-px size-3.5 flex-none"
-                        aria-hidden="true"
+                      <span class="text-xs font-semibold text-(--el-text-strong)">尚未保存</span
+                      ><span class="text-xs text-(--el-text-secondary)"
+                        >批准后，这些内容会加入你的待办列表。拒绝会结束此计划，不做任何改动。</span
                       >
-                        <path d="M10 2h4"></path>
-                        <path d="M4.6 11a8 8 0 0 0 1.7 8.7 8 8 0 0 0 8.7 1.7"></path>
-                        <path d="M7.4 7.4a8 8 0 0 1 10.3 1 8 8 0 0 1 .9 10.2"></path>
-                        <path d="m2 2 20 20"></path>
-                        <path d="M12 12v-2"></path></svg
-                      ><span
-                        ><span class="font-semibold">未创建任何内容 —— 批准耗时过长。</span>
-                        这份计划仍在等待你的决定，内容未变。可以放心再次批准。</span
-                      >
-                    </p>
-                    <button
-                      type="button"
-                      data-variant="primary"
-                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
-                    >
-                      <span aria-hidden="true" class="inline-flex"
-                        ><svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-check size-4"
-                          aria-hidden="true"
-                        >
-                          <path d="M20 6 9 17l-5-5"></path></svg></span
-                      ><span>批准 — 将 33 个工作项加入待办列表</span></button
-                    ><button
-                      type="button"
-                      data-variant="ghost"
-                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
-                    >
-                      <span aria-hidden="true" class="inline-flex"
-                        ><svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-x size-4"
-                          aria-hidden="true"
-                        >
-                          <path d="M18 6 6 18"></path>
-                          <path d="m6 6 12 12"></path></svg></span
-                      ><span>拒绝</span>
-                    </button>
-                    <p class="text-center text-xs text-(--el-text-secondary)">
-                      批准后会将建议落实到你的待办列表。
-                    </p>
+                    </div>
                   </div>
                 </aside>
               </div>
