@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { enterpriseRequestService } from '@/lib/services/enterpriseRequestService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
@@ -86,7 +87,7 @@ async function BillingPaneBody({
   orgName: string;
   actor: { id: string; name: string | null; email: string };
 }) {
-  const [{ total: memberCount }, formContext] = await Promise.all([
+  const [{ total: memberCount }, formContext] = await allSettledOrThrow([
     organizationsService.listMembers({
       organizationId: orgId,
       actorUserId: actor.id,
