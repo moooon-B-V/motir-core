@@ -20,6 +20,11 @@ import { BrandMark } from '@/components/brand/BrandMark';
  * single-column form at 1106px (which is why `AuthShell`'s `tight` mode and this
  * layout's `data-auth-wide` widening exist at all), and the wide rebuild landed
  * at a 622px page inside a 1366×648 viewport — 26px of headroom, all of it.
+ * That figure was taken with THREE scope rows. The scope list is derived from
+ * `CLI_TOKEN_GRANT`, which now carries ten, and at ten the same screen measured
+ * a 754px page with Approve/Deny ending at 702px — below the fold (MOTIR-7818).
+ * The budget is now held where the list lives, in `DeviceApproval`, and is
+ * asserted by `tests/e2e/cli-connect.spec.ts` rather than recorded here.
  *
  * So the question this card had to answer was how tall the new row actually is.
  * Measured in Chromium at 1366×648 against `design/brand/brand-mark.mock.html`
@@ -54,7 +59,10 @@ import { BrandMark } from '@/components/brand/BrandMark';
  * cheapest 36px in the fold budget: it is whitespace AROUND the content,
  * so nothing the reader has to read gets compressed to buy it. Measured
  * in Chromium at 1366×648 after the change — card 558px, page 622px,
- * both CTAs ending at 590px, no scroll.
+ * both CTAs ending at 590px, no scroll (three scope rows). With the ten-key
+ * grant and MOTIR-7818's rebalanced detail box: page 683px, both CTAs ending
+ * at 631px — the page scrolls only through its own bottom padding, and both
+ * buttons are on screen without it.
  *
  * ⚠️ AND ONE WIDE PAGE IS WIDER STILL — the OAuth consent screen, which
  * renders `data-auth-wide="consent"` (MOTIR-7380, built to

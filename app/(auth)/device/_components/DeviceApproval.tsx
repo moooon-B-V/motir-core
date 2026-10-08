@@ -399,14 +399,15 @@ export function DeviceApproval({
       // the fold at 648px, which is the whole reason this screen works.
       <div data-auth-wide>
         <AuthShell headline={t('heading.confirm')} subhead={t('subhead.confirm')} tight>
-          <div className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-3">
             {banner}
 
             {/* TWO COLUMNS, not a row-flowing grid — the mock's `.detail.cols` is a
                 pair of column CONTAINERS, and the difference is 200px of height:
                 row-flowed cells stretch each row to its tallest cell, which opens a
-                dead gap under WHO to match the three scope rows opposite. Measured
-                in Chromium at 1366×648 before and after. */}
+                dead gap under WHO to match the scope rows opposite. Measured
+                in Chromium at 1366×648 before and after. Which block sits in which
+                column is ALSO a measurement — see Expires below. */}
             <div className="grid rounded-(--radius-card) border border-(--el-border) sm:grid-cols-2">
               <DetailColumn>
                 {/* 1 — WHO */}
@@ -489,6 +490,21 @@ export function DeviceApproval({
                       : t('confirm.workspaceOnly')}
                   </DetailSub>
                 </DetailBlock>
+
+                {/* 5 — Expires. The exit is stated before the action is taken. It sits
+                    in the LEFT column, under the workspace, and that placement is the
+                    fold budget (MOTIR-7818): the scope list is derived from
+                    `CLI_TOKEN_GRANT`, and at ten keys it is the tallest thing in the
+                    box by a long way. Stacked under it, Expires made the right column
+                    set the box's height alone (425px), and Approve/Deny ended at 702px
+                    in a 648px window. Moved across, the two columns balance — the scope
+                    list now has ~22px of slack beneath it before it grows the box. */}
+                <DetailBlock label={t('confirm.expires')}>
+                  <span className="font-sans text-sm font-medium text-(--el-text)">
+                    {t('confirm.expiresValue', { days: CLI_TOKEN_EXPIRY_DAYS })}
+                  </span>
+                  <DetailSub>{t('confirm.expiresHelp')}</DetailSub>
+                </DetailBlock>
               </DetailColumn>
 
               <DetailColumn divided>
@@ -507,14 +523,6 @@ export function DeviceApproval({
                     ))}
                   </span>
                   <DetailSub>{t('confirm.cant')}</DetailSub>
-                </DetailBlock>
-
-                {/* 5 — Expires. The exit is stated before the action is taken. */}
-                <DetailBlock label={t('confirm.expires')}>
-                  <span className="font-sans text-sm font-medium text-(--el-text)">
-                    {t('confirm.expiresValue', { days: CLI_TOKEN_EXPIRY_DAYS })}
-                  </span>
-                  <DetailSub>{t('confirm.expiresHelp')}</DetailSub>
                 </DetailBlock>
               </DetailColumn>
             </div>
@@ -699,8 +707,11 @@ function DetailColumn({ divided = false, children }: { divided?: boolean; childr
  *  The key carries meaning, so it uses `--el-text-muted` (4.54:1), never the
  *  decorative `--el-text-faint` (2.61:1 on white). */
 function DetailBlock({ label, children }: { label: string; children: ReactNode }) {
+  // `py-2`, not the mock's `py-2.5`: the left column stacks four blocks, so this
+  // padding is paid eight times on the column that sets the box's height — 16px of
+  // the fold budget (MOTIR-7818), spent on whitespace rather than on content.
   return (
-    <div className="flex min-w-0 flex-col gap-1 py-2.5">
+    <div className="flex min-w-0 flex-col gap-1 py-2">
       <span className="text-(--el-text-muted) font-sans text-[11px] font-semibold uppercase tracking-wider">
         {label}
       </span>
