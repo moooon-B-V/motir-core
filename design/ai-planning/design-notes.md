@@ -32,6 +32,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **Approve or decline a plan, in place**         | `plan-review--decide.mock.html` (on the design result)    | MOTIR-6033           | Part XXII  |
 | **The plan drawn as it is written**             | **`plan-review--live-drawing.mock.html`**                 | MOTIR-6294           | Part XXIII |
 | **A Plans row NAMES its refused work item**     | **`plans-sessions--seeded.mock.html`**                    | MOTIR-6206           | § at end   |
+| **Approve, while it runs**                      | **`plan-review--approve-progress.mock.html`**             | MOTIR-5248           | Part XXV   |
 
 **A Part number is an address in THIS file.** Before taking the next number, check the area's
 published design results too (`list_designs` with `pathPrefix: design/ai-planning/`): a result that
@@ -7022,3 +7023,404 @@ Over every `MOTIR-<n>` the new mock and this Part name:
 - **The plan page's own live poll**, which is unchanged.
 - **Motion anywhere but the planning canvas's nodes and edges** and the list's rows. The motion is
   OPT-IN on `PlanningCanvas`; `/roadmap`, runs and onboarding do not get it.
+
+---
+
+# Part XXV — APPROVE, WHILE IT RUNS: the four states, the count in the copy, the motion, and both hosts (MOTIR-5248 · Story MOTIR-5246 — `plan-review--approve-progress.mock.html`, DATED 2026-10-08 — refreshed from the 2026-09-30 draft)
+
+**Design system — files read:** `package.json` (root; motir-core is not a monorepo app and its root
+manifest is the web app's: `"@motir/design-system": "workspace:*"`), `app/globals.css` (line 13:
+`@import '@motir/design-system/theme.css';`), `node_modules/@motir/design-system/package.json`
+(`"version": "0.10.0"`, exports `./mock`), `app/layout.tsx` (the `data-style` / `data-palette` /
+`data-type` attributes on `<html>`), and `packages/design-system/src/theme/{styles,palettes,typography}.ts`
+(the registries those attributes resolve against). There is no `DESIGN.md`.
+
+**Verdict: ON MOTIR DESIGN — branch (a).** Both checks hold. The installed version is **0.10.0**, and it
+exports `@motir/design-system/mock`, so the asset is built with **`renderMock`**. The project's axes:
+`app/layout.tsx` writes each signed-in user's own preference onto `<html>`, and with no preference it
+writes nothing, so the `:root` defaults apply: **`data-style="warm-editorial"` ·
+`data-palette="motir"` · `data-type="motir"`** (`DEFAULT_STYLE_ID`, `DEFAULT_PALETTE_ID`, and
+`warm-editorial`'s own `defaultTypeId`). These are the project's defaults and the package's defaults
+at the same time, because motir-core is the package's home. The mock renders at exactly those axes.
+
+**Package parts, product parts, new parts:**
+
+| part                                                  | where it comes from                                                                               | disposition                                                                                                                                                  |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Spinner` (`sm`)                                      | `@motir/design-system` — the package's own part, rendered by `renderMock`                         | composed as is, plus one class (`motion-reduce:animate-none`)                                                                                                |
+| `Button` (primary · ghost, `md` / `sm`)               | `@motir/design-system`, inside the shipped rail and bar renders                                   | unchanged, cited                                                                                                                                             |
+| `PlanReviewRail` · `PlanChangeConfirmBar`             | product-local, `components/planning/` — rendered on `origin/main` in happy-dom and spliced in     | unchanged hosts; this Part draws INTO their footer / bar                                                                                                     |
+| the overlay rail's review block and error bubble      | product-local, `PlanChangeRail.tsx` — class strings copied, text resolved from `messages/en.json` | unchanged hosts                                                                                                                                              |
+| **`PlanApproveProgress`** (running + timed-out bands) | NEW                                                                                               | **product-local component** — it speaks one product moment, a plan's materialize, in `planReview.*` copy; nothing about it is general enough for the package |
+
+Nothing is proposed as an addition to `@motir/design-system`.
+
+**A Part number, checked before it was taken (the rule under the table at the top of this file).**
+`list_designs` over `design/ai-planning/` shows **MOTIR-6628's published, not-landed result already
+calls itself Part XXIV** (evidence `cmuk89dnv009qhwtxlqmekkw3`, obsolescence). So this Part is **XXV**,
+and XXIV is missing from this file on purpose until MOTIR-6628 lands. (MOTIR-6044's published
+addition also calls itself "Part XXI" — a collision it made before the rule existed; it is not this
+Part's to repair.)
+
+**THE CARD IS NOT ALREADY BUILT.** The dispatch warned that moooon-B-V/motir-core#3146 touched this
+file after the card was filed. That pull request added the MOTIR-6206 section (a Plans row naming its
+refused work item). It shares the file and nothing else: no approve progress, no timeout copy, no
+threshold.
+
+**How the earlier refusal was answered.** The 2026-09-30 publish of this Part (gate
+`cmuodk0o6002rhxoiql82ys7h`) was sent back with the note _"don't need it for now"_. That note is about
+timing, not about the drawing: it names no element, copy or placement to change. Yue has since asked
+for MOTIR-5246 to run, so the design is wanted now. This revision answers the note by **refreshing,
+not redrawing**: it re-renders the same states against `origin/main` @ `066fb94e9` and design system
+0.10.0, and corrects the two premises that moved since (the overlay's approved outcome, 25.2, and the
+timeout's rollback, 25.2). Every element, string and threshold is the one drawn on 2026-09-30.
+
+**The Part number still holds.** The unnumbered section MOTIR-7634 published sits after Part XXIII
+and calls itself nothing, and MOTIR-6628's result still claims XXIV, so XXV collides with nothing.
+
+## 25.0 Drawn against SHIPPED reality
+
+Rendered on `origin/main` @ `066fb94e9` (2026-10-08) with `tests/helpers/renderWithIntl.tsx` in happy-dom, before
+anything was drawn:
+
+| host                            | what ships in the approve moment                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| plan page, `PlanReviewRail`     | `busy` → the primary `Button` gets `loading` (a `Spinner` replaces its check, `aria-busy`), and is `disabled`. **Its label still reads _Approve — add 33 items to your backlog_**, a count of work that has not happened. Decline is disabled. The hint _Approve materializes the proposals into your backlog._ stays.                                                     |
+| plan page, the timeout          | `PlanDetail` keeps the code (`err.code` → `PLAN_APPROVE_TIMED_OUT`), but the rail's error arm has no case for it, so it prints the generic `planReview.actionError` — _Something went wrong. Please try again._ — in `--el-danger-on-surface`. **The one refusal that can promise "nothing was written, pressing again is safe" says the same thing as every other.**      |
+| overlay, `PlanChangeConfirmBar` | `deciding` → a bare `Spinner` beside the two verbs, both disabled. The counts and consequence line stay.                                                                                                                                                                                                                                                                   |
+| overlay, the review block       | `PlanChangeRail`'s block mirrors the bar: its verbs go disabled. No words change.                                                                                                                                                                                                                                                                                          |
+| overlay, the timeout            | `planDecisionErrorCode` FLATTENS it: `PLAN_APPROVE_TIMED_OUT` is not one of its cases, so it becomes `APPROVE_ERROR` → the rail prints `planningWorkspace.conversation.error.body` (_That didn't go through. Your conversation is saved — try again, or rephrase the change._) in a rose bubble, beside a _Try again_ that re-runs the conversation turn, not the approve. |
+
+The server side is exactly as the card describes: `APPROVE_TX_BUDGET = { timeoutMs: 30_000,
+maxWaitMs: 10_000 }` (`lib/services/plansService.ts`), `translateApproveTimeout` turns P2028 into
+`PlanApproveTimedOutError` (`lib/plans/errors.ts`), and the route answers **503** with `{ code:
+'PLAN_APPROVE_TIMED_OUT', planId, itemCount }`.
+
+**The overlay host is not what the card names.** The card places the overlay's approve in
+`PlanChangeRail` / `PlanEditsReviewDock`, and the overlay story names `usePlanEditsJob`.
+`PlanEditsReviewDock` was retired by MOTIR-4261 and `usePlanEditsJob` no longer exists. The overlay's
+approve today is **one hook** (`usePlanChangeConversation.approve`, phase `deciding`) with **two
+doors**: the canvas **confirm bar** and the rail's **review block** that mirrors it. The host already
+records which one was pressed (`PlanningWorkspaceHost`'s `approveFrom('bar' | 'rail')`). This Part
+draws those two doors. A third one — `PlanCloseGuard`'s _Confirm and close_ — is a planning flag
+(25.13).
+
+## 25.1 The access path (Panel 0)
+
+**No new door.** The surface opens only from the Approve a reader already has:
+
+- **Plan page** — the rail footer's primary _Approve — add {n} items to your backlog_.
+- **Overlay** — the confirm bar's _Approve_ (or _Approve changes_ on an ungated plan) at the canvas
+  foot, or the same verb in the rail's review block.
+
+Panel 0 draws both at rest, from the real renders. Pressing either leads to panels 1–4.
+
+## 25.2 The four states
+
+| state                | when                                                    | page rail (Panels 1–2)                                                                                                                                                                                                                                                                    | overlay (Panels 3–4)                                                                                                                                                                                                                              |
+| -------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **creating**         | the press lands, until 8 s                              | The progress **replaces the verbs and the hint**: a row (spinner + _Adding 33 items to your backlog…_), and under it, in the hint's slot, _They all arrive together when it finishes._                                                                                                    | Pressed from the bar: **the bar's contents become the progress** — spinner, the same bold line, the same secondary line, the bar's own two-line grammar at its own `min-height: 3.5rem`. The review block mirrors it in its rail form, silently.  |
+| **still going**      | **8 s after the press** (25.3), until an answer         | Only the lower line changes: _Still working — a large plan takes longer. There's no need to press again._ The upper line and the spinner stay.                                                                                                                                            | The same swap, in the bar and in the mirror.                                                                                                                                                                                                      |
+| **timed out**        | the answer is 503 `PLAN_APPROVE_TIMED_OUT`              | The verbs come back, enabled, with their label true again (nothing was added). **Above them, in the error slot, a `role="alert"` band**: timer glyph, **_Nothing was created — approving took too long._** _This plan still awaits your decision, unchanged. It's safe to approve again._ | The band stacks **above the bar**, exactly where the shipped stale band stacks, and the bar is back at rest with live verbs. If the press came from the rail, the band sits in the review block instead (`place="rail"`), as the stale band does. |
+| **failed otherwise** | any other refusal the host has no specific sentence for | **UNCHANGED**: the shipped `planReview.actionError` red line over the live verbs.                                                                                                                                                                                                         | **UNCHANGED**: the shipped rose bubble in the conversation, and a live bar.                                                                                                                                                                       |
+
+The refusals that already have their own sentences — `PLAN_REVISION_IN_FLIGHT`,
+`APPROVAL_GATE_STALE_SUBJECT`, `PLAN_FOLDER_MISSING`, the gate's `held` / `decided` / `stale` — keep
+them. "Failed otherwise" means only the generic arm.
+
+**Success is not a fifth state.** When approve answers 200, the progress leaves and the shipped
+approved outcome arrives exactly as today. On the page that is `DecidedOutcome`. On the overlay it is
+the **session end** (AMENDMENT 23 §2): the approve transaction ends the planning session `approved`
+(`endDecidedSession`, `lib/services/plansService.ts`), and the rail shows `SessionEndMarker` (the
+_Approved_ `Pill`) and `EndedComposerSlot` in place of the composer. Nothing about that moment is
+redrawn. (The 2026-09-30 draft said "the after-approve turn"; that turn no longer exists.)
+
+**A timeout ends nothing.** `PLAN_APPROVE_TIMED_OUT` is the approve transaction running out of budget,
+so the whole transaction rolls back, the session end with it. The session stays open, the plan still
+awaits a decision, and the composer stays live. That is what lets the band say _This plan still
+awaits your decision, unchanged._ truthfully, and it is why the band sits above live verbs rather
+than beside an end marker. The rail's generic failure arm is now `state.errorCode && !ended`; it
+behaves exactly as before for a session that did not end, which a timeout's is.
+
+### The timeout and the generic failure, side by side (Panels 2 and 4)
+
+**One sentence for the reader: a YELLOW BAND with a timer glyph, opening with _Nothing was created_
+and ending with _safe to approve again_, means press again; a bare RED LINE (page) or ROSE BUBBLE
+(overlay) with neither promise means read before you press.** They differ in four independent ways —
+container (band vs. line/bubble), hue (`--el-tint-yellow` vs. danger / rose), glyph (timer vs. none)
+and words — so no single one of them, including colour, carries the difference alone.
+
+**Why yellow, the stale band's tint, and not a new one.** The stale refusal and the timeout ask for
+the SAME response: nothing was written, look, and decide again. The rail and the bar already have a
+band for "nothing was written, decide again" (`PlanStaleBand`, Part XXII §22.5), so the timeout takes
+its grammar — the same container, the same tint and ink, the same placement — and is told apart from
+stale by its glyph (`timer-off`, not `refresh-cw`) and its sentence. A new tint would have invented a
+second vocabulary for the same instruction.
+
+### The three facts, and how many are on screen
+
+All three of `PlanApproveTimedOutError`'s facts are on screen, in the order a worried reader needs
+them:
+
+1. **nothing was created** — the title, bold, first;
+2. **the plan still awaits you** — _This plan still awaits your decision, unchanged._;
+3. **pressing again is safe** — _It's safe to approve again._
+
+None is dropped. The sentence says _approve again_ rather than naming the button, because the button's
+label differs by host (_Approve — add 33 items…_, _Approve_, _Approve changes_) and a sentence that
+quoted one of them would be wrong in the others.
+
+**What it does NOT say:** "the plan is too large", which the error's own message offers. The
+`approveRefusals` classification (`lib/plans/approveRefusals.ts`) records the budget as a property of
+the database's load at the moment of the press, not of the plan. Telling a person their plan is too
+big, when a retry will very likely succeed, would send them to cut a plan that is fine.
+
+## 25.3 The slow threshold: **8 seconds**
+
+**`APPROVE_SLOW_AFTER_MS = 8_000`.** The still-going line appears 8 s after the press. The code card
+reads this number from here and cites this line.
+
+Why 8:
+
+- **It sits above the measured case.** `APPROVE_TX_BUDGET`'s own note records the failing fixture —
+  15 adds + 27 edges — at **~5.03 s** before the edge pass was batched. A plan of that size, which is
+  an ordinary one, finishes inside 8 s and never sees the reassurance. A reassurance that fires on
+  every approve stops meaning anything.
+- **It lands before 10 s**, the limit at which a person's attention leaves a task that shows no sign
+  of progress. The reassurance has to arrive before the reader decides the product has hung, not
+  after.
+- **It is far from the ceiling.** The timeout arrives at most **~40 s** after the press (10 s
+  `maxWait` + 30 s `timeout`). Eight seconds leaves the reassurance on screen for the long tail
+  without pretending to be a warning.
+
+The threshold is measured **on the client, from the press**, by the component. It uses no server
+time, no poll and no second read.
+
+## 25.4 The component: `PlanApproveProgress` (product-local)
+
+One component, `PlanApproveProgress.tsx`, NEW in `components/planning/` beside `PlanReviewRail.tsx`, mounted by every host. It is
+presentational: **no `fetch`, no router, no search params.**
+
+| prop       | type                                  | meaning                                                                                                                                                          |
+| ---------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state`    | `'running' \| 'timedOut' \| 'failed'` | `running` covers creating AND still going: **the component owns the 8 s timer**, from mount, so no host can pick a different threshold.                          |
+| `count`    | `number`                              | `review.itemCount`, on both hosts (the overlay's review is the same `PlanReviewDto`).                                                                            |
+| `kind`     | `'adds' \| 'changes'`                 | `adds` when every proposal is an `add`; `changes` when any is a `modify` or `remove`. It picks _Adding {n} items…_ or _Applying {n} changes…_ (25.8).            |
+| `place`    | `'rail' \| 'bar'`                     | The rail form (a row plus a centred line under it) or the bar form (the bar's own two-line row) — the `PlanStaleBand` precedent.                                 |
+| `announce` | `boolean`, default `true`             | Whether this instance is the live region. **Exactly one mounted instance announces**: the one at the door that was pressed. The overlay's mirror passes `false`. |
+
+`failed` renders the page's shipped generic line verbatim (`planReview.actionError`, `role="alert"`,
+`text-xs font-medium text-(--el-danger-on-surface)`), so the four states live in one place on the
+page. **The overlay does not mount the component for `failed`**: its generic failure is the shipped
+conversation bubble, unchanged.
+
+**The press cannot be doubled.** While `running`, the host renders the component INSTEAD of the verbs
+(page) or instead of the bar's contents (overlay), so no Approve exists to press. The mirror's verbs
+are replaced too. The host keeps its `busy` / `deciding` guard as well.
+
+## 25.5 The motion: `Spinner`, and nothing else
+
+**The motion primitive is the shipped `Spinner` from `@motir/design-system`**
+(`packages/design-system/src/components/ui/Spinner.tsx`, size `sm`, `animate-spin`, a
+`border-current` ring with a transparent top). The surface uses no `animate-pulse` skeleton, because
+a skeleton stands for content that is about to appear in its place, and nothing appears in the
+footer. It adds no keyframe and no CSS of its own.
+
+- **Colour:** `text-(--el-accent-on-surface)` — the ring is `border-current`, so the token colours it.
+  A graphic needs 3:1, and this is the rule MOTIR-4474 set for a mark on a board.
+- **`aria-hidden`:** the spinner's own `role="status"` / _Loading_ label would compete with the
+  sentence. The component's wrapper is the live region, and the words are what it announces.
+
+**No animation dependency is introduced.** `package.json` and `packages/design-system/package.json`
+gain nothing, and a later reader meeting a plain CSS spinner here should read that as the decision
+MOTIR-5246 recorded (no Lottie, no animation runtime), not as an unfinished job.
+
+## 25.6 Reduced motion: the words stay, the motion stops (Panel 6)
+
+Under `prefers-reduced-motion: reduce`:
+
+- the `Spinner` carries **`motion-reduce:animate-none`** and stands still as a static ring. It stays
+  `aria-hidden`, so it is decoration either way;
+- **every word is identical** to the animated form;
+- **the 8 s swap still happens.** It is a change of text, not a motion, and it is the part a
+  reduced-motion reader needs most, because the ring no longer tells them anything is running;
+- nothing fades, slides or pulses anywhere in the surface, so there is nothing else to stop.
+
+The shipped `Spinner` keeps spinning under reduced motion today (`app/globals.css` gates only the
+nav-pending frame, the launcher shimmer and the orb). This Part adds the class on this use only. It
+does not change `Spinner` for everyone (25.13, flag 4).
+
+## 25.7 Both hosts, at their own widths (Panels 1–5)
+
+| host                 | width                                                               | placement                                                                                                                                                                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| page rail            | `22rem` (`md:grid-cols-[1fr_22rem]`), footer `px-5`                 | In the pinned footer, where the verbs were. The footer gets SHORTER by about one button height while running. The transcript above is top-anchored, so nothing the reader is reading moves.                                                                                                   |
+| overlay confirm bar  | the canvas pane (the viewport minus the 22rem rail)                 | **In the bar, at the bar's own `min-height`.** The bar is absolutely positioned over the canvas foot, and it does not change height when it starts running — **the canvas does not reflow**, which is the overlay story's one hard constraint.                                                |
+| overlay review block | the 22rem rail                                                      | Inside the block, under its _Nothing saved yet_ heading, in the rail form. The heading stays, because it is still true until the transaction commits.                                                                                                                                         |
+| **narrow, < md**     | 375px, one column: canvas over rail (`PLANNING_FRAME_STACKED_ROWS`) | **Page:** the rail row is full width and the footer keeps its form. **Overlay:** the bar is full width, and **its lower line WRAPS instead of truncating** (the counts line truncates today). _There's no need to press again_ is the sentence that matters, and truncation would cut it off. |
+
+The overlay frames in the mock are drawn at 880px (a 528px canvas pane beside the 22rem rail), the
+widest the board allows. The bar stretches with the pane, and nothing in it depends on the width.
+
+**At < md the timed-out footer is the tallest the rail ever gets** (band + two verbs + hint, about
+220px). On a 640px-high phone the rail row is about 256px, so the transcript above it nearly
+disappears while the band is up. That is acceptable: in that moment, the decision is the only thing
+on the page that matters.
+
+## 25.8 Copy — `messages/en.json` and `zh.json`
+
+All new strings sit under **`planReview.approveProgress`**, next to the rail's `approveCta` /
+`approvedOutcome`. The overlay reads the same keys, because it mounts the same component, so it adds
+none.
+
+| key                                        | en                                                                           | zh                                                     |
+| ------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `planReview.approveProgress.creating`      | Adding {n, plural, one {# item} other {# items}} to your backlog…            | 正在将 {n} 个工作项加入待办列表…                       |
+| `planReview.approveProgress.applying`      | Applying {n, plural, one {# change} other {# changes}} to your backlog…      | 正在应用 {n} 项变更…                                   |
+| `planReview.approveProgress.together`      | They all arrive together when it finishes.                                   | 完成后它们会一起出现。                                 |
+| `planReview.approveProgress.slow`          | Still working — a large plan takes longer. There’s no need to press again.   | 仍在处理 —— 计划越大，耗时越长。无需再次点击。         |
+| `planReview.approveProgress.timedOutTitle` | Nothing was created — approving took too long.                               | 未创建任何内容 —— 批准耗时过长。                       |
+| `planReview.approveProgress.timedOutNext`  | This plan still awaits your decision, unchanged. It’s safe to approve again. | 这份计划仍在等待你的决定，内容未变。可以放心再次批准。 |
+
+**Why _Adding N items to your backlog…_ and not the card's _Creating N work items…_.** The rail
+already says this sentence in two tenses: _Approve — add 33 items to your backlog_ before the press
+and _Added 33 items to your backlog_ after it (`approveCta`, `approvedOutcome`). The progress is the
+tense between them, so the three read as one sentence moving through time. A new noun ("work items")
+and a new verb ("creating") in the middle would break that. **_They all arrive together_** is the
+honest substitute for a progress bar. It tells the reader the operation is one step, which is true
+(`materialize` is one transaction), and that explains why there is no bar to show.
+
+**Why a second string for mixed plans.** `review.itemCount` counts every proposal, and a `modify` or a
+`remove` is not "added to your backlog". A plan of 15 adds, 2 changes and 1 removal reads _Applying 18
+changes to your backlog…_ (Panel 3) and never claims to add 18 things. (The shipped CTA does claim
+that; see 25.13, flag 3.)
+
+## 25.9 Token and shape roles (everything added, `--el-*` only)
+
+| element                           | colour                                                                 | shape                                                                                           |
+| --------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| running row (rail form)           | `--el-surface-soft` fill, `--el-border` border, `--el-text` ink        | `--radius-card` · `--spacing-control-x/y` · `min-h-(--height-btn-md)` (holds a button's height) |
+| running line under it (rail form) | `--el-text-secondary` (AA on `--el-surface`)                           | `text-xs`, centred — the hint slot's own classes                                                |
+| running bar (bar form)            | `--el-surface`, `--el-border` top; `--el-text` / `--el-text-secondary` | the bar's own `px-4 py-2.5`, `min-height: 3.5rem` (`PLAN_CONFIRM_BAR_HEIGHT`)                   |
+| spinner                           | `--el-accent-on-surface` (via `border-current`)                        | `Spinner size="sm"`, `rounded-full` (a circle, allowed)                                         |
+| timed-out band, rail form         | `--el-tint-yellow` + `--el-text-strong`                                | `--radius-control` · `--spacing-control-x/y` (the `PlanStaleBand` rail form)                    |
+| timed-out band, bar form          | `--el-tint-yellow` + `--el-text-strong`, `--el-border` top             | `px-4 py-2.5` (the `PlanStaleBand` bar form)                                                    |
+| timer glyph                       | inherits `--el-text-strong`, `aria-hidden`                             | `size-3.5`                                                                                      |
+| failed otherwise (page)           | `--el-danger-on-surface` — shipped, unchanged                          | none                                                                                            |
+
+No `--color-*`, no raw hex, and no `rounded-md` / `p-2` / `h-9` in anything added. The compiled
+token layer in the mock's stylesheet is the only place `--color-*` appears, exactly as in
+`globals.css`. **No new token is needed**: every role above already exists.
+
+## 25.10 a11y
+
+- The running wrapper is `role="status"` (polite). It announces the creating line on mount and the
+  still-going line when it swaps. **Only one instance announces** (`announce`, 25.4), so an overlay
+  press is not read twice.
+- The timed-out band is `role="alert"`, like the stale band. Focus is not moved: the reader's focus
+  was on Approve, and Approve is back, enabled, in the same place.
+- The spinner and the timer glyph are `aria-hidden`. The words carry every meaning.
+- While running, no disabled Approve remains to be focused. The verbs are gone, not greyed.
+
+## 25.11 How the asset was produced
+
+- `renderMock` from **`@motir/design-system/mock` 0.10.0**, at `warm-editorial` / `motir` / `motir`.
+  It compiles Tailwind v4.3.0 over the document's own classes with the package's `theme.css`.
+- The hosts are the **real components' DOM**: `PlanReviewRail` and `PlanChangeConfirmBar`, rendered
+  on `origin/main` @ `066fb94e9` through `renderWithIntl` (en and zh catalogues) and spliced in
+  verbatim. The running states replace the rail footer's CONTENTS. The timed-out states insert the
+  band in the footer's error slot, above the real verbs.
+- The overlay rail's review block and error bubble are **copied class strings from
+  `PlanChangeRail.tsx`**, with their text resolved from `messages/en.json` through a lookup that
+  throws on a missing key (21.11's rule).
+- The new component is JSX built on the package's `Spinner` and lucide's `TimerOff`.
+- The theme's `.style-vignette > .sv-canvas` rules were dropped: this asset draws no style vignette,
+  and direction (B) of `design-mock-utility-correspondence` rules on a rule nothing carries.
+- There is **no dark panel**. `renderMock`'s nested `data-theme="dark"` did not flip the tokens, and
+  a dark panel that renders light is what `design-dark-parity` exists to fail. Every role in 25.9
+  is one the shipped rail and stale band already carry in dark.
+- It was rendered and looked at, panel by panel, in headless Chromium, and **all 278 specs of the
+  design lane** (`vitest.design.config.ts`) are green over it.
+
+## 25.12 GIVES / TAKES — every key this Part names
+
+Grepped over the subtree: MOTIR-5246's children (5248, 5249, 5251, 5252), MOTIR-5247's children
+(5250, 5253, 5254), and the `/ready` story MOTIR-5266 / 5267, which relates to both.
+
+- **MOTIR-5249** (the component + the page wiring)
+  - GIVES — **element:** `PlanApproveProgress`, its props, the three new visuals and the reused
+    generic line (25.2, 25.4, 25.9); the six strings (25.8). **structure:** it renders INSTEAD of the
+    verbs while running, and in the error slot on a timeout; the 8 s timer lives in the component.
+    **premise:** the page needs no client widening — `PlanDetail` already keeps
+    `PLAN_APPROVE_TIMED_OUT` as the error code (checked). Only the rail's error arm needs a case for it.
+  - TAKES — **premise:** its acceptance criterion quotes _"Creating N work items…"_. This Part
+    settles _Adding {n} items to your backlog…_ / _Applying {n} changes…_ (25.8), and the card says
+    to build the states "as the design drew them". Its test asserts THIS copy.
+- **MOTIR-5251** (the vitest gate) — GIVES the rules to assert per state: the threshold at 8 000 ms;
+  exactly one announcing instance; `motion-reduce:animate-none` on the spinner; `failed` renders the
+  shipped line unchanged. TAKES nothing.
+- **MOTIR-5252** (acceptance E2E) — GIVES the en and zh strings to read on screen, and the fact that
+  the timeout's recovery is the ordinary Approve, not a separate retry control. TAKES nothing.
+- **MOTIR-5246** (the story) — GIVES its four states, the count, and the no-dependency /
+  no-determinate-progress stance, all kept. TAKES one refinement on the **element** axis: the count's
+  sentence splits into adds-only and mixed forms (25.8).
+- **MOTIR-5247 / MOTIR-5250** (the overlay story and its code card)
+  - GIVES — **element:** the bar form and the silent mirror (Panels 3–5). **structure:** the
+    component replaces the bar's contents at the bar's own height; the band stacks above the bar, as
+    the stale band does; `announce` follows `approveFrom`'s `bar | rail`.
+  - TAKES — **premise:** both cards name `PlanEditsReviewDock` and `usePlanEditsJob` /
+    `PlanEditsPhase 'approving'`. Neither exists (MOTIR-4261 retired the dock). The overlay's one
+    approve hook is `usePlanChangeConversation`, whose phase `deciding` covers **both** approve and
+    discard, so MOTIR-5250 must tell which decision is running (the host's `approveFrom` already
+    knows). **structure:** `planDecisionErrorCode` flattens `PLAN_APPROVE_TIMED_OUT` into
+    `APPROVE_ERROR`, so MOTIR-5250 must add a `timedOut` case, or the overlay can never show 25.2's
+    band.
+- **MOTIR-5253 / MOTIR-5254** — GIVE nothing new. They TAKE the same premise correction as MOTIR-5250:
+  there is ONE overlay hook with two doors (bar, review block), not two hooks.
+- **MOTIR-5266 / MOTIR-5267** (the `/ready` nudge, the fourth door) — GIVES the component and its
+  copy for that placement to compose. TAKES nothing. Its Card-width placement is MOTIR-5267's to draw.
+- **MOTIR-4261** — TAKES its retirement of `PlanEditsReviewDock` as the premise 25.0 corrects.
+- **MOTIR-6037** — TAKES the stale band's grammar and placement (`PlanStaleBand`, `place` bar/rail),
+  reused unchanged for the timeout (25.2).
+- **MOTIR-4474** — TAKES the rule that a mark on a surface is `--el-accent-on-surface` (the spinner).
+- **MOTIR-3396** — TAKES the error class and its 503; this Part only gives it words.
+- **MOTIR-7629 / MOTIR-7632 / MOTIR-7646** (the confirmed session-end decisions) — TAKES their
+  premise that an approve ends the overlay's session, as the success outcome 25.2 cites, and that a
+  rolled-back approve ends nothing, which the timeout band relies on. GIVES nothing.
+- **MOTIR-7634** — named only for the Part-number check (its section is unnumbered).
+- **MOTIR-6628 / MOTIR-6044 / MOTIR-6206** — named only for the Part-number check and #3146. No
+  element, structure or premise is given or taken.
+
+## 25.13 ⚠️ Planning flags
+
+1. **The overlay cards name a host that no longer exists.** MOTIR-5247 / 5250 / 5253 / 5254 cite
+   `PlanEditsReviewDock`, `usePlanEditsJob` and `PlanEditsPhase 'approving'`. All are gone
+   (MOTIR-4261). The overlay's approve is `usePlanChangeConversation`'s `deciding`, shared with
+   discard. The placement drawn here is correct for the code as it ships. The cards' context refs
+   and acceptance criteria ("the `approving` phase of `PlanEditsPhase` is what drives it") need a
+   re-plan before MOTIR-5250 runs.
+2. **A third overlay door no card owns: `PlanCloseGuard`'s _Confirm and close_.** It approves and then
+   closes the workspace, showing only a bare `Spinner` in the dialog footer. Its timeout closes
+   nothing and says nothing specific. Neither story names it. It should compose the same component
+   inside the dialog, or be named out of scope explicitly.
+3. **The shipped CTA miscounts mixed plans.** _Approve — add {n} items to your backlog_ and
+   _Added {n} items to your backlog_ both use `review.itemCount`, which counts `modify` and `remove`
+   proposals as "added". This Part does not repeat the mistake (25.8), but it does not fix the CTA or
+   the outcome, which belong to the rail's shipped copy. No card owns them.
+4. **`Spinner` ignores `prefers-reduced-motion` everywhere.** This Part adds `motion-reduce:animate-none`
+   to its own use only. Whether the package's `Spinner` should carry it by default is a
+   design-system decision no card here owns.
+5. **The overlay's generic-failure _Try again_ re-runs the conversation turn, not the approve.** After
+   an approve fails generically, the rail's _Try again_ (`onRetry` → the last user turn) is disabled
+   or sends a turn again. Drawn UNCHANGED here, because "failed otherwise" is out of this card's
+   scope. It is a defect in the shipped path, and no card owns it.
+
+## 25.14 What Part XXV does NOT draw or decide
+
+- The Approve / Decline buttons, the rail's footer, the confirm bar, the review block, the approved
+  outcome, the establish step, or the workspace chrome. All are cited and drawn INTO.
+- A percentage, a bar or a step list. `materialize` reports none, and inventing one would promise a
+  time nothing measures.
+- Anything server-side: the budget, the transaction, the 503.
+- Decline and discard, and their failures.
+- The `/ready` nudge's placement (MOTIR-5267) and the close guard's (flag 2).
