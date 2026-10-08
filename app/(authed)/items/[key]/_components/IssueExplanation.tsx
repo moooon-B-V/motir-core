@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Pill } from '@/components/ui/Pill';
 import type { WorkItemExplanationSourceDto, WorkItemRefMap } from '@/lib/dto/workItems';
+import type { PageRefMap } from '@/lib/dto/pages';
 import { ContentSectionCard } from './ContentSectionCard';
 
 // The issue's "why this matters" axis (Story 1.4's `explanationMd`), rendered
@@ -24,6 +25,8 @@ export interface IssueExplanationProps {
   editHref?: string;
   /** Resolved `motir:` references in `explanationMd` (Subtask 5.8.6) → live chips. */
   workItemRefs?: WorkItemRefMap;
+  /** Resolved `motir-page:` tags in `explanationMd` (MOTIR-7698) → page chips. */
+  pageRefs?: PageRefMap;
 }
 
 export function IssueExplanation({
@@ -31,6 +34,7 @@ export function IssueExplanation({
   explanationSource,
   editHref,
   workItemRefs,
+  pageRefs,
 }: IssueExplanationProps) {
   const t = useTranslations('issueViews');
   return (
@@ -52,6 +56,7 @@ export function IssueExplanation({
           value={explanationMd}
           aria-label={t('issueExplanationAria')}
           workItemRefs={workItemRefs}
+          pageRefs={pageRefs}
         />
       ) : (
         <p className="font-sans text-sm text-(--el-text-secondary) italic">{t('noExplanation')}</p>

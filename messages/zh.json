@@ -150,6 +150,12 @@
     "mentionNoResults": "没有与「{query}」匹配的工作项。",
     "mentionSearchFailed": "无法搜索工作项。",
     "mentionRetry": "重试",
+    "mentionPages": "页面",
+    "mentionTypeToSearchPages": "继续输入以搜索页面…",
+    "mentionNoPages": "没有与「{query}」匹配的页面。",
+    "mentionPagesSearchFailed": "无法搜索页面。",
+    "pageUntitled": "无标题",
+    "pageUnavailable": "页面不可用",
     "codeLanguage": "语言"
   },
   "common": {

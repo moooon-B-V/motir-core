@@ -5,6 +5,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Archive } from 'lucide-react';
 import { pageMembers, pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { pagesService } from '@/lib/services/pagesService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { plansService } from '@/lib/services/plansService';
@@ -22,6 +23,7 @@ import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { parseWorkItemRefs } from '@/lib/mentions/workItemRefs';
+import { parsePageTokenIds } from '@/lib/mentions/pageRefs';
 import { Pill } from '@/components/ui/Pill';
 import { formatDate } from '@/lib/utils/datetime';
 import type { Locale } from '@/lib/i18n/locales';
@@ -259,6 +261,7 @@ export default async function ItemView({
     parentRollup,
     locale,
     workItemRefs,
+    pageRefs,
     todoList,
     pendingPlans,
     planHistory,
@@ -304,6 +307,15 @@ export default async function ItemView({
         [item.title, item.descriptionMd, item.explanationMd].filter(Boolean).join('\n'),
         ctx.project.identifier,
       ),
+      ctx.projectId,
+      ctx.read,
+    ),
+    // Page tags (Story MOTIR-7694 · MOTIR-7698) — every `[<title>](motir-page:<id>)`
+    // in the two bodies, resolved to the page's CURRENT title or an unavailable
+    // state (no `page:view`, archived, deleted, Visitor). TIER TWO beside the
+    // work-item refs, for the same no-reflow reason.
+    pagesService.resolvePageRefSummaries(
+      parsePageTokenIds([item.descriptionMd, item.explanationMd].filter(Boolean).join('\n')),
       ctx.projectId,
       ctx.read,
     ),
@@ -663,6 +675,7 @@ export default async function ItemView({
                           value={item.descriptionMd}
                           aria-label={t('issueDescriptionAria')}
                           workItemRefs={workItemRefs}
+                          pageRefs={pageRefs}
                         />
                       ) : (
                         <p className="font-sans text-sm text-(--el-text-secondary) italic">
@@ -679,6 +692,7 @@ export default async function ItemView({
                           : undefined
                       }
                       workItemRefs={workItemRefs}
+                      pageRefs={pageRefs}
                     />
                     {/* MOTIR-3815: the to-do list — after Explanation and BEFORE
               Relationships, the slot `design/work-items/todo-list.mock.html`

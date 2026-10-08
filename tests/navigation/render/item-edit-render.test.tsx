@@ -25,6 +25,7 @@ const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
 const { getActiveProject } = vi.hoisted(() => ({ getActiveProject: vi.fn() }));
 const { getIssueDetail } = vi.hoisted(() => ({ getIssueDetail: vi.fn() }));
 const { getCapabilities } = vi.hoisted(() => ({ getCapabilities: vi.fn() }));
+const { getPageCapabilities } = vi.hoisted(() => ({ getPageCapabilities: vi.fn() }));
 const { listMembers } = vi.hoisted(() => ({ listMembers: vi.fn() }));
 const { resolveAliasedIssueKey } = vi.hoisted(() => ({ resolveAliasedIssueKey: vi.fn() }));
 const { redirect, permanentRedirect, notFound } = vi.hoisted(() => ({
@@ -54,7 +55,7 @@ vi.mock('@/lib/services/workItemsService', () => ({
   workItemsService: { getIssueDetail },
 }));
 vi.mock('@/lib/services/projectAccessService', () => ({
-  projectAccessService: { getCapabilities },
+  projectAccessService: { getCapabilities, getPageCapabilities },
 }));
 vi.mock('@/lib/services/assignableMembersService', () => ({
   assignableMembersService: { list: listMembers },
@@ -98,6 +99,11 @@ beforeEach(() => {
   getActiveProject.mockResolvedValue(PROJECT);
   getIssueDetail.mockResolvedValue(DETAIL);
   getCapabilities.mockResolvedValue({ canEdit: true });
+  getPageCapabilities.mockResolvedValue({
+    canViewPages: true,
+    canEditPages: false,
+    canDeletePages: false,
+  });
   listMembers.mockResolvedValue([]);
   resolveAliasedIssueKey.mockResolvedValue(null);
 });
@@ -133,11 +139,23 @@ describe('/items/[key]/edit — the gate is a gate, and the two reads below it a
     await until(() => getIssueDetail.mock.calls.length > 0, { label: 'the gate read' });
 
     expect(getCapabilities).not.toHaveBeenCalled();
+    expect(getPageCapabilities).not.toHaveBeenCalled();
     expect(listMembers).not.toHaveBeenCalled();
 
     detail.resolve(DETAIL);
     await rendered;
     expect(getCapabilities).toHaveBeenCalledTimes(1);
+    expect(getPageCapabilities).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the form the viewer's page:view, for the editors' Pages section (MOTIR-7698)", async () => {
+    getPageCapabilities.mockResolvedValue({
+      canViewPages: false,
+      canEditPages: false,
+      canDeletePages: false,
+    });
+    const tree = await renderTree(EditIssuePage, params());
+    expect(findFirst(tree, EditIssueForm)?.props.canViewPages).toBe(false);
   });
 });
 
