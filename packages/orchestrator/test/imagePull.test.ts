@@ -191,6 +191,23 @@ describe('parseBearerChallenge — the WWW-Authenticate dance', () => {
     expect(challengeScheme('')).toBeNull();
   });
 
+  it('reads params whatever their spacing and case, and stays linear on a hostile header', () => {
+    // MOTIR-7816 — a scan replaced two regexes CodeQL flagged as polynomial.
+    expect(parseBearerChallenge('  bearer   realm="r" ,service="s",scope="a:b:pull,push"')).toEqual(
+      { realm: 'r', service: 's', scope: 'a:b:pull,push' },
+    );
+    expect(parseBearerChallenge('Bearer x-realm="no",realm="yes"')).toEqual({
+      realm: 'yes',
+    });
+    expect(parseBearerChallenge('Bearer realm="unterminated')).toBeNull();
+    expect(parseBearerChallenge('Bearerrealm="r"')).toBeNull();
+
+    const started = performance.now();
+    expect(parseBearerChallenge(`Bearer ${' '.repeat(100_000)}x`)).toBeNull();
+    expect(parseBearerChallenge(`Bearer ${'A'.repeat(100_000)}`)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
   it('is null for a missing header, a non-Bearer scheme, or a Bearer with no realm', () => {
     expect(parseBearerChallenge(null)).toBeNull();
     expect(parseBearerChallenge('Basic realm="x"')).toBeNull();

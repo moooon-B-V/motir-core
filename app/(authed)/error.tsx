@@ -14,9 +14,10 @@ import { useReportCaughtError } from '@/lib/monitoring/reportCaughtError';
 // P2028 stall of Bug MOTIR-6776, at `layout.tsx`'s `listProjects` read) falls
 // through to `app/error.tsx`, one segment up.
 //
-// Retry is `unstable_retry`, not `reset`: `reset()` only clears the boundary and
+// Retry is the boundary's `retry` prop (`unstable_retry` before Next 16.3),
+// not `reset`: `reset()` only clears the boundary and
 // re-renders its children from what the client already holds, so a SERVER
-// render failure would throw again unchanged. `unstable_retry` refreshes the
+// render failure would throw again unchanged. `retry` refreshes the
 // router and resets inside one transition (`next/dist/client/components/
 // error-boundary.js`) — it re-fetches the segment, which is the point of trying
 // again. Wrapping it in our own transition is what gives the button its pending
@@ -28,10 +29,10 @@ import { useReportCaughtError } from '@/lib/monitoring/reportCaughtError';
 
 export default function AuthedError({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  retry: () => void;
 }) {
   useReportCaughtError(error, 'authed-page');
   const copy = useServerErrorCopy('page');
@@ -42,7 +43,7 @@ export default function AuthedError({
       <ServerErrorView
         copy={copy}
         digest={error.digest}
-        onRetry={() => startRetry(() => unstable_retry())}
+        onRetry={() => startRetry(() => retry())}
         retryPending={retryPending}
         showHome={false}
       />

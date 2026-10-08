@@ -29,10 +29,12 @@ describe('the three error boundaries exist and do their two jobs', () => {
       expect(read(path).trimStart().startsWith("'use client'")).toBe(true);
     });
 
-    it(`${path} retries with unstable_retry, never a bare reset`, () => {
+    it(`${path} retries with the retry prop, never a bare reset`, () => {
       // Comments may (and do) explain why `reset` is NOT used; only code counts.
       const source = stripComments(read(path));
-      expect(source).toMatch(/unstable_retry/);
+      // Next 16.3 renamed the prop from `unstable_retry`; the old name is undefined.
+      expect(source).toMatch(/\bretry: \(\) => void/);
+      expect(source).not.toMatch(/unstable_retry/);
       expect(source).not.toMatch(/\breset\s*\(/);
     });
   }

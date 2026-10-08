@@ -10,6 +10,7 @@
 // without real network or real delays.
 
 import { ConnectorAuthError, ConnectorHttpError } from './errors';
+import { assertPublicHttpUrl } from './publicUrl';
 
 export interface RetryOptions {
   /** Total attempts including the first (default 4). */
@@ -62,8 +63,17 @@ export function backoffDelay(
   return Math.floor(exp * random());
 }
 
+/** `url` without its trailing slashes — a scan, because `/\/+$/` backtracks
+ *  polynomially on a long run of them (CodeQL js/polynomial-redos). */
+export function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') end--;
+  return url.slice(0, end);
+}
+
 /**
- * Fetch `url` with rate-limit/retry resilience. Returns the `Response` on the
+ * Fetch `url` with rate-limit/retry resilience. A request on the real network
+ * goes only to a public address (`assertPublicHttpUrl`, MOTIR-7816). Returns the `Response` on the
  * first 2xx. Retries 429 (waiting `Retry-After` when present, else backoff) and
  * 5xx and network throws up to `maxAttempts`; a 401/403 throws immediately
  * (`ConnectorAuthError` — a retry cannot fix auth); any other 4xx throws
@@ -81,6 +91,8 @@ export async function fetchWithRetry(
   const doFetch = opts.fetchImpl ?? fetch;
   const sleep = opts.sleep ?? defaultSleep;
   const random = opts.random ?? Math.random;
+  // The real network only: an injected fetch is a test stub that reaches nothing.
+  if (!opts.fetchImpl) await assertPublicHttpUrl(url, opts.source);
 
   let lastStatus = 0;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {

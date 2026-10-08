@@ -267,6 +267,29 @@ describe('provision — the two single-use guarantees are in the request body', 
     expect(metadata['motir_project_id']).toBe('proj-1');
   });
 
+  it("a jobless container's repo slug is trimmed of hyphens, and stays linear on a long run of them", async () => {
+    // MOTIR-7816 — the slug trims by scanning; `/-+$/` was polynomial on a run of '-'.
+    handler = () => json(200, machine());
+    await flyOrchestrator.provision({
+      ...SPEC,
+      workload: 'code_graph_index',
+      workflowJobId: null,
+      repoFullName: 'acme/--My__Repo--',
+    });
+    expect(calls[0]!.body!['name']).toMatch(/^motir-index-my-repo-[0-9a-f]{8}$/);
+
+    calls.length = 0;
+    const started = performance.now();
+    await flyOrchestrator.provision({
+      ...SPEC,
+      workload: 'code_graph_index',
+      workflowJobId: null,
+      repoFullName: `acme/a${'-'.repeat(100_000)}!`,
+    });
+    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(calls[0]!.body!['name']).toMatch(/^motir-index-a-[0-9a-f]{8}$/);
+  });
+
   it("a jobless container's name is stable, and DIFFERENT per repo in one project", async () => {
     // A Fly machine name is unique within the app, and a Motir project spans
     // several repositories — so a name built from the project alone would

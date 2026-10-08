@@ -91,8 +91,15 @@ const FINDINGS = [
 const fill = (text: string, vars: Record<string, string | number>) =>
   text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key]));
 /** A rich message's plain words — its tags dropped, its placeholders filled. */
-const plain = (text: string, vars: Record<string, string | number> = {}) =>
-  fill(text.replace(/<\/?\w+>/g, ''), vars);
+const plain = (text: string, vars: Record<string, string | number> = {}) => {
+  // Repeated until nothing changes, so a tag one pass rebuilds is dropped too.
+  let stripped = text;
+  for (let prev = ''; prev !== stripped; ) {
+    prev = stripped;
+    stripped = stripped.replace(/<\/?\w+>/g, '');
+  }
+  return fill(stripped, vars);
+};
 
 const repoName = `${REVIEW_REPO.owner}/${REVIEW_REPO.name}`;
 const headRefFor = (card: ReviewAgentCard) => `review/${card.identifier.toLowerCase()}`;
