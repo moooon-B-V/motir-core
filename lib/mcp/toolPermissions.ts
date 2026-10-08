@@ -435,6 +435,13 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // off the constant.
   update_plan: 'ai:view_plan',
   record_plan_revision_reason: 'ai:view_plan',
+  // A planner session's in-flight STEP (MOTIR-7824). Same key by the same rule:
+  // `plansService.recordPlanStep` / `endPlanStep` assert `ai:view_plan` on the
+  // plan's project as their FIRST act. `CLI_TOKEN_GRANT` is deliberately NOT
+  // widened — a run executing one work item has no business reporting progress
+  // on a plan, and `tests/mcp/report-plan-step.test.ts` asserts that refusal off
+  // the constant.
+  report_plan_step: 'ai:view_plan',
   // The APPROVED-SHAPE verdict read (MOTIR-6227). A READ, and still NOT
   // `project:browse` like `get_plan` above: it hands back what a plan proposed
   // and a judgement about it, and BOTH services it calls

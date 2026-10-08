@@ -2193,6 +2193,34 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  report_plan_step: {
+    type: 'object',
+    properties: {
+      planId: { type: 'string', minLength: 1, description: 'The plan id `create_plan` returned.' },
+      sessionKey: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 128,
+        description:
+          'A stable name for the planner SESSION reporting the step (at most 128 characters) — one per concurrently running session, so several sessions of one parallel level each hold their own step. A second report under the same key REPLACES that session’s step.',
+      },
+      step: {
+        type: 'string',
+        enum: ['settle', 'lay', 'author', 'end'],
+        description:
+          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target).',
+      },
+      target: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'What the step works on: a `planItem:<id>` ref naming an `add` on THIS plan, or a committed work item in the plan’s project by its KEY (`MOTIR-123`) or id. Leave it out on `lay` for the project’s top level and on `author` for an item not yet on the plan. Refused on `settle` and `end`.',
+      },
+    },
+    required: ['planId', 'sessionKey', 'step'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   report_unbuildable_target: {
     type: 'object',
     properties: {
@@ -3600,6 +3628,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   record_plan_revision_reason: 'Record WHY a plan had to change',
   reinforce_lesson: 'Reinforce a lesson',
   report_action: 'Report your next step',
+  report_plan_step: 'Report the step a planner session is on',
   report_unbuildable_target: 'Report a card you cannot build',
   search_lessons: 'Search lessons by meaning',
   search_work_items: 'Search work items',
@@ -3974,6 +4003,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: false,
+    openWorldHint: false,
+  },
+  report_plan_step: {
+    title: 'Report the step a planner session is on',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
     openWorldHint: false,
   },
   report_unbuildable_target: {

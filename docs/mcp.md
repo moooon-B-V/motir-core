@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **92 tools**.
+`initialize` handshake and registers **93 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3949,7 +3949,7 @@ report on the same leg returns the same acknowledgement and records nothing more
 Requires **`work_item:edit`**, which `CLI_TOKEN_GRANT` already carries — a token
 from `motir login` reaches it without widening the grant.
 
-#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan` · `record_plan_revision_reason`
+#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan` · `record_plan_revision_reason` · `report_plan_step`
 
 The three tools above hand a **prompt** to Motir's planner and let it decide the
 tree. These two are the other door: **you decide the tree, and Motir reviews it
@@ -4588,6 +4588,57 @@ Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_EDITABLE` on an `approved` or `declined` pla
 naming the status; `PLAN_REVISION_CLASSIFICATION_INVALID` for a branch/bug pairing
 that contradicts itself, a key that names no work item or not a `bug`, evidence that
 is empty or past its bound, and a call naming the bug twice.
+
+##### `report_plan_step` — say which step a planner session is on
+
+The doors above change what a plan PROPOSES. This one says what a planner is
+**doing right now**, so a person following a plan being written sees the items
+being laid and drafted — and can tell a plan that is working from one that has
+stalled. Call it as each planner session **opens** a step, and with
+`step: 'end'` under the same `sessionKey` as the session closes, however it closes.
+
+| Input        | Type   | Required | Notes                                                                                                    |
+| ------------ | ------ | -------- | -------------------------------------------------------------------------------------------------------- |
+| `planId`     | string | yes      | The id `create_plan` returned.                                                                           |
+| `sessionKey` | string | yes      | A stable name for the reporting session, 1–128 characters. A second report under it REPLACES its step.   |
+| `step`       | enum   | yes      | `settle` · `lay` · `author` · `end`.                                                                     |
+| `target`     | string | no       | A `planItem:<id>` ref naming an `add` on this plan, or a committed work item by key (`MOTIR-123`) or id. |
+
+| `step`   | `target`                                                                     |
+| -------- | ---------------------------------------------------------------------------- |
+| `settle` | must be absent                                                               |
+| `lay`    | the parent being laid, **or absent** for the project's top level             |
+| `author` | the item being written, **or absent** for a new item not yet on the plan     |
+| `end`    | must be absent — clears the session's step; a no-op success when it has none |
+
+**`target` is optional on `lay` and `author`.** Both untargeted forms are real
+moments in a walk — the root lay of an untargeted plan, and a create whose `add`
+does not exist until the session's own append returns — so leave the target out
+rather than guess one. The server sets the step's time; the result's `startedAt`
+is the stored row's.
+
+**Legal only while the plan is `generating`.** On `planned`, `approved` or
+`declined` the call is refused with `PLAN_NOT_GENERATING` and nothing changes.
+
+**It is ADVISORY.** Every refusal comes back as a code and a sentence, never as an
+internal error, so a planner can match the code and keep planning. A refused report
+must not stop a walk.
+
+```jsonc
+report_plan_step({ planId, sessionKey: "lay-root", step: "lay" })
+// → { planId, sessionKey: "lay-root", step: "lay", targetRef: null, startedAt }
+report_plan_step({ planId, sessionKey: "author-3", step: "author", target: "planItem:cm…" })
+report_plan_step({ planId, sessionKey: "author-3", step: "end" })
+// → { …, targetRef: null, startedAt: null }
+```
+
+Requires **`ai:view_plan`**, the key every plan-authoring write names. A `motir run`
+credential (`CLI_TOKEN_GRANT`) does not carry it and cannot reach this tool: a run
+executing one work item has no business reporting progress on a plan.
+
+Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_GENERATING` off `generating`, naming the
+status; `PLAN_STEP_INVALID` for a target on `settle` or `end`, a ref naming nothing
+on this plan or in its project, a `folder:` ref, or a key that names no work item.
 
 ##### `validate_plan` — CHECK the plan BEFORE `final: true`
 

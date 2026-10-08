@@ -6371,6 +6371,33 @@ export const plansService = {
     });
   },
 
+  /**
+   * The ONE dispatch both step DOORS make (MOTIR-7824): `report_plan_step` and
+   * `POST /api/internal/ai/plan-step` carry four values, `settle` · `lay` ·
+   * `author` · `end`, and this maps them onto {@link recordPlanStep} /
+   * {@link endPlanStep} — so the one rule `endPlanStep` cannot see, that an `end`
+   * names no target, lives here once rather than in each door. Returns the
+   * stored step, or `null` for an `end`.
+   */
+  async reportPlanStep(
+    planId: string,
+    input: { sessionKey: string; step: PlanStepKindDto | 'end'; targetRef: string | null },
+    ctx: ServiceContext,
+  ): Promise<PlanStepDto | null> {
+    if (input.step === 'end') {
+      if (input.targetRef !== null) {
+        throw new InvalidPlanStepError('An `end` step names no target — send it with none.');
+      }
+      await plansService.endPlanStep(planId, input.sessionKey, ctx);
+      return null;
+    }
+    return plansService.recordPlanStep(
+      planId,
+      { sessionKey: input.sessionKey, kind: input.step, targetRef: input.targetRef },
+      ctx,
+    );
+  },
+
   async recordRevisionClassification(
     args: {
       planId: string;

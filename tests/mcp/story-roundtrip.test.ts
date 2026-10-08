@@ -614,6 +614,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           branch: 'new_ask',
           evidenceMd: 'scoped classification',
         },
+        report_plan_step: { planId: plan.id, sessionKey: 'scoped', step: 'settle' },
         // MOTIR-6227 — the caller's OWN item. Gated on `ai:view_plan`, so the
         // read-only-token loop asserts it is REFUSED at the scope gate.
         get_approved_shape_verdict: { key: item1 },

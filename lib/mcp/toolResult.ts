@@ -70,6 +70,7 @@ import {
   PlanItemNotFoundError,
   PlanNotFoundError,
   PlanNotGeneratingError,
+  InvalidPlanStepError,
   PlanNotInExpectedStatusError,
   UnresolvedPlanRefError,
   PlanNotEditableError,
@@ -576,6 +577,11 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof PlanNotInExpectedStatusError ||
     err instanceof PlanNotGeneratingError ||
     err instanceof InvalidProposalError ||
+    // PLAN_STEP_INVALID (MOTIR-7824) — `report_plan_step`'s refusal of a step it
+    // cannot record: a target on `settle` / `end`, a ref naming nothing on this
+    // plan. The signal is ADVISORY, so an emitter must be able to match the code
+    // and carry on, which it cannot do with a JSON-RPC internal error.
+    err instanceof InvalidPlanStepError ||
     err instanceof DuplicatePlanTargetError ||
     // UNRESOLVED_PLAN_REF (MOTIR-3539) — an intra-plan `planItem:` ref naming no
     // proposal, now refused AT THE APPEND rather than discovered at approve. It

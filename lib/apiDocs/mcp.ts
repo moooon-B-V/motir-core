@@ -921,6 +921,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: 'f58da227efc6',
   },
+  report_plan_step: {
+    // What a reader picks this one on: it is the only plan door that says what
+    // a planner is DOING rather than what it proposes, and it is advisory.
+    summary:
+      'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '3909bbcb4967',
+  },
   open_plan_session: {
     // Re-worded for MOTIR-6028: a scope holds MANY conversations now, and the
     // result's session `id` is how every later call names the one it means.
