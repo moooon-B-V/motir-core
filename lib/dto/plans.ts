@@ -1323,15 +1323,17 @@ export interface PlanValidityDto {
   rejections: PlanApprovabilityRejectionDto[];
   /**
    * Every same-level cross-parent `blocked_by` in the PROJECTION whose parents
-   * carry no matching edge (MOTIR-6370). A validation verdict only — neither the
-   * append nor approve refuses on it.
+   * carry no matching edge (MOTIR-6370) and which the PLAN introduces
+   * (MOTIR-7727 — `planValidityService`'s `planOwnsEdge`). A validation verdict
+   * only — neither the append nor approve refuses on it.
    */
   invalidEdges: InvalidEdgeDto[];
   /**
    * Every `blocked_by` in the PROJECTION that joins two levels (MOTIR-6509). A
    * proposed one is refused at the append (`INVALID_PLAN_REF_GRAPH` /
-   * `cross_level`), so what reaches here is a COMMITTED edge the plan leaves in
-   * place — a validation verdict, as on `validate_work_item`.
+   * `cross_level`), so what reaches here is a COMMITTED edge the plan OWNS — one
+   * whose end, or an ancestor of an end, the plan adds, re-parents, re-wires or
+   * removes (MOTIR-7727) — a validation verdict, as on `validate_work_item`.
    */
   crossLevelEdges: CrossLevelEdgeDto[];
 }

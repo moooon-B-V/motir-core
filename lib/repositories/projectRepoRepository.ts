@@ -715,6 +715,18 @@ export const projectRepoRepository = {
     return result.count;
   },
 
+  /**
+   * How many repository links the organization holds, across ALL its workspaces
+   * — the "Repositories connected" figure the Enterprise Contact-sales form shows
+   * read-only (MOTIR-7607). Needs a transaction that binds `app.organization_id`
+   * (`withOrgContext`): `project_repository_org_read` (and `workspace`'s org
+   * member arm) admit a cross-workspace read only through that GUC, and without
+   * it the count reads ZERO while raising nothing.
+   */
+  async countByOrganization(organizationId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.projectRepo.count({ where: { workspace: { organizationId } } });
+  },
+
   /** How many rows in this workspace Motir is currently holding DISABLED — the
    *  resume pass's "is this tenant affected at all?" probe, so an hourly job
    *  costs one cheap count per Motir-hosted workspace instead of an entitlement

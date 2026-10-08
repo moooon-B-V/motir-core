@@ -4,19 +4,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 /*
  * MOTIR-3884 — the moved public surfaces leave the application host. Once the
  * public origin is configured (`MOTIR_PUBLIC_SITE_URL` → motir.co), the proxy
- * 308s `/`, `/explore/*`, `/docs/*`, `/legal/*` AND `/p/*` onto it, path and
- * query preserved, and nothing fires while the public origin is unconfigured
- * (a redirect would loop onto this origin).
+ * 308s `/explore/*`, `/docs/*`, `/legal/*` AND `/p/*` onto it, path and query
+ * preserved, and nothing fires while the public origin is unconfigured (a
+ * redirect would loop onto this origin).
+ *
+ * MOTIR-7819 — the root `/` is NOT one of them. It is the application's entry:
+ * the proxy forwards it untouched, signed in or not, so `app/page.tsx` answers
+ * it by session (`tests/onboarding/entry-rework.test.tsx` holds that half).
  */
 
+const sessionCookie = vi.hoisted(() => ({ value: null as string | null }));
 vi.mock('better-auth/cookies', () => ({
-  getSessionCookie: () => null,
+  getSessionCookie: () => sessionCookie.value,
 }));
 
 const PUBLIC = 'https://motir.co';
 const APP = 'https://app.motir.co';
 
 afterEach(() => {
+  sessionCookie.value = null;
   delete process.env['MOTIR_PUBLIC_SITE_URL'];
   delete process.env['MOTIR_BASE_URL'];
 });
@@ -26,15 +32,42 @@ const redirect = async (path: string) => {
   return proxy(new NextRequest(`${APP}${path}`));
 };
 
-describe('the moved public surfaces 308 to motir.co', () => {
-  it('308s the root / to the public site root', async () => {
+describe('the application root / is the app entry, never a move to motir.co (MOTIR-7819)', () => {
+  // Both session states, because the bug was invisible to whichever one a test
+  // happened to encode: the 308 answered a signed-in reader and a signed-out
+  // one identically. The proxy must forward `/` in BOTH, so the page decides.
+  for (const [state, cookie] of [
+    ['signed out', null],
+    ['signed in', 'a-session-token'],
+  ] as const) {
+    it(`forwards / untouched for a ${state} request once the public origin is configured`, async () => {
+      process.env['MOTIR_PUBLIC_SITE_URL'] = PUBLIC;
+      process.env['MOTIR_BASE_URL'] = APP;
+      sessionCookie.value = cookie;
+      const res = await redirect('/');
+      expect(res.status).not.toBe(308);
+      expect(res.headers.get('location')).toBeNull();
+      expect(res.headers.get('x-middleware-next')).toBe('1');
+    });
+
+    it(`forwards / untouched for a ${state} request on a self-hosted build`, async () => {
+      sessionCookie.value = cookie;
+      const res = await redirect('/');
+      expect(res.headers.get('location')).toBeNull();
+      expect(res.headers.get('x-middleware-next')).toBe('1');
+    });
+  }
+
+  it('keeps the query on a forwarded root — nothing rewrites it', async () => {
     process.env['MOTIR_PUBLIC_SITE_URL'] = PUBLIC;
     process.env['MOTIR_BASE_URL'] = APP;
-    const res = await redirect('/');
-    expect(res.status).toBe(308);
-    expect(res.headers.get('location')).toBe('https://motir.co/');
+    const res = await redirect('/?ref=motir.co');
+    expect(res.headers.get('location')).toBeNull();
+    expect(res.headers.get('x-middleware-next')).toBe('1');
   });
+});
 
+describe('the moved public surfaces 308 to motir.co', () => {
   it('308s /explore with path and query preserved', async () => {
     process.env['MOTIR_PUBLIC_SITE_URL'] = PUBLIC;
     process.env['MOTIR_BASE_URL'] = APP;
@@ -131,8 +164,8 @@ describe('the moved public surfaces 308 to motir.co', () => {
   });
 });
 
-describe('the matcher covers the moved surfaces, including /p', () => {
-  it('lists /, /explore, /docs, /legal and /p', async () => {
+describe('the matcher covers the root and the moved surfaces, including /p', () => {
+  it('lists /, /explore, /docs, /legal and /p — and only the last four move', async () => {
     const { config, PUBLIC_REDIRECT_SEGMENTS } = await import('@/proxy');
     const segments = config.matcher.map((entry) => entry.replace(/^\//, '').split('/')[0]);
     expect(segments).toContain('');
@@ -140,6 +173,6 @@ describe('the matcher covers the moved surfaces, including /p', () => {
     expect(segments).toContain('docs');
     expect(segments).toContain('legal');
     expect(segments).toContain('p');
-    expect([...PUBLIC_REDIRECT_SEGMENTS]).toEqual(['', 'explore', 'docs', 'legal', 'p']);
+    expect([...PUBLIC_REDIRECT_SEGMENTS]).toEqual(['explore', 'docs', 'legal', 'p']);
   });
 });

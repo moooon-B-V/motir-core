@@ -90,6 +90,10 @@ arrangement rather than a side effect of it.
 >
 > **Amended 2026-09-28 (AMENDMENT 8, MOTIR-6746):** motir.co's read pages now
 > 308 to those views, and its request board is retired.
+>
+> **Amended 2026-10-08 (AMENDMENT 9, MOTIR-7819):** the `/` row is about the
+> landing's CONTENT. `app.motir.co/` itself is the application's entry and is
+> not redirected: it answers by session.
 
 ### Where the line comes from — measured, not asserted
 
@@ -1831,3 +1835,38 @@ emits it. The request page's `upvote` and `comment` hand-offs are unchanged.
 - **Retiring `intent=vote`** on `/act`. It costs nothing to keep.
 - **The Requested features view** — its read, page and design are MOTIR-6768,
   MOTIR-6769 and MOTIR-6767, under `public-request-board-retired.md`.
+
+---
+
+## AMENDMENT 9 — `app.motir.co/` is the application's entry, not a move to motir.co (MOTIR-7819, 2026-10-08)
+
+- **Status:** Accepted with Bug MOTIR-7819; the change ships in the same pull
+  request.
+- **Cites:** §2's `/` row; MOTIR-3884 (the redirect set); MOTIR-3367 (the root's
+  two-branch contract in `app/page.tsx`).
+
+§2 put `/` (the landing) on `motir.co`, and MOTIR-3884 read that row as an
+instruction about the ROOT OF THIS HOST: `proxy.ts`'s `PUBLIC_REDIRECT_SEGMENTS`
+carried `''`, so once `MOTIR_PUBLIC_SITE_URL` was set every request for
+`app.motir.co/` was 308'd to `motir.co/` before any session was read. A signed-in
+member typing the application's address landed on the marketing site, and
+`app/page.tsx` never received a request in production.
+
+The row's subject is the landing CONTENT, and that stays on `motir.co`. The root
+of the application host is a different thing: it is where members enter the
+product. So:
+
+| request                         | answer                                             |
+| ------------------------------- | -------------------------------------------------- |
+| `app.motir.co/` with a session  | redirect to the signed-in landing (`/workbench`)   |
+| `app.motir.co/` with no session | redirect to `/sign-in`                             |
+| `motir.co/`                     | the landing, rendered by `motir-marketing` (as §2) |
+
+The proxy forwards `/` untouched on every deployment, cloud or self-hosted, and
+`app/page.tsx` answers it. `/explore`, `/docs`, `/legal` and the non-Visitor
+`/p/*` paths keep their 308.
+
+**A cost this cannot reverse:** a 308 is a permanent redirect and browsers cache
+it, so a reader who met the old redirect may keep being sent to `motir.co/`
+from their own cache until it expires or is cleared. Nothing on this host can
+reach that cache.

@@ -971,6 +971,46 @@
       "renew": "Renewing the AI plan before {date} cancels the deletion. Until then your agents cannot be created or woken, and their storage is still charged every day.",
       "openBilling": "Renew the AI plan",
       "footer": "You are receiving this because you own agents in this organization."
+    },
+    "enterpriseRequestReceived": {
+      "subject": "Enterprise request from {organization}",
+      "preview": "{requester} asked about Enterprise for {organization}",
+      "greeting": "Hi,",
+      "lede": "{requester} ({email}) asked about the Enterprise plan for {organization}.",
+      "needsHeading": "What they told us",
+      "cardsPerDay": "Work items a day: about {count}",
+      "parallelAgents": "Agents in parallel: {count}",
+      "agentPath": "Which agents: {value}",
+      "autonomy": "Run on its own: {value}",
+      "startWhen": "When they would start: {value}",
+      "teamSize": "Team size: {value}",
+      "noNeeds": "They left every optional question blank.",
+      "contact": "Reach them at: {contact}",
+      "noteHeading": "Their note",
+      "openRequest": "Open the request",
+      "footer": "You are receiving this because you are Motir platform staff.",
+      "agentPathValue": {
+        "hosted": "Motir's hosted agents",
+        "own": "Their own agents",
+        "both": "Both"
+      },
+      "autonomyValue": {
+        "autonomous_lead": "Run the project around the clock on its own",
+        "volume_only": "A large volume of runs they start themselves",
+        "unsure": "Not sure yet"
+      },
+      "startWhenValue": {
+        "now": "Now",
+        "within_month": "Within a month",
+        "within_quarter": "Within a quarter",
+        "exploring": "Just exploring"
+      },
+      "teamSizeValue": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      }
     }
   },
   "auth": {
@@ -6268,7 +6308,6 @@
       "once": "once",
       "ctaChoose": "Choose {plan}",
       "ctaUpgrade": "Upgrade to {plan}",
-      "ctaContactSales": "Contact sales",
       "ctaCurrent": "Current plan",
       "ctaTrialUsed": "Trial used",
       "footer": "Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax is applied automatically at checkout. Credits are an internal usage allotment; the price shown is the AI plan fee, billed by Stripe to the {org} organization. Your Motir seats are billed separately — manage them on the Motir plan screen.",
@@ -6384,6 +6423,120 @@
     "internalBilling": {
       "badge": "Internal billing",
       "note": "This organization is charged exactly like a customer and then made whole — every figure below is real, and the balance nets to zero."
+    },
+    "contactSales": {
+      "contact": "Contact sales",
+      "sentChip": "Request sent · {date}",
+      "memberReason": "Only owners and admins of {org} can contact sales.",
+      "title": "Contact sales — Enterprise",
+      "subtitle": "Tell us what you want Motir to run. Platform staff read every request and reply to you directly.",
+      "facts": {
+        "heading": "Sent with your request",
+        "organization": "Organization",
+        "requestedBy": "Requested by",
+        "currentPlan": "Current plan",
+        "repositories": "Repositories connected"
+      },
+      "optionalNote": "Everything below is optional except the note.",
+      "fields": {
+        "cardsPerDay": "Work items a day, roughly",
+        "cardsPerDayPlaceholder": "e.g. 40",
+        "parallelAgents": "Agents in parallel",
+        "parallelAgentsPlaceholder": "e.g. 8",
+        "agentPath": "Which agents",
+        "autonomy": "How should it run?",
+        "startWhen": "When would you start?",
+        "teamSize": "Team size",
+        "choose": "Choose…",
+        "contact": "Best way to reach you",
+        "contactHelp": "Your account email. Change it if someone else should get the reply.",
+        "note": "Note",
+        "required": "Required",
+        "notePlaceholder": "What should Motir do for your team? Anything we should know about your repositories, security or timing."
+      },
+      "agentPath": {
+        "hosted": {
+          "label": "Motir’s hosted agents",
+          "hint": "Run on Motir’s models."
+        },
+        "own": {
+          "label": "Our own agents",
+          "hint": "Claude Code, Codex or another agent on our own credential, in Motir’s cloud."
+        },
+        "both": {
+          "label": "Both",
+          "hint": "Some of each."
+        }
+      },
+      "autonomy": {
+        "autonomous_lead": {
+          "label": "Around the clock, on its own",
+          "hint": "The autonomous lead: Motir plans, runs and repairs, and your team decides at approval gates."
+        },
+        "volume_only": {
+          "label": "A large volume of runs we start",
+          "hint": "Your team starts each run."
+        },
+        "unsure": {
+          "label": "Not sure yet",
+          "hint": ""
+        }
+      },
+      "startWhen": {
+        "now": "Now",
+        "within_month": "Within a month",
+        "within_quarter": "Within a quarter",
+        "exploring": "Just exploring"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "cancel": "Cancel",
+      "send": "Send request",
+      "sending": "Sending…",
+      "close": "Close",
+      "done": "Done",
+      "errors": {
+        "note": "Add a note — tell us what you want Motir to do for your team.",
+        "number": "Enter a whole number of at least 1."
+      },
+      "refused": {
+        "open": {
+          "title": "Your organization already has an open request.",
+          "body": "It was sent on {date}, from another tab or by another admin. Nothing new was sent.",
+          "bodyNoDate": "It was sent from another tab or by another admin. Nothing new was sent.",
+          "action": "View the request"
+        },
+        "forbidden": {
+          "title": "You can’t contact sales for {org}.",
+          "body": "Only owners and admins can. Your role may have changed since this page loaded — ask an organization admin."
+        },
+        "network": {
+          "title": "Couldn’t reach Motir.",
+          "body": "Nothing was sent. Check your connection and send again — what you wrote is kept."
+        }
+      },
+      "sent": {
+        "title": "Request sent",
+        "body": "Platform staff will reply to <b>{contact}</b>. Until the request is closed, the Enterprise card shows it instead of Contact sales."
+      },
+      "request": {
+        "title": "Your Enterprise request",
+        "subtitle": "Sent {date} by {name}.",
+        "subtitleNoName": "Sent {date}.",
+        "state": "State",
+        "asked": "What you told us",
+        "unset": "Not given",
+        "reply": "Platform staff reply to <b>{contact}</b>. To add something, answer their email.",
+        "status": {
+          "received": "Received",
+          "in_conversation": "In conversation",
+          "offer_sent": "Offer sent"
+        }
+      }
     }
   },
   "draftWithAi": {
@@ -8667,6 +8820,7 @@
       "navAiPlanning": "AI planning",
       "navPlanningLessons": "Planning lessons",
       "navIdeas": "Ideas",
+      "navEnterpriseRequests": "Enterprise requests",
       "navRunModels": "Hosted-run models"
     },
     "nav": {
@@ -8848,6 +9002,9 @@
           },
           "fleet": {
             "stop": "Stopped the fleet containers"
+          },
+          "enterprise_request": {
+            "transition": "Moved an Enterprise request"
           },
           "idea": {
             "add": "Added an idea",
@@ -10427,6 +10584,152 @@
       "unavailable": {
         "title": "Couldn’t load hosted-run models",
         "body": "motir-ai didn’t respond, so whether each listed model is offered is unknown and no list is shown. Nothing has changed."
+      }
+    },
+    "enterpriseRequests": {
+      "breadcrumb": "Platform · Enterprise requests",
+      "title": "Enterprise requests",
+      "subtitle": "What organisations sent from Contact sales on the Enterprise plan. Work each request from new to won or lost; every move is recorded with who made it.",
+      "auditLead": "A request is customer data.",
+      "auditBody": "Loading this list and opening a request are cross-tenant reads, written to the audit log.",
+      "cardTitle": "Requests",
+      "count": {
+        "loading": "Newest first.",
+        "open": "Newest first. <b>{count} open</b> — new, contacted or offer sent.",
+        "state": "Newest first. <b>{count} {state}</b>.",
+        "all": "Newest first. <b>{count} in all</b>."
+      },
+      "filterLabel": "Filter requests by state",
+      "filter": {
+        "open": "Open",
+        "all": "All"
+      },
+      "status": {
+        "new": "New",
+        "contacted": "Contacted",
+        "offer_sent": "Offer sent",
+        "won": "Won",
+        "lost": "Lost"
+      },
+      "stateWord": {
+        "open": "open",
+        "new": "new",
+        "contacted": "contacted",
+        "offer_sent": "offer sent",
+        "won": "won",
+        "lost": "lost"
+      },
+      "col": {
+        "organisation": "Organisation",
+        "requester": "Requester",
+        "sent": "Sent",
+        "needs": "Needs",
+        "state": "State"
+      },
+      "tierWhenSent": "on {tier} when sent",
+      "requesterGone": "Account deleted",
+      "needs": {
+        "cardsPerDay": "<b>{n}</b> items/day",
+        "cardsPerDayNone": "items/day —",
+        "agents": "<b>{n}</b> agents",
+        "agentsNone": "agents —",
+        "agentPathNone": "which agents —",
+        "autonomyNone": "on its own —"
+      },
+      "agentPath": {
+        "hosted": "Motir-hosted",
+        "own": "Their own",
+        "both": "Both"
+      },
+      "autonomy": {
+        "autonomous_lead": "Runs on its own",
+        "volume_only": "Volume only",
+        "unsure": "Not sure"
+      },
+      "startWhen": {
+        "now": "Now",
+        "within_month": "Within a month",
+        "within_quarter": "Within a quarter",
+        "exploring": "Just exploring"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "notAnswered": "Not answered",
+      "pager": {
+        "label": "Pages of requests",
+        "note": "Newest first · 50 a page",
+        "range": "{from}–{to} of {total}",
+        "newer": "Newer",
+        "older": "Older"
+      },
+      "empty": {
+        "title": "No enterprise requests yet",
+        "body": "When an organisation’s owner presses Contact sales on the Enterprise plan, the request lands here and platform staff are emailed."
+      },
+      "emptyFilter": {
+        "title": "No {state} requests",
+        "body": "No request is {state} right now.",
+        "action": "Show open requests",
+        "actionAll": "Show all requests"
+      },
+      "error": {
+        "title": "Couldn’t load the requests",
+        "body": "Something went wrong reading the requests, so none is shown. Nothing has changed.",
+        "retry": "Retry"
+      },
+      "detail": {
+        "back": "Back to requests",
+        "sent": "Sent {date}",
+        "requestTitle": "The request",
+        "orgLink": "Open {org} in Tenants",
+        "field": {
+          "organisation": "Organisation",
+          "requester": "Requester",
+          "contact": "Contact",
+          "sent": "Sent",
+          "cardsPerDay": "Work items a day",
+          "parallelAgents": "Parallel agents",
+          "agentPath": "Which agents",
+          "autonomy": "Runs on its own",
+          "startWhen": "Start",
+          "teamSize": "Team size",
+          "note": "Note"
+        }
+      },
+      "move": {
+        "title": "Move to",
+        "stateTitle": "State",
+        "contacted": "Mark contacted",
+        "offer_sent": "Mark offer sent",
+        "won": "Mark won",
+        "lost": "Mark lost",
+        "hint": {
+          "new": "Next: you reached out to the requester.",
+          "contacted": "Next: you sent them an offer.",
+          "offer_sent": "Next: they accepted — or it is lost.",
+          "closes": "Won and lost close the request."
+        },
+        "failed": "Couldn’t move the request. Nothing changed; try again."
+      },
+      "closed": "<b>Closed as {state} on {date}.</b> A closed request does not move again. The organisation can send a new one from its Billing page.",
+      "readOnly": "<b>Read-only for support.</b> Moving a request is an operator’s or a superadmin’s job; you can read everything here and in the history.",
+      "confirm": {
+        "title": "Mark this request {state}?",
+        "body": "{org}’s request closes as <b>{state}</b> and cannot be moved again. The organisation can send a new request from its Billing page.",
+        "cancel": "Cancel"
+      },
+      "stale": "<b>Not changed — someone else moved this request first.</b> {who} marked it <b>{state}</b> a moment ago, so your “{action}” was refused and nothing was recorded. The page now shows its current state; choose again.",
+      "staleUnknown": "<b>Not changed — someone else moved this request first.</b> It is now <b>{state}</b>, so your “{action}” was refused and nothing was recorded. The page now shows its current state; choose again.",
+      "history": {
+        "title": "History",
+        "order": "oldest first",
+        "sent": "Sent as",
+        "to": "to",
+        "requesterOf": "{name} ({org})"
       }
     },
     "ideas": {
