@@ -1,5 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { db } from '@/lib/db';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
@@ -209,6 +211,24 @@ describe('GET /api/internal/ai/repo-file — the connected repo', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       result: { outcome: 'not_found', path: 'nope.ts', ref: 'main' },
+    });
+  });
+
+  // MOTIR-7873 — a binary blob reaches the model as a NAMED outcome carrying no
+  // content, never as `found` with its bytes decoded into replacement characters.
+  it('passes a binary file through as the named `binary` outcome, with no text', async () => {
+    const png = readFileSync(join(process.cwd(), 'app/apple-icon.png'));
+    stubGithub(() => new Response(new Uint8Array(png), { status: 200 }));
+    const { token } = await seedConnectedProject();
+    const res = await GET(
+      req('/api/internal/ai/repo-file?repoRef=moooon/motir-core&path=app/apple-icon.png', {
+        bearer: SERVICE_SECRET,
+        token,
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      result: { outcome: 'binary', path: 'app/apple-icon.png', ref: 'main', bytes: png.length },
     });
   });
 
