@@ -80,8 +80,10 @@ describe('proxy config.matcher', () => {
     // are deliberate, and each is enumerated here so that adding a third is a
     // decision somebody writes down rather than a silent widening:
     //
-    //   1. The moved public SURFACES (MOTIR-3884) — `/`, `/explore`, `/docs`,
-    //      `/legal`, `/p` — which the proxy 308s onto motir.co.
+    //   1. The application ROOT `/` (MOTIR-7819), forwarded untouched so
+    //      `app/page.tsx` answers it by session, and the moved public SURFACES
+    //      (MOTIR-3884) — `/explore`, `/docs`, `/legal`, `/p` — which the proxy
+    //      308s onto motir.co.
     //   2. The public read API (MOTIR-4114) — `/api/public/*`, matched so the
     //      proxy can answer the cross-origin preflight and attach the CORS
     //      headers `motir.co`'s browser-side fetches need. It is matched for
@@ -92,12 +94,15 @@ describe('proxy config.matcher', () => {
     //      before anyone signs in, and `wellKnownCors` answers and returns first.
     const { config } = await import('@/proxy');
 
-    const PUBLIC_REDIRECT_SEGMENTS = ['', 'explore', 'docs', 'legal', 'p'];
+    const APP_ROOT_SEGMENT = '';
+    const PUBLIC_REDIRECT_SEGMENTS = ['explore', 'docs', 'legal', 'p'];
     const CORS_ONLY_SEGMENTS = ['api', '.well-known'];
     expect(
       strayProxyEntries(APP, SIGNED_IN_GROUPS, config.matcher).filter(
         (segment) =>
-          !PUBLIC_REDIRECT_SEGMENTS.includes(segment) && !CORS_ONLY_SEGMENTS.includes(segment),
+          segment !== APP_ROOT_SEGMENT &&
+          !PUBLIC_REDIRECT_SEGMENTS.includes(segment) &&
+          !CORS_ONLY_SEGMENTS.includes(segment),
       ),
     ).toEqual([]);
   });

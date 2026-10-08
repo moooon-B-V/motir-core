@@ -83,13 +83,15 @@ describe('robots policy', () => {
   // still promised those two addresses were crawlable HERE was asserting
   // something about a surface this repository no longer has.
   //
-  // The four entries below that are in the SAME state — `/explore`, `/docs`,
-  // `/p/*` and `/` — are deliberately left, and the difference is worth being
+  // The three entries below that are in the SAME state — `/explore`, `/docs`
+  // and `/p/*` — are deliberately left, and the difference is worth being
   // explicit about because it is not obvious. MOTIR-3951 deleted their pages
   // from this application too, so none of them RENDERS here either; they stay
   // because they are the paths `PUBLIC_REDIRECT_SEGMENTS` 308s onto `motir.co`,
   // and a `Disallow` on this host would stop a crawler ever following that
-  // redirect to the page that does render. `/legal` is 308'd by that same set,
+  // redirect to the page that does render. `/` stays too, for a different
+  // reason since MOTIR-7819: it is no longer moved, it is the application's
+  // entry, and a crawler following it reaches `/sign-in`. `/legal` is 308'd by that same set,
   // so it would qualify on that reading — this card's own acceptance criterion
   // is what takes it out, and the criterion is right for the narrower reason
   // that nothing in this repository can now say what is at that address.
