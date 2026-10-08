@@ -121,7 +121,7 @@ beforeEach(async () => {
   const realFetch = globalThis.fetch;
   vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
-    if (!url.startsWith(AI_URL)) return realFetch(input, init);
+    if (new URL(url).origin !== AI_URL) return realFetch(input, init);
     const headers = (init?.headers ?? {}) as Record<string, string>;
     aiCalls.push({
       url,

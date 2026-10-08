@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   MCP_TOOL_ANNOTATIONS,
@@ -37,17 +34,12 @@ import { mcpToolArgs } from '../helpers/mcpToolArgs';
 // `read` scope, read-only). `EXEMPT_TOOLS` is a plain object literal, and
 // `docs/mcp.md`, `docs/decisions/member-facing-permissions.md` and
 // `design/mcp-server/build.py` are text: a missing row there is invisible to the
-// compiler, and THAT is what this guard exists for.
+// compiler, and THAT is what this guard exists for. Those three TEXT homes are
+// asserted in `code-read-tool-docs.test.ts`, which imports nothing from `lib/` so
+// it can run in the database-free docs-guard lane on a docs-only pull request.
 
 const CODE_READ_TOOLS = ['read_file', 'code_explore', 'code_search'] as const;
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
-
-const docsMcp = read('docs/mcp.md');
-const docHeadings = docsMcp.split('\n').filter((l) => /^#{1,6}\s/.test(l));
-const buildPy = read('design/mcp-server/build.py');
-const permissionsAdr = read('docs/decisions/member-facing-permissions.md');
 const catalogue = new Map(mcpToolRows().map((r) => [r.name as string, r]));
 const fixtureArgs = mcpToolArgs({
   projectKey: 'PROD',
@@ -88,17 +80,5 @@ describe.each(CODE_READ_TOOLS)('%s — every McpToolName home carries it', (tool
 
   it('has a fixture in tests/helpers/mcpToolArgs.ts', () => {
     expect(fixtureArgs[tool]).toMatchObject({ projectKey: 'PROD' });
-  });
-
-  it('is documented under a heading in docs/mcp.md', () => {
-    expect(
-      docHeadings.some((h) => h.includes(`\`${tool}\``)),
-      `docs/mcp.md has no heading naming \`${tool}\``,
-    ).toBe(true);
-  });
-
-  it('is named in design/mcp-server/build.py and the ai:plan amendment', () => {
-    expect(buildPy).toContain(`"${tool}":`);
-    expect(permissionsAdr).toContain(`\`${tool}\``);
   });
 });

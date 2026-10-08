@@ -67,7 +67,7 @@ const json = (body: unknown, status = 200) =>
 function stubFetch(): void {
   vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
-    if (url.startsWith(AI_URL)) {
+    if (new URL(url).origin === AI_URL) {
       aiCalls.push({ url, body: JSON.parse(String(init?.body)) as AiCall['body'] });
       return aiReply();
     }
