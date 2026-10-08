@@ -87,20 +87,25 @@ async function IdeasSection({
 }) {
   const t = await getTranslations('platformAdmin.ideas');
   const actor = consoleIdeaActor(principal);
-  let list: StaffIdeaListDto;
-  let tags: StaffIdeaTagDto[];
-  try {
-    [list, tags] = await Promise.all([
-      ideasAdminService.listForStaff(actor, toIdeaListQuery(view)),
-      ideasAdminService.listTags(actor),
-    ]);
-  } catch (err) {
+  // Settled, not `Promise.all`: a list read that rejects at once (an unissued
+  // cursor) must not return the page while the tags query is still running on
+  // the database (MOTIR-7796).
+  const [listRead, tagsRead] = await Promise.allSettled([
+    ideasAdminService.listForStaff(actor, toIdeaListQuery(view)),
+    ideasAdminService.listTags(actor),
+  ]);
+  if (listRead.status === 'rejected' || tagsRead.status === 'rejected') {
     // Any failure to read the store is the error state (Panel 3c) — a cursor
     // this URL carries but the service did not issue included: the card offers
     // Retry and the rail, not a crash.
-    console.error('[admin] ideas could not be read', err);
+    const failed = [listRead, tagsRead].find(
+      (read): read is PromiseRejectedResult => read.status === 'rejected',
+    );
+    console.error('[admin] ideas could not be read', failed?.reason);
     return <IdeasUnavailable />;
   }
+  const list: StaffIdeaListDto = listRead.value;
+  const tags: StaffIdeaTagDto[] = tagsRead.value;
 
   const filtered = isFilteredView(view);
 

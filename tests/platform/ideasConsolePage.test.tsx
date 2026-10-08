@@ -170,6 +170,41 @@ describe('the list', () => {
     spy.mockRestore();
   });
 
+  it('settles the tags read before it shows the error card (MOTIR-7796)', async () => {
+    // The list read rejects on the cursor; the tags read is held until it has,
+    // so the page cannot finish ahead of it by luck. A page that takes the
+    // error branch on the first rejection returns with the tags query still
+    // running — the leftover `tests/helpers/inFlightProbe.ts` reports.
+    await seedStore();
+    await signInAs('support');
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const listForStaff = ideasAdminService.listForStaff.bind(ideasAdminService);
+    const listTags = ideasAdminService.listTags.bind(ideasAdminService);
+    let listSettled: Promise<unknown> = Promise.resolve();
+    let tagsSettled = false;
+    const listSpy = vi.spyOn(ideasAdminService, 'listForStaff').mockImplementation((...args) => {
+      const read = listForStaff(...args);
+      listSettled = read.catch(() => undefined);
+      return read;
+    });
+    const tagsSpy = vi.spyOn(ideasAdminService, 'listTags').mockImplementation(async (...args) => {
+      await listSettled;
+      try {
+        return await listTags(...args);
+      } finally {
+        tagsSettled = true;
+      }
+    });
+
+    const html = await list({ cursor: 'not-a-cursor-this-api-issued' });
+
+    expect(tagsSettled).toBe(true);
+    expect(html).toContain('Couldn’t load the ideas');
+    listSpy.mockRestore();
+    tagsSpy.mockRestore();
+    errors.mockRestore();
+  });
+
   it('pages past fifty with Next page, and offers the first page back', async () => {
     const operator = await staffActor('operator', { kind: 'session' }, 'pager');
     for (let batch = 0; batch < 3; batch += 1) {
