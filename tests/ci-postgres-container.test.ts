@@ -115,6 +115,10 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-7806's bug-filing coverage lane (Story MOTIR-7797): the log-bug route,
       // the guide landing and the story gate it measures run against a real database.
       'ci.yml:story-7797-coverage',
+      // MOTIR-7865's story coverage floor (Story MOTIR-7858): the three MCP
+      // code-read tools resolve the project, its repository set and every
+      // permission decision against a real database.
+      'ci.yml:story-7858-coverage',
       'ci.yml:test',
     ]);
   });
