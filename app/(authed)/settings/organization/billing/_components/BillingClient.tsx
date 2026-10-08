@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -31,7 +31,9 @@ import { Segmented } from '@/components/ui/Segmented';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useToast } from '@/components/ui/Toast';
-import type { BillingStatusDTO } from '@/lib/dto/billing';
+import type { BillingStatusDTO, EnterpriseRequestDTO } from '@/lib/dto/billing';
+import { fetchOpenEnterpriseRequest } from '@/lib/billing/enterpriseRequestClient';
+import { ContactSalesDialog, type ContactSalesContext } from './ContactSalesDialog';
 import type { AiPlanCatalogEntry, BillingCadence } from '@/lib/billing/catalog';
 import { ciLineFigures, type CiLineVariant } from './ciFigures';
 import { searchLineFigures } from './searchFigures';
@@ -96,6 +98,9 @@ export interface BillingClientProps {
   /** The org's member count (resolved server-side) — the seat count for the
    *  seat preview + the panel-6 seat calc (one seat per member, ADR §3). */
   memberCount: number;
+  /** What the Enterprise Contact-sales form shows read-only (MOTIR-7607), read
+   *  on the server; null for a viewer who cannot send a request. */
+  contactSales?: ContactSalesContext | null;
 }
 
 type View = 'home' | 'plans' | 'seats';
@@ -109,7 +114,12 @@ type LoadState = 'loading' | 'idle' | 'error' | 'forbidden';
 // Checkout / Portal sessions are started over the same boundary and the browser
 // redirects to the returned hosted URL. The PAYWALL (panel 7) is the sibling
 // 8.1.8; this card never renders it.
-export function BillingClient({ orgId, orgName, memberCount }: BillingClientProps) {
+export function BillingClient({
+  orgId,
+  orgName,
+  memberCount,
+  contactSales = null,
+}: BillingClientProps) {
   const t = useTranslations('billing');
   const { toast } = useToast();
   const [data, setData] = useState<BillingStatusDTO | null>(null);
@@ -120,10 +130,35 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
   // tier may still be settling — show a pending note until the refetch confirms).
   const [returnBanner, setReturnBanner] = useState<'success' | 'cancel' | null>(null);
   const seq = useRef(0);
+  // The org's OPEN Enterprise request (MOTIR-7607): null when none is open,
+  // undefined when it could not be read (a member's 403, a failed read) — the
+  // Enterprise card then offers Contact sales, and the server's one-open-per-org
+  // rule (409) still stands behind it.
+  const [enterpriseRequest, setEnterpriseRequest] = useState<
+    EnterpriseRequestDTO | null | undefined
+  >(undefined);
+  const enterpriseSeq = useRef(0);
+
+  // Re-read the open request from the server — after a send, and after a 409 —
+  // so the card shows "Request sent" because the server says so, not because
+  // the client assumed it (the page-state-after-mutation contract).
+  const refreshEnterpriseRequest = useCallback(async () => {
+    const mySeq = ++enterpriseSeq.current;
+    const request = await fetchOpenEnterpriseRequest(orgId);
+    if (mySeq === enterpriseSeq.current) setEnterpriseRequest(request);
+    return request;
+  }, [orgId]);
 
   const load = useCallback(async () => {
     const mySeq = ++seq.current;
     setState('loading');
+    // The open request is read ALONGSIDE the billing status, so the Enterprise
+    // card paints its final control in the same render as the rest.
+    const enterpriseRead = (async () => {
+      const myEnterpriseSeq = ++enterpriseSeq.current;
+      const request = await fetchOpenEnterpriseRequest(orgId);
+      return { request, current: () => myEnterpriseSeq === enterpriseSeq.current };
+    })();
     try {
       const res = await fetch(`/api/organizations/${orgId}/billing`);
       if (mySeq !== seq.current) return;
@@ -136,7 +171,9 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
         return;
       }
       const body = (await res.json()) as BillingStatusDTO;
+      const enterprise = await enterpriseRead;
       if (mySeq !== seq.current) return;
+      if (enterprise.current()) setEnterpriseRequest(enterprise.request);
       setData(body);
       setState('idle');
     } catch {
@@ -278,6 +315,12 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
     portal,
     redirecting,
   } as const;
+  const enterprise: EnterpriseContactProps = {
+    orgId,
+    context: contactSales,
+    request: enterpriseRequest ?? null,
+    refresh: refreshEnterpriseRequest,
+  };
 
   return (
     <div className="flex flex-col gap-5" aria-busy={state === 'loading'}>
@@ -304,7 +347,9 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
       {view === 'home' ? (
         <HomeView {...shared} goPlans={() => setView('plans')} goSeats={() => setView('seats')} />
       ) : null}
-      {view === 'plans' ? <PlansView {...shared} back={() => setView('home')} /> : null}
+      {view === 'plans' ? (
+        <PlansView {...shared} enterprise={enterprise} back={() => setView('home')} />
+      ) : null}
       {view === 'seats' ? <SeatsView {...shared} back={() => setView('home')} /> : null}
     </div>
   );
@@ -323,6 +368,15 @@ interface SharedViewProps {
   checkout: (priceLookupKey: string, quantity?: number) => void;
   portal: () => void;
   redirecting: boolean;
+}
+
+/** What the Enterprise card's Contact sales needs (MOTIR-7607). */
+export interface EnterpriseContactProps {
+  orgId: string;
+  context: ContactSalesContext | null;
+  /** The org's open request, or null (none open, or unknown). */
+  request: EnterpriseRequestDTO | null;
+  refresh: () => Promise<EnterpriseRequestDTO | null | undefined>;
 }
 
 export function fmt(n: number, locale: string): string {
@@ -1448,8 +1502,9 @@ function PlansView({
   checkout,
   portal,
   redirecting,
+  enterprise,
   back,
-}: SharedViewProps & { back: () => void }) {
+}: SharedViewProps & { enterprise: EnterpriseContactProps; back: () => void }) {
   const locale = useLocale();
   const [cadence, setCadence] = useState<BillingCadence>('annual');
   const { tier, balance, subscription } = data.motirAi;
@@ -1557,6 +1612,17 @@ function PlansView({
             redirecting={redirecting}
             checkout={checkout}
             t={t}
+            contactSales={
+              plan.prices ? null : (
+                <EnterpriseContactControl
+                  enterprise={enterprise}
+                  canManage={canManage}
+                  orgName={orgName}
+                  planName={tier?.name ?? null}
+                  t={t}
+                />
+              )
+            }
           />
         ))}
       </div>
@@ -1586,6 +1652,7 @@ function PlanCard({
   redirecting,
   checkout,
   t,
+  contactSales,
 }: {
   plan: AiPlanCatalogEntry;
   cadence: BillingCadence;
@@ -1595,6 +1662,8 @@ function PlanCard({
   redirecting: boolean;
   checkout: (priceLookupKey: string) => void;
   t: T;
+  /** The Enterprise card's control (MOTIR-7607) — rendered for the price-less plan. */
+  contactSales: React.ReactNode;
 }) {
   const locale = useLocale();
   const isCurrent = currentKey === plan.key && status !== null && status !== 'canceled';
@@ -1673,14 +1742,7 @@ function PlanCard({
       </Button>
     );
   } else if (!plan.prices) {
-    cta = (
-      <a
-        href="mailto:sales@motir.co"
-        className={`${buttonVariants({ variant: 'secondary', size: 'sm' })} w-full`}
-      >
-        {t('plans.ctaContactSales')}
-      </a>
-    );
+    cta = contactSales;
   } else {
     const priceKey = plan.prices[cadence].priceLookupKey;
     cta = (
@@ -1791,6 +1853,126 @@ function PlanCard({
       </ul>
       <div className="mt-auto pt-1">{cta}</div>
     </div>
+  );
+}
+
+// The Enterprise card's Contact sales (Story MOTIR-7602 · Subtask MOTIR-7607;
+// design `billing--contact-sales.mock.html` panel 2). It used to be a
+// `mailto:` link, live for everyone; it is now one of four controls:
+//   (a) a manager, no open request → Contact sales, opening the request form;
+//   (b) a member (no `manageBilling`) → the same button DISABLED, its reason
+//       said under it as visible text (a disabled button takes no focus, so a
+//       tooltip would be unreachable), wired as its `aria-describedby`;
+//   (c) an open request, manager → "Request sent · {date}" on mint, opening
+//       that request read-only;
+//   (d) an open request, member → the same words as a plain line.
+// The dialog is mounted only while open, so each opening starts from the
+// state it is opened in (the form, or the open request).
+//
+// ⚠️ (b) and (d) are drawn and built, but the plans screen is reached today
+// only through manager-gated buttons (② Change plan, the CI paused decision),
+// so a member does not land here in the shipped flow. They are exported for
+// the component test that pins them, and so they hold if a member path opens.
+export function EnterpriseContactControl({
+  enterprise,
+  canManage,
+  orgName,
+  planName,
+  t,
+}: {
+  enterprise: EnterpriseContactProps;
+  canManage: boolean;
+  orgName: string;
+  planName: string | null;
+  t: T;
+}) {
+  const [open, setOpen] = useState(false);
+  const format = useFormatter();
+  const reasonId = useId();
+  const { request } = enterprise;
+  const sentLabel = request
+    ? t('contactSales.sentChip', {
+        date: format.dateTime(new Date(request.createdAt), {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          timeZone: 'UTC',
+        }),
+      })
+    : null;
+
+  let control: React.ReactNode;
+  if (request && !canManage) {
+    control = (
+      <p className="flex w-full items-center justify-center gap-1.5 rounded-(--radius-badge) bg-(--el-tint-mint) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)">
+        <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        {sentLabel}
+      </p>
+    );
+  } else if (request) {
+    control = (
+      <Button
+        variant="secondary"
+        size="sm"
+        className="w-full border-transparent bg-(--el-tint-mint) text-(--el-text-strong) hover:bg-(--el-tint-mint)"
+        aria-haspopup="dialog"
+        leftIcon={<Check className="h-4 w-4" />}
+        onClick={() => setOpen(true)}
+      >
+        {sentLabel}
+      </Button>
+    );
+  } else if (!canManage) {
+    control = (
+      <div className="flex flex-col gap-1.5">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="w-full"
+          disabled
+          aria-describedby={reasonId}
+        >
+          {t('contactSales.contact')}
+        </Button>
+        <p
+          id={reasonId}
+          className="flex items-start gap-1.5 font-sans text-[11.5px] leading-snug text-(--el-text-secondary)"
+        >
+          <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+          <span>{t('contactSales.memberReason', { org: orgName })}</span>
+        </p>
+      </div>
+    );
+  } else {
+    control = (
+      <Button
+        variant="secondary"
+        size="sm"
+        className="w-full"
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+      >
+        {t('contactSales.contact')}
+      </Button>
+    );
+  }
+
+  return (
+    <>
+      {control}
+      {open ? (
+        <ContactSalesDialog
+          open
+          onOpenChange={setOpen}
+          orgId={enterprise.orgId}
+          orgName={orgName}
+          planName={planName}
+          context={enterprise.context}
+          openRequest={request}
+          onRequestChanged={enterprise.refresh}
+        />
+      ) : null}
+    </>
   );
 }
 

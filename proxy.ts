@@ -59,14 +59,22 @@ export const CURRENT_PATH_HEADER = 'x-current-path';
 
 /**
  * The top-level URL segments that have MOVED to the public site (MOTIR-3884).
- * `''` is the root `/`. The proxy 308s these to `motir.co` (the public origin)
- * once `MOTIR_PUBLIC_SITE_URL` is configured, path and query preserved.
+ * The proxy 308s these to `motir.co` (the public origin) once
+ * `MOTIR_PUBLIC_SITE_URL` is configured, path and query preserved.
+ *
+ * ⚠️ THE ROOT `/` IS NOT ONE OF THEM (MOTIR-7819). It was — as `''` — and that
+ * sent every request for `app.motir.co/`, signed in or not, to the marketing
+ * site, so `app/page.tsx`'s two-branch contract (session → the landing, none →
+ * `/sign-in`, MOTIR-3367) never received a request in production. The landing
+ * CONTENT lives on motir.co; `app.motir.co/` is the application's entry and
+ * answers by session. A 308 is cached by browsers, so whoever already met the
+ * old redirect may keep meeting it from cache after this ships.
  *
  * `/p/*` is included. Its move to `motir.co` is MOTIR-3877's (which renders the
  * replacement), but the redirect ships here and MOTIR-3951 deletes the page from
  * this application — so `/p/*` must 308 onto the public host, not 404.
  */
-export const PUBLIC_REDIRECT_SEGMENTS = new Set(['', 'explore', 'docs', 'legal', 'p']);
+export const PUBLIC_REDIRECT_SEGMENTS = new Set(['explore', 'docs', 'legal', 'p']);
 
 /**
  * The paths under `/p/*` that stay IN THIS APPLICATION although their segment has
@@ -310,14 +318,15 @@ export async function proxy(request: NextRequest) {
   const visitor = visitorSurface(request);
   if (visitor) return visitor;
 
-  // While MOTIR_PUBLIC_SITE_URL is unset the moved surfaces are still served
-  // HERE — the root `/` runs its own session handling in `app/page.tsx` (no
-  // session → `/sign-in`, session → the landing), and the deleted pages 404. They
-  // are NOT protected routes, so forward them untouched rather than bouncing a
-  // cookie-less request to `/sign-in?next=…` (which would shadow the root's
-  // own contract and turn a deleted page's 404 into a sign-in redirect).
+  // The root `/` runs its own session handling in `app/page.tsx` (no session →
+  // `/sign-in`, session → the landing) on every deployment (MOTIR-7819), and
+  // while MOTIR_PUBLIC_SITE_URL is unset the moved surfaces are still served
+  // HERE, where their deleted pages 404. None of them is a protected route, so
+  // forward them untouched rather than bouncing a cookie-less request to
+  // `/sign-in?next=…` (which would shadow the root's own contract and turn a
+  // deleted page's 404 into a sign-in redirect).
   const segment = request.nextUrl.pathname.split('/')[1] ?? '';
-  if (PUBLIC_REDIRECT_SEGMENTS.has(segment)) {
+  if (request.nextUrl.pathname === '/' || PUBLIC_REDIRECT_SEGMENTS.has(segment)) {
     return NextResponse.next();
   }
 
@@ -402,8 +411,9 @@ export const config = {
   // `requirePlatformStaff()` with the ordinary 404. It costs nothing: that
   // layout makes the same session read every authed page already makes.
   matcher: [
-    // The MOVED public surfaces (MOTIR-3884) — the proxy runs on them to 308
-    // them onto motir.co. `/p/*` IS here: its move to motir.co was folded into
+    // The application root (MOTIR-7819) — forwarded untouched, so
+    // `app/page.tsx` answers it by session. Then the MOVED public surfaces
+    // (MOTIR-3884) — the proxy runs on them to 308 them onto motir.co. `/p/*` IS here: its move to motir.co was folded into
     // this redirect set (MOTIR-3877 renders the replacement; MOTIR-3951 deletes
     // the page here), so it must 308, not 404 — except the Visitor's consent
     // screen and views (MOTIR-6648), which the same entry reaches so that they

@@ -617,7 +617,10 @@ describe('1 · the seam: route → relay → the real chat server → a real tur
     expect(turn!.env).not.toHaveProperty('MOTIR_TERMINAL_KEY');
     expect(turnMarks()).toHaveLength(1);
 
-    // Recorded as a CHAT connection.
+    // Recorded as a CHAT connection. The relay starts that insert without awaiting
+    // it and dials straight on (`terminalRelay.ts`), so wait for the row before
+    // reading it — the same wait MOTIR-7654 gave the terminal gate (MOTIR-7813).
+    await until(async () => (await connections()).length === 1);
     expect(await connections()).toEqual([
       expect.objectContaining({
         instanceId: id,

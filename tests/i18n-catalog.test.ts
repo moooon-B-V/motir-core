@@ -210,6 +210,8 @@ const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
       'UI panel — the tenant page’s Fleet card, which shows the last stop’s reason',
     'platformAdmin.tenant.fleet.error.failedBody':
       'UI panel — the tenant page’s Fleet card, whose counts were re-read',
+    'billing.contactSales.sent.body':
+      'UI panel — the Enterprise plan card, which shows the open request (MOTIR-7607)',
   },
   zh: {
     'platformAdmin.monitoring.subtitle':
@@ -218,6 +220,8 @@ const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
       'UI panel — 此卡片 is the tenant page’s Fleet card, not a work item',
     'platformAdmin.tenant.fleet.error.failedBody':
       'UI panel — 此卡片 is the tenant page’s Fleet card, not a work item',
+    'billing.contactSales.sent.body':
+      'UI panel — Enterprise 卡片 is the plan card on Billing & plans, not a work item',
   },
 };
 

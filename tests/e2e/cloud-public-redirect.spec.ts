@@ -53,8 +53,9 @@ test('the moved public surfaces 308 off the application host', async ({
   await resetDatabase();
 
   // ── Step 6 — each moved path 308s, path and query preserved ──────────────
+  // The root `/` is NOT among them (MOTIR-7819): it is the application's entry
+  // and `app/page.tsx` answers it by session — the next chapter holds that.
   for (const [label, path, destination] of [
-    ['the landing page redirects', '/', '/'],
     ['the ranked explore view redirects', '/explore?rank=popular', '/explore?rank=popular'],
     ['an explore topic redirects', '/explore/topic/design', '/explore/topic/design'],
     ['the API guide redirects', '/docs/api/getting-started', '/docs/api/getting-started'],
@@ -68,10 +69,22 @@ test('the moved public surfaces 308 off the application host', async ({
     });
   }
 
+  // ── The application root answers by session, not with a move ──────────────
+  await chapter('the application root sends a signed-out visitor to sign-in', async () => {
+    const res = await request.get('/', { maxRedirects: 0 });
+    expect(res.status(), '/ is not a moved surface').not.toBe(308);
+    expect(new URL(res.headers()['location'] ?? '', 'http://app.local').pathname).toBe('/sign-in');
+  });
+
   // ── Step 7 — a signed-in journey is unaffected ────────────────────────────
   await chapter('signed-in surfaces do not redirect', async () => {
     await signUp(page, 'public-redirect-e2e@example.com');
     await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
     await beat();
+  });
+
+  await chapter('the application root lands a signed-in member on the workbench', async () => {
+    await page.goto('/');
+    await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
   });
 });

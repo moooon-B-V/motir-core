@@ -4613,9 +4613,22 @@ append nor approve refuses an uncovered edge, because a titles-first pass append
 children before it may have drawn every parent edge. `crossLevelEdges` is the
 "blocked elsewhere" verdict under `validate_work_item` above, asked of the
 PROJECTION: a PROPOSED cross-level edge is a `cross_level` rejection instead, so
-what it reports is a COMMITTED cross-level edge the plan leaves in place (the link
-door writes one — MOTIR-6509). `valid` is `true` only when all four lists are
-empty.
+what it reports is a COMMITTED cross-level edge (the link door writes one —
+MOTIR-6509). `valid` is `true` only when all four lists are empty.
+
+**Both edge lists hold only the findings the PLAN introduces (MOTIR-7727).** The
+projection holds every edge anyone ever drew in the project, so judging all of
+them made one old bad edge anywhere turn every plan on the project
+`valid: false`, with no blocker and no rejection to act on. An edge is the
+plan's when the plan touches either end, or an ancestor of either end (the chain
+both rules read): an `add`, a `modify` carrying `parentRef`, `blockedByAdd` or
+`blockedByRemove` (a title- or body-only `modify` touches no edge), or a
+`remove` — including the removed parent of an end, which the projected chain can
+no longer show. So a `blockedByRemove` on a parent that uncovers a child edge
+still reports that child edge, and re-wiring one end of an old bad edge makes it
+this plan's to fix. An old edge the plan touches nothing of is reported by
+`validate_work_item` without a `planId`, unchanged. The same narrowing applies to
+`validate_work_item` with a `planId`.
 
 ```jsonc
 validate_plan({ planId })
@@ -4665,7 +4678,10 @@ committed tree:
 - **`validate_work_item({ key, planId })`** — is this SUBTREE finishable once the
   plan materializes? `key` may be a committed identifier (`"ACME-7"`) **or** a
   `planItem:<id>` temp-ref naming an `add` in that plan, which is the case an
-  authoring agent usually has: the card it wants to check has no key yet.
+  authoring agent usually has: the card it wants to check has no key yet. Its
+  `invalidEdges` and `crossLevelEdges` hold only the findings the plan introduces
+  (MOTIR-7727, under `validate_plan` above); the committed call, without
+  `planId`, still reports every edge in the subtree.
 - **`validate_sprint({ planId })`** — will the project's ACTIVE sprint still be
   finishable once the plan materializes? On this path the plan names its own
   project, so `projectKey` is not required; `sprintId` is **refused** rather than

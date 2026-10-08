@@ -374,11 +374,16 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
   ];
 
   /**
-   * The callers that DO opt in, and the only two allowed to. `app/tokens` is the
-   * specimen MOTIR-6237 added so the variant is visible at all; the planning
-   * composer is MOTIR-6238, the surface the opt-in was built for.
+   * The callers that DO opt in, and the only ones allowed to. `app/tokens` is
+   * the specimen MOTIR-6237 added so the variant is visible at all; the planning
+   * composer is MOTIR-6238, the surface the opt-in was built for; the Contact
+   * sales note (MOTIR-7607) grows from 3 rows, per design billing § Contact sales.
    */
-  const OPTED_IN = ['app/tokens/page.tsx', 'components/planning/PlanChangeComposer.tsx'];
+  const OPTED_IN = [
+    'app/(authed)/settings/organization/billing/_components/ContactSalesDialog.tsx',
+    'app/tokens/page.tsx',
+    'components/planning/PlanChangeComposer.tsx',
+  ];
 
   const callers = () =>
     sources('app', 'components').filter((p) =>
@@ -396,7 +401,7 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
     );
   });
 
-  it('both OPTED_IN callers really do opt in — the list cannot rot into a comment', () => {
+  it('every OPTED_IN caller really does opt in — the list cannot rot into a comment', () => {
     // The mirror assertion, so a caller that stops using `autoGrow` (or is
     // deleted) has to be taken off the list rather than left standing as a claim
     // nothing checks.

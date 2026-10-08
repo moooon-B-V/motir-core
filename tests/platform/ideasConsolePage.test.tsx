@@ -170,6 +170,34 @@ describe('the list', () => {
     spy.mockRestore();
   });
 
+  it('does not show the error card until the tag read has finished too (MOTIR-7795)', async () => {
+    await seedStore();
+    await signInAs('support');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The list read rejects at once on a cursor this API never issued; the tag
+    // read is slowed here so it is still running at that moment, which is the
+    // window a slow CI runner opens by chance. The page must wait for it rather
+    // than return while its own query is still working on the database.
+    const listTags = ideasAdminService.listTags.bind(ideasAdminService);
+    let tagReadSettled = false;
+    const tagSpy = vi.spyOn(ideasAdminService, 'listTags').mockImplementation(async (actor) => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      try {
+        return await listTags(actor);
+      } finally {
+        tagReadSettled = true;
+      }
+    });
+    try {
+      const html = await list({ cursor: 'not-a-cursor-this-api-issued' });
+      expect(html).toContain('Couldn’t load the ideas');
+      expect(tagReadSettled).toBe(true);
+    } finally {
+      tagSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
   it('pages past fifty with Next page, and offers the first page back', async () => {
     const operator = await staffActor('operator', { kind: 'session' }, 'pager');
     for (let batch = 0; batch < 3; batch += 1) {

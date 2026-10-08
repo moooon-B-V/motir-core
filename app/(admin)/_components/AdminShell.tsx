@@ -9,6 +9,7 @@ import {
   Bot,
   Building2,
   Coins,
+  Inbox,
   Lightbulb,
   LogOut,
   ScrollText,
@@ -53,6 +54,8 @@ export interface AdminShellLabels {
   navUsage: string;
   navTenants: string;
   navUsers: string;
+  /** Platform → Enterprise requests (MOTIR-7609), visible to every staff role. */
+  navEnterpriseRequests: string;
   navMonitoring: string;
   /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
   navAiPlanning: string;
@@ -140,6 +143,18 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           label: labels.navUsers,
           href: '/admin/users',
           active: pathname.startsWith('/admin/users'),
+        },
+        // The requests orgs send from the Enterprise card's Contact sales
+        // (MOTIR-7609, design `platform-admin` § Enterprise requests, MOTIR-7604):
+        // the LAST Platform row, after Users — it is a view of the estate's
+        // customers, the family it links into. Every staff role reads it; the
+        // moves on a request's detail are the operator's. `startsWith` so a
+        // request's detail keeps it lit.
+        {
+          icon: <Inbox />,
+          label: labels.navEnterpriseRequests,
+          href: '/admin/enterprise-requests',
+          active: pathname.startsWith('/admin/enterprise-requests'),
         },
       ],
     },

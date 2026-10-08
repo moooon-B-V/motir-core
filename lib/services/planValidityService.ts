@@ -449,6 +449,55 @@ async function projectedCoverageAdvisories(
 }
 
 /**
+ * Which projected edges does the PLAN own (MOTIR-7727)? The edge findings
+ * below — `invalidEdges` and `crossLevelEdges` — judge the tree the plan would
+ * leave, and that tree holds every edge anyone ever drew in the project. A plan
+ * validation answers *"is this PLAN sound?"*, so it reports only the findings
+ * the plan could have caused; the committed `validate_work_item` (no `planId`)
+ * still reports the whole subtree's edges, untouched.
+ *
+ * Ownership is the TOUCHED SET T:
+ * - every `add` (its temp-ref);
+ * - every `modify` whose patch carries an EDGE key — `parentRef`,
+ *   `blockedByAdd` or `blockedByRemove`. The patch KEYS are read, not the mere
+ *   presence of a patch: a title- or body-only `modify` moves no edge;
+ * - every `remove` target.
+ *
+ * An edge `item → blocker` is OWNED when T holds either end, or any node in
+ * either end's projected ancestor chain — the chain both edge rules read (the
+ * coverage test asks the parents up to the common one; the level test reads
+ * depth). A removed parent is the one link the projected chain cannot show (the
+ * node is gone from `proj.nodes`, its child's `parentId` still names it), so the
+ * walk checks T BEFORE it looks the node up: a `remove` that uncovers a child
+ * edge makes that edge the plan's. Likewise a `blockedByRemove` on parent B puts
+ * B in T, and B sits in the chain of every child edge it covered.
+ *
+ * Chosen over *"projected findings minus the committed-only findings"* (the
+ * other shape the card allowed): a diff keyed by `(item, blockedBy)` hides a
+ * still-bad edge whose endpoint the plan re-wired, which this predicate reports.
+ */
+function planOwnsEdge(proj: Projection): (blockedId: string, blockerId: string) => boolean {
+  const touched = new Set<string>(proj.proposalByRef.keys());
+  for (const [id, patch] of proj.patchByWorkItemId) {
+    if (EDGE_PATCH_KEYS.some((k) => k in patch)) touched.add(id);
+  }
+  for (const id of proj.removedIds) touched.add(id);
+  const reaches = (id: string): boolean => {
+    const seen = new Set<string>();
+    for (let cur: string | null = id; cur !== null && !seen.has(cur); ) {
+      if (touched.has(cur)) return true;
+      seen.add(cur);
+      cur = proj.nodes.get(cur)?.parentId ?? null;
+    }
+    return false;
+  };
+  return (blockedId, blockerId) => reaches(blockedId) || reaches(blockerId);
+}
+
+/** The `modify` patch keys that move an edge or a position (MOTIR-7727). */
+const EDGE_PATCH_KEYS = ['parentRef', 'blockedByAdd', 'blockedByRemove'] as const;
+
+/**
  * The UNCOVERED CROSS-PARENT edges over a projection (Story MOTIR-6015 ·
  * MOTIR-6370) — the committed walk's twin (`workItemsService`'s
  * `computeInvalidEdges`), asked of the tree the plan would leave: proposed
@@ -460,14 +509,24 @@ async function projectedCoverageAdvisories(
  * A carried-in cross-project blocker has no projected parent, so its edge is
  * exempt — there is no parent edge the plan could be asked for. A proposal is
  * named by its temp-ref, as everywhere else in this service.
+ *
+ * Only edges the plan OWNS are judged (`owns`, {@link planOwnsEdge}): the
+ * parents' edges the coverage test reads are still the whole projection's, so
+ * an owned edge is covered exactly as it would be after approve.
  */
-function projectedInvalidEdges(proj: Projection, memberIds: ReadonlySet<string>): InvalidEdgeDto[] {
+function projectedInvalidEdges(
+  proj: Projection,
+  memberIds: ReadonlySet<string>,
+  owns: (blockedId: string, blockerId: string) => boolean,
+): InvalidEdgeDto[] {
   const edges: CoverageEdge[] = [];
   for (const memberId of memberIds) {
     const member = proj.nodes.get(memberId)!;
     if (isDone(proj, member)) continue;
     for (const blockerId of proj.blockedBy.get(memberId) ?? []) {
-      if (proj.nodes.has(blockerId)) edges.push({ blockedId: memberId, blockerId });
+      if (proj.nodes.has(blockerId) && owns(memberId, blockerId)) {
+        edges.push({ blockedId: memberId, blockerId });
+      }
     }
   }
   const node = (id: string) => proj.nodes.get(id);
@@ -508,7 +567,10 @@ function projectedInvalidEdges(proj: Projection, memberIds: ReadonlySet<string>)
  * committed walk's twin (`workItemsService`'s `computeCrossLevelEdges`), asked of
  * the tree the plan would leave. A PROPOSED cross-level edge never gets here (the
  * append refuses it, `INVALID_PLAN_REF_GRAPH` / `cross_level`), so what this
- * reports is a COMMITTED edge the plan leaves in place.
+ * reports is a COMMITTED edge the plan OWNS (MOTIR-7727, {@link planOwnsEdge}):
+ * one whose end, or an ancestor of an end, the plan re-wires, re-parents or
+ * removes. A committed edge the plan touches nothing of is left to the committed
+ * `validate_work_item`, which still reports it.
  *
  * ⚠️ An edge to a blocker in ANOTHER project is not judged here. The projection
  * carries such a blocker in without its ancestors (`parentId: null`), so its
@@ -518,13 +580,14 @@ function projectedInvalidEdges(proj: Projection, memberIds: ReadonlySet<string>)
 function projectedCrossLevelEdges(
   proj: Projection,
   memberIds: ReadonlySet<string>,
+  owns: (blockedId: string, blockerId: string) => boolean,
 ): CrossLevelEdgeDto[] {
   const edges: Array<{ blockedId: string; blockerId: string }> = [];
   for (const memberId of memberIds) {
     const member = proj.nodes.get(memberId)!;
     if (isDone(proj, member)) continue;
     for (const blockerId of proj.blockedBy.get(memberId) ?? []) {
-      if (proj.nodes.get(blockerId)?.projectId === member.projectId) {
+      if (proj.nodes.get(blockerId)?.projectId === member.projectId && owns(memberId, blockerId)) {
         edges.push({ blockedId: memberId, blockerId });
       }
     }
@@ -617,8 +680,11 @@ export const planValidityService = {
     // Prose families first, then COVERAGE — the committed verdict's order.
     const prose = await projectedProseAdvisories(proj, memberIds, ctx);
     const coverage = await projectedCoverageAdvisories(proj, memberIds, ctx);
-    const invalidEdges = projectedInvalidEdges(proj, memberIds);
-    const crossLevelEdges = projectedCrossLevelEdges(proj, memberIds);
+    // Only the edge findings this PLAN owns (MOTIR-7727) — an old bad edge in
+    // the subtree is the committed verdict's to report, not the plan's.
+    const owns = planOwnsEdge(proj);
+    const invalidEdges = projectedInvalidEdges(proj, memberIds, owns);
+    const crossLevelEdges = projectedCrossLevelEdges(proj, memberIds, owns);
     return {
       key: root.identifier,
       valid: blockers.length === 0 && invalidEdges.length === 0 && crossLevelEdges.length === 0,
@@ -730,10 +796,14 @@ export const planValidityService = {
     // parents do not carry. A validation verdict only — neither the append nor
     // approve refuses on it, because a titles-first pass appends children before
     // it may have drawn every parent edge.
-    const invalidEdges = projectedInvalidEdges(proj, memberIds);
-    // THE FOURTH (MOTIR-6509): a committed edge the plan leaves in place that
-    // joins two levels — the same verdict `validate_work_item` gives it.
-    const crossLevelEdges = projectedCrossLevelEdges(proj, memberIds);
+    // THE FOURTH (MOTIR-6509): a committed edge that joins two levels — the same
+    // verdict `validate_work_item` gives it.
+    // BOTH narrowed to the edges this plan OWNS (MOTIR-7727): S above is the
+    // whole project, so without it one old bad edge anywhere made every plan on
+    // the project read `valid: false` with no blocker and no rejection.
+    const owns = planOwnsEdge(proj);
+    const invalidEdges = projectedInvalidEdges(proj, memberIds, owns);
+    const crossLevelEdges = projectedCrossLevelEdges(proj, memberIds, owns);
     return {
       planId,
       // Every half, so a caller reading only `valid` cannot get a false green —

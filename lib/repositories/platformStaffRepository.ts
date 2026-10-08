@@ -34,4 +34,18 @@ export const platformStaffRepository = {
       select: { id: true, email: true, platformRole: true },
     });
   },
+
+  /**
+   * Every platform staff member a staff notice can reach — any `platformRole`
+   * (support reads Enterprise requests too) with a VERIFIED email. Selects only
+   * what an email needs: who to address, and which id keys its idempotency.
+   * Ordered by id so the fan-out is deterministic.
+   */
+  async listStaffRecipients(): Promise<Array<{ id: string; email: string }>> {
+    return db.user.findMany({
+      where: { platformRole: { not: null }, emailVerified: true },
+      select: { id: true, email: true },
+      orderBy: { id: 'asc' },
+    });
+  },
 };

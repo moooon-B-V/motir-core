@@ -55,6 +55,7 @@
     "coverage:session-lifecycle": "vitest run --config vitest.coverage.session-lifecycle.config.ts --coverage",
     "coverage:plan-something-new": "vitest run --config vitest.coverage.plan-something-new.config.ts --coverage",
     "coverage:to-resume": "vitest run --config vitest.coverage.to-resume.config.ts --coverage",
+    "coverage:enterprise-requests": "vitest run --config vitest.coverage.enterprise-requests.config.ts --coverage",
     "test:guards": "vitest run --config vitest.guards.config.ts",
     "test:docs-guards": "vitest run --config vitest.docs.config.ts",
     "test:watch": "vitest",
