@@ -61,6 +61,12 @@
     "playwright.acceptance.config.ts",
     "playwright.cloud.config.ts"
   ],
+  // One module from the design system, by source: `acceptance-font-sets.spec.ts`
+  // reads the font-set registry at run time, and the package's `exports` offer
+  // only an ESM `import` condition, which Playwright's CommonJS loader cannot
+  // resolve. The module imports nothing, so it brings no closure with it.
+  // (`files` is not filtered by `exclude`.)
+  "files": ["packages/design-system/src/theme/fontSets.ts"],
   "exclude": ["node_modules", "packages", ".tsout"],
   // The app for `@/lib/…`, and the tests project for everything under `tests/`
   // — every helper, seed, reporter and global hook a spec or a config imports
