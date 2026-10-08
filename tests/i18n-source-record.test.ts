@@ -30,7 +30,7 @@ const ROOT = process.cwd();
 
 /** Catalogues allowed to have no source record. Asserted TIGHT: a listed locale
  *  that gains a record fails. */
-const UNTRACKED_LOCALES: string[] = ['zh'];
+const UNTRACKED_LOCALES: string[] = [];
 
 const isCatalogue = (f: string) => /^[a-z]{2,3}(-[A-Za-z0-9]+)?\.json$/.test(f) && f !== 'en.json';
 
