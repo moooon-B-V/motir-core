@@ -30,6 +30,7 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 export type WorkbenchTab =
   | 'todo'
+  | 'planning'
   | 'in-progress'
   | 'to-fix'
   | 'to-resume'
@@ -39,17 +40,38 @@ export type WorkbenchTab =
 
 /**
  * Every tab, in strip order — the DESIGN's order (`design-notes.md` § 21,
- * MOTIR-5216): what is waiting on you, what is moving, what to start, what just
- * landed, what you follow.
+ * MOTIR-5216, as amended by § 36.2, MOTIR-7823): what is waiting on you, what is
+ * being WRITTEN for you, what is waiting to be repaired or resumed, what is
+ * moving, what to start, what just landed, what you follow.
  *
- * ⚠️ The order says NOTHING about which tab a bare `/workbench` shows. Nothing
- * reads the first member as a default: `BY_PARAM` is built order-independently,
- * and what a paramless request gets is the landing cascade's decision
- * (`lib/workbench/landing.ts`). The first three are that cascade's rungs, which
- * is why the strip reads as an explanation of where the reader just landed.
+ * ⚠️ THE STRIP ORDER IS NO LONGER THE CASCADE ORDER, and this comment used to say
+ * it was. § 30 Panel 1's *"the first four tabs are the four rungs"* and § 35.3's
+ * *"one order for the strip and the cascade"* are **false with Planning second**,
+ * and § 36.2 replaces both on the record:
+ *
+ *   > The cascade's rungs are tabs 1, 3, 4, 5 and 6 — Waiting on you → To fix →
+ *   > To resume → In progress → To do — in the strip's order. **Planning (tab 2)
+ *   > is never a rung.** The strip still explains where a reader landed, read
+ *   > with Planning skipped.
+ *
+ * ⚠️ PLANNING IS DELIBERATELY NOT A RUNG (§ 36.2). A plan being written needs
+ * nothing from the reader; the moment it does — it is proposed — it is a review,
+ * and reviews are on the first tab, which is already the first rung. So a bare
+ * `/workbench` never lands here, even when `planning` is the only non-zero count,
+ * and `lib/workbench/landing.ts` reads no `planning` count at all (its
+ * `LandingCounts` is a `Pick` that leaves it out). `planning` rides
+ * `HomeTabCountsDto` only because the strip renders every chip from that one DTO.
+ *
+ * ⚠️ The order still says NOTHING about which tab a bare `/workbench` shows.
+ * Nothing reads the first member as a default: `BY_PARAM` is built
+ * order-independently, and what a paramless request gets is the landing
+ * cascade's decision.
  */
 export const WORKBENCH_TABS: readonly WorkbenchTab[] = [
   'approvals',
+  // PLANNING (MOTIR-7831; design § 36.2) — second, and never a rung: tab 1 is what
+  // is waiting on you, tab 2 is what will arrive on tab 1 once it is written.
+  'planning',
   // TO FIX (MOTIR-6604; design § 30) — second, amending § 21's strip: what is
   // waiting on you to DECIDE, then what is waiting on you to REPAIR.
   'to-fix',
@@ -69,6 +91,8 @@ export const WORKBENCH_TABS: readonly WorkbenchTab[] = [
  */
 const TAB_PARAM: Readonly<Record<WorkbenchTab, string>> = {
   approvals: 'approvals',
+  // Slug and label are the same word, as To fix's are (§ 36.2).
+  planning: 'planning',
   'in-progress': 'in-progress',
   'to-fix': 'to-fix',
   'to-resume': 'to-resume',

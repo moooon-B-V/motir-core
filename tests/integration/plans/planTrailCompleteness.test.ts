@@ -200,8 +200,27 @@ describe('no plan mutation escapes the trail', () => {
       expect(handler).toContain(`.${act}(`);
     }
 
+    // ⚠️ A PLANNER'S IN-FLIGHT STEP IS NOT A PLAN CHANGE (Story MOTIR-7820 · MOTIR-7822,
+    // MOTIR-7824). `recordPlanStep` / `endPlanStep` (and `reportPlanStep`, the one dispatch
+    // both step doors make) take the plan row's lock and stamp `lastActivityAt`, so they
+    // derive as mutations — but they write only the ephemeral `plan_step` row saying which
+    // step a running session is on, which the read drops the moment the plan leaves
+    // `generating`. Nothing about what the plan PROPOSES changes, and a trail row per step
+    // would bury the plan's real history under hundreds of "started drafting X" entries.
+    // Named here so the exemption is a decision on the record; a stale entry fails below.
+    const NOT_A_PLAN_CHANGE = new Set(['recordPlanStep', 'endPlanStep', 'reportPlanStep']);
+    for (const name of NOT_A_PLAN_CHANGE) {
+      expect(mutations, `${name} is no longer a derived mutation`).toContain(name);
+      expect(
+        reaches(name, bodies).has('upsertForSession') ||
+          reaches(name, bodies).has('deleteForSession'),
+        `${name} no longer writes a plan step`,
+      ).toBe(true);
+    }
+
     const untracked = mutations.filter(
       (name) =>
+        !NOT_A_PLAN_CHANGE.has(name) &&
         !reaches(name, bodies).has('recordRevision') &&
         !(name in PHASE_OF && reaches(PHASE_OF[name]!, bodies).has('recordRevision')),
     );

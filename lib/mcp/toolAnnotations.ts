@@ -247,6 +247,13 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // W: authorPlan.ts → plansService.recordPlanStep / endPlanStep — upserts one row per session (a repeat replaces it; `end` on no row is a no-op)
+  report_plan_step: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   // W: planSession.ts → planChangeSessionsService.openPublic — may create a session; re-acquires target locks (parks cards, extends the lease)
   open_plan_session: {
     readOnlyHint: false,

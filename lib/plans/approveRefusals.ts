@@ -260,6 +260,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       "The re-plan classification door's refusal (MOTIR-5543) — a branch outside the four, missing or oversized evidence, a branch-vs-bug disagreement, or a key naming something that is not a `bug` in the plan's own project. It records WHY a reviewer asked for a change on an UNAPPROVED plan; approve is the act that ends that window, and it classifies nothing.",
   },
+  PLAN_STEP_INVALID: {
+    cause: 'not-approve',
+    justification:
+      "The step doors' refusal of a planner step it cannot record (MOTIR-7822) — a target on `settle` / `end`, a ref naming nothing on this plan or in its project, a bad session key. It records which step a session of a GENERATING plan is on; approve acts on a `planned` plan and records no step.",
+  },
 } as const;
 
 /** The refusal ids the CLOSE must also raise — the card's invariant, as a set. */

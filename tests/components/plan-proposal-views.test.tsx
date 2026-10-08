@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import { PLAN_STALLED_AFTER_MS, type PlanProgressSnapshot } from '@/lib/plans/planProgress';
 
 // MOTIR-6185 — `PlanProposalViews`, the plan page's List | Canvas pane lifted into
 // ONE component two hosts mount.
@@ -28,15 +29,19 @@ vi.mock('@/components/planning/PlanReviewCanvas', () => ({
     outcome,
     ariaLabel,
     live,
+    liveSteps,
   }: {
     outcome: string | null;
     ariaLabel: string;
     live?: boolean;
+    liveSteps?: readonly { targetNodeId: string | null }[] | null;
   }) => (
     <div
       data-testid="plan-review-canvas"
       data-outcome={outcome ?? 'none'}
       data-live={String(live ?? false)}
+      // What the cue layer is handed (MOTIR-7830): the live steps' targets.
+      data-cue-targets={(liveSteps ?? []).map((st) => st.targetNodeId ?? '-').join(',')}
       aria-label={ariaLabel}
     />
   ),
@@ -227,5 +232,159 @@ describe('PlanProposalViews — live is off by default (the plan page is unchang
     expect(screen.getByTestId('plan-live-state').textContent).toBe('Being written');
     expect(screen.getByTestId('host-band')).toBeTruthy();
     expect(screen.queryByTestId('plan-live-discarded')).toBeNull();
+  });
+});
+
+// MOTIR-7829 — the PROGRESS LINE in the pane header (design Part XXV §25.2). It
+// renders on `progress`, never on `live`: the plan page passes no `live` and
+// must still show the plan being written.
+describe('PlanProposalViews — the progress line', () => {
+  const T0 = Date.parse('2026-10-08T14:00:00.000Z');
+  const progress: PlanProgressSnapshot = {
+    startedAt: new Date(T0 - 4 * 60_000).toISOString(),
+    lastActivityAt: new Date(T0 - 10_000).toISOString(),
+    observedAt: new Date(T0).toISOString(),
+    authored: 1,
+    proposed: 5,
+    steps: [
+      {
+        sessionKey: 's1',
+        kind: 'author',
+        phrase: 'authoring',
+        targetRef: 'planItem:pi_1',
+        targetNodeId: 'pi_1',
+        targetTitle: 'Invoice export',
+        startedAt: new Date(T0 - 60_000).toISOString(),
+      },
+    ],
+  };
+
+  it('renders the line in the HEADER with live={false} (the plan page)', () => {
+    mount({ progress });
+    const header = screen.getByRole('group', { name: 'Plan view' }).parentElement!;
+    expect(within(header).getByTestId('plan-progress')).toBeTruthy();
+    expect(within(header).getByTestId('plan-progress-steps').textContent).toBe(
+      'Authoring: Invoice export',
+    );
+    expect(within(header).getByTestId('plan-progress-pointer')).toBeTruthy();
+    // The marker comes with the line — its word carries the state (§25.1).
+    expect(within(header).getByTestId('plan-live-state').textContent).toBe('Being written');
+    // The canvas stays still: the motion layer is `live`'s, not `progress`'s.
+    expect(screen.getByTestId('plan-review-canvas').getAttribute('data-live')).toBe('false');
+    expect(screen.queryByTestId('plan-live-announce')).toBeNull();
+  });
+
+  it('renders no line when progress is null (the hand-over), and the switcher is unchanged', () => {
+    mount({ progress: null });
+    expect(screen.queryByTestId('plan-progress')).toBeNull();
+    expect(screen.queryByTestId('plan-progress-pointer')).toBeNull();
+    expect(screen.queryByTestId('plan-live-state')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Plan view' })).toBeTruthy();
+  });
+
+  it('with live and progress, ONE marker in the shipped slot — same testid, role and word', () => {
+    mount({ live: true, progress });
+    const markers = screen.getAllByTestId('plan-live-state');
+    expect(markers).toHaveLength(1);
+    expect(markers[0]!.getAttribute('role')).toBe('status');
+    expect(markers[0]!.className).toContain('ml-auto');
+    expect(markers[0]!.textContent).toBe('Being written');
+    expect(screen.getByTestId('plan-live-announce')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Canvas/ }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+  });
+
+  it('progressFailing turns the marker to Reconnecting', () => {
+    mount({ live: true, progress, progressFailing: true });
+    expect(screen.getByTestId('plan-live-state').textContent).toBe(
+      'Reconnecting — showing the last update',
+    );
+  });
+
+  it('live without progress keeps the shipped marker exactly as before', () => {
+    mount({ live: true, liveFailing: true });
+    expect(screen.getByTestId('plan-live-state').textContent).toBe(
+      'Reconnecting — showing the last update',
+    );
+    expect(screen.queryByTestId('plan-progress')).toBeNull();
+  });
+});
+
+// MOTIR-7830 — the canvas cues read the SAME clock as the line: `PlanProposalViews`
+// hands `PlanReviewCanvas` the hook's `liveSteps`, on `progress`, never on `live`.
+describe('PlanProposalViews — the canvas cues read the one clock', () => {
+  const T0 = Date.parse('2026-10-08T14:00:00.000Z');
+  const progress: PlanProgressSnapshot = {
+    startedAt: new Date(T0 - 20 * 60_000).toISOString(),
+    lastActivityAt: new Date(T0 - 14 * 60_000).toISOString(),
+    observedAt: new Date(T0).toISOString(),
+    authored: 1,
+    proposed: 2,
+    steps: [
+      {
+        sessionKey: 's1',
+        kind: 'author',
+        phrase: 'authoring',
+        targetRef: 'planItem:pi_1',
+        targetNodeId: 'pi_1',
+        targetTitle: 'Invoice export',
+        startedAt: new Date(T0 - 14 * 60_000).toISOString(),
+      },
+    ],
+  };
+  const targets = () => screen.getByTestId('plan-review-canvas').getAttribute('data-cue-targets');
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('with live={false} (the plan page) the canvas is handed the drafting step', () => {
+    mount({ progress });
+    expect(targets()).toBe('pi_1');
+  });
+
+  it('past PLAN_STALLED_AFTER_MS with no new snapshot every cue leaves', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    vi.setSystemTime(T0);
+    mount({ progress });
+    expect(targets()).toBe('pi_1');
+    act(() => {
+      vi.advanceTimersByTime(PLAN_STALLED_AFTER_MS);
+    });
+    expect(targets()).toBe('');
+    expect(screen.getByTestId('plan-live-state').textContent).toBe('Stalled');
+  });
+
+  it('with progressFailing the same advance HOLDS the cues', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    vi.setSystemTime(T0);
+    mount({ progress, progressFailing: true });
+    act(() => {
+      vi.advanceTimersByTime(PLAN_STALLED_AFTER_MS);
+    });
+    expect(targets()).toBe('pi_1');
+  });
+
+  it('progress: null (the hand-over) removes every cue and leaves the canvas and the live marker as they were', () => {
+    const { rerender } = mount({ live: true, progress });
+    expect(targets()).toBe('pi_1');
+    rerender(
+      <PlanProposalViews
+        items={items}
+        outcome={null}
+        projectKey="MOTIR"
+        version={0}
+        ariaLabel="Proposed plan"
+        view="canvas"
+        onViewChange={() => {}}
+        live
+        progress={null}
+      />,
+    );
+    expect(targets()).toBe('');
+    expect(screen.getByTestId('plan-review-canvas').getAttribute('data-live')).toBe('true');
+    expect(screen.getByTestId('plan-live-state').textContent).toBe('Being written');
+    expect(screen.queryByTestId('plan-progress')).toBeNull();
   });
 });

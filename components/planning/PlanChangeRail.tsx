@@ -319,6 +319,8 @@ export function PlanChangeRail({
   const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
   const ts = useTranslations('planningWorkspace.session');
+  // The Planning tab's own copy (§ 36.13) — its reopened line, nothing else.
+  const tWorkbenchPlanning = useTranslations('workbench.planning');
   const tr = useTranslations('planningWorkspace.restart');
   const format = useFormatter();
   const [draft, setDraft] = useState(initialDraft ?? '');
@@ -551,7 +553,24 @@ export function PlanChangeRail({
             reopened from the Plans page says where it came from; a FRESH start
             with an earlier conversation for this scope points to it — until this
             conversation has a turn, when the rail is about it instead. */}
-        {state.reopened && launch.via === 'approvals' ? (
+        {state.reopened && launch.via === 'planning' ? (
+          // REOPENED FROM PLANNING (MOTIR-7831; design `design/workbench/design-notes.md`
+          // § 36.6): the Planning tab's row carries `planVia=planning`, so this line names
+          // that entrance. Only the plan's own requester reaches that tab, so there is one
+          // form and no *started by {name}* twin; the glyph is the tab's `PenLine`, in the
+          // slot the `approvals` line gives `Inbox`.
+          <p
+            data-testid="planning-reopened-from-planning"
+            className="flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+          >
+            <PenLine className="mt-px size-3.5 flex-none" aria-hidden />
+            <span>
+              {tWorkbenchPlanning('reopened', {
+                when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+              })}
+            </span>
+          </p>
+        ) : state.reopened && launch.via === 'approvals' ? (
           // REOPENED FROM TO APPROVE (MOTIR-6037; design Part XXII §22.2, §22.5): the
           // row's address carries `planVia=approvals`, so this line names the entrance
           // the reader actually used — MOTIR-6019's shape, its own glyph.

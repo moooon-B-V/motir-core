@@ -11,6 +11,9 @@ import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { addedProposalIds, newlyAddedCount } from '@/lib/planning/livePane';
+import { PlanProgressLineView } from '@/components/planning/PlanProgressLine';
+import { usePlanProgressReading } from '@/lib/hooks/usePlanProgressReading';
+import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
 
 // The plan page's List | Canvas pane, as ONE component two hosts mount
 // (Subtask MOTIR-6185 · Story MOTIR-6155).
@@ -125,6 +128,22 @@ export interface PlanProposalViewsProps {
    *  surface opts in to the *"Plan is in … · Go there"* offer when the plan sits
    *  beside the reader's level. The plan page passes nothing and is unchanged. */
   offerPlanElsewhere?: boolean;
+  /**
+   * The plan's PROGRESS while it is being written (Story MOTIR-7820 · MOTIR-7829;
+   * design Part XXV §25.2) — the review's own `progress`, NON-NULL EXACTLY while
+   * the plan is `generating`. It mounts the progress line in this header, and it
+   * renders on `progress`, NOT on `live`: the plan page passes no `live` and
+   * must still show the line. It leaves at the hand-over because `progress`
+   * turns `null` once the plan is not `generating`.
+   *
+   * While it is present the line OWNS the header's marker (§25.1: the marker's
+   * WORD carries the state — Starting… · Being written · Stalled ·
+   * Reconnecting), so the shipped `live` marker is not drawn twice.
+   */
+  progress?: PlanProgressSnapshot | null;
+  /** The poll's `failing` (§25.10): the line holds the last snapshot and the
+   *  marker says *Reconnecting*. */
+  progressFailing?: boolean;
 }
 
 export function PlanProposalViews({
@@ -147,8 +166,13 @@ export function PlanProposalViews({
   liveFailing = false,
   discarded = false,
   offerPlanElsewhere = false,
+  progress = null,
+  progressFailing = false,
 }: PlanProposalViewsProps) {
   const t = useTranslations('planReview');
+  // THE ONE CLOCK (MOTIR-7829): read once here, so the line and anything else
+  // this pane draws from the steps read the same instant.
+  const progressReading = usePlanProgressReading(progress, { failing: progressFailing });
   const showingList = view === 'list';
   const announcement = useBatchAnnouncement(items, live);
   const canvas = (
@@ -166,6 +190,10 @@ export function PlanProposalViews({
       onLevelChange={onCanvasLevelChange}
       live={live}
       offerPlanElsewhere={offerPlanElsewhere}
+      // THE CUES (MOTIR-7830) — the line's own clock's live steps, so the words
+      // and the canvas stop naming a step at the same instant. A dropped read
+      // holds them because the hook does. The List gets no cue (§25.18).
+      liveSteps={progressReading?.liveSteps ?? null}
     />
   );
   // THE DISCARDED BAND (§23.12) — the band idiom (`--el-surface-soft` +
@@ -192,7 +220,9 @@ export function PlanProposalViews({
           (Part VIII reserved this bar's right end for Part IX's Show-changes
           control; Part IX RELEASED it and put that control in the canvas's own
           cluster, so the bar holds the switcher alone.) */}
-      <div className="flex h-11 shrink-0 items-center border-b border-(--el-border) bg-(--el-surface) px-(--spacing-control-x)">
+      {/* `@container`: the progress line drops its parts on the HEADER's width
+          (§25.2), never the viewport's. */}
+      <div className="@container flex h-11 shrink-0 items-center border-b border-(--el-border) bg-(--el-surface) px-(--spacing-control-x)">
         <Segmented<PlanViewDto>
           label={t('viewSwitchAria')}
           value={view}
@@ -210,7 +240,15 @@ export function PlanProposalViews({
             word, STATIC (a permanent loop here is the attention sink the running
             edge warns about). `role="status"`, so *Being written → Reconnecting*
             is heard once. It leaves at the hand-over. */}
-        {live ? (
+        {/* THE PROGRESS LINE (§25.2) — marker · progress · pointer, while the
+            plan is being written. It carries the marker itself. */}
+        {progressReading ? (
+          <PlanProgressLineView
+            reading={progressReading}
+            failing={progressFailing}
+            density="pane"
+          />
+        ) : live ? (
           <span
             data-testid="plan-live-state"
             role="status"

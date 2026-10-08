@@ -192,13 +192,17 @@ export function PlanDetail({
   // itself is the shared one (MOTIR-6295); this island only files each snapshot
   // into its own state, exactly as `refetch` does. Not `immediate`: the island is
   // seeded from the server read, so the first re-read waits a full interval.
-  useGeneratingPlanPoll(review.status === 'generating' ? planId : null, {
-    immediate: false,
-    onSnapshot: (fresh) => {
-      setReview(fresh);
-      setVersion((v) => v + 1);
+  // Its `failing` feeds the progress line's dropped-read row (MOTIR-7829, §25.10).
+  const { failing: liveFailing } = useGeneratingPlanPoll(
+    review.status === 'generating' ? planId : null,
+    {
+      immediate: false,
+      onSnapshot: (fresh) => {
+        setReview(fresh);
+        setVersion((v) => v + 1);
+      },
     },
-  });
+  );
 
   const onRevise = useCallback(
     async (prompt: string) => {
@@ -468,6 +472,10 @@ export function PlanDetail({
             ariaLabel={ariaLabel ?? t('canvasAria')}
             view={view}
             onViewChange={onViewChange}
+            // The progress line (MOTIR-7829) — on `progress`, never on `live`:
+            // this page passes no `live` and still shows the plan being written.
+            progress={review.progress ?? null}
+            progressFailing={liveFailing}
             band={
               repositorySet && setHasEstablishWork(repositorySet.view.set.rows) ? (
                 <div

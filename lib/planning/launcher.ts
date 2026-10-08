@@ -111,12 +111,21 @@ export type PlanningLaunchContext =
 
 /**
  * WHERE A NAMED SESSION WAS REOPENED FROM (`planVia`, Story MOTIR-6012 · MOTIR-6037;
- * `design/ai-planning/design-notes.md` Part XXII §22.2). Only the To-approve row writes
- * it, and only its reopened line reads it: *Reopened from To approve* rather than the
- * Plans-page line every `planSession` address printed before. Absent means the Plans
- * page, so every shipped link keeps its meaning.
+ * `design/ai-planning/design-notes.md` Part XXII §22.2). A list that opens a plan's
+ * conversation writes it, and only the reopened line reads it: *Reopened from Waiting on
+ * you* / *Reopened from Planning* rather than the Plans-page line every `planSession`
+ * address printed before. Absent means the Plans page, so every shipped link keeps its
+ * meaning.
+ *
+ * `planning` is the Workbench's Planning tab (`design/workbench/design-notes.md` § 36.6,
+ * MOTIR-7831): only the plan's own requester ever reaches that list, so its line has no
+ * *started by {name}* form.
  */
-export type PlanningEntrance = 'approvals';
+export type PlanningEntrance = 'approvals' | 'planning';
+
+/** Every entrance, so the address parser is total over the union rather than testing one
+ *  string — a third entrance added above is then read back without a second edit here. */
+const PLANNING_ENTRANCES: readonly PlanningEntrance[] = ['approvals', 'planning'];
 
 /** Resolve the originating context to the planning mode the workspace opens in. */
 export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMode {
@@ -504,11 +513,9 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
     from === 'project' || from === 'work-item'
       ? first(readParam(params, OVERLAY_PARAM_NAMES.session))
       : null;
-  // Read only WITH a named session; anything but `approvals` is the Plans page.
-  const via =
-    sessionId && first(readParam(params, OVERLAY_PARAM_NAMES.via)) === 'approvals'
-      ? ('approvals' as const)
-      : null;
+  // Read only WITH a named session; anything that names no entrance is the Plans page.
+  const viaRaw = sessionId ? first(readParam(params, OVERLAY_PARAM_NAMES.via)) : null;
+  const via = PLANNING_ENTRANCES.find((entrance) => entrance === viaRaw) ?? null;
   // The gate rides ONLY its own origin, like `planItem` and `planRepo` do.
   const gateId =
     from === 'refused-gate' ? first(readParam(params, OVERLAY_PARAM_NAMES.gate)) : null;

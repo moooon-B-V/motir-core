@@ -295,6 +295,39 @@
     "liveWriting": "Redactándose",
     "liveReconnecting": "Reconectando: se muestra la última actualización",
     "liveAnnounce": "{count, plural, one {Se añadió # elemento} other {Se añadieron # elementos}} al plan",
+    "liveStarting": "Iniciando…",
+    "liveStalled": "Estancado",
+    "progress": {
+      "settling": "Ordenando la conversación",
+      "layingChildrenOf": "Organizando: {title}",
+      "layingTopLevel": "Organizando el nivel superior del proyecto",
+      "authoring": "Redactando: {title}",
+      "draftingNew": "Redactando un elemento nuevo",
+      "moreSteps": "+{count} más",
+      "authored": "{authored} de {proposed} redactados",
+      "elapsedUnderMinute": "<1 min",
+      "elapsedMinutes": "{minutes} min",
+      "elapsedHours": "{hours} h {minutes} min",
+      "lastActivityJustNow": "última actividad hace un momento",
+      "lastActivitySeconds": "última actividad hace {seconds} s",
+      "lastActivityAgo": "última actividad hace {duration}",
+      "stalledFor": "sin actividad desde hace {duration}",
+      "detailsAria": "Detalles del progreso del plan",
+      "detailsNow": "En curso ahora",
+      "detailsNoSteps": "No se informó ningún paso; es posible que el planificador no informe de sus pasos.",
+      "detailsStarted": "Iniciado {time} · en ejecución desde hace {duration}",
+      "detailsLastActivity": "Última actividad {time}",
+      "detailsStalled": "No se ha escrito ni informado nada desde hace {duration}. Es posible que el plan se haya detenido.",
+      "pointer": "Seguir desde el banco de trabajo",
+      "pointerSentence": "Puedes salir: este plan se sigue redactando. Síguelo desde Banco de trabajo › En planificación."
+    },
+    "cue": {
+      "drafting": "Redactando",
+      "draftingName": "Redactándose ahora",
+      "laying": "Organizando sus elementos hijos",
+      "layingName": "Sus elementos hijos se están organizando ahora",
+      "layingHere": "Organizando este nivel"
+    },
     "listWritingTitle": "Aún no se ha propuesto nada",
     "listWritingBody": "Los elementos aparecen aquí a medida que se redacta el plan.",
     "abandonedOutcome": "La generación nunca terminó: este plan se finalizó automáticamente",
@@ -7704,6 +7737,10 @@
       "goToTarget": "El plan está en {identifier} · Ir allí",
       "arrivedIn": "{count} nuevos en {identifier} · Ir allí",
       "arrivedAcross": "{count} nuevos en otras partes · el más reciente en {identifier} · Ir allí",
+      "draftingIn": "{count} redactándose en {identifier} · Ir allí",
+      "layingIn": "Organizando {identifier} · Ir allí",
+      "newAndDraftingIn": "{arrived} nuevos · {drafting} redactándose en {identifier} · Ir allí",
+      "draftingAcross": "{count} redactándose en otras partes · el primero en {identifier} · Ir allí",
       "levelChange": {
         "srPrefix": "Cambio pendiente en este nivel:",
         "changed": "Este nivel",
@@ -8534,14 +8571,17 @@
       "toResume": "Por reanudar",
       "recentlyFinished": "Terminados recientemente",
       "watching": "Siguiendo",
-      "toApprove": "Esperando tu acción"
+      "toApprove": "Esperando tu acción",
+      "planning": "En planificación"
     },
     "columns": {
       "title": "Título",
       "role": "Tu rol",
       "assignee": "Responsable",
       "status": "Estado",
-      "finished": "Terminado"
+      "finished": "Terminado",
+      "plan": "Plan",
+      "planner": "Planificador"
     },
     "row": {
       "unassigned": "Sin asignar",
@@ -8584,6 +8624,11 @@
       "approvals": {
         "title": "Nada espera tu acción",
         "body": "Aquí aparecen las aprobaciones que necesitan tu decisión y el trabajo que una Ejecución te pasó para que lo hagas."
+      },
+      "planning": {
+        "title": "No hay planes en redacción",
+        "body": "Cuando pides un plan a Motir AI o a un Agente, espera aquí mientras se redacta, con lo que lleva avanzado, y pasa a Esperando tu acción cuando está listo para tu revisión. Los planes que pidieron otras personas están en la página Planes.",
+        "action": "Planificar con IA"
       }
     },
     "approvals": {
@@ -8801,6 +8846,28 @@
         "card_not_ready": "Resuelve lo que bloquea {key} o devuélvelo a En curso, y pulsa Continuar."
       },
       "copyAria": "Copiar el comando de reanudación de {key}"
+    },
+    "planning": {
+      "scope": "Planes que pediste en <project>{name}</project> y que todavía se están redactando. Los planes que pidieron otras personas están en la <link>página Planes</link>.",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "Agente MCP",
+        "agentModel": "Agente MCP · <mono>{model}</mono>"
+      },
+      "rowAria": "Abrir el plan en redacción: {sentence}",
+      "reopened": "Reabierto desde En planificación · iniciado por ti · última actividad {when}",
+      "left": {
+        "planned": "Redactado",
+        "plannedLine": "Listo para tu revisión.",
+        "plannedLink": "Verlo en Esperando tu acción",
+        "discarded": "Finalizado",
+        "discardedLine": "Finalizó antes de proponerse; no se añadió nada.",
+        "abandoned": "Detenido",
+        "abandonedLine": "Su planificador se detuvo, así que el plan se cerró; no se añadió nada.",
+        "unknownLine": "Ya no se está redactando."
+      },
+      "ceiling": "Se muestran tus {shown} planes en redacción más recientes. Los otros {rest} están en la <link>página Planes</link>."
     }
   },
   "approvalRecords": {

@@ -2,13 +2,14 @@
 // Services call these just before returning, so no Prisma row (Date objects,
 // the enum types, the raw Json columns) ever crosses the API boundary.
 
-import type { Plan, PlanItem } from '@/generated/prisma/client';
+import type { Plan, PlanItem, PlanStep } from '@/generated/prisma/client';
 import type { PlanHistoryItemRow } from '@/lib/repositories/planItemRepository';
 import type {
   PlanDto,
   PlanItemDto,
   PlanItemPatch,
   PlanItemProposedFields,
+  PlanStepDto,
   PlanWithItemsDto,
   WorkItemPlanHistoryEntryDto,
 } from '@/lib/dto/plans';
@@ -77,6 +78,16 @@ export function toPlanDto(row: Plan, itemCount: number): PlanDto {
     // the review surface can tell a DISCARDED plan from one somebody reviewed
     // and rejected without re-deriving it from which timestamps are null.
     decisionReason: row.decisionReason,
+  };
+}
+
+/** One stored planner step as it crosses the boundary (MOTIR-7822). */
+export function toPlanStepDto(row: PlanStep): PlanStepDto {
+  return {
+    sessionKey: row.sessionKey,
+    kind: row.kind,
+    targetRef: row.targetRef,
+    startedAt: row.startedAt.toISOString(),
   };
 }
 

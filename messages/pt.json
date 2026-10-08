@@ -295,6 +295,39 @@
     "liveWriting": "Sendo escrito",
     "liveReconnecting": "Reconectando — exibindo a última atualização",
     "liveAnnounce": "{count, plural, one {# item adicionado} other {# itens adicionados}} ao plano",
+    "liveStarting": "Iniciando…",
+    "liveStalled": "Travado",
+    "progress": {
+      "settling": "Consolidando a conversa",
+      "layingChildrenOf": "Organizando: {title}",
+      "layingTopLevel": "Organizando o nível superior do projeto",
+      "authoring": "Redigindo: {title}",
+      "draftingNew": "Redigindo um novo item",
+      "moreSteps": "+{count} mais",
+      "authored": "{authored} de {proposed} redigidos",
+      "elapsedUnderMinute": "<1 min",
+      "elapsedMinutes": "{minutes} min",
+      "elapsedHours": "{hours} h {minutes} min",
+      "lastActivityJustNow": "última atividade agora mesmo",
+      "lastActivitySeconds": "última atividade há {seconds} s",
+      "lastActivityAgo": "última atividade há {duration}",
+      "stalledFor": "sem atividade há {duration}",
+      "detailsAria": "Detalhes do progresso do plano",
+      "detailsNow": "Em andamento agora",
+      "detailsNoSteps": "Nenhuma etapa informada — o planejador pode não informar as etapas.",
+      "detailsStarted": "Iniciado {time} · em execução há {duration}",
+      "detailsLastActivity": "Última atividade {time}",
+      "detailsStalled": "Nada foi escrito nem informado há {duration}. O plano pode ter parado.",
+      "pointer": "Acompanhar pela bancada",
+      "pointerSentence": "Você pode sair — este plano continua sendo escrito. Acompanhe-o em Bancada › Em planejamento."
+    },
+    "cue": {
+      "drafting": "Redigindo",
+      "draftingName": "Sendo redigido agora",
+      "laying": "Organizando os itens filhos",
+      "layingName": "Os itens filhos estão sendo organizados agora",
+      "layingHere": "Organizando este nível"
+    },
     "listWritingTitle": "Nada proposto ainda",
     "listWritingBody": "Os itens aparecem aqui conforme o plano é escrito.",
     "abandonedOutcome": "A geração nunca terminou — este plano foi encerrado automaticamente",
@@ -7704,6 +7737,10 @@
       "goToTarget": "O plano está em {identifier} · Ir para lá",
       "arrivedIn": "{count} novos em {identifier} · Ir para lá",
       "arrivedAcross": "{count} novos em outros lugares · o mais recente em {identifier} · Ir para lá",
+      "draftingIn": "{count} sendo redigidos em {identifier} · Ir para lá",
+      "layingIn": "Organizando {identifier} · Ir para lá",
+      "newAndDraftingIn": "{arrived} novos · {drafting} sendo redigidos em {identifier} · Ir para lá",
+      "draftingAcross": "{count} sendo redigidos em outros lugares · o primeiro em {identifier} · Ir para lá",
       "levelChange": {
         "srPrefix": "Alteração pendente neste nível:",
         "changed": "Este nível",
@@ -8534,14 +8571,17 @@
       "toResume": "A retomar",
       "recentlyFinished": "Concluídos recentemente",
       "watching": "Acompanhando",
-      "toApprove": "Aguardando você"
+      "toApprove": "Aguardando você",
+      "planning": "Em planejamento"
     },
     "columns": {
       "title": "Título",
       "role": "Seu papel",
       "assignee": "Responsável",
       "status": "Status",
-      "finished": "Concluído"
+      "finished": "Concluído",
+      "plan": "Plano",
+      "planner": "Planejador"
     },
     "row": {
       "unassigned": "Sem responsável",
@@ -8584,6 +8624,11 @@
       "approvals": {
         "title": "Nada está aguardando você",
         "body": "As aprovações que precisam da sua decisão e o trabalho que uma execução entregou a você aparecem aqui."
+      },
+      "planning": {
+        "title": "Nenhum plano sendo escrito",
+        "body": "Quando você pede um plano ao Motir AI ou a um agente, ele espera aqui enquanto é escrito, com o progresso até o momento, e passa para Aguardando você quando está pronto para sua revisão. Os planos pedidos por outras pessoas ficam na página Planos.",
+        "action": "Planejar com IA"
       }
     },
     "approvals": {
@@ -8801,6 +8846,28 @@
         "card_not_ready": "Resolva o que bloqueia {key} ou mova-o de volta para Em andamento e depois pressione Continuar."
       },
       "copyAria": "Copiar o comando de retomada de {key}"
+    },
+    "planning": {
+      "scope": "Planos que você pediu em <project>{name}</project> e que ainda estão sendo escritos. Os planos pedidos por outras pessoas ficam na <link>página Planos</link>.",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "Agente MCP",
+        "agentModel": "Agente MCP · <mono>{model}</mono>"
+      },
+      "rowAria": "Abrir o plano sendo escrito — {sentence}",
+      "reopened": "Reaberto de Em planejamento · iniciado por você · última atividade {when}",
+      "left": {
+        "planned": "Escrito",
+        "plannedLine": "Pronto para sua revisão.",
+        "plannedLink": "Ver em Aguardando você",
+        "discarded": "Encerrado",
+        "discardedLine": "Encerrado antes de ser proposto — nada foi adicionado.",
+        "abandoned": "Parado",
+        "abandonedLine": "O planejador parou, então o plano foi fechado — nada foi adicionado.",
+        "unknownLine": "Não está mais sendo escrito."
+      },
+      "ceiling": "Mostrando seus {shown} planos mais recentes sendo escritos. Os outros {rest} estão na <link>página Planos</link>."
     }
   },
   "approvalRecords": {

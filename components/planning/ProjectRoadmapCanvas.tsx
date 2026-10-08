@@ -30,10 +30,14 @@ import {
   arrivalsSummary,
   EMPTY_ARRIVALS,
   foldArrivals,
+  liveSlot,
+  offLevelInFlight,
   visitLevel,
   type ArrivalsLog,
+  type InFlightCue,
   type LiveArrival,
 } from '@/lib/planning/livePane';
+import type { NodeCue } from '@/components/planning/PlanningCanvas';
 import {
   NODE_H,
   NODE_W,
@@ -499,6 +503,23 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   levelBand?: (focus: { id: string; label: string }) => ReactNode;
   /**
+   * THE DRAFTING / LAYING CUES (MOTIR-7830; design Part XXV §25.6) — threaded to
+   * `PlanningCanvas` as given. Read whether or not `motion` is on (the plan page
+   * draws them with motion off). Absent by default.
+   */
+  nodeCues?: ReadonlyMap<string, NodeCue> | null;
+  /**
+   * The cues IN FLIGHT, with where each one is (MOTIR-7830; §25.7). An entry is
+   * OFF-LEVEL when its node is not on the drawn level and it is not a `laying`
+   * cue on the level the reader stands in; off-level entries are counted in the
+   * arrivals pill's ONE slot, in the design's in-flight wording, and *Go there*
+   * drills by the earliest one's `trail` when there are no arrivals. The canvas
+   * never moves on its own. A PRESENT STATE: counted from this prop each render,
+   * never folded into the arrivals log. Unlike `arrivals`, read whether or not
+   * `motion` is on. Absent → the pill renders exactly as before.
+   */
+  inFlight?: readonly InFlightCue[] | null;
+  /**
    * The plan is SOMEWHERE ELSE (bug MOTIR-6223, second half; design MOTIR-6241 §
    * *BESIDE the anchor*) — a second ARMING of the declined-follow offer, whose
    * copy, markup, placement and behaviour are unchanged: *"Plan is in
@@ -586,6 +607,8 @@ export function ProjectRoadmapCanvas({
   motion = false,
   arrivals = null,
   levelBand,
+  nodeCues = null,
+  inFlight = null,
   elsewhereOffer,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
@@ -1536,6 +1559,16 @@ export function ProjectRoadmapCanvas({
   // being somewhere the reader is not. The declined one wins — it is the older
   // sentence, and it names where the plan lands just the same.
   const offer = declined ?? elsewhereOffer?.(crumbs) ?? null;
+  // THE ONE SLOT'S WORDS (§23.7, re-worded by Part XXV §25.7): the arrivals
+  // count, joined by the cues the reader cannot see. With no `inFlight` it is the
+  // arrivals pill exactly as shipped.
+  const drawnIds = new Set(nodes.map((n) => n.id));
+  const slot = liveSlot(
+    arrivalsPill,
+    inFlight ? offLevelInFlight(inFlight, drawnIds, focusId) : [],
+  );
+  const slotIdentifier = (trail: readonly CanvasCrumb[]) =>
+    trail[trail.length - 1]?.crumbKey ?? trail[trail.length - 1]?.label ?? resolvedRootLabel;
 
   // The bar's crumb row — the whole bar without a band, row one with one.
   const breadcrumbRow = (
@@ -1651,24 +1684,29 @@ export function ProjectRoadmapCanvas({
       {/* THE ARRIVALS COUNT (MOTIR-6300; design Part XXIII §23.7) — ONE slot,
                 in the follow offer's own markup. The offer WINS it when it is up: it
                 already names where the plan lands. */}
-      {offer === null && arrivalsPill !== null && (
+      {offer === null && slot !== null && (
         <button
           type="button"
           data-testid="canvas-arrivals-offer"
-          onClick={() => goToArrivals(arrivalsPill.latest.trail)}
+          onClick={() => goToArrivals(slot.trail)}
           className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
         >
           <span
             aria-hidden="true"
             className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
           />
-          {tTarget(arrivalsPill.levels > 1 ? 'arrivedAcross' : 'arrivedIn', {
-            count: arrivalsPill.count,
-            identifier:
-              arrivalsPill.latest.trail[arrivalsPill.latest.trail.length - 1]?.crumbKey ??
-              arrivalsPill.latest.trail[arrivalsPill.latest.trail.length - 1]?.label ??
-              resolvedRootLabel,
-          })}
+          {slot.key === 'newAndDraftingIn'
+            ? tTarget(slot.key, {
+                arrived: slot.arrived,
+                drafting: slot.drafting,
+                identifier: slotIdentifier(slot.trail),
+              })
+            : slot.key === 'layingIn'
+              ? tTarget(slot.key, { identifier: slotIdentifier(slot.trail) })
+              : tTarget(slot.key, {
+                  count: slot.count,
+                  identifier: slotIdentifier(slot.trail),
+                })}
         </button>
       )}
     </>
@@ -1700,7 +1738,7 @@ export function ProjectRoadmapCanvas({
         {/* breadcrumb + Back overlay — only while drilled. At the ROOT it renders
             for the arrivals pill too (§23.7): the root crumb and the pill, and no
             Back, because there is nowhere to go back to. */}
-        {(drilled || offer !== null || arrivalsPill !== null) && (
+        {(drilled || offer !== null || slot !== null) && (
           <nav
             aria-label={t('breadcrumb')}
             // Widened from 36rem with the `identifier · title` crumb label (MOTIR-1805
@@ -2122,6 +2160,7 @@ export function ProjectRoadmapCanvas({
           ariaLabel={resolvedAriaLabel}
           motion={motion}
           animateInitial={animateInitial}
+          nodeCues={nodeCues}
         />
       )}
     </div>

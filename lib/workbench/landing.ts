@@ -17,7 +17,9 @@ import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 //
 // Three properties the design states and this implements literally:
 //   · FIVE TABS ONLY (three until § 30 added To fix, four until § 35 added To resume). Recently finished and Watching are never landed on, so
-//     their counts are not even part of the input.
+//     their counts are not even part of the input. Nor is Planning (MOTIR-7828):
+//     `HomeTabCountsDto.planning` rides the DTO for the strip, and is deliberately
+//     NOT an input — a plan being written needs nothing from the reader.
 //   · TO DO IS UNCONDITIONAL. There is no input for which this returns nothing,
 //     so the landing can never be a blank page.
 //   · AN EXPLICIT `?tab=` ALWAYS WINS — which is why nothing here sees the

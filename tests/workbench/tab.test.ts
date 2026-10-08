@@ -9,6 +9,9 @@ describe('WORKBENCH_TABS — the strip order (MOTIR-5217)', () => {
   it('is the design order: what waits on you, what moves, what to start, then the rest', () => {
     expect(WORKBENCH_TABS).toEqual([
       'approvals',
+      // PLANNING, second and never a landing rung (MOTIR-7831; design § 36.2,
+      // which amends the *strip order = cascade order* sentence on the record).
+      'planning',
       'to-fix',
       'to-resume',
       'in-progress',
@@ -24,6 +27,7 @@ describe('WORKBENCH_TABS — the strip order (MOTIR-5217)', () => {
     expect(WORKBENCH_TABS[0]).toBe('approvals');
     expect(WORKBENCH_TABS.map((tab) => workbenchTabHref(tab))).toEqual([
       '/workbench?tab=approvals',
+      '/workbench?tab=planning',
       '/workbench?tab=to-fix',
       '/workbench?tab=to-resume',
       '/workbench?tab=in-progress',
@@ -37,6 +41,7 @@ describe('WORKBENCH_TABS — the strip order (MOTIR-5217)', () => {
 describe('parseWorkbenchTab', () => {
   it('reads EVERY tab by its own slug — To do and To approve included (MOTIR-5218)', () => {
     expect(parseWorkbenchTab('approvals')).toBe('approvals');
+    expect(parseWorkbenchTab('planning')).toBe('planning');
     expect(parseWorkbenchTab('in-progress')).toBe('in-progress');
     expect(parseWorkbenchTab('to-fix')).toBe('to-fix');
     expect(parseWorkbenchTab('todo')).toBe('todo');
@@ -68,6 +73,7 @@ describe('workbenchTabHref', () => {
     // The bare path is an entrance that names no tab, so no tab may be spelled
     // as it — To do included, which used to be the special case.
     expect(workbenchTabHref('todo')).toBe('/workbench?tab=todo');
+    expect(workbenchTabHref('planning')).toBe('/workbench?tab=planning');
     expect(workbenchTabHref('in-progress')).toBe('/workbench?tab=in-progress');
     expect(workbenchTabHref('to-fix')).toBe('/workbench?tab=to-fix');
     expect(workbenchTabHref('finished')).toBe('/workbench?tab=finished');
@@ -109,6 +115,7 @@ describe('workbenchTabHref', () => {
 
   it('drops an absent or degenerate page rather than emitting an empty param', () => {
     expect(workbenchTabHref('todo')).toBe('/workbench?tab=todo');
+    expect(workbenchTabHref('planning')).toBe('/workbench?tab=planning');
     expect(workbenchTabHref('todo', null)).toBe('/workbench?tab=todo');
     // 0 and a negative are what a hand-edited URL produces; `parsePage` already
     // answers 1 for them, and the builder must not emit them either.
