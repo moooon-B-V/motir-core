@@ -7760,7 +7760,10 @@
         "movedTemp": "Une étape a été déplacée dans ce parcours. Non enregistré dans l'élément de travail.",
         "edited": "Modification du champ {fields} de <chip>{key}</chip>.",
         "commented": "Commentaire ajouté sur <chip>{key}</chip> : « {reason} »",
-        "closed": "<chip>{key}</chip> est passé à Terminé, et ce résumé a été ajouté en commentaire."
+        "closed": "<chip>{key}</chip> est passé à Terminé, et ce résumé a été ajouté en commentaire.",
+        "filed": "Bug <bug>{bugKey}</bug> signalé.",
+        "filedBlocking": "Bug <bug>{bugKey}</bug> signalé. <chip>{key}</chip> est bloqué jusqu’à sa correction.",
+        "alreadyFiled": "Déjà signalé sous <bug>{bugKey}</bug> : rien de nouveau n’a été signalé."
       },
       "files": {
         "attach": "Joindre des fichiers",

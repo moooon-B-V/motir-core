@@ -7760,7 +7760,10 @@
         "movedTemp": "Moví un paso en este recorrido. No se guardó en el elemento de trabajo.",
         "edited": "Edité {fields} de <chip>{key}</chip>.",
         "commented": "Comenté en <chip>{key}</chip>: “{reason}”",
-        "closed": "Moví <chip>{key}</chip> a Hecho y añadí este resumen como comentario."
+        "closed": "Moví <chip>{key}</chip> a Hecho y añadí este resumen como comentario.",
+        "filed": "Registré el error <bug>{bugKey}</bug>.",
+        "filedBlocking": "Registré el error <bug>{bugKey}</bug>. <chip>{key}</chip> queda bloqueado hasta que se corrija.",
+        "alreadyFiled": "Ya estaba registrado como <bug>{bugKey}</bug>, así que no se registró nada nuevo."
       },
       "files": {
         "attach": "Adjuntar archivos",

@@ -7760,7 +7760,10 @@
         "movedTemp": "Uma etapa foi movida neste percurso. Não salvo no item de trabalho.",
         "edited": "Editado: {fields} de <chip>{key}</chip>.",
         "commented": "Comentário em <chip>{key}</chip>: “{reason}”",
-        "closed": "<chip>{key}</chip> movido para Concluído, e este resumo foi adicionado como comentário."
+        "closed": "<chip>{key}</chip> movido para Concluído, e este resumo foi adicionado como comentário.",
+        "filed": "Bug <bug>{bugKey}</bug> registrado.",
+        "filedBlocking": "Bug <bug>{bugKey}</bug> registrado. <chip>{key}</chip> fica bloqueado até que seja corrigido.",
+        "alreadyFiled": "Já registrado como <bug>{bugKey}</bug>, então nada novo foi registrado."
       },
       "files": {
         "attach": "Anexar arquivos",

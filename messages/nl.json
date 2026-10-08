@@ -7757,7 +7757,10 @@
         "movedTemp": "Een stap verplaatst in deze doorloop. Niet opgeslagen op het werkitem.",
         "edited": "De {fields} van <chip>{key}</chip> bewerkt.",
         "commented": "Gereageerd op <chip>{key}</chip>: ‘{reason}’",
-        "closed": "<chip>{key}</chip> naar Klaar verplaatst en deze samenvatting als reactie toegevoegd."
+        "closed": "<chip>{key}</chip> naar Klaar verplaatst en deze samenvatting als reactie toegevoegd.",
+        "filed": "Bug <bug>{bugKey}</bug> gemeld.",
+        "filedBlocking": "Bug <bug>{bugKey}</bug> gemeld. <chip>{key}</chip> is geblokkeerd tot die is opgelost.",
+        "alreadyFiled": "Al gemeld als <bug>{bugKey}</bug>, dus er is niets nieuws gemeld."
       },
       "files": {
         "attach": "Bestanden bijvoegen",

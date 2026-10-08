@@ -7757,7 +7757,10 @@
         "movedTemp": "このウォークのステップを移動しました。作業項目には保存されていません。",
         "edited": "<chip>{key}</chip> の{fields}を編集しました。",
         "commented": "<chip>{key}</chip> にコメントしました: 「{reason}」",
-        "closed": "<chip>{key}</chip> を「完了」に移動し、この要約をコメントとして追加しました。"
+        "closed": "<chip>{key}</chip> を「完了」に移動し、この要約をコメントとして追加しました。",
+        "filed": "バグ <bug>{bugKey}</bug> を登録しました。",
+        "filedBlocking": "バグ <bug>{bugKey}</bug> を登録しました。修正されるまで <chip>{key}</chip> はブロックされます。",
+        "alreadyFiled": "すでに <bug>{bugKey}</bug> として登録済みのため、新しく登録はしていません。"
       },
       "files": {
         "attach": "ファイルを添付",

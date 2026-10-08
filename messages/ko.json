@@ -7754,7 +7754,10 @@
         "movedTemp": "이 진행에서 단계 하나를 이동했습니다. 작업 항목에는 저장되지 않았습니다.",
         "edited": "<chip>{key}</chip>의 {fields}을(를) 편집했습니다.",
         "commented": "<chip>{key}</chip>에 댓글을 남겼습니다: “{reason}”",
-        "closed": "<chip>{key}</chip>을(를) 완료로 이동하고 이 요약을 댓글로 추가했습니다."
+        "closed": "<chip>{key}</chip>을(를) 완료로 이동하고 이 요약을 댓글로 추가했습니다.",
+        "filed": "버그 <bug>{bugKey}</bug>을(를) 등록했습니다.",
+        "filedBlocking": "버그 <bug>{bugKey}</bug>을(를) 등록했습니다. 수정될 때까지 <chip>{key}</chip>은(는) 차단됩니다.",
+        "alreadyFiled": "이미 <bug>{bugKey}</bug>(으)로 등록되어 있어 새로 등록하지 않았습니다."
       },
       "files": {
         "attach": "파일 첨부",

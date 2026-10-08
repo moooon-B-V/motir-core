@@ -7757,7 +7757,10 @@
         "movedTemp": "Przeniesiono krok w tym przewodniku. Niezapisane w elemencie roboczym.",
         "edited": "Edytowano: {fields} w <chip>{key}</chip>.",
         "commented": "Dodano komentarz do <chip>{key}</chip>: „{reason}”",
-        "closed": "Przeniesiono <chip>{key}</chip> do statusu Gotowe i dodano to podsumowanie jako komentarz."
+        "closed": "Przeniesiono <chip>{key}</chip> do statusu Gotowe i dodano to podsumowanie jako komentarz.",
+        "filed": "Zgłoszono błąd <bug>{bugKey}</bug>.",
+        "filedBlocking": "Zgłoszono błąd <bug>{bugKey}</bug>. <chip>{key}</chip> jest zablokowany do czasu jego naprawy.",
+        "alreadyFiled": "Już zgłoszono jako <bug>{bugKey}</bug>, więc nie zgłoszono niczego nowego."
       },
       "files": {
         "attach": "Załącz pliki",

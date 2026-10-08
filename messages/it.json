@@ -7760,7 +7760,10 @@
         "movedTemp": "Spostato un passaggio in questo percorso. Non salvato sull’elemento di lavoro.",
         "edited": "Modificati i campi {fields} di <chip>{key}</chip>.",
         "commented": "Commento su <chip>{key}</chip>: «{reason}»",
-        "closed": "Spostato <chip>{key}</chip> in Completato e aggiunto questo riepilogo come commento."
+        "closed": "Spostato <chip>{key}</chip> in Completato e aggiunto questo riepilogo come commento.",
+        "filed": "Segnalato il bug <bug>{bugKey}</bug>.",
+        "filedBlocking": "Segnalato il bug <bug>{bugKey}</bug>. <chip>{key}</chip> resta bloccato finché non viene corretto.",
+        "alreadyFiled": "Già segnalato come <bug>{bugKey}</bug>, quindi non è stato segnalato nulla di nuovo."
       },
       "files": {
         "attach": "Allega file",

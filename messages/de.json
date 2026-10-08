@@ -7760,7 +7760,10 @@
         "movedTemp": "Einen Schritt in diesem Durchgang verschoben. Nicht im Arbeitselement gespeichert.",
         "edited": "{fields} von <chip>{key}</chip> bearbeitet.",
         "commented": "<chip>{key}</chip> kommentiert: „{reason}“",
-        "closed": "<chip>{key}</chip> nach „Erledigt“ verschoben und diese Zusammenfassung als Kommentar hinzugefügt."
+        "closed": "<chip>{key}</chip> nach „Erledigt“ verschoben und diese Zusammenfassung als Kommentar hinzugefügt.",
+        "filed": "Fehler <bug>{bugKey}</bug> erfasst.",
+        "filedBlocking": "Fehler <bug>{bugKey}</bug> erfasst. <chip>{key}</chip> ist blockiert, bis er behoben ist.",
+        "alreadyFiled": "Bereits als <bug>{bugKey}</bug> erfasst, daher wurde nichts Neues erfasst."
       },
       "files": {
         "attach": "Dateien anhängen",
