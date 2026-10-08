@@ -162,13 +162,15 @@ export default async function BacklogPage({
                 {t('subtitle', { project: ctx.project.name })}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            {/* `flex-wrap`: the cluster wraps onto a second row before the
+                link's longer translations squeeze it (MOTIR-7759). */}
+            <div className="flex flex-wrap items-center gap-2">
               {/* View all issues — Jira's "View in Issue Navigator": deep-links to
                   the project's /items List/Tree (every issue across the backlog
                   AND all sprints), CARRYING the active filter (8.8.18). */}
               <Link
                 href={viewAllHref}
-                className="inline-flex h-(--height-btn-md) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-btn-x) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                className="inline-flex h-(--height-btn-md) items-center gap-2 rounded-(--radius-btn) whitespace-nowrap border border-(--el-border) px-(--spacing-btn-x) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               >
                 <ExternalLink className="h-4 w-4" aria-hidden />
                 {t('viewAllIssues')}

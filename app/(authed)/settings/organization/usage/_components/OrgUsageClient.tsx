@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   ChevronLeft,
@@ -258,12 +258,12 @@ export function OrgUsageClient({ orgId, orgName }: OrgUsageClientProps) {
 // Formatting helpers
 type T = ReturnType<typeof useTranslations>;
 
-function fmt(n: number): string {
-  return n.toLocaleString();
+function fmt(n: number, locale: string): string {
+  return n.toLocaleString(locale);
 }
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+function when(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -277,10 +277,10 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
-function monthLabel(yearMonth: string): string {
+function monthLabel(yearMonth: string, locale: string): string {
   const [y, m] = yearMonth.split('-').map(Number);
   if (!y || !m) return yearMonth;
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString(undefined, {
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString(locale, {
     month: 'short',
     timeZone: 'UTC',
   });
@@ -373,6 +373,7 @@ function SummaryPanel({
   allotment: number;
   t: T;
 }) {
+  const locale = useLocale();
   const history = data.monthlyHistory;
   const search = searchUsageFigures(data);
   const maxCredits = Math.max(1, ...history.map((h) => h.credits));
@@ -396,7 +397,7 @@ function SummaryPanel({
               `isMeta` ternary and is deleted with it: a word where a figure
               belongs is the shape this story exists to remove. */}
           <div className="mt-2 font-serif text-[2.125rem] leading-none text-(--el-text)">
-            {fmt(data.balance)}
+            {fmt(data.balance, locale)}
             <span className="ml-1 font-sans text-sm text-(--el-text-muted)">
               {t('summary.creditsUnit')}
             </span>
@@ -447,7 +448,10 @@ function SummaryPanel({
                 />
               </div>
               <p className="mt-2 font-sans text-xs text-(--el-text-muted)">
-                {t('summary.allotmentRemaining', { pct: remainingPct, allotment: fmt(allotment) })}
+                {t('summary.allotmentRemaining', {
+                  pct: remainingPct,
+                  allotment: fmt(allotment, locale),
+                })}
               </p>
             </>
           ) : null}
@@ -459,7 +463,7 @@ function SummaryPanel({
             {t('summary.spentAllTime')}
           </span>
           <div className="mt-2 font-sans text-lg font-semibold text-(--el-text)">
-            {t('summary.credits', { n: fmt(data.totalSpend) })}
+            {t('summary.credits', { n: fmt(data.totalSpend, locale) })}
           </div>
           <p className="mt-1 font-sans text-xs text-(--el-text-muted)">{t('summary.since')}</p>
           <ScopeTag scope="follows-scope" t={t} />
@@ -471,7 +475,7 @@ function SummaryPanel({
             {t('summary.spentThisMonth')}
           </span>
           <div className="mt-2 font-sans text-lg font-semibold text-(--el-text)">
-            {t('summary.credits', { n: fmt(data.monthSpend) })}
+            {t('summary.credits', { n: fmt(data.monthSpend, locale) })}
           </div>
           {delta !== null ? (
             <p
@@ -509,12 +513,12 @@ function SummaryPanel({
                     &mdash;
                   </span>
                 ) : (
-                  t('summary.credits', { n: fmt(search.monthSpend ?? 0) })
+                  t('summary.credits', { n: fmt(search.monthSpend ?? 0, locale) })
                 )}
               </div>
               {search.figuresUnavailable ? null : (
                 <p className="mt-1 font-sans text-xs text-(--el-text-muted)">
-                  {t('summary.searchAllTime', { n: fmt(search.totalSpend ?? 0) })}
+                  {t('summary.searchAllTime', { n: fmt(search.totalSpend ?? 0, locale) })}
                 </p>
               )}
               {/* The ONE figure on this page that does not narrow with the drill. */}
@@ -535,7 +539,7 @@ function SummaryPanel({
                     &mdash;
                   </span>
                 ) : (
-                  t('summary.credits', { n: fmt(search.attributedSpend ?? 0) })
+                  t('summary.credits', { n: fmt(search.attributedSpend ?? 0, locale) })
                 )}
               </div>
               {/* THE REMAINDER. Attributed rows do not sum to the org total,
@@ -547,7 +551,9 @@ function SummaryPanel({
                   that does not exist. */}
               {search.hasRemainder ? (
                 <p className="mt-1 font-sans text-xs text-(--el-text-secondary)">
-                  {t('summary.searchUnattributed', { n: fmt(search.unattributedSpend ?? 0) })}
+                  {t('summary.searchUnattributed', {
+                    n: fmt(search.unattributedSpend ?? 0, locale),
+                  })}
                 </p>
               ) : null}
               <ScopeTag scope="follows-scope" t={t} />
@@ -598,7 +604,7 @@ function SummaryPanel({
                     }}
                   />
                   <span className="font-sans text-[0.625rem] text-(--el-text-muted)">
-                    {monthLabel(h.yearMonth)}
+                    {monthLabel(h.yearMonth, locale)}
                   </span>
                 </div>
               );
@@ -772,6 +778,7 @@ function RunLogPanel({
   onPage: (page: number) => void;
   t: T;
 }) {
+  const locale = useLocale();
   const { page, pageSize, total } = data.recentRuns;
   // ONE list, not two: splitting search into its own table would put the
   // reconciliation back on the reader. `activityEntries` merges THIS PAGE of
@@ -797,7 +804,7 @@ function RunLogPanel({
             <h3 className="font-sans text-base font-semibold text-(--el-text)">
               {t('activity.runs')}
             </h3>
-            <Pill tone="neutral">{t('activity.total', { n: fmt(total) })}</Pill>
+            <Pill tone="neutral">{t('activity.total', { n: fmt(total, locale) })}</Pill>
           </div>
           <span className="font-sans text-xs text-(--el-text-muted)">
             {t('activity.scopeNote', { scope: scopeLabel })}
@@ -807,7 +814,7 @@ function RunLogPanel({
       footer={
         <div className="flex items-center justify-between gap-3">
           <span className="font-sans text-xs text-(--el-text-muted)" aria-live="polite">
-            {t('activity.pagerShowing', { from, to, total: fmt(total) })}
+            {t('activity.pagerShowing', { from, to, total: fmt(total, locale) })}
           </span>
           <div className="flex items-center gap-2">
             <Button
@@ -860,7 +867,9 @@ function RunLogPanel({
                 key={`run:${e.run.jobId}`}
                 className="border-(--el-border-soft) border-b last:border-b-0"
               >
-                <td className="py-2 font-sans text-xs text-(--el-text-muted)">{when(e.at)}</td>
+                <td className="py-2 font-sans text-xs text-(--el-text-muted)">
+                  {when(e.at, locale)}
+                </td>
                 <td className="py-2">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <Pill
@@ -877,7 +886,7 @@ function RunLogPanel({
                   {fmtTokens(e.run.inputTokens + e.run.outputTokens)}
                 </td>
                 <td className="py-2 text-right font-medium tabular-nums text-(--el-text-strong)">
-                  {fmt(e.run.credits)}
+                  {fmt(e.run.credits, locale)}
                 </td>
               </tr>
             ) : (
@@ -893,7 +902,9 @@ function RunLogPanel({
                 key={`search:${e.search.jobId}`}
                 className="border-(--el-border-soft) border-b last:border-b-0"
               >
-                <td className="py-2 font-sans text-xs text-(--el-text-muted)">{when(e.at)}</td>
+                <td className="py-2 font-sans text-xs text-(--el-text-muted)">
+                  {when(e.at, locale)}
+                </td>
                 <td className="py-2">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <Pill tone="neutral">
@@ -911,7 +922,7 @@ function RunLogPanel({
                   </span>
                 </td>
                 <td className="py-2 text-right font-medium tabular-nums text-(--el-text-strong)">
-                  {fmt(e.search.credits)}
+                  {fmt(e.search.credits, locale)}
                 </td>
               </tr>
             ),
@@ -939,6 +950,7 @@ function MemberLockNote({ t }: { t: T }) {
 }
 
 function LowBalanceBanner({ balance, pct, t }: { balance: number; pct: number; t: T }) {
+  const locale = useLocale();
   return (
     <div className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-yellow) p-(--spacing-card-padding)">
       <AlertTriangle
@@ -947,7 +959,8 @@ function LowBalanceBanner({ balance, pct, t }: { balance: number; pct: number; t
         aria-hidden
       />
       <p className="font-sans text-xs text-(--el-text-strong)">
-        <strong>{t('lowBalance.title')}</strong> {t('lowBalance.body', { n: fmt(balance), pct })}
+        <strong>{t('lowBalance.title')}</strong>{' '}
+        {t('lowBalance.body', { n: fmt(balance, locale), pct })}
       </p>
     </div>
   );

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { type ReactNode } from 'react';
 import { BrandMark } from '@/components/brand/BrandMark';
+import { AuthLanguageControl } from './_components/AuthLanguageControl';
 
 /**
  * Shared frame for the auth pages (sign-in, sign-up, reset-password,
@@ -74,11 +75,30 @@ import { BrandMark } from '@/components/brand/BrandMark';
  * sort order against it is not guaranteed) and its narrow side padding drops to `px-4`, because the pinned
  * action bar is the card's last child and carries both itself. `/device` and
  * `/two-factor-required` render the bare attribute and are unchanged.
+ *
+ * THE LANGUAGE CONTROL (MOTIR-7758) sits in the PAGE's top-right corner, on the
+ * wash, OUTSIDE the card — `design/auth/design-notes.md` § _The language control
+ * on the signed-out frame_, which measured the placements against this frame.
+ * The outer `div` is `relative` and the control's `<header>` is its first
+ * child, `absolute top-2 right-6 z-10`: out of the centred column's flow, so it adds
+ * nothing to the card's height or the page's (the `/device` fold figures above
+ * hold with it), and first in the DOM, so it is first in the tab order. It ends
+ * at 44px, inside the 48px `py-12` top padding. The one frame change it needs is
+ * that the wide screen's page tightening is scoped to `lg:`
+ * (`lg:has-[[data-auth-wide]]:py-8`): between 640px and ~930px the 40rem card
+ * would otherwise sit under the corner, so below `lg` the wide screen keeps
+ * `py-12`. That costs `/device` 32px of PAGE height below `lg`, where no fold
+ * budget was measured, and no card height anywhere.
  */
 export default async function AuthLayout({ children }: { children: ReactNode }) {
   const t = await getTranslations('auth');
   return (
-    <div className="flex min-h-dvh w-full items-center justify-center overflow-x-clip bg-(--el-auth-wash) px-6 py-12 has-[[data-auth-wide]]:py-8 sm:px-10">
+    <div className="relative flex min-h-dvh w-full items-center justify-center overflow-x-clip bg-(--el-auth-wash) px-6 py-12 sm:px-10 lg:has-[[data-auth-wide]]:py-8">
+      {/* A `<header>` (the banner landmark) rather than a bare `div`, so the
+          control is inside a landmark like everything else on the page. */}
+      <header className="absolute top-2 right-6 z-10">
+        <AuthLanguageControl />
+      </header>
       <main className="w-full max-w-[28rem] has-[[data-auth-wide]]:max-w-[40rem] lg:has-[[data-auth-wide=consent]]:max-w-[64rem]">
         {/* The card is the brand row's column: `gap-8` matches the rhythm
             `AuthShell` already sets inside itself, so the lockup reads as the

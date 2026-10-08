@@ -46,11 +46,13 @@ function SectionHeader({
     <div role="rowgroup">
       <div
         role="row"
-        className="flex h-10 items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-4 pl-4 md:grid"
+        // A MINIMUM height: a section title or column label longer than its
+        // track wraps at a word boundary and grows the band (MOTIR-7759).
+        className="flex min-h-10 items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) py-1 pr-4 pl-4 md:grid"
         style={{ gridTemplateColumns: gridTemplate }}
       >
         <div role="columnheader" className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-[11px] font-semibold tracking-wider text-(--el-text) uppercase">
+          <span className="min-w-0 hyphens-auto text-[11px] font-semibold tracking-wider text-(--el-text) uppercase">
             {title}
           </span>
           <span className="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)">
@@ -65,7 +67,7 @@ function SectionHeader({
             role="columnheader"
             className="hidden min-w-0 items-center md:flex"
           >
-            <span className="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
+            <span className="min-w-0 hyphens-auto text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
               {c}
             </span>
           </div>

@@ -1,0 +1,224 @@
+{
+  "locale": "nl",
+  "register": {
+    "formality": "\"je\" (informal), as Dutch SaaS UIs (Atlassian, GitHub) address the reader. Buttons are infinitives (Opslaan, Verwijderen).",
+    "quotes": "‘…’ (nested “…”)",
+    "note": "Compounds closed up (werkitem, ontwerpresultaat). Sentence case. A sentence-final ellipsis is \"…\"."
+  },
+  "terms": {
+    "Motir": {
+      "translation": "Motir",
+      "doNotTranslate": true,
+      "source": "Product name (story MOTIR-7730 copy rules)",
+      "note": "Never translated, transliterated or inflected."
+    },
+    "Motir AI": {
+      "translation": "Motir AI",
+      "doNotTranslate": true,
+      "source": "Product name (story MOTIR-7730 copy rules)",
+      "note": "Never translated, transliterated or inflected."
+    },
+    "Sprint": {
+      "translation": "Sprint",
+      "source": "messages/zh.json issueViews.sprint (\"Sprint\", kept Latin) and story MOTIR-7730 copy rules",
+      "note": "Kept in Latin script by decision, in every language."
+    },
+    "work item": {
+      "translation": "werkitem",
+      "banned": ["issue", "kaart", "ticket", "melding"],
+      "allowedSenses": "'card' (and its translation) stays correct for a PAYMENT card (billing) and a UI PANEL (a dashboard or board card component) — the same senses tests/i18n-catalog.test.ts's CARD_SENSE_ALLOWLIST allows in en and zh. It is banned only as a name for a work item.",
+      "source": "Microsoft Terminology / Azure DevOps Boards, Dutch UI (\"work item\")",
+      "note": "The ONE product noun. Never the language's word for \"issue\" or \"card\", even where its Jira says so. Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "item": {
+      "translation": "item",
+      "source": "Microsoft Terminology / Azure DevOps Boards, Dutch UI (\"work item\")",
+      "note": "Short form of \"work item\" where the full term would repeat (e.g. \"3 items\"). Same banned list as \"work item\". Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "epic": {
+      "translation": "Epic",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "story": {
+      "translation": "Story",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "task": {
+      "translation": "Taak",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "bug": {
+      "translation": "Bug",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "subtask": {
+      "translation": "Subtaak",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "To do": {
+      "translation": "Te doen",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Blocked": {
+      "translation": "Geblokkeerd",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Planning": {
+      "translation": "In planning",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "In progress": {
+      "translation": "Bezig",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Implemented": {
+      "translation": "Geïmplementeerd",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "In review": {
+      "translation": "In review",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Done": {
+      "translation": "Klaar",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "backlog": {
+      "translation": "Backlog",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "board": {
+      "translation": "Bord",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "dashboard": {
+      "translation": "Dashboard",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "story points": {
+      "translation": "Storypoints",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "estimate": {
+      "translation": "Schatting",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "assignee": {
+      "translation": "Verantwoordelijke",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "reporter": {
+      "translation": "Maker",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "priority": {
+      "translation": "Prioriteit",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "label": {
+      "translation": "Label",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "component": {
+      "translation": "Component",
+      "source": "Atlassian Jira Software, Dutch UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "folder": {
+      "translation": "Map",
+      "source": "Microsoft 365 / Azure DevOps, Dutch UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "project": {
+      "translation": "Project",
+      "source": "Microsoft 365 / Azure DevOps, Dutch UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "workspace": {
+      "translation": "Werkruimte",
+      "source": "Microsoft 365 / Azure DevOps, Dutch UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "organization": {
+      "translation": "Organisatie",
+      "source": "Microsoft 365 / Azure DevOps, Dutch UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "member": {
+      "translation": "Lid",
+      "source": "Microsoft 365 / Azure DevOps, Dutch UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "plan": {
+      "translation": "Plan",
+      "source": "Atlassian Jira Software / GitHub, Dutch UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "proposal": {
+      "translation": "Voorstel",
+      "source": "Atlassian Jira Software / GitHub, Dutch UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "approve": {
+      "translation": "goedkeuren",
+      "source": "Atlassian Jira Software / GitHub, Dutch UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "approval": {
+      "translation": "Goedkeuring",
+      "source": "Atlassian Jira Software / GitHub, Dutch UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "acceptance criteria": {
+      "translation": "Acceptatiecriteria",
+      "source": "Atlassian Jira Software / GitHub, Dutch UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "agent": {
+      "translation": "Agent",
+      "source": "Atlassian Jira Software / GitHub, Dutch UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "run": {
+      "translation": "Run",
+      "source": "Atlassian Jira Software / GitHub, Dutch UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "pull request": {
+      "translation": "pull request",
+      "source": "GitHub, Dutch UI (pull request)",
+      "note": "Kept in Latin (lower case mid-sentence), as developers using GitHub in this language read it. Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "design result": {
+      "translation": "Ontwerpresultaat",
+      "source": "Atlassian Jira Software / GitHub, Dutch UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "acceptance video": {
+      "translation": "Acceptatievideo",
+      "source": "Atlassian Jira Software / GitHub, Dutch UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    }
+  }
+}

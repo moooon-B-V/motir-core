@@ -124,7 +124,7 @@ describe('StatusHeldNotice', () => {
       messages: zhMessages,
     });
     expect(screen.getByTestId('status-held-notice').textContent).toContain(
-      '合并该合并请求后会自动变更',
+      '合并该拉取请求后会自动变更',
     );
   });
 });
@@ -378,7 +378,7 @@ describe('StatusHeldNotice — the mark', () => {
         locale: 'zh',
       },
     );
-    screen.getByText('该事项已标记为已过时，状态无法重新打开。');
+    screen.getByText('该工作项已标记为已过时，状态无法重新打开。');
     screen.getByRole('link', { name: '清除标记' });
   });
 });

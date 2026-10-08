@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { CircleSlash, TriangleAlert } from 'lucide-react';
 import { RunModal } from '@/app/(authed)/runs/_components/RunModal';
 import { RunTonePill } from '@/components/runs/RunTonePill';
@@ -441,16 +441,17 @@ function RunRow({
  * a hydration bug for a lint error the CI rule `react-hooks/set-state-in-effect`
  * exists to refuse — and it was the wrong instrument anyway.
  *
- * Pinning the locale and the zone removes the disagreement instead of papering
- * over it: the same input renders the same string in both places, so this is a
+ * Pinning the zone, and formatting in the request's own locale (MOTIR-7771),
+ * removes the disagreement instead of papering over it: the same input renders
+ * the same string in both places, so this is a
  * pure function and the row needs no client state at all. It is the same answer
  * the item page's `runTimes.ts` reached, and for the same stated reason — a
  * run's timestamps are written by a machine that may be anywhere, and a label
  * silently rendered in the SERVER's zone is a number a reader cannot check.
  *
- * Per-viewer local time is a real want and a separate one; it needs the shipped
- * locale seam, which is not this card's.
+ * Per-viewer local time is a real want and a separate one.
  */
 function RunTime({ iso }: { iso: string }) {
-  return <span>{formatRunInstant(iso)}</span>;
+  const locale = useLocale();
+  return <span>{formatRunInstant(iso, locale)}</span>;
 }

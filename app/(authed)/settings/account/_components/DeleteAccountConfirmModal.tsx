@@ -363,6 +363,7 @@ function LedgerRow({
   desc: string;
   count?: number;
 }) {
+  const locale = useLocale();
   return (
     <div className="flex items-start gap-2.5 px-3.5 py-3">
       <span className="mt-px inline-flex h-4 w-4 shrink-0 text-(--el-icon-muted)">{icon}</span>
@@ -374,7 +375,7 @@ function LedgerRow({
       </span>
       {count === undefined ? null : (
         <span className="shrink-0 font-sans text-sm tabular-nums text-(--el-text-secondary)">
-          {count.toLocaleString()}
+          {count.toLocaleString(locale)}
         </span>
       )}
     </div>

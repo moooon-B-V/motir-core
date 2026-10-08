@@ -44,6 +44,11 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/p/MOTIR',
   useSearchParams: () => new URLSearchParams(),
 }));
+// The frame's language control (MOTIR-7758) is a client component with its own
+// suite (`auth-language-control.test.tsx`); this file is about the lockup.
+vi.mock('@/app/(auth)/_components/AuthLanguageControl', () => ({
+  AuthLanguageControl: () => null,
+}));
 vi.mock('@/lib/auth/client', () => ({
   signOut: vi.fn(),
   signIn: { email: vi.fn(), social: vi.fn() },

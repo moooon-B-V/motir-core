@@ -156,11 +156,15 @@ export function LinkPullRequestDoor() {
   const t = useTranslations('github');
   const { open, openForm } = useDevelopmentLink();
   if (open) return null;
+  // `whitespace-nowrap`: the header row shares its width with the card's gloss,
+  // and a CJK label squeezed by it broke between characters (ja
+  // 「プルリクエストをリンク」 on two lines). The door keeps its width and the
+  // gloss — prose, not a control — wraps instead (MOTIR-7761; remedy 1).
   return (
     <button
       type="button"
       onClick={openForm}
-      className="text-(--el-link) inline-flex items-center gap-1.5 rounded-(--radius-control) px-1.5 py-1 font-sans text-sm font-semibold hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+      className="text-(--el-link) inline-flex items-center gap-1.5 rounded-(--radius-control) px-1.5 py-1 font-sans text-sm font-semibold whitespace-nowrap hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
       <Plus className="h-4 w-4" aria-hidden />
       {t('development.linkPr')}

@@ -88,7 +88,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Locale comes from the NEXT_LOCALE cookie (resolved in i18n/request.ts), so
+  // Locale comes from the request config's resolution (i18n/request.ts), so
   // <html lang/dir> is correct on the first byte — no client flash. (The theme
   // attributes still need the FOUC script below because they live in
   // localStorage, which the server can't read; the locale does not.)

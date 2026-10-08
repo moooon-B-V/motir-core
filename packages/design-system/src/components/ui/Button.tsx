@@ -23,8 +23,11 @@ export const buttonVariants = cva(
   cn(
     // Base layout
     'inline-flex items-center justify-center gap-2',
-    // Typography
-    'font-sans text-sm font-medium leading-none',
+    // Typography. `whitespace-nowrap`: a label longer than its English draft
+    // (German and Polish run 30–40% longer) WIDENS the button instead of
+    // wrapping to a second line inside a box one line tall, where the text
+    // spills out of the control (MOTIR-7759).
+    'font-sans text-sm font-medium leading-none whitespace-nowrap',
     // Shape — semantic tokens that flip with the active style
     'rounded-(--radius-btn)',
     // Interaction
