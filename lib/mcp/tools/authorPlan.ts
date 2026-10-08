@@ -859,6 +859,18 @@ const updatePlanItemInputSchema = {
         ' REPLACES the list whole — a list has no sparse edit — so send the set you want; ' +
         '`[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
     ),
+  revision: z
+    .boolean()
+    .optional()
+    .describe(
+      'Set true to edit a proposal on a plan you have ALREADY closed — a plan that is ' +
+        '`planned` and in front of a reviewer. Without it such an edit is refused. The plan ' +
+        'does NOT re-open: it is `planned` before, during and after, and the edit is recorded ' +
+        'on its timeline with the harness and model that made it. This is how a card’s WORDS ' +
+        'are corrected on a landed plan — the same card, same id and edges — rather than by ' +
+        'withdrawing it and appending a copy. On a `generating` plan it is unnecessary and ' +
+        'changes nothing. `approved` and `declined` stay frozen.',
+    ),
 };
 
 // ── The CORRECTION door (Story MOTIR-3533 · Subtask MOTIR-3541) ────────────
@@ -887,8 +899,13 @@ const correctionRefField = z
       'are interchangeable (MOTIR-3934).',
   );
 
+// `revision` is `update_plan_item`'s opt-in; the correction door is legal on a
+// `planned` plan already and takes no such flag, so it is dropped from the spread.
+const { revision: _updatePlanItemRevision, ...updatePlanItemFieldsSchema } =
+  updatePlanItemInputSchema;
+
 const updatePlanProposalInputSchema = {
-  ...updatePlanItemInputSchema,
+  ...updatePlanItemFieldsSchema,
   planItemId: z
     .string()
     .trim()
@@ -1171,6 +1188,7 @@ interface UpdatePlanItemArgs {
   estimateMinutes?: number | null;
   difficulty?: WorkItemDifficultyDto | null;
   todos?: ProposedTodoInput[] | null;
+  revision?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1240,8 +1258,9 @@ function summarizeClose(plan: PlanWithItemsDto): string {
     '',
     'It is in the review queue now. `add_plan_items` is refused from here UNLESS it carries ' +
       '`revision: true` — which appends to the plan where it stands, keeps it `planned`, and ' +
-      `records itself on the timeline; \`${UPDATE_PLAN_ITEM_TOOL_NAME}\` is refused outright ` +
-      `(\`update_plan_proposal\` is a landed plan's edit door). Read it back with ` +
+      `records itself on the timeline; \`${UPDATE_PLAN_ITEM_TOOL_NAME}\` likewise needs ` +
+      '`revision: true` to rewrite a card, and `update_plan_proposal` corrects where one sits. ' +
+      `Read it back with ` +
       `\`${GET_PLAN_TOOL_NAME}\`.`,
     '',
     PROPOSAL_GATE,
@@ -1305,17 +1324,26 @@ function summarizeDeepen(
   plan: PlanWithItemsDto,
   planItemId: string,
   changed: readonly string[],
+  revision = false,
 ): string {
+  const closing =
+    plan.status === 'planned'
+      ? 'This plan is `planned` — it is in front of a reviewer, and this edit is on its ' +
+        'timeline with the harness and model that made it. It did NOT re-open: the plan was ' +
+        `\`planned\` before this call and is \`planned\` after it. Read it back with ` +
+        `\`${GET_PLAN_TOOL_NAME}\`.`
+      : `Still \`generating\` — deepen the rest, then send \`final: true\` on a last ` +
+        `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` batch to put the plan in front of a reviewer. ` +
+        'After that this tool needs `revision: true`: a plan somebody is reading moves only ' +
+        'by an edit that declares itself.';
   return [
-    `Deepened proposal ${planItemId} on plan ${plan.id} — ${plan.status}, ` +
-      `${plan.itemCount} proposal(s) in total.`,
+    `${revision && plan.status === 'planned' ? 'Revised' : 'Deepened'} proposal ${planItemId} ` +
+      `on plan ${plan.id} — ${plan.status}, ${plan.itemCount} proposal(s) in total.`,
     changed.length > 0
       ? `Fields set by this call: ${changed.join(', ')}. Every other field was left as it was.`
       : 'No fields were sent, so nothing changed.',
     '',
-    `Still \`generating\` — deepen the rest, then send \`final: true\` on a last ` +
-      `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` batch to put the plan in front of a reviewer. ` +
-      'After that this tool is refused: a plan somebody is reading does not move.',
+    closing,
     '',
     PROPOSAL_GATE,
   ].join('\n');
@@ -1808,10 +1836,16 @@ export async function runUpdatePlanItem(
     changed.push(key);
   }
 
-  const plan = await plansService.deepenProposal(args.planId, args.planItemId, input, ctx);
+  // ⚠️ The flag is passed through as the CHOICE of service method, not derived
+  // from a status this adapter never read — the same reason `add_plan_items`
+  // hands `revision` through verbatim (AMENDMENT 12): the service re-takes the
+  // status decision under the plan row lock.
+  const plan = args.revision
+    ? await plansService.reviseProposal(args.planId, args.planItemId, input, ctx)
+    : await plansService.deepenProposal(args.planId, args.planItemId, input, ctx);
 
   return toolOk(
-    summarizeDeepen(plan, args.planItemId, changed),
+    summarizeDeepen(plan, args.planItemId, changed, args.revision === true),
     derived(planPayload, presentMcpPlan(plan)),
   );
 }
@@ -2109,9 +2143,13 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'description and explanation, its work type, priority, executor and sizing — now that ' +
         'you can see every sibling you proposed. The patch is SPARSE: a field you omit is left ' +
         'exactly as it was, and an explicit `null` clears it. Address the proposal by the id ' +
-        `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` returned for it in \`planItemIds\`. Legal only while ` +
-        'the plan is still `generating` — once you send `final: true` it is in front of a ' +
-        'reviewer and stops moving, and this tool refuses, naming the status. It cannot ' +
+        `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` returned for it in \`planItemIds\`. While the plan ` +
+        'is `generating` it just works. Once you send `final: true` it is in front of a ' +
+        'reviewer, and an edit is refused UNLESS it carries `revision: true`: a REVISION ' +
+        'rewrites the card where it stands — same id, same edges — keeps the plan `planned`, ' +
+        'and is recorded on its timeline with the harness and model that made it. That is the ' +
+        'door for correcting what a card SAYS on a landed plan; never withdraw a card and ' +
+        'append a copy to change its words. `approved` and `declined` stay frozen. It cannot ' +
         're-parent a proposal, change its dependency edges or re-pin its repo: those are the ' +
         'shape you settled in phase one. ' +
         'IMPORTANT: this creates NO work item and changes nothing in the tree. Approving the ' +
