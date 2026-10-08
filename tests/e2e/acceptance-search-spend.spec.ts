@@ -83,6 +83,23 @@ const bill = enMessages.billing.search;
 const OWNER = 'acceptance-search-spend@example.com';
 const MEMBER = 'acceptance-search-member@example.com';
 
+// ⚠️ ITS OWN TIMEOUT, BECAUSE ITS PACING DOES NOT FIT THE LANE DEFAULT
+// (MOTIR-7838). This spec holds 16 beats at `BEAT_MS` (4000ms) and 5 chapters at
+// `CHAPTER_HOLD_MS` (2500ms) — **76.5s of deliberate hold** — against the
+// `playwright.acceptance.config.ts` per-test default of 90s. That left 13.5s for
+// the database reset, the seed, TWO sign-ins (~11s each, per the measurement
+// above) and eleven navigations, so the 81.7s walk passed with ~8s to spare and
+// timed out the first time the runner was slow: merge-queue run 37760263518
+// died at 90.0s with the last chapter's "unavailable" panel already on screen,
+// and the timeout printed NO call log — it landed inside a hold, not inside a
+// locator, which is the tell that this is a budget and not a hang.
+//
+// The holds are the POINT — this lane records a clip a reviewer watches
+// (`docs/decisions/acceptance-video.md`), so the pacing is the deliverable and
+// shortening it to fit is the wrong trade. 180s is the figure
+// `acceptance-repository-tenancy.spec.ts` (MOTIR-4876) takes for the same shape.
+test.describe.configure({ timeout: 180_000 });
+
 /** The org's motir-ai state: a paid plan, real search spend, and a remainder. */
 function withSearch(over: Partial<BillingFixtureEntry> = {}): BillingFixtureEntry {
   return {
