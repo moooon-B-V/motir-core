@@ -112,8 +112,17 @@ const fill = (template: string, values: Record<string, string | number>): string
   template.replace(/\{(\w+)\}/g, (whole, key: string) =>
     key in values ? String(values[key]) : whole,
   );
-/** A rich message's text: its `<tag>…</tag>` markup removed, the chunks kept. */
-const textOf = (template: string): string => template.replace(/<\/?\w+>/g, '');
+/** A rich message's text: its `<tag>…</tag>` markup removed, the chunks kept.
+ *  Stripped to a fixed point, so no tag can be re-formed by the removal of
+ *  another (the input is our own catalogue, but the loop costs nothing). */
+const textOf = (template: string): string => {
+  let text = template;
+  for (let prev = ''; prev !== text; ) {
+    prev = text;
+    text = text.replace(/<\/?\w+>/g, '');
+  }
+  return text;
+};
 /** A template as a pattern — each `{placeholder}` matches any value. */
 const patternOf = (template: string, placeholder = '.+?'): string =>
   escapeRegExp(template).replace(/\\\{\w+\\\}/g, placeholder);
