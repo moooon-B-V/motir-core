@@ -1,4 +1,4 @@
-import { Prisma, type EnterpriseRequest } from '@/generated/prisma/client';
+import { Prisma, type EnterpriseRequest, type User } from '@/generated/prisma/client';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { pmTierForOrg } from '@/lib/billing/entitlements';
@@ -8,7 +8,11 @@ import {
   EnterpriseRequestOpenError,
   EnterpriseRequestValidationError,
 } from '@/lib/billing/errors';
-import { enterpriseRequestInputSchema, type EnterpriseRequestDTO } from '@/lib/dto/billing';
+import {
+  enterpriseRequestInputSchema,
+  type EnterpriseRequestDTO,
+  type EnterpriseRequestFormContextDTO,
+} from '@/lib/dto/billing';
 import { toEnterpriseRequestDTO } from '@/lib/mappers/billingMappers';
 import { orgCan } from '@/lib/organizations/capabilities';
 import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
@@ -16,6 +20,7 @@ import { withOrgContext } from '@/lib/organizations/context';
 import { enterpriseRequestRepository } from '@/lib/repositories/enterpriseRequestRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { sendEvent } from '@/lib/jobs/sendEvent';
@@ -59,6 +64,12 @@ async function assertBillingManager(actor: EnterpriseRequestActor, organizationI
       'Contacting sales is limited to the organization owner and admins.',
     );
   }
+}
+
+/** The sender as the org reads them — their name, else their email; null when the account is gone. */
+function senderName(user: User | null): string | null {
+  if (!user) return null;
+  return user.name || user.email || null;
 }
 
 function parseInput(raw: unknown) {
@@ -167,6 +178,7 @@ export const enterpriseRequestService = {
           row,
           organizationName: organization?.name ?? organizationId,
           requesterName: requester?.name || actor.email,
+          sender: senderName(requester),
         };
       });
     } catch (err) {
@@ -184,7 +196,7 @@ export const enterpriseRequestService = {
     // AFTER the commit, never inside it: a staff email about a request that
     // rolled back would describe nothing, and a mail failure must not undo it.
     await notifyStaff(committed.row, committed.organizationName, committed.requesterName);
-    return toEnterpriseRequestDTO(committed.row);
+    return toEnterpriseRequestDTO(committed.row, committed.sender);
   },
 
   /** The org's OPEN request, or `null` when none is open. Same gate as create. */
@@ -193,9 +205,40 @@ export const enterpriseRequestService = {
     organizationId: string,
   ): Promise<EnterpriseRequestDTO | null> {
     await assertBillingManager(actor, organizationId);
-    const row = await withOrgContext({ userId: actor.userId, organizationId }, (tx) =>
-      enterpriseRequestRepository.findOpenByOrganizationId(organizationId, tx),
+    return withOrgContext({ userId: actor.userId, organizationId }, async (tx) => {
+      const row = await enterpriseRequestRepository.findOpenByOrganizationId(organizationId, tx);
+      if (!row) return null;
+      const sender = row.requestedById
+        ? await userRepository.findById(row.requestedById, tx)
+        : null;
+      return toEnterpriseRequestDTO(row, senderName(sender));
+    });
+  },
+
+  /**
+   * What the Contact-sales form shows read-only beside the person's answers
+   * (MOTIR-7607) — today the org's connected-repository count. Read by the
+   * billing page on the server so the client is never trusted for it.
+   *
+   * Returns `null` rather than refusing when the viewer could not send a
+   * request anyway (off-cloud, or no `manageBilling`): the page renders for
+   * every member, and a member's form is never opened.
+   */
+  async getFormContext(
+    actor: EnterpriseRequestActor,
+    organizationId: string,
+  ): Promise<EnterpriseRequestFormContextDTO | null> {
+    try {
+      await assertBillingManager(actor, organizationId);
+    } catch (err) {
+      if (err instanceof BillingNotAvailableError || err instanceof BillingForbiddenError) {
+        return null;
+      }
+      throw err;
+    }
+    const repositoryCount = await withOrgContext({ userId: actor.userId, organizationId }, (tx) =>
+      projectRepoRepository.countByOrganization(organizationId, tx),
     );
-    return row ? toEnterpriseRequestDTO(row) : null;
+    return { repositoryCount };
   },
 };

@@ -36,7 +36,10 @@ const ORG_STATUS: Record<EnterpriseRequest['status'], EnterpriseRequestOrgStatus
 
 /** The org's view of an Enterprise request (MOTIR-7605) — staff's states folded
  *  into the org's words, and nothing the org did not give or cannot see. */
-export function toEnterpriseRequestDTO(row: EnterpriseRequest): EnterpriseRequestDTO {
+export function toEnterpriseRequestDTO(
+  row: EnterpriseRequest,
+  requestedByName: string | null,
+): EnterpriseRequestDTO {
   return {
     id: row.id,
     status: ORG_STATUS[row.status],
@@ -49,5 +52,6 @@ export function toEnterpriseRequestDTO(row: EnterpriseRequest): EnterpriseReques
     teamSize: row.teamSize,
     contact: row.contact,
     note: row.note,
+    requestedByName,
   };
 }

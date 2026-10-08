@@ -14,6 +14,7 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { warmPool } from '../helpers/warmPool';
+import { seedControlOrg, seedSiblingWorkspaceRepo } from '../helpers/siblingWorkspaceRepo';
 
 // The ORG side of an Enterprise request (Story MOTIR-7602 · Subtask MOTIR-7605) —
 // `enterpriseRequestService`, against the real Postgres. Pins the billing
@@ -311,5 +312,55 @@ describe('enterpriseRequestService.getOpen', () => {
     const b = await makeOrg();
     await enterpriseRequestService.create(a.owner, a.organizationId, { note: 'a' });
     expect(await enterpriseRequestService.getOpen(b.owner, b.organizationId)).toBeNull();
+  });
+});
+
+// The read-only half of the Contact-sales form (MOTIR-7607): who sent the open
+// request, and the org's connected-repository count, both read on the server.
+describe("enterpriseRequestService — the form's read-only facts (MOTIR-7607)", () => {
+  it('names the sender on the open request, and the same name on the send', async () => {
+    const { organizationId, owner, admin } = await makeOrg();
+    await adminDb.user.update({ where: { id: owner.userId }, data: { name: 'Sam Rivera' } });
+
+    const sent = await enterpriseRequestService.create(owner, organizationId, { note: 'x' });
+    expect(sent.requestedByName).toBe('Sam Rivera');
+    expect((await enterpriseRequestService.getOpen(admin, organizationId))?.requestedByName).toBe(
+      'Sam Rivera',
+    );
+
+    // The sender's account is gone (SetNull): the request stands, the name does not.
+    await adminDb.enterpriseRequest.update({
+      where: { id: sent.id },
+      data: { requestedById: null },
+    });
+    expect(
+      (await enterpriseRequestService.getOpen(admin, organizationId))?.requestedByName,
+    ).toBeNull();
+  });
+
+  it("counts the repositories linked across ALL the org's workspaces, and only its own", async () => {
+    // The link row lives in a SIBLING workspace of the org (W2), so a count
+    // scoped to one workspace would miss it; the control org's link must not
+    // be counted at all.
+    const fx = await seedSiblingWorkspaceRepo();
+    await seedControlOrg();
+    const user = await adminDb.user.findUniqueOrThrow({ where: { id: fx.userId } });
+
+    expect(
+      await enterpriseRequestService.getFormContext(
+        { userId: user.id, email: user.email },
+        fx.organizationId,
+      ),
+    ).toEqual({ repositoryCount: 1 });
+  });
+
+  it('is null for a viewer who cannot send, and off-cloud — never a refusal', async () => {
+    const { organizationId, owner, member } = await makeOrg();
+    expect(await enterpriseRequestService.getFormContext(member, organizationId)).toBeNull();
+    expect(await enterpriseRequestService.getFormContext(owner, organizationId)).toEqual({
+      repositoryCount: 0,
+    });
+    delete process.env['MOTIR_CLOUD'];
+    expect(await enterpriseRequestService.getFormContext(owner, organizationId)).toBeNull();
   });
 });

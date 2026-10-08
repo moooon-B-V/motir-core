@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { enterpriseRequestService } from '@/lib/services/enterpriseRequestService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -61,27 +62,52 @@ export default async function OrganizationBillingPage() {
           screen (home / Motir AI / Motir seats), each with its own breadcrumb. */}
       <span className="sr-only">{t('title')}</span>
       <Suspense fallback={<SettingsPaneFrame />}>
-        <BillingPaneBody orgId={org.id} orgName={org.name} actorUserId={session.user.id} />
+        <BillingPaneBody
+          orgId={org.id}
+          orgName={org.name}
+          actor={{ id: session.user.id, name: session.user.name, email: session.user.email }}
+        />
       </Suspense>
     </div>
   );
 }
 
 /** The seat count (one seat per member, ADR §3) for the seat preview + the
- *  panel-6 seat calc — resolved the same way the org settings page does. */
+ *  panel-6 seat calc — resolved the same way the org settings page does — and
+ *  what the Enterprise Contact-sales form shows read-only (MOTIR-7607): the
+ *  requester, and the org's connected-repository count, read server-side so the
+ *  client is never trusted for it (null for a viewer who cannot send). */
 async function BillingPaneBody({
   orgId,
   orgName,
-  actorUserId,
+  actor,
 }: {
   orgId: string;
   orgName: string;
-  actorUserId: string;
+  actor: { id: string; name: string | null; email: string };
 }) {
-  const { total: memberCount } = await organizationsService.listMembers({
-    organizationId: orgId,
-    actorUserId,
-    limit: 1,
-  });
-  return <BillingClient orgId={orgId} orgName={orgName} memberCount={memberCount} />;
+  const [{ total: memberCount }, formContext] = await Promise.all([
+    organizationsService.listMembers({
+      organizationId: orgId,
+      actorUserId: actor.id,
+      limit: 1,
+    }),
+    enterpriseRequestService.getFormContext({ userId: actor.id, email: actor.email }, orgId),
+  ]);
+  return (
+    <BillingClient
+      orgId={orgId}
+      orgName={orgName}
+      memberCount={memberCount}
+      contactSales={
+        formContext
+          ? {
+              requesterName: actor.name || actor.email,
+              requesterEmail: actor.email,
+              repositoryCount: formContext.repositoryCount,
+            }
+          : null
+      }
+    />
+  );
 }

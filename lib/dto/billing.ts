@@ -296,4 +296,18 @@ export interface EnterpriseRequestDTO {
   teamSize: EnterpriseTeamSizeValue | null;
   contact: string;
   note: string;
+  /** Who sent it, as the org reads it (the user's name, else their email);
+   *  null once the sender's account is gone. The read-only view's "by …". */
+  requestedByName: string | null;
+}
+
+/**
+ * What the Contact-sales form shows read-only beside the person's answers
+ * (MOTIR-7607): read server-side, never trusted from the client. `null` from
+ * the service when the viewer cannot send a request (off-cloud, or no
+ * `manageBilling`), so the page passes nothing for the form to show.
+ */
+export interface EnterpriseRequestFormContextDTO {
+  /** The org's connected repositories — `project_repository` rows across its workspaces. */
+  repositoryCount: number;
 }

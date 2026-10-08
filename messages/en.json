@@ -6308,7 +6308,6 @@
       "once": "once",
       "ctaChoose": "Choose {plan}",
       "ctaUpgrade": "Upgrade to {plan}",
-      "ctaContactSales": "Contact sales",
       "ctaCurrent": "Current plan",
       "ctaTrialUsed": "Trial used",
       "footer": "Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax is applied automatically at checkout. Credits are an internal usage allotment; the price shown is the AI plan fee, billed by Stripe to the {org} organization. Your Motir seats are billed separately — manage them on the Motir plan screen.",
@@ -6424,6 +6423,120 @@
     "internalBilling": {
       "badge": "Internal billing",
       "note": "This organization is charged exactly like a customer and then made whole — every figure below is real, and the balance nets to zero."
+    },
+    "contactSales": {
+      "contact": "Contact sales",
+      "sentChip": "Request sent · {date}",
+      "memberReason": "Only owners and admins of {org} can contact sales.",
+      "title": "Contact sales — Enterprise",
+      "subtitle": "Tell us what you want Motir to run. Platform staff read every request and reply to you directly.",
+      "facts": {
+        "heading": "Sent with your request",
+        "organization": "Organization",
+        "requestedBy": "Requested by",
+        "currentPlan": "Current plan",
+        "repositories": "Repositories connected"
+      },
+      "optionalNote": "Everything below is optional except the note.",
+      "fields": {
+        "cardsPerDay": "Work items a day, roughly",
+        "cardsPerDayPlaceholder": "e.g. 40",
+        "parallelAgents": "Agents in parallel",
+        "parallelAgentsPlaceholder": "e.g. 8",
+        "agentPath": "Which agents",
+        "autonomy": "How should it run?",
+        "startWhen": "When would you start?",
+        "teamSize": "Team size",
+        "choose": "Choose…",
+        "contact": "Best way to reach you",
+        "contactHelp": "Your account email. Change it if someone else should get the reply.",
+        "note": "Note",
+        "required": "Required",
+        "notePlaceholder": "What should Motir do for your team? Anything we should know about your repositories, security or timing."
+      },
+      "agentPath": {
+        "hosted": {
+          "label": "Motir’s hosted agents",
+          "hint": "Run on Motir’s models."
+        },
+        "own": {
+          "label": "Our own agents",
+          "hint": "Claude Code, Codex or another agent on our own credential, in Motir’s cloud."
+        },
+        "both": {
+          "label": "Both",
+          "hint": "Some of each."
+        }
+      },
+      "autonomy": {
+        "autonomous_lead": {
+          "label": "Around the clock, on its own",
+          "hint": "The autonomous lead: Motir plans, runs and repairs, and your team decides at approval gates."
+        },
+        "volume_only": {
+          "label": "A large volume of runs we start",
+          "hint": "Your team starts each run."
+        },
+        "unsure": {
+          "label": "Not sure yet",
+          "hint": ""
+        }
+      },
+      "startWhen": {
+        "now": "Now",
+        "within_month": "Within a month",
+        "within_quarter": "Within a quarter",
+        "exploring": "Just exploring"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "cancel": "Cancel",
+      "send": "Send request",
+      "sending": "Sending…",
+      "close": "Close",
+      "done": "Done",
+      "errors": {
+        "note": "Add a note — tell us what you want Motir to do for your team.",
+        "number": "Enter a whole number of at least 1."
+      },
+      "refused": {
+        "open": {
+          "title": "Your organization already has an open request.",
+          "body": "It was sent on {date}, from another tab or by another admin. Nothing new was sent.",
+          "bodyNoDate": "It was sent from another tab or by another admin. Nothing new was sent.",
+          "action": "View the request"
+        },
+        "forbidden": {
+          "title": "You can’t contact sales for {org}.",
+          "body": "Only owners and admins can. Your role may have changed since this page loaded — ask an organization admin."
+        },
+        "network": {
+          "title": "Couldn’t reach Motir.",
+          "body": "Nothing was sent. Check your connection and send again — what you wrote is kept."
+        }
+      },
+      "sent": {
+        "title": "Request sent",
+        "body": "Platform staff will reply to <b>{contact}</b>. Until the request is closed, the Enterprise card shows it instead of Contact sales."
+      },
+      "request": {
+        "title": "Your Enterprise request",
+        "subtitle": "Sent {date} by {name}.",
+        "subtitleNoName": "Sent {date}.",
+        "state": "State",
+        "asked": "What you told us",
+        "unset": "Not given",
+        "reply": "Platform staff reply to <b>{contact}</b>. To add something, answer their email.",
+        "status": {
+          "received": "Received",
+          "in_conversation": "In conversation",
+          "offer_sent": "Offer sent"
+        }
+      }
     }
   },
   "draftWithAi": {
