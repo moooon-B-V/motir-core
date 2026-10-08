@@ -107,13 +107,21 @@ describe('permissionDenial — pure decision over the whole registry', () => {
     }
   });
 
-  it('withholding ai:plan stops the billable submits and NOTHING else', () => {
+  it('withholding ai:plan stops the billable submits and the planning code-health read, and NOTHING else', () => {
     // The separation the six scopes could not express: a token that files work
-    // items but cannot spend the owner's AI credits.
+    // items but cannot spend the owner's AI credits. MOTIR-7793 adds ONE read to
+    // the set — `get_code_health`, which shows what the hosted planner reads, to
+    // the actors who may plan (`member-facing-permissions.md` AMENDMENT 3).
     const noPlanning = GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:plan');
     const blocked = MCP_TOOL_NAMES.filter((n) => permissionDenial(n, noPlanning) !== null);
     expect([...blocked].sort()).toEqual(
-      ['append_plan_turn', 'expand_item', 'open_plan_session', 'submit_plan_session'].sort(),
+      [
+        'append_plan_turn',
+        'expand_item',
+        'get_code_health',
+        'open_plan_session',
+        'submit_plan_session',
+      ].sort(),
     );
   });
 

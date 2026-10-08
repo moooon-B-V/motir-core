@@ -366,6 +366,18 @@ export const planChangeSessionRepository = {
     return rows[0] ?? null;
   },
 
+  /** Bump a guide conversation's filed-bug counter by one (MOTIR-7800). The
+   *  caller holds {@link lockById} on the row in the same transaction, so the
+   *  count it checked and this increment are one decision. */
+  async incrementGuideBugsFiled(id: string, tx: Prisma.TransactionClient): Promise<number> {
+    const row = await tx.planChangeSession.update({
+      where: { id },
+      data: { guideBugsFiled: { increment: 1 } },
+      select: { guideBugsFiled: true },
+    });
+    return row.guideBugsFiled;
+  },
+
   async update(
     id: string,
     data: PlanChangeSessionUpdateInput,

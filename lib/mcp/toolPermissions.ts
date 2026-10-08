@@ -365,6 +365,16 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   open_plan_session: 'ai:plan',
   append_plan_turn: 'ai:plan',
   submit_plan_session: 'ai:plan',
+  // The PLANNING read of code health (MOTIR-7793) — NOT a billable submit, and
+  // on this key anyway, by the rule: `aiConventionService.getPlanningCodeHealth`
+  // asserts `ai:plan` itself, so the door and the service ask the same question.
+  // Not `project:browse` (a browse-only token minted by an admin would then read
+  // what the browser reserves for `ai:configure`, through the owner's role), and
+  // not `ai:configure` (ungrantable to any token today; this tool would make it
+  // grantable and refuse every planning token already minted). The hosted
+  // planner already shows this content to every `ai:plan` holder —
+  // `docs/decisions/member-facing-permissions.md` AMENDMENT 3 to §4.
+  get_code_health: 'ai:plan',
 
   // ── ai:view_plan — the plan AUTHOR write that has a door ─────────────────
   // `plansService.addProposals` (and `markPlanned`, which `final: true` also

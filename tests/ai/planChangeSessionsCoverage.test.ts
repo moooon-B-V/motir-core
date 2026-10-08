@@ -305,6 +305,7 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       endReason: null,
       endedById: null,
       copiedFromSessionId: null,
+      guideBugsFiled: 0,
       createdAt: now,
       updatedAt: now,
     };

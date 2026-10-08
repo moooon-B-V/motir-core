@@ -199,6 +199,29 @@ export const aiWorkItemsService = {
    * only resolved INSIDE the token's project — a key from anywhere else is
    * `WorkItemNotFoundError` (404), typed apart from a bad token's 401 so the
    * caller can tell "wrong project" from "not authenticated".
+   *
+   * PLANLESS JOBS (Story MOTIR-7797 · MOTIR-7799; decision MOTIR-7798 Q2). A job
+   * with no plan in the token's project is refused (`NoPlanForJobError`, 404) ON
+   * PURPOSE, and there is no planless arm. The job token carries NO job id
+   * (`lib/ai/jobToken.ts` — its claims are user, workspace, project, iat, exp):
+   * `jobId` is a body field the caller writes, so a counter keyed on a job with
+   * no row here is a counter whose key the caller chooses, and a fresh `jobId`
+   * per call would reset it — that is not a bound. None is needed, because every
+   * run that opens PART 1 (the conversation) has its plan before the model can
+   * call `log_bug`: (1) `aiPlanEditsService.submitPlanEditJob` — behind the
+   * conversation's `planChangeSessionsService.submit`, MCP `submit_plan_session`
+   * and every expand / augment / contextual submit — opens the Plan with
+   * `sourceJobId: jobId` straight after motir-ai accepts the job, and
+   * `aiGenerationService.startGeneration` does the same; (2) motir-ai's
+   * `openPart1` already hands the conversation `planInFlight(jobToken, job.id)`,
+   * which `clear_plan` withdraws through and which would not work without that
+   * plan. `tests/integration/ai/logBugConversationJob.test.ts` pins (1). The only
+   * `plan` submit with no plan is the onboarding ROUTING run, which plans nothing
+   * and never opens PART 1. So the conversation and the phases of one job share
+   * the same `PLANNER_BUGS_PER_JOB`.
+   *
+   * `explanationMd` (optional, MOTIR-7799) is written at birth by the same create
+   * as an `ai_draft` explanation; absent means none.
    */
   async filePlannerBug(
     input: FilePlannerBugInput,
@@ -268,6 +291,9 @@ export const aiWorkItemsService = {
             parentId,
             folderId,
             descriptionMd: input.descriptionMd ?? null,
+            ...(input.explanationMd != null && input.explanationMd.trim() !== ''
+              ? { explanationMd: input.explanationMd, explanationSource: 'ai_draft' as const }
+              : {}),
             provenance: {
               planning: { source: 'native', harness: actor.harness, model: actor.model },
             },
@@ -329,6 +355,8 @@ export interface FilePlannerBugInput {
   jobId: string;
   title: string;
   descriptionMd?: string | null;
+  /** The bug's explanation (MOTIR-7799), written at birth as an `ai_draft`; absent/blank → none. */
+  explanationMd?: string | null;
   /** Optional parent key (`MOTIR-<n>`), resolved INSIDE the token's project; omitted → the project's
    *  BUG DESTINATION, its folder or the project root (MOTIR-4937). */
   parentKey?: string | null;

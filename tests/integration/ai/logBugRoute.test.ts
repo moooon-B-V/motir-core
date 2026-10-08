@@ -183,6 +183,34 @@ describe('POST /api/internal/ai/log-bug — the filing, and what it records', ()
     expect(row?.parentId).toBe(story.id);
   });
 
+  it('an `explanationMd` is written at birth as an `ai_draft` explanation; absent means none (MOTIR-7799)', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_log_bug_explanation';
+    await openPlan(fx, jobId);
+
+    const withIt = await file(fx, jobId, {
+      title: 'The export drops the last row',
+      descriptionMd: 'Reproduced on a 3-row export.',
+      explanationMd: 'The reader stops one row early because the loop bound is exclusive.',
+    });
+    const without = await file(fx, jobId, { title: 'Another defect' });
+    expect(withIt.status).toBe(201);
+    expect(without.status).toBe(201);
+
+    const a = await adminDb.workItem.findUniqueOrThrow({
+      where: { id: ((await withIt.json()) as { id: string }).id },
+    });
+    expect(a.explanationMd).toBe(
+      'The reader stops one row early because the loop bound is exclusive.',
+    );
+    expect(a.explanationSource).toBe('ai_draft');
+    const b = await adminDb.workItem.findUniqueOrThrow({
+      where: { id: ((await without.json()) as { id: string }).id },
+    });
+    expect(b.explanationMd).toBeNull();
+    expect(b.explanationSource).toBe('user_authored');
+  });
+
   it('a blank model and no description are stored as nulls, never as empty strings', async () => {
     const fx = await makeFixture();
     const jobId = 'job_log_bug_blank';
@@ -364,6 +392,10 @@ describe('the PROJECT bound — the token’s project, and only the token’s', 
     expect(await adminDb.planRevision.count({ where: { changeKind: 'bug_filed' } })).toBe(0);
   });
 
+  // ⚠️ A STATED REFUSAL, not an accident (MOTIR-7799; decision MOTIR-7798 Q2):
+  // there is no planless arm, because the token carries no job id and a counter
+  // keyed on a caller-supplied `jobId` would be no bound. Every run that opens
+  // PART 1 has its plan first — `logBugConversationJob.test.ts` pins that.
   it('a job with no plan in this tenant → 404 NO_PLAN_FOR_JOB', async () => {
     const fx = await makeFixture();
     const res = await file(fx, 'job_never_opened', { title: 'x' });
@@ -397,6 +429,50 @@ describe('the VOLUME bound — at most PLANNER_BUGS_PER_JOB, counted on the trai
       planRevisionRepository.countByPlanAndKind(planId, PLANNER_BUG_FILED_CHANGE_KIND, tx),
     );
     expect(filed).toBe(PLANNER_BUGS_PER_JOB);
+  });
+
+  it('UNDER REAL CONCURRENCY at cap − 1, parallel filings for one job admit exactly ONE (MOTIR-7799)', async () => {
+    // The serial test above passes an UNLOCKED count too: each call commits
+    // before the next one counts. Here the calls overlap AT the count, so only
+    // the plan-row lock (`planRepository.lockById`, `SELECT … FOR UPDATE`) keeps
+    // a second one out — without it every parallel call would read
+    // `cap − 1` and all of them would file.
+    const fx = await makeFixture();
+    const jobId = 'job_cap_race';
+    const planId = await openPlan(fx, jobId);
+    for (let i = 1; i < PLANNER_BUGS_PER_JOB; i += 1) {
+      expect((await file(fx, jobId, { title: `seed ${i}` })).status, `seed ${i}`).toBe(201);
+    }
+    const bugsBefore = await adminDb.workItem.count({
+      where: { projectId: fx.projectId, kind: 'bug' },
+    });
+
+    const RACERS = 4;
+    const settled = await Promise.allSettled(
+      Array.from({ length: RACERS }, (_, i) => file(fx, jobId, { title: `racer ${i}` })),
+    );
+    // Every call RESOLVES (a refusal is a 409 response, never a throw) …
+    const responses = settled.map((s) => {
+      expect(s.status).toBe('fulfilled');
+      return (s as PromiseFulfilledResult<Response>).value;
+    });
+    // … and whichever interleaving the database chose, exactly one won.
+    const statuses = responses.map((r) => r.status).sort();
+    expect(statuses).toEqual([201, ...Array<number>(RACERS - 1).fill(409)]);
+    for (const r of responses.filter((r) => r.status === 409)) {
+      const body = await r.json();
+      expect(body.code).toBe('PLANNER_BUG_CAP_EXCEEDED');
+      expect(body.cap).toBe(PLANNER_BUGS_PER_JOB);
+      expect(body.filed).toBe(PLANNER_BUGS_PER_JOB);
+    }
+
+    const filed = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planRevisionRepository.countByPlanAndKind(planId, PLANNER_BUG_FILED_CHANGE_KIND, tx),
+    );
+    expect(filed).toBe(PLANNER_BUGS_PER_JOB);
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId, kind: 'bug' } })).toBe(
+      bugsBefore + 1,
+    );
   });
 
   it('the cap is PER JOB — a second job on the same project has its own', async () => {
@@ -442,6 +518,7 @@ describe('auth + body shape — the family posture', () => {
     ['no title', { jobId: 'j' }],
     ['blank title', { jobId: 'j', title: '   ' }],
     ['non-string descriptionMd', { jobId: 'j', title: 'x', descriptionMd: 7 }],
+    ['non-string explanationMd', { jobId: 'j', title: 'x', explanationMd: { md: 'x' } }],
     ['non-string parentKey', { jobId: 'j', title: 'x', parentKey: ['PROD-1'] }],
     ['non-string model', { jobId: 'j', title: 'x', model: { name: 'x' } }],
   ])('400s %s', async (_label, body) => {

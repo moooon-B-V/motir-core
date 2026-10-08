@@ -264,3 +264,30 @@ describe('`report_unbuildable_target` is documented as an acknowledgement (MOTIR
     expect(section).toContain('RUN_FOUND_REPORT_REASON_INVALID');
   });
 });
+
+// MOTIR-7793 — `get_code_health`'s contract section and its permission's
+// decision record. HERE, in the docs-guard lane, for the same reason as the two
+// above; keyed on the literal name so this spec still imports nothing that
+// reaches Prisma. The tool's own DB-backed spec is
+// `tests/mcp/get-code-health.test.ts`.
+describe('`get_code_health` is documented, and its `ai:plan` gate is recorded (MOTIR-7793)', () => {
+  it('docs/mcp.md carries its section beside `get_project_state`, naming the three section states', () => {
+    const doc = read('docs/mcp.md');
+    const start = doc.indexOf('#### `get_code_health`');
+    expect(start).toBeGreaterThan(doc.indexOf('#### `get_project_state`'));
+    const section = doc.slice(start, doc.indexOf('\n#### ', start + 1));
+    for (const state of ['`present`', '`absent`', '`unavailable`']) {
+      expect(section).toContain(state);
+    }
+    expect(section).toContain('`repos: []`');
+    expect(section).toContain('`ai:plan`');
+  });
+
+  it('member-facing-permissions.md carries the §4 amendment that gates the planning read on `ai:plan`', () => {
+    const adr = read('docs/decisions/member-facing-permissions.md');
+    expect(adr).toMatch(/## AMENDMENT 3[^\n]*§4[^\n]*FOR PLANNING is `ai:plan`/);
+    const amendment = adr.slice(adr.indexOf('## AMENDMENT 3'));
+    expect(amendment).toContain('get_code_health');
+    expect(amendment).toContain('`ai:configure` stays in `UNGRANTABLE_PERMISSIONS`');
+  });
+});

@@ -38,6 +38,10 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // Resource-targeting: the key names tenant A's project, so a non-member
     // must read its state as not-found rather than learn A's setup.
     get_project_state: { projectKey: t.projectKey },
+    // MOTIR-7793 — project-keyed the same way: a non-member reads tenant A's code
+    // health as not-found. Aimed at a project with no repository set, it answers
+    // `repos: []` without ever reaching the motir-ai boundary.
+    get_code_health: { projectKey: t.projectKey },
     // The ORIENTING read (MOTIR-3100) — project-keyed, so a non-member must
     // read tenant A's tree as not-found rather than receive its SHAPE. A
     // partial skeleton would be the worst possible leak here: it names every

@@ -59,6 +59,7 @@ SUMMARIES = {
     "whoami": "Who this token is: the owning user, the active workspace, and the scopes granted. Call it first.",
     "list_projects": "Every project this token can reach, each with the projectKey every other tool takes.",
     "get_project_state": "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+    "get_code_health": "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
     "list_sprints": "A project's sprints with state, goal, window and issue count, and the ids the sprint tools take.",
     "validate_sprint": "Is this sprint finishable? Names every in-sprint item still gated by work outside it.",
     "validate_work_item": "Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.",
