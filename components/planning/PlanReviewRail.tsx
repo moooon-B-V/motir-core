@@ -481,6 +481,11 @@ export function PlanReviewRail({
                 disabled={!planned || busy || held || folderMissingCount > 0}
                 loading={busy}
                 leftIcon={<Check className="size-4" aria-hidden="true" />}
+                // The rail is a fixed 352px, so this full-width button cannot
+                // widen: its sentence-long label ("Genehmigen – 1 Element zum
+                // Backlog hinzufügen") wraps at a word onto a second line and the
+                // button grows from its token MINIMUM height (MOTIR-7759).
+                className="h-auto min-h-(--height-btn-md) py-(--spacing-btn-y) text-center leading-snug whitespace-normal"
               >
                 {t('approveCta', { n: review.itemCount })}
               </Button>

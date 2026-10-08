@@ -136,7 +136,11 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
     {
       key: 'assignee',
       header: t('issues.columns.assignee'),
-      width: 150,
+      // 176px (was 150): the Dutch header is ONE word the glossary fixes
+      // ("VERANTWOORDELIJKE", 155px in the header's uppercase), which cannot wrap,
+      // plus the sort caret beside it. Two-word translations wrap instead
+      // (MOTIR-7759).
+      width: 176,
       sortColumn: 'assignee',
       // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only value
       // otherwise. The cell owns its own avatar/name vs. "Unassigned" rendering.

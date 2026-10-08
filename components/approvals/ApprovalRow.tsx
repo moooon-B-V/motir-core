@@ -87,15 +87,20 @@ import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
  * The tab's column set — design-notes § 20, RE-WEIGHTED by § 28 (MOTIR-5999): the
  * sentence is the row's main content now, so the DETAILS track gave it 48px. The
  * room's own-records view uses it unchanged.
+ *
+ * The WAITED / DECIDED track is 112px (was 88): its header is one word in Polish
+ * ("Rozstrzygnięto", 108px in the header's uppercase), which cannot wrap, so the
+ * track sizes to it; two-word headers wrap inside it (MOTIR-7759). The sentence
+ * track gives up the 24px.
  */
-export const APPROVALS_GRID_TEMPLATE = 'minmax(12rem,1fr) 220px 88px 132px';
+export const APPROVALS_GRID_TEMPLATE = 'minmax(12rem,1fr) 220px 112px 132px';
 
 /**
  * The room's FULL-VIEW column set (`design/approvals` § The grid): the tab's, with
  * the details track narrowed to 200px and a 144px person track before the Decide
  * cell (§ 28 re-weighted it from 228px, for the same reason as the tab's).
  */
-export const APPROVALS_FULL_VIEW_GRID_TEMPLATE = 'minmax(12rem,1fr) 200px 88px 144px 132px';
+export const APPROVALS_FULL_VIEW_GRID_TEMPLATE = 'minmax(12rem,1fr) 200px 112px 144px 132px';
 
 /**
  * WHICH SENTENCE each gate kind reads as (§ 28, DECISION 1) — TOTAL over
