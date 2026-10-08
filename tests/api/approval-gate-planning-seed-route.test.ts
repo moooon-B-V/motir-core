@@ -515,7 +515,7 @@ describe('an acceptance seed (MOTIR-6504) — anchored on the STORY', () => {
 });
 
 describe('seededSessionId — the viewer’s own recent seeded session', () => {
-  it('is the viewer’s session seeded by this gate, then null once past the window', async () => {
+  it('is the viewer’s session seeded by this gate, then null once it ENDED', async () => {
     const gateId = await gate(card, 'decision_approval', 'changes_requested');
     const me = pctxFor(owner());
     const s = await planChangeSessionsService.startSeededWithFirstTurn(
@@ -527,9 +527,15 @@ describe('seededSessionId — the viewer’s own recent seeded session', () => {
     signIn(owner());
     expect((await (await readSeed(gateId)).json()).seed.seededSessionId).toBe(s.id);
 
+    // An open seeded session is offered at any age (AMENDMENT 23 §3, §7).
     await adminDb.planChangeSession.update({
       where: { id: s.id },
       data: { lastActivityAt: new Date(Date.now() - 121 * MINUTE) },
+    });
+    expect((await (await readSeed(gateId)).json()).seed.seededSessionId).toBe(s.id);
+    await adminDb.planChangeSession.update({
+      where: { id: s.id },
+      data: { endedAt: new Date(), endReason: 'idle' },
     });
     expect((await (await readSeed(gateId)).json()).seed.seededSessionId).toBeNull();
   });

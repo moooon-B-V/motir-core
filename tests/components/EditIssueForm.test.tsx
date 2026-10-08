@@ -5,7 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { PlanHeldByPlanDTO } from '@/lib/dto/plans';
 import { planRowDestination } from '@/lib/planning/planDestination';
 
 const { updateSpy, changeStatusSpy, refresh } = vi.hoisted(() => ({
@@ -204,7 +204,8 @@ describe('EditIssueForm', () => {
   });
 
   // ── A PLAN holds the status (Story MOTIR-6017 · MOTIR-6267) ────────────────
-  const hold: PlanHoldDTO = {
+  const hold: PlanHeldByPlanDTO = {
+    kind: 'plan',
     itemKey: 'WFD-7',
     workItemId: 'wi_1',
     planId: 'pln_9',

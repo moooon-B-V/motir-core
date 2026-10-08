@@ -127,6 +127,7 @@ export type PersonalDataDelegate =
   | 'page'
   | 'pageVersion'
   | 'decisionPagePublication'
+  | 'pageWorkItemLink'
   | 'monitorConnection'
   | 'approvalGate'
   | 'planRevision';
@@ -541,6 +542,18 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     where: (userId) => ({ publishedById: userId }),
   },
   {
+    // `created_by_id` attributes an act — the save that wrote a page's link to a
+    // work item — to a person, the same SetNull-preserved shape as
+    // `decision_page_publication.published_by_id` directly above, so it is
+    // EXPORTED (Story MOTIR-7565 · MOTIR-7571). The row carries ids, a source and
+    // a time, no content.
+    table: 'page_work_item_link',
+    model: 'pageWorkItemLink',
+    tier: 'tenant',
+    basis: 'Links between pages and work items the reader created by saving a page.',
+    where: (userId) => ({ createdById: userId }),
+  },
+  {
     // `bound_by_user_id` attributes an act — binding a monitored project to this
     // Motir project — to a person, and it is WHOSE NAME every bug the reconciler
     // files goes on (Story MOTIR-4929 · MOTIR-5576). The same SetNull-preserved
@@ -722,6 +735,12 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'keeps after the sender leaves (`requestedById` is SetNull). Its RLS admits only the ' +
     'org context (`app.organization_id`) and platform staff, so neither export tier can ' +
     'read it. Exporting it would need an org tier this enumeration does not have.',
+  IdeaResearchRun:
+    'A row of the idea store’s research-run log (MOTIR-7662) whose only User FK is ' +
+    'the moooon B.V. operator who recorded the run. Motir’s own content, written only ' +
+    'from the platform tier, not a record about the operator as a data subject — ' +
+    '`PlatformRunModel`’s argument; every run is recorded in the audit log ' +
+    '(`idea.research_run`) with the same actor.',
   PlanTargetLock:
     'A planning lease measured in minutes, held by a session and released by a sweep. ' +
     'It carries no fact about the person beyond "a lock existed", and is gone before ' +

@@ -3,6 +3,7 @@ import type { ClaimActorDto } from '@/lib/dto/claim';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   ContinueBranchDto,
+  ContinueGateDto,
   ContinuePullRequestDto,
   DeadRunDto,
   RunDiedReason,
@@ -24,6 +25,7 @@ import { isRunAlive, lastHeardFrom } from '@/lib/runs/runLiveness';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { readHeldGateVerdict, type HeldGateRef } from '@/lib/services/resumeStateService';
 import {
   ContinueRunRefusedError,
   DispatchRunTerminalError,
@@ -251,6 +253,9 @@ export function endedHow(
   timeout: 'stalled' | 'backstop' | null,
 ): string {
   if (run.status === 'running') return 'the run stopped reporting (no heartbeat reached Motir)';
+  if (run.status === 'succeeded' && run.stopReason === 'gated') {
+    return 'it stopped at an approval gate, with the rest of its work waiting on a person';
+  }
   // A run in the developer's own agent is closed `timed_out` by the same stall
   // window and 12-hour backstop as a hosted one (`agent-instance-run.md` §6).
   const who =
@@ -340,21 +345,43 @@ async function timeoutReason(
   return /12[- ]hour|backstop/i.test(message) ? 'backstop' : 'stalled';
 }
 
+/** What the claim may still refuse a run it would otherwise take over for. */
+type TakeoverRefusal = Exclude<
+  WorkItemContinueRefusal,
+  'run_alive' | 'no_dead_run' | 'gate_awaiting' | 'gate_sent_back'
+>;
+
+/** A run the claim would take over — one that died, or one RESUMABLE after a gate. */
+interface TakeoverFacts {
+  run: LatestRunForWorkItem;
+  /** The rule reads it dead but its row still says `running` — the sweep has
+   *  not got to it. The claim closes it; the view only reads it. */
+  lapsed: boolean;
+  branch: string | null;
+  branches: ContinueBranchDto[];
+  pullRequest: ContinuePullRequestDto | null;
+  refusal: TakeoverRefusal | null;
+  parentKey: string | null;
+}
+
 export type ContinueEvaluation =
   | { kind: 'none' }
   | { kind: 'alive'; run: LatestRunForWorkItem }
   | { kind: 'continuing'; run: LatestRunForWorkItem }
+  | ({ kind: 'died' } & TakeoverFacts)
+  /**
+   * The last run STOPPED AT A GATE (closed `gated`) and a gate it stopped on has
+   * since been approved (MOTIR-7708) — taken over exactly like a run that died,
+   * on its own branch. `gates` are the approved ones. NOT a death: the To fix
+   * reason and the *run died* marker read `died` alone.
+   */
+  | ({ kind: 'resumable'; gates: HeldGateRef[] } & TakeoverFacts)
+  /** The last run stopped at a gate that still holds it — awaiting, or sent back. */
   | {
-      kind: 'died';
+      kind: 'gated';
       run: LatestRunForWorkItem;
-      /** The rule reads it dead but its row still says `running` — the sweep has
-       *  not got to it. The claim closes it; the view only reads it. */
-      lapsed: boolean;
-      branch: string | null;
-      branches: ContinueBranchDto[];
-      pullRequest: ContinuePullRequestDto | null;
-      refusal: Exclude<WorkItemContinueRefusal, 'run_alive' | 'no_dead_run'> | null;
-      parentKey: string | null;
+      refusal: 'gate_awaiting' | 'gate_sent_back';
+      gates: HeldGateRef[];
     };
 
 type Evaluation = ContinueEvaluation;
@@ -386,7 +413,14 @@ async function evaluate(
     );
     if (alive)
       return run.command === 'continue' ? { kind: 'continuing', run } : { kind: 'alive', run };
-  } else if (!DIED_STATUSES.has(run.status)) {
+  }
+  // A run that STOPPED AT A GATE succeeded, but its remaining work waits on the
+  // gate's answer (MOTIR-7708): it is resumed once a gate is approved.
+  const held =
+    run.status === 'succeeded' && run.stopReason === 'gated'
+      ? await readHeldGateVerdict(run.id, tx)
+      : null;
+  if (run.status !== 'running' && held === null && !DIED_STATUSES.has(run.status)) {
     // It SUCCEEDED: the work moved on through the run's own delivery.
     return { kind: 'none' };
   }
@@ -404,18 +438,38 @@ async function evaluate(
     tx,
     item.targetRepos[0] ?? null,
   );
-  const refusal: Exclude<WorkItemContinueRefusal, 'run_alive' | 'no_dead_run'> | null =
-    // ⚠️ THE STATUS FIRST, then the parent (MOTIR-6537): a child that is not In
-    // Progress — never started, or finished — has nothing to continue, whoever's
-    // run it was a leg of. The parent pointer is for an in-flight leg only, and
-    // the marker's not-shown rule depends on this order.
+  // ⚠️ THE STATUS FIRST, then the parent (MOTIR-6537): a child that is not In
+  // Progress — never started, or finished — has nothing to continue, whoever's
+  // run it was a leg of. The parent pointer is for an in-flight leg only, and
+  // the marker's not-shown rule depends on this order.
+  const before: TakeoverRefusal | null =
     refusalByStatus === 'use_fix' || refusalByStatus === 'not_in_progress'
       ? refusalByStatus
       : parentKey !== null
         ? 'continue_the_parent'
-        : branch === null
-          ? 'no_branch'
-          : null;
+        : null;
+  // A gate that still holds the run is asked AFTER the parent — a leg is resumed
+  // with its parent, whose own claim gives the gate's answer — and before the
+  // branch, which is a question only for work that may go ahead.
+  if (held !== null && before === null && held.verdict !== 'released') {
+    return held.verdict === 'awaiting'
+      ? { kind: 'gated', run, refusal: 'gate_awaiting', gates: held.waiting }
+      : { kind: 'gated', run, refusal: 'gate_sent_back', gates: held.sentBack };
+  }
+  const refusal: TakeoverRefusal | null = before ?? (branch === null ? 'no_branch' : null);
+  if (held !== null) {
+    return {
+      kind: 'resumable',
+      gates: held.released,
+      run,
+      lapsed: false,
+      branch,
+      branches,
+      pullRequest,
+      refusal,
+      parentKey,
+    };
+  }
   return {
     kind: 'died',
     run,
@@ -505,8 +559,23 @@ function refused(
     mode: 'card',
     landedKeys: [],
     resumedKeys: [],
+    gates: [],
+    resumesGated: false,
     ...extra,
   };
+}
+
+/** A held gate as the claim names it. */
+function toGateDto(gate: Pick<HeldGateRef, 'key' | 'kind' | 'state'>): ContinueGateDto {
+  return { key: gate.key, kind: gate.kind, state: gate.state };
+}
+
+/**
+ * The gates a `run_opened` recorded for a resume, or `[]`. This service is the
+ * one writer of that array (`claimContinue`), so its elements are read as written.
+ */
+function gatesOf(value: unknown): ContinueGateDto[] {
+  return Array.isArray(value) ? (value as ContinueGateDto[]).map(toGateDto) : [];
 }
 
 /** A JSON array of strings, or `[]` for anything else. */
@@ -531,6 +600,8 @@ async function replayOpening(
     previousAssignee?: { id?: unknown; name?: unknown } | null;
     landedKeys?: unknown;
     resumedKeys?: unknown;
+    resumesGated?: unknown;
+    gates?: unknown;
   } | null;
   const deadId = typeof data?.continuesRunId === 'string' ? data.continuesRunId : null;
   const dead = deadId ? await dispatchRunRepository.findForWorkItemById(deadId, item.id, tx) : null;
@@ -555,6 +626,8 @@ async function replayOpening(
     mode: run.scopeWorkItemId === item.id ? 'parent' : 'card',
     landedKeys: stringsOf(data?.landedKeys),
     resumedKeys: stringsOf(data?.resumedKeys),
+    gates: gatesOf(data?.gates),
+    resumesGated: data?.resumesGated === true,
   };
 }
 
@@ -671,6 +744,8 @@ export const workItemContinueService = {
             mode: verdict.run.scopeWorkItemId === item.id ? 'parent' : 'card',
             landedKeys: [],
             resumedKeys: [],
+            gates: [],
+            resumesGated: false,
           };
         }
         if (verdict.kind === 'alive') {
@@ -683,12 +758,19 @@ export const workItemContinueService = {
           const byStatus = statusRefusal(state.status, state.archivedAt !== null, statuses);
           return refused(item, byStatus ?? 'no_dead_run');
         }
+        if (verdict.kind === 'gated') {
+          return refused(item, verdict.refusal, { gates: verdict.gates.map(toGateDto) });
+        }
 
         if (verdict.refusal !== null) {
           return refused(item, verdict.refusal, { parentKey: verdict.parentKey });
         }
 
-        // THE TAKEOVER. A lapsed run is closed first — under this lock, with the
+        // THE TAKEOVER — of a run that died, or of one RESUMED after its gate was
+        // approved (MOTIR-7708): the same lock, branch and parent split for both.
+        const resumesGated = verdict.kind === 'resumable';
+        const gates = verdict.kind === 'resumable' ? verdict.gates.map(toGateDto) : [];
+        // A lapsed run is closed first — under this lock, with the
         // reason the lapse reap would give — so the record says it ended.
         let deadRun = toDeadRun(verdict.run);
         if (verdict.lapsed) {
@@ -794,6 +876,11 @@ export const workItemContinueService = {
                 mode: parent ? 'parent' : 'card',
                 landedKeys: [...landedKeys].sort(),
                 resumedKeys: [...resumedKeys].sort(),
+                // A RESUME after an approval says so, and after which gates — the
+                // run section reads *Resuming* from here (MOTIR-7708).
+                ...(resumesGated
+                  ? { resumesGated: true, gates: gates.map((g) => ({ ...g })) }
+                  : {}),
                 // A hosted continue's ONE `run_opened` (the hosted start appends
                 // none of its own) says what Run hosted's does.
                 ...(opening ? { origin: opening.origin, model: opening.model } : {}),
@@ -819,6 +906,8 @@ export const workItemContinueService = {
           mode: parent ? 'parent' : 'card',
           landedKeys: landedKeys.sort(),
           resumedKeys: resumedKeys.sort(),
+          gates,
+          resumesGated,
         };
       },
     );
@@ -872,7 +961,8 @@ export const workItemContinueService = {
           tx,
         );
         const legs =
-          evaluated.kind === 'died' && evaluated.run.scopeWorkItemId === item.id
+          (evaluated.kind === 'died' || evaluated.kind === 'resumable') &&
+          evaluated.run.scopeWorkItemId === item.id
             ? await dispatchRunCardRepository.listByRun(evaluated.run.id, tx)
             : [];
         return { evaluated, state, legs };
@@ -897,6 +987,7 @@ export const workItemContinueService = {
         statusRefusal(state.status, state.archivedAt !== null, statuses) ?? 'no_dead_run',
       );
     }
+    if (evaluated.kind === 'gated') return refuse(evaluated.refusal);
     if (evaluated.refusal === 'continue_the_parent' && evaluated.parentKey && !redirected) {
       return this.previewHostedContinue(projectId, evaluated.parentKey, ctx, now, true);
     }
@@ -1018,7 +1109,11 @@ export const workItemContinueService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: item.projectId },
       async (tx): Promise<WorkItemContinueViewDto> => {
         const verdict = await evaluate(item, statuses, now, tx);
-        if (verdict.kind === 'none') return { state: 'none' };
+        // A run that stopped at a gate is not a death, so the *run died* marker
+        // draws nothing for it; its own marker is the run section's (MOTIR-7713).
+        if (verdict.kind === 'none' || verdict.kind === 'gated' || verdict.kind === 'resumable') {
+          return { state: 'none' };
+        }
         if (verdict.kind === 'alive') return { state: 'alive' };
         if (verdict.kind === 'continuing') {
           const opened = await dispatchRunEventRepository.findLatestOfKind(

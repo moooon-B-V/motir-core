@@ -266,6 +266,7 @@ import type {
   WorkItemEdgeSummaryDto,
   WorkItemKindDto,
   WorkItemLineageDto,
+  PlanningAnchorLineageDto,
   WorkItemTypeDto,
   WorkItemDifficultyDto,
   WorkItemObsolescenceDto,
@@ -341,6 +342,7 @@ import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { writeDerivedRepoSet, writeRepoRefs } from '@/lib/workItems/repoSetWrites';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { recomputeWorkItemResumeState } from './resumeStateService';
 import { fixGroupPointersFor, fixHeadKeysFor } from './fixGroupService';
 
 // ⚠️ `assertSingleTargetRepoInput` MOVED to `lib/workItems/targetRepo.ts`
@@ -3380,6 +3382,8 @@ export const workItemsService = {
       const hold = await readPlanHoldWithin(
         { id: workItemId, identifier: current.identifier, status: fromKey },
         tx,
+        new Date(),
+        ctx.userId,
       );
       if (hold) throw new PlanTargetHeldError({ statusKey: toStatusKey, ...hold });
     }
@@ -3873,6 +3877,8 @@ export const workItemsService = {
     // under the card lock this method already holds. SYSTEM moves included: the cascade,
     // the merge sync and the CI promotion all come through here.
     await recomputeWorkItemFixReason(workItemId, tx);
+    // …and so is it of To resume's (MOTIR-7707): leaving the category takes the card off.
+    await recomputeWorkItemResumeState(workItemId, tx);
 
     return {
       dto: toWorkItemDto(row),
@@ -4341,8 +4347,9 @@ export const workItemsService = {
       // withdrawn — gates first, in the decide door's lock order (MOTIR-7109).
       await withdrawQuestionsOnArchive(id, tx);
       const row = await workItemRepository.archive(id, tx); // throws WorkItemNotFoundError if absent
-      // An archived card is waiting on no repair (MOTIR-6602).
+      // An archived card is waiting on no repair (MOTIR-6602), nor on a gate (MOTIR-7707).
       await recomputeWorkItemFixReason(id, tx);
+      await recomputeWorkItemResumeState(id, tx);
 
       // The container ROLLUP (MOTIR-2978, §A6): an ARCHIVED descendant contributes
       // nothing to its ancestors' union — a parent is not waiting on work archived
@@ -4397,8 +4404,9 @@ export const workItemsService = {
 
       const wasArchivedAt = current.archivedAt?.toISOString() ?? null;
       const row = await workItemRepository.unarchive(id, tx); // throws WorkItemNotFoundError if absent
-      // …and a restored one may be again (MOTIR-6602).
+      // …and a restored one may be again (MOTIR-6602, MOTIR-7707).
       await recomputeWorkItemFixReason(id, tx);
+      await recomputeWorkItemResumeState(id, tx);
 
       // …and unarchiving puts it back, which is the same trigger in reverse.
       await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
@@ -6335,6 +6343,34 @@ export const workItemsService = {
   },
 
   /**
+   * The planning surface's ANCHOR read (MOTIR-7621) — the lineage read plus
+   * whether the anchor has children, so the arrival rule can open INSIDE a
+   * target only when there is something inside it.
+   *
+   * The lineage half is `getWorkItemWithAncestors` verbatim — same tenant gate,
+   * same `assertCanBrowse`, same no-existence-leak `WorkItemNotFoundError` — and
+   * the count is the lazy tree's own level count for that parent, so the answer
+   * agrees with the level the canvas would load.
+   */
+  async getPlanningAnchor(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<PlanningAnchorLineageDto> {
+    const lineage = await this.getWorkItemWithAncestors(projectId, identifier, ctx);
+    const childCount = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.countProjectTreeLevel(
+        lineage.item.projectId,
+        ctx.workspaceId,
+        lineage.item.id,
+        null,
+        tx,
+      ),
+    );
+    return { ...lineage, hasChildren: childCount > 0 };
+  },
+
+  /**
    * Resolve a work item by an EXACT title + kind within a project — a MARKER
    * lookup for a known, migration-created infra item (MOTIR-1466 / MOTIR-2201 —
    * the planner-bug home EPIC the auto-bug files under). Same tenant + browse
@@ -7255,7 +7291,7 @@ export const workItemsService = {
   async quickSearch(
     query: string,
     ctx: ServiceContext,
-    opts: { limit?: number; excludeIds?: string[] } = {},
+    opts: { limit?: number; excludeIds?: string[]; projectId?: string } = {},
   ): Promise<WorkItemSummaryDto[]> {
     const trimmed = query.trim();
     if (trimmed.length < QUICK_SEARCH_MIN_QUERY_LENGTH) return [];
@@ -7269,11 +7305,17 @@ export const workItemsService = {
       projectRepository.findByWorkspace(ctx.workspaceId, tx),
     );
     const browsable = await projectAccessService.filterBrowsable(projects, ctx);
-    if (browsable.length === 0) return [];
+    // `projectId` narrows the search to ONE project (MOTIR-7572) — the page
+    // editor's picker, whose link rows are same-project only. It narrows WITHIN
+    // the browsable set, so a project the actor may not browse (or one outside
+    // the workspace) fails closed to `[]` rather than widening anything.
+    const scoped =
+      opts.projectId === undefined ? browsable : browsable.filter((p) => p.id === opts.projectId);
+    if (scoped.length === 0) return [];
     const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.quickSearch(
         ctx.workspaceId,
-        browsable.map((p) => p.id),
+        scoped.map((p) => p.id),
         trimmed,
         limit,
         opts.excludeIds ?? [],

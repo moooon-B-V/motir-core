@@ -6,7 +6,7 @@ import { Lock } from 'lucide-react';
 import { StatusHeldNotice, type StatusHeldLine } from '@/components/issues/StatusHeldNotice';
 import { useDismissOnEscapeOrOutside } from '@/components/issues/heldRefusal';
 import type { BoardPlanHoldSummaryDto } from '@/lib/dto/boards';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import { planHoldKey, type PlanHoldDTO } from '@/lib/dto/plans';
 import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
 
 // The board's HELD refusal, anchored ON the returned card (Story MOTIR-4887 ·
@@ -43,15 +43,16 @@ export type BoardHeldRefusal =
 export interface BoardHeldRefusalContextValue {
   held: BoardHeldRefusal | null;
   close: () => void;
-  /** Every plan holding a loaded card, keyed by `planId` (the projection's). */
+  /** Every plan (or open session) holding a loaded card, keyed by `planHoldKey`
+   *  (the projection's). */
   planHolds?: Record<string, BoardPlanHoldSummaryDto>;
   /** The `{name}` rule's last fallback. */
   projectName?: string;
-  /** The plan whose items are outlined: a hovered / focused footer's, else an
-   *  open plan refusal's. */
+  /** The hold (a `planHoldKey`) whose items are outlined: a hovered / focused
+   *  footer's, else an open plan refusal's. */
   highlightedPlanId?: string | null;
-  /** A footer's hover / focus sets it; leaving clears it. */
-  onPlanFooterHover?: (planId: string | null) => void;
+  /** A footer's hover / focus sets it (with its `planHoldKey`); leaving clears it. */
+  onPlanFooterHover?: (holdKey: string | null) => void;
 }
 
 /** Outside a board (a card rendered on its own): nothing held, nothing to close. */
@@ -76,11 +77,11 @@ export function useBoardHeldRefusal(): BoardHeldRefusalContextValue {
  * the anchor only.
  */
 export function planHoldName(
-  plan: Pick<PlanHoldDTO, 'planId' | 'anchorKey'>,
+  plan: Parameters<typeof planHoldKey>[0] & Pick<PlanHoldDTO, 'anchorKey'>,
   planHolds: Record<string, BoardPlanHoldSummaryDto> | undefined,
   projectName: string | undefined,
 ): { name: string; isKey: boolean } {
-  const summary = planHolds?.[plan.planId];
+  const summary = planHolds?.[planHoldKey(plan)];
   const anchorKey = summary?.anchorKey ?? plan.anchorKey;
   if (anchorKey) return { name: anchorKey, isKey: true };
   const title = summary?.title?.trim();
@@ -93,12 +94,19 @@ export function planHoldName(
 const NAME_SLOT = '\u0000';
 
 /** `Plan · MOTIR-6017` — the footer's label, the same words on every item of the
- *  plan. Lock glyph first; a key in mono, a title truncated to one line. */
-export function PlanHoldMarker({ plan }: { plan: Pick<PlanHoldDTO, 'planId' | 'anchorKey'> }) {
+ *  plan; `Session · MOTIR-7702` for an open session's hold (MOTIR-7640). Lock glyph
+ *  first; a key in mono, a title truncated to one line. */
+export function PlanHoldMarker({
+  plan,
+}: {
+  plan: Pick<PlanHoldDTO, 'kind' | 'planId' | 'sessionId' | 'anchorKey'>;
+}) {
   const t = useTranslations('boards.planHold');
   const { planHolds, projectName } = useContext(BoardHeldRefusalContext);
   const { name, isKey } = planHoldName(plan, planHolds, projectName);
-  const [before = '', after = ''] = t('marker', { name: NAME_SLOT }).split(NAME_SLOT);
+  const [before = '', after = ''] = t(plan.kind === 'session' ? 'sessionMarker' : 'marker', {
+    name: NAME_SLOT,
+  }).split(NAME_SLOT);
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold">
       <Lock aria-hidden className="h-3.5 w-3.5 shrink-0" />
@@ -166,17 +174,21 @@ export function BoardCardHeldRefusal({
     <div
       ref={ref}
       data-board-held=""
-      data-plan-footer={held.plan.planId}
+      data-plan-footer={planHoldKey(held.plan)}
       className={PLAN_FOOTER_CLASS}
     >
       <PlanHoldMarker plan={held.plan} />
-      <PlanSiblings count={held.siblings} />
+      <PlanSiblings count={held.siblings} session={held.plan.kind === 'session'} />
       <StatusHeldNotice itemKey={held.itemKey} lines={[]} plan={held.plan} />
     </div>
   );
 }
 
-function PlanSiblings({ count }: { count: number }) {
+function PlanSiblings({ count, session }: { count: number; session: boolean }) {
   const t = useTranslations('boards.planHold');
-  return <p className="m-0 leading-snug text-(--el-text-secondary)">{t('siblings', { count })}</p>;
+  return (
+    <p className="m-0 leading-snug text-(--el-text-secondary)">
+      {t(session ? 'sessionSiblings' : 'siblings', { count })}
+    </p>
+  );
 }

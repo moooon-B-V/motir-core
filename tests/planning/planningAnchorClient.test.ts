@@ -20,6 +20,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 const ANCHOR = {
   anchor: { id: 'w1', identifier: 'MOTIR-4725', title: 'The overlay', kind: 'story' },
   ancestors: [{ id: 'e1', identifier: 'MOTIR-653', title: 'Epic 8: Launch readiness' }],
+  hasChildren: true,
 };
 
 afterEach(() => {
@@ -53,6 +54,19 @@ describe('fetchPlanningAnchor', () => {
     await expect(fetchPlanningAnchor('MOTIR-4725')).resolves.toEqual({
       anchor: ANCHOR.anchor,
       ancestors: [],
+      hasChildren: false,
+    });
+  });
+
+  it('reads a missing `hasChildren` as a LEAF (MOTIR-7621)', async () => {
+    // Arriving beside an item always shows it; arriving inside a childless one
+    // shows an empty level. So the unknown case takes the safe arrival.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ anchor: ANCHOR.anchor, ancestors: [] })),
+    );
+    await expect(fetchPlanningAnchor('MOTIR-4725')).resolves.toMatchObject({
+      hasChildren: false,
     });
   });
 

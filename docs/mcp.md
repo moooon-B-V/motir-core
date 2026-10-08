@@ -1886,11 +1886,18 @@ asserts. A card the token cannot see, including one in another workspace, is
 `claimed` (the card is yours: `runId` is your run), `mine` (you already hold it —
 a resume), `taken` (somebody else is continuing it; do not push) or
 `not_continuable`, with `reason` one of `run_alive`, `use_fix`,
-`not_in_progress`, `continue_the_parent`, `no_dead_run`, `no_branch` — the REST
-route's refusals, in its order. **A refusal is a result, not an error**, and
-changes nothing on the card. With `use_fix`, the card's pull request is open:
-`claim_work_item_repair` is the door. With `continue_the_parent`, continue
-`parentKey` as a whole.
+`not_in_progress`, `continue_the_parent`, `no_dead_run`, `gate_awaiting`,
+`gate_sent_back`, `no_branch` — the REST route's refusals, in its order. **A
+refusal is a result, not an error**, and changes nothing on the card. With
+`use_fix`, the card's pull request is open: `claim_work_item_repair` is the door.
+With `continue_the_parent`, continue `parentKey` as a whole.
+
+A run that **stopped at a gate** (closed `gated`) is not dead, but it is resumed
+through this same claim once a gate it stopped on is approved (MOTIR-7708): the
+answer is `claimed` with `resumesGated: true` and the approved `gates`, on the
+gated run's own branch. While every gate still waits the answer is
+`gate_awaiting`; when they were answered but none approved it is
+`gate_sent_back`. Both name the `gates`.
 
 ##### `touch_work_item_continue`
 
@@ -2008,7 +2015,12 @@ writes nothing.
 | `runId`   | string | yes      | The `runId` `start_work_item_run` answered.                                   |
 | `outcome` | enum   | yes      | `completed`, `drained`, `max`, `halted`, `interrupted`, `replanned`, `gated`. |
 
-`abandoned` is refused: only the 60-minute reap writes it. A **`completed`** or
+`abandoned` is refused: only the 60-minute reap writes it. **`gated`** is the
+outcome for a run that stopped because its remaining work waits on an approval
+gate — a design, decision, choice, confirmation or manual card not yet decided —
+and such a stop is **never `halted`** (`halted` reads as _Run died_). Motir
+records which gates held the run itself, from the awaiting gates on the run's
+cards (MOTIR-7703); you name none. A **`completed`** or
 **`drained`** close records your harness and model as the implementer of every
 leg card the run took to Implemented or later, and answers those keys in
 `stamped`; any other outcome stamps nothing. **No outcome changes a card's

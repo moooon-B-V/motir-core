@@ -1,8 +1,11 @@
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 import type {
+  CopyableSessionDto,
   DebugLandingDto,
   EarlierSessionDto,
   PlanChangeSessionDto,
+  PlanSessionRestartResultDto,
+  PlanTargetHeldByDto,
   ResumableSessionDto,
 } from '@/lib/dto/planChange';
 
@@ -48,17 +51,29 @@ export interface ContextualSessionResumeResponse {
   planId?: string | null;
   /** The scope's earlier conversation when nothing resumed (MOTIR-6024). */
   earlier?: EarlierSessionDto | null;
+  /** The caller's own failed / idle-closed session of the scope (AMENDMENT 23 §6). */
+  copyable?: CopyableSessionDto | null;
+  /** Another holder of one of the scope's cards (AMENDMENT 23 §4). */
+  heldBy?: PlanTargetHeldByDto | null;
 }
 
 const JSON_HEADERS = { Accept: 'application/json', 'Content-Type': 'application/json' } as const;
 
-async function readErrorCode(res: Response): Promise<string | null> {
+/** A refusal's code AND its body — the body carries what a lock refusal says
+ *  about its holder (AMENDMENT 23 §4). */
+async function readError(res: Response): Promise<{ code: string | null; body: unknown }> {
   try {
     const body = (await res.json()) as { code?: string };
-    return body.code ?? null;
+    return { code: body?.code ?? null, body };
   } catch {
-    return null;
+    return { code: null, body: null };
   }
+}
+
+/** The typed refusal for a failed response, its body kept. */
+async function clientError(res: Response): Promise<PlanEditsClientError> {
+  const { code, body } = await readError(res);
+  return new PlanEditsClientError(res.status, code, body);
 }
 
 async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -68,18 +83,18 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     signal,
   });
-  if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
+  if (!res.ok) throw await clientError(res);
   return (await res.json()) as T;
 }
 
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { headers: { Accept: 'application/json' }, signal });
-  if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
+  if (!res.ok) throw await clientError(res);
   return (await res.json()) as T;
 }
 
-/** The caller's own RESUMABLE project-wide conversation — their session active
- *  within the resume window — or `null` (MOTIR-6023; AMENDMENT 17 §3). A READ:
+/** The caller's own RESUMABLE project-wide conversation — their session
+ *  that is still OPEN (AMENDMENT 23 §3) — or `null` (MOTIR-6023; AMENDMENT 17 §3). A READ:
  *  mounting the rail creates nothing; the first turn does ({@link startPlanChangeSession}). */
 export async function findResumableSession(signal?: AbortSignal): Promise<ResumableSessionDto> {
   const body = await get<Partial<ResumableSessionDto> | null>(
@@ -87,7 +102,57 @@ export async function findResumableSession(signal?: AbortSignal): Promise<Resuma
     signal,
   );
   // Read defensively (an E2E stub may answer the older bare shape or nothing).
-  return { session: body?.session ?? null, earlier: body?.earlier ?? null };
+  return {
+    session: body?.session ?? null,
+    earlier: body?.earlier ?? null,
+    copyable: body?.copyable ?? null,
+  };
+}
+
+/** START a new session that CARRIES OVER an ended one's conversation (AMENDMENT
+ *  23 §6; MOTIR-7643) — the overlay's **Start a new session**. Sends no turn. */
+export async function startCopiedSession(
+  fromSessionId: string,
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto> {
+  return post<PlanChangeSessionDto>(
+    '/api/ai/plan-change/session',
+    { copyFrom: fromSessionId },
+    signal,
+  );
+}
+
+/** PLAN SOMETHING NEW pressed (MOTIR-7650; ADR AMENDMENT 3, A3.3): write the
+ *  fixed confirm onto the caller's own open session. Closes nothing. */
+export async function requestRestartConfirm(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto> {
+  return post<PlanChangeSessionDto>(
+    '/api/ai/plan-change/session/restart/confirm',
+    { sessionId },
+    signal,
+  );
+}
+
+/** The ANSWER to that confirm: `keep` returns the same session with its marker;
+ *  `confirm` ends it `restarted` and returns the NEW empty session to swap to. */
+export async function answerRestart(
+  sessionId: string,
+  answer: 'keep',
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto>;
+export async function answerRestart(
+  sessionId: string,
+  answer: 'confirm',
+  signal?: AbortSignal,
+): Promise<PlanSessionRestartResultDto>;
+export async function answerRestart(
+  sessionId: string,
+  answer: 'confirm' | 'keep',
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto | PlanSessionRestartResultDto> {
+  return post('/api/ai/plan-change/session/restart', { sessionId, answer }, signal);
 }
 
 /** One conversation BY ID — a reopened session (the Plans page's row). */
@@ -237,7 +302,7 @@ export async function peekMailbox(
     `/api/ai/plan-change/session/mailbox?jobId=${encodeURIComponent(jobId)}&sessionId=${encodeURIComponent(sessionId)}`,
     { headers: JSON_HEADERS, signal },
   );
-  if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
+  if (!res.ok) throw await clientError(res);
   return (await res.json()) as MailboxDeliveryResponse;
 }
 
@@ -298,6 +363,8 @@ export type AskSettleResponse =
   | { outcome: 'debugging'; jobId: string; session: PlanChangeSessionDto }
   // That debug job's own settle (MOTIR-7049): the ONE card it wrote, if any.
   | { outcome: 'debugged'; landing: DebugLandingDto; session: PlanChangeSessionDto }
+  // A `new_session` turn (MOTIR-7649): the confirm is on the thread, no job ran.
+  | { outcome: 'confirming'; session: PlanChangeSessionDto }
   | { outcome: 'silent'; session: PlanChangeSessionDto };
 
 /**
@@ -467,12 +534,14 @@ export async function resumeContextualSession(
     headers: { Accept: 'application/json' },
     signal,
   });
-  if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
+  if (!res.ok) throw await clientError(res);
   const body = (await res.json()) as ContextualSessionResumeResponse;
   return {
     session: body.session ?? null,
     planId: body.planId ?? null,
     earlier: body.earlier ?? null,
+    copyable: body.copyable ?? null,
+    heldBy: body.heldBy ?? null,
   };
 }
 

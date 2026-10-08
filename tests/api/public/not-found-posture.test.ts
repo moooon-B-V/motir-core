@@ -56,6 +56,8 @@ const NO_SUBJECT: Record<string, string> = {
     'the directory — a filter over every public project, never one',
   'app/api/public/categories/route.ts': 'a facet list — no subject at all',
   'app/api/public/projects/route.ts': 'the crawl enumeration — a page of the whole set',
+  'app/api/public/ideas/route.ts': 'the idea list — a filter over every active idea, never one',
+  'app/api/public/ideas/tags/route.ts': 'a facet list — no subject at all',
 };
 
 describe('every public read answers a missing subject with 404', () => {

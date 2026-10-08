@@ -148,6 +148,8 @@
     "mentionTypeToSearch": "Keep typing to search work items…",
     "mentionSearching": "Searching…",
     "mentionNoResults": "No work items match “{query}”.",
+    "mentionSearchFailed": "Couldn’t search work items.",
+    "mentionRetry": "Try again",
     "codeLanguage": "Language"
   },
   "common": {
@@ -1454,6 +1456,16 @@
     "planHistoryShowMore": "Show more plans",
     "planHistoryError": "Couldn't load plans.",
     "planHistoryLoadMoreError": "Couldn't load more plans.",
+    "pagesTitle": "Pages",
+    "pagesGloss": "where this item is written about",
+    "pagesListAria": "Pages that link to {key}",
+    "pagesSourceMention": "Mentioned",
+    "pagesSourceEmbed": "Embedded",
+    "pagesSourceManual": "Linked",
+    "pagesEmpty": "No page links to this work item yet.",
+    "pagesShowMore": "Show more pages",
+    "pagesError": "Couldn't load pages.",
+    "pagesLoadMoreError": "Couldn't load more pages.",
     "edit": "Edit",
     "description": "Description",
     "descriptionGloss": "what to do",
@@ -4276,8 +4288,11 @@
     "noActiveSprintCta": "Go to Backlog",
     "announcementHeld": "{key} returned. {line}",
     "announcementPlanHeld": "{key} returned. It is held by {plan}. {line}",
+    "announcementSessionHeld": "{key} returned. It is held by {session}. {line}",
     "planHold": {
       "marker": "Plan · {name}",
+      "sessionMarker": "Session · {name}",
+      "sessionSiblings": "{count, plural, =0 {No other item on this board is in this session.} one {# other item on this board is in this session.} other {# other items on this board are in this session.}}",
       "siblings": "{count, plural, =0 {No other item on this board is in this plan.} one {# other item on this board is in this plan.} other {# other items on this board are in this plan.}}"
     }
   },
@@ -7013,6 +7028,8 @@
             "notInProgress": "Not started — this work item is not In Progress any more.",
             "noDeadRun": "Not started — no run of this work item died.",
             "theParent": "Not started — this is part of <link>{key}</link>'s run, so it is continued from there.",
+            "gateAwaiting": "Not started — the run stopped at a gate that is still waiting for approval. It resumes once the gate is approved.",
+            "gateSentBack": "Not started — the run stopped at a gate that was sent back, not approved, so there is nothing to resume.",
             "outOfCredits": {
               "body": "Nothing was booted and nothing was charged. Continue works again once the organization has credits — or carry it on from your terminal."
             }
@@ -7178,7 +7195,8 @@
         "planned": "Waiting for approval",
         "stale": "Stale",
         "approved": "Approved",
-        "declined": "Declined"
+        "declined": "Declined",
+        "closed": "Closed"
       },
       "origin": {
         "mcp": "Agent plan",
@@ -7220,7 +7238,22 @@
         "pickLabel": "Follow-up to <mono>{key}</mono>",
         "chose": "chose {label}",
         "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})"
-      }
+      },
+      "end": {
+        "failed": "Closed · the attempt failed · {time}",
+        "idle": "Closed · idle · {time}",
+        "restartedYou": "Closed · you started something new · {time}",
+        "restartedBy": "Closed · {name} started something new · {time}",
+        "restarted": "Closed · started something new · {time}",
+        "declinedBy": "Declined by {name} · {time}",
+        "declinedYou": "Declined by you · {time}",
+        "declined": "Declined · {time}",
+        "approvedBy": "Approved by {name} · {time}",
+        "approvedYou": "Approved by you · {time}",
+        "approved": "Approved · {time}"
+      },
+      "continuedFrom": "Continued from the {when} conversation",
+      "continuedFromAria": "Open the conversation this one continues, closed {when}"
     }
   },
   "planningWorkspace": {
@@ -7320,7 +7353,8 @@
         "stale": "This plan changed since you read it. Nothing was written — the canvas now shows the current version; review it and decide again.",
         "notDecidable": "This plan can’t be decided yet — nobody has been asked to approve it. Nothing was changed.",
         "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it.",
-        "askSilent": "Nothing came back. Try asking that a different way."
+        "askSilent": "Nothing came back. Try asking that a different way.",
+        "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were."
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
       "correctToPlan": "Propose changes instead",
@@ -7490,7 +7524,38 @@
       "reopenedYours": "Reopened from the Plans page · started by you · last active {when}",
       "readOnly": "You can read this conversation. Continuing it needs permission to plan with Motir AI.",
       "someone": "someone",
-      "mcpNoTurns": "The conversation behind this plan happened in {harness}, so it isn’t shown here. Ask below to change the plan."
+      "mcpNoTurns": "The conversation behind this plan happened in {harness}, so it isn’t shown here. Ask below to change the plan.",
+      "end": {
+        "closed": "Closed",
+        "declined": "Declined",
+        "approved": "Approved",
+        "reason": {
+          "failed": "the attempt failed · {when}",
+          "idle": "no activity for 30 minutes · {when}",
+          "restarted": "you started something new · {when}"
+        },
+        "by": "by {name} · {when}"
+      },
+      "newSession": {
+        "gloss": "Your conversation so far is copied into the new session. Nothing is sent until you write.",
+        "start": "Start a new session"
+      },
+      "copiedFrom": "Copied from an earlier session",
+      "copiedFromOpen": "Open it",
+      "takenBack": "You already have a session open for {label}, so you are back in it. Nothing new was started.",
+      "takenBackProject": "You already have a session open for {project}, so you are back in it. Nothing new was started.",
+      "refused": {
+        "sessionTitle": "{name} is planning {key} in another session",
+        "someoneTitle": "Someone else is planning {key} in another session",
+        "sessionBody": "You can plan it once that session ends — free by about {time} at the latest.",
+        "planTitle": "{name}'s plan for {key} is waiting for approval",
+        "someonePlanTitle": "A plan for {key} is waiting for approval",
+        "planBody": "You can plan it once that plan is approved or declined.",
+        "link": "See {name}'s session on the Plans page",
+        "placeholder": "{key} is held by another session"
+      },
+      "ended": "This session has ended, so it can't be continued. Planning {label} again starts a new session.",
+      "endedProject": "This session has ended, so it can't be continued. Planning {project} again starts a new session."
     },
     "arrival": {
       "crumbTargetPrefix": "Planning target:",
@@ -7594,6 +7659,19 @@
         "typeMarkdown": "Markdown",
         "typeFile": "File"
       }
+    },
+    "restart": {
+      "control": "Plan something new",
+      "confirm": {
+        "body": "Start something new? This closes the current planning session and gives its work items back.",
+        "yes": "Confirm",
+        "keep": "Keep planning"
+      },
+      "kept": "Kept planning",
+      "earlier": "Your earlier session is closed",
+      "earlierOpen": "Open it",
+      "disabledStreaming": "Available when this run finishes",
+      "swapped": "Your earlier session is closed. A new session is open."
     }
   },
   "codeHealth": {
@@ -8309,6 +8387,7 @@
       "toDo": "To do",
       "inProgress": "In progress",
       "toFix": "To fix",
+      "toResume": "To resume",
       "recentlyFinished": "Recently finished",
       "watching": "Watching",
       "toApprove": "Waiting on you"
@@ -8345,6 +8424,10 @@
       "toFix": {
         "title": "Nothing to fix",
         "body": "When a run that died, a merge queue, a conflict, a failing check or a reviewer stops one of your work items, it shows up here with what repairs it."
+      },
+      "toResume": {
+        "title": "Nothing to resume",
+        "body": "When a run stops at an approval it needs, it waits here until the approval is given — then it carries on by itself on the hosted agent, or with motir continue from your terminal."
       },
       "recentlyFinished": {
         "title": "Nothing finished this week",
@@ -8488,6 +8571,92 @@
         "showMore": "Show {count, plural, one {# more work item} other {# more work items}}",
         "showFewer": "Show fewer"
       }
+    },
+    "toResume": {
+      "waiting": "Stopped at a gate · waiting on {count, plural, one {# approval} other {# approvals}}",
+      "ready": "Ready to resume · {name} approved the {kind} on {key} <when></when>",
+      "readyByYou": "Ready to resume · you approved the {kind} on {key} <when></when>",
+      "readyBare": "Ready to resume",
+      "readySome": "Ready to resume · {approved} of {total} approvals given",
+      "resuming": "Resuming on the hosted agent · started <when></when>",
+      "couldNot": "Could not resume by itself · <reason></reason>",
+      "ranBy": {
+        "hosted": "{name} ran it on the hosted agent",
+        "terminal": "{name} ran it from a terminal",
+        "runbook": "{name} ran it with the runbook",
+        "instance": "{name} ran it in {agent}"
+      },
+      "you": "you",
+      "someone": "Someone",
+      "branch": "branch <d>{branch}</d>",
+      "entry": {
+        "membersLabel": "Work items waiting with {key}"
+      },
+      "gatesLabel": "Gates holding {key}'s run",
+      "decider": "<b>{name}</b> decides",
+      "deciderYou": "<b>You</b> decide",
+      "decidedBy": "approved by <b>{name}</b> <when></when>",
+      "gate": {
+        "awaiting": "Awaiting",
+        "awaitingYou": "Awaiting you",
+        "approved": "Approved",
+        "chosen": "Chosen",
+        "confirmed": "Confirmed",
+        "markedDone": "Marked done",
+        "changesRequested": "Changes requested",
+        "declined": "Declined",
+        "overturned": "Overturned"
+      },
+      "open": "Open",
+      "review": "Review",
+      "state": {
+        "resuming": "Resuming",
+        "couldNot": "Didn't resume"
+      },
+      "seeRun": "See the run",
+      "next": {
+        "waitingHosted": "Once it is approved, this run carries on by itself on the hosted agent.",
+        "waitingHostedMany": "When any one is approved, this run carries on by itself on the hosted agent and stops again at the rest.",
+        "waitingLocal": "Once you approve it, continue the run from your terminal — the command appears here.",
+        "ready": "An agent picks the run up on its own branch, builds what the approval released, and stops again at any gate still waiting.",
+        "readySome": "Continuing now builds what the approved gate released, and stops again at the {count} still waiting.",
+        "couldNot": "Nothing was booted and nothing was charged. {repair}",
+        "changes_requested": "Nothing resumes. {key} is reworked first; its next version asks again, and this run keeps waiting.",
+        "declined": "Nothing resumes. The work this would have released needs a new plan — re-plan {key}, or set {head} to To Do to start over.",
+        "overturned": "Nothing resumes. The approval no longer stands, so the run waits for a new decision on {key}."
+      },
+      "back": {
+        "changes_requested": "{kind} sent back · changes requested by <b>{name}</b> — “{note}”",
+        "changes_requestedNoNote": "{kind} sent back · changes requested by <b>{name}</b>",
+        "declined": "Decision declined by <b>{name}</b> — “{note}”",
+        "declinedNoNote": "Decision declined by <b>{name}</b>",
+        "overturned": "Approval overturned by <b>{name}</b> — “{note}”",
+        "overturnedNoNote": "Approval overturned by <b>{name}</b>"
+      },
+      "skip": {
+        "out_of_credits": "the organization is out of credits",
+        "ci_credits_exhausted": "the organization's CI credits are used up",
+        "credits_unavailable": "Motir couldn't check the organization's credits",
+        "model_not_offered": "the model it ran with, {model}, is no longer offered",
+        "models_unavailable": "Motir couldn't load the list of models",
+        "no_project_access": "<b>{name}</b>, who started it, no longer has access to this project",
+        "dispatcher_gone": "<b>{name}</b>, who started it, is no longer in this workspace",
+        "dispatcher_goneAnon": "the person who started it is no longer in this workspace",
+        "repository_not_writable": "Motir can no longer push to {repo}",
+        "card_not_ready": "{key} is not ready to run — it is blocked or no longer in progress"
+      },
+      "repair": {
+        "out_of_credits": "Add credits in billing, then press Continue — or continue from your terminal.",
+        "ci_credits_exhausted": "Add CI credits in billing, then press Continue — or continue from your terminal.",
+        "credits_unavailable": "Press Continue to try again.",
+        "model_not_offered": "Pick another model and press Continue.",
+        "models_unavailable": "Press Continue to try again.",
+        "no_project_access": "Continue it yourself — it runs as you, on your organization's credits.",
+        "dispatcher_gone": "Continue it yourself — it runs as you, on your organization's credits.",
+        "repository_not_writable": "Reconnect the repository in the project's settings, then press Continue.",
+        "card_not_ready": "Clear what blocks {key} or move it back to In Progress, then press Continue."
+      },
+      "copyAria": "Copy the resume command for {key}"
     }
   },
   "approvalRecords": {
@@ -8534,6 +8703,7 @@
       "exitToApp": "Exit to app",
       "navAiPlanning": "AI planning",
       "navPlanningLessons": "Planning lessons",
+      "navIdeas": "Ideas",
       "navRunModels": "Hosted-run models"
     },
     "nav": {
@@ -8718,6 +8888,14 @@
           },
           "enterprise_request": {
             "transition": "Moved an Enterprise request"
+          },
+          "idea": {
+            "add": "Added an idea",
+            "update": "Edited an idea",
+            "retire": "Retired an idea",
+            "delete": "Deleted an idea",
+            "tag_add": "Added an idea tag",
+            "research_run": "Recorded an idea research run"
           }
         }
       }
@@ -10290,6 +10468,202 @@
         "title": "Couldn’t load hosted-run models",
         "body": "motir-ai didn’t respond, so whether each listed model is offered is unknown and no list is shown. Nothing has changed."
       }
+    },
+    "ideas": {
+      "breadcrumb": "Operations · Ideas",
+      "title": "Ideas",
+      "subtitle": "The ideas motir.co shows under Ideas to build, active and retired. Correct an idea, or retire it with a reason; the research skill adds new ones.",
+      "auditLead": "Every change is audited.",
+      "auditBody": "Saving, retiring and deleting each write a row to the audit log with your name. motir.co picks a change up within the hour.",
+      "card": {
+        "title": "Ideas",
+        "count": "Newest first. {count} shown."
+      },
+      "search": {
+        "label": "Search",
+        "placeholder": "Search title, pitch, gap or tag"
+      },
+      "filter": {
+        "label": "Filter ideas",
+        "status": "Status",
+        "kind": "Kind",
+        "category": "Category",
+        "tag": "Tag",
+        "anyKind": "Any kind",
+        "anyCategory": "Any category",
+        "anyTag": "Any tag",
+        "all": "All",
+        "filtered": "Filtered by",
+        "clearAll": "Clear all",
+        "remove": "Remove {filter}"
+      },
+      "col": {
+        "idea": "Idea",
+        "kind": "Kind",
+        "category": "Category",
+        "tags": "Tags",
+        "status": "Status",
+        "added": "Added"
+      },
+      "status": {
+        "active": "Active",
+        "retired": "Retired"
+      },
+      "kind": {
+        "motir_buys": "Motir would buy",
+        "direction": "Direction"
+      },
+      "retiredLine": "Retired {date} — “{reason}”",
+      "moreTags": "+{n}",
+      "pager": {
+        "label": "Pages",
+        "note": "Newest first · 50 a page",
+        "first": "First page",
+        "next": "Next page"
+      },
+      "empty": {
+        "title": "No ideas yet",
+        "body": "Ideas are added in batches by the motir-ideas research skill, not on this page. Once a batch lands, every idea shows here for review."
+      },
+      "emptyFilter": {
+        "title": "No ideas match these filters",
+        "action": "Clear all filters"
+      },
+      "error": {
+        "title": "Couldn’t load the ideas",
+        "body": "Something went wrong reading the idea store, so none is shown. Nothing has changed.",
+        "retry": "Retry"
+      },
+      "detail": {
+        "back": "Back to ideas",
+        "idea": "The idea",
+        "pitch": "Pitch",
+        "capabilities": "What it does",
+        "gap": "The gap",
+        "whyNow": "Why now",
+        "whyMotir": "Why Motir would buy it",
+        "whoElse": "Who else needs it",
+        "evidence": "Evidence",
+        "tags": "Tags",
+        "record": "Record",
+        "noCapabilities": "No capabilities listed.",
+        "notWritten": "Not written.",
+        "noTags": "No tags.",
+        "noEvidence": "No evidence rows.",
+        "sources": "{n, plural, one {# source} other {# sources}}",
+        "newTab": "(opens in a new tab)",
+        "newRow": "New"
+      },
+      "record": {
+        "slug": "Slug",
+        "added": "Added",
+        "lastEdited": "Last edited",
+        "lastReviewed": "Last reviewed",
+        "onSite": "On motir.co",
+        "notReviewed": "Not yet reviewed",
+        "onSiteYes": "Yes, in {category}",
+        "onSiteNo": "No — retired"
+      },
+      "retiredBox": {
+        "title": "Retired — {reason}",
+        "meta": "{when} · no longer on motir.co",
+        "metaBy": "{when} · {who} · no longer on motir.co"
+      },
+      "readOnly": "Read-only for support. Editing, retiring and deleting ideas is an operator’s or a superadmin’s job.",
+      "action": {
+        "edit": "Edit",
+        "retire": "Retire",
+        "delete": "Delete"
+      },
+      "edit": {
+        "title": "Edit idea",
+        "field": {
+          "title": "Title",
+          "pitch": "Pitch",
+          "kind": "Kind",
+          "category": "Category",
+          "tags": "Tags",
+          "capabilities": "What it does",
+          "evidence": "Evidence",
+          "gap": "The gap",
+          "whyNow": "Why now",
+          "whyMotir": "Why Motir would buy it",
+          "whoElse": "Who else needs it"
+        },
+        "evidence": {
+          "claim": "Claim",
+          "source": "Source",
+          "sourceDate": "Source date",
+          "link": "Link",
+          "datePlaceholder": "YYYY-MM-DD, or empty",
+          "add": "Add evidence",
+          "up": "Move evidence {n} up",
+          "down": "Move evidence {n} down",
+          "remove": "Remove evidence {n}",
+          "row": "Evidence {n}"
+        },
+        "addLine": "Add a line",
+        "line": "Line {n}",
+        "removeLine": "Remove line {n}",
+        "limit": "{n} of {max}",
+        "tags": {
+          "hint": "Existing tags only · at most 6 · new tags come from the research skill",
+          "placeholder": "Add a tag",
+          "remove": "Remove {label}",
+          "empty": "No tag matches",
+          "option": "{label} ({count})"
+        },
+        "motirOnly": "Why Motir would buy it and Who else needs it belong to a Motir-would-buy idea only. Switch Kind to show them.",
+        "reviewed": "Mark as reviewed today",
+        "cancel": "Cancel",
+        "save": "Save changes",
+        "unchanged": "Nothing to save — change a field, or tick Mark as reviewed today.",
+        "refused": "Not saved — {n, plural, one {one field needs} other {# fields need}} fixing. Nothing was changed. The fields are marked below.",
+        "saved": "Saved. Your changes show here now and on motir.co within the hour."
+      },
+      "fieldError": {
+        "title": "Give the idea a title of at most 120 characters.",
+        "pitch": "Write a pitch of at most 400 characters.",
+        "long": "Keep this to 600 characters.",
+        "motirOnly": "Clear this on a direction, or switch Kind to Motir would buy.",
+        "evidenceRequired": "A direction needs at least one evidence row.",
+        "evidenceMax": "At most 10 rows.",
+        "claim": "Write the claim (at most 400).",
+        "sourceName": "Name the source (at most 200).",
+        "url": "Use a full link that starts with https://.",
+        "sourceDate": "Use a real date as YYYY-MM-DD, or leave it empty.",
+        "capability": "Write the line (at most 300), or remove it.",
+        "capabilities": "At most 8 lines.",
+        "tags": "At most 6 tags.",
+        "unknownTag": "{tag} is no longer a tag; remove it.",
+        "reason": "Write a reason (at most 2000 characters).",
+        "generic": "Check this field."
+      },
+      "retire": {
+        "title": "Retire “{title}”?",
+        "body": "It leaves motir.co within the hour and moves under Retired here, with your reason. Nothing is deleted.",
+        "reason": "Reason — required, shown on the idea and written to the audit log",
+        "placeholder": "Why is this idea no longer worth building?",
+        "confirm": "Retire idea",
+        "cancel": "Cancel",
+        "already": "Not retired — this idea was already retired. Someone retired it while you had the page open, so your reason was not recorded. The page now shows who retired it and why.",
+        "done": "Retired. It leaves motir.co within the hour."
+      },
+      "delete": {
+        "title": "Delete “{title}” for good?",
+        "body": "Deleting removes the idea, its evidence and its tags and cannot be undone. Use it for an idea that was added by mistake; to take a real idea down, retire it instead. The audit log keeps the slug, the title and your reason.",
+        "reason": "Reason — required, written to the audit log",
+        "placeholder": "Why is this idea being deleted?",
+        "typeSlug": "Type the slug to confirm: {slug}",
+        "confirm": "Delete idea",
+        "cancel": "Cancel",
+        "done": "Deleted “{title}”. It is gone from the store and from motir.co; the audit log keeps the record."
+      },
+      "refused": {
+        "notPermitted": "Not done — your staff role does not allow this. Nothing was changed.",
+        "notFound": "This idea no longer exists. Someone deleted it while you had the page open.",
+        "failed": "Something went wrong, so nothing was changed. Try again."
+      }
     }
   },
   "legal": {
@@ -11024,6 +11398,28 @@
       }
     },
     "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it from Development below.",
+    "gated": {
+      "pill": "Stopped at a gate",
+      "pillReady": "Ready to resume",
+      "gate": "the {kind} on {key}",
+      "waitingMany": "{count} approvals",
+      "waitingHosted": "This run stopped at a gate — waiting on <b>{gate}</b>. Its work is kept on <d>{branch}</d>, and it <b>carries on by itself</b> on the hosted agent once the gate is approved.",
+      "waitingHostedNoBranch": "This run stopped at a gate — waiting on <b>{gate}</b>. Its work is kept, and it <b>carries on by itself</b> on the hosted agent once the gate is approved.",
+      "waitingLocal": "This run stopped at a gate — waiting on <b>{gate}</b>. Its work is kept on its branch; once the gate is approved, continue it with <d>{command}</d>.",
+      "ready": "Ready to resume — <b>{approved} of {total} approvals given</b>. Continue it to build what was approved; it stops again at any gate still waiting:",
+      "resuming": "Resuming — <b>{name}</b> approved {gate}, so a new run carries on on the same branch. <link>See the new run</link>",
+      "resumingBare": "Resuming — a new run carries on on the same branch. <link>See the new run</link>",
+      "couldNot": "<b>{name}</b> approved {gate}, but the run could not resume by itself: <reason></reason>. Continue it from <link>To resume</link> on the Workbench, or with <d>{command}</d>.",
+      "sentBack": "This run stopped at a gate — {gate} was sent back: {outcome} by <b>{name}</b>. Nothing resumes until a new version is approved.",
+      "outcome": {
+        "changes_requested": "changes requested",
+        "declined": "declined",
+        "overturned": "overturned"
+      },
+      "child": "This work item was run as part of <link>{parent}</link>, and that run stopped at a gate — waiting on <b>{gate}</b>. It carries on from {parent} once the gate is approved, and this work item with it.",
+      "someone": "Someone",
+      "gatesLabel": "Gates holding this run"
+    },
     "start": {
       "caption": "Start this work item",
       "run": {
@@ -11731,6 +12127,12 @@
       },
       "reviewPlan": "Review plan",
       "planHeldOption": "held by plan",
+      "sessionHeld": "Being planned in a conversation — status can't change until it ends.",
+      "sessionBy": "{name} is planning it with Motir AI.",
+      "sessionByYou": "You are planning it with Motir AI.",
+      "sessionByUnknown": "A teammate is planning it with Motir AI.",
+      "openSession": "Open the session",
+      "sessionHeldOption": "held by session",
       "planAndGate": "A <strong>{decision}</strong> is waiting on this item too — it can be decided once the plan is."
     },
     "decision": {
@@ -12856,7 +13258,11 @@
         "link": "Link",
         "linkPrompt": "Link URL",
         "image": "Insert image",
-        "table": "Insert table"
+        "table": "Insert table",
+        "workItem": "Work item",
+        "workItemLabel": "Mention a work item",
+        "workItemTip": "Mention a work item — or type @ in the text",
+        "workItemInCode": "Work items can’t be mentioned inside a code block"
       },
       "table": {
         "addRow": "+ Row",
@@ -13019,6 +13425,10 @@
         "rootRequired": "Couldn’t restore “{title}”",
         "rootRequiredBody": "“{title}” is archived as part of “{root}”. Restore “{root}” to bring it back."
       }
+    },
+    "mention": {
+      "unavailable": "Unavailable work item",
+      "unavailableTitle": "This work item was deleted, or you can’t see it."
     }
   }
 }

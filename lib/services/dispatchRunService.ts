@@ -67,6 +67,8 @@ import {
   type DispatchRunReader,
 } from '@/lib/mappers/dispatchRunMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { dispatchRunHeldGateRepository } from '@/lib/repositories/dispatchRunHeldGateRepository';
+import { RUN_HOLDING_GATE_KINDS } from '@/lib/dispatchRuns/heldGates';
 import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
 import { getAgentRunUsage } from '@/lib/ai/motirAiClient';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
@@ -95,6 +97,7 @@ import { availableRoomViews, holdsAnyOf, RUN_ACT_PERMISSIONS } from '@/lib/rooms
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { uniqueViolationConstraints } from '@/lib/prisma/uniqueViolation';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { recomputeWorkItemResumeState } from './resumeStateService';
 import { manualWorkGateService } from './manualWorkGateService';
 import { CANCELLED_STATUS_KEY } from '@/lib/workItems/provenanceBackfill';
 import { ladderKeysFrom, rankOfStatus, RUNG_RANK } from '@/lib/workItems/statusLadder';
@@ -681,6 +684,60 @@ async function recomputeCovered(
 ): Promise<void> {
   if (covered.scope) await recomputeWorkItemFixReason(covered.scope, tx);
   for (const id of covered.legs) await recomputeWorkItemFixReason(id, tx);
+  // …and To resume (MOTIR-7707): a `gated` close puts the cards on it, and the next
+  // open on them — a continue, a fresh run — takes them off.
+  if (covered.scope) await recomputeWorkItemResumeState(covered.scope, tx);
+  for (const id of covered.legs) await recomputeWorkItemResumeState(id, tx);
+}
+
+/**
+ * RECORD THE GATES A `gated` RUN STOPPED AT (Story MOTIR-7701 · MOTIR-7703;
+ * `dispatch-run-record.md` AMENDMENT 2026-10-07) — inside the close's own
+ * transaction, after its lock, so every door (the ingest close, the agent's
+ * `close_work_item_run`, the hosted end) writes the same record and no reporter
+ * names a gate itself.
+ *
+ * The scope is the run's legs plus, for a run pointed at a container, that
+ * container's children: a scoped drain that never reached a gated child still
+ * stopped because of it. Only `awaiting` gates of the five stopper kinds count
+ * ({@link RUN_HOLDING_GATE_KINDS}). None found — the gate was decided in the same
+ * minute — writes nothing, and the run still closes `gated`.
+ *
+ * Reads only: the covered cards are already locked by {@link lockCoveredCards},
+ * and the gate rows are read without a lock, so the close's lock set does not widen.
+ */
+async function recordHeldGates(
+  run: { id: string; workspaceId: string; scopeWorkItemId: string | null },
+  covered: { scope: string | null; legs: string[] },
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const ids = new Set(covered.legs);
+  if (run.scopeWorkItemId) {
+    for (const child of await workItemRepository.findChildren(run.scopeWorkItemId, tx)) {
+      ids.add(child.id);
+    }
+  }
+  const gates = await approvalGateRepository.findAwaitingByWorkItemsAndKinds(
+    [...ids],
+    RUN_HOLDING_GATE_KINDS,
+    tx,
+  );
+  await dispatchRunHeldGateRepository.createMany(
+    gates.flatMap((gate) =>
+      gate.workItemId === null
+        ? []
+        : [
+            {
+              workspaceId: run.workspaceId,
+              dispatchRunId: run.id,
+              gateId: gate.id,
+              workItemId: gate.workItemId,
+              kind: gate.kind,
+            },
+          ],
+    ),
+    tx,
+  );
 }
 
 /** The partial unique index holding one running run per agent (MOTIR-7023). */
@@ -1765,6 +1822,8 @@ export const dispatchRunService = {
         tx,
       );
     }
+
+    if (input.stopReason === 'gated') await recordHeldGates(before, covered, tx);
 
     await recomputeCovered(covered, tx);
 

@@ -4,6 +4,7 @@ import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
 import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
+import { gateResumeService } from '@/lib/services/gateResumeService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
@@ -51,6 +52,7 @@ import { planDriftService } from '@/lib/services/planDriftService';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { impersonationService } from '@/lib/services/impersonationService';
 import { codeGraphDriftService } from '@/lib/services/codeGraphDriftService';
 import { codeGraphIndexCatchUpService } from '@/lib/services/codeGraphIndexCatchUpService';
@@ -140,6 +142,7 @@ export const jobServices = {
   migrateOnboarding: migrateOnboardingService,
   workItemEmbeddings: workItemEmbeddingsService,
   planTargetLock: planTargetLockService,
+  planSessionEnd: planSessionEndService,
   // Staff "View as" sessions (MOTIR-749): the expiry sweep records the end of a
   // session nobody came back to.
   impersonation: impersonationService,
@@ -174,6 +177,8 @@ export const jobServices = {
   agentReviewStart: agentReviewStartService,
   // The automatic hosted re-run after a design Revise (MOTIR-700).
   designAutoRerun: designAutoRerunService,
+  // The automatic hosted resume after a held gate is approved (MOTIR-7710).
+  gateResume: gateResumeService,
   // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch
   // withdraws the approve-and-merge question over any pull request it put in conflict.
   pullRequestMergeability: pullRequestMergeabilityService,

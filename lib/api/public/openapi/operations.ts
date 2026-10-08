@@ -15,6 +15,9 @@ import {
   publicAtomDocumentSchema,
   publicBoardSchema,
   publicHostResolutionSchema,
+  publicIdeaListSchema,
+  publicIdeaSchema,
+  publicIdeaTagsSchema,
   publicProjectIndexPageSchema,
   publicRequestDetailSchema,
   publicRoadmapColumnPageSchema,
@@ -719,6 +722,96 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
         status: 404,
         description: 'No PUBLIC project carries this id.',
         schema: publicErrorWithMessageSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/ideas',
+    operationId: 'listPublicIdeas',
+    summary: "The idea store's active ideas",
+    description:
+      'Every ACTIVE idea in the store (MOTIR-7676), Motir-would-buy ideas first, then newest — ' +
+      'narrowed by any combination of the parameters below, with per-category counts computed ' +
+      'over every filter except `category`. Unpaginated by design: the store is curated. Fully ' +
+      'anonymous — this route makes no session call. Cacheable: ' +
+      '`Cache-Control: public, s-maxage=300, stale-while-revalidate=3300`.',
+    parameters: [
+      {
+        name: 'category',
+        in: 'query',
+        required: false,
+        description: 'Restrict to one category, by slug.',
+        schema: z.string(),
+      },
+      {
+        name: 'tag',
+        in: 'query',
+        required: false,
+        description: 'A tag slug. Repeat it to require every one; an unknown tag matches nothing.',
+        schema: z.string(),
+      },
+      {
+        name: 'q',
+        in: 'query',
+        required: false,
+        description: 'Free text over title, pitch, gap and tag labels (at most 200 characters).',
+        schema: z.string(),
+      },
+      {
+        name: 'kind',
+        in: 'query',
+        required: false,
+        description: '`motir_buys` or `direction`.',
+        schema: z.string(),
+      },
+    ],
+    response: publicIdeaListSchema,
+    errors: [
+      {
+        status: 400,
+        description: 'A `category` or `kind` outside the closed set. `INVALID_IDEA_FILTER`.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/ideas/tags',
+    operationId: 'listPublicIdeaTags',
+    summary: 'The tags the idea list can be filtered by',
+    description:
+      'Every tag carried by at least one ACTIVE idea, with that count — the facet behind the ' +
+      'tag filter. Fully anonymous; cacheable like the list.',
+    parameters: [],
+    response: publicIdeaTagsSchema,
+    errors: [],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/ideas/{slug}',
+    operationId: 'getPublicIdea',
+    summary: 'One active idea',
+    description:
+      'One ACTIVE idea with its evidence and tags. A retired idea answers exactly as an unknown ' +
+      'slug does, so a public reader cannot tell it ever existed. Fully anonymous; cacheable ' +
+      'like the list.',
+    parameters: [
+      {
+        name: 'slug',
+        in: 'path',
+        required: true,
+        description: "The idea's slug, e.g. `a-care-team-app-for-families`.",
+        schema: z.string(),
+      },
+    ],
+    response: publicIdeaSchema,
+    errors: [
+      {
+        status: 404,
+        description:
+          'No ACTIVE idea carries this slug. `IDEA_NOT_FOUND`; a retired slug is indistinguishable.',
+        schema: publicErrorSchema,
       },
     ],
   },

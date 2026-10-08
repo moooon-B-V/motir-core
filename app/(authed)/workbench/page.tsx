@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { Circle, CircleCheck, CircleDot, Inbox, Star, Wrench } from 'lucide-react';
+import { Circle, CircleCheck, CircleDot, CirclePause, Inbox, Star, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
@@ -66,6 +66,7 @@ const TAB_LABEL_KEY: Readonly<Record<WorkbenchTab, string>> = {
   todo: 'tabs.toDo',
   'in-progress': 'tabs.inProgress',
   'to-fix': 'tabs.toFix',
+  'to-resume': 'tabs.toResume',
   finished: 'tabs.recentlyFinished',
   watching: 'tabs.watching',
   approvals: 'tabs.toApprove',
@@ -95,6 +96,8 @@ function readTab(tab: WorkbenchTab, ctx: HomeActorContext, page: number): Promis
       return homeService.listInProgress(ctx, { page });
     case 'to-fix':
       return homeService.listToFix(ctx, { page });
+    case 'to-resume':
+      return homeService.listToResume(ctx, { page });
     case 'finished':
       return homeService.listRecentlyFinished(ctx, { page });
     case 'watching':
@@ -161,6 +164,15 @@ async function EmptyTab({ tab }: { tab: WorkbenchTab }): Promise<ReactNode> {
           icon={<Wrench className="h-12 w-12" aria-hidden />}
           title={t('empty.toFix.title')}
           description={t('empty.toFix.body')}
+        />
+      );
+    case 'to-resume':
+      // § 35 — no action: an approval, not this page, moves a waiting run.
+      return (
+        <EmptyState
+          icon={<CirclePause className="h-12 w-12" aria-hidden />}
+          title={t('empty.toResume.title')}
+          description={t('empty.toResume.body')}
         />
       );
     case 'finished':

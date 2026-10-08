@@ -77,8 +77,8 @@ export const planChangeSessionRepository = {
     return tx.planChangeSession.findFirst({ where: { id, projectId, workspaceId } });
   },
 
-  /** The RESUME read (AMENDMENT 17 §3): this member's OWN most recent
-   *  CONVERSATION for the scope, active at or after `since`. Another member's
+  /** The RESUME read (AMENDMENT 17 §3, AMENDMENT 23 §3): this member's OWN most
+   *  recent OPEN CONVERSATION for the scope. Another member's
    *  session never qualifies — auto-resume is own-only — and neither does a
    *  session a door opened for a plan with no conversation (`mcp`, `expand`, …):
    *  it has no turns to resume into. Served by the
@@ -88,7 +88,6 @@ export const planChangeSessionRepository = {
     scopeKey: string,
     userId: string,
     workspaceId: string,
-    since: Date,
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeSession | null> {
     return tx.planChangeSession.findFirst({
@@ -98,7 +97,77 @@ export const planChangeSessionRepository = {
         workspaceId,
         createdById: userId,
         origin: 'conversation',
-        lastActivityAt: { gte: since },
+        // OPEN, at any age (AMENDMENT 23 §3) — the 2-hour window is retired. An
+        // ended session is never resumed, however recent.
+        endedAt: null,
+      },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
+  /** What the SESSION HOLD reads of the session a lock names (AMENDMENT 23 §5;
+   *  MOTIR-7640): whether it is open, its anchor, and who started it. */
+  async findHoldSubject(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    endedAt: Date | null;
+    targetKeys: string[];
+    createdBy: { id: string; name: string } | null;
+  } | null> {
+    return tx.planChangeSession.findUnique({
+      where: { id },
+      select: {
+        endedAt: true,
+        targetKeys: true,
+        createdBy: { select: { id: true, name: true } },
+      },
+    });
+  },
+
+  /** This member's own most recent CONVERSATION for the scope, open or ended —
+   *  the COPYABLE read (AMENDMENT 23 §6; MOTIR-7641): with no open session, the
+   *  one that ended is what a new session may carry over. */
+  async findLatestConversationForUser(
+    projectId: string,
+    scopeKey: string,
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    return tx.planChangeSession.findFirst({
+      where: { projectId, scopeKey, workspaceId, createdById: userId, origin: 'conversation' },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
+  /**
+   * The TAKE-BACK read (AMENDMENT 23 §3; MOTIR-7639): this member's own OPEN
+   * conversation that HOLDS one of `targetKeys` — a lock naming the session, or
+   * naming its plan. A first turn or an open on a card the member is already
+   * planning lands back in that conversation instead of starting a second one.
+   * Newest activity wins when more than one does.
+   */
+  async findOpenHoldingForUser(
+    projectId: string,
+    targetKeys: readonly string[],
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    if (targetKeys.length === 0) return null;
+    const names = { workItem: { identifier: { in: [...targetKeys] } } };
+    return tx.planChangeSession.findFirst({
+      where: {
+        projectId,
+        workspaceId,
+        createdById: userId,
+        origin: 'conversation',
+        endedAt: null,
+        OR: [
+          { targetLocks: { some: names } },
+          { plans: { some: { targetLocks: { some: names } } } },
+        ],
       },
       orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
     });
@@ -124,8 +193,8 @@ export const planChangeSessionRepository = {
   },
 
   /** The SEEDED-session read (AMENDMENT 17 §9; MOTIR-6207): this member's OWN
-   *  most recent session seeded by `seedGateId` in this project, active at or
-   *  after `since`. Never another member's (sessions are per member), never an
+   *  most recent OPEN session seeded by `seedGateId` in this project (AMENDMENT
+   *  23 §3 — no window). Never another member's (sessions are per member), never an
    *  unseeded session and never one seeded by a different gate. Served by the
    *  `(seed_gate_id, created_by_id, last_activity_at)` index. */
   async findSeededForUser(
@@ -133,7 +202,6 @@ export const planChangeSessionRepository = {
     seedGateId: string,
     userId: string,
     workspaceId: string,
-    since: Date,
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeSession | null> {
     return tx.planChangeSession.findFirst({
@@ -142,7 +210,7 @@ export const planChangeSessionRepository = {
         workspaceId,
         seedGateId,
         createdById: userId,
-        lastActivityAt: { gte: since },
+        endedAt: null,
       },
       orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
     });
@@ -184,8 +252,22 @@ export const planChangeSessionRepository = {
     return row?.createdBy ?? null;
   },
 
-  /** The ids of this member's OTHER sessions of the scope — the predecessors a new
-   *  session may take a live target lease over from (AMENDMENT 17 §6). */
+  /** Who ENDED a session (AMENDMENT 23 §1), or null — Motir, or a departed member. */
+  async findEnder(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; name: string } | null> {
+    const row = await tx.planChangeSession.findFirst({
+      where: { id, workspaceId },
+      select: { endedBy: { select: { id: true, name: true } } },
+    });
+    return row?.endedBy ?? null;
+  },
+
+  /** The ids of this member's OTHER OPEN sessions of the scope — the sessions a
+   *  new SEEDED session may take a live target lease over from (AMENDMENT 17 §6,
+   *  kept for §9 only by AMENDMENT 23 §3). */
   async listIdsForUserInScope(
     projectId: string,
     scopeKey: string,
@@ -195,7 +277,16 @@ export const planChangeSessionRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<string[]> {
     const rows = await tx.planChangeSession.findMany({
-      where: { projectId, scopeKey, workspaceId, createdById: userId, id: { not: excludeId } },
+      // OPEN sessions only: an ended one released its leases when it ended
+      // (AMENDMENT 23 §2), so it has nothing left to hand over.
+      where: {
+        projectId,
+        scopeKey,
+        workspaceId,
+        createdById: userId,
+        id: { not: excludeId },
+        endedAt: null,
+      },
       select: { id: true },
     });
     return rows.map((r) => r.id);
@@ -243,6 +334,31 @@ export const planChangeSessionRepository = {
    * session does not exist; the caller re-reads the current row UNDER the lock
    * to allocate from a `turnCount` no sibling transaction can still move.
    */
+  /**
+   * The IDLE CLOSE's discovery read (AMENDMENT 23 §2; MOTIR-7638): open,
+   * non-`guide` sessions whose last activity is older than `olderThan` and that
+   * hold no undecided plan. Cross-tenant, so it runs under the system context
+   * (`plan_change_session_system_read`); the end re-checks each one under its
+   * own row lock before writing. Oldest first, bounded per pass.
+   */
+  async listIdleOpen(
+    olderThan: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    return tx.planChangeSession.findMany({
+      where: {
+        endedAt: null,
+        origin: { not: 'guide' },
+        lastActivityAt: { lt: olderThan },
+        plans: { none: { status: { in: ['generating', 'planned', 'stale'] } } },
+      },
+      select: { id: true, workspaceId: true },
+      orderBy: [{ lastActivityAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+  },
+
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "plan_change_session" WHERE "id" = ${id} FOR UPDATE
@@ -305,6 +421,10 @@ export const planChangeSessionRepository = {
              lp."id" AS "planId", lp."status"::text AS "planStatus",
              lp."title" AS "planTitle", lp."summary" AS "planSummary",
              pc."n" AS "planCount",
+             ${sessionStateSql}::text AS "state",
+             s."ended_at" AS "endedAt", s."end_reason"::text AS "endReason",
+             eb."id" AS "endedById", eb."name" AS "endedByName",
+             cf."id" AS "copiedFromId", cf."ended_at" AS "copiedFromEndedAt",
              s."seed_gate_id" AS "seedGateId", sg."kind"::text AS "seedGateKind",
              sg."state"::text AS "seedGateState",
              sg."chosen_option"->>'label' AS "seedChosenLabel",
@@ -312,6 +432,10 @@ export const planChangeSessionRepository = {
              (sw."id" IS NOT NULL AND sw."projectId" = s."project_id") AS "seedCardInProject"
       FROM "plan_change_session" s
       LEFT JOIN "user" u ON u."id" = s."created_by_id"
+      LEFT JOIN "user" eb ON eb."id" = s."ended_by_id"
+      LEFT JOIN "plan_change_session" cf
+        ON cf."id" = s."copied_from_session_id" AND cf."workspace_id" = s."workspace_id"
+       AND cf."project_id" = s."project_id"
       LEFT JOIN "approval_gate" sg
         ON sg."id" = s."seed_gate_id" AND sg."workspace_id" = s."workspace_id"
       LEFT JOIN "work_item" sw
@@ -417,7 +541,7 @@ export const planChangeSessionRepository = {
     hiddenIds?: readonly string[],
   ): Promise<Array<{ state: string; count: number }>> {
     return tx.$queryRaw<Array<{ state: string; count: number }>>`
-      SELECT COALESCE(lp."status"::text, 'none') AS "state", count(*)::int AS "count"
+      SELECT ${sessionStateSql}::text AS "state", count(*)::int AS "count"
       FROM "plan_change_session" s
       ${latestPlanJoin}
       WHERE s."project_id" = ${projectId} AND s."workspace_id" = ${workspaceId}
@@ -429,8 +553,9 @@ export const planChangeSessionRepository = {
   },
 };
 
-/** A plan state the list filters on — `none` or a `PlanStatus` value. */
-export type PlanSessionListState = 'none' | PlanStatus;
+/** A session state the list filters on — `none`, `closed` or a `PlanStatus`
+ *  value (AMENDMENT 23 §1). */
+export type PlanSessionListState = 'none' | 'closed' | PlanStatus;
 
 /** One raw row of {@link planChangeSessionRepository.listPageByProject}. */
 export interface PlanSessionListRow {
@@ -446,6 +571,16 @@ export interface PlanSessionListRow {
   planTitle: string | null;
   planSummary: string | null;
   planCount: number;
+  /** The session's state, END first — {@link sessionStateSql}. */
+  state: string;
+  endedAt: Date | null;
+  endReason: string | null;
+  endedById: string | null;
+  endedByName: string | null;
+  /** The session this one was COPIED from (AMENDMENT 23 §6), when it is still
+   *  in the project; null otherwise — a gone source reads like no source. */
+  copiedFromId: string | null;
+  copiedFromEndedAt: Date | null;
   /** MOTIR-6207's `seed_gate_id` — still set when the gate's work item moved away. */
   seedGateId: string | null;
   /** The seeding gate's kind; null when the session is unseeded or the gate is gone. */
@@ -525,6 +660,20 @@ const latestPlanJoin = Prisma.sql`
   ) lp ON true`;
 
 /**
+ * A session's STATE (AMENDMENT 23 §1), END FIRST: an ended session reads
+ * `declined` / `approved` when a person's decision ended it and `closed` when
+ * Motir did (`failed` · `idle` · `restarted`); an OPEN one reads its latest
+ * plan's status, or `none`. Over `s` and {@link latestPlanJoin}'s `lp`, and the
+ * ONE expression the list, its filter and the counts all read — so a count, its
+ * tab and a row's chip cannot disagree.
+ */
+export const sessionStateSql = Prisma.sql`(CASE
+    WHEN s."ended_at" IS NULL THEN COALESCE(lp."status"::text, 'none')
+    WHEN s."end_reason" IN ('declined', 'approved') THEN s."end_reason"::text
+    ELSE 'closed'
+  END)`;
+
+/**
  * The Plans room's `mine` scope (Story MOTIR-6179 · MOTIR-6330): WHO is reading,
  * and the ids of the plans whose approval gate is routed to them — resolved ONCE
  * per read by the service through `approvalGateRepository.findAwaitingRoutedPlanIds`,
@@ -559,6 +708,5 @@ function mineFilter(mine: PlanSessionMineScope | null): Prisma.Sql {
 
 function stateFilter(state: PlanSessionListState | null): Prisma.Sql {
   if (state === null) return Prisma.empty;
-  if (state === 'none') return Prisma.sql`AND lp."id" IS NULL`;
-  return Prisma.sql`AND lp."status" = CAST(${state} AS "plan_status")`;
+  return Prisma.sql`AND ${sessionStateSql} = ${state}`;
 }

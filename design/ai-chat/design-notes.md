@@ -4600,3 +4600,95 @@ No new mock: the change removes one line from an existing bubble and adds nothin
 
 - `planningWorkspace.conversation.turn` "turn {n}" · `.turnRefine` "turn {n} · refine" ·
   `.turnAnswer` "turn {n} · answer" — removed from `en` and `zh`.
+
+## ⭐ Plan something new — the control in the rail head, the confirm, and the new session opening in place (MOTIR-7647, 2026-10-06)
+
+**Mock:** `design/ai-chat/planning-workspace--plan-something-new.mock.html` (a delta; panels 1–8).
+**Amends** §_The conversation_ (the rail head, `planning-workspace.mock.html`) by adding one control
+to it, and composes the end marker and read-only slot of the session-end delta
+(`planning-workspace--session-end.mock.html`, MOTIR-7633) without redrawing them. **Contract:**
+`docs/decisions/conversation-turn-intent.md` AMENDMENT 3 (MOTIR-7646).
+
+**The ask.** From inside the planning overlay a person can close the session they are in and start
+something else, by pressing **Plan something new** or by saying so. Either path raises the same
+confirm. **Confirm** ends the session (`restarted`), gives its cards back, and swaps a new, empty
+session into the same overlay. **Keep planning** closes nothing.
+
+### Panel 1 — the control
+
+- Design-system `Button` variant **secondary**, size **sm**, glyph `SquarePen` (14px, `currentColor`),
+  label `planningWorkspace.restart.control`. Shape: `--radius-btn`, `--height-btn-sm`; colour
+  `--el-button-border` border, `--el-text` ink. Focus: the shipped `--focus-ring-color` ring.
+- Placed at the END of the rail head, after the mode `Pill` (`gap-2`). The head is sticky chrome, so
+  the control is reachable from any scroll position.
+- Pressing it calls `POST /api/ai/plan-change/session/restart/confirm`. It closes nothing; it only
+  raises the confirm (idempotent: a confirm already pending is not written twice).
+- `data-testid="planning-restart-control"`.
+
+### Panel 2 — the confirm
+
+- A planner `Bubble` (`--el-chat-bubble-ai`, `--el-text`) holding the fixed body
+  `planningWorkspace.restart.confirm.body`, rendered from the turn's `confirm: 'new_session'` column
+  with catalogue strings (never the stored body), so it reads in the viewer's locale.
+- Under the body, `.confirm-acts` (`gap-2`, `mt-2`, wraps): **Confirm** (`Button` primary sm,
+  `--el-accent` / `--el-accent-text`) and **Keep planning** (`Button` secondary sm).
+- It is the SAME turn whether the control or the person's words (`new_session` from the classifier)
+  raised it. The words stay in the thread as the person's own turn. No job runs.
+- It is not a planner question: no _asking_ bar, the composer keeps its placeholder. The answers show
+  only while the confirm is the LATEST turn of an OPEN session; a later turn leaves it as a record
+  without buttons.
+- Test ids: `planning-restart-confirm-turn`, `planning-restart-confirm`, `planning-restart-keep`.
+
+### Panel 3 — after Keep planning
+
+The answers leave the bubble, and the shipped centred marker line (`.marker`, `--el-text-secondary`,
+12px) records `planningWorkspace.restart.kept`. Nothing else changes; the control stays in the head.
+
+### Panel 4 — the swap
+
+- The rail swaps to the returned session in place; the overlay, canvas frame and rail width stay put.
+  The address changes to the new session's (`shallowPush` is not enough here: the session id is a
+  route param, so a `router.replace` to the new session's URL).
+- The new session shows the head (with the control), ONE earlier-session line (the copied divider's
+  idiom: hairlines `--el-border`, `ArrowLeft` glyph, `--el-text-secondary` 12px,
+  `planningWorkspace.restart.earlier` · link `planningWorkspace.restart.earlierOpen` in `--el-link`),
+  then the shipped opener. The composer is empty and focused.
+- **Open it** reopens the ended session read-only by id. It ends with the shipped end marker,
+  `data-end-reason="restarted"`, now reading `planningWorkspace.session.end.reason.restarted`, and the
+  shipped read-only slot. No copy is offered (A3.4).
+- The canvas shows the session's cards back at their pre-session status (ACME-40 at To Do).
+- Motion: the thread cross-fades over `--transition-duration`; `prefers-reduced-motion: reduce` draws
+  the end state at once. Focus moves to the composer; a polite live region reads the earlier-session
+  line.
+
+### Panel 5 — absent and disabled
+
+- **Absent** in a guide conversation (A3.5), in a read-only reopen (another member's session, or no
+  `ai:plan`), and in an ended session (it already has its own way forward).
+- **Disabled** while a run streams: `disabled` with `aria-describedby` to a `Tooltip`
+  (`--el-text` fill, `--el-text-inverted` ink, `--radius-control`, `--spacing-tooltip-x/y`,
+  `--shadow-elevated`) reading `planningWorkspace.restart.disabledStreaming`.
+
+### Panels 6–7 — dark parity and the 352px floor
+
+Every element above is drawn under `data-theme="dark"`; all inks are `--el-text`,
+`--el-text-secondary`, `--el-accent-text` and `--el-link`, which clear AA on both themes. At the
+rail's 352px floor the control keeps its full label beside the mode chip and the confirm's two answers
+wrap before they shrink.
+
+### Copy index
+
+| key                                              | en                                                                                      | zh                                                         |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `planningWorkspace.restart.control`              | Plan something new                                                                      | 规划新内容                                                 |
+| `planningWorkspace.restart.confirm.body`         | Start something new? This closes the current planning session and gives its cards back. | 开始新的规划？这会关闭当前的规划会话，并归还它占用的卡片。 |
+| `planningWorkspace.restart.confirm.yes`          | Confirm                                                                                 | 确认                                                       |
+| `planningWorkspace.restart.confirm.keep`         | Keep planning                                                                           | 继续规划                                                   |
+| `planningWorkspace.restart.kept`                 | Kept planning                                                                           | 已继续规划                                                 |
+| `planningWorkspace.restart.earlier`              | Your earlier session is closed                                                          | 你之前的会话已关闭                                         |
+| `planningWorkspace.restart.earlierOpen`          | Open it                                                                                 | 打开                                                       |
+| `planningWorkspace.restart.disabledStreaming`    | Available when this run finishes                                                        | 本次运行结束后可用                                         |
+| `planningWorkspace.session.end.reason.restarted` | you started something new · {when} (was "you started over · {when}")                    | 你开始了新的规划 · {when}                                  |
+
+`session.end.reason.restarted` changes because "started over" reads like the in-session START OVER
+(`clear_plan`), which keeps the session.

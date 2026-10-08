@@ -5,6 +5,7 @@ import type { ProjectContext } from '@/lib/projects';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { buildScope, PROJECT_SCOPE } from '@/lib/planChange/scope';
 import { EmptyPlanChangeTurnError, PlanSeedNotApplicableError } from '@/lib/planChange/errors';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { usersService } from '@/lib/services/usersService';
 import { createTestProject } from '../fixtures/projectFixtures';
 import {
@@ -182,7 +183,7 @@ describe('startSeededWithFirstTurn — a refused gate seeds a NEW session', () =
     expect(await adminDb.planChangeSession.count()).toBe(1);
   });
 
-  it('a call after the window starts a NEW seeded session and hands the target lock over', async () => {
+  it('a call once that session ENDED starts a NEW seeded session, which takes the card', async () => {
     const gateId = await gate(card, 'decision_approval', 'changes_requested');
     const me = pctxFor(fx.ownerId);
     const old = await planChangeSessionsService.startSeededWithFirstTurn(
@@ -191,7 +192,7 @@ describe('startSeededWithFirstTurn — a refused gate seeds a NEW session', () =
       'old',
       gateId,
     );
-    await setActivity(old.id, new Date(Date.now() - 3 * 60 * MINUTE));
+    await planSessionEndService.endSession(old.id, 'idle', { workspaceId: fx.workspaceId });
 
     const fresh = await planChangeSessionsService.startSeededWithFirstTurn(
       me,
@@ -414,7 +415,9 @@ describe('findSeededSession — the caller’s own recent seeded session, or nul
     expect(await counts()).toEqual(before);
   });
 
-  it('is null once the session has gone quiet past the window', async () => {
+  // AMENDMENT 23 §3 (MOTIR-7639) retired the 2-hour window: an OPEN seeded
+  // session is returned at any age, and an ENDED one never is.
+  it('is returned at any age while open, and null once the session has ended', async () => {
     const gateId = await gate(card, 'decision_approval', 'changes_requested');
     const me = pctxFor(fx.ownerId);
     const s = await planChangeSessionsService.startSeededWithFirstTurn(
@@ -423,11 +426,13 @@ describe('findSeededSession — the caller’s own recent seeded session, or nul
       'x',
       gateId,
     );
-    const now = new Date();
-    await setActivity(s.id, new Date(now.getTime() - 119 * MINUTE));
-    expect(await planChangeSessionsService.findSeededSession(me, gateId, now)).toBe(s.id);
-    await setActivity(s.id, new Date(now.getTime() - 121 * MINUTE));
-    expect(await planChangeSessionsService.findSeededSession(me, gateId, now)).toBeNull();
+    await setActivity(s.id, new Date(Date.now() - 48 * 60 * MINUTE));
+    expect(await planChangeSessionsService.findSeededSession(me, gateId)).toBe(s.id);
+    await adminDb.planChangeSession.update({
+      where: { id: s.id },
+      data: { endedAt: new Date(), endReason: 'idle' },
+    });
+    expect(await planChangeSessionsService.findSeededSession(me, gateId)).toBeNull();
   });
 
   it('is null for ANOTHER member’s seeded session, an unseeded one, or another gate’s', async () => {

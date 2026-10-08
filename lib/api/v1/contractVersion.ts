@@ -939,5 +939,33 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.62.0` after MOTIR-7146's
  *   `1.61.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
  *   MEMBERS.
+ *
+ * - `1.63.0` — MOTIR-7640 (Story MOTIR-7630; `agent-authored-plans.md` AMENDMENT 23
+ *   §5) adds the SESSION form of `PLAN_TARGET_HELD`'s `plan` payload: a card an OPEN
+ *   planning session holds is refused a move out of Planning before any plan exists.
+ *   Every `plan` now carries `kind` (`plan` | `session`); the session form has
+ *   `planId` and `planStatus` null, its holding `sessionId`, and `holderId` /
+ *   `holderName` / `heldByViewer`.
+ *
+ *   Additive in what a client meets on the existing condition: a plan hold's payload
+ *   is unchanged but for the new `kind` field. The session form is a NEW condition of
+ *   the same code, and a client written against the plan form must read `kind`
+ *   before `planId`.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.63.0` after MOTIR-7474's
+ *   `1.62.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.64.0` — MOTIR-7708 (Story MOTIR-7701) lets the continue claim RESUME a run that
+ *   stopped at a gate (closed `gated`) once a gate it stopped on is approved. The
+ *   claim's refusal `reason` gains `gate_awaiting` and `gate_sent_back`, and
+ *   `WorkItemContinueClaim` gains `gates` (`{ key, kind, state }[]`, the gates a gated
+ *   run stopped on) and `resumesGated` (true on a resume).
+ *
+ *   Additive: new members of an enum every client must tolerate, and two new fields on
+ *   an existing shape (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.64.0` after MOTIR-7640's
+ *   `1.63.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
+ *   MEMBERS and the FIELDS.
  */
-export const V1_CONTRACT_VERSION = '1.62.0';
+export const V1_CONTRACT_VERSION = '1.64.0';

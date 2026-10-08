@@ -227,7 +227,14 @@ test('Plans: the filter, ten at a time, who started a decided plan, the list vie
       PLAN_SESSION_STATE_VALUES.length + 1,
     );
     await expect(tab(page, 'All')).toHaveAttribute('aria-pressed', 'true');
-    for (const other of ['Writing', 'Waiting for approval', 'Stale', 'Approved', 'Declined']) {
+    for (const other of [
+      'Writing',
+      'Waiting for approval',
+      'Stale',
+      'Approved',
+      'Declined',
+      'Closed',
+    ]) {
       await expect(tab(page, other)).toHaveAttribute('aria-pressed', 'false');
     }
 

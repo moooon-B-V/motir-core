@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { QuickViewData } from '@/lib/dto/quickView';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { PlanHeldByPlanDTO } from '@/lib/dto/plans';
 import { planRowDestination } from '@/lib/planning/planDestination';
 
 // The editable quick-view rail (MOTIR-2563) — the chrome, the five
@@ -514,7 +514,8 @@ describe('the status field when a PLAN holds the card (MOTIR-6267)', () => {
     position: `a${i}`,
     isInitial: i === 0,
   }));
-  const hold: PlanHoldDTO = {
+  const hold: PlanHeldByPlanDTO = {
+    kind: 'plan',
     itemKey: 'PROD-7',
     workItemId: DATA.id,
     planId: 'pln_3',

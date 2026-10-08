@@ -645,6 +645,30 @@ export const dispatchRunRepository = {
     });
   },
 
+  /**
+   * A gated run's header as its To resume entry names it (MOTIR-7712): where it ran,
+   * who reported it, and who started it.
+   */
+  async findResumeHeaderById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    origin: DispatchRun['origin'];
+    reportedBy: DispatchRun['reportedBy'];
+    createdBy: { id: string; name: string } | null;
+    agentInstance: { name: string } | null;
+  } | null> {
+    return tx.dispatchRun.findUnique({
+      where: { id },
+      select: {
+        origin: true,
+        reportedBy: true,
+        createdBy: { select: { id: true, name: true } },
+        agentInstance: { select: { name: true } },
+      },
+    });
+  },
+
   /** One run, header only — the cheap read the append path makes per batch. */
   async findById(id: string, tx: Prisma.TransactionClient): Promise<DispatchRun | null> {
     return tx.dispatchRun.findUnique({ where: { id } });

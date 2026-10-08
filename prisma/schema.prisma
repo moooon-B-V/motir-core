@@ -363,6 +363,7 @@ model User {
   // the conversation is project history, not personal substrate. Modelled on
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   createdPlanChangeSessions        PlanChangeSession[]           @relation("PlanChangeSessionCreatedBy")
+  endedPlanChangeSessions          PlanChangeSession[]           @relation("PlanChangeSessionEndedBy")
   authoredPlanChangeTurns          PlanChangeTurn[]              @relation("PlanChangeTurnAuthor")
   // Mid-run mailbox entries this user attached to a RUNNING planning job
   // (Story MOTIR-4054 · MOTIR-4067). SetNull, the same actor semantics as the
@@ -382,6 +383,7 @@ model User {
   // (Story MOTIR-7521 · MOTIR-7525). SetNull: the entry outlives the account,
   // and the hash-chained audit log keeps WHO for ever.
   platformRunModelsAdded           PlatformRunModel[]            @relation("PlatformRunModelAddedBy")
+  ideaResearchRuns                 IdeaResearchRun[]
   // Organizations this platform operator SUSPENDED and that are still suspended
   // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
   // role must not block, or cascade into, a tenant's suspension state — the
@@ -435,6 +437,7 @@ model User {
   // Decision pages this person published (Story MOTIR-5761). Restrict, as
   // `PageVersion.author`: publishing is durable attribution.
   decisionPagePublications         DecisionPagePublication[]     @relation("DecisionPagePublisher")
+  pageWorkItemLinksCreated         PageWorkItemLink[]            @relation("PageWorkItemLinkCreator")
   // Monitor connections this person BOUND (Story MOTIR-4926 · MOTIR-4929 ·
   // MOTIR-5576) — whose identity the reconciler files each monitor bug as.
   // SetNull, NOT Cascade: removing the person must not remove the binding; the
@@ -477,6 +480,9 @@ enum PlatformAuditTargetKind {
   project
   user
   platform
+  /// An idea in the platform idea store (Story MOTIR-7662) — `targetId` is the
+  /// idea's id and `targetLabel` its slug; the row outlives a deleted idea.
+  idea
 
   @@map("platform_audit_target_kind")
 }
@@ -1555,6 +1561,8 @@ model Workspace {
   approvalGates               ApprovalGate[]
   /// Automatic hosted re-runs after a design Revise (MOTIR-700).
   designAutoReruns            DesignAutoRerun[]
+  dispatchRunHeldGates        DispatchRunHeldGate[]
+  gateResumes                 GateResume[]
   boards                      Board[]
   boardColumns                BoardColumn[]
   boardColumnStatuses         BoardColumnStatus[]
@@ -1687,6 +1695,7 @@ model Workspace {
   pages                       Page[]
   pageVersions                PageVersion[]
   decisionPagePublications    DecisionPagePublication[]
+  pageWorkItemLinks           PageWorkItemLink[]
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
@@ -1928,15 +1937,6 @@ model Project {
   /// app-side, so a human-paced team can still stretch it to a fortnight
   /// without the column becoming a free-form integer.
   aiSprintLengthDays               Int                   @default(2) @map("ai_sprint_length_days")
-  /// RETIRED (Story MOTIR-7220 · MOTIR-7228). Was the per-project planner-model
-  /// override (MOTIR-915); it was stored and never sent to motir-ai. The model
-  /// that plans is now a PLATFORM setting per audience, chosen by a superadmin in
-  /// the operator console and stored in motir-ai — never a tenant setting.
-  /// `@ignore` hides the field from the generated client, so no query reads or
-  /// writes it, while the COLUMN stays for the build still serving during this
-  /// release's rollout. The column is dropped by a later release (MOTIR-7230's
-  /// verification, then the drop task) — the three-release column removal.
-  aiPlannerModel                   String?               @map("ai_planner_model") @ignore
   /// HOSTED-AGENT MODEL OVERRIDES per leaf DIFFICULTY (Story MOTIR-6989 ·
   /// MOTIR-6993). NULL — the default — means "use the platform default for that
   /// level", which motir-ai serves as `defaultsByDifficulty` on
@@ -2184,6 +2184,7 @@ model Project {
   pages                         Page[]
   pageVersions                  PageVersion[]
   decisionPagePublications      DecisionPagePublication[]
+  pageWorkItemLinks             PageWorkItemLink[]
   /// The folder this project's filed bugs land in (Story MOTIR-4927 · MOTIR-4934).
   /// NULL MEANS THE PROJECT ROOT, CHOSEN — nullable with no default, and never to
   /// be made required. `NoAction`, the `Folder.parentFolder` idiom: a folder this
@@ -3026,6 +3027,19 @@ model WorkItem {
   // card's open pull requests are affected. Written with `fixReason`, `null`
   // exactly when it is.
   fixDetail             Json?
+  // WHETHER a card waits To resume (Story MOTIR-7701 · MOTIR-7707) — a SIBLING
+  // of `fixReason`, never a sixth value of it: To fix means a repair would claim
+  // the card, and a run stopped at an approval gate is not broken. Set while the
+  // LATEST run covering the card closed `gated`; `waiting_on_gate` until one of
+  // its held gates is approved, then `ready_to_resume`. RECOMPUTED by
+  // `resumeStateService.recomputeWorkItemResumeState`, never stamped; `null` off
+  // the `in_progress` category, on an archived card, and once a newer run opens.
+  resumeState           WorkItemResumeState?
+  // The gated run the state is about — the To resume tab's ENTRY key, as To fix
+  // groups by run (MOTIR-7589). Written with `resumeState`, `null` exactly when it
+  // is; `SetNull` so a pruned run can never leave a dangling pointer.
+  resumeRunId           String?                       @map("resume_run_id")
+  resumeRun             DispatchRun?                  @relation("WorkItemResumeRun", fields: [resumeRunId], references: [id], onDelete: SetNull)
   // WHEN this item finished (Story MOTIR-4777 · MOTIR-4780) — the moment it
   // ENTERED a `done`-CATEGORY status, cleared the moment it leaves one. The
   // Workbench's "Recently finished" tab is the first reader; it is also the
@@ -3118,9 +3132,13 @@ model WorkItem {
   approvalGates            ApprovalGate[]
   /// Decision pages this work item published (Story MOTIR-5761). Cascade.
   decisionPagePublications DecisionPagePublication[]
+  // The pages that link this work item (MOTIR-7571). Cascade.
+  pageWorkItemLinks        PageWorkItemLink[]
   /// What each Revise on this design card did about an automatic hosted re-run
   /// (MOTIR-700) — the "re-running" / "skipped" line.
   designAutoReruns         DesignAutoRerun[]
+  /// The gated runs held by a gate on this card (MOTIR-7703).
+  heldRunGates             DispatchRunHeldGate[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
   // the issue: label/component joins are pure association rows, watcher rows
   // are notification substrate.
@@ -3256,6 +3274,9 @@ model WorkItem {
   // `fixReason` is NULL on nearly every row, so the non-null range is a handful of
   // entries and the membership predicate filters those rather than the project.
   @@index([projectId, fixReason])
+  // The TO RESUME read (Story MOTIR-7701 · MOTIR-7707) — the same shape as To fix's.
+  @@index([projectId, resumeState])
+  @@index([resumeRunId])
   // pg_trgm GIN over the free-text contains-match columns (Story 6.1 · 6.1.1,
   // finding #57): the filter builder's `text contains` compiles to ILIKE over
   // title + description, which must not table-scan at 10k issues. A multicolumn
@@ -3757,6 +3778,17 @@ enum WorkItemFixReason {
   changes_requested
 
   @@map("work_item_fix_reason")
+}
+
+/// WHERE a card waiting on a gated run stands (Story MOTIR-7701 · MOTIR-7707) —
+/// `WorkItem.resumeState`. The *resuming* and *could not resume* sub-states are
+/// NOT values: they are read from the per-decision resume record, so this column
+/// stays a pure function of runs and gates.
+enum WorkItemResumeState {
+  waiting_on_gate
+  ready_to_resume
+
+  @@map("work_item_resume_state")
 }
 
 /// A per-project, customizable issue status (Story 2.2). Every project owns an
@@ -5613,9 +5645,13 @@ model ApprovalGate {
   /// caller it was added for.
   /// The automatic hosted re-run a Revise on this gate caused or skipped (MOTIR-700).
   designAutoRerun    DesignAutoRerun?
+  /// The runs that closed `gated` waiting on this gate (MOTIR-7703).
+  heldRuns           DispatchRunHeldGate[]
+  /// What its approval did about resuming the hosted run it held (MOTIR-7710).
+  gateResume         GateResume?
   /// The page versions this gate FROZE at its approval (Story MOTIR-5761 ·
   /// MOTIR-7428). SetNull on the version side: the freeze outlives the row.
-  frozenPageVersions PageVersion[]    @relation("PageVersionFrozenByGate")
+  frozenPageVersions PageVersion[]         @relation("PageVersionFrozenByGate")
 
   @@index([workspaceId, state])
   /// THE ROUTING READ's index (MOTIR-4791) — the Approvals tab asks for one
@@ -7057,6 +7093,28 @@ enum PlanSessionOrigin {
   guide
 
   @@map("plan_session_origin")
+}
+
+/// WHY a planning session ENDED (story MOTIR-7630 · MOTIR-7636;
+/// `agent-authored-plans.md` AMENDMENT 23 §1). Written with
+/// `PlanChangeSession.endedAt`, never without it. The first three are MOTIR's
+/// ending and read **Closed** on the Plans page; `declined` and `approved` are a
+/// person's decision on the session's plan and read as those. Deliberately NOT
+/// a `PlanStatus` member: the end is a SESSION fact, and `PlanStatus` is public
+/// vocabulary (v1, MCP, i18n parity).
+enum PlanSessionEndReason {
+  /// Its attempt's job failed or was canceled.
+  failed
+  /// The idle sweep closed it after its lease ran out.
+  idle
+  /// The person restarted from inside the planning overlay.
+  restarted
+  /// A person declined its plan.
+  declined
+  /// Its plan was approved.
+  approved
+
+  @@map("plan_session_end_reason")
 }
 
 /// An AI-planning proposal bundle (Story 7.21 — the Plan substrate). A `Plan`
@@ -8678,19 +8736,19 @@ enum MigrateOnboardingStatus {
 /// exactly one session through `Plan.sessionId` (§5). Workspace-scoped tenant
 /// data (RLS in the same migration).
 model PlanChangeSession {
-  id              String            @id @default(cuid())
-  workspaceId     String            @map("workspace_id")
-  projectId       String            @map("project_id")
+  id                  String                @id @default(cuid())
+  workspaceId         String                @map("workspace_id")
+  projectId           String                @map("project_id")
   /// Who opened the thread. SetNull — a departed author leaves the conversation
   /// intact and unattributed (the `Notification` actor semantics).
-  createdById     String?           @map("created_by_id")
+  createdById         String?               @map("created_by_id")
   /// The number of turns on the thread — the READ-DERIVED value an append
   /// allocates the next `seq` from. Appends lock this row (`SELECT … FOR UPDATE`)
   /// and re-read it inside the transaction, so two concurrent appends serialize
   /// into two ordered turns instead of colliding on `seq` (the
   /// lock-before-read-derived-update rule); the `(session_id, seq)` unique is the
   /// DB-level backstop, translated to a typed error.
-  turnCount       Int               @default(0) @map("turn_count")
+  turnCount           Int                   @default(0) @map("turn_count")
   /// The CANONICAL anchor-set discriminator (7.12.3 · MOTIR-909) — what makes a
   /// thread "the conversation about THESE work items" rather than "the project's
   /// conversation". Derived, never client-supplied: `targetKeys` deduped, sorted,
@@ -8698,31 +8756,31 @@ model PlanChangeSession {
   /// PROJECT-WIDE thread — the shipped 7.30 conversation, unchanged — so the
   /// `(project_id, scope_key)` unique still admits exactly one of those per
   /// project while allowing one contextual thread per distinct anchor set.
-  scopeKey        String            @default("") @map("scope_key")
+  scopeKey            String                @default("") @map("scope_key")
   /// The anchor SET this thread is scoped to, as work-item IDENTIFIERS ("MOTIR-812"),
   /// in the same canonical order `scopeKey` is built from. Empty on the project-wide
   /// thread. Stored (not re-derived from `scopeKey`) because it is what a RESUMED
   /// thread re-submits as the motir-ai `context.targetKeys` anchor set, and what the
   /// panel labels the conversation with. Identifiers, not FKs — the same opaque-token
   /// posture `last_job_id` takes; a deleted anchor must not cascade the conversation.
-  targetKeys      String[]          @default([]) @map("target_keys")
+  targetKeys          String[]              @default([]) @map("target_keys")
   /// The most recent plan-edit job this thread submitted (an OPAQUE motir-ai job
   /// token — a plain scalar, NOT an FK; the `plan.sourceJobId` precedent). What
   /// a resumed rail re-attaches its stream / diff review to.
-  lastJobId       String?           @map("last_job_id")
+  lastJobId           String?               @map("last_job_id")
   /// When that submission happened. Null until the thread has been submitted at
   /// least once (a thread can accumulate turns without ever submitting).
-  lastSubmittedAt DateTime?         @map("last_submitted_at")
+  lastSubmittedAt     DateTime?             @map("last_submitted_at")
   /// When the session was last USED — every turn (user, assistant, system) and
   /// every submit moves it (AMENDMENT 17 §3). The resume window and the Plans
   /// page's newest-activity order both read it. Not `updatedAt`, which any
   /// bookkeeping write (a lock, a label) would also move.
-  lastActivityAt  DateTime          @default(now()) @map("last_activity_at")
+  lastActivityAt      DateTime              @default(now()) @map("last_activity_at")
   /// WHICH DOOR opened the session (AMENDMENT 17 §4) — NOT `Plan.origin`, which
   /// answers what decided to start a plan. `legacy` is written only by the
   /// MOTIR-6020 backfill, for a pre-existing plan whose conversation cannot be
   /// identified.
-  origin          PlanSessionOrigin @default(conversation)
+  origin              PlanSessionOrigin     @default(conversation)
   /// The REFUSED approval gate that SEEDED this session (story MOTIR-6068 ·
   /// MOTIR-6207; `agent-authored-plans.md` AMENDMENT 17 §9). Written ONLY at the
   /// session's creation by a seeded first turn
@@ -8730,14 +8788,31 @@ model PlanChangeSession {
   /// afterwards; NULL on every unseeded session. A seeded start resumes only a
   /// session of the SAME seed. SetNull — a gate row that goes leaves the
   /// conversation intact and unseeded.
-  seedGateId      String?           @map("seed_gate_id")
-  createdAt       DateTime          @default(now()) @map("created_at")
-  updatedAt       DateTime          @updatedAt @map("updated_at")
+  seedGateId          String?               @map("seed_gate_id")
+  /// When the session ENDED (AMENDMENT 23 §1). **A session is OPEN ⟺ this is
+  /// NULL.** An ended session is never resumed and accepts no turn. Written only
+  /// by the one end operation, together with `endReason` and `endedById`.
+  endedAt             DateTime?             @map("ended_at")
+  /// Why it ended — see `PlanSessionEndReason`. Null exactly when `endedAt` is.
+  endReason           PlanSessionEndReason? @map("end_reason")
+  /// The person who ended it (a decider, or the person who restarted); NULL when
+  /// Motir ended it (a failure, the idle sweep). SetNull — a departed member
+  /// leaves the end recorded and unattributed.
+  endedById           String?               @map("ended_by_id")
+  /// The ENDED session this one's conversation was copied from (AMENDMENT 23
+  /// §6) — written once, at creation, by the copy start; NULL otherwise. SetNull:
+  /// the copy outlives its source.
+  copiedFromSessionId String?               @map("copied_from_session_id")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
 
   workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy   User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   seedGate    ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
+  endedBy     User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
+  copiedFrom  PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
+  copies      PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
   turns       PlanChangeTurn[]
   /// The BOUNDARY MAILBOX for this thread's runs (MOTIR-4067) — one ordered
   /// sequence per job, carrying BOTH the turns typed mid-run and the stop.
@@ -8782,15 +8857,15 @@ model PlanChangeSession {
 ///                nothing happened. System turns are NOT part of the intent.
 /// Workspace-scoped tenant data (RLS in the same migration).
 model PlanChangeTurn {
-  id                    String                @id @default(cuid())
-  workspaceId           String                @map("workspace_id")
-  sessionId             String                @map("session_id")
+  id                    String                 @id @default(cuid())
+  workspaceId           String                 @map("workspace_id")
+  sessionId             String                 @map("session_id")
   /// 0-based position in the thread. Unique per session — the DB backstop for the
   /// locked allocation; a violation means a lost append race and surfaces as a
   /// typed domain error, never a raw P2002.
   seq                   Int
   role                  PlanChangeTurnRole
-  body                  String                @db.Text
+  body                  String                 @db.Text
   /// The producing motir-ai job token — set on a `system` submission marker (the
   /// job that submission produced) AND on an `assistant` turn (the job whose
   /// result carried the utterance, MOTIR-2226; it is also the idempotency key
@@ -8800,18 +8875,18 @@ model PlanChangeTurn {
   /// the settle is then a single keyed, replayable lookup rather than "the most
   /// recent user turn". Null on a `user` turn of the shipped plan-change path,
   /// whose submission is a separate gesture writing a `system` marker.
-  jobId                 String?               @map("job_id")
+  jobId                 String?                @map("job_id")
   /// The ONE Gate-2 question an `assistant` turn asked (MOTIR-2222's
   /// `PlanningTurn.question`), or null when the turn only reported its findings.
   /// It is what makes the awaiting-your-answer state DERIVABLE from the persisted
   /// thread rather than held in client state — so re-opening the workspace hours
   /// later comes back to the same pending question. Null on every other role.
-  question              String?               @db.Text
+  question              String?                @db.Text
   /// A `user` turn sent as the REPLY to the pending question (through the answer
   /// bar), as opposed to one that changed the subject and SUPERSEDED it. The two
   /// dispositions render different markers (design state C vs E), and neither may
   /// rest on reading the words — so which affordance sent it is recorded here.
-  isAnswer              Boolean               @default(false) @map("is_answer")
+  isAnswer              Boolean                @default(false) @map("is_answer")
   /// What this turn ASKED FOR — `ask` (answer my question, change nothing) or
   /// `plan_change` (propose a plan delta), MOTIR-1816 /
   /// `docs/decisions/conversation-turn-intent.md`. Set on `user` turns only
@@ -8823,13 +8898,13 @@ model PlanChangeTurn {
   /// disposition — what actually ran for this turn — not a stored guess, which
   /// is why a re-run under the other intent MOVES it rather than adding a second
   /// row (the `isAnswer` posture: the thread records what Motir DID).
-  intent                PlanChangeTurnIntent? @map("intent")
+  intent                PlanChangeTurnIntent?  @map("intent")
   /// Whether this turn was RE-RUN under the other intent after Motir read it
   /// wrong (ADR §3). `intent` alone cannot say so — it holds what finally ran —
   /// and the transcript is a record, so the correction has to survive as a fact
   /// rather than as the absence of the first reading. Also the one number that
   /// says whether ADR §4's default ever needs revisiting.
-  intentCorrected       Boolean               @default(false) @map("intent_corrected")
+  intentCorrected       Boolean                @default(false) @map("intent_corrected")
   /// When a `debug` turn's ONE write was CLAIMED (MOTIR-7049,
   /// `docs/decisions/conversation-turn-intent.md` AMENDMENT 1 · A1.4). Set on a
   /// `user` turn only, by a compare-and-set under the session's row lock BEFORE
@@ -8838,7 +8913,7 @@ model PlanChangeTurn {
   /// landed for. Released (back to null) only when the write was refused inside
   /// its own transaction, so nothing committed; a claim that outlives a crash
   /// stays set — the landing fails CLOSED rather than filing a second bug.
-  debugLandingClaimedAt DateTime?             @map("debug_landing_claimed_at")
+  debugLandingClaimedAt DateTime?              @map("debug_landing_claimed_at")
   /// The work item a `user` turn was ANCHORED on (MOTIR-7064; ADR AMENDMENT 1 ·
   /// A1.2) — the report widget's triage bug on its seeded debug turn — as the
   /// IDENTIFIER the ask door resolved it to ("MOTIR-812"), never the raw string
@@ -8847,7 +8922,7 @@ model PlanChangeTurn {
   /// role and on an unanchored turn (the orb, an ordinary question). An
   /// IDENTIFIER, not an FK, for the reason `citations` gives: the record of what
   /// the turn was about must not cascade away with the card.
-  anchorKey             String?               @map("anchor_key")
+  anchorKey             String?                @map("anchor_key")
   /// What a `debug` turn LANDED (MOTIR-7064; ADR AMENDMENT 1 · A1.4), on the
   /// `assistant` turn that carries its diagnosis — `{ outcome, workItemKey,
   /// title, createdInTriage }`, the settle's `DebugLandingDto` as it was when
@@ -8856,13 +8931,13 @@ model PlanChangeTurn {
   /// reply never exists without it. It is what renders the turn's outcome line
   /// after a reload. Null on every other turn — every non-debug reply, and every
   /// `user` / `system` turn.
-  debugLanding          Json?                 @map("debug_landing")
+  debugLanding          Json?                  @map("debug_landing")
   /// The CLAIM on a `guide` turn's landing (Story MOTIR-7459 · MOTIR-7470; ADR
   /// `conversation-turn-intent.md` AMENDMENT 2, A2.4) — set on the `user` turn,
   /// by a compare-and-set under the session's row lock, BEFORE the turn's
   /// actions are written to the card. The debug claim's shape: a replayed or
   /// concurrent settle of the same job finds it taken and lands nothing.
-  guideLandingClaimedAt DateTime?             @map("guide_landing_claimed_at")
+  guideLandingClaimedAt DateTime?              @map("guide_landing_claimed_at")
   /// What a `guide` turn's job returned and what landed (MOTIR-7470), on the
   /// `assistant` turn carrying its message — `{ actions, outcomes, temporary }`:
   /// the validated actions, each one's outcome (`landed`, `recorded` on the
@@ -8871,7 +8946,14 @@ model PlanChangeTurn {
   /// rail and canvas read it, and the temporary list is re-derived from it, so
   /// an unsaved walk lives on the conversation and nowhere else (A2.2). Null on
   /// every other turn.
-  guideTurn             Json?                 @map("guide_turn")
+  guideTurn             Json?                  @map("guide_turn")
+  /// The fixed confirm CORE wrote on this `assistant` turn (MOTIR-7649; ADR
+  /// AMENDMENT 3, A3.2) — written with no model call by the ask settle for a
+  /// `new_session` turn and by the Plan something new control, so the words and
+  /// the button leave the SAME turn. It is PENDING while it is the thread's latest
+  /// turn and the session is open; an unanswered confirm closes nothing. Null on
+  /// every other turn and role.
+  confirm               PlanChangeTurnConfirm? @map("confirm")
   /// The work items an `assistant` ANSWER rests on, as work-item IDENTIFIERS
   /// ("MOTIR-812"), in the order the answer cites them. Empty on every other
   /// role and on an answer the graphs could not support.
@@ -8883,7 +8965,7 @@ model PlanChangeTurn {
   /// WRITE time (`workItemRepository.findByIdentifiers`), so a cross-project or
   /// unresolvable key is dropped rather than persisted as a chip that renders
   /// broken. Queryable without a join (`citations @> ARRAY['MOTIR-812']`).
-  citations             String[]              @default([])
+  citations             String[]               @default([])
   /// The files a `guide` `user` turn carried (Story MOTIR-7471 · MOTIR-7484;
   /// `docs/decisions/guide-turn-files.md` A3.2) — `attachment` ids, in the order
   /// the person added them, each an attachment on the GUIDED card at the moment
@@ -8893,12 +8975,12 @@ model PlanChangeTurn {
   /// be deleted from the card later, and the turn must survive it unchanged; the
   /// rail then draws that id as a removed chip. Validated at WRITE time (the card,
   /// the workspace, the caller's view) by `aiGuideService`, never trusted as sent.
-  attachmentIds         String[]              @default([]) @map("attachment_ids")
+  attachmentIds         String[]               @default([]) @map("attachment_ids")
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).
-  authorId              String?               @map("author_id")
-  createdAt             DateTime              @default(now()) @map("created_at")
+  authorId              String?                @map("author_id")
+  createdAt             DateTime               @default(now()) @map("created_at")
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// COMPOSITE FK (MOTIR-1735) — the turn points at `(session_id, workspace_id)`,
@@ -9065,8 +9147,24 @@ enum PlanChangeTurnIntent {
   /// `guide_work_item` job anchored on the card (`anchorKey`). Every user turn of
   /// a `guide`-origin session carries it; `intentCorrected` stays false.
   guide
+  /// A request to PLAN SOMETHING NEW (MOTIR-7649 · the ADR's AMENDMENT 3, A3.1):
+  /// `ask_project` redirected the turn and NO job ran for it. Core wrote the fixed
+  /// confirm (`PlanChangeTurn.confirm`) instead; nothing closes until the person
+  /// presses Confirm.
+  new_session
 
   @@map("plan_change_turn_intent")
+}
+
+/// Which fixed confirm an `assistant` turn CORE wrote is (MOTIR-7649 · the ADR's
+/// AMENDMENT 3, A3.2). One value today: the Plan something new confirm, whose two
+/// answers are controls (Confirm · Keep planning), never typed text — which is
+/// why it is NOT a `question`: a pending question routes a typed reply into the
+/// plan-change submit, and a reply to this must never start a plan run.
+enum PlanChangeTurnConfirm {
+  new_session
+
+  @@map("plan_change_turn_confirm")
 }
 
 /// ONE work item held EXCLUSIVELY by ONE planning session (Story MOTIR-2786 ·
@@ -11342,6 +11440,13 @@ model DispatchRun {
   gitCredentials   DispatchRunGitCredential[]
   /// The design refusal that started this run automatically, if one did (MOTIR-700).
   designAutoReruns DesignAutoRerun[]
+  /// The approval gates this run stopped at, when it closed `gated` (MOTIR-7703).
+  heldGates        DispatchRunHeldGate[]
+  resumingItems    WorkItem[]                 @relation("WorkItemResumeRun")
+  /// The automatic resumes an approval attempted for this gated run (MOTIR-7710).
+  gateResumes      GateResume[]               @relation("GateResumeRun")
+  /// The approval whose automatic resume started this run, if one did (MOTIR-7710).
+  resumedByGate    GateResume[]               @relation("GateResumeResumedRun")
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.
@@ -11362,6 +11467,109 @@ model DispatchRun {
   /// as the index above.
   @@index([status, lastHeartbeatAt])
   @@map("dispatch_run")
+}
+
+/// A GATE THAT HELD A RUN (Story MOTIR-7701 · MOTIR-7703;
+/// `docs/decisions/dispatch-run-record.md` AMENDMENT 2026-10-07).
+///
+/// When a run closes `gated`, the close DERIVES — server-side, for every reporter —
+/// each approval gate that is `awaiting` on a card in the run's scope and is one of
+/// the kinds a parent run's stoppers raise (`design_result`, `decision_approval`,
+/// `decision_choice`, `decision_confirmation`, `manual_work`), and writes one row
+/// per gate in the close's own transaction. No client names a gate: the runbook,
+/// the CLI and a hosted container all get the same record. A `gated` close that
+/// finds none writes none. The rows are what To resume and the auto-resume read.
+model DispatchRunHeldGate {
+  id            String           @id @default(cuid())
+  /// Tenant of record — RLS does not traverse foreign keys.
+  workspaceId   String           @map("workspace_id")
+  dispatchRunId String           @map("dispatch_run_id")
+  gateId        String           @map("gate_id")
+  /// The card the gate is ON, captured at the close.
+  workItemId    String           @map("work_item_id")
+  /// The gate's kind, captured at the close — one of the five stopper kinds.
+  kind          ApprovalGateKind
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dispatchRun DispatchRun  @relation(fields: [dispatchRunId], references: [id], onDelete: Cascade)
+  gate        ApprovalGate @relation(fields: [gateId], references: [id], onDelete: Cascade)
+  workItem    WorkItem     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  /// One row per gate per run.
+  @@unique([dispatchRunId, gateId])
+  /// The decide door's read: which gated runs does this gate hold?
+  @@index([gateId])
+  /// A card's held-run read.
+  @@index([workItemId])
+  @@index([workspaceId])
+  @@map("dispatch_run_held_gate")
+}
+
+/// WHAT ONE APPROVAL DID ABOUT RESUMING A HOSTED RUN (Story MOTIR-7701 · MOTIR-7710).
+/// A gated run on Motir's hosted agent resumes itself when a gate it stopped at is
+/// approved: the `run/gate-resume.requested` job starts a hosted continue as the run's
+/// dispatcher, and records here what it did. One row per approved gate, keyed on it —
+/// a redelivered event writes nothing more. A run that was not hosted gets no row.
+model GateResume {
+  id           String                @id @default(cuid())
+  /// Tenant of record — RLS does not traverse foreign keys.
+  workspaceId  String                @map("workspace_id")
+  /// The approved gate this attempt answers. Unique: one approval, one attempt.
+  gateId       String                @unique @map("gate_id")
+  /// The `gated` run the gate held.
+  runId        String                @map("run_id")
+  /// The hosted continue it started. `SET NULL`: the record outlives the run.
+  resumedRunId String?               @map("resumed_run_id")
+  outcome      GateResumeOutcome
+  /// Why nothing started. Null exactly when `outcome` is `started`.
+  skipReason   GateResumeSkipReason? @map("skip_reason")
+  /// What the skipped line names — the dispatcher, the model, the repository, or the
+  /// continue claim's refusal — captured when it was written.
+  detail       String?
+  createdAt    DateTime              @default(now()) @map("created_at")
+
+  workspace  Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  gate       ApprovalGate @relation(fields: [gateId], references: [id], onDelete: Cascade)
+  run        DispatchRun  @relation("GateResumeRun", fields: [runId], references: [id], onDelete: Cascade)
+  resumedRun DispatchRun? @relation("GateResumeResumedRun", fields: [resumedRunId], references: [id], onDelete: SetNull)
+
+  /// The To resume entry's line: a run's newest attempt.
+  @@index([runId, createdAt])
+  @@index([resumedRunId])
+  @@map("gate_resume")
+}
+
+enum GateResumeOutcome {
+  /// A hosted continue was started, as the gated run's dispatcher, with its model.
+  started
+  /// Nothing started; `skipReason` says why, and the run waits on To resume.
+  skipped
+
+  @@map("gate_resume_outcome")
+}
+
+/// Why an automatic resume did not start. The start-path refusals mean what
+/// `DesignAutoRerunSkipReason`'s do.
+enum GateResumeSkipReason {
+  /// The run's dispatcher account no longer exists.
+  dispatcher_gone
+  /// The dispatcher can no longer edit the project.
+  no_project_access
+  ci_credits_exhausted
+  out_of_credits
+  credits_unavailable
+  /// The run's model is not offered any more (or the run recorded none).
+  model_not_offered
+  models_unavailable
+  repository_not_writable
+  card_not_ready
+  /// A continue already holds the run — another approval's resume, or a person's.
+  already_resumed
+  /// The continue claim refused it for another reason (`detail` names it).
+  not_resumable
+
+  @@map("gate_resume_skip_reason")
 }
 
 /// A GitHub INSTALLATION TOKEN handed to a hosted run (Story MOTIR-683 · MOTIR-6449;
@@ -12093,6 +12301,8 @@ model Page {
   versions             PageVersion[]
   // Decision publications of this page (Story MOTIR-5761). Cascade.
   decisionPublications DecisionPagePublication[]
+  // The work items this page links (Story MOTIR-7565 · MOTIR-7571). Cascade.
+  workItemLinks        PageWorkItemLink[]
 
   @@index([projectId, parentPageId, position, id])
   @@index([projectId, folderId, position, id])
@@ -12181,6 +12391,46 @@ model DecisionPagePublication {
   @@index([pageVersionId])
   @@index([workspaceId])
   @@map("decision_page_publication")
+}
+
+// PAGE ↔ WORK ITEM LINKS (Epic MOTIR-5747 · Story MOTIR-7565 · MOTIR-7571).
+//
+// `docs/decisions/pages.md` §8.1. One row per `(page, work item, source)`:
+// `mention` and `embed` are DERIVED from the page body on every save (the
+// adapter's `replaceDerivedLinks`, in the save's transaction); `manual` is
+// written by an explicit action and never touched by a body write. Page and work
+// item share the row's project (the `trg_page_work_item_link_cotenancy`
+// trigger); RLS is the `page` pair. `createdBy` is who FIRST linked it — a
+// re-save that keeps a link keeps its row.
+model PageWorkItemLink {
+  id          String                 @id @default(cuid())
+  workspaceId String                 @map("workspace_id")
+  projectId   String                 @map("project_id")
+  pageId      String                 @map("page_id")
+  workItemId  String                 @map("work_item_id")
+  source      PageWorkItemLinkSource
+  createdById String?                @map("created_by_id")
+  createdAt   DateTime               @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  // SET NULL: deleting the user forgets who linked it, never the link.
+  createdBy User?     @relation("PageWorkItemLinkCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([pageId, workItemId, source])
+  @@index([workItemId, pageId])
+  @@index([workspaceId])
+  @@map("page_work_item_link")
+}
+
+enum PageWorkItemLinkSource {
+  mention
+  embed
+  manual
+
+  @@map("page_work_item_link_source")
 }
 
 model MonitorInstallation {
@@ -13118,4 +13368,191 @@ model AgentInstanceBootStep {
   @@index([bootAttemptId, seq])
   @@index([workspaceId])
   @@map("agent_instance_boot_step")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE IDEA STORE (Story MOTIR-7662 · MOTIR-7670)
+//
+// Platform-owned content, not tenant data: platform staff curate the ideas
+// (the console, the private `motir-ideas` skill over `/api/platform/ideas`),
+// and anyone reads the ACTIVE ones over `/api/public/ideas`. No tenant column
+// anywhere — RLS reads are unconditional and writes are `app.platform_staff`
+// only, the posture `platform_run_model` set (see the migration). Every write
+// lands with its hash-chained `PlatformAuditLog` row (`targetKind: idea`).
+//
+// ⚠️ Not `IdeaDraft` — that is the unrelated pre-auth draft hand-off.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Who an idea is for. `motir_buys` is an idea Motir itself would buy (the
+/// "Motir would buy" band); `direction` is a researched direction with evidence.
+enum IdeaKind {
+  motir_buys
+  direction
+
+  @@map("idea_kind")
+}
+
+/// Retiring is the normal end of an idea — it leaves every public read and keeps
+/// its reason. Hard delete is a superadmin's correction of a mistake.
+enum IdeaStatus {
+  active
+  retired
+
+  @@map("idea_status")
+}
+
+/// The FIXED category list — adding one is a migration, which is what "fixed"
+/// means. Labels live in `lib/ideas/categories.ts`, held total by the compiler.
+enum IdeaCategory {
+  // ── Business functions
+  /// Legal
+  legal
+  /// Finance
+  finance
+  /// Security & compliance
+  security_compliance
+  /// Customer support
+  customer_support
+  /// Localization
+  localization
+  /// Growth & marketing
+  growth_marketing
+  /// Sales
+  sales
+  /// People & HR
+  people_hr
+  /// Operations
+  operations
+  /// Engineering
+  engineering
+  // ── Verticals
+  /// E-commerce
+  ecommerce
+  /// Healthcare
+  healthcare
+  /// Education
+  education
+  /// Financial services
+  financial_services
+  /// Real estate
+  real_estate
+  /// Logistics
+  logistics
+  /// Construction
+  construction
+  /// Agriculture
+  agriculture
+  /// Pets
+  pets
+  /// Family care
+  family_care
+  /// Public sector
+  public_sector
+  // ── Consumer
+  /// Personal growth
+  personal_growth
+  /// Personal finance
+  personal_finance
+  /// Health & wellness
+  health_wellness
+  // ── Platform
+  /// AI infrastructure
+  ai_infrastructure
+
+  @@map("idea_category")
+}
+
+/// One idea. A CHECK in the migration holds `retired_reason` and `retired_at`
+/// both set exactly when `status = 'retired'`.
+model Idea {
+  id             String       @id @default(cuid())
+  slug           String       @unique
+  title          String
+  pitch          String
+  kind           IdeaKind
+  category       IdeaCategory
+  /// What the product does — the ordered "does" bullets.
+  capabilities   String[]
+  /// What nobody serves yet (directions).
+  gap            String?
+  whyNow         String?      @map("why_now")
+  /// Why Motir itself would buy it (`motir_buys` only — enforced in the service).
+  whyMotir       String?      @map("why_motir")
+  /// Who else needs it (`motir_buys` only — enforced in the service).
+  whoElse        String?      @map("who_else")
+  status         IdeaStatus   @default(active)
+  retiredReason  String?      @map("retired_reason")
+  retiredAt      DateTime?    @map("retired_at")
+  addedAt        DateTime     @default(now()) @map("added_at")
+  lastReviewedAt DateTime?    @map("last_reviewed_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  evidence IdeaEvidence[]
+  tags     IdeaTagAssignment[]
+
+  @@index([status, category])
+  @@index([status, kind])
+  @@map("idea")
+}
+
+/// One sourced claim behind an idea, ordered by `position`. A child table, not
+/// JSON, so each source is addressable and correctable on its own.
+model IdeaEvidence {
+  id         String    @id @default(cuid())
+  ideaId     String    @map("idea_id")
+  position   Int
+  claim      String
+  sourceName String    @map("source_name")
+  url        String
+  sourceDate DateTime? @map("source_date") @db.Date
+
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@unique([ideaId, position])
+  @@map("idea_evidence")
+}
+
+/// The curated tag vocabulary. `description` is the stated reason a tag exists.
+model IdeaTag {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  label       String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  assignments IdeaTagAssignment[]
+
+  @@map("idea_tag")
+}
+
+/// An idea ↔ tag join. Deleting an idea drops its assignments; a tag still in
+/// use cannot be deleted (Restrict).
+model IdeaTagAssignment {
+  ideaId String @map("idea_id")
+  tagId  String @map("tag_id")
+
+  idea Idea    @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  tag  IdeaTag @relation(fields: [tagId], references: [id], onDelete: Restrict)
+
+  @@id([ideaId, tagId])
+  @@index([tagId])
+  @@map("idea_tag_assignment")
+}
+
+/// The research-run log the `motir-ideas` skill writes, so its coverage map
+/// survives across machines.
+model IdeaResearchRun {
+  id           String   @id @default(cuid())
+  ranAt        DateTime @default(now()) @map("ran_at")
+  actorUserId  String   @map("actor_user_id")
+  areasCovered String[] @map("areas_covered")
+  addedCount   Int      @map("added_count")
+  retiredCount Int      @map("retired_count")
+  reportMd     String   @map("report_md")
+
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([ranAt])
+  @@index([actorUserId])
+  @@map("idea_research_run")
 }

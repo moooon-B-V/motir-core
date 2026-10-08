@@ -108,10 +108,22 @@ const REFUSAL_LINES = {
   no_branch: (c: WorkItemContinueClaim) =>
     'the run that died left no branch to continue on. Start over instead: set it to To Do ' +
     `and run \`motir run ${c.key}\`.`,
+  gate_awaiting: (c: WorkItemContinueClaim) =>
+    `its run stopped at a gate that is still waiting for approval${gateList(c)}. ` +
+    'Approve it in Motir, then run this again.',
+  gate_sent_back: (c: WorkItemContinueClaim) =>
+    `its run stopped at a gate that was sent back, not approved${gateList(c)}. ` +
+    'Answer the change it asks for, or approve it, before resuming.',
 } as const satisfies Record<
   NonNullable<WorkItemContinueClaim['reason']>,
   (claim: WorkItemContinueClaim) => string
 >;
+
+/** ` (MOTIR-7: design_result, …)` — the gates a gated run names, or nothing. */
+function gateList(claim: WorkItemContinueClaim): string {
+  const gates = claim.gates ?? [];
+  return gates.length === 0 ? '' : ` (${gates.map((g) => `${g.key}: ${g.kind}`).join(', ')})`;
+}
 
 /** A refused continue, in words. Exported so the vocabulary can be pinned. */
 export function renderContinueRefusal(claim: WorkItemContinueClaim): string {
@@ -133,6 +145,13 @@ export function renderTakeover(claim: WorkItemContinueClaim): string {
   const from = claim.previousAssignee
     ? `Took ${claim.key} over from ${claim.previousAssignee.name}`
     : `Took ${claim.key} over`;
+  if (claim.resumesGated) {
+    // A RESUME (MOTIR-7708): the last run stopped cleanly at a gate — nothing died.
+    return (
+      `${from} — resuming its run after an approval${gateList(claim)}.\n` +
+      `Resuming on ${claim.branch ?? 'its branch'}.`
+    );
+  }
   const dead = claim.deadRun
     ? ` — its last run (${claim.deadRun.dispatcher?.name ?? 'somebody'}'s) was last heard from ${claim.deadRun.lastHeardAt}`
     : '';

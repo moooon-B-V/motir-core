@@ -9,3 +9,7 @@ export const LATE_FALLBACK_ATTR = 'data-late-stack-fallback';
 // a plain `#development` anchor. One spelling for the server section and the
 // client link.
 export const DEVELOPMENT_SECTION_ID = 'development';
+
+// The Pages section's fragment id (Story MOTIR-7565 · MOTIR-7575):
+// `/items/<KEY>#pages` lands on it once the late stack has streamed it in.
+export const PAGES_SECTION_ID = 'pages';

@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  CopyableSessionDto,
   DebugLandingDto,
   EarlierSessionDto,
   PlanChangeSessionDto,
+  PlanTargetHeldByDto,
 } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import { announceGateStateDecided } from '@/lib/approvals/decidedGates';
@@ -18,6 +20,9 @@ import {
   resubmitContextualPlan,
   resumeContextualSession,
   settleAskJob,
+  startCopiedSession,
+  requestRestartConfirm,
+  answerRestart,
   submitAskTurn,
   submitContextualPlan,
   attachMidRunTurn,
@@ -316,6 +321,19 @@ export interface PlanChangeConversationState {
    *  composer is replaced by the reason. */
   readOnly: boolean;
   /**
+   * When nothing resumed: the caller's own failed / idle-closed session of the
+   * scope, whose conversation a new session may carry over (AMENDMENT 23 §6).
+   * Optional so a state built by hand needs no change.
+   */
+  copyable?: CopyableSessionDto | null;
+  /**
+   * ANOTHER holder has one of this scope's cards (AMENDMENT 23 §4; MOTIR-7643) —
+   * read on open, or carried by a send's `409 PLAN_TARGET_LOCKED`. The rail refuses
+   * IN PLACE (a status, not an error) and the composer is disabled for the target;
+   * nothing is sent. Optional so a state built by hand needs no change.
+   */
+  targetHeld?: PlanTargetHeldByDto | null;
+  /**
    * The work item each ask turn SENT FROM HERE was anchored on, by user-turn id
    * (MOTIR-7050) — the report widget's triage bug on its seeded debug turn. The
    * rail draws it as the turn's target row. The send-time SEED only: the turn
@@ -334,6 +352,16 @@ export interface PlanChangeConversationState {
    * Kept as the fallback for a state built without it (every rail test).
    */
   debugLandings?: Readonly<Record<string, DebugLandingDto>>;
+  /**
+   * PLAN SOMETHING NEW confirmed here (MOTIR-7650; ADR AMENDMENT 3): the id of the
+   * session that just ended `restarted`, for the rail's earlier-session line above
+   * the new session's opener. Null otherwise, and cleared by the next swap.
+   * Optional so a state built by hand needs no change.
+   */
+  restartedFrom?: string | null;
+  /** A confirm or keep answer is IN FLIGHT — the confirm's two buttons and the
+   *  control hold still until it lands. Optional for the same reason. */
+  restarting?: boolean;
 }
 
 const INITIAL: PlanChangeConversationState = {
@@ -358,6 +386,8 @@ const INITIAL: PlanChangeConversationState = {
   earlier: null,
   reopened: null,
   readOnly: false,
+  copyable: null,
+  targetHeld: null,
   turnAnchors: {},
   debugLandings: {},
 };
@@ -520,7 +550,7 @@ export interface UsePlanChangeConversationOptions {
   anchorId?: string | null;
   /**
    * REOPEN this exact conversation (MOTIR-6024) — the overlay's `planSession`
-   * address, which a Plans row writes. The resume window does not apply: a
+   * address, which a Plans row writes. The resume read does not apply: a
    * named session opens whatever its age or starter.
    */
   sessionId?: string | null;
@@ -532,6 +562,12 @@ export interface UsePlanChangeConversationOptions {
    * Plans page* line it would be lying about.
    */
   sessionIsResume?: boolean;
+  /**
+   * The overlay SWAPPED to a new session in place (MOTIR-7650) — the caller puts
+   * its address where the old one's was. The hook already holds the session, so
+   * the `sessionId` that comes back through the address re-opens nothing.
+   */
+  onRestarted?: (sessionId: string) => void;
   /**
    * The REFUSED gate a seeded re-plan starts from (story MOTIR-6068 · MOTIR-6210).
    * Two effects, both once-only:
@@ -599,6 +635,31 @@ function announcePlanGateDecided(
   announceGateStateDecided(gate.id, state);
 }
 
+/** A send refused because another holder has the card (AMENDMENT 23 §4): the
+ *  refusal's holder and free-by, from the `409 PLAN_TARGET_LOCKED` body. */
+export function targetHeldFrom(err: unknown): PlanTargetHeldByDto | null {
+  if (!(err instanceof PlanEditsClientError) || err.code !== 'PLAN_TARGET_LOCKED') return null;
+  const body = (err.body ?? {}) as Partial<Record<string, unknown>>;
+  const str = (v: unknown) => (typeof v === 'string' ? v : null);
+  return {
+    target: str(body.target) ?? '',
+    holder: str(body.holder),
+    freesBy: str(body.freesBy),
+    holderSessionId: str(body.holderSessionId),
+  };
+}
+
+/** Whether a thread has ENDED (AMENDMENT 23 §1) — read from the server's row. */
+export function sessionEnded(session: PlanChangeSessionDto | null | undefined): boolean {
+  return Boolean(session?.endedAt);
+}
+
+/** How long the overlay waits between re-reads of a session a failed attempt may
+ *  have ended — the relay ends it as it sees the terminal frame, which can land a
+ *  moment after the browser's own stream reports the failure. */
+export const SESSION_END_REREAD_MS = 400;
+const SESSION_END_REREADS = 3;
+
 export function usePlanChangeConversation({
   onApproved,
   anchorId = null,
@@ -606,6 +667,7 @@ export function usePlanChangeConversation({
   sessionIsResume = false,
   seedGateId = null,
   onTriageChanged,
+  onRestarted,
 }: UsePlanChangeConversationOptions = {}) {
   const [state, setState] = useState<PlanChangeConversationState>(INITIAL);
   // The seed the FIRST send carries (MOTIR-6210). Seeded once from the option —
@@ -641,6 +703,12 @@ export function usePlanChangeConversation({
    * second Enter from firing a second turn.
    */
   const stoppingRef = useRef(false);
+  /** The session a restart swapped in (MOTIR-7650), so the address naming it
+   *  afterwards is recognised as already open. */
+  const adoptedSessionRef = useRef<string | null>(null);
+  /** A restart answer is in flight — set before the await, as `stoppingRef` is. */
+  const restartingRef = useRef(false);
+  const restartedCbRef = useRef(onRestarted);
   // A read-only mirror of the latest state, so a callback can read `jobId`/`planId`
   // without listing them as dependencies (which would re-create the callback — and
   // the rail's handlers — on every stream tick).
@@ -655,6 +723,7 @@ export function usePlanChangeConversation({
   useEffect(() => {
     stateRef.current = state;
     approvedCbRef.current = onApproved;
+    restartedCbRef.current = onRestarted;
     triageChangedRef.current = onTriageChanged;
     anchorRef.current = anchorId;
   });
@@ -794,6 +863,12 @@ export function usePlanChangeConversation({
   // a broken rail. An anchored item that was never planned simply has no thread
   // yet (`null`), which is an empty rail, not an error.
   useEffect(() => {
+    // The address now names the session a restart already swapped in (MOTIR-7650):
+    // it is on screen, so there is nothing to open.
+    if (sessionId && sessionId === adoptedSessionRef.current) return;
+    // Any other address opens as it always did, and the adoption is spent: coming
+    // BACK to the restarted session's address later must open it again.
+    adoptedSessionRef.current = null;
     const controller = new AbortController();
     void (async () => {
       try {
@@ -818,6 +893,8 @@ export function usePlanChangeConversation({
                     lastActivityAt: named.lastActivityAt,
                   },
               readOnly: named.viewerCanPlan === false,
+              copyable: null,
+              targetHeld: null,
             }))
           : seedGateId
             ? // A SEEDED re-plan opens EMPTY (MOTIR-6210): the first turn sits
@@ -830,6 +907,8 @@ export function usePlanChangeConversation({
                 earlier: null,
                 reopened: null,
                 readOnly: false,
+                copyable: null,
+                targetHeld: null,
               }
             : anchorId
               ? // Mount-time resume is the ENTRANCE's single anchor: the picker's set
@@ -841,6 +920,10 @@ export function usePlanChangeConversation({
                   earlier: r.earlier ?? null,
                   reopened: null,
                   readOnly: false,
+                  copyable: r.copyable ?? null,
+                  // Another holder has the card (AMENDMENT 23 §4): refused on OPEN,
+                  // before the person types anything.
+                  targetHeld: r.heldBy ?? null,
                 }))
               : await findResumableSession(controller.signal).then((r) => ({
                   session: r.session,
@@ -848,6 +931,8 @@ export function usePlanChangeConversation({
                   earlier: r.earlier,
                   reopened: null,
                   readOnly: false,
+                  copyable: r.copyable ?? null,
+                  targetHeld: null,
                 }));
         const { session, planId } = opened;
         if (!mountedRef.current) return;
@@ -863,6 +948,8 @@ export function usePlanChangeConversation({
           earlier: opened.earlier,
           reopened: opened.reopened,
           readOnly: opened.readOnly,
+          copyable: opened.copyable,
+          targetHeld: opened.targetHeld,
         }));
 
         // A thread that left a proposal UNDECIDED comes back reviewable: read its
@@ -919,6 +1006,55 @@ export function usePlanChangeConversation({
    * door submitted. Re-implementing the tail beside the ask path would be two
    * settle behaviours for one outcome, and they would drift.
    */
+  /**
+   * A failed attempt may have ENDED the session (AMENDMENT 23 §2; MOTIR-7643) —
+   * re-read it from the server, a few times, since the relay ends it as it sees
+   * the terminal frame. An ended session replaces the thread in state, which is
+   * what draws the end marker and takes away the retry; an open one is left as it
+   * is, and its error stays recoverable in place. State from the SERVER, never
+   * inferred from the stream error, so a reload shows exactly the same end.
+   */
+  const settleEnd = useCallback(async (signal: AbortSignal) => {
+    const id = stateRef.current.session?.id;
+    if (!id) return;
+    for (let attempt = 0; attempt < SESSION_END_REREADS; attempt += 1) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, SESSION_END_REREAD_MS));
+      let read: PlanChangeSessionDto;
+      try {
+        read = await getPlanChangeSession(id, signal);
+      } catch {
+        return;
+      }
+      if (!mountedRef.current) return;
+      if (sessionEnded(read)) {
+        setState((s) => (s.session?.id === id ? { ...s, session: read } : s));
+        return;
+      }
+    }
+  }, []);
+
+  /** What a refused SUBMIT means for the rail: another holder's card (refused in
+   *  place, AMENDMENT 23 §4), a session that has ended under it (re-read it), or a
+   *  recoverable failure. */
+  const refuseRun = useCallback(
+    (err: unknown, controller: AbortController) => {
+      const gated = err instanceof PlanEditsClientError && err.isOutOfCredits;
+      const held = targetHeldFrom(err);
+      setState((s) => ({
+        ...s,
+        phase: s.review ? 'review' : 'idle',
+        progress: null,
+        errorCode: gated || held ? null : 'FAILED',
+        outOfCredits: gated,
+        ...(held ? { targetHeld: held } : {}),
+      }));
+      if (err instanceof PlanEditsClientError && err.code === 'PLAN_SESSION_ENDED') {
+        void settleEnd(controller.signal);
+      }
+    },
+    [settleEnd],
+  );
+
   const finishPlanRun = useCallback(
     async (
       jobId: string,
@@ -973,7 +1109,15 @@ export function usePlanChangeConversation({
           if (progress) setState((s) => ({ ...s, progress, acts: [...s.acts, progress] }));
         },
       );
-      if (failed || !mountedRef.current) return;
+      if (failed) {
+        // The run is OVER at the failure: release it before the end re-read, or
+        // a Try again pressed while the re-read waits would find a run still in
+        // flight and do nothing.
+        if (abortRef.current === controller) abortRef.current = null;
+        if (mountedRef.current) await settleEnd(controller.signal);
+        return;
+      }
+      if (!mountedRef.current) return;
 
       // SETTLED → first, let the PLANNER SPEAK (MOTIR-2226). The run's result
       // carries the findings report it owes on every turn, and the one question
@@ -1041,7 +1185,7 @@ export function usePlanChangeConversation({
         stoppingRef.current = false;
       }
     },
-    [readProposalOnce],
+    [readProposalOnce, settleEnd],
   );
 
   /** Submit the thread's ACCUMULATED intent, then stream + settle the job. Shared
@@ -1108,6 +1252,8 @@ export function usePlanChangeConversation({
           ...firstAct('submitted'),
           errorCode: null,
           outOfCredits: false,
+          // The send went through, so nothing holds its targets from this person.
+          targetHeld: null,
           // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
           // flags are per-RUN: leaving them set would carry a previous run's
           // ending onto the one just started, which is the mirror of the bug
@@ -1125,20 +1271,13 @@ export function usePlanChangeConversation({
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         if (!mountedRef.current) return;
-        const gated = err instanceof PlanEditsClientError && err.isOutOfCredits;
-        setState((s) => ({
-          ...s,
-          phase: s.review ? 'review' : 'idle',
-          progress: null,
-          errorCode: gated ? null : 'FAILED',
-          outOfCredits: gated,
-        }));
+        refuseRun(err, controller);
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         endLive(livePlan);
       }
     },
-    [finishPlanRun, resetLiveRun, endLive],
+    [finishPlanRun, resetLiveRun, endLive, refuseRun],
   );
 
   /**
@@ -1370,7 +1509,13 @@ export function usePlanChangeConversation({
           },
           () => {},
         );
-        if (failed || !mountedRef.current) return;
+        if (failed) {
+          // Released before the end re-read, as a plan run's failure is.
+          if (abortRef.current === controller) abortRef.current = null;
+          if (mountedRef.current) await settleEnd(controller.signal);
+          return;
+        }
+        if (!mountedRef.current) return;
 
         const settleSessionId = submitted.session?.id ?? stateRef.current.session?.id ?? null;
         let settled = await settleAskJob(submitted.jobId, controller.signal, settleSessionId);
@@ -1420,20 +1565,13 @@ export function usePlanChangeConversation({
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         if (!mountedRef.current) return;
-        const gated = err instanceof PlanEditsClientError && err.isOutOfCredits;
-        setState((s) => ({
-          ...s,
-          phase: s.review ? 'review' : 'idle',
-          progress: null,
-          errorCode: gated ? null : 'FAILED',
-          outOfCredits: gated,
-        }));
+        refuseRun(err, controller);
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         endLive(livePlan);
       }
     },
-    [finishPlanRun, resetLiveRun, endLive],
+    [finishPlanRun, resetLiveRun, endLive, refuseRun, settleEnd],
   );
 
   /**
@@ -1461,6 +1599,9 @@ export function usePlanChangeConversation({
     ) => {
       const body = text.trim();
       if (!body) return;
+      // An ENDED session accepts no turn (AMENDMENT 23 §3): the composer is not
+      // drawn for one, and a stale click must not reach the server either.
+      if (sessionEnded(stateRef.current.session)) return;
 
       // ⚠️ THE RUN IS STILL WORKING → THE MAILBOX, NOT THE SUBMIT (MOTIR-4274).
       //
@@ -1648,6 +1789,9 @@ export function usePlanChangeConversation({
    *  Before any run, that is the entrance's anchor. */
   const retry = useCallback(async () => {
     if (abortRef.current) return;
+    // NO RETRY INSIDE AN ENDED SESSION (MOTIR-7633): a retry would append to a
+    // session that accepts no turn. The only way on is a NEW session.
+    if (sessionEnded(stateRef.current.session)) return;
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));
     const anchor =
       lastAnchorRef.current ??
@@ -2013,5 +2157,158 @@ export function usePlanChangeConversation({
     [state, liveFailing],
   );
 
-  return { state: exposed, send, retry, correctTurn, approve, discard, dismissError, stop };
+  /**
+   * START A NEW SESSION carrying this ended one's conversation (AMENDMENT 23 §6;
+   * MOTIR-7643) — the Start slot's one action. The server copies the turns and
+   * sends nothing; the overlay SWAPS onto the new session in place, live, with
+   * none of the old run's state carried across (no act record, no failure, no
+   * plan). Its own failure is the recoverable session error.
+   */
+  const startCopied = useCallback(async () => {
+    const from = stateRef.current.session;
+    if (!from || !sessionEnded(from) || abortRef.current) return;
+    try {
+      const copied = await startCopiedSession(from.id);
+      if (!mountedRef.current) return;
+      lastAskTurnRef.current = null;
+      setState((s) => ({
+        ...s,
+        phase: 'idle',
+        session: copied,
+        progress: null,
+        acts: [],
+        review: null,
+        liveReview: null,
+        discardedReview: null,
+        decided: null,
+        jobId: null,
+        planId: null,
+        approved: null,
+        errorCode: null,
+        outOfCredits: false,
+        stopping: false,
+        stopped: false,
+        queued: [],
+        earlier: null,
+        reopened: null,
+        readOnly: false,
+        copyable: null,
+        targetHeld: null,
+        restartedFrom: null,
+      }));
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (!mountedRef.current) return;
+      setState((s) => ({ ...s, errorCode: 'SESSION_UNAVAILABLE' }));
+    }
+  }, []);
+
+  /**
+   * PLAN SOMETHING NEW pressed (MOTIR-7650; ADR AMENDMENT 3, A3.3): the server
+   * writes the SAME fixed confirm the words produce. Nothing closes here, and a
+   * confirm already pending comes back unchanged.
+   */
+  const requestRestart = useCallback(async () => {
+    const session = stateRef.current.session;
+    if (!session || sessionEnded(session) || abortRef.current || restartingRef.current) return;
+    restartingRef.current = true;
+    setState((s) => ({ ...s, restarting: true }));
+    try {
+      const withConfirm = await requestRestartConfirm(session.id);
+      if (!mountedRef.current) return;
+      setState((s) => ({ ...s, session: withConfirm, restarting: false }));
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setState((s) => ({
+        ...s,
+        restarting: false,
+        errorCode:
+          err instanceof DOMException && err.name === 'AbortError'
+            ? s.errorCode
+            : 'SESSION_UNAVAILABLE',
+      }));
+    } finally {
+      restartingRef.current = false;
+    }
+  }, []);
+
+  /**
+   * The ANSWER to the confirm. `keep` lands the Keep planning marker and changes
+   * nothing else. `confirm` ends the session `restarted` (its cards go back) and
+   * SWAPS the overlay onto the new, empty session in place — the shape
+   * {@link startCopied} swaps with, plus the ended session's id for the rail's
+   * earlier-session line.
+   */
+  const answerRestartConfirm = useCallback(async (answer: 'confirm' | 'keep') => {
+    const session = stateRef.current.session;
+    if (!session || sessionEnded(session) || abortRef.current || restartingRef.current) return;
+    restartingRef.current = true;
+    setState((s) => ({ ...s, restarting: true }));
+    try {
+      if (answer === 'keep') {
+        const kept = await answerRestart(session.id, 'keep');
+        if (!mountedRef.current) return;
+        setState((s) => ({ ...s, session: kept, restarting: false }));
+        return;
+      }
+      const result = await answerRestart(session.id, 'confirm');
+      if (!mountedRef.current) return;
+      adoptedSessionRef.current = result.session.id;
+      lastAskTurnRef.current = null;
+      lastAskAnchorRef.current = null;
+      setState((s) => ({
+        ...s,
+        phase: 'idle',
+        session: result.session,
+        progress: null,
+        acts: [],
+        review: null,
+        liveReview: null,
+        discardedReview: null,
+        decided: null,
+        jobId: null,
+        planId: null,
+        approved: null,
+        errorCode: null,
+        outOfCredits: false,
+        stopping: false,
+        stopped: false,
+        queued: [],
+        earlier: null,
+        reopened: null,
+        readOnly: false,
+        copyable: null,
+        targetHeld: null,
+        restartedFrom: result.endedSessionId,
+        restarting: false,
+      }));
+      restartedCbRef.current?.(result.session.id);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setState((s) => ({
+        ...s,
+        restarting: false,
+        errorCode:
+          err instanceof DOMException && err.name === 'AbortError'
+            ? s.errorCode
+            : 'SESSION_UNAVAILABLE',
+      }));
+    } finally {
+      restartingRef.current = false;
+    }
+  }, []);
+
+  return {
+    state: exposed,
+    send,
+    retry,
+    correctTurn,
+    approve,
+    discard,
+    dismissError,
+    stop,
+    startCopied,
+    requestRestart,
+    answerRestartConfirm,
+  };
 }

@@ -56,7 +56,9 @@ export type ContinueHostedRefusal =
   | { kind: 'useFix' }
   | { kind: 'notInProgress' }
   | { kind: 'noDeadRun' }
-  | { kind: 'theParent'; parentKey: string | null };
+  | { kind: 'theParent'; parentKey: string | null }
+  | { kind: 'gateAwaiting' }
+  | { kind: 'gateSentBack' };
 
 /** Why a *Fix on the hosted agent* did not start (Story MOTIR-1626 · MOTIR-6930) — Run
  *  hosted's answers, less `notReady` (a repair has no readiness), plus the repair claim's
@@ -154,6 +156,8 @@ const CONTINUE_REFUSALS: Record<string, ContinueHostedRefusal['kind']> = {
   hosted_continue_use_fix: 'useFix',
   hosted_continue_not_in_progress: 'notInProgress',
   hosted_continue_no_dead_run: 'noDeadRun',
+  hosted_continue_gate_awaiting: 'gateAwaiting',
+  hosted_continue_gate_sent_back: 'gateSentBack',
 };
 
 function actorOf(v: unknown): ClaimActorDto | null {
@@ -203,6 +207,8 @@ export function continueStateMoved(refusal: ContinueHostedRefusal): boolean {
     refusal.kind === 'notInProgress' ||
     refusal.kind === 'noDeadRun' ||
     refusal.kind === 'theParent' ||
+    refusal.kind === 'gateAwaiting' ||
+    refusal.kind === 'gateSentBack' ||
     refusal.kind === 'bootFailed'
   );
 }

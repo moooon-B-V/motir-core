@@ -10,6 +10,8 @@ import {
   type RefObject,
 } from 'react';
 import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
+import { shallowReplace } from '@/lib/navigation/shallowUrl';
+import { OVERLAY_PARAM_NAMES } from '@/lib/planning/launcher';
 import { useTranslations } from 'next-intl';
 import { Map, X } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -429,7 +431,39 @@ function PlanWorkspaceHost({
     closeBypassingGuard();
   }, [refresh, closeBypassingGuard]);
   const report = useOptionalReport();
-  const { state, send, retry, correctTurn, approve, discard, stop } = usePlanChangeConversation({
+  // PLAN SOMETHING NEW swapped the overlay onto a new session (MOTIR-7650): an
+  // address that NAMED the old session now names the new one, so a reload opens
+  // what is on screen. A REPLACE, not a push — Back should not return to a session
+  // that no longer accepts a turn — and shallow, because the body is already here.
+  const replaceSessionAddress = useCallback((sessionId: string) => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(OVERLAY_PARAM_NAMES.session)) return;
+    url.searchParams.set(OVERLAY_PARAM_NAMES.session, sessionId);
+    shallowReplace(`${url.pathname}${url.search}${url.hash}`);
+  }, []);
+  // …and the ended session gave its cards back, so the canvas island re-reads them
+  // at their prior status and the server-rendered surfaces take the refresh — the
+  // end effect below cannot see this end, because the session id changed with it.
+  const onRestarted = useCallback(
+    (sessionId: string) => {
+      replaceSessionAddress(sessionId);
+      setTreeVersion((v) => v + 1);
+      refresh();
+    },
+    [replaceSessionAddress, refresh],
+  );
+  const {
+    state,
+    send,
+    retry,
+    correctTurn,
+    approve,
+    discard,
+    stop,
+    startCopied,
+    requestRestart,
+    answerRestartConfirm,
+  } = usePlanChangeConversation({
     onApproved,
     anchorId,
     // A NAMED conversation (`planSession=`, a Plans row) reopens that one
@@ -442,7 +476,24 @@ function PlanWorkspaceHost({
     // A debug turn that filed a bug into Triage (MOTIR-7049) bumps the inbox's
     // refetch tick — the one surface `router.refresh()` cannot reach.
     onTriageChanged: report?.notifySubmissionsChanged,
+    onRestarted,
   });
+
+  // THE SESSION'S END (MOTIR-7643): an end releases the cards the session held at
+  // Planning, so the canvas re-reads them at their prior status — the same refetch
+  // a decline or an approve triggers. Fires on the transition only, never on a
+  // session that mounted already ended.
+  const endSessionId = state.session?.id ?? null;
+  const endedAt = state.session?.endedAt ?? null;
+  const seenEnd = useRef<{ id: string | null; endedAt: string | null } | null>(null);
+  useEffect(() => {
+    const before = seenEnd.current;
+    seenEnd.current = { id: endSessionId, endedAt };
+    if (!before || before.id === null || before.id !== endSessionId) return;
+    if (before.endedAt !== null || endedAt === null) return;
+    setTreeVersion((v) => v + 1);
+    refresh();
+  }, [endSessionId, endedAt, refresh]);
 
   // The rail sends TEXT; the anchors come from the set this host owns, so the
   // rail never has to know how a turn is scoped.
@@ -957,6 +1008,9 @@ function PlanWorkspaceHost({
           onApprove={() => approveFrom('rail')}
           onDiscard={() => void discard()}
           onStop={stop}
+          onStartNewSession={() => void startCopied()}
+          onRequestRestart={() => void requestRestart()}
+          onAnswerRestart={(answer) => void answerRestartConfirm(answer)}
           gateView={gateView}
           declining={declineFrom === 'rail'}
           onRequestDecline={() => setDeclineFrom('rail')}

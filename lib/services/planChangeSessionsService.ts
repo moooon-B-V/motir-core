@@ -2,6 +2,7 @@ import {
   Prisma,
   type PlanChangeSession,
   type PlanChangeTurn,
+  type PlanChangeTurnConfirm,
   type PlanChangeTurnIntent,
   type PlanChangeTurnRole,
 } from '@/generated/prisma/client';
@@ -38,9 +39,11 @@ import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
 import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
+  CopyableSessionDto,
   DebugLandingDto,
   PlanChangeSessionDto,
   PlanChangeSubmitResultDto,
+  PlanSessionRestartResultDto,
   ResumableSessionDto,
 } from '@/lib/dto/planChange';
 import { planRepository } from '@/lib/repositories/planRepository';
@@ -53,11 +56,14 @@ import {
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
   PlanSeedNotApplicableError,
+  PlanSessionEndedError,
+  PlanSessionNotCopyableError,
   PlanSessionNotFoundError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
-import { resumableSince } from '@/lib/planChange/sessionWindow';
 import { attachmentsService } from '@/lib/services/attachmentsService';
+import { endSession, endSessionWithin } from '@/lib/services/planSessionEndService';
+import { KEEP_PLANNING_MARKER_BODY, NEW_SESSION_CONFIRM_BODY } from '@/lib/planChange/restart';
 
 /**
  * How a write ADDRESSES its session (AMENDMENT 17 §2, story MOTIR-6011): by its
@@ -285,6 +291,8 @@ interface AppendTurn {
   guideTurn?: GuideTurnRecord | null;
   /** A guide `user` turn's files (MOTIR-7484) — ids the caller already validated. */
   attachmentIds?: readonly string[];
+  /** The fixed confirm core writes on an `assistant` turn (MOTIR-7649). */
+  confirm?: PlanChangeTurnConfirm | null;
 }
 
 async function appendLocked(
@@ -310,7 +318,7 @@ async function appendLocked(
  * row AMENDMENT 17 §1 forbids. `tx` is REQUIRED; this never opens a transaction.
  *
  * Every append moves `lastActivityAt` in the SAME update that bumps `turnCount`
- * (§3): the resume window and the Plans page's order both read it, and a turn
+ * (§3): the idle close and the Plans page's order both read it, and a turn
  * that did not move it would let a live conversation age out mid-sentence.
  */
 async function appendWithin(
@@ -330,6 +338,10 @@ async function appendWithin(
   if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
 
   if (skipIf && (await skipIf(tx))) return fresh;
+  // An ENDED session takes no turn from a person (AMENDMENT 23 §3), checked
+  // under the row lock so an end that commits first is always seen. A late
+  // machine turn of the attempt that just finished may still land on the record.
+  if (fresh.endedAt && turn.role === 'user') throw new PlanSessionEndedError(fresh.id);
 
   const seq = fresh.turnCount;
   try {
@@ -347,6 +359,7 @@ async function appendWithin(
         citations: turn.citations ?? [],
         anchorKey: turn.anchorKey ?? null,
         attachmentIds: turn.attachmentIds ? [...turn.attachmentIds] : [],
+        confirm: turn.confirm ?? null,
         // An explicit literal, not the DTO itself: Prisma's JSON input wants an
         // indexable object, and spelling the four fields keeps the column's
         // shape exactly the DTO's.
@@ -379,9 +392,14 @@ async function appendWithin(
     throw err;
   }
 
+  // Every turn is activity, so it pushes the session's lease out too (AMENDMENT
+  // 23 §2): the idle close reads `lastActivityAt` and the lease sweep reads the
+  // lease, and the two must agree on when the session went quiet.
+  const now = new Date();
+  await planTargetLockService.refreshForSessionWithin(fresh.id, now, tx);
   return planChangeSessionRepository.update(
     fresh.id,
-    { ...patch, turnCount: seq + 1, lastActivityAt: new Date() },
+    { ...patch, turnCount: seq + 1, lastActivityAt: now },
     tx,
   );
 }
@@ -412,12 +430,26 @@ async function resumeOrStartWithin(
     scope.scopeKey,
     pctx.userId,
     pctx.workspaceId,
-    resumableSince(now),
     tx,
   );
+  // TAKE-BACK (AMENDMENT 23 §3): no open session for this scope, but one of the
+  // member's own open sessions already holds a card in it — that is the
+  // conversation they are having about it, so the turn lands there. Nothing is
+  // created and nothing is taken over; its own scope is left as it is.
+  const heldBy = resumable
+    ? null
+    : await planChangeSessionRepository.findOpenHoldingForUser(
+        pctx.projectId,
+        scope.targetKeys,
+        pctx.userId,
+        pctx.workspaceId,
+        tx,
+      );
 
   let sessionId: string;
-  if (resumable) {
+  if (heldBy) {
+    sessionId = heldBy.id;
+  } else if (resumable) {
     sessionId = resumable.id;
     await planTargetLockService.acquireForScopeWithin(sessionId, scope.targetKeys, pctx, now, tx);
   } else {
@@ -434,17 +466,11 @@ async function resumeOrStartWithin(
       tx,
     );
     sessionId = created.id;
-    const predecessors = await planChangeSessionRepository.listIdsForUserInScope(
-      pctx.projectId,
-      scope.scopeKey,
-      pctx.userId,
-      pctx.workspaceId,
-      created.id,
-      tx,
-    );
-    await planTargetLockService.acquireForScopeWithin(sessionId, scope.targetKeys, pctx, now, tx, {
-      takeOverFrom: predecessors,
-    });
+    // No take-over (AMENDMENT 23 §3 retires AMENDMENT 17 §6 here): a card the
+    // caller's own open session holds was TAKEN BACK above, and an ended session
+    // released its leases when it ended — so whatever refuses this acquire is
+    // another person's.
+    await planTargetLockService.acquireForScopeWithin(sessionId, scope.targetKeys, pctx, now, tx);
   }
   return sessionId;
 }
@@ -560,7 +586,6 @@ async function resumeSeededOrStartWithin(
     seedGateId,
     pctx.userId,
     pctx.workspaceId,
-    resumableSince(now),
     tx,
   );
   if (seeded) {
@@ -581,6 +606,10 @@ async function resumeSeededOrStartWithin(
     },
     tx,
   );
+  // A SEEDED session is the one place the hand-over survives (AMENDMENT 17 §9):
+  // it must never land on the member's own unseeded (or differently seeded)
+  // session, so take-back cannot serve it, and the card passes from that OPEN
+  // session to this one instead of refusing the member over their own hold.
   const predecessors = await planChangeSessionRepository.listIdsForUserInScope(
     pctx.projectId,
     scope.scopeKey,
@@ -595,34 +624,100 @@ async function resumeSeededOrStartWithin(
   return created.id;
 }
 
+/** The end reasons whose conversation a new session may carry over (AMENDMENT 23
+ *  §6): Motir ended them. Never `restarted` (the person asked for something
+ *  new), never `approved` / `declined` (those were decisions). */
+const COPYABLE_END_REASONS: ReadonlySet<string> = new Set(['failed', 'idle']);
+
+/** The copyable read's answer for the caller's latest own conversation. */
+/** Whether the Plan something new confirm is PENDING on this thread
+ *  (MOTIR-7649; ADR AMENDMENT 3, A3.2): the latest turn is that confirm. Read
+ *  under the session's row lock by every caller, because it guards an append. */
+async function restartConfirmPendingWithin(
+  sessionId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const latest = await planChangeTurnRepository.findLatestInSession(sessionId, workspaceId, tx);
+  return latest?.role === 'assistant' && latest.confirm === 'new_session';
+}
+
+/** The confirm turn itself — one shape for the words and the button (A3.2). */
+const NEW_SESSION_CONFIRM_TURN: AppendTurn = {
+  role: 'assistant',
+  body: NEW_SESSION_CONFIRM_BODY,
+  confirm: 'new_session',
+};
+
+/** Plan something new acts only on the caller's OWN `conversation` session (A3.3):
+ *  another member's session, a guide conversation and a session opened by any
+ *  other door are `PLAN_SESSION_NOT_FOUND`, as the copy door answers. */
+function assertRestartable(session: PlanChangeSession, pctx: ProjectContext): void {
+  if (session.createdById !== pctx.userId || session.origin !== 'conversation') {
+    throw new PlanSessionNotFoundError(session.id);
+  }
+}
+
+function toCopyable(row: PlanChangeSession | null): CopyableSessionDto | null {
+  if (!row?.endedAt || !row.endReason || !COPYABLE_END_REASONS.has(row.endReason)) return null;
+  return {
+    id: row.id,
+    endReason: row.endReason as CopyableSessionDto['endReason'],
+    endedAt: row.endedAt.toISOString(),
+    turnCount: row.turnCount,
+  };
+}
+
 export const planChangeSessionsService = {
   /**
-   * The RESUME read (AMENDMENT 17 §3): the caller's OWN most recent session for
-   * the scope, if its last turn was inside `PLAN_SESSION_RESUME_WINDOW_MS`, else
-   * `null`. Another member's session is never resumed automatically — reopening
-   * one is an explicit by-id act ({@link getById}). WRITES NOTHING and takes no
-   * lock: looking at the door is not starting a conversation.
+   * END a session (AMENDMENT 23 §2) — the one end operation, idempotent, in one
+   * transaction. Lives in `planSessionEndService` (see its header for why); this
+   * is the conversation service's address for it.
+   */
+  endSession,
+
+  /**
+   * The RESUME read (AMENDMENT 17 §3, AMENDMENT 23 §3): the caller's OWN OPEN
+   * session for the scope, at any age, else `null` — an ended session is never
+   * resumed. A scope the caller has no open session for falls back to the
+   * TAKE-BACK: their own open session that holds one of the scope's cards.
+   * Another member's session is never resumed automatically — reopening one is
+   * an explicit by-id act ({@link getById}). WRITES NOTHING and takes no lock:
+   * looking at the door is not starting a conversation.
    *
    * Browse-gated, like {@link getById}: it reads a conversation.
    */
   async findResumable(
     pctx: ProjectContext,
     scopeKey: string = PROJECT_SCOPE_KEY,
-    now: Date = new Date(),
   ): Promise<PlanChangeSessionDto | null> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
-    const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-      planChangeSessionRepository.findResumableForUser(
+    // A scope key IS its canonical target set (`buildScope`), so the take-back
+    // needs no second argument; the project scope (`''`) holds no card.
+    const targetKeys = scopeKey ? scopeKey.split(',') : [];
+    const found = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+      const own = await planChangeSessionRepository.findResumableForUser(
         pctx.projectId,
         scopeKey,
         pctx.userId,
         pctx.workspaceId,
-        resumableSince(now),
         tx,
-      ),
-    );
-    return row ? toDto(row, pctx) : null;
+      );
+      if (own) return { row: own, takenBack: false };
+      const holding = await planChangeSessionRepository.findOpenHoldingForUser(
+        pctx.projectId,
+        targetKeys,
+        pctx.userId,
+        pctx.workspaceId,
+        tx,
+      );
+      return holding ? { row: holding, takenBack: true } : null;
+    });
+    if (!found) return null;
+    // The take-back is SAID (MOTIR-7643): the overlay's notice tells the person
+    // they are back in the session they already had open, and nothing was started.
+    return { ...(await toDto(found.row, pctx)), takenBack: found.takenBack };
   },
 
   /**
@@ -638,10 +733,16 @@ export const planChangeSessionsService = {
     // The REOPEN extras (MOTIR-6024): the reopened line names who started it,
     // a member without `ai:plan` reads it read-only, and a still-undecided plan
     // comes back reviewable — the three things a Plans row's reopen needs.
-    const [startedBy, pending, viewerCanPlan] = await Promise.all([
+    const [startedBy, endedBy, pending, viewerCanPlan] = await Promise.all([
       withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
         planChangeSessionRepository.findStarter(row.id, pctx.workspaceId, tx),
       ),
+      // Who ENDED it (AMENDMENT 23 §1) — the end marker's `by {name}`.
+      row.endedById
+        ? withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+            planChangeSessionRepository.findEnder(row.id, pctx.workspaceId, tx),
+          )
+        : null,
       withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
         planRepository.findLatestBySession(row.id, tx),
       ),
@@ -658,6 +759,7 @@ export const planChangeSessionsService = {
     return {
       ...(await toDto(row, pctx)),
       startedBy,
+      endedBy,
       startedByViewer: row.createdById === pctx.userId,
       viewerCanPlan,
       pendingPlanId: undecided,
@@ -692,21 +794,28 @@ export const planChangeSessionsService = {
   async findResumableWithEarlier(
     pctx: ProjectContext,
     scopeKey: string = PROJECT_SCOPE_KEY,
-    now: Date = new Date(),
   ): Promise<ResumableSessionDto> {
-    const session = await planChangeSessionsService.findResumable(pctx, scopeKey, now);
-    if (session) return { session, earlier: null };
-    const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-      planChangeSessionRepository.findLatestConversationInScope(
+    const session = await planChangeSessionsService.findResumable(pctx, scopeKey);
+    if (session) return { session, earlier: null, copyable: null };
+    const [row, own] = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => [
+      await planChangeSessionRepository.findLatestConversationInScope(
         pctx.projectId,
         scopeKey,
         pctx.workspaceId,
         null,
         tx,
       ),
-    );
+      await planChangeSessionRepository.findLatestConversationForUser(
+        pctx.projectId,
+        scopeKey,
+        pctx.userId,
+        pctx.workspaceId,
+        tx,
+      ),
+    ]);
     return {
       session: null,
+      copyable: toCopyable(own),
       earlier: row
         ? {
             id: row.id,
@@ -768,6 +877,102 @@ export const planChangeSessionsService = {
           tx,
         );
         return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * CARRY AN ENDED CONVERSATION INTO A NEW SESSION (AMENDMENT 23 §6; MOTIR-7641).
+   * In ONE transaction, under the member's scope lock (so two racing copies
+   * create one session):
+   *
+   *  * the caller's own OPEN session for the source's scope wins — it is
+   *    returned and nothing is copied (a second copy, or a copy after a turn
+   *    already started one, lands there);
+   *  * a source that is not the caller's is `PLAN_SESSION_NOT_FOUND`, so an id
+   *    confirms nothing; one that is open, or ended `restarted` / `approved` /
+   *    `declined`, is `PLAN_SESSION_NOT_COPYABLE`;
+   *  * otherwise a new `conversation` session of the same scope is created with
+   *    `copiedFromSessionId`, holding the source's `user` and `assistant` turns
+   *    in `seq` order — not its `system` turns, not a pending question, not a
+   *    turn's `jobId` (an idempotency key of the old job).
+   *
+   * It takes NO lock: like the `open` doors it is an explicit start, and its
+   * first new turn takes the scope as any first turn does. The source is left
+   * ended and unchanged. `ai:plan`-gated: it writes.
+   */
+  async startCopied(pctx: ProjectContext, fromSessionId: string): Promise<PlanChangeSessionDto> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await assertCanPlan(pctx.projectId, ctx);
+    const now = new Date();
+
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const source = await planChangeSessionRepository.findByIdInProject(
+          fromSessionId,
+          pctx.projectId,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!source || source.createdById !== pctx.userId || source.origin !== 'conversation') {
+          throw new PlanSessionNotFoundError(fromSessionId);
+        }
+        await planChangeSessionRepository.lockScopeForUser(
+          pctx.projectId,
+          source.scopeKey,
+          pctx.userId,
+          tx,
+        );
+        const open = await planChangeSessionRepository.findResumableForUser(
+          pctx.projectId,
+          source.scopeKey,
+          pctx.userId,
+          pctx.workspaceId,
+          tx,
+        );
+        if (open) return toDto(open, pctx, tx);
+        if (!source.endedAt || !source.endReason || !COPYABLE_END_REASONS.has(source.endReason)) {
+          throw new PlanSessionNotCopyableError(source.id, source.endReason);
+        }
+
+        const turns = (
+          await planChangeTurnRepository.listBySessionId(source.id, pctx.workspaceId, tx)
+        ).filter((t) => t.role === 'user' || t.role === 'assistant');
+        const created = await planChangeSessionRepository.create(
+          {
+            workspaceId: pctx.workspaceId,
+            projectId: pctx.projectId,
+            createdById: pctx.userId,
+            scopeKey: source.scopeKey,
+            targetKeys: source.targetKeys,
+            origin: 'conversation',
+            copiedFromSessionId: source.id,
+            turnCount: turns.length,
+            lastActivityAt: now,
+          },
+          tx,
+        );
+        for (const [seq, turn] of turns.entries()) {
+          await planChangeTurnRepository.create(
+            {
+              workspaceId: pctx.workspaceId,
+              sessionId: created.id,
+              seq,
+              role: turn.role,
+              body: turn.body,
+              authorId: turn.authorId,
+              isAnswer: turn.isAnswer,
+              intent: turn.intent,
+              anchorKey: turn.anchorKey,
+              citations: turn.citations,
+              attachmentIds: turn.attachmentIds,
+              createdAt: turn.createdAt,
+            },
+            tx,
+          );
+        }
+        return toDto(created, pctx, tx);
       },
     );
   },
@@ -929,17 +1134,13 @@ export const planChangeSessionsService = {
 
   /**
    * The SEEDED-session read the refusal's door returns to (AMENDMENT 17 §9;
-   * MOTIR-6207): the id of the caller's OWN session seeded by `seedGateId`
-   * whose last activity is inside the resume window, else `null`. Another
-   * member's seeded session is never returned — sessions are per member
-   * (MOTIR-6011 §6) — and neither is an expired one. Browse-gated like
-   * {@link findResumable}; WRITES NOTHING and takes no lock.
+   * MOTIR-6207): the id of the caller's OWN OPEN session seeded by `seedGateId`,
+   * else `null` (AMENDMENT 23 §3 — no window). Another member's seeded session
+   * is never returned — sessions are per member (MOTIR-6011 §6) — and neither is
+   * an ended one. Browse-gated like {@link findResumable}; WRITES NOTHING and
+   * takes no lock.
    */
-  async findSeededSession(
-    pctx: ProjectContext,
-    seedGateId: string,
-    now: Date = new Date(),
-  ): Promise<string | null> {
+  async findSeededSession(pctx: ProjectContext, seedGateId: string): Promise<string | null> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
     const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
@@ -948,7 +1149,6 @@ export const planChangeSessionsService = {
         seedGateId,
         pctx.userId,
         pctx.workspaceId,
-        resumableSince(now),
         tx,
       ),
     );
@@ -1203,6 +1403,187 @@ export const planChangeSessionsService = {
           tx,
         );
         return toDto(fresh, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * File a `new_session` turn (MOTIR-7649; ADR AMENDMENT 3, A3.1/A3.2): the ask
+   * settle's fourth arm. In ONE transaction under the session's row lock it moves
+   * the turn `ask → new_session` (a compare-and-set, so a replayed settle writes
+   * nothing) and appends the fixed confirm — unless one is already pending, or
+   * the session has ended meanwhile, when the intent is still recorded and no
+   * confirm is written. No job is dispatched. Returns the fresh session, or
+   * `null` when another settle already filed this turn.
+   */
+  async recordNewSessionTurn(
+    turnId: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto | null> {
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const turn = await planChangeTurnRepository.findByIdInSession(
+          turnId,
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!turn) throw new PlanChangeTurnNotFoundError(turnId);
+        if (turn.intent !== 'ask') return null;
+        await planChangeTurnRepository.updateIntent(turn.id, { intent: 'new_session' }, tx);
+        const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
+        if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        if (fresh.endedAt || (await restartConfirmPendingWithin(fresh.id, pctx.workspaceId, tx))) {
+          const touched = await planChangeSessionRepository.update(
+            fresh.id,
+            { lastActivityAt: new Date() },
+            tx,
+          );
+          return toDto(touched, pctx, tx);
+        }
+        const row = await appendWithin(fresh.id, pctx, NEW_SESSION_CONFIRM_TURN, {}, tx);
+        return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * THE CONTROL (MOTIR-7649; ADR AMENDMENT 3, A3.3) — Plan something new pressed:
+   * append the SAME fixed confirm the words produce to the caller's own open
+   * conversation session. Idempotent: a confirm already pending returns the
+   * session unchanged. An ended session is `PLAN_SESSION_ENDED`.
+   */
+  async requestRestartConfirm(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto> {
+    const session = await requireSession(pctx, address);
+    assertRestartable(session, pctx);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
+        if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        // Checked under the lock: an end that commits first is always seen.
+        if (fresh.endedAt) throw new PlanSessionEndedError(fresh.id);
+        const row = await appendWithin(fresh.id, pctx, NEW_SESSION_CONFIRM_TURN, {}, tx, (t) =>
+          restartConfirmPendingWithin(fresh.id, pctx.workspaceId, t),
+        );
+        return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * KEEP PLANNING (MOTIR-7649; ADR AMENDMENT 3, A3.2): the confirm's second
+   * answer. Writes the `system` marker that answers a PENDING confirm and closes
+   * nothing. With no confirm pending (already answered, superseded by a later
+   * turn, or the session ended) it writes nothing and returns the thread.
+   */
+  async keepPlanning(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto> {
+    const session = await requireSession(pctx, address);
+    assertRestartable(session, pctx);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const row = await appendWithin(
+          session.id,
+          pctx,
+          { role: 'system', body: KEEP_PLANNING_MARKER_BODY },
+          {},
+          tx,
+          async (t) => {
+            const now = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, t);
+            if (!now || now.endedAt) return true;
+            return !(await restartConfirmPendingWithin(session.id, pctx.workspaceId, t));
+          },
+        );
+        return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * CONFIRM — Plan something new (MOTIR-7649; ADR AMENDMENT 3, A3.3/A3.4). In ONE
+   * transaction under the member's scope lock: end the caller's own conversation
+   * session `restarted` through AMENDMENT 23's one end operation (its `generating`
+   * plan discarded as the person's decision, every card it held given back), then
+   * return a NEW, empty `conversation` session for the same scope. It holds no
+   * lock until its first turn, which takes the scope as any first turn does.
+   *
+   * Two edges, both by the decision: a session that had ALREADY ended ends
+   * nothing and still gets a new session; and when the caller already has an
+   * open session for the scope — or one holding one of its cards (the take-back)
+   * — that session is returned and nothing is created.
+   */
+  async restart(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanSessionRestartResultDto> {
+    const session = await requireSession(pctx, address);
+    assertRestartable(session, pctx);
+    const now = new Date();
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        // The scope lock FIRST, as every start takes it: a first turn racing this
+        // restart for the same scope serialises behind it instead of creating a
+        // second open session beside the new one.
+        await planChangeSessionRepository.lockScopeForUser(
+          pctx.projectId,
+          session.scopeKey,
+          pctx.userId,
+          tx,
+        );
+        await endSessionWithin(tx, session.id, pctx.workspaceId, 'restarted', {
+          endedById: pctx.userId,
+          actor: { userId: pctx.userId, workspaceId: pctx.workspaceId },
+          now,
+        });
+        const open =
+          (await planChangeSessionRepository.findResumableForUser(
+            pctx.projectId,
+            session.scopeKey,
+            pctx.userId,
+            pctx.workspaceId,
+            tx,
+          )) ??
+          (await planChangeSessionRepository.findOpenHoldingForUser(
+            pctx.projectId,
+            session.targetKeys,
+            pctx.userId,
+            pctx.workspaceId,
+            tx,
+          ));
+        const next =
+          open ??
+          (await planChangeSessionRepository.create(
+            {
+              workspaceId: pctx.workspaceId,
+              projectId: pctx.projectId,
+              createdById: pctx.userId,
+              scopeKey: session.scopeKey,
+              targetKeys: session.targetKeys,
+              origin: 'conversation',
+              lastActivityAt: now,
+            },
+            tx,
+          ));
+        return {
+          outcome: 'restarted' as const,
+          endedSessionId: session.id,
+          session: await toDto(next, pctx, tx),
+        };
       },
     );
   },

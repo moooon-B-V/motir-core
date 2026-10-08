@@ -15,12 +15,19 @@ import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
-import type { HomePageDto, HomeTabCountsDto, HomeWorkItemRowDto } from '@/lib/dto/home';
+import { toGateResumeAttemptDto, toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
+import type {
+  GateResumeAttemptDto,
+  HomePageDto,
+  HomeTabCountsDto,
+  HomeWorkItemRowDto,
+} from '@/lib/dto/home';
 import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import { toOpenRepairRuns } from '@/lib/mappers/repairRunMappers';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { gateResumeRepository } from '@/lib/repositories/gateResumeRepository';
+import { describeResumeRun } from '@/lib/services/resumeRunDetailService';
 import { resolveFixEntries, type FixEntry } from '@/lib/services/fixGroupService';
 import { fixGroupKeyOf } from '@/lib/workItems/fixReason';
 
@@ -217,6 +224,30 @@ function toFixEntryDto(entry: FixEntry, viewerId: string): HomeWorkItemRowDto {
   };
 }
 
+/** Each card's gated run, first appearance first — To resume's entries, in order. */
+function orderedResumeRunIds(rows: readonly { resumeRunId: string | null }[]): string[] {
+  return [...new Set(rows.flatMap((row) => (row.resumeRunId ? [row.resumeRunId] : [])))];
+}
+
+/**
+ * One To resume entry → its row DTO (MOTIR-7707): the run's SCOPE card heads it when it
+ * waits too, else the first card in the tab's order, and the rest are its members.
+ */
+function toResumeEntryDto(
+  members: readonly HomeWorkItemRow[],
+  scopeId: string | null,
+  viewerId: string,
+): HomeWorkItemRowDto | null {
+  const head = members.find((m) => m.id === scopeId) ?? members[0];
+  if (!head) return null;
+  return {
+    ...toHomeWorkItemRowDto(head, viewerId),
+    resumeMembers: members
+      .filter((m) => m.id !== head.id)
+      .map((m) => toHomeWorkItemRowDto(m, viewerId)),
+  };
+}
+
 /** Shape one repository window into the wire DTO. */
 function toPage(
   rows: HomeWorkItemRow[],
@@ -405,6 +436,97 @@ export const homeService = {
   },
 
   /**
+   * TO RESUME — the reader's in-progress cards whose latest run stopped at an approval
+   * gate (Story MOTIR-7701 · MOTIR-7707), as `WorkItem.resumeState` records it.
+   *
+   * ⚠️ THE SAME PREDICATE, ONE MORE SLICE, as To fix: In progress's category with
+   * `resumeState` set and `fixReason` unset, so no card is on two tabs.
+   *
+   * ⚠️ AND IT PAGES ENTRIES, ONE PER GATED RUN, as To fix pages one per dead run
+   * (MOTIR-7589). Each row is the entry's head carrying the other cards the run left
+   * waiting (`resumeMembers`); `total` counts runs, the number `tabCounts().toResume`
+   * returns.
+   */
+  async listToResume(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
+    const pageSize = clampLimit(options.limit);
+    const page = await withWorkspaceContext(ctx, async (tx): Promise<HomePageDto> => {
+      const projectScopes = await resolveActiveProjectScope(ctx, tx);
+      const keyed = await workItemRepository.listToResumeRunKeysByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        tx,
+      );
+      const order = orderedResumeRunIds(keyed);
+      const window = windowFor(order.length, options.page, pageSize);
+      const pageRuns = order.slice(window.skip, window.skip + pageSize);
+      const [members, scopes, attempts] = await Promise.all([
+        workItemRepository.findResumeMembers(
+          ctx.workspaceId,
+          projectScopes.map((scope) => scope.projectId),
+          pageRuns,
+          tx,
+        ),
+        dispatchRunRepository.findScopesByIds(pageRuns, tx),
+        gateResumeRepository.listByRunIds(pageRuns, tx),
+      ]);
+      const scopeOf = new Map(scopes.map((run) => [run.id, run.scopeWorkItemId]));
+      // Newest first, so the first attempt seen per run is the one the entry reads.
+      const attemptOf = new Map<string, GateResumeAttemptDto>();
+      for (const a of attempts) {
+        if (!attemptOf.has(a.runId)) attemptOf.set(a.runId, toGateResumeAttemptDto(a));
+      }
+      const entries = pageRuns.flatMap((runId) => {
+        const entry = toResumeEntryDto(
+          members.filter((m) => m.resumeRunId === runId),
+          scopeOf.get(runId) ?? null,
+          ctx.userId,
+        );
+        return entry ? [{ runId, entry }] : [];
+      });
+      // Each entry's run, as line 2's aside and the gate list draw it (MOTIR-7712).
+      // Sequential: one transaction's client runs one query at a time anyway.
+      const items: HomeWorkItemRowDto[] = [];
+      for (const { runId, entry } of entries) {
+        items.push({
+          ...entry,
+          resumeAttempt: attemptOf.get(runId) ?? null,
+          resumeRun: await describeResumeRun(runId, entry.id, tx),
+        });
+      }
+      return {
+        items,
+        total: order.length,
+        page: window.page,
+        pageSize,
+      };
+    });
+    // THE CONTINUE DOOR (§ 35.5) — on an entry the approval released that did not resume
+    // by itself (*Ready to resume*, *Could not resume*), offered only where the reader may
+    // edit the card: To fix's rule, decided once per distinct project.
+    const continuable = page.items.filter(
+      (row) => row.resumeState === 'ready_to_resume' && row.resumeAttempt?.outcome !== 'started',
+    );
+    if (continuable.length === 0) return page;
+    const editable = new Set<string>();
+    for (const projectId of new Set(continuable.map((row) => row.project.id))) {
+      const held = await projectAccessService.getPermissions(projectId, {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      if (held.has('work_item:edit')) editable.add(projectId);
+    }
+    return {
+      ...page,
+      items: page.items.map((row) =>
+        continuable.includes(row) && editable.has(row.project.id)
+          ? { ...row, canContinueHosted: true }
+          : row,
+      ),
+    };
+  },
+
+  /**
    * RECENTLY FINISHED — the week's work, which this surface has never shown.
    *
    * ⚠️ TWO THINGS DIFFER FROM ITS SIBLINGS AND THEY ARE ONE DECISION: it orders
@@ -490,7 +612,7 @@ export const homeService = {
   async tabCounts(ctx: HomeActorContext): Promise<HomeTabCountsDto> {
     return withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await resolveActiveProjectScope(ctx, tx);
-      const [toDo, toFixCards, inProgress, recentlyFinished, watching, approvals] =
+      const [toDo, toFixCards, toResumeCards, inProgress, recentlyFinished, watching, approvals] =
         await Promise.all([
           workItemRepository.countByAssigneeOrReporterInWorkspace(
             ctx.userId,
@@ -502,6 +624,13 @@ export const homeService = {
           // TO FIX COUNTS ENTRIES (MOTIR-7589; § 34.2) — the same keys the list pages, so
           // the badge and the pager's total are one number.
           workItemRepository.listToFixGroupKeysByAssigneeOrReporterInWorkspace(
+            ctx.userId,
+            ctx.workspaceId,
+            projectScopes,
+            tx,
+          ),
+          // TO RESUME COUNTS ENTRIES too (MOTIR-7707) — one per gated run, as its list pages.
+          workItemRepository.listToResumeRunKeysByAssigneeOrReporterInWorkspace(
             ctx.userId,
             ctx.workspaceId,
             projectScopes,
@@ -543,10 +672,12 @@ export const homeService = {
           ),
         ]);
       const toFix = orderedFixGroupKeys(toFixCards).length;
+      const toResume = orderedResumeRunIds(toResumeCards).length;
       return {
         toDo,
         inProgress,
         toFix,
+        toResume,
         recentlyFinished,
         approvals,
         watching,
@@ -556,7 +687,8 @@ export const homeService = {
         // To fix is carved out of In progress (MOTIR-6604), so it is added back
         // here: the old badge still means everything not finished.
         // It counts CARDS, so it adds back the stuck cards, not To fix's entries.
-        myWork: toDo + inProgress + toFixCards.length,
+        // To resume is carved out the same way (MOTIR-7707).
+        myWork: toDo + inProgress + toFixCards.length + toResumeCards.length,
       };
     });
   },

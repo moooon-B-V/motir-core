@@ -3,6 +3,7 @@
 import { type ReactNode } from 'react';
 import * as RadixTooltip from '@radix-ui/react-tooltip';
 import { cn } from '../../utils/cn';
+import { useFullscreenElement } from '../../utils/fullscreen';
 
 /**
  * Tooltip — Radix-wrapped popover that appears on hover + focus.
@@ -31,11 +32,14 @@ export function Tooltip({
   delayMs = 700,
   className,
 }: TooltipProps) {
+  // Into the element in native full screen while there is one, else <body>
+  // (MOTIR-7658 — the browser paints nothing outside a full-screen element).
+  const fullscreenElement = useFullscreenElement();
   return (
     <RadixTooltip.Provider delayDuration={delayMs}>
       <RadixTooltip.Root>
         <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
-        <RadixTooltip.Portal>
+        <RadixTooltip.Portal container={fullscreenElement ?? undefined}>
           <RadixTooltip.Content
             side={side}
             sideOffset={6}

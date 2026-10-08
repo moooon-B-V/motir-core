@@ -20,8 +20,9 @@ vi.mock('@/lib/approvals/overlayAddress', async (importOriginal) => {
 import { StatusHeldNotice, type StatusHeldLine } from '@/components/issues/StatusHeldNotice';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
-import { planRowDestination } from '@/lib/planning/planDestination';
+import type { PlanHeldByPlanDTO, PlanHeldBySessionDTO } from '@/lib/dto/plans';
+import { ReaderRoutesProvider } from '@/lib/visitor/useReaderRoutes';
+import { planRowDestination, sessionHoldDestination } from '@/lib/planning/planDestination';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
 
 // THE STATUS CONTROL SAYS SO (Story MOTIR-4887 · Subtask MOTIR-5528), built to
@@ -131,7 +132,8 @@ describe('StatusHeldNotice', () => {
 // THE STATUS CONTROL SAYS A PLAN HOLDS IT (Story MOTIR-6017 · MOTIR-6267), built to
 // `design/work-items/status-held-by-decision--plan-hold.mock.html`.
 describe('StatusHeldNotice — a plan hold', () => {
-  const plan = (over: Partial<PlanHoldDTO> = {}): PlanHoldDTO => ({
+  const plan = (over: Partial<PlanHeldByPlanDTO> = {}): PlanHeldByPlanDTO => ({
+    kind: 'plan',
     itemKey: 'PROD-7',
     workItemId: 'wi_7',
     planId: 'pln_7c3a91',
@@ -141,7 +143,7 @@ describe('StatusHeldNotice — a plan hold', () => {
     ...over,
   });
   /** The door's href, as the ONE destination rule computes it for this page. */
-  const expectedHref = (p: PlanHoldDTO) =>
+  const expectedHref = (p: PlanHeldByPlanDTO) =>
     planRowDestination({
       planStatus: p.planStatus,
       planId: p.planId,
@@ -424,5 +426,67 @@ describe('StatusPicker — held by mark (MOTIR-6676)', () => {
     expect(onChange).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('option', { name: /Cancelled/ }));
     expect(onChange).toHaveBeenCalledWith('cancelled');
+  });
+});
+
+// AN OPEN SESSION HOLDS THE CARD (AMENDMENT 23 §5; MOTIR-7640), built to
+// `design-7635`'s session line: the refusal, who is planning it, Open the session.
+describe('StatusHeldNotice — a session hold', () => {
+  const session = (over: Partial<PlanHeldBySessionDTO> = {}): PlanHeldBySessionDTO => ({
+    kind: 'session',
+    itemKey: 'PROD-7',
+    workItemId: 'wi_7',
+    planId: null,
+    planStatus: null,
+    sessionId: 'pcs_77aa',
+    anchorKey: 'PROD-7',
+    holderId: 'usr_ada',
+    holderName: 'Ada Lovelace',
+    heldByViewer: false,
+    ...over,
+  });
+
+  it('names the holder and opens the session on the planning surface over THIS page', () => {
+    const hold = session();
+    render(<StatusHeldNotice itemKey="PROD-7" lines={[]} plan={hold} />);
+
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.querySelector('[data-waiting-on]')?.getAttribute('data-waiting-on')).toBe(
+      'session',
+    );
+    expect(notice.textContent).toContain(
+      "Being planned in a conversation — status can't change until it ends.",
+    );
+    expect(notice.textContent).toContain('Ada Lovelace is planning it with Motir AI.');
+    const door = within(notice).getByRole('link', { name: 'Open the session' });
+    const href = sessionHoldDestination({
+      sessionId: 'pcs_77aa',
+      host: '/items/PROD-7?tab=activity',
+      anchorKey: 'PROD-7',
+    })!.href;
+    expect(href).toContain('planSession=pcs_77aa');
+    expect(door.getAttribute('href')).toBe(href);
+    fireEvent.click(door);
+    expect(shallowPushSpy).toHaveBeenCalledWith(href);
+    expect(withApprovalOverlay).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the viewer', { heldByViewer: true }, 'You are planning it with Motir AI.'],
+    ['an unnamed holder', { holderName: null }, 'A teammate is planning it with Motir AI.'],
+  ] as const)('the holder is %s', (_label, over, sentence) => {
+    render(<StatusHeldNotice itemKey="PROD-7" lines={[]} plan={session(over)} />);
+    expect(screen.getByTestId('status-held-notice').textContent).toContain(sentence);
+  });
+
+  it('a Visitor reads the line and gets NO door', () => {
+    render(
+      <ReaderRoutesProvider identifier="ACME">
+        <StatusHeldNotice itemKey="PROD-7" lines={[]} plan={session()} />
+      </ReaderRoutesProvider>,
+    );
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.textContent).toContain('Ada Lovelace is planning it with Motir AI.');
+    expect(within(notice).queryByRole('link')).toBeNull();
   });
 });

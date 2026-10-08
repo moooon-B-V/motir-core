@@ -612,6 +612,7 @@ function counts(over: Partial<HomeTabCountsDto> = {}): HomeTabCountsDto {
     toDo: 0,
     inProgress: 0,
     toFix: 0,
+    toResume: 0,
     recentlyFinished: 0,
     approvals: 0,
     watching: 0,

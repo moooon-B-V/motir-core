@@ -275,8 +275,12 @@ export class MemoryPageStore implements PageStore {
       );
   }
 
-  async replaceDerivedLinks(pageId: string, links: readonly DerivedPageLink[]): Promise<void> {
-    this.record('replaceDerivedLinks', pageId, links);
+  async replaceDerivedLinks(
+    pageId: string,
+    links: readonly DerivedPageLink[],
+    actorId: string,
+  ): Promise<void> {
+    this.record('replaceDerivedLinks', pageId, links, actorId);
   }
 
   async setArchived(

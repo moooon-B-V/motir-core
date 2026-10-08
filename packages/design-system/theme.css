@@ -1984,7 +1984,24 @@
    dividers inside a wavy card): the full-box `.border`, and the single-side
    dividers `.border-b` / `.border-t` (table rows, section rules) — the latter
    scoped INSIDE `[data-surface]` panels to bound the count to real surfaces (and
-   their rows are virtualised, so only ~viewport-many overlays ever render). */
+   their rows are virtualised, so only ~viewport-many overlays ever render).
+
+   ⚠️ THE INK IS AN `outline`, NOT A `border`, AND THE OVERLAY BOX NEVER LEAVES ITS
+   HOST'S PADDING BOX (MOTIR-7693). The line has to straddle the host's padding
+   edge — 1px out, 1px in — to sit on the real border it roughens. Drawn as a
+   2px border on an overlay at `inset: -1px`, that put the overlay's BOX one
+   pixel past its host on every side, and when the host is also a scroll
+   container (`.border` + `overflow-*-auto`: framed tables, pickers, code blocks)
+   its own `::after` is part of its scrollable overflow — `scrollWidth` /
+   `scrollHeight` one past the client box, so the browser drew a vertical AND a
+   horizontal scroll bar on content that fits. An outline is ink, not layout: it
+   never counts toward scrollable overflow. So the overlay box sits at `inset: 0`
+   and `outline-offset: -1px` puts the 2px line back on exactly the same pixels.
+   The dividers are the same move — a 0-height box ON the edge, a 1px outline
+   either side of it (the line it replaces was 2px straddling the edge), and
+   `left`/`right: 1px` to cancel the outline's run past the box's ends; their
+   `bottom: -1px` overflowed a scroller whose last row drops its real border.
+   tests/e2e/hand-drawn-scroll-frame.spec.ts measures it in Chromium. */
 @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
   .border {
     border-width: 2px;
@@ -1999,9 +2016,10 @@
   .border::after {
     content: '';
     position: absolute;
-    inset: -1px;
+    inset: 0;
     pointer-events: none;
-    border: 2px solid var(--el-border-strong);
+    outline: 2px solid var(--el-border-strong);
+    outline-offset: -1px;
     border-radius: inherit;
     filter: url(#hd-rough);
   }
@@ -2020,12 +2038,12 @@
   [data-surface] .border-b:not(.border)::after {
     content: '';
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -1px;
+    left: 1px;
+    right: 1px;
+    bottom: 0;
     height: 0;
     pointer-events: none;
-    border-bottom: 2px solid var(--el-border-strong);
+    outline: 1px solid var(--el-border-strong);
     filter: url(#hd-rough);
   }
 }
@@ -2033,12 +2051,12 @@
   [data-surface] .border-t:not(.border)::after {
     content: '';
     position: absolute;
-    left: 0;
-    right: 0;
-    top: -1px;
+    left: 1px;
+    right: 1px;
+    top: 0;
     height: 0;
     pointer-events: none;
-    border-top: 2px solid var(--el-border-strong);
+    outline: 1px solid var(--el-border-strong);
     filter: url(#hd-rough);
   }
 }
@@ -2519,6 +2537,49 @@
       inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
       inset 0 -1px 0 color-mix(in srgb, black 24%, transparent),
       0 0 28px -8px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+  }
+}
+
+/* Showcase fields under the chrome (motir.co's illustrations). The card rule
+   above repaints every card-radius panel with --el-surface, which turns a
+   showcase field — the deep ground, the accent field — into a grey panel with
+   its light text left on it. A showcase panel names its field with
+   `data-showcase="<field>"`; it keeps that fill under the chrome, and the deep
+   fields take a quieter streak and bevel so the light text keeps its contrast.
+   Palette-derived like every material rule here: the fills are the showcase
+   tokens, the sheen is the style's own achromatic white. */
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-showcase='field'] {
+    background-color: var(--el-showcase-field);
+  }
+  [data-showcase='ground'] {
+    background-color: var(--el-showcase-ground);
+  }
+  [data-showcase='ground-raised'] {
+    background-color: var(--el-showcase-ground-raised);
+  }
+  [data-showcase='decision'] {
+    background-color: var(--el-showcase-decision);
+  }
+  [data-showcase='record'] {
+    background-color: var(--el-showcase-record);
+  }
+  [data-showcase='wash'] {
+    background-color: var(--el-showcase-wash);
+  }
+  [data-showcase='wash-warm'] {
+    background-color: var(--el-showcase-wash-warm);
+  }
+  [data-showcase='paper'] {
+    background-color: var(--el-showcase-paper);
+  }
+  [data-showcase='field'],
+  [data-showcase='ground'],
+  [data-showcase='ground-raised'],
+  [data-showcase='decision'],
+  [data-showcase='record'] {
+    --retro-spec: 12%;
+    --retro-bevel-light: 10%;
   }
 }
 
@@ -3274,6 +3335,16 @@
   --el-accent-on-surface: var(--color-primary);
   --el-accent-pressed: var(--color-primary-pressed);
   --el-highlight: var(--color-accent); /* brand pink — decorative accents */
+  /* Progress FILL for a determinate bar (MOTIR-7584) — upload / import bars.
+     Resolves to the CTA fill, which is what those bars painted before the role
+     existed, so every palette that does not override it is pixel-identical.
+     (The planning node's done/total meter is NOT this role: it means DONE and
+     stays --el-success.) */
+  --el-progress-fill: var(--color-primary-fill);
+  /* The rich-text editor's FOCUS indicator (MOTIR-7584). Resolves to the
+     decorative accent the editor borrowed before the role existed; a palette
+     whose accent is decorative-only (motir) points it back at its focus hue. */
+  --el-editor-focus: var(--color-accent);
 
   /* ── Surfaces ──────────────────────────────────────────────────── */
   --el-surface: var(--color-surface);
@@ -3850,6 +3921,91 @@
   --el-sidebar-item-bg-active: var(
     --color-background
   ); /* active row = canvas inset into the rail */
+
+  /* ── Product marks (motir.co's Products menu) ───────────────────────── */
+  /* The small square beside each product's name. One per product, each a
+     palette hue — or a mix of two, where the palette has fewer distinct hues
+     than there are products — so a palette re-skins all of them. */
+  --el-product-ai-planner: var(--color-primary);
+  --el-product-project-management: var(--color-accent-teal);
+  --el-product-project-manager: var(--color-accent);
+  --el-product-ai-debugging: var(--color-destructive);
+  --el-product-mcp: color-mix(in srgb, var(--color-primary) 55%, var(--color-destructive));
+  --el-product-cli: var(--color-charcoal);
+  --el-product-claude-code-connector: var(--color-accent-green);
+  --el-product-claude-code-plugin: color-mix(
+    in srgb,
+    var(--color-accent) 55%,
+    var(--color-accent-green)
+  );
+  --el-product-agent-fleet: color-mix(in srgb, var(--color-primary) 50%, var(--color-accent-teal));
+  --el-product-agent-hosting: var(--color-slate);
+  --el-product-sandbox: color-mix(in srgb, var(--color-accent) 45%, var(--color-charcoal));
+
+  /* ── Logo tile (the wave mark on its rounded square) ─────────────── */
+  /* The mark is the palette's identity hue — its primary FILL, the colour its
+     swatch shows — on a tile chosen so the mark reads: a pale wash of that hue
+     here; a palette whose identity hue is itself bright or pale sets a dark
+     tile in its own block. */
+  --el-logo-mark: var(--color-primary-fill);
+  --el-logo-tile: color-mix(in srgb, var(--color-primary-fill) 14%, var(--color-background));
+
+  /* ── Showcase (motir.co's illustrations) ─────────────────────── */
+  /* The marketing site draws its pictures as flat fields holding small
+     example screens ("Vibe the project" and "How Motir works"). These are
+     the pictures' own element tokens, named for what they paint — the
+     palette decides the colour. Each FIELD has a TEXT token that reads on it
+     in every palette and theme.
+       field     — the main picture field (the plan, the progress lanes);
+                   field-ink is that colour as text on paper
+       ground    — the deep ground (the project-manager panel, the design and
+                   run pictures), with its raised step, rule and muted text
+       highlight — the one bright touch, drawn on the ground and on the
+                   record field (the person's marks in the history)
+       decision  — a choice that waits on the person ("Your call")
+       record    — the history / learning field
+       wash      — the quiet pictures (docs, the written brief, memory)
+       wash-warm — the quiet warm picture (the plan gate)
+       paper     — the small screens inside the fields
+       wave-1..3 — the hero's moving wave lines */
+  --el-showcase-field: var(--color-primary);
+  --el-showcase-field-text: var(--color-background);
+  --el-showcase-field-ink: var(--color-primary);
+  --el-showcase-ground: var(--color-foreground);
+  --el-showcase-ground-text: var(--color-background);
+  --el-showcase-ground-muted: color-mix(
+    in srgb,
+    var(--color-background) 68%,
+    var(--color-foreground)
+  );
+  --el-showcase-ground-raised: color-mix(
+    in srgb,
+    var(--color-foreground) 90%,
+    var(--color-background)
+  );
+  --el-showcase-ground-rule: color-mix(
+    in srgb,
+    var(--color-foreground) 74%,
+    var(--color-background)
+  );
+  --el-showcase-highlight: color-mix(in srgb, var(--color-accent) 55%, var(--color-background));
+  --el-showcase-decision: color-mix(in srgb, var(--color-accent) 70%, var(--color-background));
+  --el-showcase-decision-text: var(--color-foreground);
+  --el-showcase-decision-ink: color-mix(in srgb, var(--color-accent) 65%, var(--color-foreground));
+  --el-showcase-record: color-mix(in srgb, var(--color-accent-teal) 72%, var(--color-foreground));
+  --el-showcase-record-text: var(--color-background);
+  --el-showcase-wash: var(--color-tint-sky);
+  --el-showcase-wash-warm: var(--color-tint-peach);
+  --el-showcase-paper: var(--color-background);
+  --el-showcase-paper-soft: var(--color-surface-soft);
+  --el-showcase-rule: var(--color-hairline);
+  --el-showcase-text: var(--color-foreground);
+  --el-showcase-muted: var(--color-slate);
+  /* The hero's wave lines: the three palette hues the moving colour band
+     cycles through — the accent, the teal, the warm accent. */
+  --el-showcase-wave-1: var(--color-primary);
+  --el-showcase-wave-2: var(--color-accent-teal);
+  --el-showcase-wave-3: var(--color-accent);
 }
 
 /* Dark-mode lift for the sidebar hover token. The other three --el-sidebar-*
@@ -3911,6 +4067,27 @@
      other concrete-hex --el-* alongside the sidebar hover. Light value (40%,
      == the prior bg-black/40) lives in the :root block above. */
   --el-overlay-scrim: #000000a6;
+  /* The logo in dark: the palette's dark primary — the lightened identity hue
+     built to read on a dark page — on a deep wash of it. */
+  --el-logo-mark: var(--color-primary);
+  --el-logo-tile: color-mix(in srgb, var(--color-primary) 18%, var(--color-background));
+  /* Showcase in dark (see the Tier-3 showcase block): the field is the
+     dark accent pulled halfway to the page, so it stays a saturated mid-tone
+     carrying LIGHT text; the ground stays dark instead of inverting — the
+     palette's recessed canvas, the one step below both page and surface; the decision and record fields carry the page's dark ink. */
+  --el-showcase-field: color-mix(in srgb, var(--color-primary) 45%, var(--color-background));
+  --el-showcase-field-text: var(--color-foreground);
+  --el-showcase-field-ink: color-mix(in srgb, var(--color-primary) 75%, var(--color-foreground));
+  --el-showcase-ground: var(--color-canvas);
+  --el-showcase-ground-text: var(--color-foreground);
+  --el-showcase-ground-muted: color-mix(in srgb, var(--color-foreground) 68%, var(--color-canvas));
+  --el-showcase-ground-raised: color-mix(in srgb, var(--color-canvas) 86%, var(--color-foreground));
+  --el-showcase-ground-rule: color-mix(in srgb, var(--color-canvas) 70%, var(--color-foreground));
+  --el-showcase-highlight: color-mix(in srgb, var(--color-accent) 70%, var(--color-foreground));
+  --el-showcase-decision: var(--color-accent);
+  --el-showcase-decision-text: var(--color-background);
+  --el-showcase-decision-ink: color-mix(in srgb, var(--color-accent) 80%, var(--color-foreground));
+  --el-showcase-record: var(--color-accent-teal);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -4079,7 +4256,12 @@
   --color-tint-sky: #dcecfa;
   --color-tint-yellow: #fef7d6;
   --color-warning: #dd5b00;
+  /* MOTIR-7584 — carried for the same reason as --el-status-approved below:
+     `motir` overrides all three, so a scoped amethyst tile under a motir page
+     would otherwise inherit motir's warm values. */
+  --el-editor-focus: var(--color-accent);
   --el-priority-high: var(--color-warning);
+  --el-progress-fill: var(--color-primary-fill);
   --el-sidebar-item-bg-hover: #eeede9;
   /* MOTIR-5139 — carried here because `evergreen` OVERRIDES it. A token this
      block omits leaks from the ANCESTOR into a scoped `motir` tile, so an
@@ -4095,6 +4277,13 @@
   --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
   --el-status-in-review: var(--color-primary);
   --el-status-planning: var(--color-accent-teal);
+  --el-type-design: var(--color-accent);
+  /* 2026-10 redesign — the logo and showcase roles the motir and bright
+     palettes override, restated so a scoped amethyst tile keeps the base. */
+  --el-logo-mark: var(--color-primary-fill);
+  --el-logo-tile: color-mix(in srgb, var(--color-primary-fill) 14%, var(--color-background));
+  --el-showcase-highlight: color-mix(in srgb, var(--color-accent) 55%, var(--color-background));
+  --el-showcase-decision: color-mix(in srgb, var(--color-accent) 70%, var(--color-background));
 }
 
 /* The base palette's DARK arm — only the tokens the global dark block
@@ -4132,6 +4321,12 @@
   --color-tint-sky: #1a2a3a;
   --color-tint-yellow: #3a341a;
   --el-sidebar-item-bg-hover: #222222;
+  /* 2026-10 redesign — the dark logo and showcase roles, restated (see the
+     light arm above). */
+  --el-logo-mark: var(--color-primary);
+  --el-logo-tile: color-mix(in srgb, var(--color-primary) 18%, var(--color-background));
+  --el-showcase-highlight: color-mix(in srgb, var(--color-accent) 70%, var(--color-foreground));
+  --el-showcase-decision: var(--color-accent);
 }
 
 /* The `motir` BASE type pairing, re-asserted (MOTIR-3933) — same reason as
@@ -4344,6 +4539,10 @@
    verified numerically + by rendered specimen, never eyeballed. See
    docs/palettes/motir.md for the colour-role reference. */
 [data-palette='motir'] {
+  /* The logo, kept as Motir has it: the cool-blue primary (its fill is the
+     ink CTA, not its identity hue) on a 28% wash of that blue. */
+  --el-logo-mark: var(--color-primary);
+  --el-logo-tile: color-mix(in srgb, var(--color-primary) 28%, var(--color-background));
   /* brand & primary — the high-contrast INK CTA + the single cool-blue accent.
      --color-primary is the accent AS text/icon/focus on a surface (the cool
      blue, AA on white & the slate surface); --color-primary-fill is the CTA
@@ -4376,19 +4575,24 @@
   --color-border: #e2e4e9;
 
   /* accent secondary — the cool-blue highlight replaces the warm brand pink */
-  --color-accent: #2563c9; /* cool-blue decorative highlight / epic & design hue */
+  /* WARM TOUCH (MOTIR-7582 / design MOTIR-7583 §8): the decorative accent —
+     highlight, Epic, chart segment 6, the progress fill — is a warm orange.
+     It sits in the narrow slot between the burnt-orange warning #c2410c and the
+     amber priority-high step #ab6400: ΔE2000 11.0 from each, and 3.08:1 or
+     better on every light surface (the selected row is the tightest). */
+  --color-accent: #d66000; /* warm orange — decorative highlight / epic hue */
   --color-accent-orange: #c2410c; /* review hue / warning — cooled */
   --color-accent-teal: #0e8f86; /* subtask / content hue */
   --color-accent-green: #18804a; /* story hue / success — cooled */
 
   /* card tints — cooled pastel washes (6 distinct feature hues; charcoal text
      on them clears AA in both themes) */
-  --color-tint-peach: #f7e6d6;
+  --color-tint-peach: #fde0c8; /* warmed (MOTIR-7582) — ink on it 12.38:1 */
   --color-tint-rose: #f6dfe8;
   --color-tint-mint: #d9efe1;
   --color-tint-lavender: #e4e6f3; /* cool indigo wash */
   --color-tint-sky: #dde9f6; /* cool blue wash — the accent tint */
-  --color-tint-yellow: #f6f1d6;
+  --color-tint-yellow: #fdf0c6; /* warmed (MOTIR-7582) — ink on it 13.70:1 */
 
   /* semantic */
   --color-success: #18804a;
@@ -4441,6 +4645,28 @@
      here and reads as "not yet coloured in", which is what the state is:
      ΔE 15.9 light / 11.8 dark from the nearest status. */
   --el-status-implemented: var(--color-charcoal);
+
+  /* Warm touches (MOTIR-7582 / design MOTIR-7583 §8) — the Tier-3 half.
+     Design takes the Citrine palette's own gold, its --color-primary #746019
+     (Mirotone yellow-700), so it reads apart from the orange Epic: ΔE2000 16.3
+     from its nearest glyph neighbour (priority-high) and 4.97:1 or better on
+     every light surface. Set directly, as --el-sidebar-item-bg-hover is, since
+     no Tier-0 source carries it. */
+  --el-type-design: #746019;
+  /* The showcase highlight — the one bright touch on motir.co's illustration
+     ground. In Motir it is the palette's Sunglow yellow (the dark Design hue
+     below), and the same in both themes because the showcase ground stays dark
+     in both. Set directly, as --el-type-design is: Motir's yellow is a role
+     value of this palette, not a Tier-0 source other palettes would carry. */
+  --el-showcase-highlight: #ffd02f;
+  /* Motir's decision field is its warm accent at full strength — dark ink on
+     it is 4.9:1; the base mapping lightens the accent for darker palettes. */
+  --el-showcase-decision: var(--color-accent);
+  /* progress bars take the warm accent instead of the ink CTA fill */
+  --el-progress-fill: var(--color-accent);
+  /* the editor's focus border / rings stay the blue focus hue — the accent they
+     borrowed is decorative-only here now */
+  --el-editor-focus: var(--color-primary);
 }
 
 /* Motir (formerly Graphite) — dark companion. A cool near-black slate canvas; the CTA fill
@@ -4449,6 +4675,8 @@
    brighten to clear AA on near-black. */
 [data-theme='dark'] [data-palette='motir']:not([data-theme]),
 [data-palette='motir'][data-theme='dark'] {
+  --el-logo-mark: var(--color-primary); /* parity with the light block */
+  --el-logo-tile: color-mix(in srgb, var(--color-primary) 28%, var(--color-background));
   --color-background: #0c0d0f; /* stark cool near-black canvas */
   --color-foreground: #edeef0;
   --color-surface: #18191c; /* cool slate section */
@@ -4476,14 +4704,16 @@
   --color-primary-fill: #edeef0; /* near-white ink CTA fill (black-on AA) */
 
   /* cooled tints, dimmed for the near-black canvas */
-  --color-tint-peach: #2e2418;
+  --color-tint-peach: #36230f; /* warmed (MOTIR-7582) — ink on it 10.58:1 */
   --color-tint-rose: #2f1c26;
   --color-tint-mint: #15271e;
   --color-tint-lavender: #1f2236;
   --color-tint-sky: #15233a;
-  --color-tint-yellow: #2a2716;
+  --color-tint-yellow: #302a12; /* warmed (MOTIR-7582) — ink on it 10.14:1 */
 
-  --color-accent: #5b9dff; /* bright cool-blue highlight on dark */
+  /* warm touch — a deeper, redder orange than the dark warning #f08a4b clears
+     it by ΔE2000 11.5, and is 4.77:1 or better on every dark surface */
+  --color-accent: #fa5500; /* warm orange highlight on dark */
   --color-accent-orange: #f08a4b;
   --color-accent-teal: #2db6a8;
   --color-accent-green: #34b86e;
@@ -4519,6 +4749,16 @@
      themes so the light value cannot cascade into dark (the cascade trap this
      suite checks for). */
   --el-status-implemented: var(--color-charcoal);
+
+  /* Warm touches — the dark halves of the light block's Tier-3 overrides, in
+     BOTH themes for the cascade reason above. Design takes the Citrine
+     palette's dark --color-primary, Miro Sunglow #ffd02f: ΔE2000 27.5 from its
+     nearest glyph neighbour, 10.0:1 or better on every dark surface. */
+  --el-type-design: #ffd02f;
+  --el-showcase-highlight: #ffd02f; /* see the light block */
+  --el-showcase-decision: var(--color-accent);
+  --el-progress-fill: var(--color-accent);
+  --el-editor-focus: var(--color-primary);
 }
 
 /* ── Palette: Evergreen (data-palette="evergreen") — Subtask 7.3.50 ──────────
@@ -4958,6 +5198,9 @@
    clears WCAG AA (≥4.5 text; ≥3.0 icon/UI) in BOTH themes, verified
    numerically. See docs/palettes/amber.md. */
 [data-palette='amber'] {
+  /* The logo: this palette's identity hue is bright, so its mark sits on a
+     dark tile (the palette's ink) rather than a pale wash of itself. */
+  --el-logo-tile: var(--color-foreground);
   /* brand & primary — Binance Gold. The FILL carries DARK ink labels (yellow
      trap); --color-primary is a darkened gold used AS text/icon on a surface. */
   --color-primary: #7d6000; /* darkened gold as text/icon (5.92:1 on white — MOTIR-3774) */
@@ -5031,6 +5274,11 @@
    #0ECB81 / sell-red #F6465D. */
 [data-theme='dark'] [data-palette='amber']:not([data-theme]),
 [data-palette='amber'][data-theme='dark'] {
+  --el-logo-tile: color-mix(
+    in srgb,
+    var(--color-primary) 18%,
+    var(--color-background)
+  ); /* parity with the light block */
   --color-background: #0b0e11; /* Binance deepest trading-floor black */
   --color-foreground: #eaecef;
   --color-surface: #1e2329; /* Binance "Shark" card surface */
@@ -5105,6 +5353,9 @@
    clears WCAG AA in BOTH themes, verified numerically. See
    docs/palettes/sienna.md. */
 [data-palette='sienna'] {
+  /* The logo: this palette's identity hue is bright, so its mark sits on a
+     dark tile (the palette's ink) rather than a pale wash of itself. */
+  --el-logo-tile: var(--color-foreground);
   /* brand & primary — Mistral's flame. The FILL is Mistral Orange #fa520f with
      DARK ink labels; --color-primary is a darkened flame used AS text/icon. */
   --color-primary: #b53b09; /* darkened Mistral flame as text/icon (5.60:1 on the cream — MOTIR-3774) */
@@ -5187,6 +5438,11 @@
    to read as text, the fill a bright flame with dark-ink labels. */
 [data-theme='dark'] [data-palette='sienna']:not([data-theme]),
 [data-palette='sienna'][data-theme='dark'] {
+  --el-logo-tile: color-mix(
+    in srgb,
+    var(--color-primary) 18%,
+    var(--color-background)
+  ); /* parity with the light block */
   --color-background: #15120d; /* warm near-black canvas (from Mistral Black) */
   --color-foreground: #f5efe2;
   --color-surface: #1f1d17;
@@ -5407,6 +5663,9 @@
    clears WCAG AA in BOTH themes, verified numerically. See
    docs/palettes/citrine.md. */
 [data-palette='citrine'] {
+  /* The logo: this palette's identity hue is bright, so its mark sits on a
+     dark tile (the palette's ink) rather than a pale wash of itself. */
+  --el-logo-tile: var(--color-foreground);
   /* brand & primary — Miro Sunglow yellow (yellow-500). FILL carries DARK
      Stratos-ink labels (yellow trap); --color-primary is a documented dark
      yellow step (yellow-700) used AS text/icon on a surface. */
@@ -5505,6 +5764,11 @@
    clear AA on the dark canvas. All values are documented Mirotone steps. */
 [data-theme='dark'] [data-palette='citrine']:not([data-theme]),
 [data-palette='citrine'][data-theme='dark'] {
+  --el-logo-tile: color-mix(
+    in srgb,
+    var(--color-primary) 18%,
+    var(--color-background)
+  ); /* parity with the light block */
   --color-background: #090909; /* Miro black */
   --color-foreground: #f6f7f9; /* gray-50 */
   --color-surface: #1a1b1e; /* gray-900 */
@@ -5595,6 +5859,9 @@
    clears WCAG AA in BOTH themes, verified numerically. See
    docs/palettes/candy.md. */
 [data-palette='candy'] {
+  /* The logo: this palette's identity hue is bright, so its mark sits on a
+     dark tile (the palette's ink) rather than a pale wash of itself. */
+  --el-logo-tile: var(--color-foreground);
   /* brand & primary — a LIGHT bubblegum pink (Radix Pink). FILL is a light pink
      with DARK berry labels; --color-primary is the Pink-11 text step. */
   --color-primary: #b72682; /* Radix Pink-11 88% toward Pink-12 (5.81:1 on white — MOTIR-3774) */
@@ -5669,6 +5936,11 @@
    All values are documented Radix dark steps. */
 [data-theme='dark'] [data-palette='candy']:not([data-theme]),
 [data-palette='candy'][data-theme='dark'] {
+  --el-logo-tile: color-mix(
+    in srgb,
+    var(--color-primary) 18%,
+    var(--color-background)
+  ); /* parity with the light block */
   --color-background: #191117; /* Radix Pink dark-1 — pink-tinted black */
   --color-foreground: #eeeef0; /* Mauve dark-12 */
   --color-surface: #37172f; /* Pink dark-3 — candy-plum section */

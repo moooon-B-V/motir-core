@@ -655,3 +655,84 @@ export const publicDuplicateMatchesSchema = z
   .object({ candidates: z.array(requestMatch) })
   .strict()
   .meta({ id: 'PublicDuplicateMatches' });
+
+// ── MOTIR-7676: the idea store's public reads (Story MOTIR-7662) ───────────
+//
+// Read off `lib/dto/ideas.ts` (the PUBLIC contract, which carries no status, no
+// retirement record and no id) and then the three handlers under
+// `app/api/public/ideas/`.
+
+const ideaKind = z
+  .enum(['motir_buys', 'direction'])
+  .meta({ id: 'IdeaKind', description: '`motir_buys`: a team Motir itself would buy.' });
+
+const ideaCategoryRef = z
+  .object({ slug: z.string(), label: z.string() })
+  .strict()
+  .meta({ id: 'IdeaCategoryRef' });
+
+const ideaTagRef = z
+  .object({ slug: z.string(), label: z.string() })
+  .strict()
+  .meta({ id: 'IdeaTagRef' });
+
+const ideaEvidence = z
+  .object({
+    claim: z.string(),
+    sourceName: z.string(),
+    url: z.string(),
+    sourceDate: z.string().nullable().meta({ description: '`YYYY-MM-DD`, or null.' }),
+  })
+  .strict()
+  .meta({ id: 'IdeaEvidence' });
+
+/** One active idea — what `/api/public/ideas/{slug}` answers and the list carries. */
+export const publicIdeaSchema = z
+  .object({
+    slug: z.string(),
+    title: z.string(),
+    pitch: z.string(),
+    kind: ideaKind,
+    category: ideaCategoryRef,
+    tags: z.array(ideaTagRef),
+    capabilities: z.array(z.string()),
+    evidence: z.array(ideaEvidence),
+    gap: z.string().nullable(),
+    whyNow: z.string().nullable(),
+    whyMotir: z.string().nullable(),
+    whoElse: z.string().nullable(),
+    addedAt: z.string(),
+    lastReviewedAt: z.string().nullable(),
+  })
+  .strict()
+  .meta({ id: 'PublicIdea' });
+
+const publicIdeaCategoryCount = z
+  .object({ slug: z.string(), label: z.string(), count: z.number().int() })
+  .strict()
+  .meta({ id: 'PublicIdeaCategoryCount' });
+
+/** The filtered list. Unpaginated by design: the store is curated. */
+export const publicIdeaListSchema = z
+  .object({
+    items: z.array(publicIdeaSchema),
+    categories: z.array(publicIdeaCategoryCount).meta({
+      description: 'Counts over every filter EXCEPT `category`, so each chip stays choosable.',
+    }),
+    total: z.number().int(),
+  })
+  .strict()
+  .meta({ id: 'PublicIdeaList' });
+
+/** `{ tags }` — the route wraps the array, like `/api/public/categories`. */
+export const publicIdeaTagsSchema = z
+  .object({
+    tags: z.array(
+      z
+        .object({ slug: z.string(), label: z.string(), count: z.number().int() })
+        .strict()
+        .meta({ id: 'PublicIdeaTag' }),
+    ),
+  })
+  .strict()
+  .meta({ id: 'PublicIdeaTags' });

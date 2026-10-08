@@ -277,6 +277,8 @@ export function MarkdownEditor({
               typeToSearch: tMention('mentionTypeToSearch'),
               searching: tMention('mentionSearching'),
               noResults: (query: string) => tMention('mentionNoResults', { query }),
+              searchFailed: tMention('mentionSearchFailed'),
+              retry: tMention('mentionRetry'),
             },
           },
         }
@@ -405,7 +407,7 @@ export function MarkdownEditor({
       ) : (
         <div
           ref={anchorRef}
-          className="border-(--el-border) bg-(--el-surface) focus-within:border-(--el-highlight) relative rounded-(--radius-input) border transition-colors"
+          className="border-(--el-border) bg-(--el-surface) focus-within:border-(--el-editor-focus) relative rounded-(--radius-input) border transition-colors"
         >
           <Toolbar
             editor={editor}
@@ -565,7 +567,7 @@ function Toolbar({
             aria-label={b.label}
             title={b.label}
             onClick={b.run}
-            className="text-(--el-text-muted) hover:bg-(--el-page-bg) hover:text-(--el-text) focus-visible:ring-(--el-highlight) rounded-(--radius-control) p-1.5 focus-visible:ring-2 focus-visible:outline-none"
+            className="text-(--el-text-muted) hover:bg-(--el-page-bg) hover:text-(--el-text) focus-visible:ring-(--el-editor-focus) rounded-(--radius-control) p-1.5 focus-visible:ring-2 focus-visible:outline-none"
           >
             <Icon className="h-4 w-4" aria-hidden />
           </button>
@@ -577,7 +579,7 @@ function Toolbar({
           aria-label="Attach file"
           title="Attach file"
           onClick={onAttach}
-          className="text-(--el-text-muted) hover:bg-(--el-page-bg) hover:text-(--el-text) focus-visible:ring-(--el-highlight) rounded-(--radius-control) p-1.5 focus-visible:ring-2 focus-visible:outline-none"
+          className="text-(--el-text-muted) hover:bg-(--el-page-bg) hover:text-(--el-text) focus-visible:ring-(--el-editor-focus) rounded-(--radius-control) p-1.5 focus-visible:ring-2 focus-visible:outline-none"
         >
           <Paperclip className="h-4 w-4" aria-hidden />
         </button>

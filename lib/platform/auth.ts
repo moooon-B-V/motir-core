@@ -21,6 +21,12 @@ import { NotPlatformStaffError } from './errors';
  * client-trusted path to platform standing, and there is deliberately no way to
  * add one without deleting that import.
  *
+ * ⚠️ THE TOKEN EXCEPTION IS NOT HERE. The 2026-10-07 amendment to §2 lets a
+ * staff member's personal access token reach `/api/platform/ideas/**` — through
+ * the SEPARATE gate `lib/platform/ideasGate.ts`. `requirePlatformStaff` itself
+ * still never reads a header, and `tests/platform/platformTokenBoundary.test.ts`
+ * proves a bearer header alone never satisfies it.
+ *
  * ⚠️ It lives in `lib/platform/`, NOT in `lib/auth/`. The card that ordered
  * this work said `lib/auth/`; the ADR that outranks it (its own `blocked_by`,
  * merged 2026-08-17 after the card was authored) places it here, because

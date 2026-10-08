@@ -101,6 +101,9 @@ import { planGateStampInputs, planSubjectVersion } from '@/lib/approvalGates/pla
 import { readPlanGateHeld } from '@/lib/approvalGates/planApprovalHandler';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { resumeStateService } from './resumeStateService';
+import { requestGateResumeAfterDecision } from './gateResumeRequest';
+import { isRunHoldingGateKind } from '@/lib/dispatchRuns/heldGates';
 import { designAutoRerunRepository } from '@/lib/repositories/designAutoRerunRepository';
 import { toDesignAutoRerunDto } from '@/lib/mappers/designAutoRerunMappers';
 
@@ -2133,6 +2136,17 @@ export const approvalGatesService = {
     // that rolled back. Stripped from the result so it never crosses the wire.
     const { afterCommit, ...effect } = decidedResult.effect;
     if (afterCommit) await afterCommit();
+    // TO RESUME (MOTIR-7707): a decision on a gate a parent run stopped at moves the
+    // cards waiting on that run. After the commit, in the close's lock order —
+    // `resumeStateService.afterGateDecided` says why.
+    if (preread.gate.workItemId !== null && isRunHoldingGateKind(preread.gate.kind)) {
+      await resumeStateService.afterGateDecided(preread.gate.workItemId, ctx);
+      // …and an APPROVAL asks for the hosted resume of the run it released
+      // (MOTIR-7710). Never fails the decision; the job decides if anything starts.
+      if (DECISION_STATE[input.decision] === 'approved') {
+        await requestGateResumeAfterDecision(preread.gate, ctx.workspaceId);
+      }
+    }
     return { ...decidedResult, effect };
 
     async function decideUnderLock(tx: Prisma.TransactionClient): Promise<DecideGateResult> {

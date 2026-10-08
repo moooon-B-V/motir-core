@@ -1,5 +1,10 @@
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
-import type { HomeWorkItemRowDto } from '@/lib/dto/home';
+import type {
+  GateResumeAttemptDto,
+  HomeWorkItemRowDto,
+  ResumeGateDto,
+  ResumeRunDto,
+} from '@/lib/dto/home';
 import type { StatusCategoryDto, WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
@@ -82,6 +87,26 @@ export interface WorkbenchRowView {
    */
   fixGroupKind: 'run' | 'prs' | 'card' | null;
   members: WorkbenchRowView[];
+  /**
+   * TO RESUME ONLY (MOTIR-7712; § 35.4): the gated run this entry waits on — its state,
+   * the run's aside and its held gates with every person resolved to a name. `null` on
+   * every other tab, and on a To resume row the read could not describe.
+   */
+  resume: WorkbenchResumeView | null;
+}
+
+/** One held gate, as the gate list draws it. */
+export interface WorkbenchResumeGateView extends ResumeGateDto {
+  deciderName: string | null;
+  /** The person who decided it, else the recorded label (an agent, the system). */
+  decidedByName: string | null;
+}
+
+/** A To resume entry's run (§ 35.4). */
+export interface WorkbenchResumeView extends Omit<ResumeRunDto, 'gates'> {
+  state: 'waiting_on_gate' | 'ready_to_resume';
+  attempt: GateResumeAttemptDto | null;
+  gates: WorkbenchResumeGateView[];
 }
 
 /**
@@ -105,6 +130,8 @@ function resolveRole(row: HomeWorkItemRowDto, isWatchingTab: boolean): Workbench
   // A To fix ENTRY's head or member the reader does not hold (MOTIR-7589; § 34.4): the
   // entry is on their tab because they hold SOME member, not this one — the cell reads —.
   if (row.fixGroupKind !== null) return 'none';
+  // The same for a To resume entry's head (MOTIR-7712): only that read sets `resumeRun`.
+  if (row.resumeRun !== undefined) return 'none';
   // Only reachable on the Watching tab — every WORK read's predicate IS
   // assignee-or-reporter, so a row there always matched one of the two above.
   return isWatchingTab ? 'watching' : 'assigned';
@@ -117,6 +144,21 @@ export function toWorkbenchRowViews(
   isWatchingTab: boolean,
 ): WorkbenchRowView[] {
   const nameByUserId = new Map(members.map((m) => [m.userId, m.name]));
+  const nameOf = (id: string | null) => (id ? (nameByUserId.get(id) ?? null) : null);
+  const resumeOf = (row: HomeWorkItemRowDto): WorkbenchResumeView | null => {
+    if (row.resumeState === null || !row.resumeRun) return null;
+    const { gates, ...run } = row.resumeRun;
+    return {
+      ...run,
+      state: row.resumeState,
+      attempt: row.resumeAttempt ?? null,
+      gates: gates.map((gate) => ({
+        ...gate,
+        deciderName: nameOf(gate.deciderId),
+        decidedByName: nameOf(gate.decidedById) ?? gate.decidedByLabel,
+      })),
+    };
+  };
   const view = (row: HomeWorkItemRowDto, isMember: boolean): WorkbenchRowView => {
     const status = workflow.statuses.find((s) => s.key === row.status);
     return {
@@ -142,7 +184,8 @@ export function toWorkbenchRowViews(
       canFixHosted: row.canFixHosted,
       repairRun: row.repairRun,
       fixGroupKind: row.fixGroupKind,
-      members: row.fixMembers.map((m) => view(m, true)),
+      members: [...row.fixMembers, ...row.resumeMembers].map((m) => view(m, true)),
+      resume: isMember ? null : resumeOf(row),
     };
   };
   return rows.map((row) => view(row, false));

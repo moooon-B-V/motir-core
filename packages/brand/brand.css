@@ -30,12 +30,14 @@
    sets, and every colour routes through a Tier-3 --el-* token, so the mark
    follows the theme and a data-palette swap for free (§4).
 
-   ⚠️ THE TYPE PIN. `.brand-word` names `--font-sans-source` — the raw FACE
-   variable — and never `--font-sans`, the ROLE token that the `motir-mono`,
-   `grotesk` and `mono-technical` [data-type] blocks each re-point. The mark is
-   brand; the type axis is chrome; wiring them to the same variable makes the
-   brand re-letter itself when a user picks a type pairing in Appearance (§3,
-   finding #1). */
+   ⚠️ THE TYPE PIN. `.brand-word` names a raw FACE variable —
+   `--font-grotesk-source`, Space Grotesk, since the 2026-10 redesign (it was
+   `--font-sans-source`, Inter) — and never `--font-sans`, the ROLE token that
+   the `motir-mono`, `grotesk` and `mono-technical` [data-type] blocks each
+   re-point. The mark is brand; the type axis is chrome; wiring them to the
+   same variable makes the brand re-letter itself when a user picks a type
+   pairing in Appearance (§3, finding #1). Both apps load the Space Grotesk
+   face under that variable; a surface that does not falls back to Inter. */
 .brand-lockup {
   display: inline-flex;
   align-items: center;
@@ -52,13 +54,13 @@
 }
 .brand-word {
   font-family:
-    var(--font-sans-source, Inter),
+    var(--font-grotesk-source, var(--font-sans-source, Inter)),
     -apple-system,
     BlinkMacSystemFont,
     sans-serif;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  font-size: calc(var(--brand-size, 32px) * 0.72);
+  letter-spacing: -0.03em;
+  font-size: calc(var(--brand-size, 32px) * 0.74);
   line-height: 1;
   color: var(--el-text);
 }

@@ -22,6 +22,8 @@ afterEach(() => {
 });
 
 function view(over: Partial<SessionRowView> = {}): SessionRowView {
+  const latestPlan: SessionRowView['latestPlan'] =
+    'latestPlan' in over ? (over.latestPlan ?? null) : { id: 'p_31', status: 'planned' };
   return {
     id: 's_1',
     origin: 'conversation',
@@ -29,9 +31,13 @@ function view(over: Partial<SessionRowView> = {}): SessionRowView {
     targetKeys: ['MOTIR-812'],
     activeLabel: '12 minutes ago',
     startedByName: 'Mara Lind',
-    latestPlan: { id: 'p_31', status: 'planned' },
+    latestPlan,
     planCount: 2,
     seed: null,
+    // An OPEN session reads its latest plan's state (AMENDMENT 23 §1).
+    state: latestPlan?.status ?? 'none',
+    end: null,
+    copiedFrom: null,
     ...over,
   };
 }
@@ -267,5 +273,111 @@ describe('the SEED link — Re-plan of {KEY} · {verb} (MOTIR-6209, design MOTIR
     const meta = screen.getByText('active 12 minutes ago').parentElement!;
     expect(meta.children).toHaveLength(4);
     expect(meta.lastElementChild!.getAttribute('data-testid')).toBe('plan-destination');
+  });
+});
+
+// MOTIR-7642 — Closed on the Plans page, built to MOTIR-7634's
+// `plans-tabbed-list--closed.mock.html` (AMENDMENT 23 §1).
+describe('an ENDED session (MOTIR-7642)', () => {
+  const end = (over: Partial<NonNullable<SessionRowView['end']>> = {}) => ({
+    reason: 'failed' as const,
+    timeLabel: '18:34',
+    fullLabel: 'Oct 5, 2026, 18:34',
+    endedByName: null,
+    endedByViewer: false,
+    ...over,
+  });
+  const closed = (over: Partial<SessionRowView> = {}) =>
+    view({
+      latestPlan: { id: 'p_31', status: 'declined' },
+      state: 'closed',
+      end: end(),
+      ...over,
+    });
+
+  it('a Closed row wears the peach Closed chip — a plain Pill, never a door', () => {
+    renderWithIntl(<SessionRow view={closed()} />);
+    const chip = screen.getByText('Closed');
+    expect(chip.closest('[class*="tint-peach"]')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Open the plan/ })).toBeNull();
+    expect(screen.queryByText('Declined')).toBeNull();
+  });
+
+  it('a Closed row opens its CONVERSATION, not the abandoned plan’s page', () => {
+    renderWithIntl(<SessionRow view={closed()} />);
+    const link = screen.getByRole('link', { name: 'Split invoicing out of billing' });
+    const href = new URL(link.getAttribute('href')!, 'http://x');
+    expect(href.pathname).toBe('/plans');
+    expect(href.searchParams.get('planSession')).toBe('s_1');
+    expect(document.querySelector('[data-destination]')?.getAttribute('data-destination')).toBe(
+      'planning-surface',
+    );
+  });
+
+  it.each([
+    [{ reason: 'failed' }, 'Closed · the attempt failed · 18:34'],
+    [{ reason: 'idle' }, 'Closed · idle · 18:34'],
+    [{ reason: 'restarted', endedByViewer: true }, 'Closed · you started something new · 18:34'],
+    [{ reason: 'restarted', endedByName: 'Ada' }, 'Closed · Ada started something new · 18:34'],
+  ] as const)('the end line reads %o → %s, replacing `active`', (over, text) => {
+    renderWithIntl(<SessionRow view={closed({ end: end(over) })} />);
+    const line = screen.getByTestId('plan-session-end');
+    expect(line.textContent).toBe(text);
+    expect(line.getAttribute('title')).toBe('Oct 5, 2026, 18:34');
+    expect(screen.queryByText(/^active /)).toBeNull();
+  });
+
+  it.each([
+    ['declined', { endedByName: 'Ada' }, 'Declined by Ada · 18:34'],
+    ['declined', { endedByViewer: true }, 'Declined by you · 18:34'],
+    ['declined', {}, 'Declined · 18:34'],
+    ['approved', { endedByName: 'Ada' }, 'Approved by Ada · 18:34'],
+    ['approved', { endedByViewer: true }, 'Approved by you · 18:34'],
+  ] as const)(
+    'a person’s %s keeps its chip and the shipped plan-page door, with its end line',
+    (reason, over, text) => {
+      renderWithIntl(
+        <SessionRow
+          view={view({
+            latestPlan: { id: 'p_31', status: reason },
+            state: reason,
+            end: end({ reason, ...over }),
+          })}
+        />,
+      );
+      expect(screen.getByTestId('plan-session-end').textContent).toBe(text);
+      expect(
+        screen.getByRole('link', { name: 'Split invoicing out of billing' }).getAttribute('href'),
+      ).toBe('/plans/p_31');
+    },
+  );
+
+  it('an OPEN row keeps `active {when}` and has no end line', () => {
+    renderWithIntl(<SessionRow view={view()} />);
+    expect(screen.getByText('active 12 minutes ago')).toBeTruthy();
+    expect(screen.queryByTestId('plan-session-end')).toBeNull();
+  });
+
+  it('a COPY links to the conversation it continues, above the title link', () => {
+    renderWithIntl(<SessionRow view={view({ copiedFrom: { id: 's_0', whenLabel: '18:34' } })} />);
+    const link = screen.getByRole('link', {
+      name: 'Open the conversation this one continues, closed 18:34',
+    });
+    expect(link.textContent).toBe('Continued from the 18:34 conversation');
+    expect(link.className).toContain('z-10');
+    const href = new URL(link.getAttribute('href')!, 'http://x');
+    expect(href.searchParams.get('planSession')).toBe('s_0');
+    fireEvent.click(link);
+    expect(shallowPush).toHaveBeenCalledWith(link.getAttribute('href'));
+  });
+
+  it('ships in zh', () => {
+    renderWithIntl(
+      <SessionRow view={closed({ copiedFrom: { id: 's_0', whenLabel: '18:34' } })} />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    expect(screen.getByText('已关闭')).toBeTruthy();
+    expect(screen.getByTestId('plan-session-end').textContent).toBe('已关闭 · 尝试失败 · 18:34');
+    expect(screen.getByText('接续 18:34 的对话')).toBeTruthy();
   });
 });

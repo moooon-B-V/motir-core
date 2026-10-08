@@ -740,7 +740,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         enum: ['drained', 'completed', 'max', 'halted', 'interrupted', 'replanned', 'gated'],
         description:
-          'How the run ended: "completed" (the work is delivered), "drained" (a parent run finished every child it could), "max" (it stopped at a card limit), "halted" (you stopped on something you could not get past), "interrupted" (the person stopped you), "replanned" (the card went to Planning) or "gated" (it stopped at an approval gate).',
+          'How the run ended: "completed" (the work is delivered), "drained" (a parent run finished every child it could), "max" (it stopped at a card limit), "halted" (you stopped on something you could not get past), "interrupted" (the person stopped you), "replanned" (the card went to Planning) or "gated" (the remaining work waits on an approval gate — a design, decision, choice, confirmation or manual card not yet decided; Motir records which gates held the run, and a stop at such a gate is never "halted").',
       },
     },
     required: ['key', 'runId', 'outcome'],

@@ -122,6 +122,21 @@ from two pieces:
   `role="rowgroup"` and is therefore itself a `:last-child`, so that heuristic
   wrongly skipped the work-item table header's divider.
 
+- **The ink is an `outline`, and the overlay box stays inside its host.** The
+  line straddles the host's padding edge (1px out, 1px in), so it sits on the
+  real border it roughens. It used to be a 2px `border` on an overlay at
+  `inset: -1px`, which put the overlay's BOX a pixel past its host — and on a
+  host that is also a scroll container (`.border overflow-x-auto`: framed
+  tables, pickers, code blocks) the pseudo-element is part of the host's own
+  scrollable overflow, so every such box drew BOTH scroll bars on content that
+  fit (MOTIR-7693). An outline is ink, not layout, and never counts toward
+  scrollable overflow: the frame overlay sits at `inset: 0` with a 2px outline
+  at `outline-offset: -1px`, and a divider is a 0-height box on the edge with a
+  1px outline (`left`/`right: 1px` cancel the outline's overrun at the ends).
+  Same pixels, no overflow. `tests/e2e/hand-drawn-scroll-frame.spec.ts` measures
+  `scrollWidth`/`scrollHeight` against the client box in Chromium — happy-dom
+  cannot lay out, so only a rendered check can see this.
+
 - **Why the overlay needs care with positioning.** The `::after` needs a
   positioned host, so static surfaces get `position: relative`. But a centred
   modal / command palette is `fixed .border` and a sticky header is `sticky` —

@@ -1,5 +1,27 @@
 # @motir/design-system
 
+## 0.10.0
+
+### Minor Changes
+
+- c406df6: Overlays now open inside an element in native full screen (MOTIR-7658). `Modal`, `Popover`, `Tooltip`, and the `Combobox` and `MultiSelectPicker` menus portal into `document.fullscreenElement` while there is one, and into `document.body` otherwise, as before. The browser paints nothing outside a full-screen element, so before this a dialog opened there was invisible while it still held focus and scroll lock. `Modal` takes a new optional `container` prop to choose the element itself (`null` forces `document.body`), and the package exports `useFullscreenElement()`, the hook behind the default.
+
+## 0.9.0
+
+### Minor Changes
+
+- d758ffa: New `--el-showcase-*` element tokens for motir.co's illustrations — the flat picture fields on the "Vibe the project" landing and "How Motir works". They are named for what they paint (`field`, `ground`, `highlight`, `decision`, `record`, `wash`, `wash-warm`, `paper`, …), each field with a `*-text` token that reads on it, and every one maps to a palette colour, so a palette re-skins them. The ground stays dark in dark mode; the Motir palette makes the highlight its Sunglow yellow, and every other palette uses its own accent.
+
+  Also `--el-logo-mark` / `--el-logo-tile` for the wave mark on its rounded tile: the mark is the palette's identity hue (its primary fill; the cool-blue primary in Motir, whose fill is the ink CTA), the tile a pale wash of it — or a dark tile for the palettes whose hue is bright (Amber, Sienna, Citrine, Candy).
+
+  And `--el-product-*`, one mark colour per product in motir.co's Products menu (`ai-planner`, `project-management`, `project-manager`, `ai-debugging`, `mcp`, `cli`, `claude-code-connector`, `claude-code-plugin`, `agent-fleet`, `agent-hosting`, `sandbox`), each a palette hue or a mix of two.
+
+## 0.8.2
+
+### Patch Changes
+
+- 6f2f433: The `motir` palette gains a few warm touches (MOTIR-7582): the decorative accent is a warm orange, the Design type takes Citrine's gold, the peach and yellow washes warm, and two new roles, `--el-progress-fill` and `--el-editor-focus`, keep the change out of every other palette.
+
 ## 0.8.1
 
 ### Patch Changes

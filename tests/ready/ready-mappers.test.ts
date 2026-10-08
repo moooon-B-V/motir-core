@@ -64,6 +64,8 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     ciState: null,
     fixReason: null,
     fixDetail: null,
+    resumeState: null,
+    resumeRunId: null,
     // Null on every ready item by construction: `completedAt` (MOTIR-4780) is
     // stamped only on entry to a done-category status, and a done item is not
     // in the ready set.

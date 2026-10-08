@@ -334,14 +334,18 @@ export class ContinueFromInvalidError extends Error {
   readonly code = 'CONTINUE_FROM_INVALID';
   constructor(
     runId: string,
-    readonly why: 'unknown' | 'still_running' | 'succeeded',
+    readonly why: 'unknown' | 'still_running' | 'succeeded' | 'gate_awaiting' | 'gate_sent_back',
   ) {
     super(
       why === 'still_running'
         ? `Run ${runId} is still open; only a run that has ended can be continued.`
         : why === 'succeeded'
           ? `Run ${runId} succeeded; there is nothing to continue.`
-          : `Run ${runId} is not a run of this work item.`,
+          : why === 'gate_awaiting'
+            ? `Run ${runId} stopped at a gate that is still waiting for approval; it resumes once a gate is approved.`
+            : why === 'gate_sent_back'
+              ? `Run ${runId} stopped at a gate that was sent back, not approved; there is nothing released to resume.`
+              : `Run ${runId} is not a run of this work item.`,
     );
     this.name = 'ContinueFromInvalidError';
   }

@@ -16,6 +16,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { useFullscreenElement } from '../../utils/fullscreen';
 
 // Run layout effects on the client, fall back to useEffect during SSR (the menu
 // only mounts client-side anyway — see the `mounted` gate below).
@@ -181,6 +182,47 @@ function nearestClipBox(el: HTMLElement): { box: HTMLElement; scrolls: boolean }
   return null;
 }
 
+// The element a `position: fixed` descendant of `el` is laid out against, or
+// null when that is the viewport. A transform (the centered Modal panel's
+// `-translate-x/y-1/2`, which Tailwind v4 emits as the `translate` property), a
+// filter, a backdrop-filter (the glassmorphism material), `contain` or a
+// matching `will-change` all make an ancestor the containing block for fixed
+// descendants — so a fixed child of the Modal panel is positioned relative to
+// the PANEL, not the viewport.
+function fixedContainingBlock(el: HTMLElement): HTMLElement | null {
+  let node = el.parentElement;
+  while (node && node !== document.documentElement) {
+    const s = getComputedStyle(node);
+    const set = (v: string | undefined) => !!v && v !== 'none';
+    if (
+      set(s.transform) ||
+      set(s.translate) ||
+      set(s.scale) ||
+      set(s.rotate) ||
+      set(s.perspective) ||
+      set(s.filter) ||
+      set(s.backdropFilter) ||
+      /\b(paint|layout|strict|content)\b/.test(s.contain || '') ||
+      /\b(transform|translate|scale|rotate|perspective|filter)\b/.test(s.willChange || '')
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+// An element's padding box in viewport coordinates — the edge its overflow
+// clips at (and, for a containing block, the box fixed offsets are measured
+// from).
+function paddingBox(el: HTMLElement): { top: number; left: number; bottom: number } {
+  const r = el.getBoundingClientRect();
+  const top = r.top + el.clientTop;
+  // happy-dom reports clientHeight 0; fall back to the border box there.
+  const height = el.clientHeight || r.height;
+  return { top, left: r.left + el.clientLeft, bottom: top + height };
+}
+
 export function Combobox<T extends string>({
   options,
   value,
@@ -228,6 +270,10 @@ export function Combobox<T extends string>({
   // keyed on the modal surface, NOT `role`, so those popovers escape the clip
   // too. Only render the portal once mounted, since createPortal needs document.body.
   const mounted = useMounted();
+  // The portal target: the element in native full screen while there is one,
+  // else <body> — the browser paints nothing outside a full-screen element
+  // (MOTIR-7658).
+  const fullscreenElement = useFullscreenElement();
   // Viewport-anchored position for the portaled menu + the listbox's available
   // height, recomputed from the trigger rect on open / scroll / resize.
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
@@ -236,6 +282,10 @@ export function Combobox<T extends string>({
   // trigger because there's more room there than below within the dialog's
   // overflow-hidden clip box (bug-combobox-menu-clipped-inside-modal).
   const [inlineAbove, setInlineAbove] = useState(false);
+  // Inline (in-dialog) branch, SCROLLING clip only (a `Modal.Body`): the fixed
+  // offsets that lift the menu out of the scroll box while keeping it in the
+  // DOM — and so inside the dialog's focus scope (MOTIR-7655). Null otherwise.
+  const [inlineFixed, setInlineFixed] = useState<CSSProperties | null>(null);
   const baseId = useId();
   const listId = `${baseId}-listbox`;
   const optionId = (i: number) => `${baseId}-opt-${i}`;
@@ -303,21 +353,75 @@ export function Combobox<T extends string>({
   const updateInlinePosition = useCallback(() => {
     const trigger = triggerRef.current;
     if (!trigger) return;
-    // Find the nearest ancestor that CLIPS the inline menu. If that ancestor
-    // SCROLLS (overflow auto/scroll — e.g. the Advanced-filter popover's
-    // `overflow-y-auto` body, or a `Modal.Body`), the menu can be scrolled into
-    // view, so leave it exactly as before (top-full, max-h-64) — flipping/
-    // clamping against a scroll box would wrongly shove the menu up under the
-    // panel's header (the regression the first cut caused). Only a NON-scrolling
+    // Find the nearest ancestor that CLIPS the inline menu. A NON-scrolling
     // `overflow: hidden` clip — the centered Modal panel's `overflow-hidden
-    // max-h-[90vh]` box — actually traps the menu (bug-combobox-menu-clipped-
-    // inside-modal); clamp + flip against THAT box.
+    // max-h-[90vh]` box — traps the menu, so clamp + flip against THAT box
+    // (bug-combobox-menu-clipped-inside-modal). A SCROLLING clip lifts the menu
+    // out with fixed positioning instead (MOTIR-7655, below), bounded above by
+    // the scroll box's visible top so it never lands under the panel's header
+    // (the regression the first clamp-against-the-scroll-box cut caused).
     const clip = nearestClipBox(trigger);
-    if (!clip || clip.scrolls) {
+    if (!clip) {
+      setInlineFixed(null);
       setInlineAbove(false);
       setListMaxHeight(256); // == the max-h-64 fallback (original behaviour)
       return;
     }
+    if (clip.scrolls) {
+      // A SCROLLING clip (`Modal.Body`, a popover's scroll body) does trap an
+      // absolute menu after all: the menu extends the box's scroll area, the
+      // part past its visible edge is cut, and the box grows a second
+      // scrollbar — on a short dialog body that leaves one option visible
+      // (MOTIR-7655). Lift the menu out instead: `position: fixed`, still in
+      // the DOM. A fixed box is clipped only by the ancestors on its
+      // containing-block chain, so the scroll box stops clipping it while the
+      // panel (the containing block, through its transform) still bounds it.
+      const rect = trigger.getBoundingClientRect();
+      const gap = 4; // matches mt-1 / mb-1
+      const inset = 8; // stay a hair inside the panel's rounded clip edge
+      const cb = fixedContainingBlock(trigger);
+      // The region the menu may paint in: never above the scroll box's visible
+      // top (that is the dialog's header), and never past the viewport or any
+      // clip at or above the containing block (the panel) — which lets the
+      // menu overlay the dialog's footer, as a dropdown should.
+      let top = Math.max(0, paddingBox(clip.box).top);
+      let bottom = window.innerHeight;
+      let node: HTMLElement | null = cb;
+      while (node && node !== document.body && node !== document.documentElement) {
+        const oy = getComputedStyle(node).overflowY;
+        if (oy === 'hidden' || oy === 'clip' || oy === 'auto' || oy === 'scroll') {
+          const b = paddingBox(node);
+          top = Math.max(top, b.top);
+          bottom = Math.min(bottom, b.bottom);
+        }
+        node = node.parentElement;
+      }
+      const spaceBelow = bottom - rect.bottom - gap - inset;
+      const spaceAbove = rect.top - top - gap - inset;
+      const placeAbove = spaceAbove > spaceBelow;
+      const avail = Math.max(80, placeAbove ? spaceAbove : spaceBelow);
+      // The menu's own chrome (search input, padding, footer note), measured
+      // when it is laid out; the portaled branch's budget before that.
+      const menu = menuRef.current;
+      const list = listRef.current;
+      const measured = menu && list ? menu.offsetHeight - list.offsetHeight : 0;
+      const chrome = measured > 0 ? measured : searchable ? 52 : 12;
+      setListMaxHeight(Math.max(80, Math.min(256, avail - chrome)));
+      // Fixed offsets are measured from the containing block's padding box
+      // (the viewport when there is none).
+      const origin = cb ? paddingBox(cb) : { top: 0, left: 0, bottom: window.innerHeight };
+      const style: CSSProperties = {
+        position: 'fixed',
+        left: Math.round(rect.left - origin.left),
+        minWidth: Math.round(rect.width),
+      };
+      if (placeAbove) style.bottom = Math.round(origin.bottom - (rect.top - gap));
+      else style.top = Math.round(rect.bottom + gap - origin.top);
+      setInlineAbove(placeAbove);
+      setInlineFixed(style);
+      return;
+    }
+    setInlineFixed(null);
     const rect = trigger.getBoundingClientRect();
     const clipRect = clip.box.getBoundingClientRect();
     const gap = 4; // matches mt-1 / mb-1
@@ -632,12 +736,17 @@ export function Combobox<T extends string>({
     <div
       ref={menuRef}
       data-menu-surface=""
+      style={inlineFixed ?? undefined}
       className={cn(
-        'absolute left-0 z-50 w-max min-w-full max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
+        'z-50 w-max max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
         'shadow-(--shadow-elevated) border border-(--el-border)',
-        // Flip above the trigger when the dialog has more room there, so a tall
-        // list near the modal's bottom edge isn't clipped (clamped + scrolled).
-        inlineAbove ? 'bottom-full mb-1' : 'top-full mt-1',
+        // Lifted out of a scrolling clip (MOTIR-7655): positioned by
+        // `inlineFixed`. Otherwise an absolute child of the trigger that flips
+        // above it when the dialog has more room there, so a tall list near the
+        // modal's bottom edge isn't clipped (clamped + scrolled).
+        inlineFixed
+          ? null
+          : cn('absolute left-0 min-w-full', inlineAbove ? 'bottom-full mb-1' : 'top-full mt-1'),
       )}
     >
       {menuInner}
@@ -704,7 +813,13 @@ export function Combobox<T extends string>({
         <ChevronsUpDown className="text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0" aria-hidden />
       </button>
 
-      {open ? (inDialog ? menu : mounted ? createPortal(menu, document.body) : null) : null}
+      {open
+        ? inDialog
+          ? menu
+          : mounted
+            ? createPortal(menu, fullscreenElement ?? document.body)
+            : null
+        : null}
     </div>
   );
 }

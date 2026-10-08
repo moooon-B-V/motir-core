@@ -15,6 +15,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Check, Plus, TriangleAlert, X } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { useFullscreenElement } from '../../utils/fullscreen';
 
 // Run the position measurement before paint on the client; fall back to
 // useEffect during SSR (the listbox only ever opens client-side).
@@ -213,6 +214,10 @@ export function MultiSelectPicker({
   // Combobox menu (the bug-inline-edit-clipped-when-table-short fix). Only render
   // the portal once mounted, since createPortal needs document.body.
   const mounted = useMounted();
+  // The portal target: the element in native full screen while there is one,
+  // else <body> — the browser paints nothing outside a full-screen element
+  // (MOTIR-7658).
+  const fullscreenElement = useFullscreenElement();
   // Portal everywhere EXCEPT inside a focus-trapping modal (the Modal primitive,
   // `data-surface="modal"`), where a body-portaled option click fights the trap /
   // dismisses the modal — there we render the listbox INLINE. Same rule + marker
@@ -348,7 +353,8 @@ export function MultiSelectPicker({
 
   // Inside a focus-trapping modal: render the listbox INLINE (in rootRef's
   // subtree). Otherwise: portal it to <body> so it escapes clipping ancestors.
-  const wrapMenu = (el: ReactNode) => (inModal ? el : createPortal(el, document.body));
+  const wrapMenu = (el: ReactNode) =>
+    inModal ? el : createPortal(el, fullscreenElement ?? document.body);
 
   return (
     // `data-inner-dismiss` (set while the listbox is open) lets an enclosing

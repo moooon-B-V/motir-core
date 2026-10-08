@@ -490,6 +490,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // under-estimating unbalances the bin-packer. RE-MEASURE from the first green
   // bulk artifact that includes it.
   'admin-fleet-selfhost.spec.ts': 4.0,
+  // Story MOTIR-7664 · MOTIR-7680 — the Ideas console smoke: one sign-up, the
+  // list, one detail and the tenant 404. ESTIMATED from its nearest neighbour by
+  // shape (`admin-fleet-selfhost.spec.ts`, above), rounded UP for the same
+  // reason. RE-MEASURE from the first green bulk artifact that includes it.
+  'admin-ideas-smoke.spec.ts': 4.0,
   'app-role-surfaces.spec.ts': 1.3,
   'ai-callout-gate.spec.ts': 1.9,
   'ai-plan-generation.spec.ts': 10.0,
@@ -643,6 +648,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // Recorded at ~1.5x per the calibration note. Re-measure from the first green
   // `playwright-report-bulk-*` artifact with it.
   'graph-too-large.spec.ts': 30.0,
+  // MOTIR-7693 — framed scroll containers under hand-drawn-indie, on the public
+  // /tokens page (no sign-up). Measured LOCALLY (1 test, 1.8 s against `next dev`),
+  // not from a green CI run. Rounded UP; re-measure from its first green bulk leg.
+  'hand-drawn-scroll-frame.spec.ts': 5.0,
   'hero-ai-control-styles.spec.ts': 12.0,
   // MOTIR-5487. Promoted from the acceptance lane (it was
   // `acceptance-how-to-test.spec.ts`). NOT measured in this lane: estimated from the

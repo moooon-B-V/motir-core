@@ -55,8 +55,17 @@ test.describe.configure({ timeout: 240_000 });
 
 // To fix joined second in the strip with Story MOTIR-6588 (design § 30). This
 // receipt's own claim — the strip reads in the order the landing decides — is
-// unchanged; the strip it reads has one more tab.
-const TAB_IDS = ['approvals', 'to-fix', 'in-progress', 'todo', 'finished', 'watching'] as const;
+// unchanged; the strip it reads has one more tab. To resume joined third with Story
+// MOTIR-7701 (design § 35) on the same terms.
+const TAB_IDS = [
+  'approvals',
+  'to-fix',
+  'to-resume',
+  'in-progress',
+  'todo',
+  'finished',
+  'watching',
+] as const;
 
 async function countsFor(seed: ApprovalsTabSeed) {
   return homeService.tabCounts({

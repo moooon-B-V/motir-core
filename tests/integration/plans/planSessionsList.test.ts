@@ -55,15 +55,34 @@ async function activeAt(sessionId: string, at: Date) {
 const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000);
 
 /**
- * A NEW conversation in the project scope. A member's second first turn within
- * the resume window lands on the session they already have (AMENDMENT 17 §3),
- * so each is aged past the window before the next one starts.
+ * A NEW, OPEN conversation in the project scope. A member's open session is
+ * resumed at any age (AMENDMENT 23 §3), so a second first turn would land on the
+ * first: each one after the first is written directly, with its one user turn.
  */
 let aged = 0;
 async function freshSession(body: string): Promise<string> {
-  const s = await planChangeSessionsService.startWithFirstTurn(pctx(), PROJECT_SCOPE, body);
   aged += 1;
-  await activeAt(s.id, minutesAgo(180 + aged));
+  const s = await adminDb.planChangeSession.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      createdById: fx.ownerId,
+      scopeKey: PROJECT_SCOPE.scopeKey,
+      targetKeys: [],
+      turnCount: 1,
+      lastActivityAt: minutesAgo(180 + aged),
+    },
+  });
+  await adminDb.planChangeTurn.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      sessionId: s.id,
+      seq: 0,
+      role: 'user',
+      body,
+      authorId: fx.ownerId,
+    },
+  });
   return s.id;
 }
 
@@ -160,6 +179,34 @@ describe('every session of the project is listed, newest activity first', () => 
     expect(row!.planCount).toBe(2);
   });
 
+  it('an ENDED session carries its end, and a COPY names the one it continues (MOTIR-7642)', async () => {
+    const source = await freshSession('the old attempt');
+    const endedAt = minutesAgo(30);
+    await adminDb.planChangeSession.update({
+      where: { id: source },
+      data: { endedAt, endReason: 'failed' },
+    });
+    const copy = await freshSession('the old attempt');
+    await adminDb.planChangeSession.update({
+      where: { id: copy },
+      data: { copiedFromSessionId: source, lastActivityAt: minutesAgo(1) },
+    });
+
+    const rows = (await planSessionsService.listSessions(fx.projectId, fx.ctx)).sessions;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(source)).toMatchObject({
+      state: 'closed',
+      endedAt: endedAt.toISOString(),
+      endReason: 'failed',
+      endedBy: null,
+      copiedFrom: null,
+    });
+    expect(byId.get(copy)).toMatchObject({
+      endedAt: null,
+      copiedFrom: { id: source, endedAt: endedAt.toISOString() },
+    });
+  });
+
   it('is ONE statement per page — no per-row plan or turn read', async () => {
     for (let i = 0; i < 4; i += 1) {
       const id = await freshSession(`t${i}`);
@@ -228,6 +275,7 @@ describe('the plan-state filter', () => {
       stale: 0,
       approved: 1,
       declined: 0,
+      closed: 0,
     });
     for (const planState of PLAN_SESSION_STATE_VALUES) {
       const page = await planSessionsService.listSessions(fx.projectId, fx.ctx, { planState });

@@ -24,6 +24,17 @@ export interface PlanHeldLockRow {
   } | null;
 }
 
+/** A session-held lease with the session columns the session hold reads. */
+export interface SessionHeldLockRow {
+  workItemId: string;
+  sessionId: string | null;
+  session: {
+    endedAt: Date | null;
+    targetKeys: string[];
+    createdBy: { id: string; name: string } | null;
+  } | null;
+}
+
 export const planTargetLockRepository = {
   async create(
     data: Prisma.PlanTargetLockUncheckedCreateInput,
@@ -92,6 +103,56 @@ export const planTargetLockRepository = {
         },
       },
     });
+  },
+
+  /**
+   * The SESSION-held leases on a SET of work items, each joined to the columns of
+   * its session `sessionHoldFor` and the session line read (AMENDMENT 23 §5;
+   * MOTIR-7640) — the twin of {@link listPlanHeldByWorkItemIds}.
+   */
+  async listSessionHeldByWorkItemIds(
+    workItemIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<SessionHeldLockRow[]> {
+    return tx.planTargetLock.findMany({
+      where: { workItemId: { in: [...workItemIds] }, sessionId: { not: null } },
+      select: {
+        workItemId: true,
+        sessionId: true,
+        session: {
+          select: {
+            endedAt: true,
+            targetKeys: true,
+            createdBy: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+  },
+
+  /** How many LIVE items of a project each OPEN session's leases name — the
+   *  session form of {@link countByPlanIds}, for a board's sibling count. */
+  async countBySessionIds(
+    args: {
+      workspaceId: string;
+      projectId: string;
+      workItemStatus: string;
+      sessionIds: readonly string[];
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, number>> {
+    if (args.sessionIds.length === 0) return new Map();
+    const rows = await tx.planTargetLock.groupBy({
+      by: ['sessionId'],
+      where: {
+        workspaceId: args.workspaceId,
+        projectId: args.projectId,
+        workItem: { status: args.workItemStatus, archivedAt: null },
+        sessionId: { in: [...args.sessionIds] },
+      },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((row) => [row.sessionId as string, row._count._all]));
   },
 
   /**

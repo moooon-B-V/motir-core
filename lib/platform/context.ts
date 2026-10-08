@@ -4,8 +4,9 @@ import { type Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogRepository';
 import { computeAuditEntryHash, normaliseAuditMetadata } from './auditChain';
-import { type PlatformAuditAction } from './auditActions';
+import { reasonPolicyFor, reasonSatisfied, type PlatformAuditAction } from './auditActions';
 import { type PlatformPrincipal } from './auth';
+import { MissingAuditReasonError, PlatformWriteUnauditedError } from './errors';
 import { type PlatformAuditTargetKind } from '@/generated/prisma/client';
 
 /**
@@ -111,13 +112,80 @@ export async function withPlatformRead<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
   options: PlatformTransactionOptions = {},
 ): Promise<T> {
+  return inPlatformTransaction(
+    principal,
+    async (tx) => {
+      await appendChainedEntry(principal, entry, tx);
+      return fn(tx);
+    },
+    options,
+  );
+}
+
+/** Appends one audit row inside a `withPlatformWrite` transaction. */
+export type PlatformAuditRecorder = (entry: PlatformAuditEntry) => Promise<void>;
+
+/**
+ * Open an audited platform WRITE transaction whose audit rows are written by the
+ * caller, AFTER the change they describe (Story MOTIR-7662 · MOTIR-7671).
+ *
+ * `withPlatformRead` names its one row up front, which is right for a read and
+ * for a write whose target is known before it happens. The idea store needs two
+ * things that shape cannot give: a row whose `targetId` is an id the write
+ * itself mints, and SEVERAL rows in one transaction (a batch add appends one
+ * `idea.add` per idea, and the batch lands whole or not at all).
+ *
+ * The §3a contract is kept, not loosened:
+ *  - the chain lock is taken FIRST, before anything `fn` locks — the same order
+ *    every platform transaction uses, so two of them cannot deadlock;
+ *  - every `record(entry)` is a hash-chained append in THIS transaction, and is
+ *    refused with `MissingAuditReasonError` when the action needs a reason;
+ *  - a transaction that records NOTHING is rolled back with
+ *    `PlatformWriteUnauditedError`, so a write cannot commit without its row.
+ *
+ * ⚠️ Like `withPlatformRead`, `fn` must never open a second platform context.
+ */
+export async function withPlatformWrite<T>(
+  principal: PlatformPrincipal,
+  fn: (tx: Prisma.TransactionClient, record: PlatformAuditRecorder) => Promise<T>,
+  options: PlatformTransactionOptions = {},
+): Promise<T> {
+  return inPlatformTransaction(
+    principal,
+    async (tx) => {
+      await platformAuditLogRepository.lockChainHead(tx);
+
+      let recorded = 0;
+      const record: PlatformAuditRecorder = async (entry) => {
+        if (!reasonSatisfied(reasonPolicyFor(entry.action), entry.reason)) {
+          throw new MissingAuditReasonError(entry.action);
+        }
+        await appendChainedEntry(principal, entry, tx);
+        recorded += 1;
+      };
+
+      const result = await fn(tx, record);
+      if (recorded === 0) throw new PlatformWriteUnauditedError();
+      return result;
+    },
+    options,
+  );
+}
+
+/**
+ * The ONE transaction opener both platform contexts share: binds
+ * `app.platform_staff` and `app.user_id` first, so every statement after — the
+ * audit append included — passes the platform tables' own policies.
+ */
+async function inPlatformTransaction<T>(
+  principal: PlatformPrincipal,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options: PlatformTransactionOptions,
+): Promise<T> {
   return db.$transaction(
     async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.platform_staff', 'true', true)`;
       await tx.$executeRaw`SELECT set_config('app.user_id', ${principal.userId}, true)`;
-
-      await appendChainedEntry(principal, entry, tx);
-
       return fn(tx);
     },
     options.timeoutMs === undefined ? undefined : { timeout: options.timeoutMs },

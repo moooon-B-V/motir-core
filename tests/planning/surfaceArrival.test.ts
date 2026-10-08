@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { arrivesInsideAnchor, surfaceArrivalTrail } from '@/lib/planning/surfaceArrival';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
-import { ALLOWED_CHILD_TYPES, ISSUE_TYPES } from '@/lib/issues/parentRules';
+import { ISSUE_TYPES } from '@/lib/issues/parentRules';
 
 // THE ARRIVAL RULE (MOTIR-6160, Story MOTIR-6154) — where the planning surface's
 // canvas OPENS. The rule is one pure function precisely so it can be ruled on
@@ -16,8 +16,12 @@ function anchorOf(kind: WorkItemKindDto) {
 }
 
 describe('surfaceArrivalTrail', () => {
-  it('a CONTAINER anchor opens INSIDE it — ancestors ++ the anchor', () => {
-    const trail = surfaceArrivalTrail({ anchor: anchorOf('story'), ancestors: [EPIC] });
+  it('an anchor WITH children opens INSIDE it — ancestors ++ the anchor', () => {
+    const trail = surfaceArrivalTrail({
+      anchor: anchorOf('story'),
+      ancestors: [EPIC],
+      hasChildren: true,
+    });
 
     expect(trail.map((c) => c.id)).toEqual(['wi_1', 'wi_7']);
     // The LAST crumb is the level the canvas loads, so it is the anchor itself.
@@ -31,33 +35,70 @@ describe('surfaceArrivalTrail', () => {
   it('a `subtask` anchor stays BESIDE — ancestors only, the ring case', () => {
     // The one structural leaf: nothing may be parented to a subtask, so it has no
     // inside to open. This is MOTIR-2070's arrival, kept for exactly this kind.
-    const trail = surfaceArrivalTrail({ anchor: anchorOf('subtask'), ancestors: [EPIC, STORY] });
+    const trail = surfaceArrivalTrail({
+      anchor: anchorOf('subtask'),
+      ancestors: [EPIC, STORY],
+      hasChildren: false,
+    });
 
     expect(trail.map((c) => c.id)).toEqual(['wi_1', 'wi_3']);
   });
 
   it.each<WorkItemKindDto>(['epic', 'story', 'task', 'bug'])(
-    'a `%s` anchor opens inside it',
+    'a `%s` anchor WITH children opens inside it',
     (kind) => {
-      const trail = surfaceArrivalTrail({ anchor: anchorOf(kind), ancestors: [EPIC] });
+      const trail = surfaceArrivalTrail({
+        anchor: anchorOf(kind),
+        ancestors: [EPIC],
+        hasChildren: true,
+      });
       expect(trail.map((c) => c.id)).toEqual(['wi_1', 'wi_7']);
-      expect(arrivesInsideAnchor(anchorOf(kind))).toBe(true);
+      expect(arrivesInsideAnchor({ anchor: anchorOf(kind), hasChildren: true })).toBe(true);
     },
   );
+
+  // MOTIR-7621 — the kind says whether an item CAN have children, not whether
+  // it DOES. A childless story, task or bug opened inside landed on an empty
+  // level with the item the conversation is about nowhere on screen.
+  it.each<WorkItemKindDto>(['epic', 'story', 'task', 'bug'])(
+    'a CHILDLESS `%s` anchor stays BESIDE — its own level, the ring case',
+    (kind) => {
+      const trail = surfaceArrivalTrail({
+        anchor: anchorOf(kind),
+        ancestors: [EPIC],
+        hasChildren: false,
+      });
+      expect(trail.map((c) => c.id)).toEqual(['wi_1']);
+      expect(arrivesInsideAnchor({ anchor: anchorOf(kind), hasChildren: false })).toBe(false);
+    },
+  );
+
+  it('a childless ROOT anchor opens the project root, where it sits', () => {
+    // A freshly filed bug with no parent: its own level IS the root.
+    expect(
+      surfaceArrivalTrail({ anchor: anchorOf('bug'), ancestors: [], hasChildren: false }),
+    ).toEqual([]);
+  });
 
   it('a NULL anchor opens the root — the no-existence-leak degradation', () => {
     // `fetchPlanningAnchor` answers `null` for a stale, deleted, foreign or
     // forbidden key alike, and all four must be indistinguishable from "no target
     // was named". The ancestors are dropped rather than kept: a trail with no
     // anchor is not a level anyone asked for.
-    expect(surfaceArrivalTrail({ anchor: null, ancestors: [EPIC, STORY] })).toEqual([]);
-    expect(arrivesInsideAnchor(null)).toBe(false);
+    expect(
+      surfaceArrivalTrail({ anchor: null, ancestors: [EPIC, STORY], hasChildren: true }),
+    ).toEqual([]);
+    expect(arrivesInsideAnchor({ anchor: null, hasChildren: true })).toBe(false);
   });
 
-  it('a ROOT-LEVEL container anchor opens on its own children, with a one-crumb trail', () => {
+  it('a ROOT-LEVEL anchor with children opens on its own children, with a one-crumb trail', () => {
     // An epic has no ancestors, so the whole trail is the epic itself — the canvas
     // opens on its stories rather than on the project root.
-    const trail = surfaceArrivalTrail({ anchor: anchorOf('epic'), ancestors: [] });
+    const trail = surfaceArrivalTrail({
+      anchor: anchorOf('epic'),
+      ancestors: [],
+      hasChildren: true,
+    });
 
     expect(trail.map((c) => c.id)).toEqual(['wi_7']);
   });
@@ -69,7 +110,11 @@ describe('surfaceArrivalTrail', () => {
       { id: 'wi_5', identifier: 'MOTIR-5', title: 'A task' },
       { id: 'wi_6', identifier: 'MOTIR-6', title: 'A bug' },
     ];
-    const trail = surfaceArrivalTrail({ anchor: anchorOf('bug'), ancestors: deep });
+    const trail = surfaceArrivalTrail({
+      anchor: anchorOf('bug'),
+      ancestors: deep,
+      hasChildren: true,
+    });
 
     expect(trail.map((c) => c.id)).toEqual(['wi_1', 'wi_3', 'wi_5', 'wi_6', 'wi_7']);
     expect(trail.map((c) => c.crumbKey)).toEqual([
@@ -85,7 +130,11 @@ describe('surfaceArrivalTrail', () => {
     // Not a second label format: `workItemCrumbLabel` is the one the roadmap, the
     // plan review and the plain canvas all render, so an arrival crumb and a
     // hand-drilled crumb are indistinguishable.
-    const trail = surfaceArrivalTrail({ anchor: anchorOf('story'), ancestors: [EPIC] });
+    const trail = surfaceArrivalTrail({
+      anchor: anchorOf('story'),
+      ancestors: [EPIC],
+      hasChildren: true,
+    });
 
     expect(trail[0]).toEqual({
       id: 'wi_1',
@@ -96,38 +145,39 @@ describe('surfaceArrivalTrail', () => {
 
   it('is pure — it does not mutate the ancestors it was handed', () => {
     const ancestors = [EPIC];
-    surfaceArrivalTrail({ anchor: anchorOf('story'), ancestors });
+    surfaceArrivalTrail({ anchor: anchorOf('story'), ancestors, hasChildren: true });
 
     expect(ancestors).toHaveLength(1);
   });
 });
 
-describe('the rule is TOTAL over the kind enum, and agrees with the kind matrix', () => {
-  // ⚠️ THE POINT OF THIS BLOCK. `KIND_HAS_INSIDE` is a `Record<WorkItemKindDto,
-  // boolean>` with no default arm, so a NEW kind fails the TYPE check rather than
-  // falling through to whichever branch was written last. A type-level guarantee
-  // is invisible at runtime, so this is what makes it legible — and what catches
-  // the other half the compiler cannot see: that the map still AGREES with
-  // `lib/issues/parentRules.ts`, which is the source of truth for which kinds
-  // take children. A kind added there and defaulted here would type-check.
-  // Taken from the kind matrix ITSELF rather than re-typed, so a kind added
-  // there arrives in this loop automatically and is ruled on by the next case.
+describe('the rule reads CHILDREN, not KIND', () => {
+  // ⚠️ THE POINT OF THIS BLOCK (MOTIR-7621). The rule used to be a
+  // `Record<WorkItemKindDto, boolean>` that agreed with the kind matrix; that
+  // answers "can it have children", which is the wrong question. Every kind is
+  // ruled on here, taken from the matrix ITSELF so a new kind arrives in the
+  // loop automatically: the answer must follow `hasChildren` and nothing else.
   const ALL_KINDS = ISSUE_TYPES as readonly WorkItemKindDto[];
 
-  it('answers every kind the enum has, with no throw and no undefined', () => {
+  it('arrives inside exactly when the anchor has children, whatever its kind', () => {
     for (const kind of ALL_KINDS) {
-      expect(typeof arrivesInsideAnchor(anchorOf(kind))).toBe('boolean');
+      expect(arrivesInsideAnchor({ anchor: anchorOf(kind), hasChildren: true })).toBe(true);
+      expect(arrivesInsideAnchor({ anchor: anchorOf(kind), hasChildren: false })).toBe(false);
     }
   });
 
-  it('"has an inside" is exactly "the kind matrix gives it children"', () => {
+  it('the trail and the predicate agree — the last crumb is the anchor iff inside', () => {
     for (const kind of ALL_KINDS) {
-      expect(arrivesInsideAnchor(anchorOf(kind))).toBe(ALLOWED_CHILD_TYPES[kind].length > 0);
+      for (const hasChildren of [true, false]) {
+        const trail = surfaceArrivalTrail({
+          anchor: anchorOf(kind),
+          ancestors: [EPIC],
+          hasChildren,
+        });
+        expect(trail.at(-1)?.id === 'wi_7').toBe(
+          arrivesInsideAnchor({ anchor: anchorOf(kind), hasChildren }),
+        );
+      }
     }
-  });
-
-  it('`subtask` is the ONLY leaf — so it is the only kind that arrives beside', () => {
-    const beside = ALL_KINDS.filter((k) => !arrivesInsideAnchor(anchorOf(k)));
-    expect(beside).toEqual(['subtask']);
   });
 });

@@ -4015,3 +4015,17 @@ mark key. `update_plan_item` is NOT widened: it deepens an `add`, which carries 
 - **It does not make a mark hide anything.** The mark stays informational on every read: no list,
   ready set or search excludes, dims or re-orders a marked card.
 - **It does not add a level rule or readiness meaning to `supersedes`.** It orders nothing.
+
+## AMENDMENT 23 — a planning session ENDS: closed sessions, one open session per scope, and the hold covers a session (story MOTIR-7630 · MOTIR-7631, 2026-10-05)
+
+A planning session used to have no end: it stayed resumable for a window, and a lock it held could
+be taken over. This amendment gives it one. A session is **open** exactly while `ended_at IS NULL`;
+`endSession` is the single writer of its end (`failed`, `idle`, `restarted`, `declined`,
+`approved`), approving or declining its plan ends it, a failed or idle session reads **Closed** on
+the Plans list, resume means the caller's own open session for the scope with no window, a session's
+lock holds its cards' status like a plan's does, and a failed or idle session can be copied into a
+fresh one. The full decision — the backfill order, the callers of the end, the idle close, the
+`freesBy` time on a locked target, the session-hold payload and the copy rules — is the approved
+decision page `cmuvqpwut00k3hxoibeafy0he`, which is the record of authority. MOTIR-7636 landed its
+§1 (the columns, the `closed` state and the backfill in
+`20261005220000_plan_change_session_end`).

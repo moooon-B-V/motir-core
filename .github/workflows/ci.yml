@@ -2637,6 +2637,97 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm coverage:platform-admin
 
+  story-7630-coverage:
+    name: Coverage (planning session lifecycle)
+    runs-on: ubuntu-latest
+    # Story MOTIR-7630 (a planning session ENDS) — MOTIR-7644's per-file floor over
+    # the files the story added and the small readers it rewrote
+    # (`vitest.coverage.session-lifecycle.config.ts`): the end operation, the
+    # overlay's end parts, the hold predicate and the Plans row view, measured by
+    # their own suites against Postgres. Locally it ran 13 files in ~1 min.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-7630
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-7630
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-7630.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-7630.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:session-lifecycle
+
+  story-7631-coverage:
+    name: Coverage (plan something new)
+    runs-on: ubuntu-latest
+    # Story MOTIR-7631 (Plan something new from inside the overlay) — MOTIR-7652's
+    # floor over the files the story added (`vitest.coverage.plan-something-new.config.ts`):
+    # the restart constants and its two doors, measured by the restart suites against
+    # Postgres. Locally it ran 4 files in well under a minute.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-7631
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-7631
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-7631.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-7631.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:plan-something-new
+
   # Story MOTIR-1626 (9.8, the review agent) — MOTIR-6826's story gate: a per-file
   # floor over the server files the story created (`vitest.coverage.review-agent.config.ts`),
   # measured by the story journeys plus the per-card server suites. Needs Postgres, and
@@ -2777,6 +2868,8 @@ jobs:
         story-1626-coverage,
         story-5752-coverage,
         story-727-coverage,
+        story-7630-coverage,
+        story-7631-coverage,
         e2e,
         e2e-at-scale,
         sandbox,

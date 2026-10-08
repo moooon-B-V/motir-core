@@ -11,7 +11,7 @@ import {
 import { ReactRenderer, type Editor } from '@tiptap/react';
 import { Mention } from '@tiptap/extension-mention';
 import { Node, mergeAttributes } from '@tiptap/core';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RotateCw, TriangleAlert } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import type { IssueType } from '@/lib/issues/parentRules';
@@ -73,7 +73,13 @@ export interface WorkItemMentionCandidate {
   kind: WorkItemKindDto;
   /** Current status for the row Pill, or null when the stored status no longer
    * resolves to a workflow status. */
-  status: { label: string; tone: WorkItemMentionStatusTone } | null;
+  status: {
+    label: string;
+    tone: WorkItemMentionStatusTone;
+    /** The status's lifecycle category, when the key resolves to one — what a
+     * page chip inserted from this row draws its dot from (MOTIR-7574). */
+    category?: 'todo' | 'in_progress' | 'done';
+  } | null;
 }
 
 /** The host-supplied async, debounced work-item search behind the picker's
@@ -89,6 +95,10 @@ export interface MentionPickerLabels {
   typeToSearch: string;
   searching: string;
   noResults: (query: string) => string;
+  /** The failed search (MOTIR-7574, `design/pages/page--work-item-mention.mock.html`
+   * panel 3 state 6). English defaults apply when a host omits them. */
+  searchFailed?: string;
+  retry?: string;
 }
 
 /** Wiring the editor hands the extension at create time. The callbacks read
@@ -117,7 +127,12 @@ const DEFAULT_LABELS: MentionPickerLabels = {
   typeToSearch: 'Keep typing to search work items…',
   searching: 'Searching…',
   noResults: (query) => `No work items match “${query}”.`,
+  searchFailed: 'Couldn’t search work items.',
+  retry: 'Try again',
 };
+
+/** The failed search's one option (MOTIR-7574). */
+const RETRY_OPTION = { type: 'retry', id: 'retry', label: '' } as const;
 
 /** One settled keystroke per server fetch — long enough to coalesce a fast
  * typer (the `useLinkCandidateSearch` debounce). */
@@ -161,6 +176,42 @@ function StatusPill({ status }: { status: { label: string; tone: WorkItemMention
 }
 
 /**
+ * The CONTENT of one work-item row — type icon · mono key · title · status Pill.
+ * Exported so the page editor's picker (`@motir/pages`, which may not import
+ * this file) draws the same row through its `renderPickerRow` prop (MOTIR-7574);
+ * the option element around it belongs to whichever picker mounts it.
+ */
+export function WorkItemMentionRow({
+  item,
+  active,
+}: {
+  item: WorkItemMentionCandidate;
+  active: boolean;
+}) {
+  return (
+    <>
+      <IssueTypeIcon type={item.kind as IssueType} className="h-[15px] w-[15px] shrink-0" />
+      <span
+        className={cn(
+          'shrink-0 font-mono text-xs',
+          // muted drops under AA (4.5:1) on the active row's --el-surface tint —
+          // step up to secondary there, as the people row's email does.
+          active ? 'text-(--el-text-secondary)' : 'text-(--el-text-muted)',
+        )}
+      >
+        {item.identifier}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{item.title}</span>
+      {item.status ? (
+        <span className="ml-auto shrink-0">
+          <StatusPill status={item.status} />
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * The caret-anchored unified picker (5.1.4 people + 5.8.5 work items). Focus
  * stays in the editor (the suggestion plugin forwards key events here), so the
  * active row is conveyed with `aria-activedescendant` on the listbox +
@@ -186,6 +237,13 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [workItems, setWorkItems] = useState<WorkItemMentionCandidate[]>([]);
   const [loading, setLoading] = useState(false);
+  // A REJECTED search (MOTIR-7574 — panel 3 state 6 of
+  // `design/pages/page--work-item-mention.mock.html`). It used to fall through
+  // to "No work items match", which told the writer something false. Only a
+  // rejection reaches it, so a host whose search resolves `[]` on failure never
+  // sees it; `attempt` is bumped by Try again to re-run the same query.
+  const [failedKey, setFailedKey] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   const trimmed = query.trim();
   const tooShort = trimmed.length < QUICK_SEARCH_MIN_QUERY_LENGTH;
@@ -219,6 +277,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
           if (cancelled) return;
           setLoading(false);
           setWorkItems([]);
+          setFailedKey(`${attempt}:${trimmed}`);
         },
       );
     }, WORKITEM_SEARCH_DEBOUNCE_MS);
@@ -226,15 +285,21 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [trimmed, tooShort, unified]);
+  }, [trimmed, tooShort, unified, attempt]);
+
+  // Derived, never reset in the effect: a failure belongs to the request that
+  // failed, so a new query or a retry is not a failed one.
+  const failed = unified && !tooShort && !loading && failedKey === `${attempt}:${trimmed}`;
 
   // The combined option list — People then Work items (the design's section
   // order). The global index is the keyboard / aria-activedescendant space.
-  const options: PickedMention[] = [
+  // A failed search adds ONE option, Try again, after the people.
+  const options: Array<PickedMention | typeof RETRY_OPTION> = [
     ...people.map((p): PickedMention => ({ type: 'user', id: p.id, label: p.name })),
     ...workItems.map((w): PickedMention => ({ type: 'workItem', id: w.id, label: w.identifier })),
+    ...(failed ? [RETRY_OPTION] : []),
   ];
-  const keyOf = (o: PickedMention) => `${o.type}:${o.id}`;
+  const keyOf = (o: PickedMention | typeof RETRY_OPTION) => `${o.type}:${o.id}`;
 
   // The active index derives from the active KEY — found in the current set, or
   // the first row when the key is gone (set changed) or none chosen yet.
@@ -243,7 +308,9 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
 
   const select = (index: number) => {
     const picked = options[index];
-    if (picked) command(picked);
+    if (!picked) return;
+    if (picked.type === 'retry') setAttempt((n) => n + 1);
+    else command(picked);
   };
   const moveTo = (index: number) => {
     const picked = options[index];
@@ -354,6 +421,36 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
               <Loader2 className="text-(--el-text-faint) h-3.5 w-3.5 animate-spin" aria-hidden />
               {copy.searching}
             </p>
+          ) : failed ? (
+            <>
+              <p
+                role="alert"
+                className="text-(--el-text) flex items-center justify-center gap-1.5 px-(--spacing-control-x) pt-2 pb-1 text-xs"
+              >
+                <TriangleAlert
+                  className="text-(--el-danger-on-surface) h-3.5 w-3.5 shrink-0"
+                  aria-hidden
+                />
+                {copy.searchFailed ?? DEFAULT_LABELS.searchFailed}
+              </p>
+              <div
+                id={`mention-option-${workItemsStart}`}
+                role="option"
+                aria-selected={workItemsStart === active}
+                onMouseEnter={() => moveTo(workItemsStart)}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  select(workItemsStart);
+                }}
+                className={cn(
+                  'text-(--el-text) flex min-w-70 cursor-pointer items-center justify-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-[13px]',
+                  workItemsStart === active && 'bg-(--el-surface)',
+                )}
+              >
+                <RotateCw className="text-(--el-text-secondary) h-3.5 w-3.5" aria-hidden />
+                {copy.retry ?? DEFAULT_LABELS.retry}
+              </div>
+            </>
           ) : workItems.length === 0 ? (
             <p className="text-(--el-text-muted) px-(--spacing-control-x) py-2 text-center text-xs">
               {copy.noResults(trimmed)}
@@ -377,27 +474,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
                     index === active ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
                   )}
                 >
-                  <IssueTypeIcon
-                    type={item.kind as IssueType}
-                    className="h-[15px] w-[15px] shrink-0"
-                  />
-                  <span
-                    className={cn(
-                      'shrink-0 font-mono text-xs',
-                      // muted drops under AA (4.5:1) on the active row's
-                      // --el-surface tint — step up to secondary there, as the
-                      // people row's email does.
-                      index === active ? 'text-(--el-text-secondary)' : 'text-(--el-text-muted)',
-                    )}
-                  >
-                    {item.identifier}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                  {item.status ? (
-                    <span className="ml-auto shrink-0">
-                      <StatusPill status={item.status} />
-                    </span>
-                  ) : null}
+                  <WorkItemMentionRow item={item} active={index === active} />
                 </div>
               );
             })

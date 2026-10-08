@@ -109,6 +109,14 @@ function summarizeClaim(claim: WorkItemContinueClaimDto): string {
       : '';
   switch (claim.outcome) {
     case 'claimed':
+      if (claim.resumesGated) {
+        return (
+          `Claimed the RESUME of ${claim.key} — ${claim.title} (run ${claim.runId}). Its last run ` +
+          `(${claim.deadRun?.id ?? '—'}) did not die: it stopped at a gate, and these are now ` +
+          `approved: ${gateNames(claim)}. Resume on these branches, never a new one:\n` +
+          `${branchLines(claim)}${scope}\n${keepAlive}`
+        );
+      }
       return (
         `Claimed the continue of ${claim.key} — ${claim.title} (run ${claim.runId}), taking over ` +
         `run ${claim.deadRun?.id ?? '—'}. Continue on these branches, never a new one:\n` +
@@ -134,11 +142,30 @@ function summarizeClaim(claim: WorkItemContinueClaimDto): string {
           `continue of ${claim.parentKey} instead.`
         );
       }
+      if (claim.reason === 'gate_awaiting') {
+        return (
+          `NOT claimed: ${claim.key}'s run stopped at a gate that is still waiting for approval ` +
+          `(${gateNames(claim)}). It resumes once a person approves it. Nothing changed.`
+        );
+      }
+      if (claim.reason === 'gate_sent_back') {
+        return (
+          `NOT claimed: ${claim.key}'s run stopped at a gate that was sent back, not approved ` +
+          `(${gateNames(claim)}). Nothing was released to build. Nothing changed.`
+        );
+      }
       if (claim.reason === 'run_alive') {
         return `NOT claimed: a run on ${claim.key} by ${holder} is still alive. Nothing changed.`;
       }
       return `NOT claimed: ${claim.key} has nothing to continue (${claim.reason}). Nothing changed.`;
   }
+}
+
+/** `MOTIR-7 design_result (approved), …` — the gates a gated run names. */
+function gateNames(claim: WorkItemContinueClaimDto): string {
+  return claim.gates.length === 0
+    ? 'none recorded'
+    : claim.gates.map((g) => `${g.key} ${g.kind} (${g.state})`).join(', ');
 }
 
 /** The touch / close answer, said as what to do next. */
@@ -238,7 +265,10 @@ export function registerWorkItemContinue(
         'branch to continue on, with its open pull request), `mine` (you already hold it — ' +
         'resume), `taken` (someone else is continuing it; they are named) or `not_continuable` ' +
         'with the reason (`run_alive`, `use_fix`, `not_in_progress`, `continue_the_parent` ' +
-        'naming the parent to continue instead, `no_dead_run`, `no_branch`). A refusal is a ' +
+        'naming the parent to continue instead, `no_dead_run`, `no_branch`, `gate_awaiting` / ' +
+        '`gate_sent_back` naming the `gates` a run that stopped at a gate still waits on). A ' +
+        'run that stopped at a gate whose gate is now APPROVED is claimed too, as a resume ' +
+        '(`resumesGated`, with the approved `gates`). A refusal is a ' +
         'RESULT, not an error, and changes nothing. After claiming, read the prompt with ' +
         '`dispatch_prompt` and `continueFrom` = the dead run’s id, call ' +
         '`touch_work_item_continue` at least every two minutes, and finish with ' +

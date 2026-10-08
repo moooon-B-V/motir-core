@@ -301,6 +301,10 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       lastActivityAt: now,
       origin: 'conversation' as const,
       seedGateId: null,
+      endedAt: null,
+      endReason: null,
+      endedById: null,
+      copiedFromSessionId: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -319,6 +323,7 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       debugLandingClaimedAt: null,
       guideLandingClaimedAt: null,
       guideTurn: null,
+      confirm: null,
       anchorKey: null,
       debugLanding: null,
       citations: [],

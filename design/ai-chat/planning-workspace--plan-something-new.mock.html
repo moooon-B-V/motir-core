@@ -1,0 +1,2567 @@
+<!doctype html>
+<!--
+  design/ai-chat/planning-workspace--plan-something-new.mock.html — MOTIR-7647
+  (story MOTIR-7631, Epic "Refine AI planning").
+
+  DELTA on `design/ai-chat/planning-workspace.mock.html` (the overlay and its
+  rail) and on the session-end delta MOTIR-7633 published
+  (`planning-workspace--session-end.mock.html`), whose end marker and read-only
+  slot it composes rather than redraws. It holds ONLY the panels that change:
+  the Plan something new control, the confirm, Keep planning, the in-place swap
+  to the new session, and where the control is absent.
+
+  Contract: `docs/decisions/conversation-turn-intent.md` AMENDMENT 3
+  (MOTIR-7646): A3.2 the confirm, A3.3 the two doors, A3.4 no copy, A3.5 no
+  control in a guide conversation.
+
+  Read before drawing, and mirrored here: components/planning/PlanChangeRail.tsx
+  (the aside, its head with the mode Pill, Bubble, the marker line),
+  components/planning/SessionEndParts.tsx (the end marker, the copied divider,
+  the read-only slot), components/planning/PlanChangeComposer.tsx, and the
+  design system's Button (secondary / primary, size sm).
+
+  TOKENS ARE EXTRACTED, NOT TYPED: the three blocks below are the declarations
+  of packages/design-system/theme.css's @theme, [data-theme='dark'] and
+  :root,[data-appearance-scope] blocks, comments stripped.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Plan something new in the planning overlay</title>
+    <style>
+      /* ── Tier 0 (light) — extracted from packages/design-system/theme.css @theme ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --width-rail-chrome: 20px;
+        --spacing-rail-inset: 0px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── Tier 0 (dark) — theme.css [data-theme='dark'] ── */
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      /* ── Tier 3 (--el-*) — theme.css :root,[data-appearance-scope] ── */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 30px 26px 44px;
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── board chrome ─────────────────────────────────────────────── */
+      .board {
+        max-width: 1140px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .boardhead h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+        color: var(--el-text-strong);
+      }
+      .boardhead p {
+        margin: 0;
+        max-width: 92ch;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .boardhead p + p {
+        margin-top: 8px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-label {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .panel-label .n {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .panel-label h2 {
+        margin: 0;
+        font-size: 15px;
+        color: var(--el-text-strong);
+      }
+      .panel-label .cap {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .panel-body {
+        padding: 18px;
+      }
+      .cols {
+        display: grid;
+        gap: 22px;
+        align-items: start;
+      }
+      .c2 {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      .sub {
+        margin: 0 0 8px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .note {
+        margin: 10px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 0 4px;
+        border-radius: var(--radius-kbd);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+      }
+      .stage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 20px 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+      }
+      .darkstage {
+        background: var(--el-canvas);
+        color: var(--el-text);
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      table.spec th {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--el-border);
+        text-align: left;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      table.spec td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: top;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .ic {
+        display: block;
+        width: 14px;
+        height: 14px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* ── the rail — PlanChangeRail's <aside>, reproduced ──────────── */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 480px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .rail.floor {
+        max-width: 352px;
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .railhead .dot {
+        width: 8px;
+        height: 8px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-success);
+      }
+      .railhead .lbl {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      /* Pill tone neutral — the mode chip */
+      .pill {
+        margin-left: auto;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border: 1px solid var(--el-chip-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .turns {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+      }
+
+      /* Bubble */
+      .turn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .turn.u {
+        flex-direction: row-reverse;
+      }
+      .av {
+        display: inline-flex;
+        flex: none;
+        width: 28px;
+        height: 28px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .av.user {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .mark {
+        display: block;
+        width: 13px;
+        height: 13px;
+        fill: currentColor;
+      }
+      .bub {
+        min-width: 0;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-chat-bubble-ai);
+        color: var(--el-text);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .turn.u .bub {
+        background: var(--el-chat-bubble-user);
+        color: var(--el-accent-text);
+      }
+      .bub p {
+        margin: 0;
+      }
+      .tgt-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+      /* PlanningTargetKeyChip, tone on-accent */
+      .keychip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-accent-pressed);
+        color: var(--el-accent-text);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      /* the marker vocabulary — a centred quiet line, never a bubble */
+      .marker {
+        margin: 0;
+        text-align: center;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* NEW — the confirm's answers, under the confirm bubble (MOTIR-7647) */
+      .confirm-acts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      /* Button (sm) — primary · secondary */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn.secondary {
+        border-color: var(--el-button-border);
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn.is-disabled {
+        opacity: 0.5;
+      }
+      .btn.focus {
+        box-shadow:
+          0 0 0 2px var(--el-surface),
+          0 0 0 4px var(--focus-ring-color);
+      }
+
+      /* NEW — the control's anchor, so its tooltip can hang under it */
+      .ctl {
+        position: relative;
+        display: inline-flex;
+        flex: none;
+      }
+      /* Tooltip — the disabled control's reason */
+      .tip {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 1;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        white-space: nowrap;
+        box-shadow: var(--shadow-elevated);
+      }
+
+      /* the end marker — SessionEndParts `planning-session-end` */
+      .endmark {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .hair {
+        height: 1px;
+        flex: 1;
+        min-width: 16px;
+        background: var(--el-border);
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border: 1px solid var(--el-chip-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      /* the earlier-session line — the copied divider's idiom */
+      .earlier {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .earlier a {
+        font-weight: 600;
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      /* the composer — PlanChangeComposer */
+      .composer {
+        border-top: 1px solid var(--el-border);
+        padding: 12px;
+      }
+      .cfield {
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      .cinput {
+        flex: 1;
+        min-width: 0;
+        min-height: var(--height-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x) var(--spacing-input-y) 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .ctrigger {
+        position: absolute;
+        left: 6px;
+        bottom: 6px;
+        display: inline-flex;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+      }
+      .runbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .runbar-line {
+        min-width: 0;
+        flex: 1;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .spin {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        flex: none;
+        border: 1.5px solid var(--el-text-secondary);
+        border-top-color: transparent;
+        border-radius: 9999px;
+      }
+      /* the read-only slot — `planning-read-only` */
+      .roslot {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        border-top: 1px solid var(--el-border);
+        padding: 12px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+
+      /* the canvas node, beside the rail in the swap */
+      .node {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        width: 100%;
+        max-width: 480px;
+        padding: 10px 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .node .k {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .flow {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+      }
+      .arrow {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="i-pen" viewBox="0 0 24 24">
+        <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path
+          d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"
+        />
+      </symbol>
+      <symbol id="i-at" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+      </symbol>
+      <symbol id="i-send" viewBox="0 0 24 24">
+        <path d="m5 12 7-7 7 7" />
+        <path d="M12 19V5" />
+      </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24">
+        <rect width="14" height="14" x="5" y="5" rx="2" />
+      </symbol>
+      <symbol id="i-back" viewBox="0 0 24 24">
+        <path d="m12 19-7-7 7-7" />
+        <path d="M19 12H5" />
+      </symbol>
+    </svg>
+    <div class="board">
+      <header class="boardhead">
+        <h1>Plan something new — the control, the confirm, and the new session opening in place</h1>
+        <p>
+          <b>MOTIR-7647 · story MOTIR-7631.</b> From inside the planning overlay a person can close
+          the session they are in and start planning something else, by pressing
+          <b>Plan something new</b> or by saying so. Either way Motir asks them to confirm first. On
+          <b>Confirm</b> the session closes, its cards go back, and a new, empty session opens in
+          the same overlay. <b>Keep planning</b> closes nothing.
+        </p>
+        <p>
+          The access path is the overlay of an open planning session, from any of its doors (the
+          Plan door on a work item, the orb, a Plans row). Every panel is the rail at its default
+          480px unless it says otherwise.
+        </p>
+      </header>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">1</span>
+          <h2>The control — <b>Plan something new</b> in the rail header of an open session</h2>
+          <span class="cap">state · control</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">en · light · at rest</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >Plan something new
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV export goes first as its own story under ACME-40; the PDF report
+                          follows it and is blocked by it. Both are on the canvas.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="sub">zh · light · keyboard focus</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">上下文</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary focus"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >规划新内容
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>已在 ACME-40 的上下文中打开。需要改变什么——或者你想了解什么？</p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row">目标 1 项 <span class="keychip">ACME-40</span></span
+                        >拆分导出工作，让 CSV 先于 PDF 报告发布。
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV 导出作为 ACME-40 下的独立故事先行；PDF
+                          报告随后，并被其阻塞。两者都在画布上。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">回复，或进一步细化…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+          <p class="note">
+            A <b>secondary</b> <code>Button</code> size sm with the <code>SquarePen</code> glyph,
+            placed at the end of the rail head after the mode chip (<code>gap-2</code>). The head is
+            the conversation&rsquo;s own chrome and is visible on every scroll position, so the
+            control is never more than one press away. Pressing it calls
+            <code>POST /api/ai/plan-change/session/restart/confirm</code>; it closes nothing. Its
+            focus ring is the shipped <code>--focus-ring-color</code> ring.
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">2</span>
+          <h2>
+            The confirm — the SAME turn whether the control or the person&rsquo;s words raised it
+          </h2>
+          <span class="cap">state · confirm</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">en · raised by the control</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >Plan something new
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV export goes first as its own story under ACME-40; the PDF report
+                          follows it and is blocked by it. Both are on the canvas.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn" data-testid="planning-restart-confirm-turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Start something new? This closes the current planning session and gives
+                          its cards back.
+                        </p>
+                        <div class="confirm-acts" role="group" aria-label="Plan something new">
+                          <button
+                            type="button"
+                            class="btn primary"
+                            data-testid="planning-restart-confirm"
+                          >
+                            Confirm</button
+                          ><button
+                            type="button"
+                            class="btn secondary"
+                            data-testid="planning-restart-keep"
+                          >
+                            Keep planning
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="sub">en · raised by the words</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >Plan something new
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV export goes first as its own story under ACME-40; the PDF report
+                          follows it and is blocked by it. Both are on the canvas.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Forget this, I want to plan something new
+                      </div>
+                    </div>
+                    <div class="turn" data-testid="planning-restart-confirm-turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Start something new? This closes the current planning session and gives
+                          its cards back.
+                        </p>
+                        <div class="confirm-acts" role="group" aria-label="Plan something new">
+                          <button
+                            type="button"
+                            class="btn primary"
+                            data-testid="planning-restart-confirm"
+                          >
+                            Confirm</button
+                          ><button
+                            type="button"
+                            class="btn secondary"
+                            data-testid="planning-restart-keep"
+                          >
+                            Keep planning
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+              <p class="note">
+                The words are the person&rsquo;s own turn, so they stay in the thread. The
+                classifier read them as <code>new_session</code>; core wrote the confirm and ran no
+                job.
+              </p>
+            </div>
+          </div>
+          <p class="note">
+            The confirm is a planner bubble with the fixed question and two answers under it:
+            <b>Confirm</b> (primary) and <b>Keep planning</b> (secondary). It is not a planner
+            <i>question</i>, so there is no <i>asking</i> bar and the composer keeps its ordinary
+            placeholder. Typing something else instead is a new turn, read from scratch, and the
+            confirm stays above it as an unanswered record without its buttons. The buttons show
+            only while the confirm is the latest turn of an open session.
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">3</span>
+          <h2>After <b>Keep planning</b> — the confirm answered, nothing else changed</h2>
+          <span class="cap">state · kept</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">en · light</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >Plan something new
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV export goes first as its own story under ACME-40; the PDF report
+                          follows it and is blocked by it. Both are on the canvas.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn" data-testid="planning-restart-confirm-turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Start something new? This closes the current planning session and gives
+                          its cards back.
+                        </p>
+                      </div>
+                    </div>
+                    <p class="marker">Kept planning</p>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="sub">zh · light</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">上下文</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >规划新内容
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>已在 ACME-40 的上下文中打开。需要改变什么——或者你想了解什么？</p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row">目标 1 项 <span class="keychip">ACME-40</span></span
+                        >拆分导出工作，让 CSV 先于 PDF 报告发布。
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV 导出作为 ACME-40 下的独立故事先行；PDF
+                          报告随后，并被其阻塞。两者都在画布上。
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn" data-testid="planning-restart-confirm-turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>开始新的规划？这会关闭当前的规划会话，并归还它占用的卡片。</p>
+                      </div>
+                    </div>
+                    <p class="marker">已继续规划</p>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">回复，或进一步细化…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+          <p class="note">
+            The answers leave the bubble and the shipped centred <b>marker line</b> records the
+            answer. The session, its cards and its plan are untouched, and the control is still in
+            the head for a later change of mind.
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">4</span>
+          <h2>
+            The swap — on <b>Confirm</b> the new, empty session opens in place; the overlay never
+            closes
+          </h2>
+          <span class="cap">state · swap</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">en · light · the new session, in place</p>
+              <div class="stage">
+                <div class="flow">
+                  <aside class="rail" aria-label="Motir AI">
+                    <div class="railhead">
+                      <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                      ><span class="pill" data-testid="planning-mode-chip">in context</span
+                      ><span class="ctl"
+                        ><button
+                          type="button"
+                          class="btn secondary"
+                          data-testid="planning-restart-control"
+                        >
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-pen" /></svg
+                          >Plan something new
+                        </button></span
+                      >
+                    </div>
+                    <div class="turns" role="log">
+                      <div class="earlier" role="note" data-testid="planning-restart-earlier">
+                        <span class="hair" aria-hidden="true"></span
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-back" /></svg
+                        ><span>Your earlier session is closed · <a href="#">Open it</a></span
+                        ><span class="hair" aria-hidden="true"></span>
+                      </div>
+                      <div class="turn">
+                        <span class="av" aria-hidden="true"
+                          ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                            <path
+                              d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            /></svg
+                        ></span>
+                        <div class="bub">
+                          <p>
+                            Opened in the context of ACME-40. What should change — or what would you
+                            like to know?
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="composer">
+                      <div class="cfield">
+                        <div class="cinput">Reply, or refine further…</div>
+                        <span class="ctrigger" aria-label="Add a work item to plan around"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-at" /></svg></span
+                        ><span class="btn primary" aria-label="Send"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-send" /></svg
+                        ></span>
+                      </div>
+                    </div>
+                  </aside>
+                  <div class="node">
+                    <span class="k">ACME-40</span>Exports for large projects<span
+                      ><span class="chip">To Do</span></span
+                    >
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                The rail swaps to the returned session: its head (with the control, for the next
+                time), one <b>earlier-session line</b> and the shipped opener. The composer is empty
+                and focused. The canvas shows ACME-40 back at To Do, because the old session gave it
+                back when it ended. The address changes to the new session&rsquo;s.
+              </p>
+            </div>
+            <div>
+              <p class="sub">en · light · the earlier session, reopened with Open it</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span>
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV export goes first as its own story under ACME-40; the PDF report
+                          follows it and is blocked by it. Both are on the canvas.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn" data-testid="planning-restart-confirm-turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Start something new? This closes the current planning session and gives
+                          its cards back.
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      class="endmark"
+                      role="note"
+                      data-testid="planning-session-end"
+                      data-end-reason="restarted"
+                    >
+                      <span class="hair" aria-hidden="true"></span><span class="chip">Closed</span
+                      ><span>you started something new · today, 11:52</span
+                      ><span class="hair" aria-hidden="true"></span>
+                    </div>
+                  </div>
+                  <div class="roslot" data-testid="planning-read-only">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-lock" /></svg
+                    ><span
+                      >This session has ended, so it can’t be continued. Planning ACME-40 again
+                      starts a new session.</span
+                    >
+                  </div>
+                </aside>
+              </div>
+              <p class="note">
+                <b>Open it</b> reopens the ended session read-only by id, in the same overlay. It
+                ends with the shipped <b>end marker</b> (<code>restarted</code>: Closed · you
+                started something new · when) and the shipped read-only slot. No copy is offered:
+                the person asked for something new.
+              </p>
+            </div>
+          </div>
+          <p class="note">
+            <b>Motion.</b> The thread cross-fades to the new session over
+            <code>--transition-duration</code>; the overlay, the canvas frame and the rail width do
+            not move. <b>Reduced motion</b> (<code>prefers-reduced-motion: reduce</code>) skips the
+            fade and draws this end state at once. Focus moves to the composer, and a polite live
+            region says the earlier-session line.
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">5</span>
+          <h2>Where the control is ABSENT, and where it is disabled</h2>
+          <span class="cap">state · absent</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">a guide conversation — no control</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">guide</span>
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>Let&rsquo;s walk through ACME-52 one step at a time.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+              <p class="note">
+                A guide conversation is about one manual card and has no restart (A3.5).
+              </p>
+            </div>
+            <div>
+              <p class="sub">reopened read-only — no control</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span>
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV export goes first as its own story under ACME-40; the PDF report
+                          follows it and is blocked by it. Both are on the canvas.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="roslot" data-testid="planning-read-only">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-lock" /></svg
+                    ><span>You can read this session, but not continue it.</span>
+                  </div>
+                </aside>
+              </div>
+              <p class="note">
+                Somebody else&rsquo;s session, or a reader without <code>ai:plan</code>.
+              </p>
+            </div>
+            <div>
+              <p class="sub">an ended session — no control</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span>
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV export goes first as its own story under ACME-40; the PDF report
+                          follows it and is blocked by it. Both are on the canvas.
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      class="endmark"
+                      role="note"
+                      data-testid="planning-session-end"
+                      data-end-reason="restarted"
+                    >
+                      <span class="hair" aria-hidden="true"></span><span class="chip">Closed</span
+                      ><span>you started something new · today, 11:52</span
+                      ><span class="hair" aria-hidden="true"></span>
+                    </div>
+                  </div>
+                  <div class="roslot" data-testid="planning-read-only">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-lock" /></svg
+                    ><span
+                      >This session has ended, so it can’t be continued. Planning ACME-40 again
+                      starts a new session.</span
+                    >
+                  </div>
+                </aside>
+              </div>
+              <p class="note">
+                An ended session already shows its own way forward (the shipped Start a new session
+                slot, or this line).
+              </p>
+            </div>
+            <div>
+              <p class="sub">while a run streams — disabled, with its reason</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary is-disabled"
+                        disabled
+                        aria-describedby="restart-why"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >Plan something new</button
+                      ><span class="tip" role="tooltip" id="restart-why"
+                        >Available when this run finishes</span
+                      ></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <p class="marker">Sent to Motir AI</p>
+                  </div>
+                  <div class="composer">
+                    <div class="runbar">
+                      <span class="spin" aria-hidden="true"></span
+                      ><span class="runbar-line">Drafting the stories under ACME-40</span
+                      ><span class="btn secondary"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-stop" /></svg
+                        >Stop</span
+                      >
+                    </div>
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+              <p class="note">
+                The control is <code>disabled</code> and named by its tooltip, shown on hover and
+                focus: the composer is busy, as it is for every intent. Stop the run first, or wait
+                for it.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">6</span>
+          <h2>Dark parity — the control, the confirm and the swap</h2>
+          <span class="cap">theme · dark</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">confirm · dark</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >Plan something new
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV export goes first as its own story under ACME-40; the PDF report
+                          follows it and is blocked by it. Both are on the canvas.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn" data-testid="planning-restart-confirm-turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Start something new? This closes the current planning session and gives
+                          its cards back.
+                        </p>
+                        <div class="confirm-acts" role="group" aria-label="Plan something new">
+                          <button
+                            type="button"
+                            class="btn primary"
+                            data-testid="planning-restart-confirm"
+                          >
+                            Confirm</button
+                          ><button
+                            type="button"
+                            class="btn secondary"
+                            data-testid="planning-restart-keep"
+                          >
+                            Keep planning
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="sub">the new session · dark</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >Plan something new
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="earlier" role="note" data-testid="planning-restart-earlier">
+                      <span class="hair" aria-hidden="true"></span
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-back" /></svg
+                      ><span>Your earlier session is closed · <a href="#">Open it</a></span
+                      ><span class="hair" aria-hidden="true"></span>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="sub">kept · dark</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >Plan something new
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV export goes first as its own story under ACME-40; the PDF report
+                          follows it and is blocked by it. Both are on the canvas.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn" data-testid="planning-restart-confirm-turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Start something new? This closes the current planning session and gives
+                          its cards back.
+                        </p>
+                      </div>
+                    </div>
+                    <p class="marker">Kept planning</p>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="sub">disabled · dark</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary is-disabled"
+                        disabled
+                        aria-describedby="restart-why"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >Plan something new</button
+                      ><span class="tip" role="tooltip" id="restart-why"
+                        >Available when this run finishes</span
+                      ></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="runbar">
+                      <span class="spin" aria-hidden="true"></span
+                      ><span class="runbar-line">Drafting the stories under ACME-40</span
+                      ><span class="btn secondary"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-stop" /></svg
+                        >Stop</span
+                      >
+                    </div>
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">7</span>
+          <h2>The narrow width — the rail at its 352px floor</h2>
+          <span class="cap">width · 352px</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">en · 352px</p>
+              <div class="stage">
+                <aside class="rail floor" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">in context</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >Plan something new
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Opened in the context of ACME-40. What should change — or what would you
+                          like to know?
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Split the export work so CSV ships before the PDF report.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV export goes first as its own story under ACME-40; the PDF report
+                          follows it and is blocked by it. Both are on the canvas.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row"
+                          >Targeting 1 item <span class="keychip">ACME-40</span></span
+                        >Forget this, I want to plan something new
+                      </div>
+                    </div>
+                    <div class="turn" data-testid="planning-restart-confirm-turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          Start something new? This closes the current planning session and gives
+                          its cards back.
+                        </p>
+                        <div class="confirm-acts" role="group" aria-label="Plan something new">
+                          <button
+                            type="button"
+                            class="btn primary"
+                            data-testid="planning-restart-confirm"
+                          >
+                            Confirm</button
+                          ><button
+                            type="button"
+                            class="btn secondary"
+                            data-testid="planning-restart-keep"
+                          >
+                            Keep planning
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">Reply, or refine further…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="sub">zh · 352px</p>
+              <div class="stage">
+                <aside class="rail floor" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="pill" data-testid="planning-mode-chip">上下文</span
+                    ><span class="ctl"
+                      ><button
+                        type="button"
+                        class="btn secondary"
+                        data-testid="planning-restart-control"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-pen" /></svg
+                        >规划新内容
+                      </button></span
+                    >
+                  </div>
+                  <div class="turns" role="log">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>已在 ACME-40 的上下文中打开。需要改变什么——或者你想了解什么？</p>
+                      </div>
+                    </div>
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="tgt-row">目标 1 项 <span class="keychip">ACME-40</span></span
+                        >拆分导出工作，让 CSV 先于 PDF 报告发布。
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>
+                          CSV 导出作为 ACME-40 下的独立故事先行；PDF
+                          报告随后，并被其阻塞。两者都在画布上。
+                        </p>
+                      </div>
+                    </div>
+                    <div class="turn" data-testid="planning-restart-confirm-turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        <p>开始新的规划？这会关闭当前的规划会话，并归还它占用的卡片。</p>
+                        <div class="confirm-acts" role="group" aria-label="规划新内容">
+                          <button
+                            type="button"
+                            class="btn primary"
+                            data-testid="planning-restart-confirm"
+                          >
+                            确认</button
+                          ><button
+                            type="button"
+                            class="btn secondary"
+                            data-testid="planning-restart-keep"
+                          >
+                            继续规划
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">回复，或进一步细化…</div>
+                      <span class="ctrigger" aria-label="Add a work item to plan around"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-at" /></svg></span
+                      ><span class="btn primary" aria-label="Send"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+          <p class="note">
+            The control keeps its full label beside the mode chip (the head has room for both at
+            352px). The two answers wrap onto a second line before they would shrink.
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">8</span>
+          <h2>Copy index — en · zh</h2>
+          <span class="cap">copy</span>
+        </div>
+        <div class="panel-body">
+          <table class="spec">
+            <thead>
+              <tr>
+                <th>key</th>
+                <th>en</th>
+                <th>zh</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>planningWorkspace.restart.control</code></td>
+                <td>Plan something new</td>
+                <td>规划新内容</td>
+              </tr>
+              <tr>
+                <td><code>planningWorkspace.restart.confirm.body</code></td>
+                <td>
+                  Start something new? This closes the current planning session and gives its cards
+                  back.
+                </td>
+                <td>开始新的规划？这会关闭当前的规划会话，并归还它占用的卡片。</td>
+              </tr>
+              <tr>
+                <td><code>planningWorkspace.restart.confirm.yes</code></td>
+                <td>Confirm</td>
+                <td>确认</td>
+              </tr>
+              <tr>
+                <td><code>planningWorkspace.restart.confirm.keep</code></td>
+                <td>Keep planning</td>
+                <td>继续规划</td>
+              </tr>
+              <tr>
+                <td><code>planningWorkspace.restart.kept</code></td>
+                <td>Kept planning</td>
+                <td>已继续规划</td>
+              </tr>
+              <tr>
+                <td><code>planningWorkspace.restart.earlier</code></td>
+                <td>Your earlier session is closed</td>
+                <td>你之前的会话已关闭</td>
+              </tr>
+              <tr>
+                <td><code>planningWorkspace.restart.earlierOpen</code></td>
+                <td>Open it</td>
+                <td>打开</td>
+              </tr>
+              <tr>
+                <td><code>planningWorkspace.restart.disabledStreaming</code></td>
+                <td>Available when this run finishes</td>
+                <td>本次运行结束后可用</td>
+              </tr>
+              <tr>
+                <td><code>planningWorkspace.session.end.reason.restarted</code></td>
+                <td>you started something new · {when}</td>
+                <td>你开始了新的规划 · {when}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="note">
+            <code>session.end.reason.restarted</code> changes from <i>you started over</i>, which
+            reads like the in-session START OVER (<code>clear_plan</code>), to
+            <i>you started something new</i>.
+          </p>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

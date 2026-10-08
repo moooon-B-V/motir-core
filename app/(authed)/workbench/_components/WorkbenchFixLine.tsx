@@ -176,7 +176,15 @@ function ReasonGlyph({ reason }: { reason: WorkItemFixReasonDto }) {
 /** The copy button — `ReadyList`'s icon-button, ALWAYS visible here (§ 30: the command
  *  is the answer the row exists to give, and a touch screen cannot hover). Raised above
  *  the row's stretched link, so pressing it copies and does not open the card. */
-function CopyFixCommand({ command, itemKey }: { command: string; itemKey: string }) {
+function CopyFixCommand({
+  command,
+  itemKey,
+  ariaLabel,
+}: {
+  command: string;
+  itemKey: string;
+  ariaLabel?: string;
+}) {
   const t = useTranslations('workbench');
   const { toast } = useToast();
   const copy = useCallback(
@@ -202,7 +210,7 @@ function CopyFixCommand({ command, itemKey }: { command: string; itemKey: string
       <button
         type="button"
         onClick={copy}
-        aria-label={t('toFix.copyAria', { key: itemKey })}
+        aria-label={ariaLabel ?? t('toFix.copyAria', { key: itemKey })}
         data-testid={`workbench-fix-copy-${itemKey}`}
         className="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
@@ -212,14 +220,23 @@ function CopyFixCommand({ command, itemKey }: { command: string; itemKey: string
   );
 }
 
-/** The command chip and its copy button — § 30's command part. */
-function FixCommand({ command, itemKey }: { command: string; itemKey: string }) {
+/** The command chip and its copy button — § 30's command part, reused by To resume's
+ *  *Ready to resume* (§ 35.5) with its own accessible name. */
+export function FixCommand({
+  command,
+  itemKey,
+  ariaLabel,
+}: {
+  command: string;
+  itemKey: string;
+  ariaLabel?: string;
+}) {
   return (
     <span className="flex shrink-0 items-center gap-1">
       <code className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-mono text-(--el-code-text)">
         {command}
       </code>
-      <CopyFixCommand command={command} itemKey={itemKey} />
+      <CopyFixCommand command={command} itemKey={itemKey} ariaLabel={ariaLabel} />
     </span>
   );
 }

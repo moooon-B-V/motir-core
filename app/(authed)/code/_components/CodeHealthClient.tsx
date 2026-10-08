@@ -15,7 +15,7 @@ import type {
   RepoAuditSurfaceDTO,
 } from '@/lib/dto/codeHealth';
 import { buildRepoAuditRows, defaultSelectedRepoKey } from '@/lib/codeHealth/repoAuditRows';
-import { mergeReauditRun } from '@/lib/codeHealth/reauditRun';
+import { mergeReauditRun, type StoredReauditRun } from '@/lib/codeHealth/reauditRun';
 import type { JobStatus } from '@/lib/ai/types';
 
 type Tab = 'audit' | 'convention';
@@ -93,13 +93,13 @@ function subscribeRun(cb: () => void): () => void {
 // `useSyncExternalStore` compares snapshots by IDENTITY, so parsing the JSON on
 // every call would hand React a fresh object each render and loop forever.
 // Memoize the parse against the exact raw string (and project) it came from.
-let runCache: { projectId: string; raw: string | null; value: ReauditResultDTO | null } = {
+let runCache: { projectId: string; raw: string | null; value: StoredReauditRun | null } = {
   projectId: '',
   raw: null,
   value: null,
 };
 
-function parseRun(raw: string): ReauditResultDTO | null {
+function parseRun(raw: string): StoredReauditRun | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -111,14 +111,14 @@ function parseRun(raw: string): ReauditResultDTO | null {
   // A record with no job id to read back is not resumable — treat a corrupt or
   // superseded entry as no record at all rather than wedging the trigger.
   const valid = repos.filter(
-    (r): r is ReauditResultDTO['repos'][number] =>
+    (r): r is StoredReauditRun['repos'][number] =>
       typeof (r as { auditJobId?: unknown })?.auditJobId === 'string' &&
       (r as { auditJobId: string }).auditJobId !== '',
   );
   return valid.length > 0 ? { repos: valid } : null;
 }
 
-function readRun(projectId: string): ReauditResultDTO | null {
+function readRun(projectId: string): StoredReauditRun | null {
   let raw: string | null = null;
   try {
     raw = localStorage.getItem(runKey(projectId));
@@ -131,7 +131,7 @@ function readRun(projectId: string): ReauditResultDTO | null {
   return runCache.value;
 }
 
-function writeRun(projectId: string, run: ReauditResultDTO): void {
+function writeRun(projectId: string, run: StoredReauditRun): void {
   try {
     localStorage.setItem(runKey(projectId), JSON.stringify(run));
   } catch {
@@ -210,6 +210,9 @@ export function CodeHealthClient({
   // field: inventing one would be a motir-ai change and a two-repo straddle
   // (Panel 7 §5) — `reaudit()` already answers with exactly which repos it fired.
   const [derivingRepos, setDerivingRepos] = useState<string[]>([]);
+  // When each of those runs was QUEUED (MOTIR-7620) — the only honest clock for
+  // a deriving row's "started {when}". The repo's previous audit is not it.
+  const [derivingSince, setDerivingSince] = useState<Record<string, string>>({});
   const [loadingMore, setLoadingMore] = useState(false);
   const [reauditing, setReauditing] = useState(false);
   // The FIRST-audit poll ran out while the job kept going (MOTIR-2080). Held apart
@@ -282,7 +285,7 @@ export function CodeHealthClient({
   // still `queued` / `running` restores the deriving state and re-enters the
   // OBSERVE half of the run (it must never re-POST — the job is already queued).
   // Everything else clears the entry, so a stale id can never wedge the page.
-  async function resumeStoredRun(run: ReauditResultDTO): Promise<void> {
+  async function resumeStoredRun(run: StoredReauditRun): Promise<void> {
     const outcomes = await Promise.all(
       run.repos.map(async (repo): Promise<'active' | 'terminal' | 'gone'> => {
         try {
@@ -316,6 +319,19 @@ export function CodeHealthClient({
         ]),
       );
       setDerivingRepos(stillDeriving);
+      // The record kept the moment each repo was queued; one written before it
+      // did keeps no entry, and that row says "just started".
+      setDerivingSince(
+        Object.fromEntries(
+          run.repos.flatMap((repo) =>
+            repo.repoKey !== null &&
+            repo.queuedAt !== undefined &&
+            stillDeriving.includes(repo.repoKey)
+              ? [[repo.repoKey, repo.queuedAt]]
+              : [],
+          ),
+        ),
+      );
       const seq = ++reauditSeq.current;
       try {
         await observeRun(seq, report?.surface.audit?.id ?? null);
@@ -565,7 +581,10 @@ export function CodeHealthClient({
       setRunResolved(true);
       resumeStarted.current = true;
       const result = (await res.json()) as ReauditResultDTO;
-      const repos = (result?.repos ?? []).filter((r) => typeof r?.auditJobId === 'string');
+      const queuedAt = new Date().toISOString();
+      const repos = (result?.repos ?? [])
+        .filter((r) => typeof r?.auditJobId === 'string')
+        .map((r) => ({ ...r, queuedAt }));
       // MERGED, not overwritten — a scoped run may only ever ADD to what a later
       // mount will resume (see `mergeRun`).
       if (repos.length > 0) writeRun(projectId, mergeReauditRun(readRun(projectId), repos));
@@ -585,6 +604,10 @@ export function CodeHealthClient({
         ),
       };
       setDerivingRepos((prev) => [...new Set([...prev, ...queued])]);
+      setDerivingSince((prev) => ({
+        ...prev,
+        ...Object.fromEntries(queued.map((repoKey) => [repoKey, queuedAt])),
+      }));
       await observeRun(seq, prevAuditId);
     } catch {
       setError(t('errorReaudit'));
@@ -597,7 +620,7 @@ export function CodeHealthClient({
   }
 
   // ── What the audit tab is looking at, derived fresh each render ───────────
-  const rows = buildRepoAuditRows(audits, derivingRepos);
+  const rows = buildRepoAuditRows(audits, derivingRepos, derivingSince);
   // Only ever the SELECTED repo's report. A report still tagged with the
   // previous repo is not shown at all — a stale grade under a new repo's name is
   // worse than the half-second of the panel's own state.

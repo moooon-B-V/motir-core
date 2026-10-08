@@ -1,6 +1,7 @@
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { resolveJobState } from '@/lib/services/aiPlanEditsService';
+import { endSessionForAbandonedPlan } from '@/lib/services/planSessionEndService';
 import type { PlanJobStateDto } from '@/lib/dto/plans';
 
 // ABANDONED-PLAN reconciliation (MOTIR-3064) — the recovery half of the
@@ -170,6 +171,9 @@ export interface AbandonedPlanSweepSummary {
  *  without a live motir-ai. Production uses the shipped one. */
 export interface AbandonedPlanDeps {
   resolveJobState: typeof resolveJobState;
+  /** The session end (MOTIR-7638), behind the same seam so a test can prove a
+   *  failed end leaves the sweep running. Absent means the shipped one. */
+  endSessionForAbandonedPlan?: typeof endSessionForAbandonedPlan;
 }
 
 const defaultDeps: AbandonedPlanDeps = {
@@ -256,12 +260,10 @@ export const abandonedPlanService = {
    * surface rendered identically. `PlanStatus` is still not the place to say so,
    * for every reason above; a PRIVATE column is.
    *
-   * PLANNING-TARGET LOCKS are deliberately not released here. `plansService`
-   * releases them on approve/decline through a best-effort helper that needs an
-   * acting user this sweep does not have, and its own fallback is already the
-   * right one: "the lease will expire and the sweep will clear it"
-   * (`planTargetLockSweep`, every 10 minutes). Two recovery paths for one lease
-   * is how they drift.
+   * PLANNING-TARGET LOCKS are released by ENDING THE SESSION (AMENDMENT 23 §2;
+   * MOTIR-7638): the one end operation gives back what the attempt's session
+   * held, signed by its starter, so this sweep no longer leaves the cards to the
+   * lease. A plan with no session still leaves its locks to the lock sweep.
    */
   async reconcileAbandoned(
     opts: { now?: Date; batchSize?: number; deps?: AbandonedPlanDeps } = {},
@@ -339,6 +341,16 @@ export const abandonedPlanService = {
         });
         continue;
       }
+
+      // The attempt is over, so its SESSION ends `failed` too (AMENDMENT 23 §2;
+      // MOTIR-7638) — the backstop for an attempt whose failure no relay saw. It
+      // gives the session's cards back, and it is idempotent with the relay.
+      // Best-effort: the plan's decline above is already committed, and the
+      // lock sweep's lease still clears a hold this fails to release.
+      await (deps.endSessionForAbandonedPlan ?? endSessionForAbandonedPlan)(plan).catch(
+        (err: unknown) =>
+          console.warn(`[abandoned-plan-sweep] ending the session of plan ${plan.id} failed`, err),
+      );
 
       // `warn`, not `info`: the repo's lint allows only warn/error, and the level
       // is right anyway — a plan terminated with nobody's decision behind it is

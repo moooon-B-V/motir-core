@@ -267,6 +267,8 @@ describe('the primitive is token-only, and ships nothing that consumes it (MOTIR
       return /^\s*import\b[^;]*\bPageSkeleton\b/m.test(src) || /<PageSkeleton[\s/>]/.test(src);
     });
     expect(consumers.map((f) => relative(ROOT, f).split(sep).join('/'))).toEqual([
+      // MOTIR-7680: the console Ideas list's in-card frame (`platform-admin` § Ideas, Panel 3a).
+      'app/(admin)/admin/ideas/_components/IdeasSkeleton.tsx',
       'app/(authed)/pages/[pageId]/page.tsx',
       // MOTIR-7300: the `/pages` index's in-page frame (`design-notes.md` § State 5).
       'app/(authed)/pages/_components/PagesIndexFrame.tsx',

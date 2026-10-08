@@ -22,9 +22,9 @@ import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 // ACTIVE project, the 2FA hold AFTER the no-project arm, a thin call into the
 // service, and the no-existence-leak 404.
 //
-// Thin HTTP over `workItemsService.getWorkItemWithAncestors` — the SAME
-// view-gated lineage read the retiring page and `/roadmap?item=` already make.
-// No `db` / no `$transaction` here, and no new service method.
+// Thin HTTP over `workItemsService.getPlanningAnchor` — the SAME view-gated
+// lineage read the retiring page and `/roadmap?item=` already make, plus the
+// anchor's child count (MOTIR-7621). No `db` / no `$transaction` here.
 //
 // A stale / deleted / cross-workspace / forbidden key is the same 404 (never a
 // 403, which would leak "it exists but you can't see it"). The overlay renders
@@ -73,15 +73,15 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   try {
-    const { item, ancestors } = await workItemsService.getWorkItemWithAncestors(
+    const { item, ancestors, hasChildren } = await workItemsService.getPlanningAnchor(
       ctx.projectId,
       key,
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     );
     // BOTH halves the page composed, raw — the CONSUMER decides the trail. The
-    // workspace opens on the anchor's OWN level (ancestors only); the roadmap
-    // opens INSIDE the item (ancestors plus the item). One body serves both, and
-    // neither is baked in here.
+    // surface opens INSIDE an anchor that has children and BESIDE one that has
+    // none (MOTIR-7621), which is why `hasChildren` rides the body: the kind
+    // alone cannot tell a childless story from a broken-down one.
     return NextResponse.json(
       {
         anchor: {
@@ -95,6 +95,7 @@ export async function GET(req: Request): Promise<Response> {
           identifier: a.identifier,
           title: a.title,
         })),
+        hasChildren,
       },
       {
         // The anchor's title and its ancestors' titles are live item state;

@@ -29,6 +29,7 @@
 // defineJob); the payload type therefore makes `workspaceId` optional.
 
 import type { DesignAutoRerunRequestedData } from '@/lib/services/designAutoRerunService';
+import type { GateResumeRequestedData } from '@/lib/services/gateResumeRequest';
 import type { TransactionalEmail } from '@/lib/services/emailService';
 import type { HostedAgentSession } from '@/lib/services/hostedAgentContainerService';
 
@@ -661,6 +662,10 @@ export interface JobEventDataMap {
   /** A person sent a HOSTED design back with Revise (MOTIR-700): start its automatic
    *  re-run, or record why not. Emitted by the design handler AFTER the refusal commits. */
   'design/auto-rerun.requested': DesignAutoRerunRequestedData;
+  /** A gate a `gated` run stopped at was APPROVED (MOTIR-7710): resume the run on the
+   *  hosted agent if it was hosted, and record what happened. Emitted by both decide
+   *  doors AFTER the decision commits. */
+  'run/gate-resume.requested': GateResumeRequestedData;
   /** A push moved a repository's DEFAULT branch (MOTIR-5914): re-read the host's
    *  mergeability of every open pull request that targets it, and withdraw the question
    *  over any that now conflict. Emitted by the push webhook after its own write. */
@@ -852,6 +857,7 @@ export type JobEventData<N extends JobEventName> = JobEventDataMap[N];
  * `email.send` + the `work-item/*` events.
  */
 export type { DesignAutoRerunRequestedData };
+export type { GateResumeRequestedData };
 
 export type WorkspaceScopedEventName = Exclude<JobEventName, `system.${string}`>;
 

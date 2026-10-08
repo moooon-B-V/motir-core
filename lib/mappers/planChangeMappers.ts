@@ -2,6 +2,7 @@ import type { PlanChangeSession, PlanChangeTurn } from '@/generated/prisma/clien
 import type {
   DebugLandingDto,
   PlanChangeSessionDto,
+  PlanChangeTurnConfirmDto,
   PlanChangeTurnDto,
   PlanChangeTurnIntentDto,
   PlanChangeTurnRoleDto,
@@ -53,6 +54,7 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     debugLanding: toDebugLandingDto(row.debugLanding),
     guide: readGuideTurnRecord(row.guideTurn),
     attachmentIds: row.attachmentIds,
+    confirm: (row.confirm as PlanChangeTurnConfirmDto | null) ?? null,
     authorId: row.authorId,
     createdAt: row.createdAt.toISOString(),
   };
@@ -81,5 +83,8 @@ export function toPlanChangeSessionDto(
     updatedAt: row.updatedAt.toISOString(),
     turns: turns.map(toPlanChangeTurnDto),
     workItemRefs,
+    endedAt: row.endedAt ? row.endedAt.toISOString() : null,
+    endReason: row.endReason ?? null,
+    copiedFromSessionId: row.copiedFromSessionId ?? null,
   };
 }

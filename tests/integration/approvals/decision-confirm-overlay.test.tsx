@@ -237,6 +237,10 @@ describe('a body edited under the reader', () => {
     fireEvent.click(await within(dialog).findByRole('button', { name: t.verb.confirm }, SLOW));
     fireEvent.click(within(dialog).getByRole('button', { name: t.confirmStep.proceed }));
     await waitFor(async () => expect(await statusOf(decision.id)).toBe('done'), SLOW);
+    // The status lands before the decide action returns, and its later reads are still
+    // open then. Wait for the overlay's own Confirmed render, which follows the
+    // response, so the test does not end with the action's backend still working.
+    expect(await within(dialog).findByText(t.state.confirmed, {}, SLOW)).toBeTruthy();
   });
 });
 

@@ -45,7 +45,7 @@ const EMPTY: HeldTransitionDTO[] = [];
 /** One locked picker target, and WHY it is locked — the `StatusPicker`'s `held`. */
 export interface HeldTarget {
   statusKey: string;
-  waitingOn: 'decision' | 'merge' | 'plan' | 'mark';
+  waitingOn: 'decision' | 'merge' | 'plan' | 'session' | 'mark';
 }
 
 /** The mark holding the card — `refused` when it came from a refusal rather than
@@ -72,7 +72,13 @@ function toLines(held: HeldTransitionDTO[]): StatusHeldLine[] {
 
 function planSignature(plan: PlanHoldDTO | null): string {
   return plan
-    ? [plan.planId, plan.planStatus, plan.sessionId ?? '', plan.anchorKey ?? ''].join('\u0000')
+    ? [
+        plan.kind,
+        plan.planId ?? '',
+        plan.planStatus ?? '',
+        plan.sessionId ?? '',
+        plan.anchorKey ?? '',
+      ].join('\u0000')
     : '';
 }
 
@@ -232,7 +238,11 @@ export function useStatusHeld(
       // A plan holds EVERY move: every option but the current one is locked.
       return statuses
         .filter((s) => s.key !== currentStatus)
-        .map((s) => ({ statusKey: s.key, waitingOn: 'plan' as const }));
+        .map((s) => ({
+          statusKey: s.key,
+          // An open SESSION's hold is tagged by its own word (AMENDMENT 23 §5).
+          waitingOn: visiblePlan.kind === 'session' ? ('session' as const) : ('plan' as const),
+        }));
     // The mark's targets first, so a status both a gate and the mark hold is
     // tagged by the mark — the one the reader has to act on first.
     const byMark: HeldTarget[] = markHold

@@ -96,13 +96,30 @@ async function seededSession(
   return { sessionId: s.id, gateId, card };
 }
 
-/** An UNSEEDED project-wide conversation, aged past the resume window (plus
- *  `minutes`) so the next first turn in the scope starts a new session. */
+/** An UNSEEDED, OPEN project-wide conversation, `180 + minutes` quiet. Written
+ *  directly: a member's open session is resumed at any age (AMENDMENT 23 §3), so
+ *  a second first turn would land on the first. */
 async function plainSession(body: string, minutes: number): Promise<string> {
-  const s = await planChangeSessionsService.startWithFirstTurn(pctx(), PROJECT_SCOPE, body);
-  await adminDb.planChangeSession.update({
-    where: { id: s.id },
-    data: { lastActivityAt: minutesAgo(180 + minutes) },
+  const s = await adminDb.planChangeSession.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      createdById: fx.ownerId,
+      scopeKey: PROJECT_SCOPE.scopeKey,
+      targetKeys: [],
+      turnCount: 1,
+      lastActivityAt: minutesAgo(180 + minutes),
+    },
+  });
+  await adminDb.planChangeTurn.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      sessionId: s.id,
+      seq: 0,
+      role: 'user',
+      body,
+      authorId: fx.ownerId,
+    },
   });
   return s.id;
 }

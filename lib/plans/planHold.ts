@@ -16,9 +16,11 @@ import { PLANNING_STATUS_KEY, isExpired } from '@/lib/planChange/targetLock';
 //   2. a `plan_target_lock` row names it with a NON-NULL `planId`;
 //   3. that plan is UNDECIDED — `generating`, `planned` or `stale`.
 //
-// Two cases look held and are NOT, by name:
-//   · a SESSION-held lock (`planId` null) — a conversation is not a decision about
-//     the card (AMENDMENT 16 D8's session clause, MOTIR-2425);
+// A SESSION-held lock (`planId` null) holds too since AMENDMENT 23 §5 — while
+// its session is OPEN, which is {@link sessionHoldFor}'s rule below. It replaced
+// AMENDMENT 21 §1's "a SESSION-held lock never holds".
+//
+// One case looks held and is NOT, by name:
 //   · an EXPIRED lease on a `generating` plan — the abandoned-plan sweep is about to
 //     release it (D9), and a lock whose own service has declared its author dead
 //     should not outrank a person. A `planned` / `stale` plan's lock never expires
@@ -89,4 +91,31 @@ export function planHoldFor(input: PlanHoldInput): PlanHold | { held: false } {
     planId: lock.planId,
     planStatus: planStatus as PlanHold['planStatus'],
   };
+}
+
+export interface SessionHoldInput {
+  /** The work item's current status key. */
+  itemStatus: string;
+  /** The session the item's `plan_target_lock` names, or null when the lock is a
+   *  plan's or there is none. */
+  lockSessionId: string | null;
+  /** That session's `endedAt`; `undefined` when the session no longer resolves. */
+  sessionEndedAt: Date | null | undefined;
+}
+
+/**
+ * Whether the card is held by an OPEN SESSION — AMENDMENT 23 §5's second arm. The
+ * lease's expiry is NOT read: an expired session lease still holds until the idle
+ * close ends the session, at most one sweep interval later, and ending is what
+ * frees the card. No override, by decision.
+ */
+export function sessionHoldFor(
+  input: SessionHoldInput,
+): { held: true; sessionId: string } | { held: false } {
+  const { itemStatus, lockSessionId, sessionEndedAt } = input;
+  if (itemStatus !== PLANNING_STATUS_KEY) return { held: false };
+  if (lockSessionId === null || sessionEndedAt === undefined || sessionEndedAt !== null) {
+    return { held: false };
+  }
+  return { held: true, sessionId: lockSessionId };
 }

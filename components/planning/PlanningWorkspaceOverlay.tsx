@@ -592,8 +592,10 @@ export function PlanningWorkspaceOverlay({
           // would hide the item the conversation is about" — and the answer is
           // not to dismiss it but to move the target's mark to where the target
           // now is: the LAST CRUMB, the level you are standing in, rather than a
-          // ring on a node that is no longer on screen. A `subtask` anchor has no
-          // inside, so it keeps MOTIR-2070's arrival and its ring.
+          // ring on a node that is no longer on screen. An anchor with NO
+          // children — a subtask, or a story, task or bug not yet broken down —
+          // has no inside to open (MOTIR-7621), so it keeps MOTIR-2070's arrival
+          // and its ring.
           //
           // The rule itself is `lib/planning/surfaceArrival.ts`, because the same
           // three entrances share it (Plan with AI, a Plans row, a To-approve
@@ -602,6 +604,7 @@ export function PlanningWorkspaceOverlay({
           trail: surfaceArrivalTrail({
             anchor: found?.anchor ?? null,
             ancestors: found?.ancestors ?? [],
+            hasChildren: found?.hasChildren ?? false,
           }),
         });
       } catch {

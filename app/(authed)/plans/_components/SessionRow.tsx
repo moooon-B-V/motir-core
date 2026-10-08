@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import {
   ArrowRight,
   Bot,
+  CornerLeftUp,
   History,
   ListChecks,
   ListTree,
@@ -102,6 +103,12 @@ function StateChip({ state, label }: { state: PlanSessionStateDto; label: React.
       return <Pill severity="success">{label}</Pill>;
     case 'declined':
       return <Pill tone="archived">{label}</Pill>;
+    case 'closed':
+      // Motir ended the session (AMENDMENT 23 §1; MOTIR-7634). Peach — the one
+      // tint left whose meaning ("needs a second look") fits "Motir stopped this,
+      // not a person", and never the archived fill Declined wears. The REASON is
+      // in the end line's words, never in the hue.
+      return <Pill severity="warning">{label}</Pill>;
   }
 }
 
@@ -153,6 +160,82 @@ function Starter({ view }: { view: SessionRowView }) {
       ) : null}
       {originLabel ? <span className="min-w-0">{originLabel}</span> : null}
     </span>
+  );
+}
+
+/** The END LINE (MOTIR-7642; MOTIR-7634 § _The end line for every end reason_) —
+ *  on an ended row it REPLACES `active {when}`: the end time is the session's last
+ *  moment, so both would say the same thing. One unit that wraps whole; the full
+ *  date-time rides `title`. */
+function EndLine({ end }: { end: NonNullable<SessionRowView['end']> }) {
+  const t = useTranslations('aiPlanning.sessions');
+  const time = end.timeLabel;
+  const name = end.endedByName;
+  let text: string;
+  switch (end.reason) {
+    case 'failed':
+      text = t('end.failed', { time });
+      break;
+    case 'idle':
+      text = t('end.idle', { time });
+      break;
+    case 'restarted':
+      text = end.endedByViewer
+        ? t('end.restartedYou', { time })
+        : name
+          ? t('end.restartedBy', { name, time })
+          : t('end.restarted', { time });
+      break;
+    case 'declined':
+      text = end.endedByViewer
+        ? t('end.declinedYou', { time })
+        : name
+          ? t('end.declinedBy', { name, time })
+          : t('end.declined', { time });
+      break;
+    case 'approved':
+      text = end.endedByViewer
+        ? t('end.approvedYou', { time })
+        : name
+          ? t('end.approvedBy', { name, time })
+          : t('end.approved', { time });
+      break;
+  }
+  return (
+    <span data-testid="plan-session-end" title={end.fullLabel}>
+      {text}
+    </span>
+  );
+}
+
+/** "Continued from …" (AMENDMENT 23 §6) — a copied session's link to the one it
+ *  continues, opened as a read over this page. The seed link's face; it names the
+ *  OLD session by its end time, since the copy's first turn IS the old one's. */
+function ContinuedFromLink({
+  from,
+  anchorKey,
+}: {
+  from: NonNullable<SessionRowView['copiedFrom']>;
+  /** A copy keeps its source's anchor set, so it opens where the source did. */
+  anchorKey: string | null;
+}) {
+  const t = useTranslations('aiPlanning.sessions');
+  const { href, open } = useOpenPlanningWorkspace(
+    anchorKey
+      ? { kind: 'work-item', itemKey: anchorKey, sessionId: from.id }
+      : { kind: 'project', sessionId: from.id },
+  );
+  return (
+    <Link
+      href={href}
+      onClick={open}
+      aria-label={t('continuedFromAria', { when: from.whenLabel })}
+      data-testid="plan-session-continued-from"
+      className="relative z-10 inline-flex items-center gap-1 rounded-(--radius-control) text-(--el-text-secondary) underline decoration-(--el-border-strong) underline-offset-2 hover:text-(--el-text) hover:decoration-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+    >
+      <CornerLeftUp aria-hidden className="h-3 w-3 shrink-0" />
+      <span>{t('continuedFrom', { when: from.whenLabel })}</span>
+    </Link>
   );
 }
 
@@ -246,23 +329,33 @@ export function SessionRow({
     launchContextFor(view),
   );
   const qs = searchParams.toString();
-  const destination: PlanRowDestination | null = view.latestPlan
-    ? planRowDestination({
-        planStatus: view.latestPlan.status,
-        planId: view.latestPlan.id,
-        // A Plans row IS a session, so this is never null (§ 21.3).
-        sessionId: view.id,
-        host: `${pathname}${qs ? `?${qs}` : ''}`,
-        anchorKey: view.targetKeys[0] ?? null,
-        routes,
-      })
-    : null;
+  const isVisitor = routes.identifier !== null;
+  // A CLOSED row opens its CONVERSATION, as a read (MOTIR-7634 § _Where a Closed
+  // row goes_): its latest plan is an abandoned `declined` nobody decided, so the
+  // plan rule would send it to an empty plan page. The session's end is read
+  // FIRST; Declined and Approved rows keep the shipped rule.
+  const destination: PlanRowDestination | null =
+    view.state === 'closed' && !isVisitor
+      ? { kind: 'planning-surface', href: conversationHref }
+      : view.latestPlan
+        ? planRowDestination({
+            planStatus: view.latestPlan.status,
+            planId: view.latestPlan.id,
+            // A Plans row IS a session, so this is never null (§ 21.3).
+            sessionId: view.id,
+            host: `${pathname}${qs ? `?${qs}` : ''}`,
+            anchorKey: view.targetKeys[0] ?? null,
+            routes,
+          })
+        : null;
   const doorHref = destination?.href ?? conversationHref;
   const Icon = ORIGIN_ICON[view.origin];
-  const state: PlanSessionStateDto = view.latestPlan?.status ?? 'none';
+  const state: PlanSessionStateDto = view.state;
   const stateLabel = t(`planState.${state}`);
-  // THE CHIP RULE (§ 21.5): a second door only where it goes somewhere else.
-  const chipIsDoor = view.latestPlan !== null && destination?.kind === 'planning-surface';
+  // THE CHIP RULE (§ 21.5): a second door only where it goes somewhere else — and
+  // never on an ENDED row, where there is nothing left to decide (MOTIR-7634).
+  const chipIsDoor =
+    view.end === null && view.latestPlan !== null && destination?.kind === 'planning-surface';
   // `Waiting for approval` keeps the accent border — the retired row's
   // `awaitingReview` rule, same meaning: this one needs a decision.
   const awaitingReview = state === 'planned';
@@ -305,7 +398,11 @@ export function SessionRow({
         </Link>
         <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-(--el-text-secondary)">
           <Anchor keys={view.targetKeys} />
-          <span>{t('lastActive', { when: view.activeLabel })}</span>
+          {view.end ? (
+            <EndLine end={view.end} />
+          ) : (
+            <span>{t('lastActive', { when: view.activeLabel })}</span>
+          )}
           <Starter view={view} />
           {/* `shrink-0`: this line WRAPS rather than truncating, so the tag takes
               its own line before it loses a word (§ 21.6). */}
@@ -313,6 +410,10 @@ export function SessionRow({
             <PlanDestinationTag destination={destination} className="shrink-0" />
           ) : null}
           {view.seed ? <SeedLink seed={view.seed} /> : null}
+          {/* A Visitor is served no planning workspace, so there is no read to open. */}
+          {view.copiedFrom && !isVisitor ? (
+            <ContinuedFromLink from={view.copiedFrom} anchorKey={view.targetKeys[0] ?? null} />
+          ) : null}
         </div>
       </div>
 

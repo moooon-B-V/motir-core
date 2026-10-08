@@ -19,8 +19,12 @@ import { mapPlanChangeError, noActiveProject, readSessionId } from '../_errors';
 //                          (MOTIR-6024). A read: looking creates nothing.
 //   POST { body, isAnswer? } → START with the first turn — or, when the caller
 //                          already has a resumable project-wide session, append
-//                          to it (the service decides under a lock). This is the
-//                          only way a conversation comes into existence.
+//                          to it (the service decides under a lock).
+//   POST { copyFrom }    → START as a COPY of the caller's own failed or
+//                          idle-closed session (AMENDMENT 23 §6; MOTIR-7641) —
+//                          its conversation carried into a new session of its
+//                          scope, with no new turn. These are the only ways a
+//                          conversation comes into existence.
 //
 // HTTP only (CLAUDE.md 4-layer): resolve the session + active project, call ONE
 // service method, map typed errors.
@@ -62,6 +66,23 @@ export async function POST(req: Request): Promise<Response> {
     body = await req.json();
   } catch {
     return NextResponse.json({ code: 'BAD_REQUEST', error: 'Invalid JSON body.' }, { status: 400 });
+  }
+  const copyFrom = (body as { copyFrom?: unknown })?.copyFrom;
+  if (copyFrom !== undefined) {
+    if (typeof copyFrom !== 'string' || !copyFrom.trim()) {
+      return NextResponse.json(
+        { code: 'BAD_REQUEST', error: '`copyFrom` must be a session id.' },
+        { status: 400 },
+      );
+    }
+    try {
+      const result = await planChangeSessionsService.startCopied(ctx, copyFrom.trim());
+      return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
+    } catch (err) {
+      const mapped = mapPlanChangeError(err);
+      if (mapped) return mapped;
+      throw err;
+    }
   }
   const rawBody = (body as { body?: unknown })?.body;
   if (typeof rawBody !== 'string') {

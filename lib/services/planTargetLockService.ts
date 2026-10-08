@@ -8,6 +8,7 @@ import {
 } from '@/lib/workspaces/context';
 import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -16,8 +17,8 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { PlanTargetLockedError } from '@/lib/planChange/errors';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
-import { holdsWhile, planHoldFor } from '@/lib/plans/planHold';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import { holdsWhile, planHoldFor, sessionHoldFor } from '@/lib/plans/planHold';
+import { planHoldKey, type PlanHoldDTO } from '@/lib/dto/plans';
 import { classifyBlockerReadiness } from '@/lib/workItems/blockerReadiness';
 import {
   PLANNING_STATUS_KEY,
@@ -253,6 +254,7 @@ async function acquireOne(
         item.identifier,
         await holderName(existing.heldById, tx),
         existing.expiresAt,
+        { sessionId: existing.sessionId, planId: existing.planId },
       );
     }
     // Ours (refresh) or expired (reclaim). EITHER WAY `priorStatus` and
@@ -496,10 +498,34 @@ export async function readPlanHoldWithin(
   item: { id: string; identifier: string; status: string },
   tx: Prisma.TransactionClient,
   now: Date = new Date(),
+  viewerId: string | null = null,
 ): Promise<PlanHoldDTO | null> {
   if (item.status !== PLANNING_STATUS_KEY) return null;
   const lock = await planTargetLockRepository.findByWorkItemId(item.id, tx);
-  if (!lock?.planId) return null;
+  if (!lock) return null;
+  if (!lock.planId) {
+    // AMENDMENT 23 §5 — an OPEN session's lock holds too.
+    if (!lock.sessionId) return null;
+    const session = await planChangeSessionRepository.findHoldSubject(lock.sessionId, tx);
+    const hold = sessionHoldFor({
+      itemStatus: item.status,
+      lockSessionId: lock.sessionId,
+      sessionEndedAt: session ? session.endedAt : undefined,
+    });
+    if (!hold.held || !session) return null;
+    return {
+      kind: 'session',
+      itemKey: item.identifier,
+      workItemId: item.id,
+      planId: null,
+      planStatus: null,
+      sessionId: hold.sessionId,
+      anchorKey: session.targetKeys[0] ?? null,
+      holderId: session.createdBy?.id ?? null,
+      holderName: session.createdBy?.name ?? null,
+      heldByViewer: viewerId !== null && session.createdBy?.id === viewerId,
+    };
+  }
   const plan = await planRepository.findHoldSubject(lock.planId, tx);
   const hold = planHoldFor({
     itemStatus: item.status,
@@ -509,6 +535,7 @@ export async function readPlanHoldWithin(
   });
   if (!hold.held) return null;
   return {
+    kind: 'plan',
     itemKey: item.identifier,
     workItemId: item.id,
     planId: hold.planId,
@@ -518,8 +545,12 @@ export async function readPlanHoldWithin(
   };
 }
 
-/** A plan named by {@link readPlanHoldsWithin}: its label columns and status. */
+/** A plan — or an open session — named by {@link readPlanHoldsWithin}: its label
+ *  columns and, for a plan, its status. Keyed by {@link planHoldKey}. */
 export interface HeldPlanSubject {
+  kind: 'plan' | 'session';
+  planId: string | null;
+  sessionId: string | null;
   title: string | null;
   anchorKey: string | null;
   planStatus: PlanHoldDTO['planStatus'];
@@ -537,6 +568,7 @@ export async function readPlanHoldsWithin(
   items: readonly { id: string; identifier: string; status: string }[],
   tx: Prisma.TransactionClient,
   now: Date = new Date(),
+  viewerId: string | null = null,
 ): Promise<{ byItemId: Map<string, PlanHoldDTO>; plans: Map<string, HeldPlanSubject> }> {
   const byItemId = new Map<string, PlanHoldDTO>();
   const plans = new Map<string, HeldPlanSubject>();
@@ -556,6 +588,7 @@ export async function readPlanHoldsWithin(
     if (!hold.held) continue;
     const anchorKey = plan.session?.targetKeys[0] ?? null;
     byItemId.set(item.id, {
+      kind: 'plan',
       itemKey: item.identifier,
       workItemId: item.id,
       planId: hold.planId,
@@ -563,7 +596,50 @@ export async function readPlanHoldsWithin(
       sessionId: plan.sessionId,
       anchorKey,
     });
-    plans.set(hold.planId, { title: plan.title, anchorKey, planStatus: hold.planStatus });
+    plans.set(hold.planId, {
+      kind: 'plan',
+      planId: hold.planId,
+      sessionId: plan.sessionId,
+      title: plan.title,
+      anchorKey,
+      planStatus: hold.planStatus,
+    });
+  }
+  // AMENDMENT 23 §5 — the OPEN-session holds, through the same rule the funnel uses.
+  const sessionLocks = await planTargetLockRepository.listSessionHeldByWorkItemIds(
+    planning.map((item) => item.id),
+    tx,
+  );
+  for (const lock of sessionLocks) {
+    const item = itemById.get(lock.workItemId)!;
+    const hold = sessionHoldFor({
+      itemStatus: item.status,
+      lockSessionId: lock.sessionId,
+      sessionEndedAt: lock.session ? lock.session.endedAt : undefined,
+    });
+    if (!hold.held || !lock.session) continue;
+    const anchorKey = lock.session.targetKeys[0] ?? null;
+    const dto: PlanHoldDTO = {
+      kind: 'session',
+      itemKey: item.identifier,
+      workItemId: item.id,
+      planId: null,
+      planStatus: null,
+      sessionId: hold.sessionId,
+      anchorKey,
+      holderId: lock.session.createdBy?.id ?? null,
+      holderName: lock.session.createdBy?.name ?? null,
+      heldByViewer: viewerId !== null && lock.session.createdBy?.id === viewerId,
+    };
+    byItemId.set(item.id, dto);
+    plans.set(planHoldKey(dto), {
+      kind: 'session',
+      planId: null,
+      sessionId: hold.sessionId,
+      title: null,
+      anchorKey,
+      planStatus: null,
+    });
   }
   return { byItemId, plans };
 }
@@ -581,7 +657,7 @@ export const planTargetLockService = {
   async readBoardPlanHolds(
     projectId: string,
     items: readonly { id: string; identifier: string; status: string }[],
-    ctx: Pick<ServiceContext, 'workspaceId'>,
+    ctx: Pick<ServiceContext, 'workspaceId'> & { userId?: string | null },
   ): Promise<{
     byItemId: Map<string, PlanHoldDTO>;
     plans: Map<string, HeldPlanSubject & { heldCount: number }>;
@@ -591,22 +667,39 @@ export const planTargetLockService = {
     }
     return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
       const now = new Date();
-      const { byItemId, plans } = await readPlanHoldsWithin(items, tx, now);
-      const planIds = [...plans.keys()];
+      const { byItemId, plans } = await readPlanHoldsWithin(items, tx, now, ctx.userId ?? null);
+      const subjects = [...plans.values()];
+      const planIds = subjects.flatMap((p) => (p.kind === 'plan' && p.planId ? [p.planId] : []));
+      const sessionIds = subjects.flatMap((p) =>
+        p.kind === 'session' && p.sessionId ? [p.sessionId] : [],
+      );
       const counts = await planTargetLockRepository.countByPlanIds(
         {
           workspaceId: ctx.workspaceId,
           projectId,
           workItemStatus: PLANNING_STATUS_KEY,
           planIds,
-          leasedPlanIds: planIds.filter((id) => holdsWhile(plans.get(id)!.planStatus) === 'lease'),
+          leasedPlanIds: planIds.filter((id) => holdsWhile(plans.get(id)!.planStatus!) === 'lease'),
           leaseAfter: now,
         },
         tx,
       );
+      const sessionCounts = await planTargetLockRepository.countBySessionIds(
+        {
+          workspaceId: ctx.workspaceId,
+          projectId,
+          workItemStatus: PLANNING_STATUS_KEY,
+          sessionIds,
+        },
+        tx,
+      );
       const counted = new Map<string, HeldPlanSubject & { heldCount: number }>();
-      for (const [planId, subject] of plans) {
-        counted.set(planId, { ...subject, heldCount: counts.get(planId) ?? 0 });
+      for (const [key, subject] of plans) {
+        const heldCount =
+          subject.kind === 'plan'
+            ? (counts.get(subject.planId!) ?? 0)
+            : (sessionCounts.get(subject.sessionId!) ?? 0);
+        counted.set(key, { ...subject, heldCount });
       }
       return { byItemId, plans: counted };
     });
@@ -628,7 +721,7 @@ export const planTargetLockService = {
     return withWorkspaceContext(ctx, async (tx) => {
       const item = await workItemRepository.findById(workItemId, tx);
       if (!item || item.workspaceId !== ctx.workspaceId) return null;
-      return readPlanHoldWithin(item, tx);
+      return readPlanHoldWithin(item, tx, new Date(), ctx.userId);
     });
   },
 
@@ -644,6 +737,38 @@ export const planTargetLockService = {
    * Idempotent for the holding session: re-opening the same thread refreshes its
    * lease instead of failing, which is what makes the mount read safe to repeat.
    */
+  /**
+   * WHO ELSE holds one of the scope's cards right now (AMENDMENT 23 §4; MOTIR-7643)
+   * — the overlay's refusal, read on OPEN so the person is told before they type.
+   * A READ: it takes nothing. Called only when the caller resumed nothing, so any
+   * live lease is one a new session's acquire would be refused by — the same
+   * PlanTargetLockedError that refusal raises is built here, so the two say the
+   * same holder and the same `freesBy`.
+   */
+  async readForeignHoldForScope(
+    identifiers: readonly string[],
+    pctx: PlanTargetLockContext,
+    now: Date = new Date(),
+  ): Promise<PlanTargetLockedError | null> {
+    if (identifiers.length === 0) return null;
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        for (const item of await resolveTargets(identifiers, pctx.projectId, tx)) {
+          const lock = await planTargetLockRepository.findByWorkItemId(item.id, tx);
+          if (!lock || isExpired(lock.expiresAt, now)) continue;
+          return new PlanTargetLockedError(
+            item.identifier,
+            await holderName(lock.heldById, tx),
+            lock.expiresAt,
+            { sessionId: lock.sessionId, planId: lock.planId },
+          );
+        }
+        return null;
+      },
+    );
+  },
+
   async acquireForScope(
     sessionId: string,
     identifiers: readonly string[],
@@ -830,15 +955,32 @@ export const planTargetLockService = {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     return withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-      async (tx) => {
-        const locks = await planTargetLockRepository.listBySessionId(sessionId, tx);
-        const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];
-        for (const lock of locks) {
-          results.push({ workItemId: lock.workItemId, outcome: await releaseOne(lock, ctx, tx) });
-        }
-        return results;
-      },
+      (tx) => planTargetLockService.releaseForSessionWithin(sessionId, ctx, tx),
     );
+  },
+
+  /**
+   * {@link releaseForSession} INSIDE THE CALLER'S TRANSACTION — for the one end
+   * operation (`planChangeSessionsService.endSession`, AMENDMENT 23 §2), which
+   * stamps the end and gives the cards back in ONE transaction. `system` signs
+   * each restore as a background write, the way the sweep does, for an end
+   * Motir made rather than a person.
+   */
+  async releaseForSessionWithin(
+    sessionId: string,
+    actor: ServiceContext,
+    tx: Prisma.TransactionClient,
+    opts: { system?: boolean } = {},
+  ): Promise<Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }>> {
+    const locks = await planTargetLockRepository.listBySessionId(sessionId, tx);
+    const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];
+    for (const lock of locks) {
+      results.push({
+        workItemId: lock.workItemId,
+        outcome: await releaseOne(lock, actor, tx, opts),
+      });
+    }
+    return results;
   },
 
   /**
@@ -871,15 +1013,27 @@ export const planTargetLockService = {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     return withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-      async (tx) => {
-        const locks = await planTargetLockRepository.listByPlanId(planId, tx);
-        const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];
-        for (const lock of locks) {
-          results.push({ workItemId: lock.workItemId, outcome: await releaseOne(lock, ctx, tx) });
-        }
-        return results;
-      },
+      (tx) => planTargetLockService.releaseForPlanWithin(planId, ctx, tx),
     );
+  },
+
+  /** {@link releaseForPlan} INSIDE THE CALLER'S TRANSACTION — the end operation's
+   *  arm for a `generating` plan it discards (AMENDMENT 23 §2). */
+  async releaseForPlanWithin(
+    planId: string,
+    actor: ServiceContext,
+    tx: Prisma.TransactionClient,
+    opts: { system?: boolean } = {},
+  ): Promise<Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }>> {
+    const locks = await planTargetLockRepository.listByPlanId(planId, tx);
+    const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];
+    for (const lock of locks) {
+      results.push({
+        workItemId: lock.workItemId,
+        outcome: await releaseOne(lock, actor, tx, opts),
+      });
+    }
+    return results;
   },
 
   /**
@@ -899,6 +1053,20 @@ export const planTargetLockService = {
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
       (tx) => planTargetLockRepository.extendBySessionId(sessionId, leaseExpiryFrom(now), tx),
     );
+  },
+
+  /**
+   * {@link refreshForSession} INSIDE THE CALLER'S TRANSACTION — every TURN
+   * refreshes the lease, not only a submit (AMENDMENT 23 §2; MOTIR-7638), so a
+   * session's lease expiry and its idle deadline are the same instant and the
+   * idle close never ends a conversation a person is still having.
+   */
+  async refreshForSessionWithin(
+    sessionId: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return planTargetLockRepository.extendBySessionId(sessionId, leaseExpiryFrom(now), tx);
   },
 
   /**

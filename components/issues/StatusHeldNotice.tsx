@@ -8,9 +8,9 @@ import { ArrowDown, GitMerge, Lock, ScanEye, Sparkles } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/Button';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
-import { planRowDestination } from '@/lib/planning/planDestination';
+import { planRowDestination, sessionHoldDestination } from '@/lib/planning/planDestination';
 import type { ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
-import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { PlanHeldByPlanDTO, PlanHeldBySessionDTO, PlanHoldDTO } from '@/lib/dto/plans';
 import {
   OBSOLESCENCE_FIELD_ANCHOR,
   OBSOLESCENCE_GLYPH,
@@ -139,7 +139,7 @@ function ReviewAndApproveLink({ itemKey, kind }: { itemKey: string; kind: Approv
 /** The plan's door — where `planRowDestination` sends it. The planning surface is
  *  an overlay over THIS page, written with `shallowPush` so Close returns here; the
  *  plan page is an ordinary link. */
-function ReviewPlanLink({ plan }: { plan: PlanHoldDTO }) {
+function ReviewPlanLink({ plan }: { plan: PlanHeldByPlanDTO }) {
   const routes = useReaderRoutes();
   const t = useTranslations('approvalGate.statusHeld');
   const pathname = usePathname();
@@ -184,6 +184,52 @@ function ReviewPlanLink({ plan }: { plan: PlanHoldDTO }) {
       {content}
     </a>
   );
+}
+
+/** The SESSION's door (AMENDMENT 23 §5; MOTIR-7640) — the planning surface on the
+ *  holding session, an overlay over THIS page written with `shallowPush`. Not
+ *  drawn at all for a Visitor: there is no planning surface and no plan page. */
+function OpenSessionLink({ hold }: { hold: PlanHeldBySessionDTO }) {
+  const routes = useReaderRoutes();
+  const t = useTranslations('approvalGate.statusHeld');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const qs = searchParams?.toString() ?? '';
+  const destination = sessionHoldDestination({
+    sessionId: hold.sessionId,
+    host: `${pathname}${qs ? `?${qs}` : ''}`,
+    anchorKey: hold.anchorKey,
+    routes,
+  });
+  if (!destination) return null;
+  function onClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
+    event.preventDefault();
+    shallowPush(destination!.href);
+  }
+  return (
+    <a
+      href={destination.href}
+      onClick={onClick}
+      data-session-door={destination.kind}
+      className={buttonVariants({ variant: 'primary', size: 'sm' })}
+    >
+      <Sparkles aria-hidden className="h-3.5 w-3.5" />
+      {t('openSession')}
+    </a>
+  );
+}
+
+/** WHO is planning the card a session holds — the session line's second sentence,
+ *  shared with the board's footer `title` and its `aria-live` announcement. */
+export function sessionHolderSentence(
+  hold: Pick<PlanHeldBySessionDTO, 'heldByViewer' | 'holderName'>,
+  t: (key: string, values?: Record<string, string>) => string,
+): string {
+  if (hold.heldByViewer) return t('sessionByYou');
+  if (hold.holderName) return t('sessionBy', { name: hold.holderName });
+  return t('sessionByUnknown');
 }
 
 /** The mark's door — to the Obsolescence field, never a write. */
@@ -286,7 +332,20 @@ export function StatusHeldNotice({
       data-testid="status-held-notice"
       className="flex w-full flex-col gap-2 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-tint-yellow) px-(--spacing-control-x) py-(--spacing-control-y)"
     >
-      {plan ? (
+      {plan?.kind === 'session' ? (
+        <div className="flex items-start gap-2" data-waiting-on="session">
+          <Lock aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--el-text-strong)" />
+          <div className="flex min-w-0 flex-col items-start gap-2">
+            <p className="m-0 text-[13px] leading-snug text-(--el-text-strong)">
+              {t('sessionHeld')}
+            </p>
+            <p className="m-0 mt-0.5 text-xs leading-snug text-(--el-text-secondary)">
+              {sessionHolderSentence(plan, t)}
+            </p>
+            <OpenSessionLink hold={plan} />
+          </div>
+        </div>
+      ) : plan ? (
         <div className="flex items-start gap-2" data-waiting-on="plan">
           <Lock aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--el-text-strong)" />
           <div className="flex min-w-0 flex-col items-start gap-2">

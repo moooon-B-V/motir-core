@@ -232,6 +232,12 @@ function Refusal({
     case 'noDeadRun':
       title = t('noDeadRun');
       break;
+    case 'gateAwaiting':
+      title = t('gateAwaiting');
+      break;
+    case 'gateSentBack':
+      title = t('gateSentBack');
+      break;
     case 'theParent': {
       const key = refusal.parentKey ?? '';
       title = t.rich('theParent', {

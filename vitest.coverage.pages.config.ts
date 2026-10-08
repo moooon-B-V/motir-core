@@ -106,6 +106,21 @@ const STORY_FILES = [
   'lib/mcp/tools/publishDecisionPage.ts',
   'app/api/work-items/*/decision-page/route.ts',
   'components/approvals/DecisionRecordPagePicker.tsx',
+  // Story MOTIR-7565 (a page names a work item, and the work item knows it;
+  // MOTIR-7576): the derived-link diff, the link table's repository, the work
+  // item's Pages read with its cursor, mapper and route. The adapter's
+  // `replaceDerivedLinks` and `getPage`'s chip data are gated by the
+  // `pageStoreAdapter.ts` / `pagesService.ts` entries above; the package's
+  // `extractLinks` and mention node by the package's own floor.
+  'lib/pages/derivedLinks.ts',
+  'lib/repositories/pageWorkItemLinkRepository.ts',
+  'lib/services/pageLinksService.ts',
+  'lib/pages/workItemPagesCursor.ts',
+  'lib/mappers/pageLinkMappers.ts',
+  'app/api/work-items/*/pages/route.ts',
+  // The work item page's Pages section (MOTIR-7575) and its fetch helper.
+  'app/**/items/*/_components/PagesSection.tsx',
+  'lib/workItems/pageLinksClient.ts',
 ] as const;
 
 const SHARED_FILES = [
@@ -156,6 +171,8 @@ export default defineConfig({
       'tests/components/page-view.test.tsx',
       'tests/components/page-view-edges.test.tsx',
       'tests/components/pages-index.test.tsx',
+      // A page mentions a work item (Story MOTIR-5747 · MOTIR-7574): the host's binding.
+      'tests/components/pageEditorHost.test.tsx',
       // A decision may be a page (Story MOTIR-5761 · MOTIR-7441): the story gate, then each
       // card's own suite over the files above.
       'tests/integration/decisionPageStoryGate.test.ts',
@@ -166,6 +183,13 @@ export default defineConfig({
       'tests/approvalGates/decisionConfirmationPageRecord.test.ts',
       'tests/components/decision-port-page.test.tsx',
       'tests/components/decision-confirm-page-record.test.tsx',
+      // A page names a work item (Story MOTIR-7565): the story gate
+      // (`tests/pages/pageWorkItemLinks.story.integration.test.ts`, matched by
+      // `tests/pages/*.test.ts` above) and the Pages read's own suites.
+      'tests/services/pageLinksService.test.ts',
+      'tests/api/workItemPagesRoute.test.ts',
+      // The work item page's Pages section (MOTIR-7575).
+      'tests/components/pagesSection.test.tsx',
     ],
     coverage: {
       provider: 'v8',

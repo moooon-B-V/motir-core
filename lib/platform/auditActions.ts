@@ -288,6 +288,25 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * would explain), and a write is never `never`.
    */
   'enterprise_request.transition': { kind: 'write', reason: 'required' },
+  /**
+   * The IDEA STORE's writes (Story MOTIR-7662 · MOTIR-7671), `targetKind:
+   * 'idea'`, written by `ideasAdminService` inside `withPlatformWrite`. Reached
+   * from the console session OR — on `/api/platform/ideas/**` alone — a staff
+   * member's personal access token (ADR §2, the 2026-10-07 amendment), so every
+   * row's `metadata.credential` names which: `{ kind: 'session' }` or
+   * `{ kind: 'token', apiTokenId }`.
+   *
+   * `retire` and `delete` are `required`: the trail must say why an idea left
+   * the public list. The other four are `inherited` — required on the row, but
+   * supplied by the caller's context (the skill's run, or "edited in the
+   * console") rather than typed per idea.
+   */
+  'idea.add': { kind: 'write', reason: 'inherited' },
+  'idea.update': { kind: 'write', reason: 'inherited' },
+  'idea.retire': { kind: 'write', reason: 'required' },
+  'idea.delete': { kind: 'write', reason: 'required' },
+  'idea.tag_add': { kind: 'write', reason: 'inherited' },
+  'idea.research_run': { kind: 'write', reason: 'inherited' },
 } as const satisfies Record<
   string,
   { kind: PlatformAuditActionKind; reason: PlatformAuditReasonPolicy }

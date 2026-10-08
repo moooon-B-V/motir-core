@@ -89,6 +89,13 @@ vi.mock('@/lib/services/projectSquareService', () => ({
 vi.mock('@/lib/services/projectTagsService', () => ({
   projectTagsService: { listCategories: vi.fn(async () => []) },
 }));
+vi.mock('@/lib/services/ideasPublicService', () => ({
+  ideasPublicService: {
+    listActive: vi.fn(async () => ({ items: [], categories: [], total: 0 })),
+    listTags: vi.fn(async () => []),
+    getBySlug: vi.fn(async () => ({})),
+  },
+}));
 vi.mock('@/lib/rateLimit/publicWriteGuard', () => ({
   enforcePublicWriteRateLimit: vi.fn(async () => null),
 }));
@@ -110,6 +117,9 @@ const subscribe = await import('@/app/api/public/p/[identifier]/subscribe/route'
 const follow = await import('@/app/api/public/p/[identifier]/follow/route');
 const explore = await import('@/app/api/public/explore/route');
 const categories = await import('@/app/api/public/categories/route');
+const ideas = await import('@/app/api/public/ideas/route');
+const ideaTags = await import('@/app/api/public/ideas/tags/route');
+const ideaDetail = await import('@/app/api/public/ideas/[slug]/route');
 const hosts = await import('@/app/api/public/hosts/[host]/route');
 const requests = await import('@/app/api/public/projects/[projectId]/requests/route');
 const duplicates = await import('@/app/api/public/projects/[projectId]/requests/duplicates/route');
@@ -136,6 +146,28 @@ const send = (path: string, method: string, body?: unknown) =>
   });
 
 const CASES: Case[] = [
+  {
+    // MOTIR-7676 — the idea store's three anonymous reads (Story MOTIR-7662).
+    file: 'ideas/route.ts',
+    method: 'GET',
+    gated: false,
+    call: () => (ideas.GET as Handler)(get('/api/public/ideas?category=pets&tag=smb')),
+  },
+  {
+    file: 'ideas/tags/route.ts',
+    method: 'GET',
+    gated: false,
+    call: () => (ideaTags.GET as unknown as () => Promise<Response>)(),
+  },
+  {
+    file: 'ideas/[slug]/route.ts',
+    method: 'GET',
+    gated: false,
+    call: () =>
+      (ideaDetail.GET as Handler)(get('/api/public/ideas/a-care-team-app-for-families'), {
+        params: Promise.resolve({ slug: 'a-care-team-app-for-families' }),
+      }),
+  },
   {
     file: 'p/[identifier]/route.ts',
     method: 'GET',
@@ -331,6 +363,9 @@ describe('the four GATED routes refuse, and are exceptions rather than omissions
     // ANONYMOUS half, and more firmly than its neighbours — the others read a
     // session to personalise, this one reads none at all, because it is called
     // by another server before a page exists.
-    expect(CASES.filter((c) => !c.gated)).toHaveLength(14);
+    // 14 → 17: MOTIR-7676's three idea-store reads (`/api/public/ideas`, its
+    // `tags` facet and one idea by slug), anonymous like the directory they sit
+    // beside and reading no session at all.
+    expect(CASES.filter((c) => !c.gated)).toHaveLength(17);
   });
 });

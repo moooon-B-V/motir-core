@@ -252,15 +252,15 @@ describe('open_plan_session — one thread per scope, resumed not forked', () =>
     await client.close();
   });
 
-  it('an OVERLAPPING anchor set is refused, naming the item and the holder (MOTIR-2787)', async () => {
-    // The hole `scope_key` cannot close, through the agent surface: `{A}` and
-    // `{A,B}` are two different threads about one common item, and before this
-    // both would have expanded it — two planners writing competing children under
-    // one parent, neither aware of the other, with nobody getting an error.
-    //
-    // ⚠️ IT IS REFUSED FOR THE SAME CALLER TOO, deliberately. The unit is the
-    // planning SESSION, not the person: one agent holding two conversations about
-    // one item produces exactly the same strange tree as two agents do.
+  it('an OVERLAPPING anchor set from the SAME caller takes them back to their session (AMENDMENT 23 §3)', async () => {
+    // REVERSED by AMENDMENT 23 §3 (MOTIR-7639). This used to assert the same
+    // caller was REFUSED, on the reasoning that one agent holding two
+    // conversations about one item builds the same strange tree as two agents.
+    // The amendment keeps that outcome impossible a different way: an open on a
+    // card the caller's own open session holds RETURNS that session, so there is
+    // still only one conversation about the item, and nothing is refused or
+    // taken over. Another person is still refused (`PLAN_TARGET_LOCKED`, with who
+    // and when it frees) — `planningTargetLockGate.test.ts` drives that race.
     const fx = await makeWorkItemFixture();
     const a = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'story', title: 'Story A' },
@@ -272,7 +272,7 @@ describe('open_plan_session — one thread per scope, resumed not forked', () =>
     );
     const client = await connectClient(fx.ctx);
 
-    session(
+    const onA = session(
       await call(client, OPEN_PLAN_SESSION_TOOL_NAME, {
         projectKey: 'PROD',
         targetKeys: [a.identifier],
@@ -284,14 +284,9 @@ describe('open_plan_session — one thread per scope, resumed not forked', () =>
       targetKeys: [a.identifier, b.identifier],
     });
 
-    expect(overlapping.isError).toBe(true);
-    // The agent has to be able to act on this: which target, and who holds it.
-    // A bare "locked" would leave it retrying the same refused call.
-    expect(text(overlapping)).toContain('PLAN_TARGET_LOCKED');
-    expect(text(overlapping)).toContain(a.identifier);
-
-    // The refused open wrote NOTHING — no second thread, and B is untouched and
-    // still plannable on its own.
+    expect(overlapping.isError).toBeFalsy();
+    expect(session(overlapping).id).toBe(onA.id);
+    // No second thread, and B is untouched and still plannable on its own.
     expect(await adminDb.planChangeSession.count()).toBe(1);
     expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: b.id } })).status).toBe('todo');
     const onB = session(
@@ -890,17 +885,26 @@ describe('plan-session tools — grant narrowing', () => {
 describe('the conversation addressed BY ID (MOTIR-6028)', () => {
   const THREE_HOURS = 3 * 60 * 60 * 1000;
 
-  /** An OLDER conversation gone quiet past the 2-hour window, and the NEWER one
-   *  the next open starts — two sessions of one (project-wide) scope. */
+  /** Two OPEN conversations of one (project-wide) scope: the OLDER one gone
+   *  quiet, and a NEWER one written directly — an open session is resumed at any
+   *  age (AMENDMENT 23 §3), so the doors never start this sibling themselves. */
   async function twoConversations(client: Client) {
     const older = session(
       await call(client, APPEND_PLAN_TURN_TOOL_NAME, { projectKey: 'PROD', body: 'older' }),
     );
-    await adminDb.planChangeSession.update({
+    const row = await adminDb.planChangeSession.update({
       where: { id: older.id },
       data: { lastActivityAt: new Date(Date.now() - THREE_HOURS) },
     });
-    const newer = session(await call(client, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' }));
+    const newer = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: row.workspaceId,
+        projectId: row.projectId,
+        createdById: row.createdById,
+        scopeKey: row.scopeKey,
+        targetKeys: row.targetKeys,
+      },
+    });
     expect(newer.id).not.toBe(older.id);
     return { older, newer };
   }

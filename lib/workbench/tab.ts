@@ -32,6 +32,7 @@ export type WorkbenchTab =
   | 'todo'
   | 'in-progress'
   | 'to-fix'
+  | 'to-resume'
   | 'finished'
   | 'watching'
   | 'approvals';
@@ -52,6 +53,9 @@ export const WORKBENCH_TABS: readonly WorkbenchTab[] = [
   // TO FIX (MOTIR-6604; design § 30) — second, amending § 21's strip: what is
   // waiting on you to DECIDE, then what is waiting on you to REPAIR.
   'to-fix',
+  // TO RESUME (MOTIR-7707; design § 35) — third: a run waiting on an approval moves
+  // the moment it is given, but a terminal run still waits for `motir continue`.
+  'to-resume',
   'in-progress',
   'todo',
   'finished',
@@ -67,6 +71,7 @@ const TAB_PARAM: Readonly<Record<WorkbenchTab, string>> = {
   approvals: 'approvals',
   'in-progress': 'in-progress',
   'to-fix': 'to-fix',
+  'to-resume': 'to-resume',
   todo: 'todo',
   finished: 'finished',
   watching: 'watching',

@@ -94,8 +94,13 @@
  *   moved — every path, method, response field and status is served exactly as
  *   before, and stays so until a 2.x arrives alongside (§D). Removing them is
  *   that MAJOR's decision, which nobody has taken.
+ * - `1.7.0` — MOTIR-7676 (Story MOTIR-7662) gives the idea store its public
+ *   reads: `listPublicIdeas` (`/api/public/ideas`), `listPublicIdeaTags` and
+ *   `getPublicIdea` (`/api/public/ideas/{slug}`), what motir.co's ideas page is
+ *   built against. Additive under §D — three new anonymous operations and their
+ *   schemas; no existing operation, path or response moved.
  */
-export const PUBLIC_CONTRACT_VERSION = '1.6.0';
+export const PUBLIC_CONTRACT_VERSION = '1.7.0';
 
 /** The MAJOR, for the document's own identity. */
 export const PUBLIC_API_MAJOR = 1;

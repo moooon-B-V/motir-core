@@ -68,6 +68,7 @@ import { pullRequestReconcile } from './definitions/pullRequestReconcile';
 import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
 import { agentReviewRequested } from './definitions/agentReviewRequested';
 import { designAutoRerun } from './definitions/designAutoRerun';
+import { gateResume } from './definitions/gateResume';
 import { pullRequestBaseMoved } from './definitions/pullRequestBaseMoved';
 import { pullRequestHeadMoved } from './definitions/pullRequestHeadMoved';
 import {
@@ -172,6 +173,8 @@ export const jobDefinitions = [
   // The review run's start (Story MOTIR-1626 · MOTIR-6820).
   agentReviewRequested,
   designAutoRerun,
+  // The automatic hosted resume after a held gate is approved (MOTIR-7710).
+  gateResume,
   pullRequestBaseMoved,
   // The head-push re-read beside it (MOTIR-7063): a push onto a base already moved.
   pullRequestHeadMoved,

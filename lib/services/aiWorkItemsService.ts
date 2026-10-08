@@ -11,11 +11,18 @@ import {
   PLANNER_BUGS_PER_JOB,
 } from '@/lib/ai/plannerTenantBug';
 import { NoPlanForJobError, PlannerBugCapExceededError } from '@/lib/plans/errors';
+import { FiledBugClosedError } from '@/lib/ai/filedBugErrors';
+import { commentsService } from '@/lib/services/commentsService';
+import { workflowsService } from '@/lib/services/workflowsService';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import type { CommentDTO } from '@/lib/dto/comments';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { planRevisionsService } from '@/lib/services/planRevisionsService';
 import type { PlanRevisionAgentActor } from '@/lib/services/planRevisionsService';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { attachmentsService } from '@/lib/services/attachmentsService';
+import type { AttachmentDTO } from '@/lib/dto/attachments';
 
 // The AI bug-filing write path (MOTIR-1450) — the ONE service method the
 // internal `POST /api/internal/ai/work-items` route calls. The AI self-learning
@@ -105,6 +112,59 @@ export const aiWorkItemsService = {
       },
       ctx,
     );
+  },
+
+  /**
+   * Attach ONE file to a work item, AS the system principal (MOTIR-7723) — the
+   * service-bearer twin of `POST /api/v1/work-items/{key}/attachments`, for the
+   * caller that holds no PAT: motir-ai, putting `planning-record.json` on the
+   * planning bug it has just filed through {@link fileBug}.
+   *
+   * Resolves the KEY the way `fileBug` resolves its parent — the project inside
+   * the principal's workspace (404-not-403), then the item by identifier — and
+   * hands the id to `attachmentsService.attachToWorkItem`, the ONE upload
+   * implementation (`attachment-api-door.md` §1). Every gate runs there
+   * unchanged: `attachment:create`, size, MIME, the per-user throttle and the
+   * org storage cap. The row is stamped `api`, the source every non-panel
+   * upload entrance writes.
+   */
+  async attachFile(
+    input: { identifier: string; file: File },
+    ctx: ServiceContext,
+  ): Promise<AttachmentDTO> {
+    const identifier = input.identifier.trim().toUpperCase();
+    const dash = identifier.lastIndexOf('-');
+    const project = await resolveServiceProjectByKey(identifier.slice(0, dash), ctx);
+    const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
+    return attachmentsService.attachToWorkItem(item.id, input.file, ctx, 'api');
+  },
+
+  /**
+   * Replace the description of a bug the SYSTEM PRINCIPAL ITSELF FILED
+   * (MOTIR-7723). The planning alarm files its bug with the machine record
+   * inline, attaches the record through {@link attachFile}, and then settles the
+   * body to say which of the two the reader should open — a fact it only has
+   * after the bug exists.
+   *
+   * ⚠️ THE BOUND IS THE REPORTER. The service bearer may target any project in
+   * the meta workspace, so without this check it could rewrite a card a person
+   * wrote. Anything that is not a `bug` reported by this principal reads as
+   * `WorkItemNotFoundError` (404) — the same answer an unknown key gets, so the
+   * route says nothing about cards it may not touch. Every edit guard
+   * (`updateWorkItem`'s edit gate, the row lock, the revision) runs unchanged.
+   */
+  async updateFiledBugDescription(
+    input: { identifier: string; descriptionMd: string },
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto> {
+    const identifier = input.identifier.trim().toUpperCase();
+    const dash = identifier.lastIndexOf('-');
+    const project = await resolveServiceProjectByKey(identifier.slice(0, dash), ctx);
+    const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
+    if (item.kind !== 'bug' || item.reporterId !== ctx.userId) {
+      throw new WorkItemNotFoundError(identifier);
+    }
+    return workItemsService.updateWorkItem(item.id, { descriptionMd: input.descriptionMd }, ctx);
   },
 
   /**
@@ -232,6 +292,34 @@ export const aiWorkItemsService = {
         return { key: dto.identifier, id: dto.id };
       },
     );
+  },
+  /**
+   * Comment on a bug Motir filed itself (MOTIR-7722) — how a REPEAT planning
+   * failure lands: the same error code, session kind and model inside motir-ai's
+   * 24-hour window adds its record to the open bug rather than filing another.
+   *
+   * The door is deliberately narrow. The item must be a `bug` the SYSTEM
+   * principal reported, so the service bearer cannot comment on a person's
+   * card; anything else answers 404, the same as a key that does not exist. A
+   * bug that is archived or in its project's done category answers
+   * `FiledBugClosedError` (409), and motir-ai files a new bug instead. The
+   * comment itself goes through `commentsService.addComment`, unbypassed.
+   */
+  async commentOnFiledBug(
+    input: { identifier: string; bodyMd: string },
+    ctx: ServiceContext,
+  ): Promise<CommentDTO> {
+    const identifier = input.identifier.trim().toUpperCase();
+    const projectKey = identifier.slice(0, identifier.lastIndexOf('-'));
+    const project = await resolveServiceProjectByKey(projectKey, ctx);
+    const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
+    if (item.kind !== 'bug' || item.reporterId !== ctx.userId) {
+      throw new WorkItemNotFoundError(identifier);
+    }
+    if (item.archivedAt !== null) throw new FiledBugClosedError(identifier);
+    const terminal = await workflowsService.getTerminalStatusKeys(project.id, ctx.workspaceId);
+    if (terminal.has(item.status)) throw new FiledBugClosedError(identifier);
+    return commentsService.addComment(item.id, { bodyMd: input.bodyMd }, ctx);
   },
 };
 

@@ -950,6 +950,71 @@ describe('continue hosted — a leaf whose run died', () => {
   });
 });
 
+/** A card whose one run stopped at a gate (MOTIR-7708): closed `gated`, holding one
+ *  `design_result` gate on the card in `state`. */
+async function gatedCard(state: 'awaiting' | 'approved') {
+  const { card, deadRunId } = await deadCard();
+  await dispatchRunService.close(deadRunId, { stopReason: 'gated' }, fx.ctx);
+  const gate = await adminDb.approvalGate.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      workItemId: card.id,
+      kind: 'design_result',
+      subjectId: `subject-${card.id}`,
+      state,
+      ...(state === 'approved' ? { decidedById: fx.ownerId, decidedAt: new Date() } : {}),
+    },
+  });
+  await adminDb.dispatchRunHeldGate.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      dispatchRunId: deadRunId,
+      gateId: gate.id,
+      workItemId: card.id,
+      kind: 'design_result',
+    },
+  });
+  return { card, gatedRunId: deadRunId };
+}
+
+describe('continue hosted — a run that stopped at a gate (MOTIR-7708)', () => {
+  it('boots ONE hosted continue once its gate is approved, recorded as a resume', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card, gatedRunId } = await gatedCard('approved');
+
+    const started = await startContinue(card.identifier);
+
+    expect(started.created).toBe(true);
+    expect(await continueRuns()).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    expect(fakeOrchestrator.specs[0]!.env).toMatchObject({ MOTIR_RUN_MODE: 'continue' });
+    const opened = await adminDb.dispatchRunEvent.findFirstOrThrow({
+      where: { dispatchRunId: started.dispatchRunId, kind: 'run_opened' },
+    });
+    expect(opened.data).toMatchObject({
+      continuesRunId: gatedRunId,
+      resumesGated: true,
+      branch: `subtask/${card.identifier}-work`,
+    });
+    // The gated run is left as it ended — a resume does not rewrite it as a death.
+    expect(
+      await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: gatedRunId } }),
+    ).toMatchObject({ status: 'succeeded', stopReason: 'gated' });
+  });
+
+  it('while its gate still waits: hosted_continue_gate_awaiting, nothing opened', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await gatedCard('awaiting');
+
+    await expect(startContinue(card.identifier)).rejects.toMatchObject({
+      code: 'hosted_continue_gate_awaiting',
+    });
+    expect(await continueRuns()).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+});
+
 describe('continue hosted — every refusal before anything is opened', () => {
   async function expectNoContinue(cardId: string): Promise<void> {
     expect(await continueRuns()).toEqual([]);

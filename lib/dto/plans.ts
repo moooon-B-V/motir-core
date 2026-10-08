@@ -1601,7 +1601,11 @@ export interface PlanHistoryListOptions {
  * (`lib/planning/planDestination.ts`): a plan WITH a session opens the planning
  * surface, one without opens `/plans/<planId>`.
  */
-export interface PlanHoldDTO {
+export type PlanHoldDTO = PlanHeldByPlanDTO | PlanHeldBySessionDTO;
+
+/** An UNDECIDED PLAN holds the card (AMENDMENT 21 §1). */
+export interface PlanHeldByPlanDTO {
+  kind: 'plan';
   /** The held card's `KEY-n`. */
   itemKey: string;
   workItemId: string;
@@ -1613,6 +1617,39 @@ export interface PlanHoldDTO {
   sessionId: string | null;
   /** The plan's first anchor key (its session's `targetKeys[0]`), or null. */
   anchorKey: string | null;
+}
+
+/**
+ * An OPEN planning SESSION holds the card (AMENDMENT 23 §5; MOTIR-7640) — before
+ * any plan exists, or while its plan is still being written. `planId` and
+ * `planStatus` are null by decision; the surfaces branch on `kind`.
+ */
+export interface PlanHeldBySessionDTO {
+  kind: 'session';
+  itemKey: string;
+  workItemId: string;
+  planId: null;
+  planStatus: null;
+  /** The holding session — the Open the session door's address. */
+  sessionId: string;
+  /** The session's first anchor key (`targetKeys[0]`), or null when project-wide. */
+  anchorKey: string | null;
+  /** Who started the session, so the line can say who is planning it; null for
+   *  a departed starter (the line then reads "A teammate"). */
+  holderId: string | null;
+  holderName: string | null;
+  /** Whether the READER started it — the line then says "You are planning it".
+   *  False wherever the read has no reader (a background mover). */
+  heldByViewer: boolean;
+}
+
+/** The key a hold is grouped by on a board: the plan, else the session. */
+export function planHoldKey(hold: {
+  kind?: PlanHoldDTO['kind'];
+  planId: string | null;
+  sessionId?: string | null;
+}): string {
+  return hold.kind === 'session' ? `session:${hold.sessionId}` : hold.planId!;
 }
 
 /**

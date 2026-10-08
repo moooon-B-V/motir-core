@@ -1915,3 +1915,85 @@ gate's row and overlay; this section holds the runs area's rules.
   whose gate was marked done counts as skipped: the run did not do it.
 - **zh** (Panel 4): 已跳过 — 等你处理。 · 已跳过 — 等 {name} 处理。 · 已跳过 — 已由 {name} 标记完成。 ·
   已跳过 — 人工工作。 · 等你处理 {n} 项 · 等他人处理 {n} 项.
+
+## Stopped at a gate — a run that waits on an approval is not dead (MOTIR-7702, 2026-10-07)
+
+**AMENDS** § _Run died_ above — Panel **R1** of `run-section--run-died.mock.html` (the run section's died line
+and RUN pill) — in the delta **[`run-section--gated.mock.html`](./run-section--gated.mock.html)**, Panels
+**G1–G6** and the zh panels, at desktop, dark (G1) and ~400px (G1, G6). **No existing mock is edited.** Card
+MOTIR-7702 (Story MOTIR-7701); built by **MOTIR-7713**. The Workbench half — the **To resume** tab — is
+`design/workbench/design-notes.md` **§ 35** and `workbench--to-resume.mock.html`; § 35.6 holds the shared copy
+for the gate list, the gate states and the skip reasons, which this section reuses rather than re-keys.
+
+**Why it is owed.** A parent run that stops because its remaining work waits on an approval closes `gated`
+(MOTIR-7703), which maps to `succeeded` and is outside `DIED_STATUSES`. Without a marker of its own the run
+section either says nothing (it looks finished) or — once read as not alive — _Run died_, which tells the reader
+the run broke when it is simply waiting for them.
+
+### The panels
+
+| panel | state                                                                                                        | shown when (and the card that specifies it)                                                                      |
+| ----- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| G1    | **Stopped at a gate** — the RUN pill, the line naming the held gate, the gate rows, the history row (hosted) | the section's run closed `gated` and every held gate is awaiting (MOTIR-7703 rows; MOTIR-7707 `waiting_on_gate`) |
+| G1b   | the same for a **terminal** run, with the viewer as the decider; the line NAMES `motir continue <KEY>`       | origin is not hosted, so nothing resumes by itself (MOTIR-7710 `not_a_candidate`)                                |
+| G2    | **Ready to resume** — several gates, one approved; the command is copyable                                   | a held gate approved / chosen / confirmed / marked done (MOTIR-7707 `ready_to_resume`; MOTIR-7708 `resumable`)   |
+| G3    | **Resuming** — the auto-resume opened a run; the line links to it; the history shows both runs               | `GateResume.outcome = started` (MOTIR-7710); the continue run records it resumes a gated run (MOTIR-7708)        |
+| G4    | **Could not resume** — the gate was approved, the auto-resume was refused; the reason in words               | `GateResume.outcome = skipped` + `skipReason` (MOTIR-7710)                                                       |
+| G5    | **Gate sent back** — nothing resumes                                                                         | a held gate `changes_requested` / `declined` / `overturned` (MOTIR-7707; MOTIR-7708 refuses `gate_sent_back`)    |
+| G6    | **A child card** of the gated parent run — points UP at the parent                                           | the card was a leg of a gated `run_scope` run (MOTIR-7703's scope)                                               |
+
+### Decisions
+
+| decision        | chosen                                                                                                                  | why                                                                                                                                                                              |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| where it sits   | the Run died line's slot (`rd-run-line`), with the RUN pill beside the leg pill                                         | one slot for "what became of this run"; a gated run and a died run are never both the latest                                                                                     |
+| the tone        | `pill-yellow` — the gate's own Awaiting tint (the overlay's _Awaiting you_) — glyph `circle-pause` in `--el-icon-muted` | _waiting_ is neither failed nor unknown: peach is the died/timed-out tone and must not be borrowed. No new hue: the tint is already the product's word for "awaiting a decision" |
+| naming the gate | by kind and key in the line (_the design result on ACME-13_), then one row per held gate with _Open_                    | the reader's next question is _which approval_; the overlay (MOTIR-5222) is where it is decided                                                                                  |
+| the command     | NAMED while waiting (non-hosted), COPYABLE once ready                                                                   | the claim refuses `gate_awaiting` until then (MOTIR-7708); a copy block for a refused command is a trap — § _Run died_'s own rule                                                |
+| Resuming        | the section's current run becomes the continue (_Running_), and the line links to it                                    | the auto-resume opened a real run; the reader should be one click from watching it                                                                                               |
+| a child card    | the D7 pointer grammar (`corner-left-up`), naming the parent                                                            | the gate is not on the child, and the parent is what resumes                                                                                                                     |
+| a died run      | unchanged — MOTIR-6529's copy                                                                                           | the card's scope: a genuinely died run is still To fix's _Run died_                                                                                                              |
+
+### Copy — `en` + `zh`
+
+Namespace **`runs.gated`**, beside `runs.runDied`. Gate kind labels, gate states, deciders and skip reasons are
+`workbench.toResume.*` (§ 35.6), shared.
+
+| key               | en                                                                                                                                                                                              | zh                                                                                                                         |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `pill`            | Stopped at a gate                                                                                                                                                                               | 停在审批处                                                                                                                 |
+| `pillReady`       | Ready to resume                                                                                                                                                                                 | 可以继续                                                                                                                   |
+| `gate`            | the {kind} on {key}                                                                                                                                                                             | {key} 的{kind}                                                                                                             |
+| `waitingHosted`   | This run stopped at a gate — waiting on {gate}. Its work is kept on {branch}, and it carries on by itself on the hosted agent once the gate is approved.                                        | 此运行停在审批处——正在等待{gate}。其工作保留在分支 {branch} 上，审批通过后会在托管代理上自动继续。                         |
+| `waitingLocal`    | This run stopped at a gate — waiting on {gate}. Its work is kept on its branch; once the gate is approved, continue it with {command}.                                                          | 此运行停在审批处——正在等待{gate}。其工作保留在分支上；审批通过后，用 {command} 继续。                                      |
+| `waitingMany`     | waiting on {count} approvals (replaces _waiting on {gate}_)                                                                                                                                     | 等待 {count} 项审批                                                                                                        |
+| `ready`           | Ready to resume — {approved} of {total} approvals given. Continue it to build what was approved; it stops again at any gate still waiting:                                                      | 可以继续——{total} 项审批中已通过 {approved} 项。继续即可构建已批准的工作；它会在仍在等待的审批处再次停下：                 |
+| `resuming`        | Resuming — {name} approved {gate}, so a new run carries on on the same branch. <link>See the new run</link>                                                                                     | 正在继续——{name} 已批准{gate}，新的运行正在同一分支上继续。<link>查看新运行</link>                                         |
+| `couldNot`        | {name} approved {gate}, but the run could not resume by itself: {reason}. Continue it from <link>To resume</link> on the Workbench, or with {command}.                                          | {name} 已批准{gate}，但运行未能自动继续：{reason}。请在工作台的<link>待继续</link>中继续，或使用 {command}。               |
+| `sentBack`        | This run stopped at a gate — {gate} was sent back: changes requested by {name}. Nothing resumes until a new version is approved.                                                                | 此运行停在审批处——{gate}已被退回：{name} 要求修改。在新版本获批之前不会继续。                                              |
+| `child`           | This work item was run as part of <link>{parent}</link>, and that run stopped at a gate — waiting on {gate}. It carries on from {parent} once the gate is approved, and this work item with it. | 此工作项的运行属于 <link>{parent}</link>，它停在审批处——正在等待{gate}。审批通过后会从 {parent} 继续，此工作项也随之推进。 |
+| `history.resumed` | resumed after an approval                                                                                                                                                                       | 审批后继续                                                                                                                 |
+| `history.partOf`  | part of {parent}                                                                                                                                                                                | 属于 {parent}                                                                                                              |
+| `gatesLabel`      | Gates holding this run                                                                                                                                                                          | 使此运行停下的审批                                                                                                         |
+
+`{branch}` and `{command}` are set in the mono face (`rd-branch`); `{reason}` is § 35.6's skip-reason words.
+
+### Tone and tokens
+
+`--el-*` colour and element-semantic shape tokens only; the `rg-` block quotes no raw hue. The RUN pill:
+`pill-yellow` (`--el-tint-yellow` + `--el-text-strong`) for _Stopped at a gate_, `pill-mint` for _Ready to
+resume_, `pill-sky` for the resumed run's _Running_. The line keeps `rd-run-line`'s ink (`--el-text-secondary`,
+names in `--el-text`); only its glyph moves from the died line's `--el-warning` to `--el-icon-muted`. Gate rows:
+kind chip `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`, `--radius-badge`; key `--el-text-secondary`
+mono; decider `--el-text-secondary`; _Open_ `--el-link`. Two sprites are added, extracted from
+`lucide-react@1.16.0` with provenance comments: `circle-pause` (`#i-pause`) and `undo-2` (`#i-undo`).
+
+### GIVES / TAKES
+
+| key        | GIVES / TAKES                                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-7713 | **GIVES** every panel (G1–G6), the copy and the tokens above. **TAKES** the held-gate rows (MOTIR-7703), the resume record (MOTIR-7710), the resumed mark (MOTIR-7708) |
+| MOTIR-7703 | **TAKES** that a gated close names its gates — G1's line and rows read them                                                                                            |
+| MOTIR-7708 | **TAKES** that a continue opened on a gated run records it resumes one — G3's history row reads it                                                                     |
+| MOTIR-6529 | **GIVES** nothing new; its Run died line and pill are unchanged for a run that really died                                                                             |
+| MOTIR-7702 | this card                                                                                                                                                              |

@@ -708,6 +708,10 @@ export function toWorkItemContinueClaim(
     mode: body.mode,
     landedKeys: [...body.landedKeys],
     resumedKeys: [...body.resumedKeys],
+    // The gates of a run that stopped at one (MOTIR-7708) — what the takeover line
+    // names when it resumes after an approval, and what a gate refusal names.
+    gates: body.gates.map((g) => ({ key: g.key, kind: g.kind, state: g.state })),
+    resumesGated: body.resumesGated,
   };
 }
 

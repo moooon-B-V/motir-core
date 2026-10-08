@@ -213,6 +213,65 @@ export default defineConfig({
         // pins (`dispatchRunService.ts`, `dispatchRunMappers.ts`, …) or were never in the
         // report; their CHANGED lines are measured in the MOTIR-7479 PR body.
         'lib/approvalGates/manualWorkHandler.ts',
+        // Story MOTIR-7662 · MOTIR-7677 — the idea store: its services, repositories,
+        // gate, route transport and the public and staff routes. MEASURED on this
+        // branch against the story's own specs (`tests/ideas/**`,
+        // `tests/api/platformIdeasRoutes`, `tests/api/publicIdeasRoutes`,
+        // `tests/platform/ideasGate`, `tests/platform/platformTokenBoundary`): every
+        // file ≥ 94.5% branches and ≥ 99.6% lines, 100% functions; the admin service
+        // is the low one at 99.6 / 94.5 / 100 / 99.6. Pinned at the floor below.
+        // `lib/platform/context.ts` grew `withPlatformWrite` here; it measured
+        // 100 / 95.8 / 100 / 100 and stays in the report it was already in or not.
+        // Story MOTIR-7664 · MOTIR-7682 — the console's Ideas page (MOTIR-7680 / 7681):
+        // the list and detail loaders, the three Server Actions, the edit form, the
+        // two dialogs, the filter bar and the rail row. MEASURED on this branch
+        // against the story's specs (`tests/integration/ideasConsoleStoryGate`,
+        // `tests/platform/ideas*`, `tests/components/idea-*`,
+        // `tests/components/admin-shell-ideas`): every file 100% lines and
+        // functions, ≥ 90.9% branches — `IdeasTable` (90.9) and `DeleteIdeaDialog`
+        // / `IdeaFilters` are the thin ones. Pinned at the floor in `thresholds`.
+        // `AdminShell` was ungated before this story added its row; it measures
+        // 100 / 100 / 100 / 100 on the shell spec alone. `app/(admin)/layout.tsx`
+        // gained one label and is the gate's, covered by the gate suites.
+        'app/**/admin/ideas/actions.ts',
+        'app/**/admin/ideas/page.tsx',
+        'app/**/admin/ideas/\\[slug\\]/page.tsx',
+        'app/**/admin/ideas/\\[slug\\]/_components/DeleteIdeaDialog.tsx',
+        'app/**/admin/ideas/\\[slug\\]/_components/IdeaEditForm.tsx',
+        'app/**/admin/ideas/\\[slug\\]/_components/IdeaWorkbench.tsx',
+        'app/**/admin/ideas/\\[slug\\]/_components/RetireIdeaDialog.tsx',
+        'app/**/admin/ideas/\\[slug\\]/_components/ideaDraft.ts',
+        'app/**/admin/ideas/_components/IdeaBits.tsx',
+        'app/**/admin/ideas/_components/IdeaDetailView.tsx',
+        'app/**/admin/ideas/_components/IdeaFilters.tsx',
+        'app/**/admin/ideas/_components/IdeasSkeleton.tsx',
+        'app/**/admin/ideas/_components/IdeasTable.tsx',
+        'app/**/admin/ideas/_components/IdeasUnavailable.tsx',
+        'app/**/admin/ideas/_components/ideaListQuery.ts',
+        'app/**/_components/AdminShell.tsx',
+        'lib/ideas/consoleActor.ts',
+        'lib/services/ideasAdminService.ts',
+        'lib/services/ideasPublicService.ts',
+        'lib/repositories/ideaRepository.ts',
+        'lib/repositories/ideaPublicRepository.ts',
+        'lib/repositories/ideaTagRepository.ts',
+        'lib/repositories/ideaResearchRunRepository.ts',
+        'lib/mappers/ideaMappers.ts',
+        'lib/ideas/categories.ts',
+        'lib/ideas/errors.ts',
+        'lib/ideas/limits.ts',
+        'lib/ideas/publicCache.ts',
+        'lib/ideas/routeErrors.ts',
+        'lib/ideas/schemas.ts',
+        'lib/platform/ideasGate.ts',
+        'app/api/platform/ideas/route.ts',
+        'app/api/platform/ideas/\\[slug\\]/route.ts',
+        'app/api/platform/ideas/\\[slug\\]/retire/route.ts',
+        'app/api/platform/ideas/tags/route.ts',
+        'app/api/platform/ideas/runs/route.ts',
+        'app/api/public/ideas/route.ts',
+        'app/api/public/ideas/\\[slug\\]/route.ts',
+        'app/api/public/ideas/tags/route.ts',
         'lib/services/manualWorkGateService.ts',
         // Story MOTIR-7220 · MOTIR-7234 — the planner-model story's motir-core
         // gate: the console seam (service + mapper), the one plan-read redaction
@@ -3169,6 +3228,242 @@ export default defineConfig({
           statements: 90,
         },
         'lib/mcp/tools/workItemContinue.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-7664 · MOTIR-7682 — the console's Ideas page; measured above, pinned at the floor.
+        'app/**/admin/ideas/actions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/page.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/\\[slug\\]/page.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/\\[slug\\]/_components/DeleteIdeaDialog.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/\\[slug\\]/_components/IdeaEditForm.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/\\[slug\\]/_components/IdeaWorkbench.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/\\[slug\\]/_components/RetireIdeaDialog.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/\\[slug\\]/_components/ideaDraft.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/_components/IdeaBits.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/_components/IdeaDetailView.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/_components/IdeaFilters.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/_components/IdeasSkeleton.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/_components/IdeasTable.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/_components/IdeasUnavailable.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ideas/_components/ideaListQuery.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/_components/AdminShell.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ideas/consoleActor.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-7662 · MOTIR-7677 — the idea store; measured above, pinned at the floor.
+        'lib/services/ideasAdminService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/ideasPublicService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/ideaRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/ideaPublicRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/ideaTagRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/ideaResearchRunRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/ideaMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ideas/categories.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ideas/errors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ideas/limits.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ideas/publicCache.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ideas/routeErrors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ideas/schemas.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/platform/ideasGate.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/platform/ideas/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/platform/ideas/\\[slug\\]/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/platform/ideas/\\[slug\\]/retire/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/platform/ideas/tags/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/platform/ideas/runs/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/public/ideas/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/public/ideas/\\[slug\\]/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/public/ideas/tags/route.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

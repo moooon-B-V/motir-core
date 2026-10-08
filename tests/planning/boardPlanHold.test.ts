@@ -126,7 +126,9 @@ describe('the board projection carries each card’s plan hold', () => {
 
       expect(Object.keys(board.planHolds).sort()).toEqual([planA, planB].sort());
       expect(board.planHolds[planA]).toEqual({
+        kind: 'plan',
         planId: planA,
+        sessionId: planARow.sessionId,
         anchorKey: a1.identifier,
         title: 'Plan A',
         heldCount: 2,
@@ -151,7 +153,7 @@ describe('the board projection carries each card’s plan hold', () => {
   );
 
   it(
-    'a SESSION-held lock (no plan) is not a hold — null, and no plan named',
+    'a SESSION-held lock (no plan) holds while its session is OPEN — and is named by the session',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       const card = await seedCard('Session parked');
@@ -165,9 +167,25 @@ describe('the board projection carries each card’s plan hold', () => {
       const board = await boardsService.getBoard(fx.projectId, fx.ctx);
       const onBoard = cardsById(board).get(card.id);
       expect(onBoard?.status).toBe(PLANNING_STATUS_KEY);
-      expect(onBoard?.planHold).toBeNull();
-      expect(await planTargetLockService.readPlanHold(card.id, fx.ctx)).toBeNull();
-      expect(board.planHolds).toEqual({});
+      expect(onBoard?.planHold).toMatchObject({ kind: 'session', sessionId: plan.sessionId });
+      expect(onBoard?.planHold).toEqual(await planTargetLockService.readPlanHold(card.id, fx.ctx));
+      const key = `session:${plan.sessionId}`;
+      expect(Object.keys(board.planHolds)).toEqual([key]);
+      expect(board.planHolds[key]).toMatchObject({
+        kind: 'session',
+        planId: null,
+        sessionId: plan.sessionId,
+        heldCount: 1,
+      });
+
+      // Once the session ENDS, the same lock holds nothing.
+      await adminDb.planChangeSession.update({
+        where: { id: plan.sessionId! },
+        data: { endedAt: new Date(), endReason: 'idle' },
+      });
+      const after = await boardsService.getBoard(fx.projectId, fx.ctx);
+      expect(cardsById(after).get(card.id)?.planHold).toBeNull();
+      expect(after.planHolds).toEqual({});
     },
   );
 

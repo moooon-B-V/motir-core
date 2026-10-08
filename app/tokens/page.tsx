@@ -190,6 +190,16 @@ const INTERACTION_AGILE_GROUPS: { heading: string; tokens: [string, string][] }[
       ['--el-vote-bg', 'vote bg'],
     ],
   },
+  {
+    // MOTIR-7584 — the warm-touch roles: a determinate progress bar's fill and
+    // the rich-text editor's focus indicator, both split off --el-accent /
+    // --el-highlight so a palette can warm one without moving the other.
+    heading: 'Progress · editor focus',
+    tokens: [
+      ['--el-progress-fill', 'progress fill'],
+      ['--el-editor-focus', 'editor focus'],
+    ],
+  },
 ];
 
 /**

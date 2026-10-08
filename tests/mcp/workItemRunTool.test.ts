@@ -148,6 +148,19 @@ describe('the run tools on the MCP surface', () => {
     }
   });
 
+  it('the close says what `gated` means: a stop at an approval gate, recorded, never `halted`', async () => {
+    const client = await connect(fx.ctx);
+    const { tools } = await client.listTools();
+    const closeTool = tools.find((t) => t.name === CLOSE_WORK_ITEM_RUN_TOOL_NAME)!;
+    const outcome = (closeTool.inputSchema.properties as Record<string, { description?: string }>)
+      .outcome!;
+    for (const text of [closeTool.description!, outcome.description!]) {
+      expect(text).toContain('"gated"');
+      expect(text).toMatch(/approval gate/);
+    }
+    expect(closeTool.description).toMatch(/never "halted"|never `halted`|never halted/);
+  });
+
   it('a token without `work_item:edit` is refused on all three, and no run is opened', async () => {
     const leaf = await heldLeaf();
     const client = await connect(

@@ -37,6 +37,9 @@ export interface PlanningAnchorSeed {
   subtaskKey: string;
   /** Its sibling on the same level — visible iff the canvas opened on that level. */
   siblingTitle: string;
+  /** A root epic with NO children — a container kind with nothing inside (MOTIR-7621). */
+  childlessEpicTitle: string;
+  childlessEpicKey: string;
 }
 
 export async function seedPlanningAnchorTree(email: string): Promise<PlanningAnchorSeed> {
@@ -84,9 +87,11 @@ export async function seedPlanningAnchorTree(email: string): Promise<PlanningAnc
   );
 
   // A second root epic, so "the canvas is NOT on the root level" is observable as
-  // an absence of something that is only ever drawn there.
-  await workItemsService.createWorkItem(
-    { projectId: project.id, kind: 'epic', title: 'Growth experiments' },
+  // an absence of something that is only ever drawn there. It has NO children,
+  // which also makes it the childless-container anchor (MOTIR-7621).
+  const childlessEpicTitle = 'Growth experiments';
+  const childlessEpic = await workItemsService.createWorkItem(
+    { projectId: project.id, kind: 'epic', title: childlessEpicTitle },
     ctx,
   );
 
@@ -108,5 +113,7 @@ export async function seedPlanningAnchorTree(email: string): Promise<PlanningAnc
     subtaskTitle,
     subtaskKey: subtask.identifier,
     siblingTitle,
+    childlessEpicTitle,
+    childlessEpicKey: childlessEpic.identifier,
   };
 }

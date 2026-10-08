@@ -17,6 +17,7 @@ import { HostedModelsProvider } from '@/components/hosted/HostedModelsProvider';
 import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
 import { useLiveRows } from './useLiveRows';
 import { WorkbenchFixLine } from './WorkbenchFixLine';
+import { WorkbenchResumeLine } from './WorkbenchResumeLine';
 import type { WorkbenchRowView } from './workbenchRows';
 import type { ReactNode } from 'react';
 
@@ -171,11 +172,14 @@ function EntryMembers({
   members,
   held,
   gridTemplateColumns,
+  label,
 }: {
   head: WorkbenchRowView;
   members: WorkbenchRowView[];
   held: boolean;
   gridTemplateColumns: string;
+  /** The list's accessible name — To fix's *stuck with*, To resume's *waiting with*. */
+  label: string;
 }) {
   const t = useTranslations('workbench');
   const listId = useId();
@@ -188,7 +192,7 @@ function EntryMembers({
     <>
       <ul
         id={listId}
-        aria-label={t('toFix.entry.membersLabel', { key: head.identifier })}
+        aria-label={label}
         data-testid={`workbench-fix-members-${head.identifier}`}
         className="m-0 list-none p-0 pb-1.5"
       >
@@ -267,6 +271,7 @@ function WorkbenchRow({
   showFinished,
   arrived = false,
   withFixLine = false,
+  withResumeLine = false,
   held = false,
   viewerId = null,
   onContinueStarted,
@@ -277,6 +282,8 @@ function WorkbenchRow({
   arrived?: boolean;
   /** The To fix tab: a second line, the FIX LINE, under line 1 (§ 30 Panel 2). */
   withFixLine?: boolean;
+  /** The To resume tab: line 2, the gate list and the next-step line (§ 35.4). */
+  withResumeLine?: boolean;
   /** It left the tab's set while the reader looked, and is HELD (§ 30 Panel 3). */
   held?: boolean;
   /** The session's user, for a Continue hosted refusal that names them. */
@@ -418,6 +425,50 @@ function WorkbenchRow({
             members={row.members}
             held={held}
             gridTemplateColumns={gridTemplateColumns}
+            label={t('toFix.entry.membersLabel', { key: row.identifier })}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  // THE TO RESUME ENTRY (§ 35.4): § 34's anatomy — line 1 unchanged, then the calm line 2,
+  // the gate list, the next-step line, and the cards waiting with the head.
+  if (withResumeLine && row.resume) {
+    return (
+      <div
+        role="row"
+        data-testid={`workbench-row-${row.identifier}`}
+        data-held={held ? 'true' : undefined}
+        className={cn(
+          rowClass,
+          'flex flex-col gap-1 px-4 py-2.5 md:pt-0 md:pr-7 md:pb-2.5 md:pl-4',
+        )}
+      >
+        <div
+          role="presentation"
+          className="flex flex-col gap-1 md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0"
+          style={{ gridTemplateColumns }}
+        >
+          {cells}
+        </div>
+        <WorkbenchResumeLine
+          itemKey={row.identifier}
+          resume={row.resume}
+          carried={row.members.length}
+          held={held}
+          canContinueHosted={row.canContinueHosted}
+          viewerId={viewerId}
+          onStarted={onContinueStarted}
+          onStateMoved={onContinueStarted}
+        />
+        {row.members.length > 0 ? (
+          <EntryMembers
+            head={row}
+            members={row.members}
+            held={held}
+            gridTemplateColumns={gridTemplateColumns}
+            label={t('toResume.entry.membersLabel', { key: row.identifier })}
           />
         ) : null}
       </div>
@@ -524,6 +575,10 @@ export function WorkbenchList({
   // approve's live rule — a row that left the set stays, marked *Cleared*, until the
   // next load, while the strip count has already dropped.
   const isToFix = tab === 'to-fix';
+  // TO RESUME (§ 35) takes the same rule: a Resuming entry is HELD until the refetch
+  // drops it (§ 35.5), the badge already one lower.
+  const isToResume = tab === 'to-resume';
+  const holds = isToFix || isToResume;
   const columns = [
     t('columns.title'),
     t('columns.role'),
@@ -553,12 +608,13 @@ export function WorkbenchList({
   // FIX ON THE HOSTED AGENT on a row a review sent back (§ 32, MOTIR-6930) reads the same
   // one list.
   const hosted =
-    isToFix &&
-    live.rows.some(
-      (row) =>
-        (row.canContinueHosted && row.fix?.detail.repair === 'continue') ||
-        (row.canFixHosted && row.repairRun === null),
-    );
+    (isToFix &&
+      live.rows.some(
+        (row) =>
+          (row.canContinueHosted && row.fix?.detail.repair === 'continue') ||
+          (row.canFixHosted && row.repairRun === null),
+      )) ||
+    (isToResume && live.rows.some((row) => row.canContinueHosted && row.resume !== null));
 
   const groups = tab === 'watching' ? splitWatchingGroups(live.rows) : null;
   const list = (
@@ -628,7 +684,8 @@ export function WorkbenchList({
                 showFinished={showFinished}
                 arrived={live.arrivedIds.has(row.id)}
                 withFixLine={isToFix}
-                held={isToFix && live.heldIds.has(row.id)}
+                withResumeLine={isToResume}
+                held={holds && live.heldIds.has(row.id)}
                 viewerId={viewerId}
                 onContinueStarted={refresh}
               />

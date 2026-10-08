@@ -4,6 +4,7 @@ import {
   HOME_SLICE_DONE,
   HOME_SLICE_IN_PROGRESS,
   HOME_SLICE_TO_FIX,
+  HOME_SLICE_TO_RESUME,
   HOME_SLICE_TODO,
 } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
@@ -73,53 +74,62 @@ async function readTabs(
 ): Promise<Record<WorkbenchTabKey, WorkbenchTabWatermarkDto>> {
   return withWorkspaceContext(ctx, async (tx) => {
     const projectScopes = await resolveActiveProjectScope(ctx, tx);
-    const [toDo, inProgress, toFix, recentlyFinished, approvals, watching] = await Promise.all([
-      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-        ctx.userId,
-        ctx.workspaceId,
-        projectScopes,
-        { slice: HOME_SLICE_TODO },
-        tx,
-      ),
-      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-        ctx.userId,
-        ctx.workspaceId,
-        projectScopes,
-        { slice: HOME_SLICE_IN_PROGRESS },
-        tx,
-      ),
-      // TO FIX (MOTIR-6604) — the other half of In progress's category. A card whose
-      // `fixReason` is recomputed moves between the two, and both readings see it.
-      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-        ctx.userId,
-        ctx.workspaceId,
-        projectScopes,
-        { slice: HOME_SLICE_TO_FIX },
-        tx,
-      ),
-      // The finished window is part of the PREDICATE here, exactly as it is in
-      // the list and the count — a reading taken without it would be a
-      // freshness for a different set, and the tab would nudge on work that
-      // finished in June.
-      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-        ctx.userId,
-        ctx.workspaceId,
-        projectScopes,
-        { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
-        tx,
-      ),
-      // ⚠️ THE GATE'S OWN PREDICATE, and deliberately NOT the membership `OR`
-      // above it. A decision queue routes to exactly one recipient
-      // (`assigneeId ?? reporterId`, `docs/decisions/approval-gates.md` §2), and
-      // the scope is built here the same way `homeService.tabCounts` builds it
-      // for the badge — the browsable project ids, which are `[]` for a reader
-      // who may not browse their active project, and the reader.
-      approvalGateRepository.watermarkAwaitingRoutedTo(
-        { projectIds: projectScopes.map((scope) => scope.projectId), userId: ctx.userId },
-        tx,
-      ),
-      watcherRepository.watermarkByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
-    ]);
+    const [toDo, inProgress, toFix, toResume, recentlyFinished, approvals, watching] =
+      await Promise.all([
+        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          { slice: HOME_SLICE_TODO },
+          tx,
+        ),
+        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          { slice: HOME_SLICE_IN_PROGRESS },
+          tx,
+        ),
+        // TO FIX (MOTIR-6604) — the other half of In progress's category. A card whose
+        // `fixReason` is recomputed moves between the two, and both readings see it.
+        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          { slice: HOME_SLICE_TO_FIX },
+          tx,
+        ),
+        // TO RESUME (MOTIR-7707) — the third slice of the category, read the same way.
+        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          { slice: HOME_SLICE_TO_RESUME },
+          tx,
+        ),
+        // The finished window is part of the PREDICATE here, exactly as it is in
+        // the list and the count — a reading taken without it would be a
+        // freshness for a different set, and the tab would nudge on work that
+        // finished in June.
+        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
+          tx,
+        ),
+        // ⚠️ THE GATE'S OWN PREDICATE, and deliberately NOT the membership `OR`
+        // above it. A decision queue routes to exactly one recipient
+        // (`assigneeId ?? reporterId`, `docs/decisions/approval-gates.md` §2), and
+        // the scope is built here the same way `homeService.tabCounts` builds it
+        // for the badge — the browsable project ids, which are `[]` for a reader
+        // who may not browse their active project, and the reader.
+        approvalGateRepository.watermarkAwaitingRoutedTo(
+          { projectIds: projectScopes.map((scope) => scope.projectId), userId: ctx.userId },
+          tx,
+        ),
+        watcherRepository.watermarkByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
+      ]);
     const pair = (reading: { count: number; latest: Date | null }): WorkbenchTabWatermarkDto => ({
       count: reading.count,
       latest: reading.latest?.toISOString() ?? null,
@@ -128,6 +138,7 @@ async function readTabs(
       toDo: pair(toDo),
       inProgress: pair(inProgress),
       toFix: pair(toFix),
+      toResume: pair(toResume),
       recentlyFinished: pair(recentlyFinished),
       approvals: pair(approvals),
       watching: pair(watching),

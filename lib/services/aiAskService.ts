@@ -145,6 +145,9 @@ export type AskSettleResult =
   | AskDebugResult
   | AskDebuggedResult
   | { outcome: 'silent'; session: PlanChangeSessionDto }
+  // A `new_session` turn (MOTIR-7649; AMENDMENT 3, A3.1/A3.2): the confirm is on
+  // the thread and NO job ran. The rail renders the confirm from `session`.
+  | { outcome: 'confirming'; session: PlanChangeSessionDto }
   // A guide conversation's settle (MOTIR-7470), handed to the guide landing.
   | GuideSettleResult;
 
@@ -634,6 +637,16 @@ export const aiAskService = {
         address,
       );
       return { outcome: 'debugging', jobId: debugJobId, session: updated };
+    }
+
+    if (outcome.intent === 'new_session') {
+      // The fourth arm (AMENDMENT 3, A3.1/A3.2): record the intent and write the
+      // fixed confirm, in one transaction guarded by the turn's intent, so a
+      // replayed settle writes nothing. No job — nothing closes until Confirm.
+      if (turn.intent === 'new_session') return { outcome: 'silent', session };
+      const filed = await planChangeSessionsService.recordNewSessionTurn(turn.id, ctx, address);
+      if (!filed) return { outcome: 'silent', session };
+      return { outcome: 'confirming', session: filed };
     }
 
     if (!outcome.answer) return { outcome: 'silent', session };

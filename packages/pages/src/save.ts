@@ -1,5 +1,6 @@
 import { PAGE_BODY_MAX_BYTES, PAGE_SAVE_MAX_BYTES, PAGE_TITLE_MAX_LENGTH } from './constants';
 import { applyUpdate, deriveFormats, emptyState, markdownToUpdate } from './document/convert';
+import { extractLinks } from './document/links';
 import {
   PageArchivedError,
   PageBodyTooLargeError,
@@ -234,8 +235,8 @@ async function writeMergedBody(
     markdown: formats.markdown,
     now,
   });
-  // Link extraction (§8.1) is the linking epic's; the port is called now so the
-  // save path's shape is fixed when it lands.
-  await store.replaceDerivedLinks(page.id, []);
+  // The links the saved body names (§8.1), from the JSON just derived, in the
+  // same transaction as the body they come from.
+  await store.replaceDerivedLinks(page.id, extractLinks(formats.json), actorId);
   return revision;
 }

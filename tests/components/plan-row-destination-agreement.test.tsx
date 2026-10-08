@@ -77,6 +77,9 @@ function sessionView(
     latestPlan: status,
     planCount: 1,
     seed: null,
+    state: status.status,
+    end: null,
+    copiedFrom: null,
   };
 }
 

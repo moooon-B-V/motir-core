@@ -27,7 +27,8 @@ import { truncateAuthTables } from '../../helpers/db';
  *   2. The TENANT READ boundary: every tenant-facing plan serialiser, deep-scanned
  *      for a native model id, with a mutation proving the scan is not vacuous.
  *   3. The usage DTO's TYPE carries no model.
- *   4. Nothing reads the retired `Project.aiPlannerModel`.
+ *   4. Nothing reads the retired `Project.aiPlannerModel`, and its column is
+ *      gone (dropped by MOTIR-7233).
  */
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -390,11 +391,15 @@ describe('guard — nothing reads Project.aiPlannerModel', () => {
     expect(hits).toEqual([]);
   });
 
-  it('the schema keeps the column but hides it from the client with @ignore', () => {
+  it('the schema no longer declares it, and the database has no column (MOTIR-7233)', async () => {
     const schema = readFileSync(join(ROOT, 'prisma/schema.prisma'), 'utf8');
-    const line = schema.split('\n').find((l) => /^\s*aiPlannerModel\s/.test(l));
-    expect(line).toBeDefined();
-    expect(line).toMatch(/@map\("ai_planner_model"\)/);
-    expect(line).toMatch(/@ignore/);
+    expect(schema.split('\n').some((l) => /^\s*aiPlannerModel\s/.test(l))).toBe(false);
+
+    const rows = await adminDb.$queryRawUnsafe<Array<{ n: number }>>(
+      `SELECT count(*)::int AS n FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'project'
+          AND column_name = 'ai_planner_model'`,
+    );
+    expect(rows[0]!.n).toBe(0);
   });
 });

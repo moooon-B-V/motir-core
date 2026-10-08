@@ -1,6 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { Collaboration } from '@tiptap/extension-collaboration';
 import { Placeholder } from '@tiptap/extensions';
@@ -14,6 +23,20 @@ import type { PageEditorMessages } from './messages';
 import { PageEditorToolbar } from './PageEditorToolbar';
 import { SaveIndicator } from './SaveIndicator';
 import { PAGE_EDITOR_CSS } from './styles';
+import { WorkItemPicker, defaultPickerRow } from './WorkItemPicker';
+import {
+  MentionChipContext,
+  candidateView,
+  defaultChip,
+  openMentionTrigger,
+  workItemMentionWithChip,
+  workItemSuggestion,
+  type AvailableWorkItemRefView,
+  type MentionChipContextValue,
+  type MentionSuggestionState,
+  type WorkItemCandidate,
+  type WorkItemRefView,
+} from './workItemMention';
 
 // The page editor (Story MOTIR-5752 · MOTIR-7275), under
 // `docs/decisions/pages.md` §2–§3 and drawn by `design/pages/page.mock.html`
@@ -40,7 +63,7 @@ import { PAGE_EDITOR_CSS } from './styles';
 /** The colour mode the host resolved; the package reads no theme context. */
 export type PageEditorTheme = 'light' | 'dark';
 
-export interface PageEditorProps {
+export interface PageEditorProps<C extends WorkItemCandidate = WorkItemCandidate> {
   /** The stored body, `Y.encodeStateAsUpdate(doc)`. Read at mount. */
   initialState: Uint8Array;
   /**
@@ -70,7 +93,30 @@ export interface PageEditorProps {
   onReloadSaved?: () => void;
   /** The too-large callout's **New page in a new tab**, likewise. */
   onNewPage?: () => void;
+  /**
+   * The work-item search behind the mention picker (MOTIR-7574) — the page's
+   * project only. Supplied → an editable page offers both doors (`@` and the
+   * toolbar's **Work item**); omitted → neither. A rejection is the picker's
+   * "search failed" state.
+   */
+  searchWorkItems?: (query: string) => Promise<C[]>;
+  /**
+   * The live summary of every work item the body mentions, by id, as the page
+   * loaded with them. An id with no entry is a deleted item.
+   */
+  workItemRefs?: Record<string, WorkItemRefView>;
+  /** Draws a live or archived chip; the unavailable chip is the package's. */
+  renderWorkItemChip?: (view: AvailableWorkItemRefView) => ReactNode;
+  /** Draws one picker row's content; the option around it is the package's. */
+  renderPickerRow?: (candidate: C, active: boolean) => ReactNode;
+  /**
+   * A plain click on a live chip in the read-only page, when the chip the host
+   * rendered did not open the item itself.
+   */
+  onOpenWorkItem?: (id: string) => void;
 }
+
+const NO_REFS: Record<string, WorkItemRefView> = {};
 
 /** The first image in a paste, drop or picker payload, if any. */
 function pickImage(files: FileList | null | undefined): File | null {
@@ -88,7 +134,7 @@ function loadDoc(state: Uint8Array): Y.Doc {
   return doc;
 }
 
-export function PageEditor({
+export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
   initialState,
   editable,
   saveUpdate,
@@ -98,7 +144,12 @@ export function PageEditor({
   onSaveStatusChange,
   onReloadSaved,
   onNewPage,
-}: PageEditorProps) {
+  searchWorkItems,
+  workItemRefs = NO_REFS,
+  renderWorkItemChip = defaultChip,
+  renderPickerRow = defaultPickerRow,
+  onOpenWorkItem,
+}: PageEditorProps<C>) {
   // The document lives as long as the component; `initialState` is read once.
   const [doc] = useState(() => loadDoc(initialState));
   const [status, setStatus] = useState<SaveStatus>('saved');
@@ -153,11 +204,51 @@ export function PageEditor({
   // Created once; the paste / drop handlers reach the editor through this.
   const editorRef = useRef<Editor | null>(null);
 
+  // ── Mention a work item (MOTIR-7574) ──────────────────────────────────────
+  // The `@` suggestion reports here and the picker renders from this state. The
+  // doors exist only on an editable page with a search wired; the extension list
+  // is fixed per editor, so that is read once, at mount.
+  const [mentionEnabled] = useState(() => editable && searchWorkItems !== undefined);
+  const [suggestion, setSuggestion] = useState<
+    (MentionSuggestionState & { position?: { left: number; top: number } }) | null
+  >(null);
+  // The chips inserted this session, shown from the picked candidate until the
+  // page is read again.
+  const [pickedRefs, setPickedRefs] = useState<Record<string, AvailableWorkItemRefView>>({});
+
   const editor = useEditor({
     immediatelyRender: false,
     editable,
     extensions: [
-      ...pageExtensions(),
+      // The document's list, its mention node given the live chip.
+      ...pageExtensions().map((extension) =>
+        extension.name === 'workItemMention' ? workItemMentionWithChip() : extension,
+      ),
+      // Read at creation only, like the rest of these options.
+      ...(mentionEnabled
+        ? [
+            workItemSuggestion({
+              // The picker sits 4px under the caret, inside the body's positioned
+              // wrapper — never a body portal (`MentionList`'s placement).
+              onChange: (next) => {
+                const box = next.anchor?.getBoundingClientRect();
+                setSuggestion({
+                  ...next,
+                  position:
+                    next.rect && box
+                      ? {
+                          left: Math.round(next.rect.left - box.left),
+                          top: Math.round(next.rect.bottom - box.top + 4),
+                        }
+                      : undefined,
+                });
+              },
+              onClose: () => setSuggestion(null),
+              onInsert: (candidate) =>
+                setPickedRefs((prev) => ({ ...prev, [candidate.id]: candidateView(candidate) })),
+            }),
+          ]
+        : []),
       Collaboration.configure({ document: doc, field: PAGE_FRAGMENT }),
       Placeholder.configure({ placeholder: messages.bodyPlaceholder }),
       codeBlockLanguage(messages.codeLanguage),
@@ -197,6 +288,21 @@ export function PageEditor({
   }, [editor, editable]);
 
   const onPickImage = useCallback(() => fileInputRef.current?.click(), []);
+  const onMentionWorkItem = useCallback(() => {
+    if (editor) openMentionTrigger(editor);
+  }, [editor]);
+
+  const chipContext = useMemo<MentionChipContextValue>(
+    () => ({
+      lookup: (id) => pickedRefs[id] ?? workItemRefs[id],
+      renderChip: renderWorkItemChip,
+      messages: messages.mention,
+      editable,
+      onOpen: onOpenWorkItem,
+    }),
+    [pickedRefs, workItemRefs, renderWorkItemChip, messages.mention, editable, onOpenWorkItem],
+  );
+
   const onFileChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const file = pickImage(event.target.files);
@@ -239,6 +345,8 @@ export function PageEditor({
           editor={editor}
           messages={messages}
           onInsertImage={onPickImage}
+          onMentionWorkItem={mentionEnabled ? onMentionWorkItem : undefined}
+          mentionOpen={suggestion !== null}
           trailing={<SaveIndicator status={status} messages={messages.status} />}
         />
       ) : null}
@@ -277,7 +385,23 @@ export function PageEditor({
           {messages.imageUploadFailed}
         </p>
       ) : null}
-      <div className="pt-4 pb-2">{editor ? <EditorContent editor={editor} /> : null}</div>
+      <div data-mention-anchor className="relative pt-4 pb-2">
+        <MentionChipContext.Provider value={chipContext}>
+          {editor ? <EditorContent editor={editor} /> : null}
+        </MentionChipContext.Provider>
+        {suggestion && searchWorkItems ? (
+          <div className="absolute z-50" style={suggestion.position}>
+            <WorkItemPicker<C>
+              query={suggestion.query}
+              search={searchWorkItems}
+              renderRow={renderPickerRow}
+              onPick={suggestion.pick}
+              label={messages.toolbar.workItemLabel}
+              messages={messages.mention}
+            />
+          </div>
+        ) : null}
+      </div>
       {editable ? (
         <input
           ref={fileInputRef}

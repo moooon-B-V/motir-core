@@ -7,6 +7,7 @@ import {
   type MarkdownSerializerState,
   defaultMarkdownSerializer,
 } from 'prosemirror-markdown';
+import { WORK_ITEM_MENTION_HREF_RE } from './extensions';
 import { pageSchema } from './schema';
 
 // Markdown ↔ the page document (Story MOTIR-5752 · MOTIR-7272), over
@@ -171,11 +172,51 @@ function liftImages(tokens: Token[]): Token[] {
   return out;
 }
 
-/** markdown-it, then the three token passes that bring it to the page schema. */
+/**
+ * Turn every inline `[label](motir:<id>)` link into ONE `work_item_mention`
+ * token (MOTIR-7570), before the `Link` mark sees it: the mark would keep it as
+ * a plain link, and the editor's protocol check drops a `motir:` href. The
+ * label is the link's text, whatever marks it carried. A `motir:` href that is
+ * not a well-formed id stays an ordinary link.
+ */
+function markWorkItemMentions(tokens: Token[]): void {
+  for (const block of tokens) {
+    if (block.type !== 'inline' || !block.children) continue;
+    const children = block.children;
+    const out: Token[] = [];
+    for (let i = 0; i < children.length; i += 1) {
+      const open = children[i]!;
+      const match =
+        open.type === 'link_open'
+          ? WORK_ITEM_MENTION_HREF_RE.exec(open.attrGet('href') ?? '')
+          : null;
+      const close = match
+        ? children.findIndex((t, j) => j > i && t.type === 'link_close' && t.level === open.level)
+        : -1;
+      if (!match || close === -1) {
+        out.push(open);
+        continue;
+      }
+      const label = children
+        .slice(i + 1, close)
+        .map((t) => (t.type === 'text' || t.type === 'code_inline' ? t.content : ''))
+        .join('');
+      const mention = new TokenClass('work_item_mention', '', 0);
+      mention.attrSet('id', match[1]!);
+      mention.attrSet('label', label);
+      out.push(mention);
+      i = close;
+    }
+    block.children = out;
+  }
+}
+
+/** markdown-it, then the four token passes that bring it to the page schema. */
 const pageTokenizer = {
   parse(source: string, env: unknown): Token[] {
     const tokens = markdownIt.parse(source, env);
     markTaskLists(tokens);
+    markWorkItemMentions(tokens);
     return liftImages(wrapTableCells(tokens));
   },
 } as unknown as ConstructorParameters<typeof MarkdownParser>[1];
@@ -229,6 +270,10 @@ const pageMarkdownParser = new MarkdownParser(pageSchema, pageTokenizer, {
     getAttrs: (tok) => ({ href: tok.attrGet('href'), title: tok.attrGet('title') || null }),
   },
   code_inline: { mark: 'code', noCloseToken: true },
+  work_item_mention: {
+    node: 'workItemMention',
+    getAttrs: (tok) => ({ id: tok.attrGet('id'), label: tok.attrGet('label') || null }),
+  },
 });
 
 /** Parse markdown into a page document. */
@@ -321,6 +366,13 @@ const pageMarkdownSerializer: MarkdownSerializer = new MarkdownSerializer(
     tableRow: (state, node) => state.renderContent(node),
     tableHeader: (state, node) => state.renderContent(node),
     tableCell: (state, node) => state.renderContent(node),
+    // The description editor's durable token, byte for byte, so a page body
+    // and a description carry a mention the same way (MOTIR-7570).
+    workItemMention: (state, node) => {
+      state.write(
+        `[${(node.attrs.label as string | null) ?? ''}](motir:${node.attrs.id as string})`,
+      );
+    },
     text: defaults.text!,
   },
   {

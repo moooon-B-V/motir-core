@@ -116,6 +116,24 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The `awaiting` gates of the given KINDS on a SET of cards (Story MOTIR-7701 ·
+   * MOTIR-7703) — the gated close's derivation of what held a run. Oldest first.
+   * `tx` required: the close reads it inside its own transaction.
+   */
+  async findAwaitingByWorkItemsAndKinds(
+    workItemIds: string[],
+    kinds: readonly ApprovalGateKind[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<ApprovalGate, 'id' | 'workItemId' | 'kind'>>> {
+    if (workItemIds.length === 0 || kinds.length === 0) return [];
+    return tx.approvalGate.findMany({
+      where: { workItemId: { in: workItemIds }, kind: { in: [...kinds] }, state: 'awaiting' },
+      select: { id: true, workItemId: true, kind: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
    * The CARD-LESS form of {@link findAwaitingByWorkItem} (Story MOTIR-6012 ·
    * MOTIR-6034; ADR `approval-gates.md` §11.1–11.2): the `awaiting` gate of one
    * `kind` about one SUBJECT that belongs to no work item — a plan's approval, whose
