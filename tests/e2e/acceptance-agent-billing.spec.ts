@@ -21,7 +21,8 @@ import en from '@/messages/en.json';
 // happen that the product makes happen on a clock or a webhook:
 //
 //   * a charged DAY — `POST /api/_test/agent-instances/storage-charge` runs the
-//     real hourly pass once;
+//     real hourly pass once (the worker's scheduled pass may beat it to the day,
+//     so the walk reads the day's charge rows rather than the pass's count);
 //   * the PLAN ENDING and COMING BACK — the seat push motir-ai's Stripe webhook
 //     makes (`pushAiIncludedSeat`, the real internal route and its bearer), with
 //     the fixture's subscription flipped to match, as Stripe's would be.
@@ -163,8 +164,20 @@ test.describe('Agents are an AI-plan feature, paid in credits', () => {
     await chapter('A day’s storage is charged — once per agent, running or asleep', async () => {
       const res = await page.request.post('/api/_test/agent-instances/storage-charge');
       expect(res.status()).toBe(200);
-      const { summary } = (await res.json()) as { summary: { charged: number } };
-      expect(summary.charged).toBe(2);
+      // The DAY'S CHARGE ROWS are the authoritative state, not this pass's count
+      // (MOTIR-7854). The lane's job worker runs the scheduler, and its own
+      // `system.agent-instance-storage-charge` pass (cron :30, plus a catch-up
+      // after every reset) can charge the day before this door does — charging is
+      // idempotent per agent per day, so this pass then reports `charged: 0` for a
+      // day that IS charged. Whichever pass wrote them, once this one has returned
+      // every pending day is charged: two agents, one charged row each, today.
+      const today = new Date(new Date().toISOString().slice(0, 10));
+      const rows = await adminDb.agentInstanceStorageCharge.findMany({
+        where: { organizationId: seed.organizationId, day: today },
+        select: { agentInstanceId: true, chargeOutcome: true },
+      });
+      expect(rows.map((r) => r.chargeOutcome)).toEqual(['charged', 'charged']);
+      expect(new Set(rows.map((r) => r.agentInstanceId)).size).toBe(2);
     });
     await beat();
 

@@ -14,16 +14,16 @@ import { useReportCaughtError } from '@/lib/monitoring/reportCaughtError';
 //
 // It renders under the ROOT layout alone — appearance tokens and the locale, no
 // rail, no top bar — so it is a full page the way `app/not-found.tsx` is, and it
-// carries its own way out (`showHome`). Retry is `unstable_retry`; why, and why
+// carries its own way out (`showHome`). Retry is the boundary's `retry` prop; why, and why
 // `notFound()` / `redirect()` never land here, is written in
 // `app/(authed)/error.tsx`.
 
 export default function AppError({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  retry: () => void;
 }) {
   useReportCaughtError(error, 'app');
   const copy = useServerErrorCopy('app');
@@ -34,7 +34,7 @@ export default function AppError({
       <ServerErrorView
         copy={copy}
         digest={error.digest}
-        onRetry={() => startRetry(() => unstable_retry())}
+        onRetry={() => startRetry(() => retry())}
         retryPending={retryPending}
         showHome
       />

@@ -42,11 +42,11 @@ export function useGlobalErrorLocale(): Locale {
 
 export function GlobalErrorContent({
   error,
-  unstable_retry,
+  retry,
   locale,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  retry: () => void;
   locale: Locale;
 }) {
   useReportCaughtError(error, 'global');
@@ -57,7 +57,7 @@ export function GlobalErrorContent({
       <ServerErrorView
         copy={GLOBAL_ERROR_COPY[locale]}
         digest={error.digest}
-        onRetry={() => startRetry(() => unstable_retry())}
+        onRetry={() => startRetry(() => retry())}
         retryPending={retryPending}
         showHome
       />

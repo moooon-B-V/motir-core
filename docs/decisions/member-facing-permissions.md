@@ -379,6 +379,16 @@ on a different key, and the reason the difference is not an oversight:
 So the door and the service ask the same question, `ai:plan`, which is already grantable and already
 in `CLI_TOKEN_GRANT`: no grant widens, and `ai:configure` stays in `UNGRANTABLE_PERMISSIONS`.
 
+**A second instance (MOTIR-7861, Story MOTIR-7858):** the `read_file` MCP tool — one repository
+file's text at a ref (`repoFileReadService.readProjectFile`; `TOOL_PERMISSIONS.read_file`) — is
+gated on `ai:plan` at the door and in the service on the same argument: the hosted planner's own
+`read_file` already shows that text to every `ai:plan` holder, so nobody's reach widens.
+
+**A third (MOTIR-7862, 2026-10-08):** the `code_explore` / `code_search` MCP tools — the hosted code
+graph, read through motir-ai's `POST /v1/code-graph/read` (`codeGraphReadService.read`) — are gated
+on `ai:plan` for the same reason: the hosted planner's own graph tools already show those answers
+to every `ai:plan` holder.
+
 ## References
 
 - `lib/permissions/catalog.ts` — `PERMISSIONS`, and the `planned` /

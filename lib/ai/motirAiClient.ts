@@ -1025,6 +1025,41 @@ export async function getCodeAudit(query: CodeAuditQuery): Promise<RawCodeAuditS
   return (await res.json()) as RawCodeAuditSurface;
 }
 
+export interface CodeGraphReadRequest {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  tool: 'code_explore' | 'code_search';
+  /** The project's whole realized repository set — bound by core, never by the agent. */
+  repoRefs: string[];
+  args: { query: string; cursor?: string; repos?: string[]; limit?: number };
+}
+
+/** motir-ai's answer — the route's state union, exactly as it sends it (contract §2.4). */
+export type RawCodeGraphRead =
+  | { state: 'ok'; text: string }
+  | { state: 'no_graph' }
+  | { state: 'not_indexed'; repoRef: string }
+  | { state: 'repo_not_in_set'; repoRef: string }
+  | { state: 'stale_cursor' }
+  | { state: 'invalid_cursor' }
+  | { state: 'graph_unavailable'; reason: string };
+
+// POST /v1/code-graph/read — ONE graph read through the hosted planner's own
+// executor (Story MOTIR-7858 · MOTIR-7860 / MOTIR-7862). Only core ids, repo refs
+// and the tool's args cross: the graph-read credential is minted INSIDE motir-ai
+// and never comes back. Every named state is a 200; a non-2xx is THROWN, as every
+// sibling here throws it — mapping a failure to a state is the service's call.
+export async function readCodeGraph(input: CodeGraphReadRequest): Promise<RawCodeGraphRead> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/code-graph/read`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawCodeGraphRead;
+}
+
 export interface RefreshCodeAuditResult {
   auditJobId: string;
   conventionJobId: string;

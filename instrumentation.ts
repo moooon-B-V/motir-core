@@ -25,6 +25,11 @@
 //     fixture, so the audit-coverage journey (MOTIR-2244) can drive the
 //     SERVER-rendered /code-health page — which a browser `page.route` cannot
 //     reach — with no motir-ai instance.
+//   - E2E_TEST_CODE_GRAPH_READ=1 → lib/test-code-graph-read-mock intercepts the
+//     motir-ai CODE-GRAPH READ (the MOTIR_AI_URL origin's POST /v1/code-graph/read)
+//     and answers from a JSON fixture, journalling every request, so the MCP
+//     code-read journey (MOTIR-7866) pages a `code_explore` result through the
+//     real `/api/mcp` route with no motir-ai instance.
 //   - E2E_TEST_LESSONS=1 → lib/test-lessons-mock intercepts the motir-ai LESSON
 //     LIBRARY seam (the MOTIR_AI_URL origin's GET /v1/lessons and
 //     /v1/lessons/:id) and answers from a JSON fixture, so MOTIR-3340 can drive

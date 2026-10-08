@@ -4,6 +4,10 @@ import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { getGitProvider } from '@/lib/git';
 import { UnknownGitProviderError } from '@/lib/git/registry';
 import type { GitProviderId, RepoFileReadResult } from '@/lib/git/types';
+import { projectsService } from '@/lib/services/projectsService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { resolveCodeContextState } from '@/lib/services/codeContextService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // The repo-file READ service (Story MOTIR-4585 · MOTIR-4586) — the core-owned
 // read motir-ai calls back into DURING a planning job, so a session can look at
@@ -53,6 +57,28 @@ export type RepoFileServiceResult =
   | RepoFileReadResult
   | { outcome: 'repo_not_connected'; repoRef: string }
   | { outcome: 'provider_unavailable'; repoRef: string; detail: string };
+
+/** The PROJECT-scoped read's result (MOTIR-7861): the service's own outcomes,
+ *  plus the one only a project-scoped caller can get — the repository is not in
+ *  THAT project's set. Deliberately NOT a member of `RepoFileServiceResult`,
+ *  which motir-ai's planner route also returns and switches on. */
+export type ProjectFileReadResult =
+  | (RepoFileServiceResult & { repoRef: string })
+  | { outcome: 'repo_not_in_project'; repo: string; repoSet: string[] };
+
+/**
+ * Match a caller's `repo` against a project's realized repository set: the full
+ * `owner/name` first, then the bare name — both case-insensitively. A bare name
+ * two owners share resolves to the first in set order; `owner/name` is the
+ * unambiguous spelling, and the set the miss returns names it.
+ */
+function matchRepoInSet(repo: string, repoSet: readonly string[]): string | null {
+  const wanted = repo.trim().toLowerCase();
+  if (!wanted) return null;
+  const full = repoSet.find((r) => r.toLowerCase() === wanted);
+  if (full) return full;
+  return repoSet.find((r) => r.slice(r.lastIndexOf('/') + 1).toLowerCase() === wanted) ?? null;
+}
 
 /**
  * Split a `repoRef` into `(owner, name)` at the LAST slash.
@@ -149,5 +175,44 @@ export const repoFileReadService = {
         detail: err instanceof Error ? err.message : 'unknown',
       };
     }
+  },
+
+  /**
+   * Read one file from one of a PROJECT's repositories — the MCP `read_file`
+   * tool's service (Story MOTIR-7858 · MOTIR-7861).
+   *
+   * ⚠️ THE PROJECT SET, NOT THE ORGANISATION, IS THE BOUNDARY. `readFile` checks
+   * only that the organisation connected the repository, which is right for a
+   * planning job (its envelope already carries the project's set) and wrong for
+   * a project-keyed tool: it would let a token bound to one project read a
+   * sibling project's repository. So the `repo` is resolved against the
+   * project's REALIZED set first, and a miss is answered before any provider
+   * call.
+   *
+   * Gated like `aiConventionService.getPlanningCodeHealth`: the key resolves
+   * inside the actor's workspace (another tenant's key is the plain not-found),
+   * and `ai:plan` — the key the MCP door checks — is asserted here too.
+   */
+  async readProjectFile(
+    projectKey: string,
+    repo: string,
+    path: string,
+    ref: string | undefined,
+    ctx: ServiceContext,
+  ): Promise<ProjectFileReadResult> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    await projectAccessService.assertPermission(project.id, ctx, 'ai:plan');
+
+    const repoSet = (await resolveCodeContextState(project.id, ctx)).repos.map((r) => r.repoRef);
+    const repoRef = matchRepoInSet(repo, repoSet);
+    if (!repoRef) return { outcome: 'repo_not_in_project', repo, repoSet };
+
+    const result = await this.readFile(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      repoRef,
+      path,
+      ref,
+    );
+    return { ...result, repoRef };
   },
 };

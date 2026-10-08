@@ -197,7 +197,9 @@ test('an agent writes a page over the MCP, a person edits it, and the agent rewr
     await expect(body.getByText('pnpm deploy --env prod')).toBeVisible();
     await expect(body.getByRole('columnheader', { name: 'Owner' })).toBeVisible();
     await expect(body.getByRole('cell', { name: 'Ana' })).toBeVisible();
-    await expect(body.getByText('Dry run done')).toBeVisible();
+    // Exact: since tiptap 3.31 a task item's checkbox carries a hidden label
+    // naming the item ("Task item checkbox for Dry run done"), MOTIR-7816.
+    await expect(body.getByText('Dry run done', { exact: true })).toBeVisible();
     await expect(body.getByRole('checkbox').first()).toBeChecked();
     await expect(body.getByRole('link', { name: 'the release notes' })).toBeVisible();
   });

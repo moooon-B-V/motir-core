@@ -1,11 +1,16 @@
 # @motir/design-system
 
+## 0.12.0
+
+### Minor Changes
+
+- Per-language font sets (MOTIR-7733). The package now exports a locale → font-set registry: `FONT_SET_REGISTRY` (the `latin`, `zh-Hans`, `ja` and `ko` sets, each with its members and default per sans / serif / mono role), `LOCALE_FONT_SET`, `FONT_SET_LOCALES`, and the resolvers `resolveFontSet`, `resolveFontSetMember` and `fontSetMemberVar`. `theme.css` composes each role token from three parts: the Type pairing's named faces (`--font-<role>-pairing`), the language's script face (`--font-script-<role>`, set by `[lang]:lang()` blocks for zh, ja and ko and reset for the Latin locales) and the pairing's generic tail (`--font-<role>-tail`). A non-default member is applied by name with `data-font-set-<role>="<member id>"`. The package loads no face: a consumer declares each member with `next/font` and sets the `--font-set-*` variable `fontSetMemberVar` names. Without those variables every stack falls back to the pairing's own faces, so a consumer that loads nothing renders as before.
+
 ## 0.11.0
 
 ### Minor Changes
 
 - 9597082: `Combobox` gains four optional props for the signed-out language control (MOTIR-7758). An option's `lang` is rendered as the `lang` attribute on its row, and on the trigger's label while it is selected, so a list that names each language in its own script is announced in that language. `triggerIcon` draws a decorative leading glyph on the trigger only, never in the rows. `busy` marks the trigger `aria-busy` and puts a spinner in the chevron's slot without disabling it. `align="end"` lines the menu's right edge up with the trigger's, so a menu opened from a right-hand corner grows leftwards instead of running past the viewport. Existing callers are unchanged.
-- Per-language font sets (MOTIR-7733). The package now exports a locale → font-set registry: `FONT_SET_REGISTRY` (the `latin`, `zh-Hans`, `ja` and `ko` sets, each with its members and default per sans / serif / mono role), `LOCALE_FONT_SET`, `FONT_SET_LOCALES`, and the resolvers `resolveFontSet`, `resolveFontSetMember` and `fontSetMemberVar`. `theme.css` composes each role token from three parts: the Type pairing's named faces (`--font-<role>-pairing`), the language's script face (`--font-script-<role>`, set by `[lang]:lang()` blocks for zh, ja and ko and reset for the Latin locales) and the pairing's generic tail (`--font-<role>-tail`). A non-default member is applied by name with `data-font-set-<role>="<member id>"`. The package loads no face: a consumer declares each member with `next/font` and sets the `--font-set-*` variable `fontSetMemberVar` names. Without those variables every stack falls back to the pairing's own faces, so a consumer that loads nothing renders as before.
 
 ## 0.10.1
 

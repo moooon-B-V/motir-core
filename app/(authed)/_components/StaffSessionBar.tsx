@@ -63,6 +63,9 @@ export function StaffSessionBar({ session }: StaffSessionBarProps) {
     const remaining = new Date(session.expiresAt).getTime() - Date.now();
     // setTimeout's ceiling is ~24.8 days; a session is at most an hour.
     const timer = window.setTimeout(
+      // A route handler that clears the cookie and redirects, not a page: it
+      // needs a full document navigation, which `router.push` cannot make.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       () => window.location.assign('/api/staff-session/clear'),
       Math.max(0, remaining) + 1_000,
     );

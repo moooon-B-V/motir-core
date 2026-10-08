@@ -596,6 +596,21 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
     descriptionFingerprint: 'ab6d4bd4fd37',
   },
+  read_file: {
+    summary:
+      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+    descriptionFingerprint: '8cca00253741',
+  },
+  code_explore: {
+    summary:
+      "The hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",
+    descriptionFingerprint: 'b2e5bdc1492a',
+  },
+  code_search: {
+    summary:
+      "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
+    descriptionFingerprint: '0b634bf94bd4',
+  },
   skeleton: {
     // Re-pinned for MOTIR-5410: the description now names the folder placement
     // (`folderId` on a filed row, the project's `folders`) the read carries.

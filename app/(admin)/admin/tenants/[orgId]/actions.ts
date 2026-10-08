@@ -96,7 +96,7 @@ export async function setInternalBillingAction(
     // Anything else is real and unexplained. LOGGED rather than swallowed: the
     // operator's screen can only say "it failed", and somebody has to be able to
     // find out why.
-    console.error(`[admin] classification action failed for organization ${orgId}`, err);
+    console.error('[admin] classification action failed for organization %s', orgId, err);
     return { ok: false, code: 'FAILED' };
   }
 }
@@ -133,7 +133,7 @@ export async function previewStopAction(orgId: string): Promise<PreviewStopActio
   } catch (err) {
     if (err instanceof PlatformOrganizationNotFoundError) return { ok: false, code: 'NOT_FOUND' };
     if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
-    console.error(`[admin] fleet stop preview failed for organization ${orgId}`, err);
+    console.error('[admin] fleet stop preview failed for organization %s', orgId, err);
     return { ok: false, code: 'FAILED' };
   }
 }
@@ -164,7 +164,7 @@ export async function stopContainersAction(
     if (err instanceof NotPlatformStaffError) {
       outcome = { ok: false, code: 'NOT_PERMITTED' };
     } else {
-      console.error(`[admin] fleet stop failed for organization ${orgId}`, err);
+      console.error('[admin] fleet stop failed for organization %s', orgId, err);
       outcome = { ok: false, code: 'FAILED' };
     }
   }

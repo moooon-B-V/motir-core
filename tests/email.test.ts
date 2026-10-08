@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getEmailProvider, sendEmail } from '@/lib/email';
+import { getEmailProvider, htmlToText, sendEmail } from '@/lib/email';
 
 // These tests exercise the small switch in lib/email.ts. The integration of
 // sendEmail with Better-Auth's password-reset flow lives in
@@ -195,5 +195,29 @@ describe('consoleProvider (via the eagerly-resolved sendEmail singleton)', () =>
 
     const message = logSpy.mock.calls[0]![0] as string;
     expect(message).toContain(url);
+  });
+});
+
+// MOTIR-7816 — the CodeQL sanitisation findings on the plain-text fallback.
+describe('htmlToText', () => {
+  it('drops style and script blocks, including a closing tag with whitespace', () => {
+    expect(htmlToText('<style>p{}</style><p>Hi</p><script >x()</script >there')).toBe('Hithere');
+  });
+
+  it('strips a tag rebuilt by an earlier strip', () => {
+    expect(htmlToText('a<scr<script>x</script>ipt>alert(1)</script>b')).not.toContain('<script');
+    expect(htmlToText('<<b>i>text')).not.toContain('<');
+  });
+
+  it('decodes each entity once, so an escaped entity stays escaped', () => {
+    expect(htmlToText('&amp;lt;b&amp;gt; &lt;tag&gt; a&nbsp;b &amp;')).toBe(
+      '&lt;b&gt; <tag> a b &',
+    );
+  });
+
+  it('keeps an anchor href inline beside its text', () => {
+    expect(htmlToText('<p>Reset: <a href="https://x.test/r?t=1"><b>here</b></a></p>')).toBe(
+      'Reset: here (https://x.test/r?t=1)',
+    );
   });
 });
