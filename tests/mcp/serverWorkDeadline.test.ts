@@ -144,3 +144,72 @@ describe('the socket harness settles a request whose client hung up mid-stream (
     expect(cancelled).toBe(true);
   });
 });
+
+describe('the socket harness settles a request whose client hung up BEFORE the route answered (MOTIR-7855)', () => {
+  let server: McpTestServer;
+  let entered!: () => void;
+  const handlerEntered = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let cancelled = false;
+
+  beforeAll(async () => {
+    server = await startMcpHttpServer({
+      extraRoutes: {
+        // The MCP SDK client's un-awaited SSE GET: the route is still inside its
+        // auth + rate-limit transactions when the test's `client.close()` hangs
+        // up, and only THEN answers 405. The gate stands in for those
+        // transactions, so the hang-up lands before the answer every time.
+        '/test/slow-refusal': {
+          GET: async () => {
+            entered();
+            await gate;
+            return new Response(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.enqueue(new TextEncoder().encode('{"error":"Method not allowed."}'));
+                  controller.close();
+                },
+                cancel() {
+                  cancelled = true;
+                },
+              }),
+              { status: 405, headers: { 'content-type': 'application/json' } },
+            );
+          },
+        },
+      },
+    });
+  });
+
+  afterAll(async () => {
+    release();
+    await server.close();
+  });
+
+  it('a client that closes while the route is still working leaves no tracked work pending', async () => {
+    const { hostname, port } = new URL(server.url);
+    const req = request({ hostname, port, path: '/test/slow-refusal', method: 'GET' });
+    req.on('error', () => {
+      // The hang-up below is the point; a reset on the client side is expected.
+    });
+    req.end();
+
+    await handlerEntered;
+    req.destroy();
+    // The authoritative signal that the SERVER has seen the hang-up: it no longer
+    // holds the socket, so the response's 'close' has already been emitted.
+    await expect.poll(() => server.openConnections()).toBe(0);
+    release();
+
+    await settleServerWork(SHORT_DEADLINE_MS * 10);
+
+    expect(pendingServerWork()).toBe(0);
+    // The route's answer was cancelled rather than left paused with no reader.
+    expect(cancelled).toBe(true);
+  });
+});
