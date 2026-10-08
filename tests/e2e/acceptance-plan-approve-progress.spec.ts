@@ -276,14 +276,20 @@ test('the progress and the timeout read in Chinese', async ({ page }) => {
     .context()
     .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
   await page.reload();
-  await expect(views(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
+  // The workspace dialog's NAME is translated, so in Chinese it is found by role
+  // alone — it is the one dialog on the page.
+  const zhWorkspace = page.getByRole('dialog');
+  const zhBar = zhWorkspace.getByTestId('plan-change-confirm-bar');
+  await expect(zhWorkspace.getByTestId('plan-proposal-views')).toBeVisible({
+    timeout: FIRST_PAINT_MS,
+  });
 
   const hold = await holdApprove(page, planId, (route) =>
     route.fulfill({ status: 503, contentType: 'application/json', body: timedOutBody(planId) }),
   );
   const answered = approveResponse(page, planId);
-  await verb(bar(page), zhSurface.approve).click();
-  const live = progressIn(bar(page));
+  await verb(zhBar, zhSurface.approve).click();
+  const live = progressIn(zhBar);
   await expect(live).toContainText(copy.creating.replace('{n}', '3'));
   await expect(live).toContainText(copy.together);
 
@@ -291,7 +297,7 @@ test('the progress and the timeout read in Chinese', async ({ page }) => {
   expect((await answered).status()).toBe(503);
   await hold.unroute();
 
-  const band = workspace(page).getByTestId('plan-approve-timed-out');
+  const band = zhWorkspace.getByTestId('plan-approve-timed-out');
   await expect(band).toContainText(copy.timedOutTitle);
   await expect(band).toContainText(copy.timedOutNext);
 });
