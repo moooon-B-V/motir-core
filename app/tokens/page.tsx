@@ -46,6 +46,7 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import type { ThemePattern } from '@/lib/theme/types';
 import { STYLE_DIMENSIONS, STYLE_REGISTRY, STYLE_IDS } from '@/lib/theme/styles';
 import { StyleVignette } from '@/components/theme/StyleVignette';
+import { FontSetsSection } from './FontSetsSection';
 
 // Identity hues (MOTIR-1274 · 1266.3) — the dedicated --el-* families that
 // un-collapsed the shared --el-tint-* pool (roles / org-roles / privacy / labels
@@ -680,6 +681,10 @@ export default function TokensPage() {
             ))}
           </div>
         </div>
+      </Section>
+
+      <Section title="Font sets">
+        <FontSetsSection />
       </Section>
 
       <Section title="Color">

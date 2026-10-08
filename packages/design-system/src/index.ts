@@ -18,6 +18,7 @@
 export * from './theme/styles';
 export * from './theme/palettes';
 export * from './theme/typography';
+export * from './theme/fontSets';
 
 // ── Pattern axis + storage/defaults (owned by ./theme/types) ─────────────────
 export { THEME_STORAGE_KEYS, THEME_DEFAULTS, isThemePattern, resolvePattern } from './theme/types';

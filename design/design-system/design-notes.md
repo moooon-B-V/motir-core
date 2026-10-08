@@ -705,3 +705,133 @@ citrine does not appear there. Once you drill below the epics almost nothing mov
 3.0 floor, where today's blue is 4.49:1. It clears, and the tile is `aria-hidden` (the key and title
 carry the meaning), so no WCAG criterion rests on it; but it is the lowest figure in this design, and
 MOTIR-7584 should assert it so a later tint change cannot push it under.
+
+## 9. /tokens — Font sets section (MOTIR-7844)
+
+**Amends:** nothing drawn. No published design draws `/tokens`. `list_designs { pathPrefix:
+"design/design-system/" }`, read 2026-10-08, returns MOTIR-7583's warm-touches result
+(`element-tokens--motir-warm-touches.mock.html`) and MOTIR-3592's `element-tokens.mock.html`, and
+both draw the `--el-*` showcase, not the page. So this is a new delta mock,
+`design/design-system/tokens-page--font-sets.mock.html`. It draws ONE new section of
+`app/tokens/page.tsx`, read at `origin/main` `959708288`. **The rest of the page is undrawn and is
+the shipped page:** `ThemeControls`, `StylePreview`, `<Section title="Typography">` (line 618),
+Color, and so on. No existing mock is edited.
+
+**Where it goes.** A new `<Section title="Font sets">` (the page's own `Section` helper, line 372,
+so the id is `font-sets`), placed directly after Typography. A font set is the Type axis's
+per-script complement: the pairing draws Latin, and the set draws the script behind it.
+
+**Where every row comes from.** `docs/typography/font-sets.md` (MOTIR-7841, commit `144b53826`),
+as typed in `packages/design-system/src/theme/fontSets.ts` (MOTIR-7843). The section renders FROM
+the registry (`FONT_SET_IDS`, `LOCALE_FONT_SET`, each role's `members` and `default`), never from
+a list of its own, so a member added to the registry appears here with no change to the page.
+
+| Set       | Locales (doc § Locale → set)          | sans (default first)             | serif (default first)          | mono                                         |
+| --------- | ------------------------------------- | -------------------------------- | ------------------------------ | -------------------------------------------- |
+| `latin`   | en · de · fr · es · it · nl · pl · pt | `type-pairing` (added)           | `type-pairing` (added)         | `type-pairing` (added)                       |
+| `zh-Hans` | zh                                    | Noto Sans SC (added)             | Noto Serif SC · LXGW WenKai TC | Noto Sans SC (added), drawn as a composition |
+| `ja`      | ja                                    | Noto Sans JP · M PLUS Rounded 1c | Noto Serif JP (added)          | Noto Sans JP (added), drawn as a composition |
+| `ko`      | ko                                    | Noto Sans KR · Nanum Gothic      | Noto Serif KR (added)          | Noto Sans KR (added), drawn as a composition |
+
+Each row is the doc's `## The sets` → `### <set>` table. "(added)" is that table's `added (not in
+dooooWeb)` tag, which is drawn as a badge.
+
+### 9.1 Anatomy — one Card per set
+
+- **Set head:** the set id in `--font-mono` 16px semibold `--el-text`, then its locales as a mono
+  caption (`— en · de · …`).
+- **Role rows** (sans, serif, mono, in `FONT_SET_ROLES` order): a 96px mono caption column with the
+  role, and the members. A 1px `--el-border` top rule separates the rows.
+- **Member:** the member id and family name (`noto-sans-jp · Noto Sans JP`) in 12px mono `--el-text`;
+  then the badges; then the **sample**, 20px, set in that member's face and with the set's `lang`.
+  - `default`: a Badge on `--el-tint-mint`. Exactly one per role.
+  - `added (not in dooooWeb)`: a Badge on `--el-tint-peach`.
+  - Badge ink is `--el-text-strong`, on a tint, which is the AA rule from finding #35.
+- **Samples, by set:** latin `Zażółć gęślą jaźń · Ĳsselmeer · Ça`; zh-Hans
+  `敏捷的棕色狐狸跳过了懒狗 · 直 骨`; ja `いろはにほへと 素早い茶色の狐 · 直 骨` (kana and kanji); ko
+  `다람쥐 헌 쳇바퀴에 타고파 · 直 骨`. The mono samples are a line of code with a script identifier and
+  string: `const 課題 = "完了";`.
+- **The Latin set's member** is the active pairing's own face, labelled with the face the current
+  pairing resolves to (`type-pairing · Inter` under `motir`), with the note "The active pairing's own
+  face. The set loads nothing." Under another pairing the label follows it. That is the
+  `TYPE_REGISTRY` face for the role.
+- **A composition** (every CJK mono role): the sample is drawn as it will render, with the pairing's
+  mono face first and then the set's sans face. The line under it reads "Composition: the pairing's
+  mono face for Latin, the set's sans face for <script>." It is not presented as a mono face of
+  its own (doc § zh-Hans, "Why the mono role reuses the sans face").
+- **LXGW WenKai TC** carries the line "Draws Traditional (inherited) forms, so never the default."
+  (doc § Region forms).
+- **A role with one member** draws that member alone. It has no "other members" slot and no empty
+  state. Most roles here are this case.
+- Explanations and captions are in `--el-text-secondary`. Never `--el-text-muted`: these sit on
+  the card, and a later re-skin may put the card on `--el-surface`.
+
+### 9.2 Region forms
+
+Three labelled cells (`zh-Hans · Noto Sans SC`, `ja · Noto Sans JP`, `ko · Noto Sans KR`), each
+drawing **直 骨** at 56px, in its set's default sans face and with its own `lang`. These are the two
+characters the story names. The doc cites the Noto CJK region-subset fonts as drawing each region's
+standard form (doc § Region forms). The grid is `repeat(auto-fit, minmax(150px, 1fr))`, so at narrow
+width the cells wrap and each keeps its label.
+
+### 9.3 Apply a member by name
+
+A read-only demonstration with no form control. Two samples side by side: the ja sans default
+(caption `ja · sans · default (noto-sans-jp)`) and the same line in a wrapper carrying
+`data-font-set-sans="m-plus-rounded-1c"` (caption naming the attribute and the member). The second
+renders in M PLUS Rounded 1c. The attribute is the by-name override MOTIR-7845 composes in
+`theme.css`, so this panel shows that mechanism, not a mock-only style.
+
+### 9.4 How the faces arrive — the one page that loads every set
+
+`/tokens` is the one page that fetches every set's faces, and it does so only once this section is
+on screen.
+
+1. **Not yet on screen** (panel 2). The section renders its heading and one dashed-border
+   placeholder per set, reading `<set id> · <locales or language name> · samples load when this
+section is on screen`. **Every word in that state is Latin: no Han, kana or Hangul character is
+   in the DOM.** A face is fetched when a rendered character falls in one of its `unicode-range`
+   slices. One CJK glyph in the placeholder would therefore fetch that face on page load, which is
+   exactly what this design exists to prevent. That is why the placeholder names the language in
+   English (`Japanese`), not as an endonym (`日本語`).
+2. **Scrolled into view.** Every set's samples mount at once, each with its own `lang`, and their
+   faces are requested.
+3. **Loading** (panel 3). Until a face has loaded, its sample shows in the generic fallback with a
+   `loading <face>` Badge on `--el-tint-sky`, so a reviewer never reads a fallback as the member.
+   The badge goes when the face is ready (`document.fonts.load` for that family resolves).
+
+### 9.5 States
+
+| State                  | Panel | What is drawn                                                                                                                                                  |
+| ---------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Not yet on screen      | 2     | Heading + one Latin-only placeholder per set; no script glyph in the DOM                                                                                       |
+| Loading                | 3     | Sample in the fallback face, `loading <face>` badge                                                                                                            |
+| Populated              | 1     | Every set, role and member in its face                                                                                                                         |
+| A role with one member | 1     | The member alone, no empty slot                                                                                                                                |
+| Failed / not loadable  | 4     | Fallback face, `not loaded` Badge on `--el-tint-rose`, and the reason in a line under it. Never silent. No member is `not loadable` today (doc § Loadability). |
+| Narrow width           | 5     | Role label above its members; region-forms cells wrap with labels                                                                                              |
+
+### 9.6 Tokens
+
+Colour: `--el-page-bg`, `--el-card`, `--el-text`, `--el-text-strong`, `--el-text-secondary`,
+`--el-border`, `--el-tint-mint` / `-peach` / `-sky` / `-rose`. Shape: `--radius-card` (set Card,
+region cell, placeholder), `--radius-badge` with `--spacing-chip-x/y` (badges),
+`--spacing-card-padding`, `--shadow-subtle`. Type: `--font-sans` / `--font-serif` / `--font-mono`
+for chrome. Each sample names its member's family directly, because that is the subject of the
+section. No new token.
+
+**On "no hex in the mock".** The card asks that a hex grep over the new mock returns nothing. The
+only hex values in it are the Tier-0 palette values in its token layer, copied verbatim from
+`packages/design-system/theme.css` (motir, light). Every mock in this tree declares that layer,
+because `tests/design-token-layer.test.ts` and the ink guards measure `--el-*` against declared
+values. Below the token layer there is no literal colour: every element paints through `--el-*`.
+
+### 9.7 Who builds what
+
+- The section, its on-screen trigger, the placeholders and the loading / failed badges:
+  **MOTIR-7848** (the /tokens code card).
+- The registry the section reads: **MOTIR-7843**.
+- The `:lang()` composition and `data-font-set-<role>` override that panels 1 and 9.3 rely on:
+  **MOTIR-7845**.
+- Declaring the faces with `next/font`: **MOTIR-7847**.
+- Proving the region forms and the fetch rule in a browser: **MOTIR-7851**.
