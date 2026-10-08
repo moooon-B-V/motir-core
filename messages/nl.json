@@ -971,6 +971,46 @@
       "renew": "Als je het AI-abonnement vóór {date} verlengt, wordt de verwijdering geannuleerd. Tot die tijd kunnen je agents niet worden aangemaakt of gewekt, en wordt hun opslag nog elke dag in rekening gebracht.",
       "openBilling": "AI-abonnement verlengen",
       "footer": "Je ontvangt dit omdat je agents in deze organisatie bezit."
+    },
+    "enterpriseRequestReceived": {
+      "subject": "Enterprise-aanvraag van {organization}",
+      "preview": "{requester} vroeg naar Enterprise voor {organization}",
+      "greeting": "Hoi,",
+      "lede": "{requester} ({email}) vroeg naar het Enterprise-abonnement voor {organization}.",
+      "needsHeading": "Wat ze ons vertelden",
+      "cardsPerDay": "Werkitems per dag: ongeveer {count}",
+      "parallelAgents": "Agents tegelijk: {count}",
+      "agentPath": "Welke agents: {value}",
+      "autonomy": "Zelfstandig draaien: {value}",
+      "startWhen": "Wanneer ze zouden beginnen: {value}",
+      "teamSize": "Teamgrootte: {value}",
+      "noNeeds": "Ze hebben alle optionele vragen leeg gelaten.",
+      "contact": "Bereik ze via: {contact}",
+      "noteHeading": "Hun bericht",
+      "openRequest": "Aanvraag openen",
+      "footer": "Je ontvangt dit omdat je platformmedewerker bent bij Motir.",
+      "agentPathValue": {
+        "hosted": "De gehoste agents van Motir",
+        "own": "Hun eigen agents",
+        "both": "Allebei"
+      },
+      "autonomyValue": {
+        "autonomous_lead": "Het project dag en nacht zelfstandig draaien",
+        "volume_only": "Een groot aantal runs die ze zelf starten",
+        "unsure": "Nog niet zeker"
+      },
+      "startWhenValue": {
+        "now": "Nu",
+        "within_month": "Binnen een maand",
+        "within_quarter": "Binnen een kwartaal",
+        "exploring": "Alleen aan het verkennen"
+      },
+      "teamSizeValue": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      }
     }
   },
   "auth": {
@@ -6274,7 +6314,6 @@
       "once": "eenmalig",
       "ctaChoose": "{plan} kiezen",
       "ctaUpgrade": "Upgraden naar {plan}",
-      "ctaContactSales": "Contact opnemen met sales",
       "ctaCurrent": "Huidig abonnement",
       "ctaTrialUsed": "Proefperiode gebruikt",
       "footer": "Jaarlijkse facturering (de standaard van Stripe) wordt getoond — schakel hierboven over naar Maandelijks om te vergelijken. Btw wordt automatisch toegepast bij het afrekenen. Credits zijn een interne gebruikstoewijzing; de getoonde prijs is de kosten van het AI-abonnement, door Stripe gefactureerd aan de organisatie {org}. Je Motir-plekken worden apart gefactureerd — beheer ze op het scherm van het Motir-abonnement.",
@@ -6393,6 +6432,120 @@
     "internalBilling": {
       "badge": "Interne facturering",
       "note": "Deze organisatie wordt precies als een klant gefactureerd en daarna gecompenseerd — elk bedrag hieronder is echt, en het saldo komt netto op nul uit."
+    },
+    "contactSales": {
+      "contact": "Contact opnemen met sales",
+      "sentChip": "Aanvraag verstuurd · {date}",
+      "memberReason": "Alleen eigenaren en beheerders van {org} kunnen contact opnemen met sales.",
+      "title": "Contact opnemen met sales — Enterprise",
+      "subtitle": "Vertel ons wat je Motir wilt laten draaien. Platformmedewerkers lezen elke aanvraag en antwoorden je rechtstreeks.",
+      "facts": {
+        "heading": "Meegestuurd met je aanvraag",
+        "organization": "Organisatie",
+        "requestedBy": "Aangevraagd door",
+        "currentPlan": "Huidig abonnement",
+        "repositories": "Gekoppelde repository’s"
+      },
+      "optionalNote": "Alles hieronder is optioneel, behalve het bericht.",
+      "fields": {
+        "cardsPerDay": "Werkitems per dag, ongeveer",
+        "cardsPerDayPlaceholder": "bijv. 40",
+        "parallelAgents": "Agents tegelijk",
+        "parallelAgentsPlaceholder": "bijv. 8",
+        "agentPath": "Welke agents",
+        "autonomy": "Hoe moet het draaien?",
+        "startWhen": "Wanneer zou je beginnen?",
+        "teamSize": "Teamgrootte",
+        "choose": "Kiezen…",
+        "contact": "Beste manier om je te bereiken",
+        "contactHelp": "Het e-mailadres van je account. Wijzig het als iemand anders het antwoord moet krijgen.",
+        "note": "Bericht",
+        "required": "Verplicht",
+        "notePlaceholder": "Wat moet Motir voor je team doen? Alles wat we moeten weten over je repository’s, beveiliging of planning."
+      },
+      "agentPath": {
+        "hosted": {
+          "label": "De gehoste agents van Motir",
+          "hint": "Draait op de modellen van Motir."
+        },
+        "own": {
+          "label": "Onze eigen agents",
+          "hint": "Claude Code, Codex of een andere agent met onze eigen inloggegevens, in de cloud van Motir."
+        },
+        "both": {
+          "label": "Allebei",
+          "hint": "Een beetje van allebei."
+        }
+      },
+      "autonomy": {
+        "autonomous_lead": {
+          "label": "Dag en nacht, zelfstandig",
+          "hint": "De autonome lead: Motir plant, draait en repareert, en je team beslist bij goedkeuringsmomenten."
+        },
+        "volume_only": {
+          "label": "Een groot aantal runs die wij starten",
+          "hint": "Je team start elke run."
+        },
+        "unsure": {
+          "label": "Nog niet zeker",
+          "hint": ""
+        }
+      },
+      "startWhen": {
+        "now": "Nu",
+        "within_month": "Binnen een maand",
+        "within_quarter": "Binnen een kwartaal",
+        "exploring": "Alleen aan het verkennen"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "cancel": "Annuleren",
+      "send": "Aanvraag versturen",
+      "sending": "Versturen…",
+      "close": "Sluiten",
+      "done": "Klaar",
+      "errors": {
+        "note": "Voeg een bericht toe — vertel ons wat je Motir voor je team wilt laten doen.",
+        "number": "Voer een geheel getal van minstens 1 in."
+      },
+      "refused": {
+        "open": {
+          "title": "Je organisatie heeft al een openstaande aanvraag.",
+          "body": "Die is op {date} verstuurd, vanuit een ander tabblad of door een andere beheerder. Er is niets nieuws verstuurd.",
+          "bodyNoDate": "Die is verstuurd vanuit een ander tabblad of door een andere beheerder. Er is niets nieuws verstuurd.",
+          "action": "Aanvraag bekijken"
+        },
+        "forbidden": {
+          "title": "Je kunt geen contact opnemen met sales voor {org}.",
+          "body": "Alleen eigenaren en beheerders kunnen dat. Je rol is misschien gewijzigd sinds deze pagina is geladen — vraag het een beheerder van de organisatie."
+        },
+        "network": {
+          "title": "Motir kon niet worden bereikt.",
+          "body": "Er is niets verstuurd. Controleer je verbinding en verstuur opnieuw — wat je hebt geschreven blijft bewaard."
+        }
+      },
+      "sent": {
+        "title": "Aanvraag verstuurd",
+        "body": "Platformmedewerkers antwoorden naar <b>{contact}</b>. Zolang de aanvraag niet is gesloten, toont het Enterprise-blok die in plaats van Contact opnemen met sales."
+      },
+      "request": {
+        "title": "Je Enterprise-aanvraag",
+        "subtitle": "Verstuurd op {date} door {name}.",
+        "subtitleNoName": "Verstuurd op {date}.",
+        "state": "Status",
+        "asked": "Wat je ons vertelde",
+        "unset": "Niet opgegeven",
+        "reply": "Platformmedewerkers antwoorden naar <b>{contact}</b>. Wil je iets toevoegen, beantwoord dan hun e-mail.",
+        "status": {
+          "received": "Ontvangen",
+          "in_conversation": "In gesprek",
+          "offer_sent": "Offerte verstuurd"
+        }
+      }
     }
   },
   "draftWithAi": {
@@ -8673,6 +8826,7 @@
       "navAiPlanning": "AI-planning",
       "navPlanningLessons": "Planningslessen",
       "navIdeas": "Ideeën",
+      "navEnterpriseRequests": "Enterprise-aanvragen",
       "navRunModels": "Modellen voor gehoste runs"
     },
     "nav": {
@@ -8854,6 +9008,9 @@
           },
           "fleet": {
             "stop": "De vlootcontainers gestopt"
+          },
+          "enterprise_request": {
+            "transition": "Een Enterprise-aanvraag verplaatst"
           },
           "idea": {
             "add": "Een idee toegevoegd",
@@ -10433,6 +10590,152 @@
       "unavailable": {
         "title": "Kan de modellen voor gehoste runs niet laden",
         "body": "motir-ai reageerde niet, dus het is onbekend of elk model in de lijst wordt aangeboden en er wordt geen lijst getoond. Er is niets gewijzigd."
+      }
+    },
+    "enterpriseRequests": {
+      "breadcrumb": "Platform · Enterprise-aanvragen",
+      "title": "Enterprise-aanvragen",
+      "subtitle": "Wat organisaties via Contact opnemen met sales bij het Enterprise-abonnement hebben gestuurd. Werk elke aanvraag af van nieuw tot gewonnen of verloren; elke stap wordt vastgelegd met wie hem zette.",
+      "auditLead": "Een aanvraag is klantgegevens.",
+      "auditBody": "Deze lijst laden en een aanvraag openen zijn leesacties over tenants heen en worden in het auditlogboek vastgelegd.",
+      "cardTitle": "Aanvragen",
+      "count": {
+        "loading": "Nieuwste eerst.",
+        "open": "Nieuwste eerst. <b>{count} open</b> — nieuw, gecontacteerd of offerte verstuurd.",
+        "state": "Nieuwste eerst. <b>{state}: {count}</b>.",
+        "all": "Nieuwste eerst. <b>{count} in totaal</b>."
+      },
+      "filterLabel": "Aanvragen filteren op status",
+      "filter": {
+        "open": "Open",
+        "all": "Alle"
+      },
+      "status": {
+        "new": "Nieuw",
+        "contacted": "Gecontacteerd",
+        "offer_sent": "Offerte verstuurd",
+        "won": "Gewonnen",
+        "lost": "Verloren"
+      },
+      "stateWord": {
+        "open": "open",
+        "new": "nieuw",
+        "contacted": "gecontacteerd",
+        "offer_sent": "offerte verstuurd",
+        "won": "gewonnen",
+        "lost": "verloren"
+      },
+      "col": {
+        "organisation": "Organisatie",
+        "requester": "Aanvrager",
+        "sent": "Verstuurd",
+        "needs": "Behoeften",
+        "state": "Status"
+      },
+      "tierWhenSent": "op {tier} bij verzending",
+      "requesterGone": "Account verwijderd",
+      "needs": {
+        "cardsPerDay": "<b>{n}</b> items/dag",
+        "cardsPerDayNone": "items/dag —",
+        "agents": "<b>{n}</b> agents",
+        "agentsNone": "agents —",
+        "agentPathNone": "welke agents —",
+        "autonomyNone": "zelfstandig —"
+      },
+      "agentPath": {
+        "hosted": "Gehost door Motir",
+        "own": "Eigen agents",
+        "both": "Allebei"
+      },
+      "autonomy": {
+        "autonomous_lead": "Draait zelfstandig",
+        "volume_only": "Alleen volume",
+        "unsure": "Niet zeker"
+      },
+      "startWhen": {
+        "now": "Nu",
+        "within_month": "Binnen een maand",
+        "within_quarter": "Binnen een kwartaal",
+        "exploring": "Alleen aan het verkennen"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "notAnswered": "Niet beantwoord",
+      "pager": {
+        "label": "Pagina’s met aanvragen",
+        "note": "Nieuwste eerst · 50 per pagina",
+        "range": "{from}–{to} van {total}",
+        "newer": "Nieuwer",
+        "older": "Ouder"
+      },
+      "empty": {
+        "title": "Nog geen Enterprise-aanvragen",
+        "body": "Als de eigenaar van een organisatie bij het Enterprise-abonnement op Contact opnemen met sales drukt, komt de aanvraag hier terecht en krijgen platformmedewerkers een e-mail."
+      },
+      "emptyFilter": {
+        "title": "Geen aanvragen met status ‘{state}’",
+        "body": "Er is nu geen aanvraag met status ‘{state}’.",
+        "action": "Open aanvragen tonen",
+        "actionAll": "Alle aanvragen tonen"
+      },
+      "error": {
+        "title": "De aanvragen konden niet worden geladen",
+        "body": "Er ging iets mis bij het lezen van de aanvragen, dus er wordt er geen getoond. Er is niets gewijzigd.",
+        "retry": "Opnieuw proberen"
+      },
+      "detail": {
+        "back": "Terug naar aanvragen",
+        "sent": "Verstuurd op {date}",
+        "requestTitle": "De aanvraag",
+        "orgLink": "{org} openen in Tenants",
+        "field": {
+          "organisation": "Organisatie",
+          "requester": "Aanvrager",
+          "contact": "Contact",
+          "sent": "Verstuurd",
+          "cardsPerDay": "Werkitems per dag",
+          "parallelAgents": "Agents tegelijk",
+          "agentPath": "Welke agents",
+          "autonomy": "Draait zelfstandig",
+          "startWhen": "Start",
+          "teamSize": "Teamgrootte",
+          "note": "Bericht"
+        }
+      },
+      "move": {
+        "title": "Verplaatsen naar",
+        "stateTitle": "Status",
+        "contacted": "Markeren als gecontacteerd",
+        "offer_sent": "Markeren als offerte verstuurd",
+        "won": "Markeren als gewonnen",
+        "lost": "Markeren als verloren",
+        "hint": {
+          "new": "Volgende stap: je hebt contact opgenomen met de aanvrager.",
+          "contacted": "Volgende stap: je hebt ze een offerte gestuurd.",
+          "offer_sent": "Volgende stap: ze hebben geaccepteerd — of hij is verloren.",
+          "closes": "Gewonnen en verloren sluiten de aanvraag."
+        },
+        "failed": "De aanvraag kon niet worden verplaatst. Er is niets gewijzigd; probeer het opnieuw."
+      },
+      "closed": "<b>Gesloten als ‘{state}’ op {date}.</b> Een gesloten aanvraag gaat niet meer verder. De organisatie kan een nieuwe sturen vanaf haar Facturering-pagina.",
+      "readOnly": "<b>Alleen-lezen voor support.</b> Een aanvraag verplaatsen is een taak voor een operator of superadmin; je kunt alles hier en in de geschiedenis lezen.",
+      "confirm": {
+        "title": "Deze aanvraag markeren als ‘{state}’?",
+        "body": "De aanvraag van {org} wordt gesloten als <b>{state}</b> en kan daarna niet meer worden verplaatst. De organisatie kan een nieuwe aanvraag sturen vanaf haar Facturering-pagina.",
+        "cancel": "Annuleren"
+      },
+      "stale": "<b>Niet gewijzigd — iemand anders heeft deze aanvraag eerst verplaatst.</b> {who} heeft hem zojuist gemarkeerd als <b>{state}</b>, dus je ‘{action}’ is geweigerd en er is niets vastgelegd. De pagina toont nu de huidige status; kies opnieuw.",
+      "staleUnknown": "<b>Niet gewijzigd — iemand anders heeft deze aanvraag eerst verplaatst.</b> De status is nu <b>{state}</b>, dus je ‘{action}’ is geweigerd en er is niets vastgelegd. De pagina toont nu de huidige status; kies opnieuw.",
+      "history": {
+        "title": "Geschiedenis",
+        "order": "oudste eerst",
+        "sent": "Verstuurd als",
+        "to": "naar",
+        "requesterOf": "{name} ({org})"
       }
     },
     "ideas": {

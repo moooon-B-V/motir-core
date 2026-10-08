@@ -971,6 +971,46 @@
       "renew": "Wenn Sie den KI-Plan vor dem {date} verlängern, wird die Löschung abgebrochen. Bis dahin können Ihre Agents weder erstellt noch aufgeweckt werden, und ihr Speicher wird weiterhin täglich berechnet.",
       "openBilling": "KI-Plan verlängern",
       "footer": "Sie erhalten diese E-Mail, weil Sie Agents in dieser Organisation besitzen."
+    },
+    "enterpriseRequestReceived": {
+      "subject": "Enterprise-Anfrage von {organization}",
+      "preview": "{requester} hat für {organization} nach Enterprise gefragt",
+      "greeting": "Hallo,",
+      "lede": "{requester} ({email}) hat für {organization} nach dem Enterprise-Plan gefragt.",
+      "needsHeading": "Was uns mitgeteilt wurde",
+      "cardsPerDay": "Arbeitselemente pro Tag: etwa {count}",
+      "parallelAgents": "Parallele Agenten: {count}",
+      "agentPath": "Welche Agenten: {value}",
+      "autonomy": "Selbstständig laufen: {value}",
+      "startWhen": "Gewünschter Start: {value}",
+      "teamSize": "Teamgröße: {value}",
+      "noNeeds": "Alle optionalen Fragen wurden leer gelassen.",
+      "contact": "Erreichbar unter: {contact}",
+      "noteHeading": "Die Notiz",
+      "openRequest": "Anfrage öffnen",
+      "footer": "Sie erhalten diese E-Mail, weil Sie zu den Plattform-Mitarbeitenden von Motir gehören.",
+      "agentPathValue": {
+        "hosted": "Gehostete Agenten von Motir",
+        "own": "Eigene Agenten",
+        "both": "Beides"
+      },
+      "autonomyValue": {
+        "autonomous_lead": "Das Projekt rund um die Uhr selbstständig betreiben",
+        "volume_only": "Viele Läufe, die sie selbst starten",
+        "unsure": "Noch unklar"
+      },
+      "startWhenValue": {
+        "now": "Sofort",
+        "within_month": "Innerhalb eines Monats",
+        "within_quarter": "Innerhalb eines Quartals",
+        "exploring": "Nur informieren"
+      },
+      "teamSizeValue": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      }
     }
   },
   "auth": {
@@ -6274,7 +6314,6 @@
       "once": "einmalig",
       "ctaChoose": "{plan} wählen",
       "ctaUpgrade": "Auf {plan} upgraden",
-      "ctaContactSales": "Vertrieb kontaktieren",
       "ctaCurrent": "Aktueller Plan",
       "ctaTrialUsed": "Testphase genutzt",
       "footer": "Angezeigt wird die jährliche Abrechnung (der Stripe-Standard) – wechseln Sie oben zu „Monatlich“, um zu vergleichen. Steuern werden beim Bezahlen automatisch berechnet. Credits sind ein internes Nutzungskontingent; der angezeigte Preis ist die Gebühr für den AI-Plan, die Stripe der Organisation {org} in Rechnung stellt. Ihre Motir-Plätze werden separat abgerechnet – verwalten Sie sie auf der Seite für den Motir-Plan.",
@@ -6396,6 +6435,120 @@
     "internalBilling": {
       "badge": "Interne Abrechnung",
       "note": "Dieser Organisation wird genau wie einem Kunden berechnet und anschließend alles erstattet – jeder Betrag unten ist echt, und das Guthaben gleicht sich auf null aus."
+    },
+    "contactSales": {
+      "contact": "Vertrieb kontaktieren",
+      "sentChip": "Anfrage gesendet · {date}",
+      "memberReason": "Nur Inhaber und Administratoren von {org} können den Vertrieb kontaktieren.",
+      "title": "Vertrieb kontaktieren – Enterprise",
+      "subtitle": "Sagen Sie uns, was Motir für Sie ausführen soll. Plattform-Mitarbeitende lesen jede Anfrage und antworten Ihnen direkt.",
+      "facts": {
+        "heading": "Wird mit Ihrer Anfrage gesendet",
+        "organization": "Organisation",
+        "requestedBy": "Angefragt von",
+        "currentPlan": "Aktueller Plan",
+        "repositories": "Verbundene Repositorys"
+      },
+      "optionalNote": "Alles Folgende ist optional, außer der Notiz.",
+      "fields": {
+        "cardsPerDay": "Arbeitselemente pro Tag, ungefähr",
+        "cardsPerDayPlaceholder": "z. B. 40",
+        "parallelAgents": "Parallele Agenten",
+        "parallelAgentsPlaceholder": "z. B. 8",
+        "agentPath": "Welche Agenten",
+        "autonomy": "Wie soll es laufen?",
+        "startWhen": "Wann möchten Sie starten?",
+        "teamSize": "Teamgröße",
+        "choose": "Auswählen…",
+        "contact": "So erreichen wir Sie am besten",
+        "contactHelp": "Die E-Mail-Adresse Ihres Kontos. Ändern Sie sie, wenn jemand anderes die Antwort erhalten soll.",
+        "note": "Notiz",
+        "required": "Erforderlich",
+        "notePlaceholder": "Was soll Motir für Ihr Team tun? Alles, was wir über Ihre Repositorys, Sicherheit oder Ihren Zeitplan wissen sollten."
+      },
+      "agentPath": {
+        "hosted": {
+          "label": "Gehostete Agenten von Motir",
+          "hint": "Laufen auf den Modellen von Motir."
+        },
+        "own": {
+          "label": "Unsere eigenen Agenten",
+          "hint": "Claude Code, Codex oder ein anderer Agent mit unseren eigenen Zugangsdaten, in der Cloud von Motir."
+        },
+        "both": {
+          "label": "Beides",
+          "hint": "Ein Teil von beidem."
+        }
+      },
+      "autonomy": {
+        "autonomous_lead": {
+          "label": "Rund um die Uhr, selbstständig",
+          "hint": "Die autonome Leitung: Motir plant, führt aus und repariert, und Ihr Team entscheidet an Genehmigungsschranken."
+        },
+        "volume_only": {
+          "label": "Viele Läufe, die wir selbst starten",
+          "hint": "Ihr Team startet jeden Lauf."
+        },
+        "unsure": {
+          "label": "Noch unklar",
+          "hint": ""
+        }
+      },
+      "startWhen": {
+        "now": "Sofort",
+        "within_month": "Innerhalb eines Monats",
+        "within_quarter": "Innerhalb eines Quartals",
+        "exploring": "Nur informieren"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "cancel": "Abbrechen",
+      "send": "Anfrage senden",
+      "sending": "Wird gesendet…",
+      "close": "Schließen",
+      "done": "Fertig",
+      "errors": {
+        "note": "Fügen Sie eine Notiz hinzu – sagen Sie uns, was Motir für Ihr Team tun soll.",
+        "number": "Geben Sie eine ganze Zahl von mindestens 1 ein."
+      },
+      "refused": {
+        "open": {
+          "title": "Ihre Organisation hat bereits eine offene Anfrage.",
+          "body": "Sie wurde am {date} aus einem anderen Tab oder von einem anderen Administrator gesendet. Es wurde nichts Neues gesendet.",
+          "bodyNoDate": "Sie wurde aus einem anderen Tab oder von einem anderen Administrator gesendet. Es wurde nichts Neues gesendet.",
+          "action": "Anfrage ansehen"
+        },
+        "forbidden": {
+          "title": "Sie können den Vertrieb für {org} nicht kontaktieren.",
+          "body": "Das können nur Inhaber und Administratoren. Ihre Rolle hat sich möglicherweise geändert, seit diese Seite geladen wurde – wenden Sie sich an einen Administrator der Organisation."
+        },
+        "network": {
+          "title": "Motir war nicht erreichbar.",
+          "body": "Es wurde nichts gesendet. Prüfen Sie Ihre Verbindung und senden Sie erneut – Ihre Eingaben bleiben erhalten."
+        }
+      },
+      "sent": {
+        "title": "Anfrage gesendet",
+        "body": "Plattform-Mitarbeitende antworten an <b>{contact}</b>. Bis die Anfrage geschlossen ist, zeigt der Enterprise-Bereich sie anstelle von „Vertrieb kontaktieren“ an."
+      },
+      "request": {
+        "title": "Ihre Enterprise-Anfrage",
+        "subtitle": "Gesendet am {date} von {name}.",
+        "subtitleNoName": "Gesendet am {date}.",
+        "state": "Status",
+        "asked": "Was Sie uns mitgeteilt haben",
+        "unset": "Nicht angegeben",
+        "reply": "Plattform-Mitarbeitende antworten an <b>{contact}</b>. Um etwas zu ergänzen, antworten Sie auf deren E-Mail.",
+        "status": {
+          "received": "Eingegangen",
+          "in_conversation": "Im Gespräch",
+          "offer_sent": "Angebot gesendet"
+        }
+      }
     }
   },
   "draftWithAi": {
@@ -8676,6 +8829,7 @@
       "navAiPlanning": "AI-Planung",
       "navPlanningLessons": "Planungslektionen",
       "navIdeas": "Ideen",
+      "navEnterpriseRequests": "Enterprise-Anfragen",
       "navRunModels": "Modelle für gehostete Läufe"
     },
     "nav": {
@@ -8857,6 +9011,9 @@
           },
           "fleet": {
             "stop": "Flotten-Container gestoppt"
+          },
+          "enterprise_request": {
+            "transition": "Enterprise-Anfrage verschoben"
           },
           "idea": {
             "add": "Idee hinzugefügt",
@@ -10436,6 +10593,152 @@
       "unavailable": {
         "title": "Modelle für gehostete Läufe konnten nicht geladen werden",
         "body": "motir-ai hat nicht geantwortet, daher ist unbekannt, ob jedes aufgeführte Modell angeboten wird, und es wird keine Liste angezeigt. Es hat sich nichts geändert."
+      }
+    },
+    "enterpriseRequests": {
+      "breadcrumb": "Plattform · Enterprise-Anfragen",
+      "title": "Enterprise-Anfragen",
+      "subtitle": "Was Organisationen über „Vertrieb kontaktieren“ beim Enterprise-Plan gesendet haben. Bearbeiten Sie jede Anfrage von „Neu“ bis „Gewonnen“ oder „Verloren“; jeder Schritt wird mit der ausführenden Person protokolliert.",
+      "auditLead": "Eine Anfrage sind Kundendaten.",
+      "auditBody": "Das Laden dieser Liste und das Öffnen einer Anfrage sind mandantenübergreifende Lesezugriffe und werden im Audit-Log erfasst.",
+      "cardTitle": "Anfragen",
+      "count": {
+        "loading": "Neueste zuerst.",
+        "open": "Neueste zuerst. <b>{count} offen</b> – neu, kontaktiert oder Angebot gesendet.",
+        "state": "Neueste zuerst. <b>{count} {state}</b>.",
+        "all": "Neueste zuerst. <b>{count} insgesamt</b>."
+      },
+      "filterLabel": "Anfragen nach Status filtern",
+      "filter": {
+        "open": "Offen",
+        "all": "Alle"
+      },
+      "status": {
+        "new": "Neu",
+        "contacted": "Kontaktiert",
+        "offer_sent": "Angebot gesendet",
+        "won": "Gewonnen",
+        "lost": "Verloren"
+      },
+      "stateWord": {
+        "open": "offen",
+        "new": "neu",
+        "contacted": "kontaktiert",
+        "offer_sent": "Angebot gesendet",
+        "won": "gewonnen",
+        "lost": "verloren"
+      },
+      "col": {
+        "organisation": "Organisation",
+        "requester": "Anfragende Person",
+        "sent": "Gesendet",
+        "needs": "Bedarf",
+        "state": "Status"
+      },
+      "tierWhenSent": "beim Senden auf {tier}",
+      "requesterGone": "Konto gelöscht",
+      "needs": {
+        "cardsPerDay": "<b>{n}</b> Elemente/Tag",
+        "cardsPerDayNone": "Elemente/Tag –",
+        "agents": "<b>{n}</b> Agenten",
+        "agentsNone": "Agenten –",
+        "agentPathNone": "welche Agenten –",
+        "autonomyNone": "selbstständig –"
+      },
+      "agentPath": {
+        "hosted": "Von Motir gehostet",
+        "own": "Eigene",
+        "both": "Beides"
+      },
+      "autonomy": {
+        "autonomous_lead": "Läuft selbstständig",
+        "volume_only": "Nur Volumen",
+        "unsure": "Unklar"
+      },
+      "startWhen": {
+        "now": "Sofort",
+        "within_month": "Innerhalb eines Monats",
+        "within_quarter": "Innerhalb eines Quartals",
+        "exploring": "Nur informieren"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "notAnswered": "Nicht beantwortet",
+      "pager": {
+        "label": "Seiten der Anfragen",
+        "note": "Neueste zuerst · 50 pro Seite",
+        "range": "{from}–{to} von {total}",
+        "newer": "Neuere",
+        "older": "Ältere"
+      },
+      "empty": {
+        "title": "Noch keine Enterprise-Anfragen",
+        "body": "Wenn der Inhaber einer Organisation beim Enterprise-Plan auf „Vertrieb kontaktieren“ klickt, landet die Anfrage hier und die Plattform-Mitarbeitenden erhalten eine E-Mail."
+      },
+      "emptyFilter": {
+        "title": "Keine Anfragen mit Status „{state}“",
+        "body": "Derzeit hat keine Anfrage den Status „{state}“.",
+        "action": "Offene Anfragen anzeigen",
+        "actionAll": "Alle Anfragen anzeigen"
+      },
+      "error": {
+        "title": "Die Anfragen konnten nicht geladen werden",
+        "body": "Beim Lesen der Anfragen ist ein Fehler aufgetreten, daher wird keine angezeigt. Es wurde nichts geändert.",
+        "retry": "Erneut versuchen"
+      },
+      "detail": {
+        "back": "Zurück zu den Anfragen",
+        "sent": "Gesendet am {date}",
+        "requestTitle": "Die Anfrage",
+        "orgLink": "{org} in Mandanten öffnen",
+        "field": {
+          "organisation": "Organisation",
+          "requester": "Anfragende Person",
+          "contact": "Kontakt",
+          "sent": "Gesendet",
+          "cardsPerDay": "Arbeitselemente pro Tag",
+          "parallelAgents": "Parallele Agenten",
+          "agentPath": "Welche Agenten",
+          "autonomy": "Läuft selbstständig",
+          "startWhen": "Start",
+          "teamSize": "Teamgröße",
+          "note": "Notiz"
+        }
+      },
+      "move": {
+        "title": "Verschieben nach",
+        "stateTitle": "Status",
+        "contacted": "Als kontaktiert markieren",
+        "offer_sent": "Als „Angebot gesendet“ markieren",
+        "won": "Als gewonnen markieren",
+        "lost": "Als verloren markieren",
+        "hint": {
+          "new": "Als Nächstes: Sie haben die anfragende Person kontaktiert.",
+          "contacted": "Als Nächstes: Sie haben ein Angebot gesendet.",
+          "offer_sent": "Als Nächstes: Das Angebot wurde angenommen – oder die Anfrage ist verloren.",
+          "closes": "„Gewonnen“ und „Verloren“ schließen die Anfrage."
+        },
+        "failed": "Die Anfrage konnte nicht verschoben werden. Es wurde nichts geändert; versuchen Sie es erneut."
+      },
+      "closed": "<b>Am {date} als „{state}“ geschlossen.</b> Eine geschlossene Anfrage kann nicht mehr verschoben werden. Die Organisation kann über ihre Abrechnungsseite eine neue senden.",
+      "readOnly": "<b>Für den Support schreibgeschützt.</b> Das Verschieben einer Anfrage ist Aufgabe eines Operators oder Superadmins; Sie können hier und im Verlauf alles lesen.",
+      "confirm": {
+        "title": "Diese Anfrage als „{state}“ markieren?",
+        "body": "Die Anfrage von {org} wird als <b>{state}</b> geschlossen und kann nicht mehr verschoben werden. Die Organisation kann über ihre Abrechnungsseite eine neue Anfrage senden.",
+        "cancel": "Abbrechen"
+      },
+      "stale": "<b>Nicht geändert – jemand anderes hat diese Anfrage zuerst verschoben.</b> {who} hat sie gerade als <b>{state}</b> markiert, daher wurde Ihr „{action}“ abgelehnt und nichts protokolliert. Die Seite zeigt jetzt den aktuellen Status; wählen Sie erneut.",
+      "staleUnknown": "<b>Nicht geändert – jemand anderes hat diese Anfrage zuerst verschoben.</b> Sie ist jetzt <b>{state}</b>, daher wurde Ihr „{action}“ abgelehnt und nichts protokolliert. Die Seite zeigt jetzt den aktuellen Status; wählen Sie erneut.",
+      "history": {
+        "title": "Verlauf",
+        "order": "älteste zuerst",
+        "sent": "Gesendet als",
+        "to": "nach",
+        "requesterOf": "{name} ({org})"
       }
     },
     "ideas": {

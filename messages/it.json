@@ -971,6 +971,46 @@
       "renew": "Rinnovando il piano AI prima del {date} annulli l’eliminazione. Fino ad allora non è possibile creare o riattivare i tuoi agenti, e il loro spazio di archiviazione continua a essere addebitato ogni giorno.",
       "openBilling": "Rinnova il piano AI",
       "footer": "Ricevi questa email perché possiedi degli agenti in questa organizzazione."
+    },
+    "enterpriseRequestReceived": {
+      "subject": "Richiesta Enterprise da {organization}",
+      "preview": "{requester} ha chiesto informazioni su Enterprise per {organization}",
+      "greeting": "Ciao,",
+      "lede": "{requester} ({email}) ha chiesto informazioni sul piano Enterprise per {organization}.",
+      "needsHeading": "Cosa ci hanno detto",
+      "cardsPerDay": "Elementi di lavoro al giorno: circa {count}",
+      "parallelAgents": "Agenti in parallelo: {count}",
+      "agentPath": "Quali agenti: {value}",
+      "autonomy": "Esecuzione autonoma: {value}",
+      "startWhen": "Quando inizierebbero: {value}",
+      "teamSize": "Dimensione del team: {value}",
+      "noNeeds": "Hanno lasciato vuote tutte le domande facoltative.",
+      "contact": "Puoi contattarli a: {contact}",
+      "noteHeading": "La loro nota",
+      "openRequest": "Apri la richiesta",
+      "footer": "Ricevi questa email perché fai parte dello staff della piattaforma Motir.",
+      "agentPathValue": {
+        "hosted": "Gli agenti ospitati di Motir",
+        "own": "I loro agenti",
+        "both": "Entrambi"
+      },
+      "autonomyValue": {
+        "autonomous_lead": "Gestire il progetto 24 ore su 24 in autonomia",
+        "volume_only": "Un grande volume di esecuzioni avviate da loro",
+        "unsure": "Non ancora deciso"
+      },
+      "startWhenValue": {
+        "now": "Subito",
+        "within_month": "Entro un mese",
+        "within_quarter": "Entro un trimestre",
+        "exploring": "Solo per esplorare"
+      },
+      "teamSizeValue": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      }
     }
   },
   "auth": {
@@ -6274,7 +6314,6 @@
       "once": "una tantum",
       "ctaChoose": "Scegli {plan}",
       "ctaUpgrade": "Passa a {plan}",
-      "ctaContactSales": "Contatta le vendite",
       "ctaCurrent": "Piano attuale",
       "ctaTrialUsed": "Prova usata",
       "footer": "È mostrata la fatturazione annuale (il valore predefinito di Stripe): passa a Mensile qui sopra per confrontare. Le imposte vengono applicate automaticamente al checkout. I crediti sono una dotazione d’uso interna; il prezzo mostrato è il costo del piano AI, fatturato da Stripe all’organizzazione {org}. Le tue postazioni Motir vengono fatturate separatamente: gestiscile nella schermata del piano Motir.",
@@ -6396,6 +6435,120 @@
     "internalBilling": {
       "badge": "Fatturazione interna",
       "note": "A questa organizzazione viene addebitato esattamente come a un cliente e poi rimborsato: ogni valore qui sotto è reale e il saldo netto è pari a zero."
+    },
+    "contactSales": {
+      "contact": "Contatta le vendite",
+      "sentChip": "Richiesta inviata · {date}",
+      "memberReason": "Solo i proprietari e gli amministratori di {org} possono contattare le vendite.",
+      "title": "Contatta le vendite: Enterprise",
+      "subtitle": "Dicci cosa vuoi che Motir esegua. Lo staff della piattaforma legge ogni richiesta e ti risponde direttamente.",
+      "facts": {
+        "heading": "Inviato con la tua richiesta",
+        "organization": "Organizzazione",
+        "requestedBy": "Richiesta da",
+        "currentPlan": "Piano attuale",
+        "repositories": "Repository collegati"
+      },
+      "optionalNote": "Tutto ciò che segue è facoltativo, tranne la nota.",
+      "fields": {
+        "cardsPerDay": "Elementi di lavoro al giorno, all’incirca",
+        "cardsPerDayPlaceholder": "es. 40",
+        "parallelAgents": "Agenti in parallelo",
+        "parallelAgentsPlaceholder": "es. 8",
+        "agentPath": "Quali agenti",
+        "autonomy": "Come dovrebbe funzionare?",
+        "startWhen": "Quando inizieresti?",
+        "teamSize": "Dimensione del team",
+        "choose": "Scegli…",
+        "contact": "Il modo migliore per contattarti",
+        "contactHelp": "L’email del tuo account. Cambiala se la risposta deve arrivare a qualcun altro.",
+        "note": "Nota",
+        "required": "Obbligatorio",
+        "notePlaceholder": "Cosa dovrebbe fare Motir per il tuo team? Qualsiasi cosa dovremmo sapere su repository, sicurezza o tempistiche."
+      },
+      "agentPath": {
+        "hosted": {
+          "label": "Gli agenti ospitati di Motir",
+          "hint": "Eseguiti sui modelli di Motir."
+        },
+        "own": {
+          "label": "I nostri agenti",
+          "hint": "Claude Code, Codex o un altro agente con le nostre credenziali, nel cloud di Motir."
+        },
+        "both": {
+          "label": "Entrambi",
+          "hint": "Un po’ di tutti e due."
+        }
+      },
+      "autonomy": {
+        "autonomous_lead": {
+          "label": "24 ore su 24, in autonomia",
+          "hint": "Il lead autonomo: Motir pianifica, esegue e ripara, e il tuo team decide ai passaggi di approvazione."
+        },
+        "volume_only": {
+          "label": "Un grande volume di esecuzioni avviate da noi",
+          "hint": "Il tuo team avvia ogni esecuzione."
+        },
+        "unsure": {
+          "label": "Non lo so ancora",
+          "hint": ""
+        }
+      },
+      "startWhen": {
+        "now": "Subito",
+        "within_month": "Entro un mese",
+        "within_quarter": "Entro un trimestre",
+        "exploring": "Sto solo esplorando"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "cancel": "Annulla",
+      "send": "Invia richiesta",
+      "sending": "Invio…",
+      "close": "Chiudi",
+      "done": "Fatto",
+      "errors": {
+        "note": "Aggiungi una nota: dicci cosa vuoi che Motir faccia per il tuo team.",
+        "number": "Inserisci un numero intero pari ad almeno 1."
+      },
+      "refused": {
+        "open": {
+          "title": "La tua organizzazione ha già una richiesta aperta.",
+          "body": "È stata inviata il {date}, da un’altra scheda o da un altro amministratore. Non è stato inviato nulla di nuovo.",
+          "bodyNoDate": "È stata inviata da un’altra scheda o da un altro amministratore. Non è stato inviato nulla di nuovo.",
+          "action": "Visualizza la richiesta"
+        },
+        "forbidden": {
+          "title": "Non puoi contattare le vendite per {org}.",
+          "body": "Possono farlo solo i proprietari e gli amministratori. Il tuo ruolo potrebbe essere cambiato dopo il caricamento della pagina: chiedi a un amministratore dell’organizzazione."
+        },
+        "network": {
+          "title": "Impossibile raggiungere Motir.",
+          "body": "Non è stato inviato nulla. Controlla la connessione e invia di nuovo: ciò che hai scritto è stato conservato."
+        }
+      },
+      "sent": {
+        "title": "Richiesta inviata",
+        "body": "Lo staff della piattaforma risponderà a <b>{contact}</b>. Finché la richiesta non viene chiusa, il piano Enterprise la mostra al posto di «Contatta le vendite»."
+      },
+      "request": {
+        "title": "La tua richiesta Enterprise",
+        "subtitle": "Inviata il {date} da {name}.",
+        "subtitleNoName": "Inviata il {date}.",
+        "state": "Stato",
+        "asked": "Cosa ci hai detto",
+        "unset": "Non indicato",
+        "reply": "Lo staff della piattaforma risponde a <b>{contact}</b>. Per aggiungere qualcosa, rispondi alla loro email.",
+        "status": {
+          "received": "Ricevuta",
+          "in_conversation": "In conversazione",
+          "offer_sent": "Offerta inviata"
+        }
+      }
     }
   },
   "draftWithAi": {
@@ -8676,6 +8829,7 @@
       "navAiPlanning": "Pianificazione con l’AI",
       "navPlanningLessons": "Lezioni di pianificazione",
       "navIdeas": "Idee",
+      "navEnterpriseRequests": "Richieste Enterprise",
       "navRunModels": "Modelli delle esecuzioni ospitate"
     },
     "nav": {
@@ -8857,6 +9011,9 @@
           },
           "fleet": {
             "stop": "Arrestati i container della flotta"
+          },
+          "enterprise_request": {
+            "transition": "Spostata una richiesta Enterprise"
           },
           "idea": {
             "add": "Aggiunta un’idea",
@@ -10436,6 +10593,152 @@
       "unavailable": {
         "title": "Impossibile caricare i modelli per le esecuzioni ospitate",
         "body": "motir-ai non ha risposto, quindi non si sa se ogni modello in elenco sia offerto e nessun elenco viene mostrato. Non è cambiato nulla."
+      }
+    },
+    "enterpriseRequests": {
+      "breadcrumb": "Piattaforma · Richieste Enterprise",
+      "title": "Richieste Enterprise",
+      "subtitle": "Ciò che le organizzazioni hanno inviato da «Contatta le vendite» sul piano Enterprise. Porta ogni richiesta da nuova a vinta o persa; ogni spostamento viene registrato insieme a chi l’ha fatto.",
+      "auditLead": "Una richiesta è un dato del cliente.",
+      "auditBody": "Caricare questo elenco e aprire una richiesta sono letture trasversali ai tenant, registrate nel registro di audit.",
+      "cardTitle": "Richieste",
+      "count": {
+        "loading": "Prima le più recenti.",
+        "open": "Prima le più recenti. <b>Aperte: {count}</b> (nuove, contattate o con offerta inviata).",
+        "state": "Prima le più recenti. <b>Nello stato «{state}»: {count}</b>.",
+        "all": "Prima le più recenti. <b>{count} in totale</b>."
+      },
+      "filterLabel": "Filtra le richieste per stato",
+      "filter": {
+        "open": "Aperte",
+        "all": "Tutte"
+      },
+      "status": {
+        "new": "Nuova",
+        "contacted": "Contattata",
+        "offer_sent": "Offerta inviata",
+        "won": "Vinta",
+        "lost": "Persa"
+      },
+      "stateWord": {
+        "open": "aperta",
+        "new": "nuova",
+        "contacted": "contattata",
+        "offer_sent": "offerta inviata",
+        "won": "vinta",
+        "lost": "persa"
+      },
+      "col": {
+        "organisation": "Organizzazione",
+        "requester": "Richiedente",
+        "sent": "Inviata",
+        "needs": "Esigenze",
+        "state": "Stato"
+      },
+      "tierWhenSent": "su {tier} all’invio",
+      "requesterGone": "Account eliminato",
+      "needs": {
+        "cardsPerDay": "<b>{n}</b> elementi/giorno",
+        "cardsPerDayNone": "elementi/giorno —",
+        "agents": "<b>{n}</b> agenti",
+        "agentsNone": "agenti —",
+        "agentPathNone": "quali agenti —",
+        "autonomyNone": "in autonomia —"
+      },
+      "agentPath": {
+        "hosted": "Ospitati da Motir",
+        "own": "I loro",
+        "both": "Entrambi"
+      },
+      "autonomy": {
+        "autonomous_lead": "In autonomia",
+        "volume_only": "Solo volume",
+        "unsure": "Indeciso"
+      },
+      "startWhen": {
+        "now": "Subito",
+        "within_month": "Entro un mese",
+        "within_quarter": "Entro un trimestre",
+        "exploring": "Solo per esplorare"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "notAnswered": "Nessuna risposta",
+      "pager": {
+        "label": "Pagine di richieste",
+        "note": "Prima le più recenti · 50 per pagina",
+        "range": "{from}–{to} di {total}",
+        "newer": "Più recenti",
+        "older": "Meno recenti"
+      },
+      "empty": {
+        "title": "Ancora nessuna richiesta Enterprise",
+        "body": "Quando il proprietario di un’organizzazione preme «Contatta le vendite» sul piano Enterprise, la richiesta arriva qui e lo staff della piattaforma riceve un’email."
+      },
+      "emptyFilter": {
+        "title": "Nessuna richiesta nello stato «{state}»",
+        "body": "Al momento nessuna richiesta è nello stato «{state}».",
+        "action": "Mostra le richieste aperte",
+        "actionAll": "Mostra tutte le richieste"
+      },
+      "error": {
+        "title": "Impossibile caricare le richieste",
+        "body": "Si è verificato un errore durante la lettura delle richieste, quindi non ne viene mostrata nessuna. Non è cambiato nulla.",
+        "retry": "Riprova"
+      },
+      "detail": {
+        "back": "Torna alle richieste",
+        "sent": "Inviata il {date}",
+        "requestTitle": "La richiesta",
+        "orgLink": "Apri {org} in Tenant",
+        "field": {
+          "organisation": "Organizzazione",
+          "requester": "Richiedente",
+          "contact": "Contatto",
+          "sent": "Inviata",
+          "cardsPerDay": "Elementi di lavoro al giorno",
+          "parallelAgents": "Agenti in parallelo",
+          "agentPath": "Quali agenti",
+          "autonomy": "In autonomia",
+          "startWhen": "Inizio",
+          "teamSize": "Dimensione del team",
+          "note": "Nota"
+        }
+      },
+      "move": {
+        "title": "Sposta in",
+        "stateTitle": "Stato",
+        "contacted": "Segna come contattata",
+        "offer_sent": "Segna come offerta inviata",
+        "won": "Segna come vinta",
+        "lost": "Segna come persa",
+        "hint": {
+          "new": "Prossimo passo: hai contattato il richiedente.",
+          "contacted": "Prossimo passo: hai inviato loro un’offerta.",
+          "offer_sent": "Prossimo passo: hanno accettato, oppure è persa.",
+          "closes": "Vinta e persa chiudono la richiesta."
+        },
+        "failed": "Impossibile spostare la richiesta. Non è cambiato nulla; riprova."
+      },
+      "closed": "<b>Chiusa come {state} il {date}.</b> Una richiesta chiusa non si sposta più. L’organizzazione può inviarne una nuova dalla sua pagina Fatturazione.",
+      "readOnly": "<b>Sola lettura per l’assistenza.</b> Spostare una richiesta spetta a un operatore o a un superamministratore; puoi leggere tutto qui e nella cronologia.",
+      "confirm": {
+        "title": "Segnare questa richiesta come {state}?",
+        "body": "La richiesta di {org} viene chiusa come <b>{state}</b> e non potrà più essere spostata. L’organizzazione può inviare una nuova richiesta dalla sua pagina Fatturazione.",
+        "cancel": "Annulla"
+      },
+      "stale": "<b>Nessuna modifica: qualcun altro ha spostato prima questa richiesta.</b> {who} l’ha segnata come <b>{state}</b> un momento fa, quindi la tua azione «{action}» è stata rifiutata e non è stato registrato nulla. La pagina ora mostra il suo stato attuale; scegli di nuovo.",
+      "staleUnknown": "<b>Nessuna modifica: qualcun altro ha spostato prima questa richiesta.</b> Ora è <b>{state}</b>, quindi la tua azione «{action}» è stata rifiutata e non è stato registrato nulla. La pagina ora mostra il suo stato attuale; scegli di nuovo.",
+      "history": {
+        "title": "Cronologia",
+        "order": "prima le meno recenti",
+        "sent": "Inviata come",
+        "to": "a",
+        "requesterOf": "{name} ({org})"
       }
     },
     "ideas": {

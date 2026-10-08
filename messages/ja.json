@@ -971,6 +971,46 @@
       "renew": "{date} より前に AI プランを更新すると、削除は取り消されます。それまではエージェントの作成や起動はできず、ストレージ料金は引き続き毎日発生します。",
       "openBilling": "AI プランを更新",
       "footer": "この組織でエージェントを所有しているため、このメールが送信されています。"
+    },
+    "enterpriseRequestReceived": {
+      "subject": "{organization} から Enterprise のリクエスト",
+      "preview": "{requester} さんが {organization} の Enterprise について問い合わせました",
+      "greeting": "こんにちは。",
+      "lede": "{requester} さん({email})が {organization} の Enterprise プランについて問い合わせました。",
+      "needsHeading": "伝えられた内容",
+      "cardsPerDay": "1 日あたりの作業項目数: 約 {count}",
+      "parallelAgents": "並列エージェント数: {count}",
+      "agentPath": "使用するエージェント: {value}",
+      "autonomy": "自律実行: {value}",
+      "startWhen": "開始時期: {value}",
+      "teamSize": "チーム規模: {value}",
+      "noNeeds": "任意の質問にはすべて回答がありませんでした。",
+      "contact": "連絡先: {contact}",
+      "noteHeading": "メモ",
+      "openRequest": "リクエストを開く",
+      "footer": "このメールは、あなたが Motir のプラットフォームスタッフであるため送信されています。",
+      "agentPathValue": {
+        "hosted": "Motir のホスト型エージェント",
+        "own": "自社のエージェント",
+        "both": "両方"
+      },
+      "autonomyValue": {
+        "autonomous_lead": "プロジェクトを 24 時間自律的に運用する",
+        "volume_only": "自分たちで開始する大量の実行",
+        "unsure": "まだ決めていない"
+      },
+      "startWhenValue": {
+        "now": "今すぐ",
+        "within_month": "1 か月以内",
+        "within_quarter": "四半期以内",
+        "exploring": "情報収集中"
+      },
+      "teamSizeValue": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      }
     }
   },
   "auth": {
@@ -6274,7 +6314,6 @@
       "once": "1 回",
       "ctaChoose": "{plan} を選択",
       "ctaUpgrade": "{plan} にアップグレード",
-      "ctaContactSales": "営業担当に問い合わせる",
       "ctaCurrent": "現在のプラン",
       "ctaTrialUsed": "トライアル使用済み",
       "footer": "年払い(Stripe のデフォルト)の料金を表示しています。比較するには上で「月払い」に切り替えてください。税金はチェックアウト時に自動で適用されます。クレジットは内部的な利用枠であり、表示価格は AI プランの料金で、Stripe から {org} 組織に請求されます。Motir のシートは別途請求されます。Motir プランの画面で管理してください。",
@@ -6393,6 +6432,120 @@
     "internalBilling": {
       "badge": "社内請求",
       "note": "この組織は顧客とまったく同じように請求され、その後補填されます。以下の数値はすべて実際のもので、残高は差し引きゼロになります。"
+    },
+    "contactSales": {
+      "contact": "営業担当に問い合わせる",
+      "sentChip": "リクエスト送信済み · {date}",
+      "memberReason": "営業担当に問い合わせできるのは {org} のオーナーと管理者のみです。",
+      "title": "営業担当に問い合わせる — Enterprise",
+      "subtitle": "Motir で何を実行したいかをお知らせください。すべてのリクエストをプラットフォームスタッフが確認し、直接ご返信します。",
+      "facts": {
+        "heading": "リクエストと一緒に送信される情報",
+        "organization": "組織",
+        "requestedBy": "リクエスト者",
+        "currentPlan": "現在のプラン",
+        "repositories": "接続済みのリポジトリ"
+      },
+      "optionalNote": "メモ以外の項目はすべて任意です。",
+      "fields": {
+        "cardsPerDay": "1 日あたりの作業項目数(目安)",
+        "cardsPerDayPlaceholder": "例: 40",
+        "parallelAgents": "並列エージェント数",
+        "parallelAgentsPlaceholder": "例: 8",
+        "agentPath": "使用するエージェント",
+        "autonomy": "どのように実行しますか?",
+        "startWhen": "いつ開始しますか?",
+        "teamSize": "チーム規模",
+        "choose": "選択…",
+        "contact": "ご希望の連絡先",
+        "contactHelp": "アカウントのメールアドレスです。別の方に返信を受け取ってほしい場合は変更してください。",
+        "note": "メモ",
+        "required": "必須",
+        "notePlaceholder": "Motir にチームのために何をしてほしいですか?リポジトリ、セキュリティ、時期について知っておくべきことがあればお書きください。"
+      },
+      "agentPath": {
+        "hosted": {
+          "label": "Motir のホスト型エージェント",
+          "hint": "Motir のモデルで実行します。"
+        },
+        "own": {
+          "label": "自社のエージェント",
+          "hint": "Claude Code、Codex などのエージェントを自社の認証情報で、Motir のクラウド上で実行します。"
+        },
+        "both": {
+          "label": "両方",
+          "hint": "両方を組み合わせて使います。"
+        }
+      },
+      "autonomy": {
+        "autonomous_lead": {
+          "label": "24 時間、自律的に",
+          "hint": "自律型リード: Motir が計画・実行・修復を行い、チームは承認ゲートで判断します。"
+        },
+        "volume_only": {
+          "label": "自分たちで開始する大量の実行",
+          "hint": "各実行はチームが開始します。"
+        },
+        "unsure": {
+          "label": "まだ決めていない",
+          "hint": ""
+        }
+      },
+      "startWhen": {
+        "now": "今すぐ",
+        "within_month": "1 か月以内",
+        "within_quarter": "四半期以内",
+        "exploring": "情報収集中"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "cancel": "キャンセル",
+      "send": "リクエストを送信",
+      "sending": "送信中…",
+      "close": "閉じる",
+      "done": "完了",
+      "errors": {
+        "note": "メモを入力してください。Motir にチームのために何をしてほしいかをお書きください。",
+        "number": "1 以上の整数を入力してください。"
+      },
+      "refused": {
+        "open": {
+          "title": "この組織には未完了のリクエストがすでにあります。",
+          "body": "{date} に別のタブまたは別の管理者から送信されています。新たな送信は行われていません。",
+          "bodyNoDate": "別のタブまたは別の管理者から送信されています。新たな送信は行われていません。",
+          "action": "リクエストを表示"
+        },
+        "forbidden": {
+          "title": "{org} の営業担当に問い合わせることはできません。",
+          "body": "問い合わせできるのはオーナーと管理者のみです。このページの読み込み後にロールが変更された可能性があります。組織の管理者にお問い合わせください。"
+        },
+        "network": {
+          "title": "Motir に接続できませんでした。",
+          "body": "何も送信されていません。接続を確認して、もう一度送信してください。入力内容は保持されています。"
+        }
+      },
+      "sent": {
+        "title": "リクエストを送信しました",
+        "body": "プラットフォームスタッフから <b>{contact}</b> に返信が届きます。リクエストが完了するまで、Enterprise プランの欄には「営業担当に問い合わせる」の代わりにこのリクエストが表示されます。"
+      },
+      "request": {
+        "title": "Enterprise のリクエスト",
+        "subtitle": "{date} に {name} さんが送信。",
+        "subtitleNoName": "{date} に送信。",
+        "state": "状態",
+        "asked": "お伝えいただいた内容",
+        "unset": "未回答",
+        "reply": "プラットフォームスタッフが <b>{contact}</b> に返信します。追加の情報は、そのメールへの返信でお知らせください。",
+        "status": {
+          "received": "受付済み",
+          "in_conversation": "やり取り中",
+          "offer_sent": "オファー送付済み"
+        }
+      }
     }
   },
   "draftWithAi": {
@@ -8673,6 +8826,7 @@
       "navAiPlanning": "AI による計画",
       "navPlanningLessons": "計画の教訓",
       "navIdeas": "アイデア",
+      "navEnterpriseRequests": "Enterprise のリクエスト",
       "navRunModels": "ホスト型実行のモデル"
     },
     "nav": {
@@ -8854,6 +9008,9 @@
           },
           "fleet": {
             "stop": "フリートのコンテナーを停止"
+          },
+          "enterprise_request": {
+            "transition": "Enterprise のリクエストを移動"
           },
           "idea": {
             "add": "アイデアを追加",
@@ -10433,6 +10590,152 @@
       "unavailable": {
         "title": "ホスト型実行のモデルを読み込めませんでした",
         "body": "motir-ai が応答しなかったため、掲載された各モデルが提供されているかどうかは不明で、リストは表示されていません。何も変更されていません。"
+      }
+    },
+    "enterpriseRequests": {
+      "breadcrumb": "プラットフォーム · Enterprise のリクエスト",
+      "title": "Enterprise のリクエスト",
+      "subtitle": "Enterprise プランの「営業担当に問い合わせる」から組織が送信した内容です。各リクエストを新規から成約または失注まで進めてください。すべての移動は実行者とともに記録されます。",
+      "auditLead": "リクエストは顧客データです。",
+      "auditBody": "この一覧の読み込みとリクエストを開く操作はテナントをまたぐ読み取りであり、監査ログに記録されます。",
+      "cardTitle": "リクエスト",
+      "count": {
+        "loading": "新しい順。",
+        "open": "新しい順。<b>未完了 {count} 件</b>(新規、連絡済み、オファー送付済み)。",
+        "state": "新しい順。<b>{state} {count} 件</b>。",
+        "all": "新しい順。<b>全 {count} 件</b>。"
+      },
+      "filterLabel": "状態でリクエストを絞り込む",
+      "filter": {
+        "open": "未完了",
+        "all": "すべて"
+      },
+      "status": {
+        "new": "新規",
+        "contacted": "連絡済み",
+        "offer_sent": "オファー送付済み",
+        "won": "成約",
+        "lost": "失注"
+      },
+      "stateWord": {
+        "open": "未完了",
+        "new": "新規",
+        "contacted": "連絡済み",
+        "offer_sent": "オファー送付済み",
+        "won": "成約",
+        "lost": "失注"
+      },
+      "col": {
+        "organisation": "組織",
+        "requester": "リクエスト者",
+        "sent": "送信日",
+        "needs": "要件",
+        "state": "状態"
+      },
+      "tierWhenSent": "送信時は {tier}",
+      "requesterGone": "アカウント削除済み",
+      "needs": {
+        "cardsPerDay": "<b>{n}</b> 項目/日",
+        "cardsPerDayNone": "項目/日 —",
+        "agents": "エージェント <b>{n}</b>",
+        "agentsNone": "エージェント —",
+        "agentPathNone": "使用エージェント —",
+        "autonomyNone": "自律実行 —"
+      },
+      "agentPath": {
+        "hosted": "Motir ホスト型",
+        "own": "自社のもの",
+        "both": "両方"
+      },
+      "autonomy": {
+        "autonomous_lead": "自律実行",
+        "volume_only": "量のみ",
+        "unsure": "未定"
+      },
+      "startWhen": {
+        "now": "今すぐ",
+        "within_month": "1 か月以内",
+        "within_quarter": "四半期以内",
+        "exploring": "情報収集中"
+      },
+      "teamSize": {
+        "size_1_10": "1–10",
+        "size_11_50": "11–50",
+        "size_51_200": "51–200",
+        "size_201_plus": "201+"
+      },
+      "notAnswered": "未回答",
+      "pager": {
+        "label": "リクエストのページ",
+        "note": "新しい順 · 1 ページ 50 件",
+        "range": "{total} 件中 {from}–{to} 件",
+        "newer": "新しい方へ",
+        "older": "古い方へ"
+      },
+      "empty": {
+        "title": "Enterprise のリクエストはまだありません",
+        "body": "組織のオーナーが Enterprise プランで「営業担当に問い合わせる」を押すと、リクエストがここに届き、プラットフォームスタッフにメールが送信されます。"
+      },
+      "emptyFilter": {
+        "title": "「{state}」のリクエストはありません",
+        "body": "現在「{state}」のリクエストはありません。",
+        "action": "未完了のリクエストを表示",
+        "actionAll": "すべてのリクエストを表示"
+      },
+      "error": {
+        "title": "リクエストを読み込めませんでした",
+        "body": "リクエストの読み取り中に問題が発生したため、何も表示されていません。何も変更されていません。",
+        "retry": "再試行"
+      },
+      "detail": {
+        "back": "リクエスト一覧に戻る",
+        "sent": "{date} に送信",
+        "requestTitle": "リクエスト内容",
+        "orgLink": "テナントで {org} を開く",
+        "field": {
+          "organisation": "組織",
+          "requester": "リクエスト者",
+          "contact": "連絡先",
+          "sent": "送信日",
+          "cardsPerDay": "1 日あたりの作業項目数",
+          "parallelAgents": "並列エージェント数",
+          "agentPath": "使用するエージェント",
+          "autonomy": "自律実行",
+          "startWhen": "開始時期",
+          "teamSize": "チーム規模",
+          "note": "メモ"
+        }
+      },
+      "move": {
+        "title": "移動先",
+        "stateTitle": "状態",
+        "contacted": "連絡済みにする",
+        "offer_sent": "オファー送付済みにする",
+        "won": "成約にする",
+        "lost": "失注にする",
+        "hint": {
+          "new": "次: リクエスト者に連絡しました。",
+          "contacted": "次: オファーを送付しました。",
+          "offer_sent": "次: 先方が承諾した、または失注した。",
+          "closes": "成約と失注でリクエストはクローズされます。"
+        },
+        "failed": "リクエストを移動できませんでした。何も変更されていません。もう一度お試しください。"
+      },
+      "closed": "<b>{date} に「{state}」としてクローズされました。</b>クローズされたリクエストは再び移動できません。組織は請求ページから新しいリクエストを送信できます。",
+      "readOnly": "<b>サポートは閲覧のみです。</b>リクエストの移動はオペレーターまたはスーパー管理者の役割です。ここと履歴の内容はすべて閲覧できます。",
+      "confirm": {
+        "title": "このリクエストを「{state}」にしますか?",
+        "body": "{org} のリクエストは <b>{state}</b> としてクローズされ、再び移動することはできません。組織は請求ページから新しいリクエストを送信できます。",
+        "cancel": "キャンセル"
+      },
+      "stale": "<b>変更されていません — 別のユーザーが先にこのリクエストを移動しました。</b>{who} さんがたった今 <b>{state}</b> にしたため、「{action}」は拒否され、何も記録されていません。ページには現在の状態が表示されています。もう一度選択してください。",
+      "staleUnknown": "<b>変更されていません — 別のユーザーが先にこのリクエストを移動しました。</b>現在は <b>{state}</b> のため、「{action}」は拒否され、何も記録されていません。ページには現在の状態が表示されています。もう一度選択してください。",
+      "history": {
+        "title": "履歴",
+        "order": "古い順",
+        "sent": "送信時:",
+        "to": "移動先",
+        "requesterOf": "{name}({org})"
       }
     },
     "ideas": {

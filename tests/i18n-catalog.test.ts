@@ -593,6 +593,9 @@ function containsBannedWord(locale: Locale, value: string, word: string): boolea
 // `问题` (a problem — and the imported tracker's or Sentry's own "issue").
 const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
   zh: {
+    'email.enterpriseRequestReceived.noNeeds':
+      'question — an optional question on the Enterprise contact form, not a work item',
+    'billing.contactSales.sent.body': 'UI panel — the Enterprise plan card on the billing page',
     'device.errors.unexpected': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'planReview.actionError': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'errors.serverError.pageBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
@@ -841,6 +844,66 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
   },
   fr: {
+    'email.enterpriseRequestReceived.subject':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'email.enterpriseRequestReceived.openRequest':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'billing.contactSales.sentChip':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'billing.contactSales.subtitle':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'billing.contactSales.facts.heading':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'billing.contactSales.send':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'billing.contactSales.refused.open.title':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'billing.contactSales.refused.open.action':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'billing.contactSales.refused.network.body':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'billing.contactSales.sent.title':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'billing.contactSales.sent.body':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'billing.contactSales.request.title':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.users.log.action.enterprise_request.transition':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.subtitle':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.auditLead':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.auditBody':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.empty.title':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.empty.body':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.emptyFilter.title':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.emptyFilter.body':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.detail.requestTitle':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.move.hint.offer_sent':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.move.hint.closes':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.move.failed':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.closed':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.readOnly':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.confirm.title':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.confirm.body':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.stale':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
+    'platformAdmin.enterpriseRequests.staleUnknown':
+      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
     'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
     'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
     'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
@@ -902,6 +965,8 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
   },
   it: {
+    'billing.contactSales.refused.open.body': 'browser tab — "from another tab"',
+    'billing.contactSales.refused.open.bodyNoDate': 'browser tab — "from another tab"',
     'settings.publicAddress.subdomain.open': 'browser tab — "open in a new tab"',
   },
   nl: {
