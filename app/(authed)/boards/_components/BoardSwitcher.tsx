@@ -317,7 +317,13 @@ export function BoardSwitcher({
           <Columns3 className="h-[15px] w-[15px] shrink-0 text-(--el-text-muted)" aria-hidden />
           <span className="truncate">{activeBoard.name}</span>
           {activeBoard.isDefault ? (
-            <Pill tone="neutral" data-testid="board-switcher-active-default">
+            // The badge keeps its word on one line; a long board NAME (user
+            // data) is what gives way, through its own `truncate` (MOTIR-7761).
+            <Pill
+              tone="neutral"
+              className="shrink-0 whitespace-nowrap"
+              data-testid="board-switcher-active-default"
+            >
               {t('defaultBadge')}
             </Pill>
           ) : null}

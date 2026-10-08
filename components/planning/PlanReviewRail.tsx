@@ -485,7 +485,13 @@ export function PlanReviewRail({
                 // widen: its sentence-long label ("Genehmigen – 1 Element zum
                 // Backlog hinzufügen") wraps at a word onto a second line and the
                 // button grows from its token MINIMUM height (MOTIR-7759).
-                className="h-auto min-h-(--height-btn-md) py-(--spacing-btn-y) text-center leading-snug whitespace-normal"
+                // `break-keep` (word-break: keep-all) makes that wrap land at a
+                // SPACE in Chinese, Japanese and Korean too: by default a CJK
+                // line may break between any two characters, which split ja 追加
+                // across the lines. Every CJK value of this label carries spaces
+                // around its count, and keep-all changes nothing for Latin text
+                // (MOTIR-7761).
+                className="h-auto min-h-(--height-btn-md) py-(--spacing-btn-y) text-center leading-snug break-keep whitespace-normal"
               >
                 {t('approveCta', { n: review.itemCount })}
               </Button>

@@ -14,6 +14,14 @@
 //   2. NO SPILL             every text box lies inside the control's box
 //                           (vertically and horizontally).
 //   3. NO MID-WORD BREAK    a Range over each word yields ONE client rect.
+//                           A "word" is a run of non-space characters. In
+//                           Chinese and Japanese that is a whole space-free
+//                           clause, so a CJK label may wrap only at a space —
+//                           deliberately stricter than the language's own word
+//                           boundaries: ICU's (`Intl.Segmenter`) split
+//                           バックログ into バック|ログ, which no reader takes
+//                           for a legitimate break. A control whose CJK label
+//                           must wrap uses `word-break: keep-all` (MOTIR-7761).
 //   4. NO OVERLAP           the control's box intersects no sibling control in
 //                           the same cluster.
 //

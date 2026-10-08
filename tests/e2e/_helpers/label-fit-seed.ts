@@ -18,6 +18,19 @@ import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 export const LABEL_FIT_PASSWORD = 'label-fit-e2e-pass-9';
 
+/** The seeded work content, which the spec waits on to prove a surface LOADED:
+ *  it is user data, so it reads the same in every locale. */
+export const LABEL_FIT_TITLES = {
+  todo: 'Draft the onboarding copy',
+  doing: 'Wire the language control',
+  review: 'Review the German catalogue',
+  done: 'Ship the locale list',
+  backlog: 'Groom the backlog',
+} as const;
+export const LABEL_FIT_SPRINT = 'Sprint 1';
+export const LABEL_FIT_PLAN = 'Translate the settings';
+export const LABEL_FIT_PROPOSAL = 'Settings in eleven languages';
+
 export interface LabelFitSeed {
   email: string;
   password: string;
@@ -25,6 +38,9 @@ export interface LabelFitSeed {
   itemKey: string;
   /** A plan awaiting review, so its approve / request-changes controls render. */
   planId: string;
+  /** The active sprint. `/sprints` has no index page — a sprint's only route is
+   *  its report, `/sprints/<id>/report`. */
+  sprintId: string;
 }
 
 export async function seedLabelFitTenant(email: string): Promise<LabelFitSeed> {
@@ -52,7 +68,7 @@ export async function seedLabelFitTenant(email: string): Promise<LabelFitSeed> {
   // A sprint holding work, started so the sprint header's actions render.
   const sprint = await sprintsService.createSprint(
     project.id,
-    { name: 'Sprint 1', goal: 'Every label fits' },
+    { name: LABEL_FIT_SPRINT, goal: 'Every label fits' },
     ctx,
   );
   const add = async (title: string, inSprint: boolean) =>
@@ -63,11 +79,11 @@ export async function seedLabelFitTenant(email: string): Promise<LabelFitSeed> {
     );
 
   // At least one work item per board column.
-  const todo = await add('Draft the onboarding copy', true);
-  const doing = await add('Wire the language control', true);
-  const review = await add('Review the German catalogue', true);
-  const done = await add('Ship the locale list', true);
-  await add('Groom the backlog', false);
+  const todo = await add(LABEL_FIT_TITLES.todo, true);
+  const doing = await add(LABEL_FIT_TITLES.doing, true);
+  const review = await add(LABEL_FIT_TITLES.review, true);
+  const done = await add(LABEL_FIT_TITLES.done, true);
+  await add(LABEL_FIT_TITLES.backlog, false);
   await workItemsService.updateStatus(doing.id, 'in_progress', ctx);
   await workItemsService.updateStatus(review.id, 'in_progress', ctx);
   await workItemsService.updateStatus(review.id, 'in_review', ctx);
@@ -87,12 +103,12 @@ export async function seedLabelFitTenant(email: string): Promise<LabelFitSeed> {
   // An open plan awaiting review.
   const plan = await plansService.createPlan(
     project.id,
-    { title: 'Translate the settings', createdById: owner.id },
+    { title: LABEL_FIT_PLAN, createdById: owner.id },
     ctx,
   );
   await plansService.addProposals(
     plan.id,
-    [{ op: 'add', proposedFields: { title: 'Settings in eleven languages', kind: 'task' } }],
+    [{ op: 'add', proposedFields: { title: LABEL_FIT_PROPOSAL, kind: 'task' } }],
     ctx,
   );
   await plansService.markPlanned(plan.id, ctx);
@@ -110,5 +126,11 @@ export async function seedLabelFitTenant(email: string): Promise<LabelFitSeed> {
     },
   });
 
-  return { email, password: LABEL_FIT_PASSWORD, itemKey: todo.identifier, planId: plan.id };
+  return {
+    email,
+    password: LABEL_FIT_PASSWORD,
+    itemKey: todo.identifier,
+    planId: plan.id,
+    sprintId: sprint.id,
+  };
 }

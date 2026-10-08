@@ -16,7 +16,11 @@
 //
 // The language is the account's SAVED language, which the request resolves
 // first (MOTIR-7743); each locale is a write to that column and a reload. Every
-// page is proven rendered by a role read before it is measured, and every menu
+// page is proven LOADED before it is measured — its seeded content on screen and
+// no pending frame (`aria-busy`) left in it, because a skeleton has a different
+// toolbar from the one a person uses (the board's switcher, group-by and filter
+// controls arrive with its data: MOTIR-7761 found /boards measured as a
+// skeleton, passing while the real toolbar clipped) — and every menu
 // is measured once its own `role="menu"` / `role="listbox"` is open — nothing
 // waits on a timeout (CLAUDE.md, the authoritative-signal rule).
 
@@ -24,7 +28,14 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { assertLabelsFit } from './_helpers/label-fit';
-import { seedLabelFitTenant, type LabelFitSeed } from './_helpers/label-fit-seed';
+import {
+  LABEL_FIT_PLAN,
+  LABEL_FIT_PROPOSAL,
+  LABEL_FIT_TITLES,
+  seedLabelFitTenant,
+  type LabelFitSeed,
+} from './_helpers/label-fit-seed';
+import { DEVELOPMENT_SECTION_ID } from '@/app/(authed)/items/[key]/_components/decisionAnchor';
 
 const EMAIL = 'e2e-label-fit@example.com';
 
@@ -40,29 +51,62 @@ const RUNS: { locale: string; width: number; height: number }[] = [
 const MENUS = '[aria-haspopup="menu"]';
 const LISTBOXES = '[aria-haspopup="listbox"]';
 
+interface Surface {
+  name: string;
+  path: string;
+  popups?: string;
+  /** The surface's LOADED signal, beyond "no pending frame": seeded content
+   *  (user data, so the same in every locale) or a late-stack section. */
+  ready?: (page: Page) => Promise<void>;
+}
+
 /** The listed surfaces. `popups` selects the popup triggers whose open menu,
  *  listbox or popover is measured too: the shell's account, help and project
  *  menus once (on the first surface), a board card's actions menu, and the item
  *  page's menus and its pickers' option lists. */
-function surfaces(seed: LabelFitSeed): { name: string; path: string; popups?: string }[] {
+function surfaces(seed: LabelFitSeed): Surface[] {
+  const main = (page: Page) => page.getByRole('main');
+  const shows = (text: string) => (page: Page) =>
+    expect(main(page).getByText(text, { exact: true }).first()).toBeVisible({ timeout: 15_000 });
   return [
     {
       name: 'workbench',
       path: '/workbench',
       popups: `header ${MENUS}, aside ${MENUS}, aside ${LISTBOXES}, aside [aria-haspopup="dialog"]`,
     },
-    { name: 'items', path: '/items' },
-    { name: 'boards', path: '/boards', popups: `main ${MENUS}` },
+    { name: 'items', path: '/items', ready: shows(LABEL_FIT_TITLES.todo) },
+    {
+      name: 'boards',
+      path: '/boards',
+      popups: `main ${MENUS}`,
+      // A card in a column: the projection has arrived, so the group-by control
+      // is portaled into the toolbar; and the switcher is past its skeleton.
+      ready: async (page) => {
+        await shows(LABEL_FIT_TITLES.todo)(page);
+        await expect(main(page).getByTestId('board-switcher-trigger')).toBeVisible();
+      },
+    },
     {
       name: 'item page',
       path: `/items/${seed.itemKey}`,
       popups: `main ${MENUS}, main ${LISTBOXES}`,
+      // The late stack (Development onwards) streams in behind the page's gate.
+      ready: (page) =>
+        expect(main(page).locator(`[id="${DEVELOPMENT_SECTION_ID}"]`)).toBeVisible({
+          timeout: 15_000,
+        }),
     },
-    { name: 'backlog', path: '/backlog' },
-    { name: 'sprints', path: '/sprints' },
-    { name: 'plans', path: '/plans' },
-    { name: 'plan detail', path: `/plans/${seed.planId}` },
-    { name: 'approvals', path: '/approvals' },
+    { name: 'backlog', path: '/backlog', ready: shows(LABEL_FIT_TITLES.todo) },
+    // `/sprints` has no index (it answered 404, which the old role read passed);
+    // the sprints surface is the active sprint's report.
+    {
+      name: 'sprint report',
+      path: `/sprints/${seed.sprintId}/report`,
+      ready: shows(LABEL_FIT_TITLES.todo),
+    },
+    { name: 'plans', path: '/plans', ready: shows(LABEL_FIT_PLAN) },
+    { name: 'plan detail', path: `/plans/${seed.planId}`, ready: shows(LABEL_FIT_PROPOSAL) },
+    { name: 'approvals', path: '/approvals', ready: shows(LABEL_FIT_PLAN) },
     { name: 'account settings', path: '/settings/account' },
     { name: 'organization settings', path: '/settings/organization' },
     { name: 'project settings', path: '/settings/project' },
@@ -119,9 +163,18 @@ test.describe('labels fit their controls in the longer-running languages', () =>
       await signIn(page, seed.email, seed.password);
 
       for (const surface of surfaces(seed)) {
-        await page.goto(surface.path);
+        // The route exists: a not-found page also renders a `main`, so the role
+        // read alone measured a 404 for `/sprints` (MOTIR-7761).
+        const response = await page.goto(surface.path);
+        expect(response?.status(), `${surface.path} answers`).toBeLessThan(400);
         await expect(page.locator('html')).toHaveAttribute('lang', run.locale);
         await expect(page.getByRole('main')).toBeVisible();
+        await surface.ready?.(page);
+        // No pending frame left: every in-page `<Suspense>` fallback and list
+        // skeleton announces itself with `aria-busy`.
+        await expect(page.getByRole('main').locator('[aria-busy="true"]')).toHaveCount(0, {
+          timeout: 15_000,
+        });
         const label = `${surface.name} · ${run.locale}`;
         await assertLabelsFit(page, { label });
         if (surface.popups) await openAndMeasurePopups(page, surface.popups, label);
