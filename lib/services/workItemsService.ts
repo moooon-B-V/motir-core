@@ -126,6 +126,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import {
   isVisitorContext,
   openVisitorRead,
+  redactPageRefLabels,
   redactWithheldWorkItemRefs,
   stripPrivateEpicTells,
 } from '@/lib/visitor/readScope';
@@ -303,6 +304,9 @@ import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
+import { syncBodyPageLinks } from '@/lib/workItems/bodyPageLinks';
+import { parsePageTokenIds } from '@/lib/mentions/pageRefs';
+import { pagesService } from '@/lib/services/pagesService';
 import type { SprintBlockerDto, ValidityCondition } from '@/lib/dto/sprints';
 import { DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
@@ -1246,8 +1250,10 @@ function redactVisitorItem<
 >(dto: T, hidden: ReadonlySet<string>): T {
   return {
     ...dto,
-    descriptionMd: redactWithheldWorkItemRefs(dto.descriptionMd, hidden),
-    explanationMd: redactWithheldWorkItemRefs(dto.explanationMd, hidden),
+    // Page chips keep their id and lose their label (MOTIR-7697): a Visitor
+    // route serves no page, so no page title may ride the body.
+    descriptionMd: redactPageRefLabels(redactWithheldWorkItemRefs(dto.descriptionMd, hidden)),
+    explanationMd: redactPageRefLabels(redactWithheldWorkItemRefs(dto.explanationMd, hidden)),
   };
 }
 
@@ -2138,6 +2144,16 @@ export const workItemsService = {
       // roll back together.
       await recomputeAncestorRepoSets(row.id, workspaceId, tx);
 
+      // Page tags (MOTIR-7696): a `motir-page:` token in either birth body
+      // derives its `description` / `explanation` link row in the SAME
+      // transaction, so a created item is never tagged without its row.
+      await syncBodyPageLinks(
+        { id: row.id, workspaceId, projectId: input.projectId },
+        { descriptionMd: row.descriptionMd, explanationMd: row.explanationMd },
+        ctx.userId,
+        tx,
+      );
+
       // Initial revision: the created-row state as a { from: null, to: value }
       // diff (1.4.6 finalized the shape 1.4.4 deferred — see buildCreatedDiff).
       // Its id is the idempotency scope of any description-mention event below.
@@ -2870,6 +2886,22 @@ export const workItemsService = {
         : null;
       const revisionDiff: Record<string, unknown> = diff;
       if (attachmentsCell) revisionDiff['attachments'] = attachmentsCell;
+
+      // Page tags (MOTIR-7696): re-derive the `description` / `explanation`
+      // link rows for each body this edit CHANGED, in the same transaction. A
+      // body the patch left alone keeps its rows — an omitted field is not an
+      // empty one. Derived rows write no History entry, as on the page side.
+      if (bodyChanged) {
+        await syncBodyPageLinks(
+          { id: row.id, workspaceId: current.workspaceId, projectId: current.projectId },
+          {
+            ...(diff['descriptionMd'] !== undefined ? { descriptionMd: row.descriptionMd } : {}),
+            ...(diff['explanationMd'] !== undefined ? { explanationMd: row.explanationMd } : {}),
+          },
+          ctx.userId,
+          tx,
+        );
+      }
 
       const revisionId = await workItemRevisionsService.recordRevision(
         { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff: revisionDiff },
@@ -6795,6 +6827,17 @@ export const workItemsService = {
       projectId,
       ctx,
     );
+    // Page chips (MOTIR-7697) — every `motir-page:` tag in the two bodies,
+    // resolved under the reader's own `page:view` to its live title or the
+    // unavailable state.
+    const pageRefs = await pagesService.resolvePageRefSummaries(
+      [
+        ...parsePageTokenIds(detail.item.descriptionMd),
+        ...parsePageTokenIds(detail.item.explanationMd),
+      ],
+      projectId,
+      ctx,
+    );
     // The Development section's linked PRs (MOTIR-1579). Tenancy rides the
     // detail read above: the PR link is keyed by the item's internal id, which
     // getIssueDetail already gated to the caller's workspace.
@@ -6865,7 +6908,7 @@ export const workItemsService = {
       folderPath,
       designEvidence,
     );
-    return { ...view, heldTransitions, planHold, mergeMembers };
+    return { ...view, pageRefs, heldTransitions, planHold, mergeMembers };
   },
 
   /**
@@ -6942,7 +6985,17 @@ export const workItemsService = {
       folderPath,
       null,
     );
-    return { ...view, heldTransitions: [], planHold: null, mergeMembers: [] };
+    // A Visitor reads no page: every chip resolves unavailable, and the bodies'
+    // page labels were redacted by the detail read (MOTIR-7697).
+    const pageRefs = await pagesService.resolvePageRefSummaries(
+      [
+        ...parsePageTokenIds(detail.item.descriptionMd),
+        ...parsePageTokenIds(detail.item.explanationMd),
+      ],
+      projectId,
+      ctx,
+    );
+    return { ...view, pageRefs, heldTransitions: [], planHold: null, mergeMembers: [] };
   },
 
   /**

@@ -150,6 +150,12 @@
     "mentionNoResults": "Aucun élément de travail ne correspond à « {query} ».",
     "mentionSearchFailed": "Impossible de rechercher les éléments de travail.",
     "mentionRetry": "Réessayer",
+    "mentionPages": "Pages",
+    "mentionTypeToSearchPages": "Continuez à taper pour rechercher des pages…",
+    "mentionNoPages": "Aucune page ne correspond à « {query} ».",
+    "mentionPagesSearchFailed": "Impossible de rechercher les pages.",
+    "pageUntitled": "Sans titre",
+    "pageUnavailable": "Page indisponible",
     "codeLanguage": "Langage"
   },
   "common": {
@@ -1468,6 +1474,8 @@
     "pagesSourceMention": "Mentionné",
     "pagesSourceEmbed": "Intégré",
     "pagesSourceManual": "Lié",
+    "pagesSourceDescription": "Référencée dans la description",
+    "pagesSourceExplanation": "Référencée dans l’explication",
     "pagesEmpty": "Aucune page ne renvoie encore vers cet élément de travail.",
     "pagesShowMore": "Afficher plus de pages",
     "pagesError": "Impossible de charger les pages.",

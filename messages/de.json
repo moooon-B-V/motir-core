@@ -150,6 +150,12 @@
     "mentionNoResults": "Keine Arbeitselemente entsprechen „{query}“.",
     "mentionSearchFailed": "Arbeitselemente konnten nicht durchsucht werden.",
     "mentionRetry": "Erneut versuchen",
+    "mentionPages": "Seiten",
+    "mentionTypeToSearchPages": "Weiter tippen, um Seiten zu suchen…",
+    "mentionNoPages": "Keine Seiten entsprechen „{query}“.",
+    "mentionPagesSearchFailed": "Seiten konnten nicht durchsucht werden.",
+    "pageUntitled": "Ohne Titel",
+    "pageUnavailable": "Seite nicht verfügbar",
     "codeLanguage": "Sprache"
   },
   "common": {
@@ -1468,6 +1474,8 @@
     "pagesSourceMention": "Erwähnt",
     "pagesSourceEmbed": "Eingebettet",
     "pagesSourceManual": "Verknüpft",
+    "pagesSourceDescription": "In der Beschreibung markiert",
+    "pagesSourceExplanation": "In der Erläuterung markiert",
     "pagesEmpty": "Noch keine Seite verweist auf dieses Arbeitselement.",
     "pagesShowMore": "Weitere Seiten anzeigen",
     "pagesError": "Seiten konnten nicht geladen werden.",

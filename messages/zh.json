@@ -150,6 +150,12 @@
     "mentionNoResults": "没有与「{query}」匹配的工作项。",
     "mentionSearchFailed": "无法搜索工作项。",
     "mentionRetry": "重试",
+    "mentionPages": "页面",
+    "mentionTypeToSearchPages": "继续输入以搜索页面…",
+    "mentionNoPages": "没有与「{query}」匹配的页面。",
+    "mentionPagesSearchFailed": "无法搜索页面。",
+    "pageUntitled": "无标题",
+    "pageUnavailable": "页面不可用",
     "codeLanguage": "语言"
   },
   "common": {
@@ -1468,6 +1474,8 @@
     "pagesSourceMention": "已提及",
     "pagesSourceEmbed": "已嵌入",
     "pagesSourceManual": "已链接",
+    "pagesSourceDescription": "已在描述中标记",
+    "pagesSourceExplanation": "已在说明中标记",
     "pagesEmpty": "尚无页面链接到此工作项。",
     "pagesShowMore": "显示更多页面",
     "pagesError": "无法加载页面。",

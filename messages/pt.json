@@ -150,6 +150,12 @@
     "mentionNoResults": "Nenhum item de trabalho corresponde a “{query}”.",
     "mentionSearchFailed": "Não foi possível pesquisar itens de trabalho.",
     "mentionRetry": "Tentar novamente",
+    "mentionPages": "Páginas",
+    "mentionTypeToSearchPages": "Continue digitando para pesquisar páginas…",
+    "mentionNoPages": "Nenhuma página corresponde a “{query}”.",
+    "mentionPagesSearchFailed": "Não foi possível pesquisar páginas.",
+    "pageUntitled": "Sem título",
+    "pageUnavailable": "Página indisponível",
     "codeLanguage": "Linguagem"
   },
   "common": {
@@ -1468,6 +1474,8 @@
     "pagesSourceMention": "Mencionado",
     "pagesSourceEmbed": "Incorporado",
     "pagesSourceManual": "Vinculado",
+    "pagesSourceDescription": "Marcada na descrição",
+    "pagesSourceExplanation": "Marcada na explicação",
     "pagesEmpty": "Nenhuma página tem link para este item de trabalho ainda.",
     "pagesShowMore": "Mostrar mais páginas",
     "pagesError": "Não foi possível carregar as páginas.",

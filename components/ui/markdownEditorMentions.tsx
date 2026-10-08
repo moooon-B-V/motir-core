@@ -7,15 +7,18 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from 'react';
 import { ReactRenderer, type Editor } from '@tiptap/react';
 import { Mention } from '@tiptap/extension-mention';
 import { Node, mergeAttributes } from '@tiptap/core';
-import { Loader2, RotateCw, TriangleAlert } from 'lucide-react';
+import { FileText, Loader2, RotateCw, TriangleAlert } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
+import type { PageMentionCandidateDto } from '@/lib/dto/pages';
+import { formatPageToken } from '@/lib/mentions/pageRefs';
 import { QUICK_SEARCH_MIN_QUERY_LENGTH } from '@/lib/workItems/quickSearch';
 import { cn } from '@/lib/utils/cn';
 
@@ -38,6 +41,14 @@ import { cn } from '@/lib/utils/cn';
 // and the editor is byte-identical to before 5.1.4. With only `mentionCandidates`
 // the picker is people-only (no "Work items" section appears) — the existing
 // consumers are untouched.
+//
+// A THIRD section, Pages (Story MOTIR-7694 · MOTIR-7698,
+// `design/work-items/internal-links--page-tag.mock.html` panels 1–4), joins
+// after Work items when the host wires a page search (`searchPages`) — the work
+// item's Description and Explanation editors, for a viewer with `page:view`. A
+// pick inserts a `pageMention` node serializing to `[<title>](motir-page:<id>)`,
+// the token `lib/mentions/pageRefs.ts` owns. Without `searchPages` the section
+// and the node are not registered, so every other host is byte-identical.
 //
 // Round-trip: tiptap-markdown loads Markdown via markdown-it, which renders each
 // token as `<a href="mention:<id>">@Name</a>` / `<a href="motir:<id>">KEY</a>`
@@ -86,6 +97,14 @@ export interface WorkItemMentionCandidate {
  * "Work items" section. Returns at most a small page (the endpoint caps it). */
 export type WorkItemMentionSearch = (query: string) => Promise<WorkItemMentionCandidate[]>;
 
+/** One page candidate row in the picker's Pages section (MOTIR-7698) — the
+ * search route's DTO: id, title and where the page lives. */
+export type PageMentionCandidate = PageMentionCandidateDto;
+
+/** The host-supplied async page search behind the "Pages" section. Rejects on a
+ * failed request, so the section's failed state is reachable. */
+export type PageMentionSearch = (query: string) => Promise<PageMentionCandidate[]>;
+
 /** Localised picker copy the host (next-intl) hands down — the popup is mounted
  * through ReactRenderer (outside the next-intl React context), so the strings
  * come in as props, never `useTranslations` inside the popup. */
@@ -99,6 +118,14 @@ export interface MentionPickerLabels {
    * panel 3 state 6). English defaults apply when a host omits them. */
   searchFailed?: string;
   retry?: string;
+  /** The Pages section's copy (MOTIR-7698). English defaults apply when a host
+   * omits them. */
+  pages?: string;
+  pagesTypeToSearch?: string;
+  noPageResults?: (query: string) => string;
+  pagesSearchFailed?: string;
+  /** The name an untitled page reads by (`pages.untitled`). */
+  untitledPage?: string;
 }
 
 /** Wiring the editor hands the extension at create time. The callbacks read
@@ -113,6 +140,9 @@ export interface MentionWiring {
   /** The async work-item search (5.8.5). Absent → the picker is people-only and
    * the `workItemMention` node is not registered (pre-5.8.5 behaviour). */
   searchWorkItems?: WorkItemMentionSearch;
+  /** The async page search (MOTIR-7698). Absent → no "Pages" section, and the
+   * `pageMention` node is not registered. */
+  searchPages?: PageMentionSearch;
   /** Localised picker copy; English defaults are used when omitted (tests). */
   labels?: MentionPickerLabels;
 }
@@ -120,6 +150,8 @@ export interface MentionWiring {
 const MENTION_ID_RE = /^[A-Za-z0-9_-]+$/;
 /** The `motir:` href payload — the cuid charset, mirroring WORKITEM_HREF_RE. */
 const WORKITEM_MENTION_ID_RE = /^[A-Za-z0-9_-]+$/;
+/** The `motir-page:` href payload — the cuid charset, mirroring PAGE_HREF_RE. */
+const PAGE_MENTION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 const DEFAULT_LABELS: MentionPickerLabels = {
   people: 'People',
@@ -129,10 +161,18 @@ const DEFAULT_LABELS: MentionPickerLabels = {
   noResults: (query) => `No work items match “${query}”.`,
   searchFailed: 'Couldn’t search work items.',
   retry: 'Try again',
+  pages: 'Pages',
+  pagesTypeToSearch: 'Keep typing to search pages…',
+  noPageResults: (query) => `No pages match “${query}”.`,
+  pagesSearchFailed: 'Couldn’t search pages.',
+  untitledPage: 'Untitled',
 };
 
 /** The failed search's one option (MOTIR-7574). */
 const RETRY_OPTION = { type: 'retry', id: 'retry', label: '' } as const;
+/** The failed PAGE search's one option (MOTIR-7698) — re-runs Pages only. */
+const PAGE_RETRY_OPTION = { type: 'pageRetry', id: 'pageRetry', label: '' } as const;
+type PickerOption = PickedMention | typeof RETRY_OPTION | typeof PAGE_RETRY_OPTION;
 
 /** One settled keystroke per server fetch — long enough to coalesce a fast
  * typer (the `useLinkCandidateSearch` debounce). */
@@ -142,7 +182,8 @@ const WORKITEM_SEARCH_DEBOUNCE_MS = 250;
  * branches it to the matching node. */
 export type PickedMention =
   | { type: 'user'; id: string; label: string }
-  | { type: 'workItem'; id: string; label: string };
+  | { type: 'workItem'; id: string; label: string }
+  | { type: 'page'; id: string; label: string };
 
 interface MentionListProps {
   /** The filtered people candidates (the suggestion `items()` output). */
@@ -151,6 +192,8 @@ interface MentionListProps {
   query: string;
   /** Present → the picker shows the "Work items" section; absent → people-only. */
   searchWorkItems?: WorkItemMentionSearch;
+  /** Present → the picker shows the "Pages" section after Work items. */
+  searchPages?: PageMentionSearch;
   labels?: MentionPickerLabels;
   command: (picked: PickedMention) => void;
 }
@@ -212,6 +255,97 @@ export function WorkItemMentionRow({
 }
 
 /**
+ * One section's debounced search (5.8.5, factored out for the Pages section in
+ * MOTIR-7698): the results, the loading flag, and a FAILED flag that belongs to
+ * the request that failed — so a new query or a retry is never a failed one.
+ * `retry` re-runs the same query. Absent `search` → no request, no results.
+ */
+function useMentionSearch<T>(
+  search: ((query: string) => Promise<T[]>) | undefined,
+  trimmed: string,
+  tooShort: boolean,
+) {
+  const [results, setResults] = useState<T[]>([]);
+  const [loading, setLoading] = useState(false);
+  // A REJECTED search (MOTIR-7574 — panel 3 state 6 of
+  // `design/pages/page--work-item-mention.mock.html`). It used to fall through
+  // to "No … match", which told the writer something false. Only a rejection
+  // reaches it, so a host whose search resolves `[]` on failure never sees it;
+  // `attempt` is bumped by Try again to re-run the same query.
+  const [failedKey, setFailedKey] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const enabled = Boolean(search);
+
+  // The search closure can change identity per render — read it through a ref so
+  // it isn't a fetch-effect dependency (the `useLinkCandidateSearch` precedent).
+  const searchRef = useRef(search);
+  useEffect(() => {
+    searchRef.current = search;
+  });
+
+  // Debounced search — a legit subscription effect (timer + cleanup), resetting
+  // loading/results around the async call (the data-fetch precedent).
+  useEffect(() => {
+    const run = searchRef.current;
+    if (!run || tooShort) {
+      setLoading(false);
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    const timer = setTimeout(() => {
+      run(trimmed).then(
+        (found) => {
+          if (cancelled) return;
+          setLoading(false);
+          setResults(found);
+        },
+        () => {
+          if (cancelled) return;
+          setLoading(false);
+          setResults([]);
+          setFailedKey(`${attempt}:${trimmed}`);
+        },
+      );
+    }, WORKITEM_SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [trimmed, tooShort, enabled, attempt]);
+
+  // Derived, never reset in the effect.
+  const failed = enabled && !tooShort && !loading && failedKey === `${attempt}:${trimmed}`;
+  return { results, loading, failed, retry: () => setAttempt((n) => n + 1) };
+}
+
+/** Where a page lives, for its picker row: the folder path joined with `›`, or
+ * the parent page's title; a top-level page has none. */
+function pagePlace(page: PageMentionCandidate): string | null {
+  if (page.place.parentPageTitle) return page.place.parentPageTitle;
+  return page.place.folderPath.length > 0 ? page.place.folderPath.join(' › ') : null;
+}
+
+/** The CONTENT of one page row — page glyph · title · place (MOTIR-7698, panel
+ * 2). The place is `--el-text-secondary`, which clears AA on the active row's
+ * `--el-surface` tint as well as the popup. */
+function PageMentionRow({ page, untitled }: { page: PageMentionCandidate; untitled: string }) {
+  const place = pagePlace(page);
+  return (
+    <>
+      <FileText className="text-(--el-text-secondary) h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span className="min-w-0 flex-1 truncate">{page.title || untitled}</span>
+      {place ? (
+        <span className="text-(--el-text-secondary) ml-auto max-w-[9rem] shrink-0 truncate text-xs">
+          {place}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * The caret-anchored unified picker (5.1.4 people + 5.8.5 work items). Focus
  * stays in the editor (the suggestion plugin forwards key events here), so the
  * active row is conveyed with `aria-activedescendant` on the listbox +
@@ -221,10 +355,11 @@ export function WorkItemMentionRow({
  * the people-only path is byte-identical to before 5.8.5.
  */
 export const MentionList = forwardRef<MentionListHandle, MentionListProps>(function MentionList(
-  { people, query, searchWorkItems, labels, command },
+  { people, query, searchWorkItems, searchPages, labels, command },
   ref,
 ) {
-  const unified = Boolean(searchWorkItems);
+  const unified = Boolean(searchWorkItems) || Boolean(searchPages);
+  const withPages = Boolean(searchPages);
   const copy = labels ?? DEFAULT_LABELS;
 
   // The active row is tracked by its stable identity KEY, not an index — so when
@@ -235,71 +370,36 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
   // array on a keystroke that only moved the active row) leaves the key — and so
   // the selection — untouched.
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [workItems, setWorkItems] = useState<WorkItemMentionCandidate[]>([]);
-  const [loading, setLoading] = useState(false);
-  // A REJECTED search (MOTIR-7574 — panel 3 state 6 of
-  // `design/pages/page--work-item-mention.mock.html`). It used to fall through
-  // to "No work items match", which told the writer something false. Only a
-  // rejection reaches it, so a host whose search resolves `[]` on failure never
-  // sees it; `attempt` is bumped by Try again to re-run the same query.
-  const [failedKey, setFailedKey] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
 
   const trimmed = query.trim();
   const tooShort = trimmed.length < QUICK_SEARCH_MIN_QUERY_LENGTH;
 
-  // The search closure can change identity per render — read it through a ref so
-  // it isn't a fetch-effect dependency (the `useLinkCandidateSearch` precedent).
-  const searchRef = useRef(searchWorkItems);
-  useEffect(() => {
-    searchRef.current = searchWorkItems;
-  });
+  // Each section is its own debounced request: it loads, empties and fails on
+  // its own (`internal-links--page-tag.mock.html` § The picker).
+  const work = useMentionSearch(searchWorkItems, trimmed, tooShort);
+  const pages = useMentionSearch(searchPages, trimmed, tooShort);
+  const workItems = work.results;
+  const pageRows = pages.results;
+  const failed = unified && work.failed;
+  const pagesFailed = withPages && pages.failed;
 
-  // Debounced work-item search — a legit subscription effect (timer + cleanup),
-  // resetting loading/results around the async call (the data-fetch precedent).
-  useEffect(() => {
-    const search = searchRef.current;
-    if (!search || tooShort) {
-      setLoading(false);
-      setWorkItems([]);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    const timer = setTimeout(() => {
-      search(trimmed).then(
-        (results) => {
-          if (cancelled) return;
-          setLoading(false);
-          setWorkItems(results);
-        },
-        () => {
-          if (cancelled) return;
-          setLoading(false);
-          setWorkItems([]);
-          setFailedKey(`${attempt}:${trimmed}`);
-        },
-      );
-    }, WORKITEM_SEARCH_DEBOUNCE_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [trimmed, tooShort, unified, attempt]);
-
-  // Derived, never reset in the effect: a failure belongs to the request that
-  // failed, so a new query or a retry is not a failed one.
-  const failed = unified && !tooShort && !loading && failedKey === `${attempt}:${trimmed}`;
-
-  // The combined option list — People then Work items (the design's section
-  // order). The global index is the keyboard / aria-activedescendant space.
-  // A failed search adds ONE option, Try again, after the people.
-  const options: Array<PickedMention | typeof RETRY_OPTION> = [
+  // The combined option list — People, Work items, then Pages (the design's
+  // section order). The global index is the keyboard / aria-activedescendant
+  // space. A failed search adds ONE option, Try again, in its section's place.
+  const options: PickerOption[] = [
     ...people.map((p): PickedMention => ({ type: 'user', id: p.id, label: p.name })),
     ...workItems.map((w): PickedMention => ({ type: 'workItem', id: w.id, label: w.identifier })),
     ...(failed ? [RETRY_OPTION] : []),
+    ...pageRows.map(
+      (pg): PickedMention => ({
+        type: 'page',
+        id: pg.id,
+        label: pg.title || (copy.untitledPage ?? DEFAULT_LABELS.untitledPage ?? ''),
+      }),
+    ),
+    ...(pagesFailed ? [PAGE_RETRY_OPTION] : []),
   ];
-  const keyOf = (o: PickedMention | typeof RETRY_OPTION) => `${o.type}:${o.id}`;
+  const keyOf = (o: PickerOption) => `${o.type}:${o.id}`;
 
   // The active index derives from the active KEY — found in the current set, or
   // the first row when the key is gone (set changed) or none chosen yet.
@@ -309,7 +409,8 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
   const select = (index: number) => {
     const picked = options[index];
     if (!picked) return;
-    if (picked.type === 'retry') setAttempt((n) => n + 1);
+    if (picked.type === 'retry') work.retry();
+    else if (picked.type === 'pageRetry') pages.retry();
     else command(picked);
   };
   const moveTo = (index: number) => {
@@ -337,11 +438,31 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
 
   const peopleStart = 0;
   const workItemsStart = people.length;
+  const pagesStart = workItemsStart + workItems.length + (failed ? 1 : 0);
+
+  /** The option row's shared frame — mousedown, not click: the editor keeps
+   * focus/selection, so the suggestion range is still there for the command. */
+  const optionProps = (index: number) => ({
+    id: `mention-option-${index}`,
+    role: 'option' as const,
+    'aria-selected': index === active,
+    onMouseEnter: () => moveTo(index),
+    onMouseDown: (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+      select(index);
+    },
+  });
 
   return (
     <div
       role="listbox"
-      aria-label={unified ? 'Mention a person or work item' : 'Mention a member'}
+      aria-label={
+        withPages
+          ? 'Mention a person, work item or page'
+          : unified
+            ? 'Mention a person or work item'
+            : 'Mention a member'
+      }
       aria-activedescendant={options.length > 0 ? `mention-option-${active}` : undefined}
       className={cn(
         'border-(--el-border) bg-(--el-page-bg) shadow-(--shadow-elevated) z-50 w-max rounded-(--radius-card) border p-1',
@@ -366,16 +487,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
         return (
           <div
             key={item.id}
-            id={`mention-option-${index}`}
-            role="option"
-            aria-selected={index === active}
-            onMouseEnter={() => moveTo(index)}
-            // mousedown, not click: the editor keeps focus/selection, so the
-            // suggestion range is still there for the command to replace.
-            onMouseDown={(event) => {
-              event.preventDefault();
-              select(index);
-            }}
+            {...optionProps(index)}
             className={cn(
               'flex min-w-55 cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
               index === active ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
@@ -407,68 +519,31 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
 
       {/* Work items section — only in the unified picker. Shows the type-to-
           search / loading / no-results states per the design, else the rows. */}
-      {unified ? (
+      {searchWorkItems ? (
         <>
           <p className="text-(--el-text-secondary) px-(--spacing-control-x) pt-1.5 pb-1 font-mono text-[10px] font-semibold tracking-wider uppercase">
             {copy.workItems}
           </p>
-          {tooShort ? (
-            <p className="text-(--el-text-muted) px-(--spacing-control-x) py-2 text-center text-xs">
-              {copy.typeToSearch}
-            </p>
-          ) : loading ? (
-            <p className="text-(--el-text-muted) flex items-center justify-center gap-1.5 px-(--spacing-control-x) py-2 text-center text-xs">
-              <Loader2 className="text-(--el-text-faint) h-3.5 w-3.5 animate-spin" aria-hidden />
-              {copy.searching}
-            </p>
-          ) : failed ? (
-            <>
-              <p
-                role="alert"
-                className="text-(--el-text) flex items-center justify-center gap-1.5 px-(--spacing-control-x) pt-2 pb-1 text-xs"
-              >
-                <TriangleAlert
-                  className="text-(--el-danger-on-surface) h-3.5 w-3.5 shrink-0"
-                  aria-hidden
-                />
-                {copy.searchFailed ?? DEFAULT_LABELS.searchFailed}
-              </p>
-              <div
-                id={`mention-option-${workItemsStart}`}
-                role="option"
-                aria-selected={workItemsStart === active}
-                onMouseEnter={() => moveTo(workItemsStart)}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  select(workItemsStart);
-                }}
-                className={cn(
-                  'text-(--el-text) flex min-w-70 cursor-pointer items-center justify-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-[13px]',
-                  workItemsStart === active && 'bg-(--el-surface)',
-                )}
-              >
-                <RotateCw className="text-(--el-text-secondary) h-3.5 w-3.5" aria-hidden />
-                {copy.retry ?? DEFAULT_LABELS.retry}
-              </div>
-            </>
-          ) : workItems.length === 0 ? (
-            <p className="text-(--el-text-muted) px-(--spacing-control-x) py-2 text-center text-xs">
-              {copy.noResults(trimmed)}
-            </p>
-          ) : (
-            workItems.map((item, i) => {
+          <SectionState
+            tooShort={tooShort}
+            loading={work.loading}
+            failed={failed}
+            empty={workItems.length === 0}
+            hint={copy.typeToSearch}
+            searching={copy.searching}
+            noResults={copy.noResults(trimmed)}
+            failedLine={copy.searchFailed ?? DEFAULT_LABELS.searchFailed ?? ''}
+            retryLabel={copy.retry ?? DEFAULT_LABELS.retry ?? ''}
+            retryProps={optionProps(workItemsStart)}
+            retryActive={workItemsStart === active}
+            ink={withPages ? 'secondary' : 'muted'}
+          >
+            {workItems.map((item, i) => {
               const index = workItemsStart + i;
               return (
                 <div
                   key={item.id}
-                  id={`mention-option-${index}`}
-                  role="option"
-                  aria-selected={index === active}
-                  onMouseEnter={() => moveTo(index)}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    select(index);
-                  }}
+                  {...optionProps(index)}
                   className={cn(
                     'flex min-w-70 cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
                     index === active ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
@@ -477,13 +552,152 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
                   <WorkItemMentionRow item={item} active={index === active} />
                 </div>
               );
-            })
-          )}
+            })}
+          </SectionState>
+        </>
+      ) : null}
+
+      {/* Pages section (MOTIR-7698) — only where the host wires a page search. */}
+      {withPages ? (
+        <>
+          <p className="text-(--el-text-secondary) px-(--spacing-control-x) pt-1.5 pb-1 font-mono text-[10px] font-semibold tracking-wider uppercase">
+            {copy.pages ?? DEFAULT_LABELS.pages}
+          </p>
+          <SectionState
+            tooShort={tooShort}
+            loading={pages.loading}
+            failed={pagesFailed}
+            empty={pageRows.length === 0}
+            hint={copy.pagesTypeToSearch ?? DEFAULT_LABELS.pagesTypeToSearch ?? ''}
+            searching={copy.searching}
+            noResults={(copy.noPageResults ?? DEFAULT_LABELS.noPageResults!)(trimmed)}
+            failedLine={copy.pagesSearchFailed ?? DEFAULT_LABELS.pagesSearchFailed ?? ''}
+            retryLabel={copy.retry ?? DEFAULT_LABELS.retry ?? ''}
+            retryProps={optionProps(pagesStart)}
+            retryActive={pagesStart === active}
+            ink="secondary"
+          >
+            {pageRows.map((page, i) => {
+              const index = pagesStart + i;
+              return (
+                <div
+                  key={page.id}
+                  {...optionProps(index)}
+                  className={cn(
+                    'flex min-w-70 cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
+                    index === active ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
+                  )}
+                >
+                  <PageMentionRow
+                    page={page}
+                    untitled={copy.untitledPage ?? DEFAULT_LABELS.untitledPage ?? ''}
+                  />
+                </div>
+              );
+            })}
+          </SectionState>
         </>
       ) : null}
     </div>
   );
 });
+
+/**
+ * One searched section's body: the under-2-characters hint, searching, failed
+ * (an alert line + one Try again option), no match — or the rows. `ink` keeps
+ * the work-item lines on their shipped `--el-text-muted` in a picker without
+ * Pages (byte-identical), and moves both sections to `--el-text-secondary` when
+ * Pages is present, as the page-tag design draws them.
+ */
+function SectionState({
+  tooShort,
+  loading,
+  failed,
+  empty,
+  hint,
+  searching,
+  noResults,
+  failedLine,
+  retryLabel,
+  retryProps,
+  retryActive,
+  ink,
+  children,
+}: {
+  tooShort: boolean;
+  loading: boolean;
+  failed: boolean;
+  empty: boolean;
+  hint: string;
+  searching: string;
+  noResults: string;
+  failedLine: string;
+  retryLabel: string;
+  retryProps: Record<string, unknown>;
+  retryActive: boolean;
+  ink: 'muted' | 'secondary';
+  children: ReactNode;
+}) {
+  const lineInk = ink === 'muted' ? 'text-(--el-text-muted)' : 'text-(--el-text-secondary)';
+  if (tooShort) {
+    return (
+      <p className={cn(lineInk, 'px-(--spacing-control-x) py-2 text-center text-xs')}>{hint}</p>
+    );
+  }
+  if (loading) {
+    return (
+      <p
+        className={cn(
+          lineInk,
+          'flex items-center justify-center gap-1.5 px-(--spacing-control-x) py-2 text-center text-xs',
+        )}
+      >
+        <Loader2
+          className={cn(
+            ink === 'muted' ? 'text-(--el-text-faint)' : 'text-(--el-text-secondary)',
+            'h-3.5 w-3.5 animate-spin',
+          )}
+          aria-hidden
+        />
+        {searching}
+      </p>
+    );
+  }
+  if (failed) {
+    return (
+      <>
+        <p
+          role="alert"
+          className="text-(--el-text) flex items-center justify-center gap-1.5 px-(--spacing-control-x) pt-2 pb-1 text-xs"
+        >
+          <TriangleAlert
+            className="text-(--el-danger-on-surface) h-3.5 w-3.5 shrink-0"
+            aria-hidden
+          />
+          {failedLine}
+        </p>
+        <div
+          {...retryProps}
+          className={cn(
+            'text-(--el-text) flex min-w-70 cursor-pointer items-center justify-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-[13px]',
+            retryActive && 'bg-(--el-surface)',
+          )}
+        >
+          <RotateCw className="text-(--el-text-secondary) h-3.5 w-3.5" aria-hidden />
+          {retryLabel}
+        </div>
+      </>
+    );
+  }
+  if (empty) {
+    return (
+      <p className={cn(lineInk, 'px-(--spacing-control-x) py-2 text-center text-xs')}>
+        {noResults}
+      </p>
+    );
+  }
+  return <>{children}</>;
+}
 
 /** Filter candidates the Combobox way — name OR email substring match. */
 export function filterMentionCandidates(
@@ -582,6 +796,106 @@ export function buildWorkItemMentionExtension() {
   });
 }
 
+/** lucide `FileText` as a ProseMirror DOM spec — the editor chip's glyph, drawn
+ * by `renderHTML`, where a React icon cannot mount. */
+const SVG = 'http://www.w3.org/2000/svg';
+const FILE_TEXT_GLYPH = [
+  `${SVG} svg`,
+  {
+    class: 'page-chip-glyph',
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    'stroke-width': '2',
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'aria-hidden': 'true',
+  },
+  [`${SVG} path`, { d: 'M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z' }],
+  [`${SVG} path`, { d: 'M14 2v4a2 2 0 0 0 2 2h4' }],
+  [`${SVG} path`, { d: 'M10 9H8' }],
+  [`${SVG} path`, { d: 'M16 13H8' }],
+  [`${SVG} path`, { d: 'M16 17H8' }],
+] as const;
+
+/**
+ * The `pageMention` node (Story MOTIR-7694 · MOTIR-7698) — the page sibling of
+ * `workItemMention`. An atomic inline node that:
+ *  - SERIALIZES to `[<title>](motir-page:<pageId>)` through `formatPageToken`,
+ *    the one formatter `lib/mentions/pageRefs.ts` owns (brackets dropped from
+ *    the label, so the token always re-parses);
+ *  - ROUND-TRIPS via a high-priority parseHTML rule on `a[href^="motir-page:"]`
+ *    (markdown-it's render of the stored token), outranking the Link mark — a
+ *    `motir:` work-item anchor does not match it, and it does not match theirs;
+ *  - renders in the editor as the `.page-chip` (page glyph · stored title, the
+ *    label the writer just saw — `internal-links--page-tag.mock.html` panel 5).
+ *    The read view never shows the stored label: it resolves `pageRefs`.
+ *
+ * Registered only when a page search is wired.
+ */
+export function buildPageMentionExtension() {
+  return Node.create({
+    name: 'pageMention',
+    group: 'inline',
+    inline: true,
+    atom: true,
+    selectable: true,
+
+    addAttributes() {
+      return {
+        id: { default: null },
+        /** The bracket label — the page's title at insert. */
+        label: { default: null },
+      };
+    },
+
+    addStorage() {
+      return {
+        markdown: {
+          serialize(
+            state: { write: (text: string) => void },
+            node: { attrs: { id: string; label: string | null } },
+          ) {
+            state.write(formatPageToken(node.attrs.id, node.attrs.label ?? ''));
+          },
+          parse: {}, // load-side parsing is the parseHTML rule below
+        },
+      };
+    },
+
+    parseHTML() {
+      return [
+        { tag: 'span[data-type="pageMention"]' },
+        {
+          tag: 'a[href^="motir-page:"]',
+          priority: 1000,
+          getAttrs: (element) => {
+            const el = element as HTMLElement;
+            const id = (el.getAttribute('href') ?? '').slice('motir-page:'.length);
+            if (!PAGE_MENTION_ID_RE.test(id)) return false;
+            const label = (el.textContent ?? '').trim();
+            return { id, label };
+          },
+        },
+      ];
+    },
+
+    renderHTML({ node, HTMLAttributes }) {
+      const label = (node.attrs.label as string | null) || 'page';
+      return [
+        'span',
+        mergeAttributes(HTMLAttributes, { 'data-type': 'pageMention', class: 'page-chip' }),
+        FILE_TEXT_GLYPH as unknown as [string],
+        ['span', { class: 'page-chip-title' }, label],
+      ];
+    },
+
+    renderText({ node }) {
+      return (node.attrs.label as string | null) ?? '';
+    },
+  });
+}
+
 /**
  * The configured tiptap Mention extension. Builds on the official extension
  * (atomic inline node, suggestion plugin) and adds:
@@ -648,7 +962,12 @@ export function buildMentionExtension(wiring: MentionWiring) {
         const nodeAfter = editor.view.state.selection.$to.nodeAfter;
         const overrideSpace = nodeAfter?.text?.startsWith(' ');
         if (overrideSpace) range.to += 1;
-        const nodeType = picked.type === 'workItem' ? 'workItemMention' : 'mention';
+        const nodeType =
+          picked.type === 'workItem'
+            ? 'workItemMention'
+            : picked.type === 'page'
+              ? 'pageMention'
+              : 'mention';
         editor
           .chain()
           .focus()
@@ -693,6 +1012,7 @@ export function buildMentionExtension(wiring: MentionWiring) {
           people: p.items,
           query: p.query,
           searchWorkItems: wiring.searchWorkItems,
+          searchPages: wiring.searchPages,
           labels: wiring.labels,
           command: p.command as (picked: PickedMention) => void,
         });

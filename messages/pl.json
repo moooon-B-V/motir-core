@@ -150,6 +150,12 @@
     "mentionNoResults": "Brak elementów roboczych pasujących do „{query}”.",
     "mentionSearchFailed": "Nie udało się wyszukać elementów roboczych.",
     "mentionRetry": "Spróbuj ponownie",
+    "mentionPages": "Strony",
+    "mentionTypeToSearchPages": "Pisz dalej, aby wyszukać strony…",
+    "mentionNoPages": "Brak stron pasujących do „{query}”.",
+    "mentionPagesSearchFailed": "Nie udało się wyszukać stron.",
+    "pageUntitled": "Bez tytułu",
+    "pageUnavailable": "Strona niedostępna",
     "codeLanguage": "Język"
   },
   "common": {
@@ -1468,6 +1474,8 @@
     "pagesSourceMention": "Wspomniano",
     "pagesSourceEmbed": "Osadzono",
     "pagesSourceManual": "Połączono",
+    "pagesSourceDescription": "Oznaczono w opisie",
+    "pagesSourceExplanation": "Oznaczono w wyjaśnieniu",
     "pagesEmpty": "Żadna strona nie zawiera jeszcze linku do tego elementu roboczego.",
     "pagesShowMore": "Pokaż więcej stron",
     "pagesError": "Nie udało się załadować stron.",

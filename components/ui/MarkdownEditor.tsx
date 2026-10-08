@@ -29,9 +29,11 @@ import { MarkdownView } from './MarkdownView';
 import {
   buildMentionExtension,
   buildWorkItemMentionExtension,
+  buildPageMentionExtension,
   type MentionCandidate,
   type MentionWiring,
   type WorkItemMentionSearch,
+  type PageMentionSearch,
 } from './markdownEditorMentions';
 import { buildCodeBlockWithLanguage } from './markdownEditorCodeBlock';
 import './markdown-editor.css';
@@ -60,7 +62,7 @@ import './markdown-editor.css';
 // source (or pasted) is treated as plain text, never rendered — there is no
 // HTML/script injection surface through the editor.
 
-export type { MentionCandidate, WorkItemMentionSearch };
+export type { MentionCandidate, WorkItemMentionSearch, PageMentionSearch };
 
 // `compact` is the comment-composer mode (Story 5.1 · the comments mockup's
 // panel 3): the shortest editing area (~72px) with the inline-format toolbar.
@@ -116,6 +118,7 @@ export function buildEditorExtensions(opts?: {
     }),
     ...(opts?.mentions ? [buildMentionExtension(opts.mentions)] : []),
     ...(opts?.mentions?.searchWorkItems ? [buildWorkItemMentionExtension()] : []),
+    ...(opts?.mentions?.searchPages ? [buildPageMentionExtension()] : []),
   ];
 }
 
@@ -197,6 +200,14 @@ export interface MarkdownEditorProps {
    */
   workItemSearch?: WorkItemMentionSearch;
   /**
+   * The async page search behind the picker's "Pages" section (Story MOTIR-7694
+   * · MOTIR-7698) — the `/api/pages/mention-search` read bound to the item's
+   * project. The host supplies it only for a work item's Description and
+   * Explanation, and only for a viewer with `page:view`. Omit and there is no
+   * Pages section and no `[<title>](motir-page:<id>)` node. Read at mount.
+   */
+  pageSearch?: PageMentionSearch;
+  /**
    * Show a code block's LANGUAGE as a field on the focused block (Subtask
    * MOTIR-5458; `design/github/design-notes.md` §24, panel 13b). Opt-in, so
    * every other editor surface renders exactly as it did: the field exists
@@ -222,6 +233,7 @@ export function MarkdownEditor({
   readOnly = false,
   mentionCandidates,
   workItemSearch,
+  pageSearch,
   codeLanguage = false,
 }: MarkdownEditorProps) {
   const theme = useOptionalTheme();
@@ -265,12 +277,13 @@ export function MarkdownEditor({
   // the localised picker copy are captured here at mount (the schema is fixed
   // per editor instance, so locale stays stable for the popup's lifetime).
   const [mentionOpts] = useState<{ mentions: MentionWiring } | undefined>(() =>
-    mentionCandidates !== undefined || workItemSearch !== undefined
+    mentionCandidates !== undefined || workItemSearch !== undefined || pageSearch !== undefined
       ? {
           mentions: {
             getCandidates: () => mentionCandidatesRef.current ?? [],
             getAnchor: () => anchorRef.current,
             searchWorkItems: workItemSearch,
+            searchPages: pageSearch,
             labels: {
               people: tMention('mentionPeople'),
               workItems: tMention('mentionWorkItems'),
@@ -279,6 +292,15 @@ export function MarkdownEditor({
               noResults: (query: string) => tMention('mentionNoResults', { query }),
               searchFailed: tMention('mentionSearchFailed'),
               retry: tMention('mentionRetry'),
+              ...(pageSearch
+                ? {
+                    pages: tMention('mentionPages'),
+                    pagesTypeToSearch: tMention('mentionTypeToSearchPages'),
+                    noPageResults: (query: string) => tMention('mentionNoPages', { query }),
+                    pagesSearchFailed: tMention('mentionPagesSearchFailed'),
+                    untitledPage: tMention('pageUntitled'),
+                  }
+                : {}),
             },
           },
         }

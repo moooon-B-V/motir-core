@@ -1,0 +1,1323 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Tag a page in Description and Explanation — MOTIR-7695 (delta)</title>
+    <!--
+      DELTA MOCK for card MOTIR-7695: tagging a PAGE from a work item's Description
+      and Explanation editors. It amends design/work-items/internal-links.mock.html
+      panel 3 (the unified @ picker: People + Work items) and draws ONLY what
+      changes. The base mock is not edited.
+
+      Composes, does not redraw:
+        · the picker is the shipped MentionList (components/ui/markdownEditorMentions.tsx):
+          the .pop listbox, the mono section header, the --radius-control option row,
+          the failed-search line and its Try again option (MOTIR-7574). The Pages
+          section is a third section built from those same parts.
+        · the page row mirrors WorkItemMentionRow: leading glyph, truncating title,
+          trailing meta on the right.
+        · the chip sits beside the shipped user .mention-chip (--el-tint-lavender) and
+          the shipped .wi-chip (--el-surface-soft) so the three read apart.
+        · the unavailable chip carries the page editor work-item chip rule (MOTIR-7568):
+          one state, no title anywhere.
+        · the Pages section rows are the shipped PagesSection.tsx row (MOTIR-7569) with
+          the two new source labels.
+
+      Panels:
+        1 · Picker idle, under 2 characters
+        2 · Picker results: People, Work items, Pages
+        3 · Pages section states: searching, no match, failed
+        4 · Reader without page:view: no Pages section
+        5 · Page chip in the editor (beside the person and work-item chips)
+        6 · Page chip in read view: rest, hover, focus
+        7 · Page unavailable (one state for three causes)
+        8 · The work item Pages section with the new source labels
+        9 · Dark theme for panels 2, 5, 6 and 7
+
+      Colour only via --el-* (Tier-3 re-emitted on [data-theme] so the nested dark
+      board recomputes); shape only via the element-semantic radius / spacing /
+      height tokens. See design-notes.md, section: Tag a page in Description and
+      Explanation (MOTIR-7695).
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --height-control: 36px;
+        --focus-ring-width: 2px;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+      /* Tier 3, re-emitted on every [data-theme] element so a NESTED dark board
+         recomputes against its own Tier-0 values (MOTIR-3592). */
+      :root,
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-identifier: var(--color-slate);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-info: var(--color-info);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+      }
+
+      /* ── Board chrome (not part of the design) ─────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .board-head {
+        max-width: 1180px;
+        margin: 0 auto 28px;
+      }
+      .board-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .board-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 880px;
+        line-height: 1.55;
+      }
+      .stack {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 44px;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 940px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+        color: var(--el-text);
+      }
+      .row-of {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 28px;
+        align-items: flex-start;
+      }
+      .mini-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .dark-board {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+
+      /* ── Icons (lucide, 24x24 stroke) ─────────────────────────────────── */
+      .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        display: block;
+      }
+
+      /* ── The editor surface (MarkdownEditor wrapper) ───────────────────── */
+      .editor {
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--el-text);
+        width: 560px;
+        max-width: 100%;
+      }
+      .typed {
+        background: var(--el-tint-yellow);
+        border-radius: var(--radius-kbd);
+        padding: 0 1px;
+        color: var(--el-text);
+      }
+      .anchor-pop {
+        margin: 6px 0 0 96px;
+      }
+
+      /* ── The @ picker (MentionList) ─────────────────────────────────── */
+      .pop {
+        width: max-content;
+        max-width: 22rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: var(--spacing-icon-btn);
+      }
+      .pop-section {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding: 6px var(--spacing-control-x) 4px;
+      }
+      .pop-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 280px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .pop-row.is-active {
+        background: var(--el-surface);
+      }
+      .pop-hint {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px var(--spacing-control-x);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        text-align: center;
+      }
+      .pop-alert {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px var(--spacing-control-x) 4px;
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      .pop-alert .ic {
+        color: var(--el-danger-on-surface);
+      }
+      .pop-retry {
+        justify-content: center;
+        gap: 6px;
+        font-size: 13px;
+      }
+      .pop-retry .ic {
+        color: var(--el-text-secondary);
+      }
+      .spin {
+        color: var(--el-text-secondary);
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .p-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .p-mail {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .type-icon {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        display: block;
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .pr-key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+        flex: none;
+      }
+      .pr-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pr-pill {
+        margin-left: auto;
+        flex: none;
+      }
+
+      /* THE PAGE ROW — new. Glyph, truncating title, place on the right. */
+      .page-ic {
+        color: var(--el-text-secondary);
+      }
+      .page-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--el-text);
+      }
+      .page-place {
+        margin-left: auto;
+        flex: none;
+        max-width: 9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* Pill (components/ui/Pill.tsx) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill--planned {
+        background: var(--el-tint-lavender);
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--neutral {
+        background: var(--el-chip-bg);
+        border-color: var(--el-chip-border);
+        color: var(--el-text-secondary);
+      }
+      .pill .ic {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* ── Inline chips in prose ───────────────────────────────────────── */
+      .prose {
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--el-text);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        width: 560px;
+        max-width: 100%;
+      }
+      /* shipped user .mention-chip — for contrast */
+      .mention {
+        display: inline-flex;
+        align-items: center;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        font-size: 0.92em;
+        font-weight: 500;
+        line-height: 1.3;
+        white-space: nowrap;
+      }
+      /* shipped .wi-chip — for contrast */
+      .wi-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        font-size: 0.92em;
+        line-height: 1.35;
+        white-space: nowrap;
+        color: var(--el-text);
+      }
+      .wi-chip .type-icon {
+        width: 13px;
+        height: 13px;
+      }
+      .wi-key {
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+        font-weight: 500;
+        color: var(--el-link);
+      }
+      .wi-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        flex: none;
+        background: var(--el-info);
+      }
+
+      /* THE PAGE CHIP — new. Badge shape, sky tint, strong ink. */
+      .page-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 100%;
+        vertical-align: baseline;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 0.92em;
+        font-weight: 500;
+        line-height: 1.3;
+        white-space: nowrap;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .page-chip .ic {
+        width: 13px;
+        height: 13px;
+      }
+      .page-chip-title {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .page-chip:hover .page-chip-title,
+      .page-chip.is-hover .page-chip-title {
+        text-decoration: underline;
+      }
+      .page-chip:focus-visible,
+      .page-chip.is-focus {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .page-chip--selected {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      /* Unavailable — neutral, not a link, no title. */
+      .page-chip--unavailable {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        cursor: default;
+      }
+
+      /* ── The Pages section card (PagesSection.tsx) ──────────────────── */
+      .section-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+        width: 760px;
+        max-width: 100%;
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .section-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .section-gloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .page-links {
+        list-style: none;
+        margin: 0 calc(-1 * var(--spacing-control-x));
+        padding: 0;
+      }
+      .page-link-row {
+        border-radius: var(--radius-control);
+      }
+      .page-link-row + .page-link-row {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .page-link-row:hover,
+      .page-link-row.is-hover {
+        background: var(--el-surface);
+      }
+      .page-link {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .page-link-ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        align-self: flex-start;
+        margin-top: 2px;
+        color: var(--el-icon-muted);
+      }
+      .page-link-body {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 0;
+      }
+      .page-link-title {
+        font-size: 14px;
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .page-link-row.is-hover .page-link-title {
+        text-decoration: underline;
+      }
+      .place {
+        list-style: none;
+        margin: 2px 0 0;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .place-sep {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .place-folder {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .place-seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .page-link-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+      }
+      .page-link-time {
+        min-width: 5.5rem;
+        text-align: right;
+        font-size: 12px;
+        white-space: nowrap;
+        color: var(--el-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <header class="board-head">
+      <h1>Tag a page in Description and Explanation — MOTIR-7695</h1>
+      <p>
+        A delta on design/work-items/internal-links.mock.html panel 3. The <code>@</code> picker in
+        a work item’s Description and Explanation editors gains a third section, Pages. A pick
+        inserts a page chip. The work item’s Pages section names the tag as its source. Only the
+        changed panels are drawn.
+      </p>
+    </header>
+
+    <main class="stack">
+      <!-- ═══════════ PANEL 1 — idle, under 2 characters ═══════════ -->
+      <section class="panel">
+        <div class="panel-label">1 · Picker idle — under 2 characters</div>
+        <div>
+          <div class="editor">Scope is in <span class="typed">@r</span></div>
+          <div
+            class="pop anchor-pop"
+            role="listbox"
+            aria-label="Mention a person, work item or page"
+          >
+            <div class="pop-section">People</div>
+            <div class="pop-row is-active" aria-selected="true">
+              <span class="avatar" aria-hidden="true">R</span><span class="p-name">Rina Okafor</span
+              ><span class="p-mail">rina@moooon.net</span>
+            </div>
+            <div class="pop-row">
+              <span class="avatar" aria-hidden="true">R</span><span class="p-name">Ravi Menon</span
+              ><span class="p-mail">ravi@moooon.net</span>
+            </div>
+            <div class="pop-section">Work items</div>
+            <div class="pop-hint">Keep typing to search work items…</div>
+            <div class="pop-section">Pages</div>
+            <div class="pop-hint">Keep typing to search pages…</div>
+          </div>
+        </div>
+        <div class="panel-note">
+          People is unchanged: it filters the member list from the first character. Work items and
+          Pages each wait for 2 characters and show the same hint line. The work-item hint is the
+          existing <code>markdownEditor.mentionTypeToSearch</code>; the Pages line is its parallel,
+          <code>markdownEditor.mentionTypeToSearchPages</code>.
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 2 — results ═══════════ -->
+      <section class="panel">
+        <div class="panel-label">2 · Picker results — People, Work items, then Pages</div>
+        <div>
+          <div class="editor">Scope is in <span class="typed">@ro</span></div>
+          <div
+            class="pop anchor-pop"
+            role="listbox"
+            aria-label="Mention a person, work item or page"
+          >
+            <div class="pop-section">People</div>
+            <div class="pop-row">
+              <span class="avatar" aria-hidden="true">R</span><span class="p-name">Rosa Lind</span
+              ><span class="p-mail">rosa@moooon.net</span>
+            </div>
+            <div class="pop-section">Work items</div>
+            <div class="pop-row">
+              <svg class="type-icon t-story" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-book" /></svg
+              ><span class="pr-key">MOTIR-7690</span
+              ><span class="pr-title">Roadmap view for folders</span
+              ><span class="pill pill--inprogress pr-pill">In progress</span>
+            </div>
+            <div class="pop-row">
+              <svg class="type-icon t-task" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-task" /></svg
+              ><span class="pr-key">MOTIR-7412</span
+              ><span class="pr-title">Roadmap export to CSV</span
+              ><span class="pill pill--done pr-pill">Done</span>
+            </div>
+            <div class="pop-section">Pages</div>
+            <div class="pop-row is-active" aria-selected="true">
+              <svg class="ic page-ic" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-file-text" /></svg
+              ><span class="page-title"
+                >Q4 roadmap — scope and sequencing for the planning release</span
+              ><span class="page-place">Product › Roadmaps</span>
+            </div>
+            <div class="pop-row">
+              <svg class="ic page-ic" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-file-text" /></svg
+              ><span class="page-title">Roadmap review notes</span
+              ><span class="page-place">Q4 roadmap</span>
+            </div>
+            <div class="pop-row">
+              <svg class="ic page-ic" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-file-text" /></svg
+              ><span class="page-title">Roadmap principles</span>
+            </div>
+          </div>
+        </div>
+        <div class="panel-note">
+          The section order is fixed: People, Work items, Pages. People keeps its shipped rule (the
+          header shows only when a member matches). ↑/↓ wraps across all three sections and Enter
+          inserts the active row. A page row is a FileText glyph in
+          <code>--el-text-secondary</code>, the title in <code>--el-text</code> (one line,
+          truncated), and its place on the right in <code>--el-text-secondary</code>. The place is
+          the folder path joined with › or, for a child page, its parent page’s title. A page at the
+          top level shows no place. The active row is <code>--el-surface</code>, which is why the
+          place takes secondary and not muted.
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 3 — Pages section states ═══════════ -->
+      <section class="panel">
+        <div class="panel-label">3 · Pages section states — searching, no match, failed</div>
+        <div class="row-of">
+          <div>
+            <div class="mini-label">Searching</div>
+            <div class="pop" role="listbox" aria-label="Mention a person, work item or page">
+              <div class="pop-section">Pages</div>
+              <div class="pop-hint">
+                <svg class="ic spin" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-spin" /></svg
+                >Searching…
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="mini-label">No match</div>
+            <div class="pop" role="listbox" aria-label="Mention a person, work item or page">
+              <div class="pop-section">Pages</div>
+              <div class="pop-hint">No pages match “zzqq”.</div>
+            </div>
+          </div>
+          <div>
+            <div class="mini-label">Failed</div>
+            <div class="pop" role="listbox" aria-label="Mention a person, work item or page">
+              <div class="pop-section">Pages</div>
+              <p class="pop-alert" role="alert">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-alert" /></svg
+                >Couldn’t search pages.
+              </p>
+              <div class="pop-row pop-retry is-active" role="option" aria-selected="true">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-retry" /></svg
+                >Try again
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-note">
+          The Pages search runs on its own request beside the work-item search, so each section
+          loads, comes back empty or fails without touching the other. Failed is the work-item
+          failure pattern: the line in <code>--el-text</code>, the TriangleAlert glyph alone in
+          <code>--el-danger-on-surface</code>, then one Try again option that re-runs the same
+          query. It is never shown as “No pages match”.
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 4 — no page:view ═══════════ -->
+      <section class="panel">
+        <div class="panel-label">4 · A reader without page:view — no Pages section</div>
+        <div>
+          <div class="editor">Scope is in <span class="typed">@ro</span></div>
+          <div class="pop anchor-pop" role="listbox" aria-label="Mention a person or work item">
+            <div class="pop-section">People</div>
+            <div class="pop-row">
+              <span class="avatar" aria-hidden="true">R</span><span class="p-name">Rosa Lind</span
+              ><span class="p-mail">rosa@moooon.net</span>
+            </div>
+            <div class="pop-section">Work items</div>
+            <div class="pop-row is-active" aria-selected="true">
+              <svg class="type-icon t-story" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-book" /></svg
+              ><span class="pr-key">MOTIR-7690</span
+              ><span class="pr-title">Roadmap view for folders</span
+              ><span class="pill pill--inprogress pr-pill">In progress</span>
+            </div>
+            <div class="pop-row">
+              <svg class="type-icon t-task" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-task" /></svg
+              ><span class="pr-key">MOTIR-7412</span
+              ><span class="pr-title">Roadmap export to CSV</span
+              ><span class="pill pill--done pr-pill">Done</span>
+            </div>
+          </div>
+        </div>
+        <div class="panel-note">
+          The picker is exactly today’s People + Work items picker. There is no Pages header, no
+          empty state and no page request. The listbox name stays “Mention a person or work item”.
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 5 — chip in the editor ═══════════ -->
+      <section class="panel">
+        <div class="panel-label">5 · The page chip in the editor</div>
+        <div class="row-of">
+          <div>
+            <div class="mini-label">Inserted, beside the person and work-item chips</div>
+            <div class="editor">
+              <span class="mention">@Rina Okafor</span> owns this. Scope is in
+              <span class="page-chip"
+                ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="page-chip-title">Q4 roadmap</span></span
+              >, tracked by
+              <span class="wi-chip"
+                ><svg class="type-icon t-story" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-book" /></svg
+                ><span class="wi-key">MOTIR-7690</span><span>Roadmap view</span
+                ><span class="wi-dot" aria-hidden="true"></span></span
+              >.
+            </div>
+          </div>
+          <div>
+            <div class="mini-label">Selected (the atom is selected, not followed)</div>
+            <div class="editor">
+              Scope is in
+              <span class="page-chip page-chip--selected"
+                ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="page-chip-title">Q4 roadmap</span></span
+              >.
+            </div>
+          </div>
+        </div>
+        <div class="panel-note">
+          The page chip is a FileText glyph and the page title, in a
+          <code>--radius-badge</code> chip with <code>--spacing-chip-x/y</code>, filled
+          <code>--el-tint-sky</code> with <code>--el-text-strong</code>. The person chip is lavender
+          and the work-item chip is a bordered <code>--el-surface-soft</code> box, so sky is a tint
+          slot neither uses. A long title truncates inside the chip. In the editor a click selects
+          the chip (focus-ring outline) and never opens the page.
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 6 — read view ═══════════ -->
+      <section class="panel">
+        <div class="panel-label">6 · The chip in read view — rest, hover, focus</div>
+        <div class="row-of">
+          <div>
+            <div class="mini-label">Rest</div>
+            <div class="prose">
+              Scope is in
+              <a class="page-chip" href="#q4-roadmap"
+                ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="page-chip-title">Q4 roadmap</span></a
+              >.
+            </div>
+          </div>
+          <div>
+            <div class="mini-label">Hover — title underlines</div>
+            <div class="prose">
+              Scope is in
+              <a class="page-chip is-hover" href="#q4-roadmap"
+                ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="page-chip-title">Q4 roadmap</span></a
+              >.
+            </div>
+          </div>
+          <div>
+            <div class="mini-label">Keyboard focus — focus ring</div>
+            <div class="prose">
+              Scope is in
+              <a class="page-chip is-focus" href="#q4-roadmap"
+                ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="page-chip-title">Q4 roadmap</span></a
+              >.
+            </div>
+          </div>
+        </div>
+        <div class="panel-note">
+          In the read view the chip is a link to the page, in the same tab. Hover underlines the
+          title and changes no colour. Keyboard focus draws
+          <code>ring-(--focus-ring-color)</code> at <code>--focus-ring-width</code>. The chip shows
+          the page’s CURRENT title, so a renamed page shows its new name.
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 7 — unavailable ═══════════ -->
+      <section class="panel">
+        <div class="panel-label">7 · Page unavailable — one state for three causes</div>
+        <div class="row-of">
+          <div>
+            <div class="mini-label">Read view and editor alike</div>
+            <div class="prose">
+              Scope is in
+              <span class="page-chip page-chip--unavailable"
+                ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-lock" /></svg
+                ><span>Page unavailable</span></span
+              >.
+            </div>
+          </div>
+        </div>
+        <div class="panel-note">
+          The reader has no <code>page:view</code>, the page is archived, or the page is deleted.
+          All three draw this chip, and nothing tells them apart. The title does not appear
+          anywhere: not in the text, not in a <code>title</code> attribute, not in hidden text. A
+          Lock glyph and “Page unavailable” in <code>--el-text-secondary</code> on
+          <code>--el-muted</code>, same badge shape. It is a span, not a link: no hover, no focus
+          stop, default cursor.
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 8 — Pages section rows ═══════════ -->
+      <section class="panel">
+        <div class="panel-label">8 · The work item’s Pages section — the new source labels</div>
+        <div class="section-card">
+          <div class="section-head">
+            <h2 class="section-title">Pages</h2>
+            <span class="section-gloss">— where this item is written about</span>
+          </div>
+          <ul class="page-links" aria-label="Pages that link to MOTIR-7690">
+            <li class="page-link-row is-hover">
+              <a class="page-link" href="#q4-roadmap">
+                <svg class="page-link-ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-notebook" />
+                </svg>
+                <span class="page-link-body">
+                  <span class="page-link-title">Q4 roadmap</span>
+                  <ol class="place" aria-label="Location">
+                    <li class="place-seg">Pages</li>
+                    <li aria-hidden="true">
+                      <svg class="place-sep" viewBox="0 0 24 24"><use href="#i-chevron" /></svg>
+                    </li>
+                    <li class="place-seg">
+                      <svg class="place-folder" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      >Product
+                    </li>
+                    <li aria-hidden="true">
+                      <svg class="place-sep" viewBox="0 0 24 24"><use href="#i-chevron" /></svg>
+                    </li>
+                    <li class="place-seg">
+                      <svg class="place-folder" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      >Roadmaps
+                    </li>
+                  </ol>
+                </span>
+                <span class="page-link-meta">
+                  <span class="pill pill--neutral"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-at" /></svg
+                    >Mentioned</span
+                  >
+                  <span class="pill pill--neutral"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-tag" /></svg
+                    >Tagged in description</span
+                  >
+                  <time class="page-link-time" datetime="2026-10-08T09:00:00Z">2 hours ago</time>
+                </span>
+              </a>
+            </li>
+            <li class="page-link-row">
+              <a class="page-link" href="#pricing-research">
+                <svg class="page-link-ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-notebook" />
+                </svg>
+                <span class="page-link-body">
+                  <span class="page-link-title">Pricing research notes</span>
+                  <ol class="place" aria-label="Location">
+                    <li class="place-seg">Pages</li>
+                    <li aria-hidden="true">
+                      <svg class="place-sep" viewBox="0 0 24 24"><use href="#i-chevron" /></svg>
+                    </li>
+                    <li class="place-seg">Q4 roadmap</li>
+                  </ol>
+                </span>
+                <span class="page-link-meta">
+                  <span class="pill pill--neutral"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-tag" /></svg
+                    >Tagged in explanation</span
+                  >
+                  <time class="page-link-time" datetime="2026-10-07T10:00:00Z">yesterday</time>
+                </span>
+              </a>
+            </li>
+          </ul>
+        </div>
+        <div class="panel-note">
+          The row is unchanged: page glyph, title, place breadcrumb, source Pills, relative time.
+          Two sources join the fixed order after Mentioned, Embedded and Linked: “Tagged in
+          description” and “Tagged in explanation”, each a neutral Pill with a lucide Tag glyph. A
+          page tagged in both fields shows both Pills. The first row is drawn hovered
+          (<code>--el-surface</code>, title underlined); its place and time stay
+          <code>--el-text-secondary</code>.
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 9 — dark ═══════════ -->
+      <section class="panel">
+        <div class="panel-label">9 · Dark theme — panels 2, 5, 6 and 7</div>
+        <div class="dark-board" data-theme="dark">
+          <div>
+            <div class="mini-label">2 · Picker results</div>
+            <div class="editor">Scope is in <span class="typed">@ro</span></div>
+            <div
+              class="pop anchor-pop"
+              role="listbox"
+              aria-label="Mention a person, work item or page"
+            >
+              <div class="pop-section">People</div>
+              <div class="pop-row">
+                <span class="avatar" aria-hidden="true">R</span><span class="p-name">Rosa Lind</span
+                ><span class="p-mail">rosa@moooon.net</span>
+              </div>
+              <div class="pop-section">Work items</div>
+              <div class="pop-row">
+                <svg class="type-icon t-story" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-book" /></svg
+                ><span class="pr-key">MOTIR-7690</span
+                ><span class="pr-title">Roadmap view for folders</span
+                ><span class="pill pill--inprogress pr-pill">In progress</span>
+              </div>
+              <div class="pop-section">Pages</div>
+              <div class="pop-row is-active" aria-selected="true">
+                <svg class="ic page-ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="page-title"
+                  >Q4 roadmap — scope and sequencing for the planning release</span
+                ><span class="page-place">Product › Roadmaps</span>
+              </div>
+              <div class="pop-row">
+                <svg class="ic page-ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="page-title">Roadmap review notes</span
+                ><span class="page-place">Q4 roadmap</span>
+              </div>
+            </div>
+          </div>
+          <div class="row-of">
+            <div>
+              <div class="mini-label">5 · Editor</div>
+              <div class="editor">
+                <span class="mention">@Rina Okafor</span> owns this. Scope is in
+                <span class="page-chip"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="page-chip-title">Q4 roadmap</span></span
+                >, tracked by
+                <span class="wi-chip"
+                  ><svg class="type-icon t-story" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-book" /></svg
+                  ><span class="wi-key">MOTIR-7690</span><span>Roadmap view</span
+                  ><span class="wi-dot" aria-hidden="true"></span></span
+                >.
+              </div>
+            </div>
+          </div>
+          <div class="row-of">
+            <div>
+              <div class="mini-label">6 · Rest</div>
+              <div class="prose">
+                Scope is in
+                <a class="page-chip" href="#q4-roadmap"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="page-chip-title">Q4 roadmap</span></a
+                >.
+              </div>
+            </div>
+            <div>
+              <div class="mini-label">6 · Hover</div>
+              <div class="prose">
+                Scope is in
+                <a class="page-chip is-hover" href="#q4-roadmap"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="page-chip-title">Q4 roadmap</span></a
+                >.
+              </div>
+            </div>
+            <div>
+              <div class="mini-label">6 · Focus</div>
+              <div class="prose">
+                Scope is in
+                <a class="page-chip is-focus" href="#q4-roadmap"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="page-chip-title">Q4 roadmap</span></a
+                >.
+              </div>
+            </div>
+            <div>
+              <div class="mini-label">7 · Unavailable</div>
+              <div class="prose">
+                Scope is in
+                <span class="page-chip page-chip--unavailable"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-lock" /></svg
+                  ><span>Page unavailable</span></span
+                >.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- lucide icon defs (24x24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-file-text"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+          <path d="M10 9H8" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-tag"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"
+          />
+          <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-at"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="4" />
+          <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+        </g>
+        <g
+          id="i-notebook"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2 6h4" />
+          <path d="M2 10h4" />
+          <path d="M2 14h4" />
+          <path d="M2 18h4" />
+          <rect width="16" height="20" x="4" y="2" rx="2" />
+          <path d="M9.5 8h5" />
+          <path d="M9.5 12H16" />
+          <path d="M9.5 16H14" />
+        </g>
+        <g
+          id="i-folder"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </g>
+        <g
+          id="i-chevron"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <g
+          id="i-retry"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-spin"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </g>
+      </defs>
+    </svg>
+  </body>
+</html>

@@ -11,17 +11,44 @@ import { Prisma } from '@/generated/prisma/client';
 //
 // ⚠️ THE DERIVED METHODS NEVER TOUCH A `manual` ROW. Their `where` names the
 // derived sources explicitly, so a hand-made link survives every body write.
+//
+// ⚠️ TWO DERIVED FAMILIES, AND NEITHER TOUCHES THE OTHER (MOTIR-7696). A PAGE
+// body derives `mention` / `embed`, keyed on the page; a WORK ITEM's
+// Description / Explanation derives `description` / `explanation`, keyed on the
+// item. Each family's methods name only its own sources, so a page save never
+// deletes an item-derived row and a work-item save never deletes a page-derived
+// one.
 
-/** The sources a body write derives; `manual` is not one of them. */
+/** The sources a PAGE body write derives; `manual` is not one of them. */
 export const DERIVED_PAGE_LINK_SOURCES = ['mention', 'embed'] as const;
 
 export type DerivedPageLinkSourceValue = (typeof DERIVED_PAGE_LINK_SOURCES)[number];
+
+/** The sources a WORK ITEM's body write derives (MOTIR-7696). */
+export const ITEM_DERIVED_PAGE_LINK_SOURCES = ['description', 'explanation'] as const;
+
+export type ItemDerivedPageLinkSourceValue = (typeof ITEM_DERIVED_PAGE_LINK_SOURCES)[number];
+
+/** Every source a row can carry. */
+export type PageLinkSourceValue =
+  | DerivedPageLinkSourceValue
+  | ItemDerivedPageLinkSourceValue
+  | 'manual';
 
 /** One derived row, as the diff reads it. */
 export interface DerivedPageLinkRecord {
   id: string;
   workItemId: string;
   source: DerivedPageLinkSourceValue;
+  createdById: string | null;
+  createdAt: Date;
+}
+
+/** One ITEM-derived row, as the work-item save's diff reads it. */
+export interface ItemDerivedPageLinkRecord {
+  id: string;
+  pageId: string;
+  source: ItemDerivedPageLinkSourceValue;
   createdById: string | null;
   createdAt: Date;
 }
@@ -35,7 +62,7 @@ export interface WorkItemPageLinkRecord {
   pageId: string;
   title: string;
   updatedAt: Date;
-  sources: Array<'mention' | 'embed' | 'manual'>;
+  sources: PageLinkSourceValue[];
   /** The folder the page's TOPMOST page is filed in (a sub-page carries none). */
   placeFolderId: string | null;
   /** The direct parent page's title; `null` for a top-level page. */
@@ -54,7 +81,7 @@ export interface DerivedPageLinkInsert {
   projectId: string;
   pageId: string;
   workItemId: string;
-  source: DerivedPageLinkSourceValue;
+  source: DerivedPageLinkSourceValue | ItemDerivedPageLinkSourceValue;
   createdById: string;
 }
 
@@ -81,6 +108,39 @@ export const pageWorkItemLinkRepository = {
     if (ids.length === 0) return 0;
     const result = await tx.pageWorkItemLink.deleteMany({
       where: { pageId, id: { in: [...ids] }, source: { in: [...DERIVED_PAGE_LINK_SOURCES] } },
+    });
+    return result.count;
+  },
+
+  /** A work item's ITEM-derived rows (`description` / `explanation`), oldest first. */
+  async findItemDerivedByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ItemDerivedPageLinkRecord[]> {
+    const rows = await tx.pageWorkItemLink.findMany({
+      where: { workItemId, source: { in: [...ITEM_DERIVED_PAGE_LINK_SOURCES] } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, pageId: true, source: true, createdById: true, createdAt: true },
+    });
+    return rows as ItemDerivedPageLinkRecord[];
+  },
+
+  /**
+   * Deletes the named ITEM-derived rows of one work item; a page-derived or
+   * `manual` id is never matched.
+   */
+  async deleteItemDerivedByIds(
+    workItemId: string,
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await tx.pageWorkItemLink.deleteMany({
+      where: {
+        workItemId,
+        id: { in: [...ids] },
+        source: { in: [...ITEM_DERIVED_PAGE_LINK_SOURCES] },
+      },
     });
     return result.count;
   },

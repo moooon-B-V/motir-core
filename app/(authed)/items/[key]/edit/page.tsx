@@ -83,7 +83,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   // the read view pays one discarded read. That is deliberate: the redirect is
   // the rare path, and the alternative charges a second round trip to every
   // successful edit.
-  const [{ canEdit }, members, heldTransitions, planHold] = await Promise.all([
+  const [{ canEdit }, members, heldTransitions, planHold, pageCaps] = await Promise.all([
     projectAccessService.getCapabilities(ctx.projectId, serviceCtx),
     assignableMembersService.list({
       projectId: ctx.projectId,
@@ -96,6 +96,9 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
     // The undecided PLAN holding the card at Planning (MOTIR-6267) — every move
     // locked, said on the status field with its Review plan door.
     planTargetLockService.readPlanHold(detail.item.id, serviceCtx),
+    // Whether the editors offer the `@` picker's Pages section (MOTIR-7698):
+    // only a viewer with `page:view` may search the project's pages.
+    projectAccessService.getPageCapabilities(ctx.projectId, serviceCtx),
   ]);
   if (!canEdit) {
     redirect(`/items/${detail.item.identifier}`);
@@ -111,6 +114,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
         heldTransitions={heldTransitions}
         planHold={planHold}
         aiConfigured={isMotirAiConfigured()}
+        canViewPages={pageCaps.canViewPages}
       />
       <RelationshipsPanel
         blockedBy={detail.blockedBy}

@@ -150,6 +150,12 @@
     "mentionNoResults": "No work items match “{query}”.",
     "mentionSearchFailed": "Couldn’t search work items.",
     "mentionRetry": "Try again",
+    "mentionPages": "Pages",
+    "mentionTypeToSearchPages": "Keep typing to search pages…",
+    "mentionNoPages": "No pages match “{query}”.",
+    "mentionPagesSearchFailed": "Couldn’t search pages.",
+    "pageUntitled": "Untitled",
+    "pageUnavailable": "Page unavailable",
     "codeLanguage": "Language"
   },
   "common": {
@@ -1468,6 +1474,8 @@
     "pagesSourceMention": "Mentioned",
     "pagesSourceEmbed": "Embedded",
     "pagesSourceManual": "Linked",
+    "pagesSourceDescription": "Tagged in description",
+    "pagesSourceExplanation": "Tagged in explanation",
     "pagesEmpty": "No page links to this work item yet.",
     "pagesShowMore": "Show more pages",
     "pagesError": "Couldn't load pages.",

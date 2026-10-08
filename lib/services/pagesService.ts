@@ -19,6 +19,8 @@ import {
   toPageTreeFolderRowDto,
   toPageTreePageRowDto,
   toPageMarkdownAtVersionDto,
+  toPageMentionCandidateDto,
+  toPageRefSummaryDto,
   toPageVersionDto,
   toPageVersionListItemDto,
   toPageVersionRow,
@@ -83,6 +85,10 @@ import type {
   SavePageUpdateInput,
 } from '@/lib/dto/pages';
 import { PAGE_ARCHIVE_SET_TITLES } from '@/lib/dto/pages';
+import type { PageMentionCandidateDto, PageRefMap } from '@/lib/dto/pages';
+import { QUICK_SEARCH_MIN_QUERY_LENGTH } from '@/lib/workItems/quickSearch';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext } from '@/lib/visitor/readScope';
 import type { Prisma } from '@/generated/prisma/client';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -157,6 +163,9 @@ async function findInProject(store: PageStore, projectId: string, pageId: string
  * rather than a decision this service made. The gate still reads the caller's
  * own `ctx` — a token's project binding is enforced there, not bypassed here.
  */
+/** The `@` picker's Pages section shows a short, fixed list (MOTIR-7697). */
+export const PAGE_MENTION_SEARCH_LIMIT = 10;
+
 function scopeTo(ctx: ServiceContext, projectId: string) {
   return { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId };
 }
@@ -923,6 +932,82 @@ export const pagesService = {
         version: toPageVersionListItemDto(result.version, author?.name, true),
         bodyState: toBase64(page!.bodyState),
       };
+    });
+  },
+  /**
+   * The `@` picker's Pages section (Story MOTIR-7694 · MOTIR-7697): the live
+   * pages of one project whose title contains `q`, newest edit first, at most
+   * {@link PAGE_MENTION_SEARCH_LIMIT}, each with its place. `page:view` — a
+   * browser without it is refused `'edit'` (→ 403), a non-browser `'browse'`
+   * (→ 404). A query shorter than `QUICK_SEARCH_MIN_QUERY_LENGTH` answers `[]`
+   * with no read; the route refuses it before it gets here.
+   */
+  async searchPagesForMention(
+    ctx: ServiceContext,
+    input: { projectId: string; q: string },
+  ): Promise<PageMentionCandidateDto[]> {
+    const q = input.q.trim();
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      if (q.length < QUICK_SEARCH_MIN_QUERY_LENGTH) return [];
+      const rows = await pageRepository.searchLiveByTitle(
+        input.projectId,
+        q,
+        PAGE_MENTION_SEARCH_LIMIT,
+        tx,
+      );
+      // A row's PLACE: its parent page's title, and the folder its topmost page
+      // is filed in — one batched read for each, however many rows.
+      const parentIds = rows.flatMap((r) => r.ancestorPageIds.slice(-1));
+      const topIds = rows.flatMap((r) => r.ancestorPageIds.slice(0, 1));
+      const related = await pageRepository.findTitlesByIds(
+        [...new Set([...parentIds, ...topIds])],
+        tx,
+      );
+      const relatedById = new Map(related.map((r) => [r.id, r]));
+      const folderOf = (r: (typeof rows)[number]): string | null => {
+        const topId = r.ancestorPageIds[0];
+        return topId === undefined ? r.folderId : (relatedById.get(topId)?.folderId ?? null);
+      };
+      const folderIds = [...new Set(rows.map(folderOf).filter((id): id is string => id !== null))];
+      const trails = await folderRepository.findTrailsByIds(folderIds, ctx.workspaceId, tx);
+      const pathByFolder = new Map(trails.map((t) => [t.id, t.trail.map((step) => step.name)]));
+      return rows.map((r) => {
+        const folderId = folderOf(r);
+        const parentId = r.ancestorPageIds[r.ancestorPageIds.length - 1];
+        return toPageMentionCandidateDto(
+          r,
+          folderId === null ? [] : (pathByFolder.get(folderId) ?? []),
+          parentId === undefined ? null : (relatedById.get(parentId)?.title ?? null),
+        );
+      });
+    });
+  },
+
+  /**
+   * The live page chips of a work item's bodies (Story MOTIR-7694 ·
+   * MOTIR-7697): one summary per tagged id, keyed by id. A live page of
+   * `projectId` is `available` with its CURRENT title; every other id —
+   * archived, deleted, another project's, unknown — is `unavailable`. A Visitor,
+   * and a reader without `page:view`, get `unavailable` for EVERY id before any
+   * page is read, so the four causes collapse to one answer and none is told.
+   */
+  async resolvePageRefSummaries(
+    ids: readonly string[],
+    projectId: string,
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<PageRefMap> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return {};
+    const allUnavailable = (): PageRefMap =>
+      Object.fromEntries(unique.map((id) => [id, toPageRefSummaryDto(id, undefined)]));
+    if (isVisitorContext(ctx)) return allUnavailable();
+    return withWorkspaceContext(scopeTo(ctx, projectId), async (tx) => {
+      const { canViewPages } = await projectAccessService.getPageCapabilities(projectId, ctx, tx);
+      if (!canViewPages) return allUnavailable();
+      const rows = await pageRepository.findSummariesByIds(unique, projectId, tx);
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      return Object.fromEntries(unique.map((id) => [id, toPageRefSummaryDto(id, byId.get(id))]));
     });
   },
 };
