@@ -2360,6 +2360,7 @@ marked it … a moment ago_ and reads _It is now **{state}**._
 - A reason on a move, an assignee, notes by staff, or reopening a closed request — none is in the
   service's contract.
 - Any price.
+
 ## Ideas — AMENDMENT 2026-10-07 (MOTIR-7679 · story MOTIR-7664)
 
 **Design system check (first).** The project is on Motir Design (`@motir/design-system`
