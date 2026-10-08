@@ -9,7 +9,7 @@ import {
   REPO_FILE_READ_TIMEOUT_MS,
   type GitProvider,
 } from '../provider';
-import { byteLength, describeBody, normalizeRepoFilePath } from '../fileRead';
+import { classifyRepoBlob, describeBody, normalizeRepoFilePath } from '../fileRead';
 import { RepoFileReadError } from '../errors';
 import {
   GitlabConnectionNotFoundError,
@@ -500,16 +500,28 @@ export const gitlabProvider: GitProvider = {
     // multi-megabyte string on the other — the exact per-host divergence the
     // shared limit in `provider.ts` exists to prevent. Checking
     // `content-length` first is what keeps a large body from being buffered at
-    // all; the post-decode check catches a chunked response that declared none.
+    // all; the check on the read blob catches a chunked response that declared none.
     const declared = Number(res.headers.get('content-length'));
     if (Number.isFinite(declared) && declared > REPO_FILE_MAX_BYTES) {
       return { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES };
     }
-    const text = await res.text();
-    if (byteLength(text) > REPO_FILE_MAX_BYTES) {
+    // The BYTES, never `res.text()` — a lenient decode turns a binary blob into
+    // `found` and inflates its size (`classifyRepoBlob`, MOTIR-7873).
+    const blob = new Uint8Array(await res.arrayBuffer());
+    if (blob.byteLength > REPO_FILE_MAX_BYTES) {
       return { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES };
     }
-    return { outcome: 'found', path: guarded.path, ref, text, bytes: byteLength(text) };
+    const classified = classifyRepoBlob(blob);
+    if (classified.kind === 'binary') {
+      return { outcome: 'binary', path: guarded.path, ref, bytes: blob.byteLength };
+    }
+    return {
+      outcome: 'found',
+      path: guarded.path,
+      ref,
+      text: classified.text,
+      bytes: blob.byteLength,
+    };
   },
 
   async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {

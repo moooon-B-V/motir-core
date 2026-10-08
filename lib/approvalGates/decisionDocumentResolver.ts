@@ -109,6 +109,9 @@ export function contentFromRead(
     case 'repo_not_connected':
       return { outcome: 'unresolvable', reason: 'not_connected' };
     case 'invalid_path':
+    // A decision document is Markdown; a binary blob at its path is not one,
+    // and there is nothing to show (MOTIR-7873).
+    case 'binary':
       return { outcome: 'unresolvable', reason: 'unreadable' };
     default: {
       const unmapped: never = result;

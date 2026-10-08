@@ -39,8 +39,8 @@ export type PathResolver = (repo: string, path: string) => Promise<PathPresence>
  * The shipped resolver: `repoFileReadService.readFile` at the stored default
  * branch, through the organisation's connected repositories.
  *
- * `found` and `too_large` are PRESENT — the second is a file the host would not
- * inline, which exists all the same — and a directory reads as `found` too (the
+ * `found`, `binary` and `too_large` are PRESENT — the last two are files the
+ * read will not return as text, which exist all the same — and a directory reads as `found` too (the
  * contents endpoint answers a directory with its listing, which is what the
  * top-level-directory clause asks). `not_found` is ABSENT. Every other outcome —
  * a repository not connected, a revoked App, a missing ref, a timeout — is
@@ -59,7 +59,9 @@ export function hostPathResolver(ctx: ServiceContext): PathResolver {
     const repoRef = (await repoRefs()).get(repo.toLowerCase());
     if (!repoRef) return 'unknown';
     const read = await repoFileReadService.readFile(ctx, repoRef, path);
-    if (read.outcome === 'found' || read.outcome === 'too_large') return 'present';
+    if (read.outcome === 'found' || read.outcome === 'binary' || read.outcome === 'too_large') {
+      return 'present';
+    }
     if (read.outcome === 'not_found') return 'absent';
     return 'unknown';
   };

@@ -480,6 +480,7 @@ export interface InstallationToken {
  *  text; every other member is a FACT about why there is none. */
 export type RepoFileReadOutcome =
   | 'found'
+  | 'binary'
   | 'not_found'
   | 'ref_not_found'
   | 'too_large'
@@ -496,12 +497,18 @@ export type RepoFileReadTransportFailure = 'timeout' | 'unreachable';
 /**
  * The result of {@link GitProvider.readFileAtRef}.
  *
- * ⚠️ `bytes` is the length of the TEXT AS DECODED, not the blob's size on the
- * host. It is here so a caller that caps output can say by how much it cut, and
- * it must never be read as the file's on-disk size.
+ * `bytes` is the BLOB's length as the host served it — never a measurement of
+ * decoded text (MOTIR-7873: it used to be, and a binary's replacement
+ * characters inflated it). On `found` it is also the UTF-8 length of `text`,
+ * so a caller that caps output can say by how much it cut.
+ *
+ * `binary` is a file that EXISTS and is not text — a NUL in its first bytes, or
+ * not valid UTF-8 (`classifyRepoBlob`). It carries no content at all: a binary
+ * file is named, never decoded into something a model would read as source.
  */
 export type RepoFileReadResult =
   | { outcome: 'found'; path: string; ref: string; text: string; bytes: number }
+  | { outcome: 'binary'; path: string; ref: string; bytes: number }
   | { outcome: 'not_found'; path: string; ref: string }
   | { outcome: 'ref_not_found'; path: string; ref: string }
   | { outcome: 'too_large'; path: string; ref: string; limitBytes: number }
