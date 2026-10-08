@@ -8,7 +8,7 @@ import zhMessages from '@/messages/zh.json';
 // MOTIR-6855 (Bug MOTIR-6776 · design MOTIR-6854) — the three error boundaries.
 //
 // What is asserted, per boundary: the drawn copy renders; Retry calls
-// `unstable_retry` (not `reset`, which would re-render the failed server segment
+// `retry` (not `reset`, which would re-render the failed server segment
 // from the same client state); the caught error is reported to Sentry EXACTLY
 // ONCE per error instance, tagged with its digest; the reference line shows the
 // digest and disappears when there is none; only the shell-less states offer
@@ -43,21 +43,21 @@ afterEach(() => {
 });
 
 describe('app/(authed)/error.tsx — state 1, a page failed inside the shell', () => {
-  it('renders the page copy, retries through unstable_retry, and draws no second door', () => {
-    const unstable_retry = vi.fn();
-    renderWithIntl(<AuthedError error={digestError('3a91f0c2')} unstable_retry={unstable_retry} />);
+  it('renders the page copy, retries through the retry prop, and draws no second door', () => {
+    const retry = vi.fn();
+    renderWithIntl(<AuthedError error={digestError('3a91f0c2')} retry={retry} />);
 
     expect(screen.getByRole('alert').textContent).toMatch(enMessages.errors.serverError.pageTitle);
     expect(screen.queryByRole('link', { name: enMessages.errors.notFound.homeAction })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: enMessages.common.retry }));
-    expect(unstable_retry).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
   it('reports the caught error to Sentry once, tagged with its digest, across re-renders', () => {
     const error = digestError('3a91f0c2');
-    const { rerender } = renderWithIntl(<AuthedError error={error} unstable_retry={vi.fn()} />);
-    rerender(<AuthedError error={error} unstable_retry={vi.fn()} />);
+    const { rerender } = renderWithIntl(<AuthedError error={error} retry={vi.fn()} />);
+    rerender(<AuthedError error={error} retry={vi.fn()} />);
 
     expect(captureException).toHaveBeenCalledTimes(1);
     expect(captureException).toHaveBeenCalledWith(error, {
@@ -67,9 +67,9 @@ describe('app/(authed)/error.tsx — state 1, a page failed inside the shell', (
 
   it('reports a retry that failed again as a NEW failure with its new reference', () => {
     const { rerender } = renderWithIntl(
-      <AuthedError error={digestError('3a91f0c2')} unstable_retry={vi.fn()} />,
+      <AuthedError error={digestError('3a91f0c2')} retry={vi.fn()} />,
     );
-    rerender(<AuthedError error={digestError('b07e4d19')} unstable_retry={vi.fn()} />);
+    rerender(<AuthedError error={digestError('b07e4d19')} retry={vi.fn()} />);
 
     expect(captureException).toHaveBeenCalledTimes(2);
     expect(screen.getByText('b07e4d19')).toBeTruthy();
@@ -77,15 +77,15 @@ describe('app/(authed)/error.tsx — state 1, a page failed inside the shell', (
   });
 
   it('shows no reference line for an error that carries no digest', () => {
-    renderWithIntl(<AuthedError error={digestError()} unstable_retry={vi.fn()} />);
+    renderWithIntl(<AuthedError error={digestError()} retry={vi.fn()} />);
     expect(screen.queryByText(enMessages.errors.serverError.reference)).toBeNull();
   });
 });
 
 describe('app/error.tsx — state 2, the signed-in shell failed', () => {
   it('renders the app copy, the digest, and Go to Motir as a document link to /', () => {
-    const unstable_retry = vi.fn();
-    renderWithIntl(<AppError error={digestError('3a91f0c2')} unstable_retry={unstable_retry} />);
+    const retry = vi.fn();
+    renderWithIntl(<AppError error={digestError('3a91f0c2')} retry={retry} />);
 
     expect(screen.getByRole('alert').textContent).toMatch(enMessages.errors.serverError.appTitle);
     expect(
@@ -96,14 +96,14 @@ describe('app/error.tsx — state 2, the signed-in shell failed', () => {
     expect(screen.getByText('3a91f0c2')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: enMessages.common.retry }));
-    expect(unstable_retry).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
     expect(captureException).toHaveBeenCalledWith(expect.any(Error), {
       tags: { boundary: 'error-boundary:app', digest: '3a91f0c2' },
     });
   });
 
   it('renders in zh from the zh catalog', () => {
-    renderWithIntl(<AppError error={digestError('3a91f0c2')} unstable_retry={vi.fn()} />, {
+    renderWithIntl(<AppError error={digestError('3a91f0c2')} retry={vi.fn()} />, {
       locale: 'zh',
       messages: zhMessages,
     });
@@ -114,21 +114,15 @@ describe('app/error.tsx — state 2, the signed-in shell failed', () => {
 
 describe('app/global-error.tsx — state 3, the root failed (no next-intl provider)', () => {
   it('renders with NO intl provider, reports once, and offers Go to Motir', () => {
-    const unstable_retry = vi.fn();
-    render(
-      <GlobalErrorContent
-        error={digestError('3a91f0c2')}
-        unstable_retry={unstable_retry}
-        locale="en"
-      />,
-    );
+    const retry = vi.fn();
+    render(<GlobalErrorContent error={digestError('3a91f0c2')} retry={retry} locale="en" />);
 
     expect(screen.getByRole('alert').textContent).toMatch(GLOBAL_ERROR_COPY.en.title);
     expect(screen.getByRole('link', { name: GLOBAL_ERROR_COPY.en.home }).getAttribute('href')).toBe(
       '/',
     );
     fireEvent.click(screen.getByRole('button', { name: GLOBAL_ERROR_COPY.en.retry }));
-    expect(unstable_retry).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
     expect(captureException).toHaveBeenCalledWith(expect.any(Error), {
       tags: { boundary: 'error-boundary:global', digest: '3a91f0c2' },
     });
