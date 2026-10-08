@@ -1114,6 +1114,12 @@
       "satisfiedHeadline": "설정이 완료되었습니다",
       "satisfiedBody": "다음 로그인부터 2단계 인증을 요청합니다. 아직 저장하지 않았다면 아래 복구 코드를 저장하세요. 기기를 잃어버렸을 때 다시 로그인하는 방법입니다.",
       "continueTo": "{destination}(으)로 계속"
+    },
+    "language": {
+      "label": "언어: {language}",
+      "switching": "{language}(으)로 전환하는 중…",
+      "failed": "언어를 변경할 수 없습니다.",
+      "retry": "다시 시도"
     }
   },
   "shell": {

@@ -1114,6 +1114,12 @@
       "satisfiedHeadline": "Je bent er helemaal klaar voor",
       "satisfiedBody": "De volgende keer dat je inlogt, wordt je om je tweede factor gevraagd. Bewaar je herstelcodes hieronder als je dat nog niet hebt gedaan — daarmee kom je weer binnen als je het apparaat kwijtraakt.",
       "continueTo": "Verder naar {destination}"
+    },
+    "language": {
+      "label": "Taal: {language}",
+      "switching": "Overschakelen naar {language}…",
+      "failed": "De taal kon niet worden gewijzigd.",
+      "retry": "Opnieuw proberen"
     }
   },
   "shell": {

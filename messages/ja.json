@@ -1114,6 +1114,12 @@
       "satisfiedHeadline": "設定が完了しました",
       "satisfiedBody": "次回のサインインから、2 つ目の認証要素を求められます。まだの場合は、下のリカバリーコードを保存してください。デバイスをなくしたときにアカウントに戻る手段になります。",
       "continueTo": "{destination} へ進む"
+    },
+    "language": {
+      "label": "言語：{language}",
+      "switching": "{language}に切り替えています…",
+      "failed": "言語を変更できませんでした。",
+      "retry": "再試行"
     }
   },
   "shell": {

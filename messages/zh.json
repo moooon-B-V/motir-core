@@ -1114,6 +1114,12 @@
       "satisfiedHeadline": "一切就绪",
       "satisfiedBody": "下次登录时会要求你提供第二重验证。如果还没有保存恢复码，请在下方保存——设备丢失时它是你重新登录的方式。",
       "continueTo": "继续前往 {destination}"
+    },
+    "language": {
+      "label": "语言：{language}",
+      "switching": "正在切换到{language}…",
+      "failed": "无法切换语言。",
+      "retry": "重试"
     }
   },
   "shell": {

@@ -1114,6 +1114,12 @@
       "satisfiedHeadline": "Tudo pronto",
       "satisfiedBody": "Seu segundo fator será solicitado na próxima vez que você entrar. Salve seus códigos de recuperação abaixo, se ainda não fez isso — eles são a forma de recuperar o acesso se você perder o dispositivo.",
       "continueTo": "Continuar para {destination}"
+    },
+    "language": {
+      "label": "Idioma: {language}",
+      "switching": "Mudando para {language}…",
+      "failed": "Não foi possível alterar o idioma.",
+      "retry": "Tentar novamente"
     }
   },
   "shell": {

@@ -1114,6 +1114,12 @@
       "satisfiedHeadline": "Alles erledigt",
       "satisfiedBody": "Bei Ihrer nächsten Anmeldung werden Sie nach Ihrem zweiten Faktor gefragt. Speichern Sie unten Ihre Wiederherstellungscodes, falls noch nicht geschehen – mit ihnen gelangen Sie wieder hinein, wenn Sie das Gerät verlieren.",
       "continueTo": "Weiter zu {destination}"
+    },
+    "language": {
+      "label": "Sprache: {language}",
+      "switching": "Wechsel zu {language}…",
+      "failed": "Die Sprache konnte nicht geändert werden.",
+      "retry": "Erneut versuchen"
     }
   },
   "shell": {

@@ -26,6 +26,7 @@ export function LanguageCard() {
   const options: ComboboxOption<Locale>[] = locales.map((locale) => ({
     value: locale,
     label: localeLabel[locale],
+    lang: locale,
   }));
 
   function change(next: Locale) {

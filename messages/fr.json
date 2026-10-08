@@ -1114,6 +1114,12 @@
       "satisfiedHeadline": "Tout est prêt",
       "satisfiedBody": "Votre second facteur vous sera réclamé lors de votre prochaine connexion. Enregistrez vos codes de récupération ci-dessous si ce n’est pas déjà fait : ils vous permettront de retrouver l’accès si vous perdez l’appareil.",
       "continueTo": "Continuer vers {destination}"
+    },
+    "language": {
+      "label": "Langue : {language}",
+      "switching": "Passage à {language}…",
+      "failed": "Impossible de changer la langue.",
+      "retry": "Réessayer"
     }
   },
   "shell": {

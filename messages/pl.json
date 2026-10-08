@@ -1114,6 +1114,12 @@
       "satisfiedHeadline": "Wszystko gotowe",
       "satisfiedBody": "Przy następnym logowaniu zostaniesz poproszony o drugi składnik. Zapisz poniższe kody odzyskiwania, jeśli jeszcze tego nie zrobiłeś — pozwolą Ci wrócić, jeśli stracisz urządzenie.",
       "continueTo": "Przejdź do: {destination}"
+    },
+    "language": {
+      "label": "Język: {language}",
+      "switching": "Przełączanie na {language}…",
+      "failed": "Nie udało się zmienić języka.",
+      "retry": "Spróbuj ponownie"
     }
   },
   "shell": {
