@@ -245,7 +245,7 @@ describe('GET /api/approval-gates/[id]/planning-seed · 200', () => {
   it('an unsupported or unresolvable request locale falls back to en', async () => {
     const gateId = await gate(card, 'decision_approval', 'changes_requested');
     signIn(owner());
-    for (const unusable of ['fr', 'throw']) {
+    for (const unusable of ['xx', 'throw']) {
       requestLocale.current = unusable;
       const turn = (await (await readSeed(gateId)).json()).seed.firstTurn as string;
       expect(turn).toContain('Changes were requested on this decision.');
