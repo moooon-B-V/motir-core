@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { AlertTriangle, CircleX, Loader2, Snowflake } from 'lucide-react';
 import type { PillProps } from '@/components/ui/Pill';
 import {
@@ -324,6 +324,7 @@ export function DevelopmentGateFrame({
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
+  const locale = useLocale();
   const tGate = useTranslations('approvalGate');
   // A refusal SAYS WHY (MOTIR-6075; design `approval-control--refusal-reason.mock.html` Panel 2).
   const refusalVerb = useRefusalVerb();
@@ -1270,7 +1271,7 @@ export function DevelopmentGateFrame({
       {t.rich('reasked.earlier', {
         // An unattributable decider is SAID, never shown as nobody (§6b).
         name: earlier.decidedByLabel ?? tGate('record.unattributed'),
-        date: new Date(earlier.decidedAt).toLocaleString(),
+        date: new Date(earlier.decidedAt).toLocaleString(locale),
         count: earlier.commits,
         b: bold,
       })}
@@ -1457,14 +1458,14 @@ export function DevelopmentGateFrame({
           recordLead={
             isAgentReview && gate.state === 'changes_requested'
               ? tReview.rich('sentBack.record', {
-                  when: gate.decidedAt ? new Date(gate.decidedAt).toLocaleString() : '',
+                  when: gate.decidedAt ? new Date(gate.decidedAt).toLocaleString(locale) : '',
                   count,
                   b,
                 })
               : decisionAccepted && gate.decidedByLabel && gate.decisionSource !== 'github'
                 ? tDecision.rich('accepted', {
                     name: gate.decidedByLabel,
-                    when: gate.decidedAt ? new Date(gate.decidedAt).toLocaleString() : '',
+                    when: gate.decidedAt ? new Date(gate.decidedAt).toLocaleString(locale) : '',
                     b,
                   })
                 : undefined

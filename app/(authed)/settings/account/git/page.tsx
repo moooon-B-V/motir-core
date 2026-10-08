@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { GitBranch, Info } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
@@ -43,7 +43,7 @@ export default async function AccountGitAccountsPage() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
-  const t = await getTranslations('settings.gitAccounts');
+  const [t, locale] = await Promise.all([getTranslations('settings.gitAccounts'), getLocale()]);
 
   // TWO INDEPENDENT READS, and the independence is the page's subject. The
   // identity is the USER's (`withUserContext`, RLS-narrowed to their own row);
@@ -91,7 +91,7 @@ export default async function AccountGitAccountsPage() {
             host: t('host.github'),
             connected: t('state.connected'),
             connectedOn: t('connectedOn', {
-              date: new Date(identity.createdAt).toLocaleDateString('en-GB', {
+              date: new Date(identity.createdAt).toLocaleDateString(locale, {
                 day: 'numeric',
                 month: 'long',
                 year: 'numeric',

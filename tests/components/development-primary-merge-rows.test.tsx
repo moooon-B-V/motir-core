@@ -38,6 +38,7 @@ vi.mock('next/navigation', async (importOriginal) => ({
 }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush: vi.fn(), shallowReplace: vi.fn() }));
 vi.mock('next-intl/server', () => ({
+  getLocale: async () => 'en',
   getTranslations: async (namespace: string) =>
     createTranslator({ locale: 'en', messages: en, namespace: namespace as never }),
 }));

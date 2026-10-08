@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { ArrowDownToLine, CloudOff, Clock, Hourglass } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { DispatchRunDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
@@ -54,6 +54,7 @@ export interface RunLogPaneProps {
 
 export function RunLogPane({ run, events, selectedWorkItemId }: RunLogPaneProps) {
   const t = useTranslations('runs');
+  const locale = useLocale();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   // Following is the DEFAULT and is released by the reader, never by the code.
   const [following, setFollowing] = useState(true);
@@ -154,7 +155,7 @@ export function RunLogPane({ run, events, selectedWorkItemId }: RunLogPaneProps)
             {lines.map((ev) => (
               <div key={ev.seq} className="flex gap-2 whitespace-pre">
                 <span className="flex-none text-(--el-text-tertiary)">
-                  {formatRunInstant(ev.createdAt)}
+                  {formatRunInstant(ev.createdAt, locale)}
                 </span>
                 {/* Unfiltered, every line names its SOURCE member; filtered to
                     one, the label is noise on every row and is dropped. */}

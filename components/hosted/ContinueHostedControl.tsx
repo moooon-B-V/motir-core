@@ -183,7 +183,7 @@ export function When({ iso }: { iso: string }) {
   // Read ONCE per mount, as the continue part's own clock is (ContinuePart.tsx).
   const [now] = useState(() => Date.now());
   return (
-    <time className="whitespace-nowrap" dateTime={iso} title={formatRunInstant(iso)}>
+    <time className="whitespace-nowrap" dateTime={iso} title={formatRunInstant(iso, locale)}>
       {relativeLabel(iso, locale, now)}
     </time>
   );

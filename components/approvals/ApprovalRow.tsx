@@ -673,6 +673,7 @@ export function ApprovalRow({
 }) {
   const routes = useReaderRoutes();
   const t = useTranslations('workbench.approvals');
+  const locale = useLocale();
   const tSentence = useTranslations('workbench.approvals.sentence');
   const tGate = useTranslations('approvalGate');
   const relativeLabel = useRelativeLabel();
@@ -836,7 +837,7 @@ export function ApprovalRow({
               question's is how long it has waited. */}
           <span
             className="truncate text-xs text-(--el-text-secondary)"
-            title={new Date(timeIso).toLocaleString()}
+            title={new Date(timeIso).toLocaleString(locale)}
           >
             {relativeLabel(timeIso)}
           </span>
@@ -1117,6 +1118,7 @@ function PlanApprovalRow({
 }) {
   const routes = useReaderRoutes();
   const t = useTranslations('workbench.approvals');
+  const locale = useLocale();
   const tPlan = useTranslations('approvalGate.planApproval.row');
   const tGate = useTranslations('approvalGate');
   const relativeLabel = useRelativeLabel();
@@ -1306,7 +1308,7 @@ function PlanApprovalRow({
         <div role="cell" className="flex min-w-0 items-center">
           <span
             className="truncate text-xs text-(--el-text-secondary)"
-            title={new Date(timeIso).toLocaleString()}
+            title={new Date(timeIso).toLocaleString(locale)}
           >
             {relativeLabel(timeIso)}
           </span>

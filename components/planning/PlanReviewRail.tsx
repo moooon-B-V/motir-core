@@ -13,7 +13,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
@@ -41,10 +41,11 @@ const STATUS_TINT: Record<PlanStatusDto, string> = {
   declined: 'bg-(--el-muted) text-(--el-text-secondary)',
 };
 
-function formatAt(iso: string | null): string {
+export function formatAt(iso: string | null, locale: string): string {
   if (!iso) return '—';
-  // Fixed UTC formatting so the server + client renders match (finding #89).
-  return new Intl.DateTimeFormat('en', {
+  // Fixed UTC formatting so the server + client renders match (finding #89), in
+  // the reader's language (MOTIR-7771).
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'UTC',
@@ -731,6 +732,7 @@ function actorLabel(ev: PlanHistoryEventDto, t: ReturnType<typeof useTranslation
 }
 
 function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof useTranslations> }) {
+  const locale = useLocale();
   // A CONTENT event carries a count; a lifecycle event does not. The label is
   // the only thing that tells the two apart, and that is the decision — Part X
   // §2: one sequence, one grammar, and the wording is the discriminator.
@@ -754,8 +756,8 @@ function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof u
             timestamp uses — no badge, no chip, no second line (Part X §5). */}
         <span className="text-xs text-(--el-text-secondary)">
           {ev.until
-            ? t('eventSpan', { from: formatAt(ev.at), to: formatAt(ev.until) })
-            : formatAt(ev.at)}
+            ? t('eventSpan', { from: formatAt(ev.at, locale), to: formatAt(ev.until, locale) })
+            : formatAt(ev.at, locale)}
         </span>
       </div>
     </li>
