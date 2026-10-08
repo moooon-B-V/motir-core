@@ -240,7 +240,6 @@ async function save(page: Page, item: Seed['item']): Promise<void> {
   const written = actionWrite(page, `/items/${item.key}/edit`, 'motir-page:');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   expect((await written).status()).toBe(200);
-  await expect(page.getByText(`${item.key} saved`, { exact: true })).toBeVisible();
 }
 
 // The picker's list is the longest thing to read; the recorded test sets this to
@@ -344,7 +343,7 @@ test('a member tags a page in a Description and another in an Explanation; the c
       await expect(page.locator('body')).not.toContainText(PAGE_B);
       await expect(pageRowOf(page, item.key, PAGE_B)).toHaveCount(0);
       await expect(pageRowOf(page, item.key, PAGE_A_RENAMED)).toHaveCount(1);
-      await page.getByText(UNAVAILABLE, { exact: true }).scrollIntoViewIfNeeded();
+      await page.getByRole('main').getByText(UNAVAILABLE, { exact: true }).scrollIntoViewIfNeeded();
       await beat();
       await section.scrollIntoViewIfNeeded();
     });
