@@ -379,6 +379,11 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // planner's `read_file` already shows exactly this to every `ai:plan` holder;
   // the same AMENDMENT 3 to §4 names it as a second instance.
   read_file: 'ai:plan',
+  // MOTIR-7862 — the hosted code graph's explore and search, the same argument:
+  // the hosted planner's own `code_explore` / `code_search` already show every
+  // `ai:plan` holder these answers.
+  code_explore: 'ai:plan',
+  code_search: 'ai:plan',
 
   // ── ai:view_plan — the plan AUTHOR write that has a door ─────────────────
   // `plansService.addProposals` (and `markPlanned`, which `final: true` also

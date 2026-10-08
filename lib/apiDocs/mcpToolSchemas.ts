@@ -747,6 +747,75 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  code_explore: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      query: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'What to look for: a symbol, a concept, or a few words naming the code you want.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Limit the read to ONE repository in the project’s set — its bare name ("motir-core") or `owner/name`, case-insensitively. Omit to read every indexed repository in the set.',
+      },
+      cursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Fetch the NEXT PAGE of an earlier result: pass the `cursor` printed on that result’s page line, exactly as printed, with the same other arguments. Omit for page 1.',
+      },
+    },
+    required: ['projectKey', 'query'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  code_search: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      query: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'What to look for: a symbol, a concept, or a few words naming the code you want.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Limit the read to ONE repository in the project’s set — its bare name ("motir-core") or `owner/name`, case-insensitively. Omit to read every indexed repository in the set.',
+      },
+      cursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Fetch the NEXT PAGE of an earlier result: pass the `cursor` printed on that result’s page line, exactly as printed, with the same other arguments. Omit for page 1.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        description: 'OPTIONAL. The page size — how many symbols to return per page.',
+      },
+    },
+    required: ['projectKey', 'query'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   complete_session: {
     type: 'object',
     properties: {
@@ -3594,6 +3663,8 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   close_work_item_continue: 'Close a continue',
   close_work_item_repair: 'Close a repair',
   close_work_item_run: 'Close your run of a work item',
+  code_explore: 'Explore the code graph',
+  code_search: 'Search the code graph',
   complete_session: 'Complete session',
   complete_sprint: 'Complete sprint',
   create_acceptance_upload: 'Create acceptance upload',
@@ -3781,6 +3852,8 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: true,
     openWorldHint: false,
   },
+  code_explore: { title: 'Explore the code graph', readOnlyHint: true, openWorldHint: false },
+  code_search: { title: 'Search the code graph', readOnlyHint: true, openWorldHint: false },
   complete_session: {
     title: 'Complete session',
     readOnlyHint: false,

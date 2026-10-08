@@ -45,6 +45,10 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // MOTIR-7861 — project-keyed, so a non-member reads tenant A's key as
     // not-found before the repo is resolved or any host is asked.
     read_file: { projectKey: t.projectKey, repo: 'motir-core', path: 'README.md' },
+    // MOTIR-7862 — project-keyed graph reads: a non-member reads A's key as
+    // not-found before any repository set is read or motir-ai is called.
+    code_explore: { projectKey: t.projectKey, query: 'readFile' },
+    code_search: { projectKey: t.projectKey, query: 'readFile' },
     // The ORIENTING read (MOTIR-3100) — project-keyed, so a non-member must
     // read tenant A's tree as not-found rather than receive its SHAPE. A
     // partial skeleton would be the worst possible leak here: it names every

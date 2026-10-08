@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **93 tools**.
+`initialize` handshake and registers **95 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -5096,6 +5096,50 @@ reads as `repo_not_in_project`.
 **Read-only**, but **open-world**: the read calls the third-party git host.
 `projectKey` selects **within** the token's workspace; another tenant's key reads
 as a plain not-found.
+
+#### `code_explore` and `code_search`
+
+The **hosted code graph**, for an agent planning over the MCP: the hosted
+planner's own `code_explore` / `code_search` (motir-ai `src/llm/codeGraphTools.ts`),
+run in motir-ai behind `POST /v1/code-graph/read`. An `ok` answer's text is that
+executor's bytes **verbatim**, so the agent reads what the hosted planner reads
+for the same query, repository set and graph commit. motir-core holds **no
+graph-read credential**: only core ids, repo refs and the tool's arguments cross
+the boundary (`docs/decisions/code-graph-service.md`, item 2 and its MOTIR-7860
+amendment).
+
+**Input**
+
+| Field        | Type    | Required | Notes                                                                                                  |
+| ------------ | ------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `projectKey` | string  | yes      | Project key, e.g. `"ACME"`.                                                                            |
+| `query`      | string  | yes      | A symbol, a concept, or a few words naming the code.                                                   |
+| `repo`       | string  | no       | ONE repository in the project's set — bare name or `owner/name`, case-insensitively. Omit to read all. |
+| `cursor`     | string  | no       | The `cursor` a page line printed, passed back exactly, with the same other arguments.                  |
+| `limit`      | integer | no       | `code_search` only: the page size.                                                                     |
+
+**Paging.** A result with more than one page prints `page k of N` and a
+`cursor`; pass it back for the next page. A cursor names one repository.
+
+**Output** — `structuredContent.state`, every one a **non-error** result:
+
+| `state`             | Meaning                                                                                                     | Extra fields                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `ok`                | The executor's text, unchanged.                                                                             | `text`                                                                      |
+| `no_repositories`   | The project's set holds no realized repository. Decided in core; motir-ai is not called.                    | —                                                                           |
+| `repo_not_in_set`   | `repo` matches no repository in the set. Decided in core; motir-ai is not called.                           | `repo`, `available`                                                         |
+| `not_indexed`       | A repository in the set has no graph yet. Enriched with core's own code-context facts.                      | `repoRef`, `indexState`, `commitsBehind`, `refreshFailing`, `graphTooLarge` |
+| `no_graph`          | No repository of the set has a graph.                                                                       | —                                                                           |
+| `stale_cursor`      | The code changed since that page — re-run without `cursor`.                                                 | —                                                                           |
+| `invalid_cursor`    | A cursor this read did not issue.                                                                           | —                                                                           |
+| `graph_unavailable` | The graph could not be read: motir-ai's own reason, or `ai_unreachable` / `ai_not_configured` / `ai_error`. | `reason`                                                                    |
+
+A request motir-ai rejects as malformed stays an error, so it is seen rather
+than read as a soft state.
+
+**Permission: `ai:plan`, at the door and in the service** — as `get_code_health`
+and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`
+AMENDMENT 3). **Read-only**, closed-world: the graph is Motir's own.
 
 #### `skeleton`
 
