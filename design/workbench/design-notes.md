@@ -3806,3 +3806,399 @@ faint, so the rows clear AA on the page and on the `:hover` `--el-surface` fill 
 | **MOTIR-7707** (the column)  | PREMISE: the tab id `to-resume` sits after `to-fix` in `WORKBENCH_TABS`; the cascade rung (§ 35.3); the count is entries                                       | nothing new                                                                                   |
 | **MOTIR-7710** (auto-resume) | PREMISE: each `skipReason` has words and a repair (§ 35.6); `already_resumed` reads as Resuming; `not_a_candidate` is Ready to resume                          | nothing new                                                                                   |
 | **§ 21 / MOTIR-5216**        | Nothing                                                                                                                                                        | The strip gains a seventh tab, and the cascade a rung between To fix and In progress.         |
+
+## 36 · PLANNING — the plans you asked for that are still being written: the eighth tab, second, never a landing rung — MOTIR-7823
+
+**The number.** The card names this section `## 33`. 33 is taken (MOTIR-7473, _Waiting on you_), and so are
+34 and 35, so this section takes **36**, the next free number.
+
+**The asset:** [`workbench--planning.mock.html`](./workbench--planning.mock.html), a new delta mock, Panels
+**0–10** and the zh panel. **It edits no existing mock.** Card **MOTIR-7823** (Story **MOTIR-7820**), the
+design gate of **MOTIR-7831** (the tab's code), and the source of the page size and fields **MOTIR-7828** (the
+reader's read) builds to. Rendered against motir-core `origin/main` @ `ca0055f7b`.
+
+**What it amends, and what each section gains:**
+
+| §                                     | what it gains                                                                                                                                                                |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| § _The tab strip_ · § 21 · § 35.3     | An eighth tab, **Planning**, second. The all-zero count suppression counts eight.                                                                                            |
+| **§ 30 Panel 1** and **§ 35.3**       | Their sentence _"the strip order and the cascade order are the same"_ is **amended on the record** (36.2). The cascade's rungs and their order are unchanged.                |
+| § _Narrow_ · § 30 Panel 1 _Width_     | A measured width for eight tabs (36.3). It also records that the SEVEN-tab strip already scrolled at 1200, which § 35 did not measure.                                       |
+| § _Layout_                            | A second row anatomy, for an object that is not a work item (36.4). The work-item row and its columns are untouched on every other tab.                                      |
+| § 29 (→ ai-planning Part XXII)        | Its plan leading line and its door, composed on a second list (36.4, 36.6). Nothing in § 29 changes.                                                                         |
+| § 26 (live) · § 30 Panel 3 (held)     | The held-row rule now also covers a plan leaving Planning, with an outcome line in place of _Cleared_ (36.8).                                                                |
+| § _Empty states_                      | A ninth empty state, with an action (36.9). The rule that only an actionable emptiness carries one is unchanged and is the reason.                                           |
+| § _The pager_ · § 28 DECISION 5       | Planning has no pager. It takes DECISION 5's ceiling note instead (36.10).                                                                                                   |
+| ai-planning **Part XXV** (MOTIR-7821) | **Nothing.** Its compact progress line (§25.5, sheet 3) is line 2 of the row, byte for byte. Its words, threshold (15 min), ticking, drop order and ARIA are all Part XXV's. |
+
+**Panels:** 0 the access path · 1 the strip (all-zero, count 1, count ≥ 10, active / inactive) and the
+amended cascade · 2 the width, en and zh, at 1200 and at `md` · 3 one plan · 4 a page-full: every target
+form × every planner form × every progress state · 5 a row while the tab is open (progress moving, stalled →
+recovered, an arrival) · 6 a plan leaving (→ planned, → discarded, → failed, outcome unread) · 7 a dropped
+read · 8 the empty state (with and without its action) and the ceiling · 9 narrow · 10 dark · zh.
+
+### 36.1 What the tab is
+
+**Planning lists every plan the reader asked for in the active project that is still being written**: one
+row per plan whose `createdById` is the reader and whose `status` is `generating` (MOTIR-7828's one predicate).
+Each row says what the plan is FOR, WHO is writing it, and HOW FAR it has got, and it opens the plan where it
+is being written. A cadence plan (`createdById` null) and a plan a teammate asked for are never on it.
+
+It exists for the person who asked for a plan and walked away. It asks nothing of them: nothing on a row is a
+decision or a repair, which is what separates it from the first tab and from To fix (36.2).
+
+### 36.2 The strip — place, slug, glyph, count, and the § 30 / § 35.3 amendment (Panels 0, 1)
+
+**Order:** Waiting on you · **Planning** · To fix · To resume · In progress · To do · Recently finished ·
+Watching. The card wrote the strip as six tabs; `origin/main` ships seven (To resume, § 35), so Planning makes
+**eight**.
+
+- **Slug `planning`**, address **`/workbench?tab=planning`**. Slug and label are the same word, like To fix.
+  `WORKBENCH_TABS` gains `'planning'` after `'approvals'`; `TAB_PARAM.planning = 'planning'`.
+- **Glyph: lucide `PenLine`.** It is the glyph Part XXV's _Drafting_ cue wears on the canvas, so "being
+  written" is one picture on the strip and on the plan. It collides with none of `Inbox` · `Wrench` ·
+  `CirclePause` · `CircleDot` · `Circle` · `CircleCheck` · `Star`, and it is not a circle, so it does not
+  read as one more status. **Not `Sparkles`:** on the strip a sparkle reads as an AI badge, and many of these
+  plans are written by an MCP agent, not Motir AI. `Sparkles` stays where § 29 put it, on the ROW, as the
+  mark of a plan.
+- **The count** is the shipped count chip (`--el-count-bg` / `--el-count-text`), `counts.planning` from
+  `HomeTabCountsDto.planning`. There is no treatment of its own. A two-digit count widens the chip and nothing
+  else (Panel 1c).
+- **The all-zero suppression rule is unchanged and now counts EIGHT**: no chip renders while all eight counts
+  are zero; when any is non-zero, every chip renders, a `0` included (Panel 1a / 1b).
+
+**THE AMENDMENT, on the record.** § 30 Panel 1 says _"The strip order and the cascade order are still the
+same: the first four tabs are the four rungs"_, and § 35.3 says _"One order for the strip and the cascade, so
+the strip still explains where the reader landed."_ **With Planning second, both sentences are false, and they
+are replaced by this one:**
+
+> **The cascade's rungs are tabs 1, 3, 4, 5 and 6 — Waiting on you → To fix → To resume → In progress → To do
+> — in the strip's order. Planning (tab 2) is never a rung.** The strip still explains where a reader landed,
+> read with Planning skipped.
+
+- **Planning is never a rung** because a plan being written needs nothing from the reader. The moment it does
+  (it is proposed), it is a review, and the review is on Waiting on you, which is already the first rung.
+  `resolveWorkbenchLanding` and `LandingCounts` (`lib/workbench/landing.ts`) do not change. `planning` lives on
+  `HomeTabCountsDto` only because the strip renders every count from that one DTO.
+- **The four rungs (five since § 35) and their order do not change.** A bare `/workbench` never lands on
+  Planning, even when it is the only non-zero count.
+- **Why second, then.** What the strip order now explains is _what you started that is not yet work_: tab 1 is
+  what is waiting on you, and tab 2 is what will arrive on tab 1 when it is written. They sit together, and the
+  work tabs follow.
+
+### 36.3 The width — measured (Panel 2)
+
+Measured in headless Chromium (Playwright, `chromium.launch()`, viewport 1280) against this mock: the summed
+`getBoundingClientRect().width` of the eight `<a>` tabs + seven 2px gaps + the 2×2px inset and border, and
+`nav.scrollWidth` inside fixed-width boxes. The content box is `viewport − 240 (rail) − 64 (lg:px-8)` at 1200,
+and `768 − 240 − 48 (sm:px-6)` at the narrowest `md` width.
+
+| strip                                      | track needed | 1200 (box 894) | `md` 768 (box 480) |
+| ------------------------------------------ | ------------ | -------------- | ------------------ |
+| **en, `88` on every tab**                  | **1155px**   | scrolls        | scrolls            |
+| **zh, `88` on every tab**                  | **984px**    | scrolls        | scrolls            |
+| en, realistic counts (Panel 0)             | 1095px       | scrolls        | scrolls            |
+| en, all counts zero (chips suppressed)     | 836px        | fits           | scrolls            |
+| en, the SHIPPED seven tabs, realistic      | 968px        | **scrolls**    | scrolls            |
+| Planning's own tab (en, count 1 digit / 2) | 125 / 132px  | —              | —                  |
+
+(The font stack is the fallback the mock resolves; § 30's 812px for six tabs measures 830px in the same render,
+so these numbers are within about 2% of the shell's.)
+
+**Verdict: the shipped `max-w-full overflow-x-auto` + per-tab `shrink-0` stands, at EVERY width.** No label is
+ever truncated (§ _Narrow_). Nothing new is added. Two facts make that the right answer rather than a shrug:
+
+- **The strip already scrolled at 1200 before this card.** Seven tabs need 968px against 894, so To resume
+  (§ 35) put Recently finished and Watching past the edge; this card widens a scroll that exists. The strip
+  fits whole from a content box of 1095px, a 1399px viewport (1459px with two-digit counts everywhere).
+- **Planning is second, so it is never the tab that scrolls away.** Tabs 1–2 are 286px, inside even the 480px
+  `md` box.
+
+**Flag, not drawn here:** a desktop strip whose last two tabs are off-screen with no visible cue is the
+real cost, and it predates this card. Whether the strip earns a scroll-edge fade (or another affordance) is a
+strip-wide decision for its own card, not a Planning one.
+
+### 36.4 The ROW — a plan, not a work item (Panels 3, 4)
+
+`WorkbenchList`'s work-item row (kind glyph, key, Your role, Assignee, Status) does not apply: a plan has none
+of those. The row is **§ 29's plan leading line on line 1, with § 30's two-line anatomy, and Part XXV's compact
+line as line 2.**
+
+**The column set:**
+
+```
+Plan (minmax(10rem, 1fr)) · Planner (220px)
+```
+
+Header row: the shipped column-header band (`--el-surface-soft`, 40px, `text-[11px] font-semibold uppercase
+tracking-wider --el-text-secondary`), labels **Plan** · **Planner**. **Measured at the 1200 viewport:** box
+892px, title track **610px**, planner track **220px**, line 2 **846px**. Every row is **75px**: line 1 at the
+shipped `h-11` (44px), line 2, and the shipped 10px bottom (`md:pb-2.5`). One plan is 75px; a page-full of
+nine is about 715px (Panel 4); the 50-row ceiling is about 3,750px, and the column header is `sticky top-0`.
+
+**Line 1 · cell 1 — WHAT IT IS FOR.** § 29's leading line, composed, never re-worded: lucide `Sparkles`
+(`h-4 w-4`, `--el-accent-on-surface`, `aria-hidden`), then `approvalGate.planApproval.row.*`:
+
+| form         | when                                       | en                         | zh                      |
+| ------------ | ------------------------------------------ | -------------------------- | ----------------------- |
+| `targeted`   | the session's first target resolves        | Plan for **{title}** + key | **{title}**的计划 + key |
+| `untargeted` | no resolvable target, the plan has a title | Plan — **{title}**         | 计划 — **{title}**      |
+| `untitled`   | neither                                    | Plan for **{project}**     | **{project}**的计划     |
+
+The words around the title are `--el-text-secondary`; the title is `--el-text`, `font-medium`, `truncate`. The
+key cell is `font-mono text-xs --el-text-secondary`; several targets read `ACME-31 +2` with every key in its
+`title` (§ 29's `moreTargets`). **The rule is `planSentenceOf` (today inside `components/approvals/ApprovalRow.tsx`), extracted to a
+shared `lib/planning/` module and called by both rows** (MOTIR-7831) — a target whose title no longer resolves falls to the next form.
+
+**Line 1 · cell 2 — WHO IS WRITING IT.** `text-xs --el-text-secondary`, `truncate`, the full string in
+`title`. A model id is `font-mono`.
+
+| `author`                              | en                    | zh                     |
+| ------------------------------------- | --------------------- | ---------------------- |
+| `source` ≠ `mcp` (the hosted planner) | Motir AI              | Motir AI               |
+| `mcp`, harness + model                | {harness} · `{model}` | {harness} · `{model}`  |
+| `mcp`, harness only                   | {harness}             | {harness}              |
+| `mcp`, model only                     | MCP agent · `{model}` | MCP 智能体 · `{model}` |
+| `mcp`, both null                      | MCP agent             | MCP 智能体             |
+
+**A long value truncates at the cell's END** (CSS ellipsis), so a long model id loses its tail first and the
+harness stays readable: `Claude Code · claude-opus-5-5[1…` (Panel 4). Harnesses are free text, so a long one
+truncates the same way (`Claude Code (prompts/plan.py)` fits). Nothing is shortened in data.
+
+**Line 2 — HOW FAR IT HAS GOT.** `<PlanProgressLine density="compact" progress={row.progress} />`, indented
+`pl-6` to the title's left edge, spanning both columns. Every state is Part XXV's, unredrawn: _Starting…_ ·
+_Settling the conversation_ · _Laying: {title}_ · _Laying the project's top level_ · _Authoring: {title}_ ·
+_+N more_ · _Drafting a new item_ · _Being written_ (never signals) · **_Stalled_** with _no activity for
+{duration}_ (warning dot, `PLAN_STALLED_AFTER_MS` = 15 min) · the dropped read (warning dot, last snapshot).
+
+**At 1, 3 and a page-full.** One row is the full anatomy with no pager and no range line (Panel 3). Three and
+nine rows are the same rows stacked, newest first (`createdAt desc`), with nothing banded and nothing grouped
+(Panel 4): every row carries its own state in words, so a list of mixed states needs no sort by state, and
+re-sorting by state would move rows under the reader every poll.
+
+**Ink.** Every text on the row is `--el-text`, `--el-text-secondary` or `--el-link`, so it clears AA on the
+page and on the `hover:bg-(--el-surface)` row tint. Nothing is muted or faint but the strip's `aria-hidden`
+glyphs (shipped).
+
+### 36.5 The scope line (Panels 0, 3, 4)
+
+**Yes, the tab says it in words**, because the tab is narrower than its name suggests and the reader cannot
+see what is excluded. One line above the list box, `text-xs --el-text-secondary`, `mb-2`, on the page ground:
+
+> Plans you asked for in **{project}** that are still being written. Plans others asked for are on the
+> [Plans page](/plans).
+
+The project name is `--el-text font-medium`; the link is `--el-link`. It shows only above rows: the empty
+state carries the same scope in its own body (36.9).
+
+### 36.6 Opening a row (Panel 0)
+
+**§ 29 Panel 4's rule, unchanged, from `planRowDestination` with `planStatus: 'generating'`:** the planning
+surface on that plan (`planSession`) when the plan has a session, else `/plans/<id>`.
+
+- **The row door** is the shipped stretched link (`absolute inset-0 z-0`), `href="/plans/<id>"`,
+  `aria-haspopup="dialog"`. A plain primary click shallow-pushes the planning surface over this tab; a
+  modified click keeps the real `/plans/<id>` href (a new tab opens the plan page).
+- **Its accessible name:** `workbench.planning.rowAria` — _Open the plan being written — {sentence}_.
+- **`planVia=planning`.** `PlanningEntrance` gains `'planning'`, and the surface's reopened line reads
+  `workbench.planning.reopened`: _Reopened from Planning · started by you · last active {when}_, with the
+  `PenLine` glyph in the slot the `approvals` line uses for `Inbox`. Only the requester ever reaches it, so
+  there is no _started by {name}_ form.
+- **Back / Close** return to `/workbench?tab=planning` — the surface is an overlay on this page, so its host
+  is this tab (§ 22.2's rule).
+- **The key is plain text, not a second door.** The TARGETED title is the quick-view door, exactly as § 29's
+  row composes § 28 DECISION 3 (`relative z-10`, `?peek=`). A second door on the key, beside a door on the
+  title naming the same work item, is two targets for one thing.
+
+### 36.7 A row while the tab is open (Panel 5)
+
+- **The read.** The tab is a client island seeded with the first page and polling `GET
+/api/workbench/planning` **every 10 s while the document is visible**; on `visibilitychange` back to visible
+  it reads once at once. Ten seconds is the compact line's finest visible step (_last activity_ moves in
+  10 s steps, §25.4), so a faster poll would buy nothing the reader can see. A request uses an
+  `AbortController` and a `seq` guard; a late response never overwrites a newer one.
+- **The times tick once a second** off the snapshot's `serverNow` (§25.4, the progress line's own tick), so
+  elapsed and last activity move between polls without a read.
+- **Progress changing:** words, counts and times swap in place; nothing animates (Part XXV C7).
+- **Stalled → recovered:** the dot and the word swap; nothing animates (C8). Stalled comes only from a read.
+- **An arrival** (a plan started elsewhere): it lands at the TOP (newest first) with § 26's neutral **New**
+  pill on line 1 until the next load. The strip count moves on the same poll.
+- **The count.** When a poll's `total` differs from the last one, the island calls `router.refresh()` once so
+  the server-rendered strip count catches up (the page-state contract, case 2 + 3).
+
+### 36.8 A plan LEAVING — HELD, with its outcome (Panel 6)
+
+**Decision: the row is HELD in place until the next load** — a tab switch, a pager move, a reload — never
+removed under the cursor. This is § 26's rule as To fix adopted it (§ 30 Panel 3), for its reason: the reader
+is watching this list, and a row that vanishes teaches them that disappearance is ambiguous. **The strip
+count drops at once**; a held row is a receipt, not a member.
+
+**The outcome is read, not guessed.** The tab's read lists only `generating` plans, so a poll learns only that
+a row LEFT. For each row that leaves, the island reads that plan once through the existing `GET
+/api/plans/<id>` (its `status` and `decisionReason`) and words the outcome from it. No new route.
+
+The held row: the `Sparkles` glyph drops (a same-size spacer keeps the alignment), the title and planner go
+`--el-text-secondary`, and **line 2 becomes a neutral `Pill` + one sentence**:
+
+| left as                                  | chip (en / zh)   | sentence                                                         | the row then opens                       |
+| ---------------------------------------- | ---------------- | ---------------------------------------------------------------- | ---------------------------------------- |
+| `planned`                                | Written / 已写好 | Ready for your review. [See it in Waiting on you]                | the planning surface — its review (§ 29) |
+| `declined` · `discarded`                 | Ended / 已结束   | Ended before it was proposed — nothing was added.                | `/plans/<id>` (decided arm)              |
+| `declined` · `abandoned` (failed)        | Stopped / 已中止 | Its planner stopped, so the plan was closed — nothing was added. | `/plans/<id>` (decided arm)              |
+| outcome not yet read, or the read failed | —                | No longer being written.                                         | `planRowDestination` on what is known    |
+
+_See it in Waiting on you_ is `--el-link`, `relative z-10`, to `/workbench?tab=approvals` — a proposed plan's
+review is found on the first tab (§ 29). **Why not _Proposed_ or _Done_:** _Written_ says the true thing the
+reader was waiting for, and the sentence says what happens next. **Why _Stopped_ and not _Failed_:**
+`abandoned` means the producer is provably gone, not that anything the reader did failed; the plan page
+records the rest.
+
+### 36.9 The EMPTY state (Panel 8)
+
+The shipped `EmptyState`: `PenLine` at `h-12` in `--el-icon-muted`, the serif `text-xl` title in `--el-text`,
+the body in `--el-text-subtitle`. It is drawn **alone** — no list box, no scope line, no pager (§ _The pager_
+Panel 10).
+
+- **Title:** _No plans being written_ / 没有正在编写的计划.
+- **Body:** _When you ask Motir AI or an agent for a plan, it waits here while it is being written, with how
+  far it has got, and moves to Waiting on you when it is ready for your review. Plans others asked for are on
+  the Plans page._
+- **Action: YES — a secondary `Button`, `Sparkles` + _Plan with AI_** (the shell's own entrance label), which
+  opens the planning surface on the active project over this tab (`withPlanningOverlay({ kind: 'project' })`).
+
+**Why it carries one, against § _Empty states_' rule.** The rule is that only a tab whose emptiness the reader
+can DO something about carries an action — To do sends you to Ready, and Recently finished, Watching and
+Waiting on you carry none because nothing a reader presses makes a row appear. **Here something does**:
+starting a plan is exactly what puts a row on this tab, and it is the reader's own act. So this is the To do
+case, not the Watching case.
+
+**The action renders only when the reader can start a plan in the active project** — the same gate the shell's
+_Plan with AI_ entrance reads. Without it the empty state carries no button (Panel 8, right), because a button
+that is refused on press is worse than none.
+
+### 36.10 More than one page — a CEILING, no pager (Panel 8)
+
+**Planning has NO pager** (§ 28 DECISION 5's form, not § _The pager_'s). A person writes a handful of plans at
+once; a pager would be a control that is almost never more than `[1]`.
+
+- **The ceiling is 50** (`PLANNING_TAB_CEILING`). MOTIR-7828's read is offset-paged; the tab reads **page 1
+  with `limit: 50` only**, and `total` says when the ceiling was reached.
+- **At the ceiling,** one note sits inside the list box under the last row: `role="note"`,
+  `border-t --el-border`, `bg-(--el-surface-soft)`, `px-4 py-2.5 text-xs --el-text-secondary`, the link
+  `font-medium --el-link` to `/plans?status=generating`:
+  _Showing your {shown} newest plans being written. The other {rest} are on the Plans page._
+- **The strip's count stays the TRUE total** (53 above a 50-row list), and the note is what says why they
+  differ. Below the ceiling, the count and the rows agree.
+
+### 36.11 Narrow (`< md`), dark, zh (Panels 9, 10, zh)
+
+- **Narrow:** the strip scrolls (36.3). The row stacks — line 1's sentence, the planner on its own line
+  (`pl-6`), then line 2 — with no column header, as every Workbench row does. The compact line takes Part
+  XXV's drop order: **last activity drops first**, then elapsed; counts never drop. A held row's link wraps
+  under its sentence. Measured rows: 81px, 110px held.
+- **Dark:** every element is an `--el-*` token, so the panel is the same markup under
+  `data-theme="dark" data-appearance-scope`.
+- **zh:** the tab is **规划** — the shipped catalogue's word for Planning, and Part XXV's pointer already reads
+  _工作台 › 规划_. Every zh string was checked against the first tab's rename: the first tab is named only as
+  **等你处理**, and **no string contains 待审批**.
+
+### 36.12 The ACCESS PATH, and the planning surface's pointer (Panel 0)
+
+**Rail → strip → Planning.** The rail's shipped _Workbench_ entry (`/workbench`, § _Where it lives_) → the
+strip → **Planning**, second. A bare `/workbench` never lands here (36.2), so the address to share is
+`/workbench?tab=planning`.
+
+**Does the planning surface owe a pointer to the tab while a plan runs? Yes — and it is already drawn.** Part
+XXV §25.2's pointer, _Follow from Workbench_ (`data-testid="plan-progress-pointer"`, shown only to the plan's
+requester, because the tab lists only theirs), links to `/workbench?tab=planning`. MOTIR-7829 builds it. This
+card draws no pointer and flags no new work item.
+
+### 36.13 Copy — every new string (`workbench.*`), en and zh
+
+| key                                       | en                                                                                                                                                                                                                          | zh                                                                                                                                       |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `workbench.tabs.planning`                 | Planning                                                                                                                                                                                                                    | 规划                                                                                                                                     |
+| `workbench.columns.plan`                  | Plan                                                                                                                                                                                                                        | 计划                                                                                                                                     |
+| `workbench.columns.planner`               | Planner                                                                                                                                                                                                                     | 规划者                                                                                                                                   |
+| `workbench.planning.scope`                | Plans you asked for in `<project>`{project}`</project>` that are still being written. Plans others asked for are on the `<link>`Plans page`</link>`.                                                                        | 你在 `<project>`{project}`</project>` 中发起、仍在编写的计划。其他人发起的计划请见`<link>`计划页`</link>`。                              |
+| `workbench.planning.planner.motir`        | Motir AI                                                                                                                                                                                                                    | Motir AI                                                                                                                                 |
+| `workbench.planning.planner.harnessModel` | {harness} · {model}                                                                                                                                                                                                         | {harness} · {model}                                                                                                                      |
+| `workbench.planning.planner.agent`        | MCP agent                                                                                                                                                                                                                   | MCP 智能体                                                                                                                               |
+| `workbench.planning.planner.agentModel`   | MCP agent · {model}                                                                                                                                                                                                         | MCP 智能体 · {model}                                                                                                                     |
+| `workbench.planning.rowAria`              | Open the plan being written — {sentence}                                                                                                                                                                                    | 打开正在编写的计划 — {sentence}                                                                                                          |
+| `workbench.planning.reopened`             | Reopened from Planning · started by you · last active {when}                                                                                                                                                                | 从“规划”重新打开 · 由你发起 · 最近活动 {when}                                                                                            |
+| `workbench.planning.left.planned`         | Written                                                                                                                                                                                                                     | 已写好                                                                                                                                   |
+| `workbench.planning.left.plannedLine`     | Ready for your review.                                                                                                                                                                                                      | 等你审阅。                                                                                                                               |
+| `workbench.planning.left.plannedLink`     | See it in Waiting on you                                                                                                                                                                                                    | 在“等你处理”中查看                                                                                                                       |
+| `workbench.planning.left.discarded`       | Ended                                                                                                                                                                                                                       | 已结束                                                                                                                                   |
+| `workbench.planning.left.discardedLine`   | Ended before it was proposed — nothing was added.                                                                                                                                                                           | 在提出之前已结束——没有添加任何内容。                                                                                                     |
+| `workbench.planning.left.abandoned`       | Stopped                                                                                                                                                                                                                     | 已中止                                                                                                                                   |
+| `workbench.planning.left.abandonedLine`   | Its planner stopped, so the plan was closed — nothing was added.                                                                                                                                                            | 其规划者已停止，计划已关闭——没有添加任何内容。                                                                                           |
+| `workbench.planning.left.unknownLine`     | No longer being written.                                                                                                                                                                                                    | 已不再编写。                                                                                                                             |
+| `workbench.planning.ceiling`              | Showing your {shown} newest plans being written. The other {rest} are on the `<link>`Plans page`</link>`.                                                                                                                   | 显示你最新的 {shown} 个正在编写的计划。其余 {rest} 个请见`<link>`计划页`</link>`。                                                       |
+| `workbench.empty.planning.title`          | No plans being written                                                                                                                                                                                                      | 没有正在编写的计划                                                                                                                       |
+| `workbench.empty.planning.body`           | When you ask Motir AI or an agent for a plan, it waits here while it is being written, with how far it has got, and moves to Waiting on you when it is ready for your review. Plans others asked for are on the Plans page. | 当你请 Motir AI 或智能体编写计划时，计划会在编写期间显示在这里，并附上进度；写好后会移到“等你处理”等你审阅。其他人发起的计划请见计划页。 |
+| `workbench.empty.planning.action`         | Plan with AI                                                                                                                                                                                                                | 用 AI 规划                                                                                                                               |
+
+**Reused verbatim, never re-keyed:** `approvalGate.planApproval.row.targeted` / `untargeted` / `untitled` /
+`moreTargets` (the leading line), every `planReview.*` key of Part XXV §25.13 (the compact line),
+`workbench.live.new` (_New_ / 新增) and `workbench.live.reconnecting` (_Reconnecting…_ / 正在重新连接…).
+The reader-facing noun is _plan_ and _item_, never _card_.
+
+### 36.14 Token and shape roles
+
+| element                        | colour (`--el-*`)                                                                                                                            | shape                                                                                                             |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| tab (shipped)                  | active `--el-page-bg` · `--el-text-strong` · glyph `--el-tabnav-active`; else `--el-text-secondary`, glyph `--el-text-faint` (`aria-hidden`) | `--height-control`, `--radius-control`, `--spacing-control-x`, `--shadow-subtle`                                  |
+| count chip (shipped)           | `--el-count-bg` / `--el-count-text`                                                                                                          | `--radius-badge`, `--spacing-chip-x`                                                                              |
+| scope line                     | `--el-text-secondary`; project `--el-text`; link `--el-link`                                                                                 | —                                                                                                                 |
+| list box · header band         | `--el-border`; header `--el-surface-soft`, `--el-text-secondary`                                                                             | `--radius-card`                                                                                                   |
+| row                            | `--el-border` divider; hover `--el-surface`; focus `--focus-ring-color`                                                                      | —                                                                                                                 |
+| plan glyph `Sparkles`          | `--el-accent-on-surface` (`aria-hidden`)                                                                                                     | 16px                                                                                                              |
+| sentence frame · title · key   | `--el-text-secondary` · `--el-text` (held: `--el-text-secondary`) · `--el-text-secondary` mono                                               | —                                                                                                                 |
+| planner                        | `--el-text-secondary`                                                                                                                        | —                                                                                                                 |
+| compact line (Part XXV)        | `--el-text-secondary`, words `--el-text`; dot `--el-status-in-progress` / `--el-warning`                                                     | dot `--radius-badge`                                                                                              |
+| held chip · New · Reconnecting | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary` (neutral `Pill`)                                                                 | `--radius-badge`, `--spacing-chip-x/y`                                                                            |
+| held sentence · its link       | `--el-text-secondary` · `--el-link`                                                                                                          | —                                                                                                                 |
+| ceiling note                   | `--el-surface-soft`, `--el-border`, `--el-text-secondary`, link `--el-link`                                                                  | —                                                                                                                 |
+| empty state                    | glyph `--el-icon-muted`, title `--el-text`, body `--el-text-subtitle`; button `--el-button-border` / `--el-text`, hover `--el-surface`       | `Card`: `--radius-card`, `--spacing-card-padding`; `Button`: `--radius-btn`, `--height-btn-md`, `--spacing-btn-x` |
+
+No `--el-text-muted` or `--el-text-faint` carries text anywhere in this section.
+
+### 36.15 How the asset was produced
+
+Every element is the shipped components' markup — `WorkbenchTabs` (with its `shrink-0`), `WorkbenchList`'s
+list box and header band, `ApprovalRow`'s plan row cell, `EmptyState` / `Card` / `Button` (secondary) / `Pill`
+(neutral) from `@motir/design-system`, and Part XXV's compact line from its sheet 3 — written from the source
+on `origin/main` @ `ca0055f7b`. The first stylesheet is Tailwind v4.3.0 compiled over this document's class
+attributes with `@import 'tailwindcss'` + `packages/design-system/theme.css` (the guard's own entry), minus
+theme.css's style-vignette rules, which no mock carries. Every glyph is lucide 1.16.0's `__iconNode`, copied
+from the installed `lucide-react`. It was rendered and looked at in headless Chromium, panel by panel.
+
+### What this asset does NOT decide
+
+- **Everything inside the compact progress line** — its words, threshold, ticking and ARIA (Part XXV,
+  MOTIR-7821; built by MOTIR-7829).
+- **The read's membership and query** (MOTIR-7828) beyond the page size it reads (36.10).
+- **The landing cascade** (unchanged), **the Plans page**, plans asked for by others, a pause or cancel
+  control, an ETA or percentage, a notification, and any pointer on the planning surface beyond Part XXV's.
+- **A scroll-edge affordance for the strip** (the flag in 36.3).
+
+### GIVES / TAKES
+
+| card                                 | GIVES                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | TAKES                                                                                      |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **MOTIR-7831** (the tab's code)      | ELEMENT: the whole surface — `planning` second in `WORKBENCH_TABS` / `TAB_PARAM`, `PenLine`, the count and the eight-way suppression, the scope line, the row (§ 29 sentence via the extracted `planSentence`, the planner forms, the compact line), the door and `planVia=planning` with its reopened line, the 10 s poll, the held leave with its one `GET /api/plans/<id>` per leaving row, the empty state and its gated action, the 50 ceiling note, narrow, every 36.13 key | the read and its count (MOTIR-7828); `<PlanProgressLine density="compact" />` (MOTIR-7829) |
+| **MOTIR-7828** (the reader's read)   | PREMISE: the row reads `planId`, `sessionId`, `title`, `projectName`, `targets` (key + title or null), `author.{source, harness, model}`, `createdAt`, `progress` — exactly its DTO; the page size is **50**, read as page 1 only, with `total` telling the ceiling                                                                                                                                                                                                               | nothing                                                                                    |
+| **MOTIR-7821** (the progress design) | nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | **nothing** — its compact line is composed, unchanged                                      |
+| **MOTIR-7829** (the progress line)   | nothing new: the pointer it builds (§25.2) is the surface's way to this tab                                                                                                                                                                                                                                                                                                                                                                                                       | nothing                                                                                    |
+| **MOTIR-7835** (E2E / acceptance)    | `data-testid`s: `workbench-tab-planning`, `planning-row-<planId>`, `planning-scope`, `planning-empty`, `planning-empty-action`, `planning-ceiling`, plus Part XXV's `plan-progress-compact`                                                                                                                                                                                                                                                                                       | nothing                                                                                    |
+| **§ 30 Panel 1 · § 35.3**            | Nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | The _strip order = cascade order_ sentence, replaced by 36.2's                             |
+
+**Do the receiving cards' estimates still fit?** **MOTIR-7828 (45 min): yes, unchanged** — the fields above are
+its DTO as written, the page size is a constant it already takes from this design, and the ceiling needs
+nothing beyond `total`. **MOTIR-7831 (65 min): yes, at the top of its range.** Everything it was already
+scoped for is here; this design adds two small pieces it did not name — one `GET /api/plans/<id>` per leaving
+row to word the held outcome (an existing route, no new endpoint), and the `planVia=planning` entrance with its
+reopened line, which the card already allowed _"only if the design names one"_ (it does). The width verdict
+adds nothing to build: the shipped scroll stands.
