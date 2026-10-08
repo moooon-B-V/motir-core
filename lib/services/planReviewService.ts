@@ -8,6 +8,7 @@ import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
+import { planProgressService } from '@/lib/services/planProgressService';
 import { toPlanStepDto } from '@/lib/mappers/planMappers';
 import { DERIVED_EVENT_KINDS, mergeTimeline, revisionCount } from '@/lib/plans/timeline';
 import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
@@ -1868,6 +1869,27 @@ export const planReviewService = {
     // is drawn, the truncation arm reads what was dropped.
     const arrivalLevelSize = Math.min(arrivalLevelTotal, TREE_LEVEL_MAX_TAKE);
 
+    // THE PLAN'S PROGRESS (Story MOTIR-7820 · MOTIR-7825) — the one derivation,
+    // built from the items and steps this read already holds. The committed rows
+    // it read for targets and ancestors already name most step targets, so the
+    // poll gains at most one small titles read.
+    const knownTitles = new Map<string, string>();
+    for (const row of ancestorById.values()) knownTitles.set(row.id, row.title);
+    const progress = await planProgressService.snapshotForReview(
+      {
+        id: plan.id,
+        projectId: plan.projectId,
+        status: plan.status,
+        createdAt: plan.createdAt,
+        lastActivityAt,
+        authorSource: plan.authorSource,
+      },
+      plan.items,
+      inFlightSteps,
+      ctx,
+      knownTitles,
+    );
+
     return {
       id: plan.id,
       projectId: plan.projectId,
@@ -1903,6 +1925,7 @@ export const planReviewService = {
         : null,
       lastActivityAt,
       inFlightSteps,
+      progress,
       gate,
       conversation,
       history,

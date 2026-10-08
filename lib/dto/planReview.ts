@@ -24,6 +24,7 @@ import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ApprovalGateStateDTO, PlanGateHeldDTO } from '@/lib/dto/approvalGate';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { PlanStepDto } from '@/lib/dto/plans';
+import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
 import type { ExecutorDto, WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import type {
   PlanItemOpDto,
@@ -1133,6 +1134,17 @@ export interface PlanReviewDto {
    * `getPlanReview` always sets it.
    */
   inFlightSteps?: PlanStepDto[];
+  /**
+   * The plan's PROGRESS — the ONE derivation's server half (Story MOTIR-7820 ·
+   * MOTIR-7825; `lib/plans/planProgress.ts`): the steps resolved to phrases and
+   * titles (withdrawn targets dropped, untargeted steps kept), N of M authored,
+   * the start, the last activity and the server instant it was built at.
+   * NON-NULL EXACTLY while the plan is `generating`. A surface reads it through
+   * `readPlanProgress(progress, serverNow(…))` and derives nothing itself.
+   * OPTIONAL on the type only so hand-built review fixtures stay valid;
+   * `getPlanReview` always sets it.
+   */
+  progress?: PlanProgressSnapshot | null;
 
   /**
    * THE PLAN'S QUESTION — its latest `plan_approval` gate, as the render read returns it

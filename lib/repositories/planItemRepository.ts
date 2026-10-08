@@ -1,5 +1,6 @@
 import { Prisma, type Plan, type PlanItem, type PlanStatus } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
+import type { PlanProgressAddRow } from '@/lib/plans/planProgress';
 
 /**
  * The `PlanItem` create shape, NAMED BY THE OWNING REPOSITORY
@@ -14,6 +15,12 @@ export type PlanItemCreateInput = Prisma.PlanItemUncheckedCreateInput;
  * alias; `Prisma.PlanItemUncheckedUpdateInput` itself is named only here.
  */
 export type PlanItemUpdateInput = Prisma.PlanItemUncheckedUpdateInput;
+
+/**
+ * One row of {@link planItemRepository.findProgressRowsByPlanIds}: an `add`'s
+ * identity plus the authored-test FLAGS, never its bodies (MOTIR-7825).
+ */
+export type PlanProgressRow = PlanProgressAddRow & { planId: string };
 
 /**
  * One row of {@link planItemRepository.findHistoryByWorkItemId}: the proposal's
@@ -281,6 +288,50 @@ export const planItemRepository = {
       _count: { _all: true },
     });
     return new Map(rows.map((r) => [r.planId, r._count._all]));
+  },
+
+  /**
+   * The `add` rows of many plans, as the PROGRESS derivation reads them (Story
+   * MOTIR-7820 · MOTIR-7825) — ONE query for a whole page of generating plans.
+   * Every authored-test flag is computed from `proposed_fields` IN SQL, so no
+   * description or explanation body crosses the wire for a list. The flags are
+   * the SQL twin of `progressRowOfAdd` (`lib/plans/planProgress.ts`): a body
+   * counts when it is a string with a non-whitespace character; a sizing field
+   * counts when it is present, not JSON null and not `''`.
+   */
+  async findProgressRowsByPlanIds(
+    planIds: readonly string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<PlanProgressRow[]> {
+    if (planIds.length === 0) return [];
+    const client = tx ?? dbRead;
+    return client.$queryRaw<PlanProgressRow[]>`
+      SELECT
+        pi."id"            AS "id",
+        pi."plan_id"       AS "planId",
+        pi."work_item_id"  AS "workItemId",
+        pi."parent_ref"    AS "parentRef",
+        pi."proposed_fields"->>'kind'                AS "kind",
+        COALESCE(pi."proposed_fields"->>'title', '')  AS "title",
+        (jsonb_typeof(pi."proposed_fields"->'descriptionMd') = 'string'
+          AND (pi."proposed_fields"->>'descriptionMd') ~ '\\S') IS TRUE AS "hasDescription",
+        (jsonb_typeof(pi."proposed_fields"->'explanationMd') = 'string'
+          AND (pi."proposed_fields"->>'explanationMd') ~ '\\S') IS TRUE AS "hasExplanation",
+        (jsonb_typeof(pi."proposed_fields"->'type') <> 'null'
+          AND (pi."proposed_fields"->>'type') <> '') IS TRUE AS "hasType",
+        (jsonb_typeof(pi."proposed_fields"->'executor') <> 'null'
+          AND (pi."proposed_fields"->>'executor') <> '') IS TRUE AS "hasExecutor",
+        (jsonb_typeof(pi."proposed_fields"->'storyPoints') <> 'null'
+          AND (pi."proposed_fields"->>'storyPoints') <> '') IS TRUE AS "hasStoryPoints",
+        (jsonb_typeof(pi."proposed_fields"->'estimateMinutes') <> 'null'
+          AND (pi."proposed_fields"->>'estimateMinutes') <> '') IS TRUE AS "hasEstimate",
+        (jsonb_typeof(pi."proposed_fields"->'difficulty') <> 'null'
+          AND (pi."proposed_fields"->>'difficulty') <> '') IS TRUE AS "hasDifficulty"
+      FROM "plan_item" pi
+      WHERE pi."plan_id" = ANY(${[...planIds]}::text[])
+        AND pi."op" = 'add'
+      ORDER BY pi."plan_id", pi."created_at", pi."id"
+    `;
   },
 
   /** A single PlanItem by id. Optional `tx` joins a surrounding transaction
