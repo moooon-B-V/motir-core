@@ -109,7 +109,13 @@ function decode(html: string): string {
 
 /** The rendered text, tags dropped — for copy that interpolates a `<b>`. */
 function text(html: string): string {
-  return html.replace(/<[^>]+>/g, '');
+  // Repeated until stable, so a tag split by another tag cannot survive a pass.
+  let out = html;
+  for (let prev = ''; prev !== out; ) {
+    prev = out;
+    out = out.replace(/<[^>]*>/g, '');
+  }
+  return out;
 }
 
 async function list(params: Record<string, string> = {}): Promise<string> {
