@@ -19,17 +19,22 @@
 // number they cannot check against the terminal they ran it in. Per-viewer local
 // time is a real want and a separate one — it needs the shipped locale seam.
 
-const RUN_TIME = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-  timeZone: 'UTC',
-});
-
-/** `"29 Aug, 14:02 UTC"` — one run timestamp, identically on client and server. */
-export function formatRunInstant(iso: string): string {
-  return `${RUN_TIME.format(new Date(iso))} UTC`;
+/**
+ * `"29 Aug, 14:02 UTC"` — one run timestamp, identically on client and server,
+ * in the reader's language (`7. Okt., 14:02 UTC` under `de`, MOTIR-7771). The
+ * 24-hour clock is kept in every language with `hourCycle: 'h23'`: it is the
+ * shape a terminal prints, so the label stays checkable against it.
+ */
+export function formatRunInstant(iso: string, locale: string): string {
+  const time = new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'UTC',
+  });
+  return `${time.format(new Date(iso))} UTC`;
 }
 
 /**

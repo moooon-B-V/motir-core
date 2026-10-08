@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn, POST_AUTH_LANDING } from './_helpers/shell-session';
+import { setReaderLanguage } from './_helpers/reader-language';
 import { signUp as apiSignUp, createProject, TEST_PASSWORD } from './_helpers/work-item-setup';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { watchersService } from '@/lib/services/watchersService';
@@ -616,7 +617,7 @@ test.describe('the pager and the kind order', () => {
 
     // 10 ── `zh`. The pager's range line and its controls' accessible names are
     //       the Chinese strings, so an untranslated control fails the walk.
-    await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: page.url() }]);
+    await setReaderLanguage(page, PAGER_OWNER, 'zh');
     await page.goto('/workbench?tab=todo');
     await expect(page.getByText(/显示第 1–25 项，共 61 项/)).toBeVisible();
     await expect(page.getByRole('navigation', { name: '分页' })).toBeVisible();

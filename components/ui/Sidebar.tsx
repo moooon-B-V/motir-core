@@ -184,7 +184,7 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
       <span
         aria-disabled="true"
         className={cn(
-          'flex h-(--height-control) cursor-default select-none items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x)',
+          'flex min-h-(--height-control) cursor-default select-none items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y)',
           'font-sans text-sm text-(--el-text-faint)',
         )}
       >
@@ -194,18 +194,22 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
         >
           {item.icon}
         </span>
-        <span className="flex-1 truncate">{item.label}</span>
+        <span className="min-w-0 flex-1">{item.label}</span>
         {item.badge ? <span className="shrink-0">{item.badge}</span> : null}
       </span>
     );
   }
 
+  // The row's height is a MINIMUM and its label wraps at a word boundary rather
+  // than truncating: a translated label ("Registre des approbations") can run
+  // wider than the 240px rail, and a cut-off nav label is unreadable. One line
+  // still renders at `--height-control` (MOTIR-7759).
   return (
     <a
       href={item.href}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x)',
+        'flex min-h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y)',
         'font-sans text-sm transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
         isActive &&
@@ -230,7 +234,7 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
       >
         {item.icon}
       </span>
-      <span className="flex-1 truncate">{item.label}</span>
+      <span className="min-w-0 flex-1">{item.label}</span>
       {item.badge ? <span className="shrink-0">{item.badge}</span> : null}
       {item.kbd ? (
         <kbd className="rounded-(--radius-kbd) border border-(--el-sidebar-border) bg-(--el-page-bg) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[10px] text-(--el-text-muted)">

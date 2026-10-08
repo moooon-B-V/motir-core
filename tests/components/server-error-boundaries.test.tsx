@@ -2,8 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
+import { locales } from '@/lib/i18n/locales';
 
 // MOTIR-6855 (Bug MOTIR-6776 · design MOTIR-6854) — the three error boundaries.
 //
@@ -141,11 +144,36 @@ describe('app/global-error.tsx — state 3, the root failed (no next-intl provid
     expect(screen.getByTestId('locale').textContent).toMatch('zh');
   });
 
+  // MOTIR-7757: with no cookie the browser's WHOLE preference list is matched the
+  // way the server's step 3 matches Accept-Language, so a regional variant lands
+  // on its base language instead of falling through to English.
+  it('matches the browser preference list when there is no cookie (pt-BR → pt)', () => {
+    const spy = vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['pt-BR', 'en']);
+    try {
+      function Probe() {
+        return <span data-testid="locale">{useGlobalErrorLocale()}</span>;
+      }
+      render(<Probe />);
+      expect(screen.getByTestId('locale').textContent).toBe('pt');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('keeps its static copy equal to the catalogs, key for key, in every locale', () => {
-    for (const [locale, messages] of [
-      ['en', enMessages],
-      ['zh', zhMessages],
-    ] as const) {
+    for (const locale of locales) {
+      const messages = JSON.parse(
+        readFileSync(join(process.cwd(), 'messages', `${locale}.json`), 'utf8'),
+      ) as {
+        common: { retry: string };
+        errors: {
+          notFound: { homeAction: string };
+          serverError: Record<
+            'appTitle' | 'appBody' | 'retrying' | 'reference' | 'copyReference' | 'copied',
+            string
+          >;
+        };
+      };
       const s = messages.errors.serverError;
       expect(GLOBAL_ERROR_COPY[locale]).toEqual({
         title: s.appTitle,

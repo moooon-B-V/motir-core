@@ -14,6 +14,7 @@ asset was drawn.
 | **Legal agreement**                   | **`legal-agreement.mock.html`** (HTML mock)                      | Two surfaces, one agreement (Story 8.4 · MOTIR-3679): the notice at the sign-up card's FOOT — on BOTH steps, because `Continue with Google` creates an account from step 1 and never saw the old one — and the re-consent interstitial a material change holds a signed-in reader on. **Gates MOTIR-1135**; for the agreement element it SUPERSEDES `03-signup-desktop.png`, and for everything else on that screen it does not.                           |
 | **OAuth consent**                     | **`oauth-consent.mock.html`** (HTML mock)                        | The page an MCP client’s browser redirect lands on (Story MOTIR-6973 · MOTIR-6980): the app asking and where it returns, one workspace, all projects or one, the grant in the token picker’s columns, Approve / Deny, and the signed-out, no-workspace, invalid-request, approved and denied states. **Gates MOTIR-6985.** See § OAuth consent.                                                                                                            |
 | **OAuth consent — pinned action bar** | **`oauth-consent--sticky-actions.mock.html`** (HTML mock, delta) | MOTIR-7379: the consent card widens to 64rem in two panes, and the summary + Deny + Approve and connect move into a bar pinned to the bottom of the viewport. Amends § OAuth consent. **Gates MOTIR-7380.** See § OAuth consent — the pinned action bar.                                                                                                                                                                                                   |
+| **Language control**                  | **`auth-frame--language-control.mock.html`** (HTML mock, delta)  | MOTIR-7746: one language `Combobox` in the `(auth)` frame's top-right corner, on the wash and outside the card, so every signed-out route inherits it at zero card height — rest, open (the eleven endonyms), switched, pending, failed, sign-up, invite arrival, `/device` signed out and wide confirm, mobile, dark. Amends § The frame every screen inherits. **Gates the build card.** See § The language control on the signed-out frame.             |
 | CLI hand-off                          | `../cli-connect/cli-connect.mock.html`                           | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                                                                                                                                                                                                                                                                                     |
 | Brand lockup                          | `../brand/brand-mark.mock.html` §7b                              | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                                                                                                                                                                                                                                                                               |
 
@@ -1835,3 +1836,284 @@ first paint.
 The board's frames print their own measurements (page height, bar height, where the bar's top
 sits, stuck or at rest) from a review-only script; the numbers in this section are those. Light
 and dark were both rendered in headless Chromium; no image is part of the asset.
+
+## The language control on the signed-out frame
+
+**Asset:** `auth-frame--language-control.mock.html` (HTML mock, a DELTA, 13 panels) ·
+**Card:** MOTIR-7746 · **Builds it:** [Build the language control on the signed-out pages](motir:cmuyo0izp0047huoi97drvvw6).
+**Amends** § _The frame every screen inherits_ above: the `(auth)` frame in `app/(auth)/layout.tsx`
+gains ONE control, so every route in the group inherits it the way it inherits the lockup. The
+fold budget it must not spend is the one `../cli-connect/design-notes.md` § _It MUST fit one
+screen_ measured for `/device`. Neither that file, `cli-connect.mock.html`, `auth-screens.pen`,
+its exports, nor any other mock in this area is edited.
+
+**What it is.** A person with no session — a browser language that picked the wrong one of the
+eleven, a borrowed machine, an invitee from a mail link — chooses the language of the signed-out
+pages. The choice is `setLocale` (`lib/i18n/actions.ts`), which, signed out, writes this browser's
+`NEXT_LOCALE` cookie and nothing else. The story seeds the new account's language from that
+cookie at sign-up, so this control is also how a person picks their account language before the
+account exists. It is not the Settings pane's control and does not replace it: once signed in,
+the account language rules and Settings → Account → Language changes it.
+
+### Where it sits — the decision, and the numbers that made it
+
+**Chosen: the page's top-right corner, on the wash, outside the card.** The frame's outer `div`
+becomes `relative`; the control is its first child, `absolute top-2 right-6 z-10`, at every
+width. It is outside `<main>`, so it is out of the centred column's flow: it adds nothing to the
+card and nothing to the page. It ends at 8 + 36 = **44px**, inside the frame's 48px `py-12` top
+padding, so on every screen that keeps `py-12` it cannot sit on the card at any width.
+
+**Measured.** Chromium (Playwright, headless, the sandbox's preinstalled build) against
+this mock: each viewport is drawn at its real size, the card (or the page) is measured, the
+control's node is removed from that viewport, and it is measured again. The harness lived in the
+run's scratchpad and is not part of the asset. Every figure is CSS px.
+
+| Screen                              | Viewport | What is measured                 | With the control | Without   | Δ   |
+| ----------------------------------- | -------- | -------------------------------- | ---------------- | --------- | --- |
+| **/sign-in step 1** (Panel 1)       | 1280×900 | card height                      | **722**          | **722**   | 0   |
+| /sign-in step 1 — after 日本語 (P3) | 1280×900 | card height                      | 812              | 812       | 0   |
+| /sign-in step 1 — failed (P5)       | 1280×900 | card height                      | 722              | 722       | 0   |
+| /sign-up step 1 · step 2 (P6)       | 640×900  | card height                      | 735.5 · 696.5    | same      | 0   |
+| /sign-in?next=/invite/accept… (P7)  | 1280×900 | card height                      | 728              | 728       | 0   |
+| /device signed out (P8)             | 1280×900 | card height                      | 523.5            | 523.5     | 0   |
+| /sign-in step 1 — dark (P11)        | 1280×900 | card height                      | 722              | 722       | 0   |
+| /sign-in step 1 — mobile (P10)      | 375×812  | card height                      | 731              | 731       | 0   |
+| **/device wide confirm** (P9)       | 1366×648 | page height (card + `py-8`)      | **717.4**        | **717.4** | 0   |
+|                                     |          | Approve / Deny end at            | 665.4            | 665.4     | 0   |
+| /device wide confirm, 3 scope rows  | 1366×648 | page height · Approve / Deny end | 590.4 · 567.2    | same      | 0   |
+
+The Δ column is the claim, and it is zero everywhere: the control costs no card and no page any
+height. The `/device` rows need a word, because they are two different screens:
+
+- **The 622px baseline** (`app/(auth)/layout.tsx`'s docstring: card 558, page 622, both CTAs
+  ending at 590, no scroll at 1366×648) was measured on the confirm screen as
+  `../cli-connect/design-notes.md` drew it, with three scope rows. The mock's reconstruction of
+  that screen measures **590.4px**, its CTAs ending at **567.2px** — 32px short of the shipped
+  figure (the mock's font metrics and callout wrap are not the app's), and identical with and
+  without the control. On that screen the CTAs end above the fold either way.
+- **The screen as it renders today** lists every key of `CLI_TOKEN_GRANT` (ten:
+  `grantedPermissionMeta` in `DeviceApproval`), not three. Drawn that way (Panel 9), the
+  reconstruction measures **717.4px** with the CTAs ending at **665.4px — below the 648px fold,
+  with or without the control.** This is not something the control does, and it is not verified
+  against the running app: it is a reconstruction, and it is 32px short at three rows. It is
+  recorded here because the docstring's 622 and the shipped grant now disagree, and somebody
+  should measure the live page (see the planning flags).
+
+**What the corner measures against the card.** At 1280 the trigger is 117.7 × 36 and its right
+edge is 24px from the viewport's; the open list (117.7 × 266) ends 274px clear of the card's
+right edge. At 1366 on `/device` it is 221px clear of the 40rem card. At 375 the trigger's right
+edge meets the card's (both at x 351) and ends at y 44, with the card starting at y 48.
+
+**The alternative that lost: a footer outside the column's flow** (`absolute bottom-6`, centred
+under the card — the Google and Atlassian placement below). It costs the card nothing either, so
+it was measured rather than dismissed:
+
+| Screen                       | Viewport | Page | Footer spans | Card ends | Result                                          |
+| ---------------------------- | -------- | ---- | ------------ | --------- | ----------------------------------------------- |
+| /sign-in step 1              | 1280×900 | 900  | 840–876      | 811       | clear                                           |
+| /sign-up step 2              | 1280×900 | 900  | 840–876      | 798       | clear                                           |
+| /sign-in step 1              | 375×812  | 827  | 767–803      | 779       | **overlaps the card's last 12px**               |
+| /device wide (today's grant) | 1366×648 | 717  | 657–693      | 685       | **overlaps the card and starts below the fold** |
+| /device wide (622 baseline)  | 1366×648 | 648  | 588–624      | 603       | **overlaps the card; 2px over the CTAs (590)**  |
+
+So it loses on three counts: it collides with the card wherever the page is tall enough to
+matter (and the only fix, bottom padding for it, is page height); it is below the fold whenever
+the page scrolls, which is exactly the phone a person on a borrowed machine is holding; and it
+is LAST in the DOM and the tab order, behind the whole form, when the person who needs it is the
+one who cannot read that form. The corner is first in the DOM, first in the tab order, and on
+screen at first paint on every panel measured.
+
+An **in-flow footer** (a row under the card, inside `<main>`) is worse on `/device`: 769.4px in
+the reconstruction, and 622 + 16 + 36 = 674px on the baseline — past 648 for a control.
+
+**Ruled out: inside the card.** A row of `--height-control` in the card pays the card's `gap-8`
+too: the reconstruction's wide card goes 653.4 → 753.4px (page 817.4), and on the baseline it is
+622 + 36 + 32 = 690px — Approve/Deny below the fold, the same arithmetic the layout docstring
+used to suppress the 28px lockup on that screen. A control that has to be absent on the one
+screen that needs the room is not the frame's control, so the card was never a candidate.
+
+**One frame change the corner needs, below `lg`.** `data-auth-wide` tightens the page to `py-8`
+(32px), and between 640px and roughly 930px the 40rem card sits under the corner, so a trigger
+ending at 44px would overlap it there. The tightening exists for the 1366×648 fold; it is scoped
+to `lg:` (`lg:has-[[data-auth-wide]]:py-8`), so below 1024px the wide screen keeps `py-12` and
+the corner stays clear. At ≥ 1024px the 40rem card is at least 50px clear of the trigger
+horizontally (192px margin against 24 + 118). That costs `/device` 32px of PAGE height below
+`lg`, where no fold budget was ever measured, and no card height anywhere.
+
+### Panels
+
+| #   | Frame         | What it shows                                                                                   |
+| --- | ------------- | ----------------------------------------------------------------------------------------------- |
+| 1   | 1280×900      | Rest — /sign-in step 1, the email typed, the control in the corner                              |
+| 2   | 1280×900      | Open — the eleven, English `aria-selected="true"`, keyboard on 日本語, the list beside the card |
+| 3   | 1280×900      | Switched — 日本語: Japanese copy, the same email in the field, focus back on the trigger        |
+| 4   | 1280×900      | Pending — spinner in the chevron's slot, `aria-busy`, the form untouched                        |
+| 5   | 1280×900      | Failed — the quiet line under the trigger, with **Try again**                                   |
+| 6   | 640×900 twice | Sign-up step 1 and step 2, in Deutsch                                                           |
+| 7   | 1280×900      | Invite arrival — `/sign-in?next=/invite/accept?token=…`, in 中文                                |
+| 8   | 1280×900      | `/device` signed out (`DeviceSignedOut`)                                                        |
+| 9   | 1366×648      | `/device` wide confirm, with the page measurement                                               |
+| 10  | 375×812 twice | Mobile — rest and open                                                                          |
+| 11  | 1280×900      | Dark — rest                                                                                     |
+| 12  | 1280×900      | Dark — open                                                                                     |
+| 13  | 1280×900      | Open — the list scrolled to its end (Polski, Português)                                         |
+
+**Placeholder copy.** The Japanese (P3), Chinese (P7) and German (P6) page copy is taken from
+`messages/ja.json`, `messages/zh.json` and `messages/de.json` as they stand on this branch. It
+stands in for the catalogue work items' final text; the design decides none of it. CJK renders
+in the current Type axis fallback — [Per-language font sets](motir:cmuyo0huo002shuoisw6b7k9y)
+owns the fonts, which is why P3's serif headline wraps as it does.
+
+### Per element — primitive, colour, shape
+
+| Element            | Primitive / markup                                                                                  | Colour (`--el-*`)                                                                             | Shape token                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Position           | `div.absolute.top-2.right-6.z-10`, first child of the frame's now-`relative` outer `div`            | —                                                                                             | layout offsets (page gutter), not a surface                                |
+| Trigger            | `Combobox`'s own trigger, `className="w-auto"`; `role="combobox"`, `aria-haspopup="listbox"`        | fill `--el-page-bg` · border `--el-border` · focus ring `--focus-ring-color`                  | `--height-control` · `--spacing-control-x` · `--radius-input`              |
+| Glyph              | lucide `Languages`, 16px, `aria-hidden`, in the trigger's leading slot                              | `--el-text-secondary` (6.80:1 on the page fill)                                               | `ICON_SLOT`                                                                |
+| Endonym            | the selected option's label, `lang` = that locale                                                   | `--el-text`                                                                                   | text-sm                                                                    |
+| Chevrons           | lucide `ChevronsUpDown`, `aria-hidden` (the primitive's)                                            | `--el-icon-muted` (a glyph, not text)                                                         | 16px                                                                       |
+| Menu               | the Combobox menu: `w-max max-w-[18rem] p-1`, opens below, **end-aligned** to the trigger           | `--el-page-bg` · border `--el-border`                                                         | `--radius-card` · `--shadow-elevated`                                      |
+| Listbox            | `role="listbox"`, named by the trigger's label; `max-h-64` (8 rows; the last three scroll)          | —                                                                                             | —                                                                          |
+| Option             | `role="option"` + `lang` + `aria-selected`; label = endonym                                         | `--el-text`                                                                                   | `--spacing-control-x/y` · `--radius-control`                               |
+| Option — active    | the `aria-activedescendant` row                                                                     | `--el-option-active-bg` + inset ring `--focus-ring-color`                                     | `--radius-control`                                                         |
+| Option — selected  | lucide `Check`, `aria-hidden`                                                                       | `--el-accent-on-surface`                                                                      | 16px                                                                       |
+| Pending            | `LoaderCircle` spinning in the chevron's 16px slot; `aria-busy="true"`; sr-only `role="status"`     | `--el-icon-muted`                                                                             | no size change (117.7 × 36 at rest and pending)                            |
+| Failed — line      | `p role="status"` (polite), `absolute top-full mt-1 right-0`, `whitespace-nowrap`, wraps below `sm` | fill `--el-page-bg` · border `--el-border` · text `--el-text`                                 | `--spacing-tooltip-x/y` · `--radius-control` · `--shadow-subtle` · text-xs |
+| Failed — glyph     | lucide `CircleAlert`, 14px, `aria-hidden`                                                           | `--el-danger-on-surface` (≥ 4.77:1 on the page in all 20 contexts) — never `--el-danger-text` | 14px                                                                       |
+| Failed — Try again | `button`, `RotateCcw` 14px + label; repeats the same choice                                         | `--el-link`                                                                                   | `--radius-control` (focus ring)                                            |
+
+**No ink touches the wash.** The trigger, the menu and the failed line each carry their own
+`--el-page-bg` fill, so every word of the control sits on the page white (or the dark page), where
+`--el-text`, `--el-text-secondary` and `--el-link` all clear AA. `--el-text-muted` and
+`--el-text-faint` are used nowhere in the control; on `--el-auth-wash` they would fail.
+
+### Copy — the new `auth.language.*` keys
+
+| Key                       | en                              | zh                      | Where                                           |
+| ------------------------- | ------------------------------- | ----------------------- | ----------------------------------------------- |
+| `auth.language.label`     | `Language: {language}`          | `语言：{language}`      | the trigger's accessible name and the listbox's |
+| `auth.language.switching` | `Switching to {language}…`      | `正在切换到{language}…` | the pending state's sr-only status              |
+| `auth.language.failed`    | `Couldn’t change the language.` | `无法切换语言。`        | the failed line                                 |
+| `auth.language.retry`     | `Try again`                     | `重试`                  | the failed line's button                        |
+
+`{language}` is always an **endonym** from `localeLabel`, wrapped in a span with that locale's
+`lang`, so a reader announces 日本語 in Japanese inside an English sentence. The option labels are
+`localeLabel` and are not translated — each language is named in its own script on every page.
+The zh follows `messages/zh.json`'s existing register (`settings.language.card.title` 语言, the
+full-width colon, `…重试` / `无法…` as the catalogue writes them, no space around an
+interpolation); `messages/glossary/zh.json` has no entry this copy touches. The ja and de strings
+drawn on the board are illustrations, not part of this hand-off.
+
+### What a switch does to the page
+
+1. **Choose** — `setLocale(next)` inside a transition. Signed out, it writes `NEXT_LOCALE` only.
+2. **Pending** — the trigger shows it (above). Nothing on the form is disabled and nothing moves.
+   A second choice before the first lands supersedes it; the reconcile is sequence-guarded so an
+   older response cannot repaint over a newer choice.
+3. **Re-render in place** — `router.refresh()`. Never `router.push`, a redirect or a reload. A
+   refresh re-runs the server components in the new locale and **keeps every client component
+   mounted**, which is what keeps the person's work:
+   - the **email typed on step 1** (`SignInCard`'s and `SignUpCard`'s `useState`), the **step**
+     they are on, and the **device code** typed on `/device`'s entry step;
+   - **every query parameter**, because the URL does not change: `?next=` (and the invite token
+     inside it), `?draft=`, `/device`'s `user_code`;
+   - the **`IdeaCarried` banners**: `SignInCard` claims a `?draft=` ONCE on mount behind a ref
+     guard and holds the idea in state, so a remount (a reload) would lose the banner and a
+     re-claim would fail. A refresh does neither.
+4. **Settle** — `<html lang>` (root layout) changes to the new locale, the trigger reads the new
+   endonym, and focus is where the person left it: on the trigger.
+5. **Fail** — the server action throws: no refresh, the page stays in the current language (the
+   same rule `LanguageCard` follows, MOTIR-7747), and the failed line appears. **Try again**
+   repeats the same choice; choosing again or a successful retry clears it.
+
+**Sign-up step 1 carries the choice too.** `Continue with Google` creates the account from step 1
+and never reaches step 2, so the control is on both steps (P6) and whatever the corner says when
+Google is pressed is what the new account is seeded with
+([Save the language on the account](motir:cmuyo0iht003lhuoi1ao6vf49) does the seeding).
+
+**Invite acceptance.** Its signed-out half is the sign-in or sign-up card an invitee arrives on
+(`proxy.ts` → `/sign-in?next=/invite/accept?token=…`), which has the control (P7), and `next`
+survives a switch. **The accept card itself gets no control:** it is under `app/(authed)`,
+renders in the signed-in shell, follows the **account** language, and a signed-in person changes
+language in Settings. Nothing under `app/(authed)` changes.
+
+**Every `(auth)` route inherits it**, including `/reset-password`, `/reset-password/new`,
+`/re-consent`, `/two-factor-required`, `/oauth/consent`, `/p/[identifier]/consent` and
+`/unsubscribe/filter-subscription` — all from the one mount in the layout, none redrawn here.
+Three of them are reached signed in (re-consent, 2FA-required, OAuth consent); there `setLocale`
+also saves the account language, which is correct, and the control behaves identically.
+
+### Accessibility
+
+- **Accessible name:** `auth.language.label` in the CURRENT language — _“Language: English”_,
+  _“语言：中文”_ — so it says what the control is and what it is set to, even to a reader who
+  cannot read the page. The listbox carries the same name.
+- **The glyph is `aria-hidden`**; the name does the work. The chevrons and the selected check are
+  `aria-hidden` too (the primitive's).
+- **Keyboard (the Combobox's own):** Tab reaches it FIRST on every `(auth)` page (it precedes the
+  card in the DOM); Enter, Space or ArrowDown opens it; ArrowUp/ArrowDown move the active option,
+  Home/End jump to the ends; Enter chooses; Escape closes without choosing. Each step is
+  `aria-activedescendant`, so focus stays on the listbox and the active row is announced with its
+  own `lang`.
+- **Focus return:** a choice, Escape or a click outside returns focus to the trigger
+  (`closeAndRefocus`), and the refresh does not remount it, so focus is still there when the page
+  has re-rendered.
+- **Pending:** the trigger is `aria-busy="true"` and a visually hidden `role="status"` (polite)
+  says _“Switching to 日本語…”_. The re-render then announces itself through `<html lang>`.
+- **Failed:** `role="status"`, polite — **not** `role="alert"`: it interrupts nothing and the
+  form still works. **Try again** is a real `button`, next in the tab order after the trigger.
+- **AutoFocus is not stolen.** The email field's `autoFocus` keeps first focus on arrival; the
+  control is first in the tab order, not focused on load.
+
+### Reference products
+
+**Not re-checked in this run** — the run had no reliable web access, so both are cited as
+recalled, from earlier first-hand use, and should be treated as such:
+
+- **Google Account sign-in** (accounts.google.com): a language dropdown in a row **below the
+  card**, beside Help / Privacy / Terms, listing each language in its own name. Outside the form.
+- **Atlassian** (id.atlassian.com): a language selector in the **page footer**, under the
+  sign-in card. Outside the form.
+
+Both keep the control out of the form, which this design follows. Neither uses a top corner; this
+design does because of the measurements above — a below-the-card footer collides with this
+frame's card on the phone and on `/device`, and it is last in the tab order.
+
+### ⚠️ Planning flags for the build card
+
+1. **The menu must open end-aligned.** The Combobox's portaled menu is placed at the trigger's
+   LEFT edge with `min-width` = the trigger, and has no right-edge clamp. In the corner a menu
+   wider than its trigger (中文 is a narrow trigger; Nederlands a wide row) would run past the
+   24px gutter. The mock draws it end-aligned. Either an `align="end"` on the primitive or a
+   viewport clamp in its `updatePosition`; the second fixes every Combobox.
+2. **Two small primitive additions.** `ComboboxOption` has no `lang`, and the primitive renders
+   one `icon` in both the trigger and the rows. The control needs a per-option `lang` and a
+   trigger-only leading glyph. Both are additive props.
+3. **The active option's ring.** The primitive shows the keyboard's active row by
+   `--el-option-active-bg` alone; this design draws the focus ring on it as well. If the build card
+   adds it, it belongs in the primitive (every Combobox's keyboard path benefits); if not, the
+   background alone is acceptable and nothing else changes.
+4. **Do not disable while pending.** `LanguageCard` passes `disabled={isPending}`; this control
+   must not (the pending state is the spinner + `aria-busy`), and its reconcile is seq-guarded.
+5. **Scope the wide tightening to `lg`** (`lg:has-[[data-auth-wide]]:py-8`), per § _Where it
+   sits_. Nothing else in the layout changes beyond `relative` on the outer `div` and the mount.
+6. **The eleven arrive with the turn-on card.** On `origin/main` when this was drawn,
+   `lib/i18n/locales.ts` held `en` and `zh`; [Turn on the eleven locales](motir:cmuyo0iyg0045huoigfkwic6i)
+   brings the set to eleven in the order drawn here. Until then the list is two rows, and the
+   design needs nothing different at two.
+7. **`/device`'s fold, independent of this design.** With `CLI_TOKEN_GRANT` at ten keys the
+   reconstruction's confirm page is 717px, CTAs at 665px, against the layout docstring's 622 / 590.
+   Measure the live `/device` confirm at 1366×648; if it does overflow, that is a pre-existing
+   defect for its own bug card, not something this control changes.
+
+### How the mock was produced
+
+The token block is the one `oauth-consent--sticky-actions.mock.html` carries (Tier 0, dark, and
+the Tier-3 `--el-*` layer re-emitted on `[data-theme]` so the nested dark panels resolve dark).
+The frame, `AuthShell`, `Button`, `Input`, `OrDivider`, `IdeaCarried`, `CodeChip`,
+`DeviceApproval`'s detail box and the Combobox trigger and menu are drawn from the shipped class
+strings; icons are the installed `lucide-react` paths; the BrandMark is `WAVE_BAND_PATH`; the
+Google mark is `GoogleButton`'s own four-colour asset (the one raw-hue exception
+`passkey-sign-in.mock.html` records). Rendered and measured in headless Chromium; no image is
+part of the asset.

@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore, useTransition } from 'react';
+import { matchAcceptLanguage } from '@/lib/i18n/acceptLanguage';
 import { defaultLocale, isLocale, type Locale } from '@/lib/i18n/locales';
 import { useReportCaughtError } from '@/lib/monitoring/reportCaughtError';
 import { ServerErrorView } from './ServerErrorView';
@@ -12,8 +13,12 @@ import { GLOBAL_ERROR_COPY } from './serverErrorCopy';
 // and tested like any component — a test cannot mount a second `<html>`.
 //
 // No `next-intl` provider exists here (it lived in the layout that failed), so
-// the locale is read the way `i18n/request.ts` reads it — the `NEXT_LOCALE`
-// cookie — and then the browser's language, falling back to `en`. The server
+// the locale is read the way `i18n/request.ts` resolves it for a signed-out
+// request: the `NEXT_LOCALE` cookie, then the browser's WHOLE preference list
+// through the same `matchAcceptLanguage` the server's step 3 uses (so `pt-BR`
+// and `zh-TW` land where the server would put them), falling back to `en`.
+// There is no session read here — the layout that would have held it failed.
+// The server
 // render answers `en`; the client corrects it on hydration without a mismatch
 // (that is what `useSyncExternalStore`'s server snapshot is for).
 
@@ -23,8 +28,10 @@ function readLocale(): Locale {
     .find((pair) => pair.startsWith('NEXT_LOCALE='))
     ?.slice('NEXT_LOCALE='.length);
   if (isLocale(cookie)) return cookie;
-  const language = navigator.language?.slice(0, 2);
-  return isLocale(language) ? language : defaultLocale;
+  const preferred = navigator.languages?.length
+    ? navigator.languages.join(',')
+    : navigator.language;
+  return matchAcceptLanguage(preferred) ?? defaultLocale;
 }
 
 const subscribe = () => () => {};

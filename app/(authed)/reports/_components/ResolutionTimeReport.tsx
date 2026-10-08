@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Minus, Plus } from 'lucide-react';
 import { BarChart, chartColor, niceTicks, type ChartLegendItem } from '@/components/ui/charts';
 import type { ResolutionTimeDto, ReportPeriodDto, ReportStaleReasonDto } from '@/lib/dto/reports';
@@ -31,13 +31,13 @@ export type ResolutionTimeResult =
 
 /** Bucket-axis label — copied from the dashboard CreatedVsResolvedBody so the
  * two surfaces format a period bucket identically (UTC `date_trunc` semantics). */
-function bucketLabel(dateIso: string, period: ReportPeriodDto): string {
+export function bucketLabel(dateIso: string, period: ReportPeriodDto, locale: string): string {
   const d = new Date(`${dateIso}T00:00:00Z`);
   const opts: Intl.DateTimeFormatOptions =
     period === 'month'
       ? { month: 'short', year: '2-digit', timeZone: 'UTC' }
       : { month: 'short', day: 'numeric', timeZone: 'UTC' };
-  return new Intl.DateTimeFormat('en-US', opts).format(d);
+  return new Intl.DateTimeFormat(locale, opts).format(d);
 }
 
 export function ResolutionTimeReport({
@@ -144,6 +144,7 @@ function ResolutionTimeBody({
   onReset: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const locale = useLocale();
   if (result.state === 'no_access') return <ReportStateMessage state={{ kind: 'no_access' }} />;
   if (result.state === 'stale') {
     return (
@@ -180,7 +181,7 @@ function ResolutionTimeBody({
     <BarChart
       series={[{ label: t('resolutionTime.legendLabel'), color: chartColor.resolution }]}
       groups={buckets.map((b) => ({
-        label: bucketLabel(b.date, period),
+        label: bucketLabel(b.date, period, locale),
         values: [b.avgDays ?? 0],
       }))}
       yTicks={yTicks}
@@ -217,7 +218,7 @@ function ResolutionTimeBody({
           t('resolutionTime.tableAvg'),
         ],
         rows: buckets.map((b) => ({
-          header: bucketLabel(b.date, period),
+          header: bucketLabel(b.date, period, locale),
           cells: [
             { value: b.count, numeric: true },
             { value: b.avgDays === null ? noValue : b.avgDays, numeric: true },

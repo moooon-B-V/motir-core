@@ -1045,6 +1045,7 @@ export function ApprovalGateControl({
   verbsLead,
 }: ApprovalGateControlProps) {
   const t = useTranslations('approvalGate');
+  const locale = useLocale();
   const tGithub = useTranslations('approvalGate.pullRequestApproval.github');
   const tPort = useTranslations('approvalGate.port');
   const [ownPhase, setPhase] = useState<Phase>({ kind: 'awaiting' });
@@ -1399,7 +1400,9 @@ export function ApprovalGateControl({
         // in those words: it is not a decision time, and there is no decision.
         <RecordStrip sectioned={sectioned}>
           <span>{t('withdrawn.record')}</span>
-          <span>{t('withdrawn.at', { when: new Date(gate.updatedAt).toLocaleString() })}</span>
+          <span>
+            {t('withdrawn.at', { when: new Date(gate.updatedAt).toLocaleString(locale) })}
+          </span>
         </RecordStrip>
       ) : decided ? (
         <>
@@ -1449,7 +1452,7 @@ export function ApprovalGateControl({
               <span>{tGithub('record.notMember')}</span>
             ) : null}
             {gate.decidedAt && !recordLead ? (
-              <span>{new Date(gate.decidedAt).toLocaleString()}</span>
+              <span>{new Date(gate.decidedAt).toLocaleString(locale)}</span>
             ) : null}
             {/* ⚠️ THE VERSION, FROM THE AUDIT COLUMN — never re-derived from
               whatever design is current now. `subjectVersion` is the immutable

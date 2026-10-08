@@ -848,7 +848,7 @@ describe('the Workbench To fix row', () => {
   it('zh — the running sentence renders with no English fallback', async () => {
     await renderRows([row('ACME-12', 'changes_requested', AGENT, { repairRun: openRun() })], true);
     const text = screen.getByTestId('workbench-fix-hosted-fixing-ACME-12').textContent ?? '';
-    expect(text).toContain('正在用托管代理修复');
+    expect(text).toContain('正在用托管智能体修复');
     expect(text).not.toMatch(/Being fixed|hosted agent/);
   });
 });

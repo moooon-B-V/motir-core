@@ -176,7 +176,7 @@
     "canvasAria": "建议计划画布",
     "reviewRailAria": "计划审阅",
     "newItem": "新增",
-    "itemCount": "{n} 个建议工作项",
+    "itemCount": "{n, plural, other {#}} 个建议工作项",
     "history": "历史记录",
     "awaitingReview": "等待你的审阅",
     "status_generating": "生成中",
@@ -234,30 +234,30 @@
     "field_status": "状态",
     "moreChanges": "还有 {n} 项",
     "staleBadge": "已过期",
-    "staleSummary": "{n} 个工作项可能已过期",
+    "staleSummary": "{n, plural, other {#}} 个工作项可能已过期",
     "staleParentRemoved": "父项在生成后已被移除",
     "staleBlockerRemoved": "某个阻塞项已被移除",
     "staleDrift_edited": "生成后已更改",
     "staleDrift_archived": "目标已归档",
     "staleDrift_missing": "目标已不存在",
-    "approveCta": "批准 — 将 {n} 个工作项加入待办列表",
+    "approveCta": "批准 — 将 {n, plural, other {#}} 个工作项加入待办列表",
     "declineCta": "拒绝",
-    "approveHint": "批准后会将建议落实到你的待办列表。",
-    "approveHintStale": "批准会落实这些建议 · 将先确认 {n} 个过期工作项。",
+    "approveHint": "批准后会将提案落实到你的待办列表。",
+    "approveHintStale": "批准会落实这些提案 · 将先确认 {n, plural, other {#}} 个过期工作项。",
     "placementFiledIn": "归档于文件夹 {path}",
     "listInFolder": "位于 {path}",
     "field_placement": "位置",
     "folderMissing": "文件夹已删除",
     "folderMissingAria": "归档到的文件夹已被删除",
     "staleFolderRemoved": "规划后文件夹已被删除",
-    "approveHintFolderMissing": "有 {n} 个工作项归档到了已删除的文件夹，暂时无法批准。请让 Motir 修改计划，或拒绝它。",
+    "approveHintFolderMissing": "有 {n, plural, other {#}} 个工作项归档到了已删除的文件夹，暂时无法批准。请让 Motir 修改计划，或拒绝它。",
     "approveFolderMissingRefused": "未创建任何内容 —“{title}”归档到的文件夹在计划写好后已被删除。",
     "reviewLocked": "生成完成后即可审阅。",
-    "emptyHint": "此计划没有提出任何内容，因此无需批准。拒绝即可结束它——你的待办事项不会有任何改变。",
+    "emptyHint": "此计划没有提出任何内容，因此无需批准。拒绝即可结束它——你的待办列表不会有任何改变。",
     "discardCta": "放弃此计划",
-    "discardHint": "生成完成后即可批准。放弃将立即结束生成——你的待办事项不会有任何改变。",
+    "discardHint": "生成完成后即可批准。放弃将立即结束生成——你的待办列表不会有任何改变。",
     "discardConfirmTitle": "放弃此计划？",
-    "discardConfirmBody": "它目前已有 {n} 条提案，且仍在生成中。放弃将立即结束生成并保留这些提案作为记录——你的待办事项不会改变，也不会创建任何内容。",
+    "discardConfirmBody": "它目前已有 {n, plural, other {#}} 条提案，且仍在生成中。放弃将立即结束生成并保留这些提案作为记录——你的待办列表不会改变，也不会创建任何内容。",
     "discardConfirmCancel": "继续生成",
     "discardConfirmCta": "放弃计划",
     "viewSwitchAria": "计划视图",
@@ -277,24 +277,24 @@
     "listStale": "可能已过期",
     "listBodyRewritten": "已重写——打开工作项查看",
     "listEmptyTitle": "没有提案",
-    "listEmptyBody": "此计划生成结束但没有提出任何内容。拒绝即可结束它——你的待办事项不会有任何改变。",
+    "listEmptyBody": "此计划生成结束但没有提出任何内容。拒绝即可结束它——你的待办列表不会有任何改变。",
     "allProposedLevel": "此层级尚无已提交的工作项——这里的每一项都来自本计划",
     "proposedCrumb": "新",
     "removeReason": "原因",
     "showChangesPast": "显示已变更内容",
     "actionError": "出了点问题，请重试。",
-    "approvedOutcome": "已将 {n} 个工作项加入待办列表",
+    "approvedOutcome": "已将 {n, plural, other {#}} 个工作项加入待办列表",
     "declinedOutcome": "计划已拒绝 — 你的工作项树未作改动",
     "discardedOutcome": "计划在完成前被弃置 — 你的工作项未作改动",
     "liveWriting": "正在编写",
     "liveReconnecting": "正在重新连接 — 显示的是最近一次更新",
-    "liveAnnounce": "计划新增了 {count} 个工作项",
+    "liveAnnounce": "计划新增了 {count, plural, other {#}} 个工作项",
     "listWritingTitle": "尚无提案",
     "listWritingBody": "计划编写过程中，工作项会出现在这里。",
     "abandonedOutcome": "生成始终未完成 — 该计划已自动结束",
     "viewInBacklog": "在待办列表中查看",
     "staleConfirmTitle": "部分工作项可能已过期",
-    "staleConfirmBody": "自该计划生成以来，有 {n} 个建议工作项发生了变化。仍要批准吗？",
+    "staleConfirmBody": "自该计划生成以来，有 {n, plural, other {#}} 个建议工作项发生了变化。仍要批准吗？",
     "staleConfirmCancel": "取消",
     "staleConfirmApprove": "仍然批准",
     "requestedBy": "由 {name} 发起",
@@ -306,7 +306,7 @@
     "noDescription": "暂无描述。",
     "noExplanation": "暂无说明。",
     "aiDrafted": "AI 起草",
-    "viewTriggerAria": "查看提议",
+    "viewTriggerAria": "查看提案",
     "revisePlaceholder": "请 Motir 修改此计划…",
     "reviseNote": "Motir 会修改此计划。在你批准之前，不会有任何内容进入你的待办列表。",
     "reviseRunning": "Motir 正在修改此计划…",
@@ -346,7 +346,7 @@
     "noAccessDescription": "此项目为私有。请联系项目管理员将你加入，或切换到你有权限访问的项目。",
     "backToProjects": "返回项目",
     "readOnlyHint": "你对此项目仅有只读访问权限",
-    "readOnlyBoardBanner": "只读访问——你可以查看此看板，但无法移动或编辑工作项。"
+    "readOnlyBoardBanner": "只读访问——你可以查看此面板，但无法移动或编辑工作项。"
   },
   "permissions": {
     "domain": {
@@ -365,7 +365,7 @@
       "board": "面板",
       "sprint": "Sprint与待办",
       "workflow": "工作流与自动化",
-      "field": "字段与组件",
+      "field": "字段与模块",
       "estimation": "估算",
       "report": "报表与筛选器",
       "repository": "代码仓库",
@@ -375,7 +375,7 @@
     },
     "project_administer": {
       "label": "管理项目",
-      "description": "修改项目设置——成员、工作流、面板、字段、组件和自动化。"
+      "description": "修改项目设置——成员、工作流、面板、字段、模块和自动化。"
     },
     "project_browse": {
       "label": "查看项目",
@@ -486,8 +486,8 @@
       "description": "修改面板列所映射的状态及其之间的流转。"
     },
     "component_manage": {
-      "label": "管理组件",
-      "description": "创建、重命名和删除项目的组件。"
+      "label": "管理模块",
+      "description": "创建、重命名和删除项目的模块。"
     },
     "field_manage": {
       "label": "管理自定义字段",
@@ -539,11 +539,11 @@
     },
     "ai_view_plan": {
       "label": "编写AI计划",
-      "description": "向已生成的计划追加建议并结束编写；仅查看计划只需项目访问权限。"
+      "description": "向已生成的计划追加提案并结束编写；仅查看计划只需项目访问权限。"
     },
     "ai_decide_plan": {
       "label": "批准或拒绝AI计划",
-      "description": "将计划中的建议转化为真实工作项，或结束计划而不创建任何工作项。"
+      "description": "将计划中的提案转化为真实工作项，或结束计划而不创建任何工作项。"
     },
     "lesson_view": {
       "label": "查看经验库",
@@ -731,14 +731,14 @@
       "UNKNOWN_STATUS": "状态“{statusKey}”不属于该项目的工作流。",
       "ILLEGAL_TRANSITION": "非法的状态流转：“{from}” → “{to}”。",
       "STALE_WORK_ITEM": "此工作项已被他人编辑。请刷新后重试。",
-      "TYPE_NOT_ALLOWED_ON_KIND": "只能为任务、子任务或缺陷设置类型和执行者，史诗和故事不可设置。",
+      "TYPE_NOT_ALLOWED_ON_KIND": "只能为任务、子任务或缺陷设置类型和执行者，篇章和故事不可设置。",
       "MISSING_ARTIFACT_EVIDENCE": "“部署”类型的工作项必须先有评论记录已发布的产物，才能关闭——版本号（1.4.0）、镜像摘要（sha256:…）或完整性哈希（sha512-…）均可。如果该交付确实没有可记录的标识，请添加以“NO ARTIFACT:”开头并写明原因的评论。",
       "CONTAINER_HAS_OPEN_CHILDREN": "该工作项还有子项尚未达到“已实现”，因此无法进入该状态。父项处于该状态，即声明其下的全部工作都已构建完成，其拉取请求也是基于这一声明才打开的。请先完成这些子项、把已不属于本次范围的子项移到别处，或将该工作项移到“已完成”——那是有意地一并关闭它们，而不是作为副作用。",
       "APPROVAL_GATE_PENDING": "该状态无法直接设置——此工作项有一个待处理的审批，批准它才会完成这一移动。其他移动仍然可以进行。",
       "APPROVAL_GATE_PENDING_MERGE": "该状态无法直接设置——此工作项有未合并的拉取请求，合并它才会完成这一移动。其他移动仍然可以进行。",
-      "PLAN_TARGET_HELD": "计划未决定前无法更改状态——一个计划正在改写此工作项。请批准或拒绝该计划，或撤回指向此工作项的提议。",
-      "OBSOLESCENCE_REQUIRES_FINISHED": "只有已完成的事项才能标记——请改为归档。",
-      "MARKED_CARD_CANNOT_REOPEN": "此事项已标记为过时或已弃用。清除标记后才能重新打开此事项。"
+      "PLAN_TARGET_HELD": "计划未决定前无法更改状态——一个计划正在改写此工作项。请批准或拒绝该计划，或撤回指向此工作项的提案。",
+      "OBSOLESCENCE_REQUIRES_FINISHED": "只有已完成的工作项才能标记——请改为归档。",
+      "MARKED_CARD_CANNOT_REOPEN": "此工作项已标记为过时或已弃用。清除标记后才能重新打开此工作项。"
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "只有项目管理员才能编辑工作流。",
@@ -784,14 +784,14 @@
       "READ_ONLY": "你没有编辑标签的权限。"
     },
     "components": {
-      "COMPONENT_NOT_FOUND": "该组件已不存在。",
-      "INVALID_COMPONENT_NAME": "请输入有效的组件名称。",
-      "COMPONENT_NAME_CONFLICT": "已存在同名组件。",
+      "COMPONENT_NOT_FOUND": "该模块已不存在。",
+      "INVALID_COMPONENT_NAME": "请输入有效的模块名称。",
+      "COMPONENT_NAME_CONFLICT": "已存在同名模块。",
       "INVALID_DEFAULT_ASSIGNEE": "默认负责人必须是可查看此项目的成员。",
-      "INVALID_MOVE_TARGET": "请选择另一个组件作为移动目标。",
-      "CROSS_PROJECT_COMPONENT": "该组件属于其他项目。",
-      "NOT_PROJECT_ADMIN": "只有项目管理员才能管理组件。",
-      "READ_ONLY": "你没有编辑组件的权限。"
+      "INVALID_MOVE_TARGET": "请选择另一个模块作为移动目标。",
+      "CROSS_PROJECT_COMPONENT": "该模块属于其他项目。",
+      "NOT_PROJECT_ADMIN": "只有项目管理员才能管理模块。",
+      "READ_ONLY": "你没有编辑模块的权限。"
     },
     "watchers": {
       "WATCHERS_FORBIDDEN": "你没有权限管理此工作项的关注者。",
@@ -814,7 +814,7 @@
       "preview": "你的Motir验证码",
       "greeting": "你好，{name}：",
       "lede": "你正在登录Motir。输入此验证码以完成登录：",
-      "expires": "此验证码将在{minutes}分钟后过期。",
+      "expires": "此验证码将在{minutes, plural, other {#}}分钟后过期。",
       "security": "不是你本人的操作？可能有人知道了你的密码——请立即修改密码并检查两步验证设置。我们绝不会向你索要此验证码。"
     },
     "passwordReset": {
@@ -915,9 +915,9 @@
       "ignore": "此链接 24 小时后失效。如果这不是你申请的，请忽略此邮件——我们不会向此邮箱发送任何内容，并会在一周内将其删除。"
     },
     "followDigest": {
-      "subject": "{project} 本周发布了 {count} 项内容",
+      "subject": "{project} 本周发布了 {count, plural, other {#}} 项内容",
       "preview": "{project} 本周的发布内容",
-      "lede": "{project} 本周发布了 {count} 项内容：",
+      "lede": "{project} 本周发布了 {count, plural, other {#}} 项内容：",
       "viewAll": "查看完整更新日志",
       "unsubscribe": "退订",
       "why": "你收到这封邮件是因为你在 Motir 上关注了该项目。点击上方链接即可停止接收。"
@@ -945,10 +945,10 @@
       "footer": "你收到这封邮件，是因为你是该组织的成员。"
     },
     "organizationDeletionReminder": {
-      "subject": "{organization} 将在 {daysLeft} 天后删除",
+      "subject": "{organization} 将在 {daysLeft, plural, other {#}} 天后删除",
       "preview": "{organization} 将于 {date} 被清除",
       "greeting": "{name}，你好：",
-      "lede": "{organization} 已计划于 {date} 删除，距今还有 {daysLeft} 天。在此之前它为只读状态。",
+      "lede": "{organization} 已计划于 {date} 删除，距今还有 {daysLeft, plural, other {#}} 天。在此之前它为只读状态。",
       "cancelOwner": "你仍可在组织设置中取消删除。",
       "cancelAdmin": "只有组织所有者 {owner} 可以取消删除。",
       "openSettings": "打开组织设置",
@@ -967,7 +967,7 @@
       "preview": "你的组织的 AI 套餐已结束——你的智能体将于 {date} 被删除",
       "greeting": "{name}，你好：",
       "lede": "你的组织的 AI 套餐已结束。除非续订套餐，你的智能体将于 {date} 被删除。",
-      "agents": "你在 {organization} 的以下 {count} 个智能体将被删除，包括其主目录及其中的全部内容：",
+      "agents": "你在 {organization} 的以下 {count, plural, other {#}} 个智能体将被删除，包括其主目录及其中的全部内容：",
       "renew": "在 {date} 之前续订 AI 套餐即可取消删除。在此之前，你的智能体无法创建或唤醒，其存储仍按天收费。",
       "openBilling": "续订 AI 套餐",
       "footer": "你收到这封邮件，是因为你在该组织中拥有智能体。"
@@ -1119,7 +1119,7 @@
       "emailSent": {
         "title": "查看你的邮箱",
         "subtitle": "我们已将六位验证码发送至{email}。",
-        "expiry": "验证码将在{minutes}分钟后过期。重新获取会替换当前验证码。",
+        "expiry": "验证码将在{minutes, plural, other {#}}分钟后过期。重新获取会替换当前验证码。",
         "resend": "发送新验证码"
       },
       "backup": {
@@ -1154,6 +1154,12 @@
       "satisfiedHeadline": "一切就绪",
       "satisfiedBody": "下次登录时会要求你提供第二重验证。如果还没有保存恢复码，请在下方保存——设备丢失时它是你重新登录的方式。",
       "continueTo": "继续前往 {destination}"
+    },
+    "language": {
+      "label": "语言：{language}",
+      "switching": "正在切换到{language}…",
+      "failed": "无法切换语言。",
+      "retry": "重试"
     }
   },
   "shell": {
@@ -1337,12 +1343,12 @@
     "labelsRemove": "移除{label}",
     "labelsLimitReached": "标签数量已达上限（{limit}个），移除一个后才能继续添加。",
     "noLabels": "暂无标签",
-    "componentsField": "组件",
-    "componentsPlaceholder": "添加组件…",
+    "componentsField": "模块",
+    "componentsPlaceholder": "添加模块…",
     "componentsRemove": "移除{label}",
-    "componentsNoneDefined": "尚未定义组件",
-    "componentsManageLink": "前往项目设置管理组件 →",
-    "noComponents": "暂无组件",
+    "componentsNoneDefined": "尚未定义模块",
+    "componentsManageLink": "前往项目设置管理模块 →",
+    "noComponents": "暂无模块",
     "watchAria": "关注（{count}人正在关注）",
     "stopWatchingAria": "取消关注（{count}人正在关注）",
     "watchTooltip": "关注",
@@ -1355,10 +1361,10 @@
     "watchersShowMore": "显示更多（还有{count}人）",
     "watchersNoMatches": "没有匹配的成员。",
     "watchersLoadError": "无法加载关注者。",
-    "epicPrivacyLabel": "将此史诗设为私有",
-    "epicPrivacyDescription": "私有史诗在公开视图中仍以一行显示，但其故事、任务和进度对非成员隐藏。成员仍可查看全部内容。",
-    "epicPrivacyOnHelper": "非成员现在只能看到此史诗的标题行——其内容已隐藏。",
-    "epicPrivacyAdminOnly": "只有项目管理员才能更改史诗的可见性。",
+    "epicPrivacyLabel": "将此篇章设为私有",
+    "epicPrivacyDescription": "私有篇章在公开视图中仍以一行显示，但其故事、任务和进度对非成员隐藏。成员仍可查看全部内容。",
+    "epicPrivacyOnHelper": "非成员现在只能看到此篇章的标题行——其内容已隐藏。",
+    "epicPrivacyAdminOnly": "只有项目管理员才能更改篇章的可见性。",
     "epicPrivacyErrorTitle": "无法更新可见性",
     "epicPrivacyError": "无法更新可见性，请重试。",
     "watchToggleFailedTitle": "无法更新关注状态",
@@ -1404,7 +1410,7 @@
     "backToWorkItems": "工作项",
     "archivedEntry": "已归档",
     "archivedHeading": "已归档的工作项",
-    "archivedSubtitle": "已从看板、列表和搜索中隐藏，但其历史会被保留。恢复即可重新启用。",
+    "archivedSubtitle": "已从面板、列表和搜索中隐藏，但其历史会被保留。恢复即可重新启用。",
     "archivedColArchivedBy": "归档人",
     "archivedColArchived": "归档时间",
     "archivedColActions": "操作",
@@ -1412,15 +1418,15 @@
     "archivedRestoring": "正在恢复…",
     "archivedRestoreAria": "恢复 {key}",
     "archivedEmptyTitle": "暂无归档",
-    "archivedEmptyDescription": "已归档的工作项会显示在这里。从工作项的 ⋯ 菜单归档，即可将其从看板和列表中隐藏，同时保留其历史。",
+    "archivedEmptyDescription": "已归档的工作项会显示在这里。从工作项的 ⋯ 菜单归档，即可将其从面板和列表中隐藏，同时保留其历史。",
     "archivedEmptyAction": "返回工作项",
     "archivedBannerHeadline": "此工作项已归档",
-    "archivedBannerMeta": "由 <strong>{name}</strong> 于 {date} 归档 · 已从看板和列表中隐藏，但其历史会被保留。",
+    "archivedBannerMeta": "由 <strong>{name}</strong> 于 {date} 归档 · 已从面板和列表中隐藏，但其历史会被保留。",
     "archivedBannerRestoreTail": "恢复即可重新启用。",
     "archivedByUnknownActor": "已离开的成员",
     "pendingPlanModifyHeadline": "有一个计划提议修改此工作项",
     "pendingPlanRemoveHeadline": "有一个计划提议归档此工作项",
-    "pendingPlanMeta": "此处尚未发生任何更改——提议仅在计划获批准后才会生效。",
+    "pendingPlanMeta": "此处尚未发生任何更改——提案仅在计划获批准后才会生效。",
     "pendingPlanReview": "查看计划",
     "pendingPlanReviewAria": "查看提及 {key} 的计划",
     "pendingPlanCountHeadline": "{count, plural, other {# 个待定计划提及此工作项}}",
@@ -1487,8 +1493,8 @@
     "refNoAccessTitle": "你无权访问该工作项",
     "linkIssue": "关联工作项",
     "removeLinkAria": "移除与 {target} 之间「{relationship}」的关联",
-    "removeConfirmBefore": "移除与",
-    "removeConfirmAfter": " 之间「{relationship}」的关联吗？该工作项不会被删除——只会移除此关联。",
+    "removeConfirmBefore": "移除「{relationship}」关联至 ",
+    "removeConfirmAfter": " 吗？该工作项不会被删除——只会移除此关联。",
     "removeLink": "移除关联",
     "status": "状态",
     "sessionBranch": "会话分支",
@@ -1578,7 +1584,7 @@
     "advancedPickDateAria": "选择{field}日期",
     "advancedPickFromDateAria": "选择{field}起始日期",
     "advancedPickToDateAria": "选择{field}结束日期",
-    "advancedBacklog": "待办事项",
+    "advancedBacklog": "待办列表",
     "advancedValueCount": "{count, plural, other {#个值}}",
     "advancedFieldChecks": "检查",
     "advancedFieldToFix": "待修复",
@@ -1651,8 +1657,8 @@
     "quickViewStaleReloaded": "快速视图打开期间，此工作项已被更改。下方字段已重新加载。",
     "actionSkewError": "此页面已过期——请重新加载后再次修改。",
     "actionTransportError": "更改未保存。请检查网络连接后重试。",
-    "sprintUpdateFailed": "无法更新冲刺，请重试。",
-    "quickViewMoreFields": "另有 {count} 个字段",
+    "sprintUpdateFailed": "无法更新Sprint，请重试。",
+    "quickViewMoreFields": "另有 {count, plural, other {#}} 个字段",
     "repositories": "代码仓库",
     "repositoriesOptional": "可选 —— 并非每个工作项都会落在某个仓库里。",
     "repositoryPrimary": "主仓库",
@@ -1770,7 +1776,7 @@
       "explanationSource": "说明来源",
       "archivedAt": "归档",
       "labels": "{count, plural, other {标签}}",
-      "components": "{count, plural, other {组件}}",
+      "components": "{count, plural, other {模块}}",
       "todos": "{count, plural, other {步骤}}"
     },
     "linkKinds": {
@@ -1902,7 +1908,7 @@
       "board": "面板",
       "estimation": "估算",
       "fields": "字段",
-      "components": "组件",
+      "components": "模块",
       "aiPlanning": "AI规划",
       "hostedAgent": "托管智能体",
       "rules": "规则",
@@ -1935,7 +1941,7 @@
     },
     "details": {
       "title": "详情",
-      "subtitle": "项目的名称、图标和键。更改键会重新为所有事项编键，并保证旧链接仍然可用。仅项目管理员可编辑。",
+      "subtitle": "项目的名称、图标和键。更改键会重新为所有工作项编键，并保证旧链接仍然可用。仅项目管理员可编辑。",
       "cardTitle": "项目详情",
       "roleAdmin": "管理员",
       "roleReadOnly": "只读",
@@ -1946,7 +1952,7 @@
       "pickerPreview": "预览",
       "pickerNone": "无",
       "nameHelp": "在应用各处显示的名称。URL 名称不受影响。",
-      "keyHelp": "事项编键为 {ident}-1、{ident}-2……更改它会重新为每个事项编键，并保证旧链接仍然可用。",
+      "keyHelp": "工作项编键为 {ident}-1、{ident}-2……更改它会重新为每个工作项编键，并保证旧链接仍然可用。",
       "changeKey": "更改键…",
       "saveDirty": "有未保存的更改",
       "saveSaving": "正在保存…",
@@ -1954,20 +1960,20 @@
       "saveButton": "保存更改",
       "saveErrorTitle": "保存更改失败，请重试。",
       "modalTitle": "更改项目键",
-      "modalLede": "该键作为 {projectName} 中每个事项 ID 的前缀。请选择一个新键——3–5 个大写字母或数字。",
+      "modalLede": "该键作为 {projectName} 中每个工作项 ID 的前缀。请选择一个新键——3–5 个大写字母或数字。",
       "newKeyLabel": "新键",
       "available": "可用",
-      "consequenceIds": "每个事项标识符将变为 {newKey}-1、{newKey}-2…——编号保持不变。",
+      "consequenceIds": "每个工作项标识符将变为 {newKey}-1、{newKey}-2…——编号保持不变。",
       "consequenceLinks": "旧的 {oldKey}- 链接仍然可用——它们会重定向到新键。",
       "errKeyFormat": "“{value}” 不是有效的项目键（请使用 3–5 个大写字母或数字）。",
       "errKeyTaken": "本工作区中另一个项目已在使用键 “{value}”。",
       "errKeyReserved": "键 “{value}” 被另一个项目的旧键保留。",
       "errKeyUnchanged": "项目键已经是 “{value}”。",
       "errKeyUnknown": "更改项目键失败，请重试。",
-      "inflightLede": "正在将每个事项重新编键为 {newKey}-。这是一次原子操作——不会让事项重命名到一半。",
+      "inflightLede": "正在将每个工作项重新编键为 {newKey}-。这是一次原子操作——不会让工作项重命名到一半。",
       "changeKeyButton": "更改键",
       "changingKey": "正在更改键…",
-      "successToast": "项目键已更改为 {newKey}。现在每个事项都以 {newKey} 编键，旧的 {oldKey} 链接仍然可用。",
+      "successToast": "项目键已更改为 {newKey}。现在每个工作项都以 {newKey} 编键，旧的 {oldKey} 链接仍然可用。",
       "prevKeysLabel": "历史键",
       "prevKeysHelp": "指向这些键的旧链接会重定向到 {ident}。",
       "prevKeyRetired": "于 {date} 停用",
@@ -2079,7 +2085,7 @@
       "migration": {
         "title": "因迁移到工作区角色和项目访问而变更",
         "managersOnly": "仅管理者可见",
-        "count": "{count} 人",
+        "count": "{count, plural, other {#}} 人",
         "body": "以下成员并非按常规映射迁移。请逐一核对。",
         "dismiss": "忽略",
         "dismissLabel": "忽略 {name}",
@@ -2130,7 +2136,7 @@
       "scopeSelectLabel": "{name} 的访问范围",
       "scopeLockedManager": "完全 · 管理者",
       "scopeLockedReason": "管理者可以打开每个项目，因此访问范围对其不适用。",
-      "projectCount": "{count} 个项目",
+      "projectCount": "{count, plural, other {#}} 个项目",
       "noProjects": "无项目",
       "noProjectsHelp": "受限且未被添加到任何项目——{name} 目前无法打开 {workspace} 中的任何内容。",
       "projectsPopoverTitle": "{name} 可打开",
@@ -2266,7 +2272,7 @@
       },
       "cascade": {
         "label": "父工作项完成时一并完成其子项",
-        "hint": "当父工作项进入「已完成」——包括其合并请求合并后自动完成——其未完成的子项也会一并完成。<strong>这包括尚未开始的子项。</strong>如果团队单独跟踪子项工作，请关闭此项。",
+        "hint": "当父工作项进入「已完成」——包括其拉取请求合并后自动完成——其未完成的子项也会一并完成。<strong>这包括尚未开始的子项。</strong>如果团队单独跟踪子项工作，请关闭此项。",
         "hintOff": "已关闭——完成父工作项不会改变其子项，由团队自行关闭。"
       },
       "footer": {
@@ -2457,13 +2463,13 @@
       "toastOptionCapError": "一个字段最多可包含{max}个选项。"
     },
     "components": {
-      "cardTitle": "组件",
-      "cardDescription": "工作项所属的产品模块——比如API、Web或计费——每个组件可设置默认负责人。",
-      "title": "组件",
-      "subtitle": "<strong>{projectName}</strong>中工作项可归属的产品模块。一个工作项可同时带有多个组件；组件仅属于此项目。",
-      "listHeading": "组件",
-      "countPillLabel": "{count, plural, other {#个组件}}",
-      "addComponent": "添加组件",
+      "cardTitle": "模块",
+      "cardDescription": "工作项所属的产品模块——比如API、Web或计费——每个模块可设置默认负责人。",
+      "title": "模块",
+      "subtitle": "<strong>{projectName}</strong>中工作项可归属的产品模块。一个工作项可同时带有多个模块；模块仅属于此项目。",
+      "listHeading": "模块",
+      "countPillLabel": "{count, plural, other {#个模块}}",
+      "addComponent": "添加模块",
       "defaultAssigneeSublabel": "默认负责人",
       "noneName": "无",
       "usage": "{count, plural, other {#个工作项}}",
@@ -2472,46 +2478,46 @@
       "delete": "删除",
       "editAria": "编辑{name}",
       "deleteAria": "删除{name}",
-      "emptyTitle": "还没有组件",
-      "emptyDescription": "组件按产品模块对工作项分组——比如API、Web或计费。带组件创建的新工作项可以自动使用其默认负责人。",
-      "createTitle": "创建组件",
-      "editTitle": "编辑组件",
+      "emptyTitle": "还没有模块",
+      "emptyDescription": "模块按产品模块对工作项分组——比如API、Web或计费。带模块创建的新工作项可以自动使用其默认负责人。",
+      "createTitle": "创建模块",
+      "editTitle": "编辑模块",
       "nameLabel": "名称",
       "nameHelper": "在此项目内唯一。",
-      "nameRequired": "请输入组件名称。",
-      "nameConflict": "此项目中已存在名为“{name}”的组件。",
+      "nameRequired": "请输入模块名称。",
+      "nameConflict": "此项目中已存在名为“{name}”的模块。",
       "descriptionLabel": "描述（可选）",
-      "descriptionPlaceholder": "这个组件覆盖产品的哪个部分…",
+      "descriptionPlaceholder": "这个模块覆盖产品的哪个部分…",
       "defaultAssigneeLabel": "默认负责人",
-      "defaultAssigneeHelper": "带此组件且未指定负责人的新工作项将自动指派给此人，已有工作项不会被更改。",
+      "defaultAssigneeHelper": "带此模块且未指定负责人的新工作项将自动指派给此人，已有工作项不会被更改。",
       "pickerNone": "无",
       "pickerNoneGloss": "不自动指派",
       "pickerScopeNote": "仅列出可查看此项目的成员。",
       "pickerSearch": "搜索成员…",
       "pickerEmpty": "无匹配结果",
-      "createConfirm": "创建组件",
+      "createConfirm": "创建模块",
       "saveConfirm": "保存更改",
       "deleteTitle": "删除{name}？",
       "deleteInUseBody": "<strong>{name}</strong>正被<strong>{count, plural, other {#个工作项}}</strong>使用。请选择如何处理它们——工作项本身不会受影响。",
       "deleteChoiceLabel": "如何处理这些工作项",
       "moveChoice": "将{count, plural, other {#个工作项}}移动到…",
-      "moveChoiceGloss": "它们的{name}关联将被替换。已带有目标组件的工作项保留一个。",
-      "moveTargetLabel": "移动目标组件",
-      "removeChoice": "从{count, plural, other {#个工作项}}中移除该组件",
-      "removeChoiceGloss": "它们保留其他组件。",
-      "deleteUnusedBody": "没有工作项使用此组件。删除后它将从项目中移除。",
-      "deleteConfirm": "删除组件",
+      "moveChoiceGloss": "它们的{name}关联将被替换。已带有目标模块的工作项保留一个。",
+      "moveTargetLabel": "移动目标模块",
+      "removeChoice": "从{count, plural, other {#个工作项}}中移除该模块",
+      "removeChoiceGloss": "它们保留其他模块。",
+      "deleteUnusedBody": "没有工作项使用此模块。删除后它将从项目中移除。",
+      "deleteConfirm": "删除模块",
       "readOnly": "只读",
-      "readOnlyNote": "只有项目管理员才能管理组件。",
-      "errorTitle": "无法加载组件",
+      "readOnlyNote": "只有项目管理员才能管理模块。",
+      "errorTitle": "无法加载模块",
       "errorDescription": "我们这边出了点问题，请重试。",
-      "createdToast": "组件“{name}”已创建",
-      "savedToast": "组件“{name}”已保存",
-      "deletedToast": "组件“{name}”已删除",
+      "createdToast": "模块“{name}”已创建",
+      "savedToast": "模块“{name}”已保存",
+      "deletedToast": "模块“{name}”已删除",
       "errorGenericTitle": "出错了",
-      "toastCreateError": "组件未能创建，请重试。",
+      "toastCreateError": "模块未能创建，请重试。",
       "toastSaveError": "更改未能保存，请重试。",
-      "toastDeleteError": "组件未能删除，请重试。"
+      "toastDeleteError": "模块未能删除，请重试。"
     },
     "access": {
       "title": "访问与成员",
@@ -2521,7 +2527,7 @@
       "accessSubheading": "{workspaceName} 工作区中谁可以打开此项目。",
       "changeAccessErrorTitle": "无法更改访问权限",
       "membersHeading": "成员",
-      "memberCountLabel": "{count} 名成员",
+      "memberCountLabel": "{count, plural, other {#}} 名成员",
       "addMember": "添加成员…",
       "addMemberLabel": "添加项目成员",
       "addMemberSearch": "搜索工作区…",
@@ -2556,7 +2562,7 @@
       "modeGroupLabel": "项目访问模式",
       "publicUnavailable": "公开发布依赖 Motir Cloud——此自托管实例没有可发布的公开站点。",
       "membersOnlyConfirmTitle": "将 {projectName} 设为仅限成员？",
-      "membersOnlyConfirmBody": "<b>{count} 人</b>将失去访问权限。他们拥有 {workspaceName} 的完全访问权限，但未被添加到此项目：",
+      "membersOnlyConfirmBody": "<b>{count, plural, other {#}} 人</b>将失去访问权限。他们拥有 {workspaceName} 的完全访问权限，但未被添加到此项目：",
       "membersOnlyConfirmHint": "如需保留某人的访问权限，请先添加，或之后再添加。管理者始终保有访问权限。",
       "membersOnlyConfirmNobody": "没有人会失去访问权限——目前能打开 {projectName} 的每个人都已被添加或是管理者。",
       "membersOnlyConfirmAction": "设为仅限成员",
@@ -2575,7 +2581,7 @@
       "readOnlyModeNote": "只有工作区管理者可以更改谁能打开此项目。",
       "visitors": {
         "heading": "访客",
-        "countLabel": "{count} 位访客",
+        "countLabel": "{count, plural, other {#}} 位访客",
         "subtitle": "观看此公开项目的 {workspace} 以外的人。每个人在首次访问前都同意与此项目的管理者分享其姓名和电子邮件。只有管理者能看到此列表。",
         "firstVisit": "首次访问",
         "latestVisit": "最近访问",
@@ -2637,11 +2643,11 @@
       },
       "visitorLink": {
         "title": "访客链接",
-        "subtitle": "打开此链接的人在登录并同意与此项目的管理者分享其姓名和电子邮件后，即可在应用中阅读 <strong>{projectName}</strong>——它的工作项、看板、路线图、计划、审批和运行。他们无法更改任何内容，并且只能看到你的团队成员的名字。",
+        "subtitle": "打开此链接的人在登录并同意与此项目的管理者分享其姓名和电子邮件后，即可在应用中阅读 <strong>{projectName}</strong>——它的工作项、面板、路线图、计划、审批和运行。他们无法更改任何内容，并且只能看到你的团队成员的名字。",
         "copy": "复制访客链接",
         "open": "以访客身份打开",
         "copied": "已复制访客链接",
-        "hint": "打开后显示看板。你可以在“成员与访问”中查看访客。成员打开此链接会直接进入自己的视图。",
+        "hint": "打开后显示面板。你可以在“成员与访问”中查看访客。成员打开此链接会直接进入自己的视图。",
         "notPublic": {
           "lead": "此项目未公开，因此没有访客链接。",
           "body": "只有项目的访问权限为<strong>公开</strong>时，访客才能阅读它，可在<link>成员与访问</link>中设置。"
@@ -2677,7 +2683,7 @@
         "title": "要重命名此子域名吗？",
         "warningTitle": "旧地址将继续有效，并且永不释放。",
         "warningBody": "{old} 将永久重定向到此处，任何人都无法再认领它——包括你自己。",
-        "remaining": "此次之后你还可重命名 {count} 次。",
+        "remaining": "此次之后你还可重命名 {count, plural, other {#}} 次。",
         "cancel": "取消",
         "confirm": "重命名"
       },
@@ -2756,7 +2762,7 @@
           "title": "添加域名",
           "label": "域名",
           "helper": "此项目将在该域名的根路径提供访问。",
-          "recordsHeading": "请创建以下 {count} 条记录",
+          "recordsHeading": "请创建以下 {count, plural, other {#}} 条记录",
           "type": "类型",
           "name": "名称",
           "value": "值",
@@ -2801,7 +2807,7 @@
       "refresh": "刷新",
       "refreshLabel": "从 GitHub 刷新访问状态",
       "refreshError": "Motir 暂时联系不上 GitHub。什么都没有改变——请稍后再试。",
-      "setLabel": "{count} 个仓库：",
+      "setLabel": "{count, plural, other {#}} 个仓库：",
       "setChip": {
         "notCreated": "尚未创建",
         "yours": "你们自己的"
@@ -2836,8 +2842,8 @@
         "push": "推送",
         "admin": "管理员"
       },
-      "expand": "{count} 个仓库",
-      "expandPartial": "{count} 个仓库 · 已发出 {sent} 个",
+      "expand": "{count, plural, other {#}} 个仓库",
+      "expandPartial": "{count, plural, other {#}} 个仓库 · 已发出 {sent} 个",
       "expandLabel": "展开{name}在各仓库的访问情况",
       "invite": "邀请",
       "inviteLabel": "邀请{name}",
@@ -2853,7 +2859,7 @@
       "useDifferent": "换一个账号",
       "self": {
         "title": "你还没有连接 GitHub",
-        "body": "{projectName}的代码是私有的。连接 GitHub，Motir 就会邀请你加入全部 {count} 个仓库。",
+        "body": "{projectName}的代码是私有的。连接 GitHub，Motir 就会邀请你加入全部 {count, plural, other {#}} 个仓库。",
         "identityCaption": "Motir 邀请加入本项目代码的 GitHub 账号",
         "verified": "已验证"
       },
@@ -2863,7 +2869,7 @@
         "body": "计划获批后，Motir 会创建这个项目的仓库——能编辑{projectName}的每个人都会收到邀请。在那之前没有可授予的访问。",
         "action": "查看计划",
         "connectedTitle": "Motir 还没有为{projectName}创建任何仓库",
-        "connectedBody": "本页面只统计 Motir 创建的仓库。{projectName} 使用的是已连接到你的组织的 {count} 个仓库——团队自己拥有的仓库通过 GitHub 授予访问权限，而不是通过 Motir。",
+        "connectedBody": "本页面只统计 Motir 创建的仓库。{projectName} 使用的是已连接到你的组织的 {count, plural, other {#}} 个仓库——团队自己拥有的仓库通过 GitHub 授予访问权限，而不是通过 Motir。",
         "connectedAction": "查看本项目的仓库"
       },
       "establishing": {
@@ -2878,7 +2884,7 @@
       "confirmTitle": "开始公开构建？",
       "confirmLead": "你的项目将变成一个任何人都能在网上打开的公开页面——无需账号，搜索引擎也可以收录。以下是具体会发生的变化：",
       "whatBecomesLabel": "哪些内容将公开",
-      "bulletBoard": "你的<b>看板</b>和<b>路线图</b>——状态、进度，以及正在交付的内容。",
+      "bulletBoard": "你的<b>面板</b>和<b>路线图</b>——状态、进度，以及正在交付的内容。",
       "bulletItems": "你的<b>工作项</b>——标题、类型和描述，可被搜索引擎抓取。",
       "bulletSignIn": "访客<b>仅在</b>提交请求、点赞或评论时才需登录——他们无法编辑任何其他内容。",
       "bulletPrivate": "保持私密：<b>负责人、估算和内部评论</b>始终不会显示。",
@@ -2887,7 +2893,7 @@
       "entryButton": "公开构建",
       "promoTitle": "公开构建这个项目",
       "promoSub": "将项目变成一个公开的“公开构建”页面。",
-      "promoBullet1": "向任何人分享你的看板、路线图和工作项——无需账号，可被搜索引擎收录。",
+      "promoBullet1": "向任何人分享你的面板、路线图和工作项——无需账号，可被搜索引擎收录。",
       "promoBullet2": "让他人提交、点赞并评论需求——仅在操作时才需登录。",
       "promoBullet3": "内部字段保持私密——负责人、估算和内部评论始终不会显示。",
       "learnMore": "了解更多",
@@ -3160,16 +3166,16 @@
             "desc": "有人在评论或描述中@提及你。"
           },
           "commented": {
-            "label": "你参与的事项有新评论",
-            "desc": "你报告、被指派或评论过的事项有了新评论。"
+            "label": "你参与的工作项有新评论",
+            "desc": "你报告、被指派或评论过的工作项有了新评论。"
           },
           "assigned": {
             "label": "指派给你",
-            "desc": "有事项被指派给你。"
+            "desc": "有工作项被指派给你。"
           },
           "transitioned": {
-            "label": "你关注的事项状态变更",
-            "desc": "有人变更你关注的事项的状态（包括移至完成或重新打开）。"
+            "label": "你关注的工作项状态变更",
+            "desc": "有人变更你关注的工作项的状态（包括移至完成或重新打开）。"
           },
           "code_access_refused": {
             "label": "无法授予代码访问权限",
@@ -3179,7 +3185,7 @@
         "soon": "即将推出",
         "cellAria": "{event}的{channel}通知",
         "cellAriaSoon": "{event}的{channel}通知（即将推出）",
-        "defaultsNote": "直接相关的事件——提及、你的事项的评论以及指派——默认在两个渠道均开启。未改动的行使用该默认值（在你关闭之前不会关闭）。",
+        "defaultsNote": "直接相关的事件——提及、你的工作项的评论以及指派——默认在两个渠道均开启。未改动的行使用该默认值（在你关闭之前不会关闭）。",
         "status": {
           "saving": "保存中…",
           "saved": "已保存",
@@ -3214,7 +3220,7 @@
           "email": {
             "name": "邮箱",
             "desc": "验证码发送至{email}。虽然方便，但邮箱并不是可靠的第二重验证——需先设置身份验证器后才可用。",
-            "descOn": "验证码发送至{email}，{minutes}分钟内有效。在验证环节以“给我发送邮件验证码”提供——不会优先要求。",
+            "descOn": "验证码发送至{email}，{minutes, plural, other {#}}分钟内有效。在验证环节以“给我发送邮件验证码”提供——不会优先要求。",
             "available": "可用",
             "unavailable": "请先设置身份验证器"
           },
@@ -3230,7 +3236,7 @@
           "generateTitle": "生成新的一组",
           "generateDesc": "替换全部十个。新代码显示的那一刻，现有代码立即失效。",
           "generate": "生成新代码",
-          "low": "你还剩{remaining}个恢复代码。请在用完之前生成新的一组。",
+          "low": "你还剩{remaining, plural, other {#}}个恢复代码。请在用完之前生成新的一组。",
           "exhausted": "你已用完所有恢复代码。如果现在丢失身份验证器，将只能通过邮件验证码登录。请生成新的一组。"
         },
         "stepUp": {
@@ -3269,7 +3275,7 @@
         },
         "regenerate": {
           "title": "生成新的恢复代码？",
-          "body": "你当前的{remaining}个代码将立即失效。你会获得十个新代码，仅显示一次。",
+          "body": "你当前的{remaining, plural, other {#}}个代码将立即失效。你会获得十个新代码，仅显示一次。",
           "warning": "如果你打印过旧代码或将其保存在密码管理器中，请一并替换——它们在此之后将无法使用。",
           "confirm": "生成新代码"
         },
@@ -3672,7 +3678,7 @@
           "description": "此规则尚未触发。当某个工作项匹配其触发器和条件时，每次运行都会显示在此处，包含运行结果、耗时以及触发该次运行的工作项。"
         },
         "orgClosingNote": "该组织已计划删除",
-        "heldByMarkNote": "此事项已标记为过时或已弃用，因此保持完成状态"
+        "heldByMarkNote": "此工作项已标记为过时或已弃用，因此保持完成状态"
       }
     },
     "aiPlanning": {
@@ -3707,12 +3713,12 @@
         "enableLabel": "由Motir规划Sprint",
         "enableHint": "Motir会依据就绪工作提议后续Sprint；创建任何Sprint前都需你批准。",
         "lengthLabel": "Sprint长度",
-        "lengthHint": "按代理的吞吐量设定，而非人类的Sprint节奏。若你的团队按人类节奏工作，可将其调长。",
+        "lengthHint": "按智能体的吞吐量设定，而非人类的Sprint节奏。若你的团队按人类节奏工作，可将其调长。",
         "lengthUnit": "天",
         "lengthInvalid": "请选择1至14天之间的Sprint长度。",
         "decreaseAria": "缩短Sprint长度",
         "increaseAria": "延长Sprint长度",
-        "rationale": "代理在几分钟内即可完成一个工作项，因此两周的Sprint会把整份计划藏进一个区间。短Sprint让规划→构建→审阅始终是一个你真正看得见的循环。"
+        "rationale": "智能体在几分钟内即可完成一个工作项，因此两周的Sprint会把整份计划藏进一个区间。短Sprint让规划→构建→审阅始终是一个你真正看得见的循环。"
       },
       "planner": {
         "title": "规划器",
@@ -3882,7 +3888,7 @@
     },
     "apiTokens": {
       "heading": "令牌",
-      "subtitle": "个人访问令牌让你的编码 agent 通过 MCP 服务器连接 Motir。每个令牌都以你的身份执行——给每个 agent 单独分配一个，不再使用的随时吊销。",
+      "subtitle": "个人访问令牌让你的编码智能体通过 MCP 服务器连接 Motir。每个令牌都以你的身份执行——给每个智能体单独分配一个，不再使用的随时吊销。",
       "cli": {
         "title": "连接 CLI",
         "subtitle": "在终端里运行 Motir——<mono>motir next</mono>、<mono>motir run</mono>、<mono>motir auto</mono>。",
@@ -3891,7 +3897,7 @@
         "copyInstall": "复制安装命令",
         "copySignIn": "复制登录命令",
         "next": "<mono>motir login</mono> 会显示一个短代码并在浏览器中打开 Motir。在那里确认后终端即已连接——不需要手动复制任何令牌。",
-        "headless": "这台机器上没有浏览器？<mono>motir login</mono> 会打印代码和链接，你可以在任意设备上打开，因此 SSH 会话和容器都用同一条命令。若是无人值守的 agent，改为设置 <mono>MOTIR_TOKEN</mono>。",
+        "headless": "这台机器上没有浏览器？<mono>motir login</mono> 会打印代码和链接，你可以在任意设备上打开，因此 SSH 会话和容器都用同一条命令。若是无人值守的智能体，改为设置 <mono>MOTIR_TOKEN</mono>。",
         "guide": "阅读 CLI 指南",
         "tie": "已确认的终端会以 <code>CLI · {host}</code> 出现在下方列表中——在那里吊销它即可断开该终端。",
         "tieEmpty": "已确认的终端将以 <code>CLI · {host}</code> 出现在下方列表中。",
@@ -3933,7 +3939,7 @@
         "hideScopes": "隐藏 {label} 的权限范围",
         "lockedWhy": "你在此项目中没有该权限。"
       },
-      "expiresIn": "{days} 天后",
+      "expiresIn": "{days, plural, other {#}} 天后",
       "expiresNever": "永不",
       "lastUsedNever": "从未",
       "revokeAria": "吊销令牌 {label}",
@@ -3947,14 +3953,14 @@
         "title": "创建令牌",
         "description": "令牌只会在创建后显示一次，请妥善保存。",
         "labelField": "名称",
-        "labelHelper": "便于识别此令牌的名称——例如使用它的 agent 或设备。",
+        "labelHelper": "便于识别此令牌的名称——例如使用它的智能体或设备。",
         "labelPlaceholder": "claude-code",
         "orgField": "组织",
         "workspaceField": "工作区",
         "defaultWorkspace": "默认",
         "scopeHelper": "此令牌仅能访问你在此选择的工作区。",
         "expiresField": "过期时间",
-        "expiresHelper": "过期后令牌将停止工作，需要为 agent 重新签发。",
+        "expiresHelper": "过期后令牌将停止工作，需要为智能体重新签发。",
         "submit": "创建令牌",
         "cancel": "取消",
         "errorTitle": "无法创建令牌",
@@ -3973,7 +3979,7 @@
       },
       "revokeConfirm": {
         "title": "吊销“{label}”？",
-        "body": "使用此令牌的 agent 将立即失去对 Motir 的访问权限。此操作无法撤销——你需要创建新令牌才能重新连接。",
+        "body": "使用此令牌的智能体将立即失去对 Motir 的访问权限。此操作无法撤销——你需要创建新令牌才能重新连接。",
         "confirm": "吊销令牌",
         "cancel": "取消",
         "errorTitle": "无法吊销令牌",
@@ -3981,13 +3987,13 @@
       },
       "empty": {
         "title": "还没有令牌",
-        "body": "令牌让你的编码 agent 通过 MCP 服务器与 Motir 对话——以你的身份列出就绪工作、打开工作项、移动它们并发表评论。",
+        "body": "令牌让你的编码智能体通过 MCP 服务器与 Motir 对话——以你的身份列出就绪工作、打开工作项、移动它们并发表评论。",
         "guideLink": "阅读 MCP 配置指南",
-        "bodyAfterLink": "，连接你的第一个 agent。"
+        "bodyAfterLink": "，连接你的第一个智能体。"
       },
       "toast": {
         "title": "令牌已复制",
-        "body": "现在就把它粘贴到 agent 的 MCP 配置中——它不会再次显示。"
+        "body": "现在就把它粘贴到智能体的 MCP 配置中——它不会再次显示。"
       }
     },
     "rolesPage": {
@@ -4072,7 +4078,7 @@
         "code-access": "谁可以克隆和推送本项目的代码，由项目管理员管理。你仍可在 Git 设置中连接自己的 GitHub 账号。",
         "workflow": "状态及其之间的流转由项目管理员管理。如需调整工作流，请联系管理员。",
         "approvals": "本项目需要哪些审批——以及在有人处理之前会一直挂起工作的关卡——由项目管理员管理。如需开启或关闭某个关卡，请联系管理员。",
-        "board": "看板配置——列、限制与泳道——由项目管理员管理。如需调整列或限制，请联系管理员。",
+        "board": "面板配置——列、限制与泳道——由项目管理员管理。如需调整列或限制，请联系管理员。",
         "estimation": "本项目如何估算工作量，由项目管理员管理。如需调整估算方式，请联系管理员。",
         "fields": "自定义字段由项目管理员管理。如需新增或修改字段，请联系管理员。",
         "components": "模块由项目管理员管理。如需新增或修改，请联系管理员。",
@@ -4227,10 +4233,10 @@
     "cancel": "取消",
     "save": "保存",
     "defaultBadge": "默认",
-    "boardListErrorRetry": "无法加载看板 · 重试",
-    "switcherTriggerAria": "切换看板",
-    "switcherMenuAria": "切换看板",
-    "switcherMenuCap": "看板",
+    "boardListErrorRetry": "无法加载面板 · 重试",
+    "switcherTriggerAria": "切换面板",
+    "switcherMenuAria": "切换面板",
+    "switcherMenuCap": "面板",
     "configureBoardTriggerAria": "选择要配置的面板",
     "configureBoardMenuAria": "选择要配置的面板",
     "manageBoardAria": "管理 {name}",
@@ -4238,31 +4244,31 @@
     "setDefaultBoard": "设为默认",
     "boardSettings": "面板设置",
     "deleteBoard": "删除",
-    "lastBoardNote": "每个项目至少保留一个看板，因此最后一个看板无法删除。",
-    "newBoard": "新建看板",
-    "newBoardTitle": "新建看板",
-    "renameBoardTitle": "重命名看板",
-    "boardNameLabel": "看板名称",
-    "boardNameRequired": "请输入看板名称。",
-    "boardTypeLabel": "看板类型",
+    "lastBoardNote": "每个项目至少保留一个面板，因此最后一个面板无法删除。",
+    "newBoard": "新建面板",
+    "newBoardTitle": "新建面板",
+    "renameBoardTitle": "重命名面板",
+    "boardNameLabel": "面板名称",
+    "boardNameRequired": "请输入面板名称。",
+    "boardTypeLabel": "面板类型",
     "boardTypeKanban": "看板",
     "boardTypeScrum": "Scrum",
-    "newBoardSeedHint": "新看板会按项目工作流生成默认列，创建后即可使用。",
-    "createBoard": "创建看板",
+    "newBoardSeedHint": "新面板会按项目工作流生成默认列，创建后即可使用。",
+    "createBoard": "创建面板",
     "deleteBoardTitle": "删除“{name}”？",
-    "deleteBoardBody": "此操作会删除该看板及其列与泳道配置。",
+    "deleteBoardBody": "此操作会删除该面板及其列与泳道配置。",
     "deleteBoardCalloutLead": "工作项不会被删除。",
-    "deleteBoardCalloutBody": "工作项属于项目，而非看板——它们仍保留在Motir中，并可在其他看板上查看。",
-    "deleteBoardConfirm": "删除看板",
-    "boardCreatedAnnounce": "已创建看板“{name}”，现已切换至该看板。",
-    "boardRenamedAnnounce": "看板已重命名为“{name}”。",
-    "boardSetDefaultAnnounce": "“{name}”已设为默认看板。",
-    "boardDeletedAnnounce": "已删除看板“{name}”，现正查看“{current}”。",
-    "boardWriteErrorTitle": "无法保存看板更改",
-    "boardCreateErrorDescription": "无法创建看板，请重试。",
-    "boardRenameErrorDescription": "无法重命名看板，更改已撤销。",
-    "boardSetDefaultErrorDescription": "无法设置默认看板，更改已撤销。",
-    "boardDeleteErrorDescription": "无法删除看板，更改已撤销。",
+    "deleteBoardCalloutBody": "工作项属于项目，而非面板——它们仍保留在Motir中，并可在其他面板上查看。",
+    "deleteBoardConfirm": "删除面板",
+    "boardCreatedAnnounce": "已创建面板“{name}”，现已切换至该面板。",
+    "boardRenamedAnnounce": "面板已重命名为“{name}”。",
+    "boardSetDefaultAnnounce": "“{name}”已设为默认面板。",
+    "boardDeletedAnnounce": "已删除面板“{name}”，现正查看“{current}”。",
+    "boardWriteErrorTitle": "无法保存面板更改",
+    "boardCreateErrorDescription": "无法创建面板，请重试。",
+    "boardRenameErrorDescription": "无法重命名面板，更改已撤销。",
+    "boardSetDefaultErrorDescription": "无法设置默认面板，更改已撤销。",
+    "boardDeleteErrorDescription": "无法删除面板，更改已撤销。",
     "sprintRegionLabel": "{name} — {state}，{remaining}",
     "sprintState": {
       "planned": "已规划",
@@ -4284,7 +4290,7 @@
     "sprintColumnPoints": "{points} 点",
     "sprintColumnPointsTitle": "此列共 {points} 个故事点",
     "noActiveSprintTitle": "没有进行中的 Sprint",
-    "noActiveSprintDescription": "此看板当前没有进行中的 Sprint。在待办列表中规划并开始一个 Sprint，其事项将在此处的工作流列中显示。",
+    "noActiveSprintDescription": "此面板当前没有进行中的 Sprint。在待办列表中规划并开始一个 Sprint，其工作项将在此处的工作流列中显示。",
     "noActiveSprintCta": "前往待办列表",
     "announcementHeld": "{key} 已退回。{line}",
     "announcementPlanHeld": "{key} 已退回。它由 {plan} 占用。{line}",
@@ -4348,7 +4354,7 @@
       "approveLabel": "批准",
       "approving": "正在批准…",
       "declineLabel": "拒绝",
-      "approved": "已创建 {count} 个子项",
+      "approved": "已创建 {count, plural, other {#}} 个子项",
       "error": "出了点问题（{code}）。"
     },
     "lanes": {
@@ -4400,8 +4406,8 @@
     "rowActions": "工作项操作",
     "selectRow": "选择 {key}",
     "deselectRow": "取消选择 {key}",
-    "selectionBarLabel": "已选择 {count} 个工作项",
-    "selectedCount": "已选择 {count} 个",
+    "selectionBarLabel": "已选择 {count, plural, other {#}} 个工作项",
+    "selectedCount": "已选择 {count, plural, other {#}} 个",
     "moveToSprint": "移动到Sprint",
     "moveToBacklog": "移动到待办列表",
     "moveToTop": "移动到待办列表顶部",
@@ -4509,9 +4515,9 @@
     "creatingSprint": "创建中…",
     "createSprintErrorTitle": "无法创建Sprint",
     "createSprintErrorDescription": "创建Sprint时出现问题。请重试。",
-    "moveRejectedTitle": "无法移动事项",
+    "moveRejectedTitle": "无法移动工作项",
     "moveErrorDescription": "无法移动 {key}，已恢复到原位置，请重试。",
-    "dndInstructions": "按空格键拿起事项，用方向键在Sprint与待办列表之间移动，再次按空格键放下，按Esc取消。",
+    "dndInstructions": "按空格键拿起工作项，用方向键在Sprint与待办列表之间移动，再次按空格键放下，按Esc取消。",
     "announcementPickedUp": "已拿起 {key}。",
     "announcementOver": "{key} 正位于{region}上方。",
     "announcementDropped": "已将 {key} 放入{region}。",
@@ -4527,15 +4533,15 @@
       "completedPoints": "{committed} 点中已完成 {completed} 点",
       "completedPointsUnestimated": "{completed, plural, =0 {未估算点数} other {已完成 # 点}}",
       "carryOverPoints": "{points, plural, =0 {无需顺延} other {# 点顺延}}",
-      "chooserLabel": "将 {count, plural, other {# 个未完成事项}}移动到",
-      "carryBacklog": "Backlog",
-      "carryBacklogSub": "未完成的事项按排序返回 Backlog",
+      "chooserLabel": "将 {count, plural, other {# 个未完成工作项}}移动到",
+      "carryBacklog": "待办列表",
+      "carryBacklogSub": "未完成的工作项按排序返回待办列表",
       "carrySprint": "未来的 Sprint",
-      "carrySprintSub": "将未完成的事项滚入一个计划中的 Sprint",
+      "carrySprintSub": "将未完成的工作项滚入一个计划中的 Sprint",
       "carrySprintSelectLabel": "目标 Sprint",
       "carrySprintSelectPlaceholder": "选择一个 Sprint…",
-      "noPlannedSprints": "没有可滚入的计划中 Sprint — 请先在 Backlog 创建一个。",
-      "allComplete": "所有事项均已完成 — 无需顺延。",
+      "noPlannedSprints": "没有可滚入的计划中 Sprint — 请先在待办列表创建一个。",
+      "allComplete": "所有工作项均已完成 — 无需顺延。",
       "confirm": "完成 Sprint",
       "completedToast": "{name} 已完成",
       "errorTitle": "无法完成 Sprint",
@@ -4553,12 +4559,12 @@
       "pointsCommitted": "承诺",
       "pointsCompleted": "已完成",
       "pointsNotCompleted": "未完成",
-      "scopeChange": "{count, plural, other {# 个事项}}在 Sprint 开始后加入（范围变更）",
+      "scopeChange": "{count, plural, other {# 个工作项}}在 Sprint 开始后加入（范围变更）",
       "sectionCompleted": "已完成",
       "sectionNotCompleted": "未完成",
-      "viewAllInIssues": "在事项中查看全部",
-      "emptyCompleted": "本 Sprint 没有已完成的事项。",
-      "emptyIncomplete": "没有未完成的事项。",
+      "viewAllInIssues": "在工作项中查看全部",
+      "emptyCompleted": "本 Sprint 没有已完成的工作项。",
+      "emptyIncomplete": "没有未完成的工作项。",
       "carriedTo": "{destination}",
       "burndown": "Sprint 图表",
       "burndownGuideline": "理想线",
@@ -4620,7 +4626,7 @@
       "velocityTableCaption": "速率 — 每个Sprint的承诺与已完成{statistic}。平均完成：{average}。",
       "velocityTableSprint": "Sprint",
       "notFound": "此 Sprint 报告不可用。",
-      "backToBacklog": "返回 Backlog"
+      "backToBacklog": "返回待办列表"
     },
     "aiPlan": {
       "cta": "用Motir规划Sprint",
@@ -4630,15 +4636,15 @@
       "commandLabel": "用Motir规划Sprint",
       "runningTitle": "正在规划你的Sprint…",
       "cancel": "取消",
-      "stepRead": "已读取{count}个就绪工作项及其阻塞关系",
+      "stepRead": "已读取{count, plural, other {#}}个就绪工作项及其阻塞关系",
       "stepSize": "已按{days}天Sprint、每天{minutes}智能体分钟的容量估算",
       "stepPack": "正在打包第{n}个Sprint（共{total}个）…",
       "stepDone": "完成",
       "progressLabel": "Sprint规划进度",
       "reviewTitle": "Sprint规划建议",
-      "reviewSub": "{sprints}个Sprint · {items}个工作项 · 每个{days}天——你确认前不会创建任何内容。",
+      "reviewSub": "{sprints, plural, other {#}}个Sprint · {items, plural, other {#}}个工作项 · 每个{days}天——你确认前不会创建任何内容。",
       "proposed": "建议",
-      "lengthDays": "{days}天",
+      "lengthDays": "{days, plural, other {#}}天",
       "capacity": "{used}/{total}——占{days}天Sprint（每天{minutes}智能体分钟）的{pct}%",
       "capacityOver": "{used}/{total}——超出{over}，因为{key}阻塞了其余工作项，只能放在一起",
       "capacityOverPlain": "{used}/{total}——超出{over}",
@@ -4650,8 +4656,8 @@
       "whyLabel": "排序依据。",
       "approveFine": "确认后会创建这些Sprint并把工作项移入。除此之外不会改动任何内容——不改状态，也不开启Sprint。",
       "discard": "丢弃",
-      "approve": "创建{count}个Sprint",
-      "sprintRegionLabel": "{name}，建议，{count}个工作项",
+      "approve": "创建{count, plural, other {#}}个Sprint",
+      "sprintRegionLabel": "{name}，建议，{count, plural, other {#}}个工作项",
       "sprintRowsLabel": "{name}的建议工作项",
       "emptyTitle": "暂无可安排的工作",
       "emptyBody": "能进入Sprint的工作项都已在Sprint里了。等有新的就绪工作，或当前Sprint完成后，Motir就有可打包的内容了。",
@@ -4672,8 +4678,8 @@
       "retry": "重试",
       "planAgain": "重新规划",
       "topUp": "充值",
-      "doneTitle": "已创建{count}个Sprint",
-      "doneBody": "{items}个工作项已移入{names}。"
+      "doneTitle": "已创建{count, plural, other {#}}个Sprint",
+      "doneBody": "{items, plural, other {#}}个工作项已移入{names}。"
     }
   },
   "estimation": {
@@ -5080,7 +5086,7 @@
       "reporter": "创建人",
       "sprint": "Sprint",
       "label": "标签",
-      "component": "组件"
+      "component": "模块"
     }
   },
   "dashboards": {
@@ -5178,7 +5184,7 @@
       "filter_results_name": "筛选结果",
       "filter_results_desc": "来自已保存筛选器或项目的分页工作项表格（每页最多 50 行）。",
       "distribution_name": "分布",
-      "distribution_desc": "按状态、经办人、优先级、类型等对工作项进行细分的圆环图。",
+      "distribution_desc": "按状态、负责人、优先级、类型等对工作项进行细分的圆环图。",
       "created_vs_resolved_name": "创建对比解决",
       "created_vs_resolved_desc": "随时间推移，创建的工作项与已解决的工作项的双序列趋势。",
       "average_age_name": "平均存留时长",
@@ -5226,11 +5232,11 @@
       "kind": "工作项类型",
       "status": "状态",
       "priority": "优先级",
-      "assignee": "经办人",
-      "reporter": "报告人",
-      "sprint": "冲刺",
+      "assignee": "负责人",
+      "reporter": "创建人",
+      "sprint": "Sprint",
       "label": "标签",
-      "component": "组件"
+      "component": "模块"
     },
     "widgetTitle": {
       "filter_results": "筛选结果",
@@ -5285,7 +5291,7 @@
     "colKey": "编号",
     "colSummary": "摘要",
     "colPriority": "优先级",
-    "colAssignee": "经办人",
+    "colAssignee": "负责人",
     "assigned": "已分配",
     "unassigned": "未分配"
   },
@@ -5333,7 +5339,7 @@
       "newWorkspace": "新建工作区",
       "switchOrg": "切换组织",
       "createOrg": "创建组织",
-      "workspacesCount": "{count} 个工作区",
+      "workspacesCount": "{count, plural, other {#}} 个工作区",
       "usage": "用量与费用",
       "security": "安全"
     },
@@ -5349,15 +5355,15 @@
       "save": "保存更改",
       "saved": "组织已更新",
       "saveError": "无法保存更改",
-      "workspacesSummary": "{count} 个工作区",
-      "membersSummary": "{count} 名成员",
+      "workspacesSummary": "{count, plural, other {#}} 个工作区",
+      "membersSummary": "{count, plural, other {#}} 名成员",
       "billing": "账单与用量",
       "comingSoon": "即将推出",
       "billingSub": "套餐、点数和用量都归集到组织。",
       "billingNote": "该组织的账单、点数和用量将在此处显示——会在后续版本中推出。目前尚无可用的账单控件；此占位用于固定布局位置。",
       "workspaceConfig": "工作区配置",
-      "workspaceConfigSub": "{count, plural, one {在你只有一个工作区时在此管理——添加第二个工作区后会拆分为独立区域。} other {在此管理——再添加一个工作区后会拆分为独立区域。}}",
-      "workspaceConfigBadge": "{count} 个工作区",
+      "workspaceConfigSub": "{count, plural, =1 {在你只有一个工作区时在此管理——添加第二个工作区后会拆分为独立区域。} other {在此管理——再添加一个工作区后会拆分为独立区域。}}",
+      "workspaceConfigBadge": "{count, plural, other {#}} 个工作区",
       "dangerZone": "危险区域",
       "transferTitle": "转让所有权",
       "transferDesc": "将组织交给另一位成员。对方成为所有者——唯一可以转让或删除组织的人——你将成为管理员。",
@@ -5392,7 +5398,7 @@
       "title": "成员",
       "subtitle": "{org} 组织中跨所有工作区的全部成员。组织角色在整个组织范围内生效；每个人所属的工作区单独显示。",
       "people": "成员",
-      "count": "{count} 人",
+      "count": "{count, plural, other {#}} 人",
       "invite": "邀请加入组织…",
       "you": "（你）",
       "noWorkspaces": "无工作区",
@@ -5412,7 +5418,7 @@
       "next": "下一页"
     },
     "seat": {
-      "count": "{n} / {n} 个席位",
+      "count": "{n, plural, other {#}} / {n, plural, other {#}} 个席位",
       "price": "${total} / {period}",
       "period": "{cadence, select, monthly {月} other {年}}",
       "scaled": "已订阅",
@@ -5474,7 +5480,7 @@
       "errorTitle": "无法加载工作区",
       "errorDescription": "获取该组织的工作区时出错。请重试。",
       "removeTitle": "移除 {workspace}？",
-      "removeDesc": "这将永久删除该工作区及其中的一切：{projects, plural, other {# 个项目}}及其工作项、迭代和看板。其中的 {members, plural, other {# 名成员}}将失去对它的访问权限，但仍留在 {org} 中。",
+      "removeDesc": "这将永久删除该工作区及其中的一切：{projects, plural, other {# 个项目}}及其工作项、Sprint和面板。其中的 {members, plural, other {# 名成员}}将失去对它的访问权限，但仍留在 {org} 中。",
       "removeCodeIndex": "Motir 为该工作区的仓库建立的代码索引会被立即删除——移除工作区没有任何恢复期。",
       "removeLastWorkspace": "这是 {org} 唯一的工作区。移除后，该组织将没有任何工作区，直到有人新建一个。",
       "removeConfirmLabel": "输入 {workspace} 以确认",
@@ -5519,10 +5525,10 @@
       "title": "删除 {org}？",
       "step1Sub": "这会安排删除整个组织。以下是将被删除的内容。",
       "step1Label": "第 1 步，共 2 步 · 将被删除的内容",
-      "workspaces": "<b>{workspaces} 个工作区、{projects} 个项目</b>及其中的一切——工作项、看板、迭代、评论、附件。",
-      "members": "<b>{count} 位成员</b>将失去访问权限。每人今天都会收到邮件，并可在 {date} 前下载自己的数据。",
+      "workspaces": "<b>{workspaces, plural, other {#}} 个工作区、{projects, plural, other {#}} 个项目</b>及其中的一切——工作项、面板、Sprint、评论、附件。",
+      "members": "<b>{count, plural, other {#}} 位成员</b>将失去访问权限。每人今天都会收到邮件，并可在 {date} 前下载自己的数据。",
       "exportLink": "下载你的数据",
-      "hostedRepos": "<b>{count} 个由 Motir 托管的代码仓库</b>将被删除。接管仓库即可保留其代码。",
+      "hostedRepos": "<b>{count, plural, other {#}} 个由 Motir 托管的代码仓库</b>将被删除。接管仓库即可保留其代码。",
       "takeOver": "接管",
       "connectedRepos": "你从 GitHub 或 GitLab 连接的代码仓库永远不会被删除——Motir 只会断开与它们的连接。",
       "subscription": "<b>你的订阅不会续订。</b>当前计费周期会持续到结束；不会再产生任何费用。",
@@ -5548,7 +5554,7 @@
     },
     "scheduled": {
       "title": "已安排于 {date} 删除",
-      "body": "{name} 于 {scheduledAt} 安排了此操作。<b>还剩 {daysLeft} 天。</b>在此之前，{org} 对所有人只读，订阅不会续订，你可以随时取消。",
+      "body": "{name} 于 {scheduledAt} 安排了此操作。<b>还剩 {daysLeft, plural, other {#}} 天。</b>在此之前，{org} 对所有人只读，订阅不会续订，你可以随时取消。",
       "someone": "某位成员",
       "cancel": "取消删除",
       "transferBlocked": "取消删除后才能转让所有权。"
@@ -5686,7 +5692,7 @@
     "viewOnly": "仅供查看——你无法编辑工作项",
     "viewsLabel": "公开视图",
     "tabOverview": "概览",
-    "tabBoard": "看板",
+    "tabBoard": "面板",
     "tabWorkItems": "工作项",
     "tabRoadmap": "路线图",
     "submitRequest": "提交需求",
@@ -5706,7 +5712,7 @@
     "atAGlance": "概况",
     "ctaTitle": "有想法？",
     "ctaBody": "告诉我们接下来该做什么。只需一分钟，直达团队。",
-    "autoIntroTagline": "Motir 上的一个公开项目——查看看板、工作项与路线图。登录后即可提交需求、点赞或评论。",
+    "autoIntroTagline": "Motir 上的一个公开项目——查看面板、工作项与路线图。登录后即可提交需求、点赞或评论。",
     "signInToActTitle": "登录后提交需求",
     "signInToActBody": "阅读对所有人开放；发布内容需要 Motir 账号。",
     "submitFormSubtitle": "把你想要的缺陷修复或新功能告诉 Motir 团队。",
@@ -5731,15 +5737,15 @@
     "rateLimitedBody": "稍等片刻再试 —— 你的草稿已保存。",
     "submitErrorTitle": "无法提交你的请求",
     "submitErrorBody": "出了点问题。你的草稿已保存 —— 请重试。",
-    "boardEmptyTitle": "暂无可展示的看板",
-    "boardEmptyBody": "该项目还没有公开看板，请稍后再来。",
+    "boardEmptyTitle": "暂无可展示的面板",
+    "boardEmptyBody": "该项目还没有公开面板，请稍后再来。",
     "boardColumnEmpty": "暂无内容",
     "boardProjectionNote": "负责人、估算与内部评论已被公开投影隐藏——它们不会被读取，而非仅在页面上隐藏。",
-    "boardTruncatedNote": "正在显示最近的 {cap} 个工作项。这是更大看板的公开预览。",
+    "boardTruncatedNote": "正在显示最近的 {cap} 个工作项。这是更大面板的公开预览。",
     "workItemsTitle": "工作项",
     "workItemsSubtitle": "该项目公开工作项的只读视图。",
     "workItemsEmptyTitle": "暂无工作项",
-    "workItemsEmptyBody": "该项目的公开看板上还没有内容。",
+    "workItemsEmptyBody": "该项目的公开面板上还没有内容。",
     "loadMore": "加载更多",
     "loadingMore": "加载中……",
     "loadError": "无法加载该项目",
@@ -5767,7 +5773,7 @@
     "kindFeature": "功能",
     "kindBug": "缺陷",
     "kindStory": "故事",
-    "kindEpic": "史诗",
+    "kindEpic": "篇章",
     "kindSubtask": "子任务",
     "faqTitle": "常见问题",
     "faqQ1": "任何人都能查看这个项目吗？",
@@ -5785,7 +5791,7 @@
     "treeTitle": "工作项树",
     "treeSubtitle": "以只读、可展开的方式查看本项目的公开工作项。",
     "treeEmptyTitle": "暂无工作项",
-    "treeEmptyBody": "该项目的公开看板上暂无内容。",
+    "treeEmptyBody": "该项目的公开面板上暂无内容。",
     "treeColTitle": "标题",
     "treeColStatus": "状态",
     "treeColPriority": "优先级",
@@ -5796,14 +5802,14 @@
     "statusInProgress": "进行中",
     "statusDone": "已完成",
     "epicNotPublicBadge": "未公开",
-    "epicNotPublicTitle": "此史诗未公开",
-    "epicNotPublicBody": "项目管理员已将此史诗的内容设为私有。",
+    "epicNotPublicTitle": "此篇章未公开",
+    "epicNotPublicBody": "项目管理员已将此篇章的内容设为私有。",
     "detailBreadcrumbLabel": "面包屑导航",
     "detailDescriptionLabel": "描述",
     "detailNoDescription": "暂无描述。",
     "detailChildIssuesLabel": "子工作项",
     "detailNoChildrenTitle": "暂无子工作项",
-    "detailNoChildrenBody": "此史诗还没有故事或任务。",
+    "detailNoChildrenBody": "此篇章还没有故事或任务。",
     "detailSideStatus": "状态",
     "detailSideType": "类型",
     "detailSideChildren": "子项",
@@ -5901,29 +5907,29 @@
     "deleteTitle": "删除此工作项？",
     "deleteCascadeBody": "这将永久删除 <b>{key}“{title}”</b> 及其下的所有内容。<b>此操作无法撤销。</b>",
     "deleteLeafBody": "这将永久删除 <b>{key}“{title}”</b>。它没有子项。<b>此操作无法撤销。</b>",
-    "deleteCascadeCount": "还将一并删除 <b>{count} 个子孙项</b> — {breakdown}。",
+    "deleteCascadeCount": "还将一并删除 <b>{count, plural, other {#}} 个子孙项</b> — {breakdown}。",
     "deleteHistoryRow": "这 {count} 个项目上的所有<b>评论、附件和活动历史</b>都会随之删除。",
     "deleteLeafHistoryRow": "其评论、附件和活动历史也会一并删除。",
     "deleteLinksRow": "其他项目指向它的<b>链接</b>（阻塞、关联、重复）将被移除。",
     "deleteLiveWarningHead": "此项下方的部分内容尚未归档。",
-    "deleteLiveWarningBody": "删除还将永久移除 <b>{count} 个尚未归档的活动工作项</b> — {breakdown}。它们仍在你的看板和列表中有效。（归档某个工作项永远不会归档其子孙项。）",
-    "deleteAllArchivedRow": "还将一并删除 <b>{count} 个子孙项</b> — {breakdown}。<b>它们都已归档</b> — 这里没有任何内容在你的看板中有效。",
+    "deleteLiveWarningBody": "删除还将永久移除 <b>{count, plural, other {#}} 个尚未归档的活动工作项</b> — {breakdown}。它们仍在你的面板和列表中有效。（归档某个工作项永远不会归档其子孙项。）",
+    "deleteAllArchivedRow": "还将一并删除 <b>{count, plural, other {#}} 个子孙项</b> — {breakdown}。<b>它们都已归档</b> — 这里没有任何内容在你的面板中有效。",
     "archiveAltLead": "只是想把它收起来？",
     "archiveAltBody": "<b>归档</b>会隐藏此工作项但保留它及其历史，且其子孙项仍然有效。你之后可以恢复它。",
     "archiveInstead": "改为归档",
     "cancel": "取消",
-    "deleteConfirmCascade": "删除 {count} 个项目",
+    "deleteConfirmCascade": "删除 {count, plural, other {#}} 个项目",
     "deleteConfirmLeaf": "删除工作项",
     "deleting": "正在删除…",
     "tryAgain": "重试",
     "deleteErrorTitle": "无法删除",
     "deleteErrorBody": "无法删除此项目。未做任何更改 — 该项目及其子孙项均完好无损。请检查网络连接后重试。",
     "deletedToast": "已删除 {key}",
-    "kindEpic": "{count} 个史诗",
-    "kindStory": "{count} 个故事",
-    "kindTask": "{count} 个任务",
-    "kindBug": "{count} 个缺陷",
-    "kindSubtask": "{count} 个子任务",
+    "kindEpic": "{count, plural, other {#}} 个篇章",
+    "kindStory": "{count, plural, other {#}} 个故事",
+    "kindTask": "{count, plural, other {#}} 个任务",
+    "kindBug": "{count, plural, other {#}} 个缺陷",
+    "kindSubtask": "{count, plural, other {#}} 个子任务",
     "archivedToast": "已归档 {key}",
     "undo": "撤销",
     "restoredToast": "已恢复 {key}",
@@ -5947,7 +5953,7 @@
     "brand": "Motir",
     "heroEyebrow": "项目广场",
     "heroTitle": "探索在 Motir 上公开的项目计划",
-    "heroLede": "浏览各团队公开分享的真实产品路线图与项目计划——工作项、看板与冲刺，无需注册即可免费阅读。按名称搜索、按主题筛选，并按热度排序。",
+    "heroLede": "浏览各团队公开分享的真实产品路线图与项目计划——工作项、面板与Sprint，无需注册即可免费阅读。按名称搜索、按主题筛选，并按热度排序。",
     "searchPlaceholder": "按名称或主题搜索公开项目…",
     "searchAria": "搜索公开项目",
     "searchSubmit": "搜索",
@@ -5995,9 +6001,9 @@
     "errorBody": "获取公开项目时出错。请检查网络连接后重试。",
     "retry": "重试",
     "faqHeading": "什么是项目广场？",
-    "faqLede": "项目广场是一个公开、可被抓取的目录，收录各团队选择在 Motir 上公开构建的项目——真实的路线图、看板与冲刺，无需账号即可免费阅读。",
+    "faqLede": "项目广场是一个公开、可被抓取的目录，收录各团队选择在 Motir 上公开构建的项目——真实的路线图、面板与Sprint，无需账号即可免费阅读。",
     "faqQ1": "什么是项目广场？",
-    "faqA1": "它是 Motir 上公开项目计划的公共目录。所列的每个项目都是团队主动公开的——你无需注册即可阅读其路线图、看板与工作项。",
+    "faqA1": "它是 Motir 上公开项目计划的公共目录。所列的每个项目都是团队主动公开的——你无需注册即可阅读其路线图、面板与工作项。",
     "faqQ2": "查看这些项目是免费的吗？",
     "faqA2": "是的。广场中的每个项目都完全公开、免费阅读——无需账号、没有付费墙。只有创建自己的项目时才需要账号。",
     "faqQ3": "项目是如何排序的？",
@@ -6008,7 +6014,7 @@
     "footProduct": "产品",
     "footProductOverview": "概览",
     "footProductPlanning": "AI 规划",
-    "footProductBoards": "看板与冲刺",
+    "footProductBoards": "面板与Sprint",
     "footProductPricing": "定价",
     "footCompany": "公司",
     "footCompanyAbout": "关于",
@@ -6016,9 +6022,9 @@
     "footCompanyOpenSource": "开源",
     "footCompanyContact": "联系",
     "metaTitle": "探索公开的项目计划 · Motir",
-    "metaDescription": "浏览各团队在 Motir 上公开构建的产品路线图与项目计划——工作项、看板与冲刺，无需注册即可免费阅读。",
+    "metaDescription": "浏览各团队在 Motir 上公开构建的产品路线图与项目计划——工作项、面板与Sprint，无需注册即可免费阅读。",
     "metaTitleTopic": "{topic} 项目 · 项目广场 · Motir",
-    "metaDescriptionTopic": "标记为 {topic} 的公开项目——来自在 Motir 上公开构建 {topic} 的团队的真实路线图、看板与冲刺。",
+    "metaDescriptionTopic": "标记为 {topic} 的公开项目——来自在 Motir 上公开构建 {topic} 的团队的真实路线图、面板与Sprint。",
     "topicBreadcrumbHome": "项目广场",
     "topicHeading": "{topic} 项目",
     "topicLede": "标记为 {topic} 的公开项目——来自公开构建团队的真实路线图与计划。",
@@ -6319,22 +6325,22 @@
       "tiers": {
         "free": {
           "useCase": "试用 Motir AI。",
-          "features": ["每种助理各体验一次"],
+          "features": ["每种智能体各体验一次"],
           "featuresOff": ["不按月刷新 · 无加购"]
         },
         "standard": {
-          "useCase": "详细规划，外加少量助理额度。",
-          "features": ["详细规划整个项目", "额度按月刷新 · 可加购", "可尝试助理任务"]
+          "useCase": "详细规划，外加少量智能体额度。",
+          "features": ["详细规划整个项目", "额度按月刷新 · 可加购", "可尝试智能体任务"]
         },
         "pro": {
-          "useCase": "详细规划，外加真正的助理工作。",
+          "useCase": "详细规划，外加真正的智能体工作。",
           "prev": "Standard",
-          "features": ["用助理处理真实任务", "需要时随时加购"]
+          "features": ["用智能体处理真实任务", "需要时随时加购"]
         },
         "max": {
-          "useCase": "详细规划，外加大量助理工作。",
+          "useCase": "详细规划，外加大量智能体工作。",
           "prev": "Pro",
-          "features": ["充足的持续助理工作余量", "满足繁忙团队的吞吐"]
+          "features": ["充足的持续智能体工作余量", "满足繁忙团队的吞吐"]
         },
         "enterprise": {
           "useCase": "定制用量，外加组织管控。",
@@ -6574,7 +6580,7 @@
         "scopeTitle": "我们要做什么",
         "scopeDesc": "我们就第一个版本的范围（做什么、不做什么）以及背后的关键决策达成一致。",
         "planTitle": "先有计划，再开始构建",
-        "planDesc": "一份完整的待办清单，Motir 据此构建 —— 并以路线图的形式跟踪每个史诗。"
+        "planDesc": "一份完整的待办清单，Motir 据此构建 —— 并以路线图的形式跟踪每个篇章。"
       },
       "optional": {
         "summary": "过程中的可选步骤",
@@ -6704,7 +6710,7 @@
             "cta": "设计外观"
           },
           "plan": {
-            "title": "计划 → 你的篇章",
+            "title": "计划 → 你的项目",
             "subtitle": "路线图从这里继续"
           }
         },
@@ -6780,7 +6786,7 @@
       "title": "生成你的计划",
       "back": "返回规划",
       "heading": "你的方向已确定",
-      "lead": "Motir 将据此生成计划——史诗、故事与任务，供你随后审阅。",
+      "lead": "Motir 将据此生成计划——篇章、故事与任务，供你随后审阅。",
       "baselineTitle": "将据此规划",
       "stepsReviewed": "{count, plural, other {已审阅 # 步}}",
       "designLabel": "设计",
@@ -6795,15 +6801,15 @@
     "noProjectTitle": "未选择项目",
     "noProjectDescription": "从切换器中选择或创建一个项目，以查看其路线图。",
     "emptyTitle": "路线图还是空的",
-    "emptyDescription": "随着计划成形，工作项会显示在这里。使用 Motir AI 进行规划以生成路线图，或手动添加一个史诗。",
+    "emptyDescription": "随着计划成形，工作项会显示在这里。使用 Motir AI 进行规划以生成路线图，或手动添加一个篇章。",
     "canvasAria": "{project} 路线图",
     "scopeAriaLabel": "路线图范围",
     "scopeWholeProject": "整个项目",
-    "scopeActiveSprint": "当前冲刺",
-    "scopeChip": "冲刺范围",
+    "scopeActiveSprint": "当前Sprint",
+    "scopeChip": "Sprint范围",
     "refresh": "刷新路线图",
-    "noActiveSprintTitle": "暂无进行中的冲刺",
-    "noActiveSprintDescription": "该项目当前没有进行中的冲刺。从看板启动一个冲刺即可查看其在路线图中的部分，或切换回“整个项目”。",
+    "noActiveSprintTitle": "暂无进行中的Sprint",
+    "noActiveSprintDescription": "该项目当前没有进行中的Sprint。从面板启动一个Sprint即可查看其在路线图中的部分，或切换回“整个项目”。",
     "canvas": {
       "breadcrumbRoot": "路线图",
       "ariaDefault": "项目路线图",
@@ -6833,14 +6839,14 @@
       "node": {
         "here": "当前位置",
         "ready": "就绪",
-        "notInSprint": "不在冲刺中",
+        "notInSprint": "不在Sprint中",
         "blockedElsewhere": "受阻于别处",
-        "blockerNotInSprint": "阻塞项不在冲刺中"
+        "blockerNotInSprint": "阻塞项不在Sprint中"
       },
       "anchor": {
         "defaultTitle": "被其他故事阻塞",
         "inParent": "位于 {parent} ↗",
-        "notInThisSprint": "不在本冲刺中 ↗",
+        "notInThisSprint": "不在本Sprint中 ↗",
         "elsewhere": "位于计划中的别处 ↗"
       },
       "legend": {
@@ -6851,8 +6857,8 @@
         "pendingMeaning": "阻塞项尚未完成",
         "blockedElsewhere": "受阻于别处",
         "blockedElsewhereMeaning": "其父项未被阻塞项的父项阻塞——请补上这条关联",
-        "blockerNotInSprint": "阻塞项不在冲刺中",
-        "blockerNotInSprintMeaning": "未完成且在冲刺之外",
+        "blockerNotInSprint": "阻塞项不在Sprint中",
+        "blockerNotInSprintMeaning": "未完成且在Sprint之外",
         "collapse": "隐藏依赖图例",
         "expand": "显示依赖图例"
       },
@@ -7016,7 +7022,7 @@
         },
         "failingOn": "<prs></prs> 的检查未通过。",
         "leftQueueOn": "<prs></prs> 已离开合并队列。",
-        "sentBack": "验收视频被退回重新运行。智能体会根据给出的理由在同一个拉取请求上修复，然后录制新的视频。",
+        "sentBack": "验收视频被退回重新运行。智能体会根据给出的理由在{count, plural, =1 {同一个拉取请求} other {同一组拉取请求}}上修复，然后录制新的视频。",
         "lead": "在终端中将修复交给智能体：",
         "how": "智能体在该拉取请求自己的分支上工作并推送，然后检查会重新运行。",
         "howMany": "智能体在每个拉取请求自己的分支上工作并推送，然后检查会重新运行。",
@@ -7029,7 +7035,7 @@
         },
         "gaveUp": {
           "pill": "已放弃",
-          "title": "<b>上一次修复在尝试 {attempts} 次后放弃</b> · <when></when>。",
+          "title": "<b>上一次修复在尝试 {attempts, plural, other {#}} 次后放弃</b> · <when></when>。",
           "titleNoCount": "<b>上一次修复已放弃</b> · <when></when>。",
           "body": "检查仍未通过。请再次运行，或打开拉取请求查看是哪项检查失败。"
         },
@@ -7038,31 +7044,31 @@
         },
         "which": {
           "conflict": "冲突需要新的提交。<code>motir fix</code> 会把它交给智能体；再次批准也无法让这些提交合入，因此在分支变化之前不会提供任何按钮。",
-          "failed": "合并队列失败需要新的提交，即使只是偶发失败也一样。<code>motir fix</code> 会把它交给代理：代理先合并目标分支再推送。这里不提供再次批准：那只会把队列刚刚拒绝的同一批提交重新排队。"
+          "failed": "合并队列失败需要新的提交，即使只是偶发失败也一样。<code>motir fix</code> 会把它交给智能体：智能体先合并目标分支再推送。这里不提供再次批准：那只会把队列刚刚拒绝的同一批提交重新排队。"
         },
         "conflictOn": "<prs></prs> 与 {base} 冲突，无法合并。",
         "conflictOnNoBase": "<prs></prs> 与其目标分支冲突，无法合并。",
-        "howConflict": "代理会在拉取请求自己的分支上变基或解决冲突、推送，检查随即重新运行。",
+        "howConflict": "智能体会在拉取请求自己的分支上变基或解决冲突、推送，检查随即重新运行。",
         "rearm": "这里没有可批准的东西。推送会移动 HEAD 并重新武装这个问题；下一次检查全绿时，会就新的提交提出一次合并审批。",
-        "sentBackByAgent": "审查代理退回了这些提交。智能体会在同一个拉取请求上修复它们，并把审查发现写进提示词。",
-        "personSentBack": "<b>{name}</b> 退回了这些提交。智能体会在同一个拉取请求上修复它们，并把退回原因写进提示词。",
-        "personSentBackAnon": "这些提交被退回了。智能体会在同一个拉取请求上修复它们，并把退回原因写进提示词。",
+        "sentBackByAgent": "审查智能体退回了这些提交。智能体会在{count, plural, =1 {同一个拉取请求} other {同一组拉取请求}}上修复它们，并把审查发现写进提示词。",
+        "personSentBack": "<b>{name}</b> 退回了这些提交。智能体会在{count, plural, =1 {同一个拉取请求} other {同一组拉取请求}}上修复它们，并把退回原因写进提示词。",
+        "personSentBackAnon": "这些提交被退回了。智能体会在{count, plural, =1 {同一个拉取请求} other {同一组拉取请求}}上修复它们，并把退回原因写进提示词。",
         "reviewedAgain": "下一个检查通过的版本会再次接受审查。",
         "hosted": {
-          "lead": "在这里用托管代理修复——无需终端：",
-          "button": "用托管代理修复",
+          "lead": "在这里用托管智能体修复——无需终端：",
+          "button": "用托管智能体修复",
           "orTerminal": "或者在终端中将修复交给智能体：",
           "eitherWay": "无论哪种方式，智能体都会在每个拉取请求自己的分支上工作并推送，然后检查会重新运行。",
           "fixing": {
-            "byYou": "<b>你</b>正在用托管代理修复 · <when></when>开始 · <run>{label}</run>",
-            "by": "<b>{name}</b> 正在用托管代理修复 · <when></when>开始 · <run>{label}</run>",
+            "byYou": "<b>你</b>正在用托管智能体修复 · <when></when>开始 · <run>{label}</run>",
+            "by": "<b>{name}</b> 正在用托管智能体修复 · <when></when>开始 · <run>{label}</run>",
             "why": "同一时间只运行一个修复。它推送后，检查会重新运行，下一个检查通过的版本会再次接受审查。"
           },
           "refused": {
             "taken": "未启动——已有一个修复在运行，由 <b>{name}</b> 于<when></when>开始。",
             "takenByYou": "未启动——你已有一个修复在运行（<when></when>开始）。",
             "outOfCredits": {
-              "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次用托管代理修复——或者在终端中修复。"
+              "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次用托管智能体修复——或者在终端中修复。"
             }
           }
         }
@@ -7265,13 +7271,13 @@
       "generatingTitle": "正在生成你的计划…",
       "generatingCount": "{count, plural, other {# 个工作项}}",
       "railTitle": "生成中",
-      "railLead": "正在阅读你的方向并起草计划。提议会随着进度逐层显示在画布上。",
+      "railLead": "正在阅读你的方向并起草计划。提案会随着进度逐层显示在画布上。",
       "proposingItems": "正在提议工作项…",
       "stopCta": "停止生成",
       "stopHint": "生成完成后即可审阅并批准",
       "redirecting": "正在打开你的计划…",
       "emptyTitle": "暂无可审阅的计划",
-      "emptyBody": "生成结束但没有任何提议。请在探索对话中补充方向，然后重试。",
+      "emptyBody": "生成结束但没有任何提案。请在探索对话中补充方向，然后重试。",
       "openDiscoveryCta": "打开探索对话",
       "retryCta": "重试",
       "failedTitle": "生成未能完成",
@@ -7397,7 +7403,7 @@
     "canvasAria": "{project} 的计划",
     "close": "关闭",
     "closeGuard": {
-      "title": "关闭前先添加这 {count} 个提议的工作项？",
+      "title": "关闭前先添加这 {count, plural, other {#}} 个提议的工作项？",
       "body": "在你确认之前不会保存任何内容。现在关闭将丢弃它们。",
       "discard": "丢弃 {count} 个提议",
       "keepPlanning": "继续规划",
@@ -7435,16 +7441,16 @@
         "addWork": "为某个篇章补充工作",
         "resequence": "重新排列剩下的工作",
         "drop": "去掉不需要的部分",
-        "blocked": "哪些卡被阻塞了，为什么？"
+        "blocked": "哪些工作项被阻塞了，为什么？"
       },
       "progress": {
         "submitted": "正在把对话发送给 Motir AI…",
         "searching": "正在读取你的计划…",
         "drilling": "正在梳理工作项树…",
         "proposed": "{count, plural, =0 {正在把提议的工作放到画布上…} other {已提议 # 项…}}",
-        "validating": "正在对照你的计划校验提议…",
+        "validating": "正在对照你的计划校验提案…",
         "reading": "正在理解你的请求……",
-        "redirected": "正在生成方案……",
+        "redirected": "正在生成提案……",
         "redirectedDebug": "正在追查缺陷……",
         "retrieval": "正在读取计划…",
         "laying": "正在铺开层级…",
@@ -7457,11 +7463,11 @@
         "empty": "没有返回任何可改动的内容。可以更具体地指明篇章或工作。",
         "immutable": "其中部分工作项已完成，无法改动。其余内容仍在画布上。",
         "session": "这段对话加载失败。请重试 —— 你的计划没有任何变化。",
-        "decided": "这份提议已经处理过了 —— 没有需要再确认的内容，也不会重复写入。",
+        "decided": "这份提案已经处理过了 —— 没有需要再确认的内容，也不会重复写入。",
         "held": "Motir 仍在改写这份计划，暂时无法批准或拒绝。没有任何改动 —— 等新版本完成后再试。",
         "stale": "这份计划在你阅读之后发生了变化。没有写入任何内容 —— 画布现在显示的是最新版本，请重新审阅后再决定。",
         "notDecidable": "这份计划暂时还不能决定 —— 还没有人被请求批准它。没有任何改动。",
-        "discard": "放弃没有成功。提议仍在画布上等待处理 —— 可以重试，或直接确认。",
+        "discard": "放弃没有成功。提案仍在画布上等待处理 —— 可以重试，或直接批准。",
         "askSilent": "没有得到任何回复。换一种方式提问试试。",
         "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的工作项已恢复原状。"
       },
@@ -7471,7 +7477,7 @@
       "correcting": "正在重新理解……",
       "correctedToPlan": "已改按计划变更理解",
       "correctedToAsk": "已改按提问理解",
-      "handoff": "按计划变更理解 — 正在生成方案",
+      "handoff": "按计划变更理解 — 正在生成提案",
       "handoffDebug": "按缺陷理解 — 正在追查可能的原因",
       "debug": {
         "wroteAnchor": "已把诊断写入 <chip>{key}</chip>。它仍留在分诊中，其他内容均未改动。",
@@ -7713,7 +7719,7 @@
       "staleNotice": "{key} 在本轮读取之后已被修改。请重新加载后再问一次。",
       "failed": "这一轮没有完成，因此工作项没有任何改动。",
       "errors": {
-        "notManual": "Motir AI 引导人完成手动工作，而这个工作项是交给 Agent 的，因此这里没有可引导的内容。",
+        "notManual": "Motir AI 引导人完成手动工作，而这个工作项是交给智能体的，因此这里没有可引导的内容。",
         "closed": "这个工作项已完成或已归档，没有需要引导的内容了。",
         "forbidden": "你需要拥有编辑这个工作项以及使用 Motir AI 规划的权限，才能被引导完成它。"
       },
@@ -7762,10 +7768,10 @@
         "uploadingPct": "上传中… {pct}%",
         "uploading": "上传中…",
         "onCard": "已在 {key} 上",
-        "attaching": "正在把 {count} 个文件添加到 {key}…… 文件全部添加后即发送本轮。",
+        "attaching": "正在把 {count, plural, other {#}} 个文件添加到 {key}…… 文件全部添加后即发送本轮。",
         "notSent": "<b>未发送。</b>有一个文件没有上传成功，所以 Motir AI 还没有看到本轮。你的文字已保留，已添加到 {key} 的文件仍在该工作项上。",
         "retry": "重试",
-        "reading": "正在读取你的 {count} 个文件和 {key}…",
+        "reading": "正在读取你的 {count, plural, other {#}} 个文件和 {key}…",
         "removed": "已删除",
         "typeText": "文本",
         "typeMarkdown": "Markdown",
@@ -7948,7 +7954,7 @@
     },
     "connect": {
       "heading": "你的工作项来自哪里？",
-      "body": "选择一个来源。无论选择哪个，Motir 都会将其归一化为相同的工作项——问题、类型、状态、优先级、指派人和标签。",
+      "body": "选择一个来源。无论选择哪个，Motir 都会将其归一化为相同的工作项——问题、类型、状态、优先级、负责人和标签。",
       "sources": {
         "jira": {
           "name": "Jira",
@@ -8015,7 +8021,7 @@
       "rowType": "问题类型 → 种类",
       "rowStatus": "状态 → 工作流状态",
       "rowPriority": "优先级",
-      "rowUsers": "指派人和报告人",
+      "rowUsers": "负责人和创建人",
       "rowLabels": "标签",
       "auto": "自动",
       "edited": "已编辑",
@@ -8339,7 +8345,7 @@
   },
   "apiDocs": {
     "metaTitle": "Motir 文档",
-    "metaDescription": "REST API、Motir 命令行、MCP 服务器与代理沙箱——各自是什么、写给谁用，以及从哪里开始。",
+    "metaDescription": "REST API、Motir 命令行、MCP 服务器与智能体沙箱——各自是什么、写给谁用，以及从哪里开始。",
     "navLabel": "文档",
     "navDocumentation": "文档",
     "navReference": "API 参考",
@@ -8383,9 +8389,9 @@
     "policyAdditiveHeading": "增量变更 —— 无需事先通知",
     "policyForbiddenHeading": "除非发布新主版本，否则绝不",
     "policyAdrNote": "本页是对外的公开承诺。其生成来源的内部记录是 API 决策记录，",
-    "navSandbox": "代理沙箱",
-    "sandboxTitle": "配置代理沙箱",
-    "sandboxLede": "Motir 让你把工作交给无人值守、免审批运行的编码代理。它应该跑在这里：一个已发布的容器，只能访问你的工作区目录，碰不到机器上的其他任何东西。读完本页，你就有了一个可用的容器。",
+    "navSandbox": "智能体沙箱",
+    "sandboxTitle": "配置智能体沙箱",
+    "sandboxLede": "Motir 让你把工作交给无人值守、免审批运行的编码智能体。它应该跑在这里：一个已发布的容器，只能访问你的工作区目录，碰不到机器上的其他任何东西。读完本页，你就有了一个可用的容器。",
     "sandboxWhatNext": "接下来",
     "sandboxThProfile": "配置 · 可执行文件",
     "sandboxThTier": "层级",
@@ -8395,7 +8401,7 @@
     "sandboxRunCaption": "sh · {profile} 这一行 —— 把标签和挂载换成你自己的",
     "navCli": "Motir 命令行",
     "cliTitle": "Motir 命令行工具",
-    "cliLede": "安装、登录、指向你的项目，然后把一个工作项交给你自己的编码 Agent——大约五分钟，无需克隆任何代码库。",
+    "cliLede": "安装、登录、指向你的项目，然后把一个工作项交给你自己的编码智能体——大约五分钟，无需克隆任何代码库。",
     "cliFilesHeading": "Motir 把文件放在哪里",
     "cliCommandsHeading": "全部命令",
     "cliCommandsLede": "由命令行工具自身的命令清单派生而来，因此工具新增的命令会自动出现在这里，无需改动本页。运行 `motir help <command>` 查看其参数。",
@@ -8405,7 +8411,7 @@
     "navMcp": "MCP 服务器",
     "navMcpTools": "工具",
     "mcpTitle": "Motir MCP 服务器",
-    "mcpLede": "任何 Model Context Protocol 客户端都可以通过一个端点访问 Motir 的项目计划。用个人访问令牌把你的智能体指向它，它就能读取就绪集、认领下一个事项、创建工作、流转状态并评论——走的是与网页端完全相同的服务、权限和数据。",
+    "mcpLede": "任何 Model Context Protocol 客户端都可以通过一个端点访问 Motir 的项目计划。用个人访问令牌把你的智能体指向它，它就能读取就绪集、认领下一个工作项、创建工作、流转状态并评论——走的是与网页端完全相同的服务、权限和数据。",
     "mcpForkHeading": "该用它，还是用 REST API？",
     "mcpForkIntro": "Motir 在同一套领域模型上发布了两个编程接口。它们并不是权衡相同的两个选项，动手之前值得花三十秒弄清区别。",
     "mcpThMcp": "MCP 服务器",
@@ -8440,8 +8446,8 @@
     "indexTitle": "Motir 文档",
     "indexLede": "Motir 面向开发者公开的全部内容。从与你手头的事最匹配的那一个开始——下面每一项都可以单独读完。",
     "surfaceReferenceDesc": "REST API 的全部接口，含权限范围与可直接运行的示例。写给你要交付出去、不能说变就变的客户端。",
-    "surfaceSandboxDesc": "用来运行无人值守编码代理的已发布容器：它只能访问你的工作区目录，碰不到机器上的其他任何东西。",
-    "surfaceCliDesc": "安装、登录，然后从终端把一个工作项交给你自己的编码 Agent——无需克隆任何代码库。",
+    "surfaceSandboxDesc": "用来运行无人值守编码智能体的已发布容器：它只能访问你的工作区目录，碰不到机器上的其他任何东西。",
+    "surfaceCliDesc": "安装、登录，然后从终端把一个工作项交给你自己的编码智能体——无需克隆任何代码库。",
     "surfaceMcpDesc": "一个端点，把你掌控的智能体接入项目计划：读取就绪集、认领工作、流转状态、发表评论。",
     "metaTitleReference": "API 参考 · Motir 文档",
     "metaDescriptionReference": "Motir 公开 REST API 的全部接口，含权限范围、参数、响应以及可直接复制的鉴权示例。",
@@ -8449,10 +8455,10 @@
     "metaDescriptionGuide": "五步走完从注册账号到成功发出第一个 Motir REST API 请求：令牌、首次调用，以及报错的含义。",
     "metaTitleStability": "稳定性与弃用 · API 参考 · Motir 文档",
     "metaDescriptionStability": "Motir v1 REST API 承诺不变的部分、可能随时调整的部分，以及弃用的流程。",
-    "metaTitleSandbox": "代理沙箱 · Motir 文档",
-    "metaDescriptionSandbox": "配置那个已发布的容器：让无人值守的编码代理只能访问你的工作区目录，碰不到机器上的其他任何东西。",
+    "metaTitleSandbox": "智能体沙箱 · Motir 文档",
+    "metaDescriptionSandbox": "配置那个已发布的容器：让无人值守的编码智能体只能访问你的工作区目录，碰不到机器上的其他任何东西。",
     "metaTitleCli": "Motir 命令行 · Motir 文档",
-    "metaDescriptionCli": "安装 Motir 命令行、登录、指向你的项目，然后把一个工作项交给你自己的编码 Agent——无需克隆任何代码库。",
+    "metaDescriptionCli": "安装 Motir 命令行、登录、指向你的项目，然后把一个工作项交给你自己的编码智能体——无需克隆任何代码库。",
     "metaTitleMcp": "MCP 服务器 · Motir 文档",
     "metaDescriptionMcp": "用个人访问令牌把任意 Model Context Protocol 客户端指向 Motir 的项目计划，并弄清该用 MCP 服务器还是 REST API。",
     "metaTitleMcpTools": "工具列表 · MCP 服务器 · Motir 文档",
@@ -8474,7 +8480,7 @@
     "retry": "重试",
     "openNote": "打开说明",
     "noteGone": "已不再保存",
-    "mockCount": "{count} 个稿件 — 发生变更的面板",
+    "mockCount": "{count, plural, other {#}} 个稿件 — 发生变更的面板",
     "earlierFormat": "旧格式",
     "earlierFormatBody": "发布于结果改为只展示待审内容之前 — 其说明和截图以文件形式保留。",
     "files": "文件",
@@ -8539,7 +8545,7 @@
       },
       "toResume": {
         "title": "没有待继续的运行",
-        "body": "当运行停在它所需的审批处时，会在这里等待，直到审批通过——随后在托管代理上自动继续，或在终端中用 motir continue 继续。"
+        "body": "当运行停在它所需的审批处时，会在这里等待，直到审批通过——随后在托管智能体上自动继续，或在终端中用 motir continue 继续。"
       },
       "recentlyFinished": {
         "title": "本周还没有完成的工作",
@@ -8593,15 +8599,15 @@
         "other": "<title>{name}</title>的审批"
       },
       "kind": {
-        "design_result": "设计成果",
+        "design_result": "设计结果",
         "decision_approval": "决策审批",
-        "pull_request_approval": "合并请求审批",
-        "pull_request_merge": "合并请求合并",
+        "pull_request_approval": "拉取请求审批",
+        "pull_request_merge": "拉取请求合并",
         "acceptance_result": "验收视频",
         "decision_choice": "选择",
         "decision_confirmation": "确认决策",
         "plan_approval": "计划审批",
-        "agent_review": "代理审查",
+        "agent_review": "智能体审查",
         "manual_work": "人工工作"
       },
       "reviewRow": "查看 {key} — {sentence}",
@@ -8655,11 +8661,11 @@
         "runDiedNothingPushed": "运行已中断 · 最后一次联系在<when></when> · {name} · 未推送任何内容",
         "runDiedNothingPushedNoName": "运行已中断 · 最后一次联系在<when></when> · 未推送任何内容",
         "runDiedBare": "运行已中断",
-        "runDiedMoreRepositories": "另有 {count} 个代码仓库",
+        "runDiedMoreRepositories": "另有 {count, plural, other {#}} 个代码仓库",
         "runDiedParent": "属于 <b>{parent}</b> 的运行——两种方式都会继续整个运行",
         "runDiedCannotEdit": "你无法编辑此工作项，因此需要由有编辑权限的人来继续。",
-        "sentBackByAgent": "已被<b>审查代理</b>退回——“{note}”",
-        "sentBackByAgentNoNote": "已被<b>审查代理</b>退回"
+        "sentBackByAgent": "已被<b>审查智能体</b>退回——“{note}”",
+        "sentBackByAgentNoNote": "已被<b>审查智能体</b>退回"
       },
       "queueReason": {
         "CI_FAILURE": "检查未通过",
@@ -8674,26 +8680,26 @@
         "title": "已复制",
         "body": "请将 {command} 粘贴到终端。"
       },
-      "fixingHosted": "<b>{name}</b> 正在用托管代理修复 · <run>{label}</run>",
-      "fixingHostedByYou": "<b>你</b>正在用托管代理修复 · <run>{label}</run>",
+      "fixingHosted": "<b>{name}</b> 正在用托管智能体修复 · <run>{label}</run>",
+      "fixingHostedByYou": "<b>你</b>正在用托管智能体修复 · <run>{label}</run>",
       "entry": {
-        "carriesRun": "此运行中另有 {count} 个工作项",
-        "carriesPullRequests": "相同拉取请求上另有 {count} 个工作项",
+        "carriesRun": "此运行中另有 {count, plural, other {#}} 个工作项",
+        "carriesPullRequests": "相同拉取请求上另有 {count, plural, other {#}} 个工作项",
         "membersLabel": "与 {key} 一起受阻的工作项",
-        "showMore": "再显示 {count} 个工作项",
+        "showMore": "再显示 {count, plural, other {#}} 个工作项",
         "showFewer": "收起"
       }
     },
     "toResume": {
-      "waiting": "停在审批处 · 等待 {count} 项审批",
+      "waiting": "停在审批处 · 等待 {count, plural, other {#}} 项审批",
       "ready": "可以继续 · {name} 已于<when></when>批准 {key} 的{kind}",
       "readyByYou": "可以继续 · 你已于<when></when>批准 {key} 的{kind}",
       "readyBare": "可以继续",
       "readySome": "可以继续 · {total} 项审批中已通过 {approved} 项",
-      "resuming": "正在托管代理上继续 · <when></when>开始",
+      "resuming": "正在托管智能体上继续 · <when></when>开始",
       "couldNot": "未能自动继续 · <reason></reason>",
       "ranBy": {
-        "hosted": "{name} 在托管代理上运行",
+        "hosted": "{name} 在托管智能体上运行",
         "terminal": "{name} 在终端中运行",
         "runbook": "{name} 通过运行手册运行",
         "instance": "{name} 在 {agent} 中运行"
@@ -8727,8 +8733,8 @@
       },
       "seeRun": "查看运行",
       "next": {
-        "waitingHosted": "审批通过后，此运行会在托管代理上自动继续。",
-        "waitingHostedMany": "任一审批通过后，此运行会在托管代理上自动继续，并在其余审批处再次停下。",
+        "waitingHosted": "审批通过后，此运行会在托管智能体上自动继续。",
+        "waitingHostedMany": "任一审批通过后，此运行会在托管智能体上自动继续，并在其余审批处再次停下。",
         "waitingLocal": "审批通过后，在终端中继续——命令会显示在这里。",
         "ready": "智能体会在原分支上接手此运行，构建该审批放行的工作，并在仍需等待的审批处再次停下。",
         "readySome": "现在继续会构建已通过审批放行的工作，并在仍在等待的 {count} 项审批处再次停下。",
@@ -9087,7 +9093,7 @@
         "failedJobs": {
           "title": "失败任务",
           "value": "{standing} 条未重放 · 24 小时内 {count} 条",
-          "detail": "重试用尽后失败且尚未重放。第一个数字是不设时间范围的积压总量——时间窗口无法反映积压。重放在各自工作区的任务看板中进行。",
+          "detail": "重试用尽后失败且尚未重放。第一个数字是不设时间范围的积压总量——时间窗口无法反映积压。重放在各自工作区的任务工作台中进行。",
           "unreachable": {
             "probeFailed": "无响应"
           },
@@ -9230,7 +9236,7 @@
           "allowance_exhausted": "免费额度已用尽",
           "other": "已停止 · {reason}"
         },
-        "behind": "{n} 个提交",
+        "behind": "{n, plural, other {#}} 个提交",
         "behindUnknown": "尚未统计",
         "resumes": {
           "upgrade": "升级后",
@@ -9239,7 +9245,7 @@
         },
         "duration": {
           "hours": "{n} 小时",
-          "days": "{n} 天"
+          "days": "{n, plural, other {#}} 天"
         }
       },
       "fleet": {
@@ -9247,7 +9253,7 @@
           "title": "容器集群 · 正在运行容器的组织",
           "subtitle": "每个当前持有容器的组织，以及过去 {minutes} 分钟（两个扣费周期）内 CI 扣费对它做了什么。不一致的排在最前。",
           "mismatchedCount": "{count} 个不一致",
-          "runningCount": "{count} 个组织在运行",
+          "runningCount": "{count, plural, other {#}} 个组织在运行",
           "noMismatch": "无不一致",
           "stat": {
             "orgs": "正在运行容器的组织",
@@ -9448,8 +9454,8 @@
         "remaining": "剩余",
         "grantedConsumed": "已发放 {granted} · 已消耗 {consumed}",
         "unknownFigure": "未知",
-        "creditNote": "由规划器和托管代理消耗。本周期 Token 花费：{spend} 额度。",
-        "creditNoteUnknownSpend": "由规划器和托管代理消耗。本周期 Token 花费：未知。",
+        "creditNote": "由规划器和托管智能体消耗。本周期 Token 花费：{spend} 额度。",
+        "creditNoteUnknownSpend": "由规划器和托管智能体消耗。本周期 Token 花费：未知。",
         "indexNote": "仅由索引消耗。在任何情况下都不会动用额度余额。",
         "notGrantedYet": "尚未发放额度——该组织在当前周期内还没有进行过索引。",
         "notConfigured": "未配置额度——由工作人员在套餐上设置。在此之前没有可越过的门槛。",
@@ -9593,7 +9599,7 @@
         "stateOn": "开启",
         "stateOff": "关闭",
         "apply": "应用",
-        "count": "{n} 个筛选条件",
+        "count": "{n, plural, other {#}} 个筛选条件",
         "clearAll": "全部清除",
         "remove": "移除{filter}"
       },
@@ -9754,7 +9760,7 @@
         "confirmBody": "在窗口内未复现的经验将从下一次规划任务起，对所有组织停止注入。不会删除任何内容：休眠的经验会在下次复现时恢复。",
         "daysLabel": "窗口（天）",
         "bounds": "介于 {min} 到 {max} 天之间。",
-        "impact": "设为 {days} 天时，今天正在注入的经验中将有 {n} 条进入休眠。",
+        "impact": "设为 {days} 天时，今天正在注入的经验中将有 {n, plural, other {#}} 条进入休眠。",
         "impactCounting": "正在统计将进入休眠的经验……",
         "confirm": "更改窗口",
         "saved": "休眠窗口已更改。",
@@ -10119,7 +10125,7 @@
       "status": {
         "title": "组织状态",
         "subtitle": "停用一个组织会拒绝其下所有工作区的每一位成员。",
-        "active": "{workspaces} 个工作区中的 {members} 位成员可以登录并工作。",
+        "active": "{workspaces, plural, other {#}} 个工作区中的 {members, plural, other {#}} 位成员可以登录并工作。",
         "activePill": "正常",
         "suspendedPill": "已停用",
         "suspendedSince": "自 {at} 起 · 操作者 {operator} · “{reason}”",
@@ -10405,11 +10411,11 @@
         "confirm": {
           "title": "停止 {org} 的容器？",
           "lead": "这将结束 {org} 此刻在 Motir 集群上运行的内容：",
-          "ci": "个 CI 运行被取消，<strong>{containers}</strong> 个 CI 容器被销毁",
-          "ciUnknown": "CI 运行数未知——无法读取 GitHub，停止操作仍会取消它们——<strong>{containers}</strong> 个 CI 容器被销毁",
-          "hosted": "个托管智能体运行被结束",
-          "instances": "个智能体实例被休眠",
-          "index": "个索引容器保留至完成——索引是 Motir 自身的成本，从不向组织计费",
+          "ci": "{runs, plural, other {个 CI 运行被取消}}，<strong>{containers}</strong> {containers, plural, other {个 CI 容器被销毁}}",
+          "ciUnknown": "CI 运行数未知——无法读取 GitHub，停止操作仍会取消它们——<strong>{containers}</strong> {containers, plural, other {个 CI 容器被销毁}}",
+          "hosted": "{count, plural, other {个托管智能体运行被结束}}",
+          "instances": "{count, plural, other {个智能体实例被休眠}}",
+          "index": "{count, plural, other {个索引容器}}保留至完成——索引是 Motir 自身的成本，从不向组织计费",
           "notSuspension": "<strong>这不是暂停。</strong>不会阻止任何操作：{org} 的下一次 CI 运行、智能体运行或智能体启动都会照常准入。",
           "asOf": "统计于 {time}。停止操作作用于你确认时正在运行的内容。",
           "loading": "正在统计运行中的内容…",
@@ -10427,11 +10433,11 @@
         "result": {
           "doneTitle": "容器已停止",
           "partialTitle": "已停止，但有失败",
-          "ci": "已取消 {runs} 个 CI 运行 · 已销毁 {stopped} 个 CI 容器",
+          "ci": "已取消 {runs, plural, other {#}} 个 CI 运行 · 已销毁 {stopped, plural, other {#}} 个 CI 容器",
           "ciPartial": "CI：已取消 {runs} 个运行 · 已销毁 {stopped} / {total} 个容器",
-          "hosted": "已结束 {ended} 个托管智能体运行",
+          "hosted": "已结束 {ended, plural, other {#}} 个托管智能体运行",
           "hostedPartial": "托管智能体运行：已结束 {ended} 个",
-          "instances": "已休眠 {hibernated} 个智能体实例",
+          "instances": "已休眠 {hibernated, plural, other {#}} 个智能体实例",
           "instancesPartial": "智能体实例：已休眠 {hibernated} / {total} 个",
           "failed": "{count} 个未能停止——协调器将重试。"
         },
@@ -10545,7 +10551,7 @@
       },
       "inUse": {
         "platformDefault": "平台默认 · {levels}",
-        "projects": "{n} 个项目"
+        "projects": "{n, plural, other {#}} 个项目"
       },
       "add": {
         "title": "添加一个托管运行模型",
@@ -10565,7 +10571,7 @@
         "inUse": "未移除：{model} 正在使用中。{platformDefaultClause}{projectsClause}请先更改这些设置。",
         "inUseParts": {
           "platformDefault": "它是 Motir 在 {levels} 难度上的平台默认模型。",
-          "projects": "{n} 个项目在使用它：{list}。",
+          "projects": "{n, plural, other {#}} 个项目在使用它：{list}。",
           "projectEntry": "{name}（{key}）用于 {levels}"
         },
         "notListed": "未移除：{model} 已不在列表中。"
@@ -10809,7 +10815,7 @@
         "notWritten": "未填写。",
         "noTags": "没有标签。",
         "noEvidence": "没有证据。",
-        "sources": "{n} 个来源",
+        "sources": "{n, plural, other {#}} 个来源",
         "newTab": "（在新标签页中打开）",
         "newRow": "新"
       },
@@ -10877,7 +10883,7 @@
         "cancel": "取消",
         "save": "保存更改",
         "unchanged": "没有可保存的内容——请修改字段，或勾选“标记为今天已审阅”。",
-        "refused": "未保存——有 {n} 个字段需要修改。没有任何更改。相关字段已在下方标出。",
+        "refused": "未保存——有 {n, plural, other {#}} 个字段需要修改。没有任何更改。相关字段已在下方标出。",
         "saved": "已保存。更改已在此显示，motir.co 会在一小时内同步。"
       },
       "fieldError": {
@@ -10967,7 +10973,7 @@
     "commandLabel": "命令",
     "copyCommand": "复制命令",
     "commandCopied": "已复制命令",
-    "agentStep": "由 Agent 执行",
+    "agentStep": "由智能体执行",
     "humanStep": "由你执行",
     "reorder": "调整步骤顺序",
     "delete": "删除步骤",
@@ -11370,10 +11376,10 @@
   "runs": {
     "title": "运行",
     "searchLabel": "搜索本次运行",
-    "gloss": "代理做了什么",
+    "gloss": "智能体做了什么",
     "empty": {
       "title": "尚未运行过。",
-      "body": "使用 `motir next` 派发此工作项，或使用 `motir run <KEY>` 派发整个故事，代理的操作将显示在这里。"
+      "body": "使用 `motir next` 派发此工作项，或使用 `motir run <KEY>` 派发整个故事，智能体的操作将显示在这里。"
     },
     "oneOfN": "此工作项是本次运行中的第 {position} 项，共 {total} 项。",
     "seeWholeRun": "查看整个运行 →",
@@ -11387,8 +11393,8 @@
       "claimed": "已认领",
       "checkout": "检出就绪",
       "prompt": "已下发提示",
-      "agent": "代理运行中",
-      "exit": "代理已退出",
+      "agent": "智能体运行中",
+      "exit": "智能体已退出",
       "delivery": "已关联拉取请求",
       "settled": "已结算"
     },
@@ -11428,7 +11434,7 @@
       "markedDone": "已跳过 — 已由 {name} 标记完成。",
       "integratedDep": "已跳过 — 仅通过已集成的依赖才就绪（尚未合入 main）。",
       "claimRefused": "已跳过 — 已被他人认领，或不再可认领。",
-      "replanSubmitted": "被其代理拒绝 — 重新规划正在 Motir 中等待你处理。",
+      "replanSubmitted": "被其智能体拒绝 — 重新规划正在 Motir 中等待你处理。",
       "checkoutUnavailable": "已跳过 — 无法克隆其仓库。",
       "blockedInScope": "已跳过 — 此范围内的阻塞项尚未落地。"
     },
@@ -11465,15 +11471,15 @@
     "modalReadFailed": "无法加载这次运行。请关闭后重试。",
     "paneSet": "工作项集合",
     "paneSetCount": "工作项集合 — {count} 个",
-    "paneLog": "代理输出",
+    "paneLog": "智能体输出",
     "tookNoneBody": "这次运行没有取到任何工作项，未认领、也未做任何改动。",
     "stopReason": {
       "drained": "就绪队列已取空",
       "completed": "已尝试快照中的全部工作项",
       "max": "已达到 --max 上限",
-      "halted": "在第一个代理失败时停止（--keep-going 可继续）",
+      "halted": "在第一个智能体失败时停止（--keep-going 可继续）",
       "interrupted": "被中断（Ctrl-C）",
-      "replanned": "代理拒绝了它的工作项并提交了重新规划 — 正在 Motir 中等你处理",
+      "replanned": "智能体拒绝了它的工作项并提交了重新规划 — 正在 Motir 中等你处理",
       "gated": "在两个工作项之间停止 — 刚完成的那个还不能作为下一个的基础",
       "abandoned": "这台机器停止了上报"
     },
@@ -11486,7 +11492,7 @@
         "body": "这次运行没有上报日志正文。加上 --report-log 即可发送。"
       },
       "waiting": {
-        "title": "正在等待代理",
+        "title": "正在等待智能体",
         "body": "运行正在进行，但还没有任何输出。"
       },
       "expired": {
@@ -11509,8 +11515,8 @@
     },
     "scope": {
       "heading": "作为范围运行",
-      "lineLive": "代理正在把此工作项的子项作为一次运行来处理。",
-      "linePast": "代理已把此工作项的子项作为一次运行处理完毕。",
+      "lineLive": "智能体正在把此工作项的子项作为一次运行来处理。",
+      "linePast": "智能体已把此工作项的子项作为一次运行处理完毕。",
       "door": "查看 {key} 的全部运行 →"
     },
     "scopeIndex": {
@@ -11554,7 +11560,7 @@
         "fromLeaves": "其子项中的最高难度：<b>{difficulty}</b>",
         "overrideFromLeaves": "项目为<b>{difficulty}</b>难度设置的模型（其子项中的最高难度）"
       },
-      "notReady": "此工作项就绪后即可运行——它还有 {count} 个未完成的阻塞项。",
+      "notReady": "此工作项就绪后即可运行——它还有 {count, plural, other {#}} 个未完成的阻塞项。",
       "refused": {
         "notReady": {
           "title": "未启动——此工作项还不能运行。",
@@ -11570,7 +11576,7 @@
         },
         "notWritable": {
           "lead": "未启动——Motir 的应用无法写入本次运行 {total} 个代码仓库中的 {count} 个。",
-          "leadNoTotal": "未启动——Motir 的应用无法写入本次运行的 {count} 个代码仓库。",
+          "leadNoTotal": "未启动——Motir 的应用无法写入本次运行的 {count, plural, other {#}} 个代码仓库。",
           "detail": "没有启动任何机器，也没有产生任何费用。下面每个代码仓库都说明了如何修复；可能需要该 GitHub 账号的所有者来操作。",
           "open": "在代码仓库中打开"
         },
@@ -11591,7 +11597,7 @@
         "starting": "正在启动",
         "cloned": "已克隆",
         "running": "运行中",
-        "finished": "代理已结束",
+        "finished": "智能体已结束",
         "pullRequest": "拉取请求已打开",
         "done": "完成"
       },
@@ -11603,7 +11609,7 @@
       "meta": {
         "lane": "通道",
         "hosted": "Motir",
-        "agent": "代理",
+        "agent": "智能体",
         "model": "模型",
         "elapsed": "已用时",
         "took": "耗时"
@@ -11613,19 +11619,19 @@
       "prHeadline": "已打开拉取请求——",
       "end": {
         "succeeded": "运行已交付其工作。",
-        "failed": "代理退出了，但没有拉取请求。",
+        "failed": "智能体退出了，但没有拉取请求。",
         "crashed": "运行的机器在运行关闭之前停止了。",
         "cancelled": "运行已取消。",
-        "stalled": "代理停止了输出。",
+        "stalled": "智能体停止了输出。",
         "timedOut": "运行达到了时间上限。",
         "lostSupervision": "Motir 失去了对运行机器的跟踪。",
-        "stays": "此工作项保持原状——代理推送的工作在本次运行的分支上。"
+        "stays": "此工作项保持原状——智能体推送的工作在本次运行的分支上。"
       },
-      "exitReason": "代理以退出码 {code} 退出",
+      "exitReason": "智能体以退出码 {code} 退出",
       "cancel": {
         "button": "取消运行",
         "title": "取消这次运行？",
-        "body": "代理会停止，它的机器会被拆除，它的密钥会被吊销。它已经推送的工作会保留在本次运行的分支上，此工作项保持原状。",
+        "body": "智能体会停止，它的机器会被拆除，它的密钥会被吊销。它已经推送的工作会保留在本次运行的分支上，此工作项保持原状。",
         "keep": "继续运行",
         "confirm": "取消运行",
         "failed": "无法取消运行。请重试。"
@@ -11639,7 +11645,7 @@
         "tokensValue": "输入 {input, number} · 输出 {output, number}",
         "cache": "缓存：读取 {read, number} · 写入 {write, number}",
         "credits": "积分",
-        "creditsValue": "{count, number} 积分",
+        "creditsValue": "{count, plural, other {# 积分}}",
         "split": "模型调用 {model, number} · 机器时间 {machine, number}",
         "splitPending": "模型调用 {model, number} · 机器时间在运行结束时计费",
         "machine": "机器时间",
@@ -11662,8 +11668,8 @@
       "pillReady": "可以继续",
       "gate": "{key} 的{kind}",
       "waitingMany": "{count} 项审批",
-      "waitingHosted": "此运行停在审批处——正在等待<b>{gate}</b>。其工作保留在分支 <d>{branch}</d> 上，审批通过后会在托管代理上<b>自动继续</b>。",
-      "waitingHostedNoBranch": "此运行停在审批处——正在等待<b>{gate}</b>。其工作已保留，审批通过后会在托管代理上<b>自动继续</b>。",
+      "waitingHosted": "此运行停在审批处——正在等待<b>{gate}</b>。其工作保留在分支 <d>{branch}</d> 上，审批通过后会在托管智能体上<b>自动继续</b>。",
+      "waitingHostedNoBranch": "此运行停在审批处——正在等待<b>{gate}</b>。其工作已保留，审批通过后会在托管智能体上<b>自动继续</b>。",
       "waitingLocal": "此运行停在审批处——正在等待<b>{gate}</b>。其工作保留在分支上；审批通过后，用 <d>{command}</d> 继续。",
       "ready": "可以继续——<b>{total} 项审批中已通过 {approved} 项</b>。继续即可构建已批准的工作；它会在仍在等待的审批处再次停下：",
       "resuming": "正在继续——<b>{name}</b> 已批准{gate}，新的运行正在同一分支上继续。<link>查看新运行</link>",
@@ -11686,24 +11692,24 @@
         "lead": "Motir 在一台全新的机器上用你选择的模型处理它。以积分计费。"
       },
       "send": {
-        "title": "发送到我的代理",
-        "lead": "由你自己的一个代理处理它，使用它的编码代理和你的登录。"
+        "title": "发送到我的智能体",
+        "lead": "由你自己的一个智能体处理它，使用它的编码智能体和你的登录。"
       },
-      "notReady": "此工作项就绪后即可运行或发送到我的代理——它还有 {count} 个未完成的阻塞项。"
+      "notReady": "此工作项就绪后即可运行或发送到我的智能体——它还有 {count, plural, other {#}} 个未完成的阻塞项。"
     },
     "agent": {
       "door": {
-        "send": "发送到我的代理",
+        "send": "发送到我的智能体",
         "starting": "正在启动…"
       },
       "picker": {
-        "title": "把 {key} 发送给你的一个代理",
-        "lead": "选择一个代理即发送并开始工作。休眠中的代理会先被唤醒。",
-        "label": "你的代理",
-        "foot": "只列出你在 {project} 上的代理。",
-        "manage": "在我的代理中管理",
-        "loading": "正在加载你的代理…",
-        "failed": "无法加载你的代理。",
+        "title": "把 {key} 发送给你的一个智能体",
+        "lead": "选择一个智能体即发送并开始工作。休眠中的智能体会先被唤醒。",
+        "label": "你的智能体",
+        "foot": "只列出你在 {project} 上的智能体。",
+        "manage": "在我的智能体中管理",
+        "loading": "正在加载你的智能体…",
+        "failed": "无法加载你的智能体。",
         "retry": "重试",
         "signin": {
           "signedIn": "已登录",
@@ -11724,7 +11730,7 @@
           "hibernating": "它正在停止。等它休眠后再选择它——它会为这项工作被唤醒。",
           "deleting": "它正在被删除。",
           "signedOut": "请先登录：打开 {name} 并在它的终端中运行 <cmd></cmd>。<link>打开 {name}</link>",
-          "imageTooOld": "它由一个无法处理工作项的旧镜像创建。把它迁移到新镜像（保留它的主目录和登录）的功能即将推出；新建的代理现在就可以处理工作项。",
+          "imageTooOld": "它由一个无法处理工作项的旧镜像创建。把它迁移到新镜像（保留它的主目录和登录）的功能即将推出；新建的智能体现在就可以处理工作项。",
           "cannotRun": "{agent} 无法独立处理工作项——它没有 Motir 可以启动的无人值守模式。"
         }
       },
@@ -11734,9 +11740,9 @@
         "generic": "它的登录命令"
       },
       "empty": {
-        "title": "你在 {project} 上还没有代理。",
-        "body": "代理是你自己的编码代理——Claude Code、Codex 等——使用你自己的登录，运行在 Motir 的云中。为这个项目创建一个并登录，就可以把工作项发送给它。",
-        "create": "在我的代理中创建一个"
+        "title": "你在 {project} 上还没有智能体。",
+        "body": "智能体是你自己的编码智能体——Claude Code、Codex 等——使用你自己的登录，运行在 Motir 的云中。为这个项目创建一个并登录，就可以把工作项发送给它。",
+        "create": "在我的智能体中创建一个"
       },
       "refused": {
         "nothing": "没有启动任何东西，也没有产生任何费用。",
@@ -11747,26 +11753,26 @@
         },
         "wrongProject": {
           "title": "未发送——{name} 属于另一个项目。",
-          "body": "代理只处理创建它时所属项目的工作。请选择 {project} 上的代理，或在我的代理中创建一个。"
+          "body": "智能体只处理创建它时所属项目的工作。请选择 {project} 上的智能体，或在我的智能体中创建一个。"
         },
         "notReady": {
           "title": "未发送——此工作项还不能开始。",
-          "body": "它还有 {count} 个未完成的阻塞项。",
+          "body": "它还有 {count, plural, other {#}} 个未完成的阻塞项。",
           "bodyState": "它不在等待开始的状态——可能已经在进行中或已完成。"
         },
         "runActive": {
           "title": "未发送——{name} 已经在处理 <k>{key}</k>。",
           "titleNoKey": "未发送——{name} 已经在处理另一个工作项。",
-          "body": "一个代理一次只处理一个工作项，那次运行结束后 {name} 才能接手这个。<run>打开 {key} 的运行</run>来查看或取消它，或者把它发送给另一个代理。",
-          "bodyNoKey": "一个代理一次只处理一个工作项，那次运行结束后 {name} 才能接手这个。<run>打开那次运行</run>来查看或取消它，或者把它发送给另一个代理。"
+          "body": "一个智能体一次只处理一个工作项，那次运行结束后 {name} 才能接手这个。<run>打开 {key} 的运行</run>来查看或取消它，或者把它发送给另一个智能体。",
+          "bodyNoKey": "一个智能体一次只处理一个工作项，那次运行结束后 {name} 才能接手这个。<run>打开那次运行</run>来查看或取消它，或者把它发送给另一个智能体。"
         },
         "imageTooOld": {
           "title": "未发送——{name} 由一个无法处理工作项的旧镜像创建。",
-          "body": "把它迁移到新镜像（保留它的主目录和登录）的功能即将推出。在此之前，新建的代理可以处理工作项。"
+          "body": "把它迁移到新镜像（保留它的主目录和登录）的功能即将推出。在此之前，新建的智能体可以处理工作项。"
         },
         "cannotRun": {
           "title": "未发送——{agent} 无法独立处理工作项。",
-          "body": "它没有 Motir 可以启动的无人值守模式。请选择使用其他编码代理的代理。"
+          "body": "它没有 Motir 可以启动的无人值守模式。请选择使用其他编码智能体的智能体。"
         },
         "hibernating": {
           "title": "未发送——{name} 正在休眠。",
@@ -11776,12 +11782,12 @@
           "title": "未发送——{name} 正在被删除。"
         },
         "notFound": {
-          "title": "未发送——那个代理不可用。",
+          "title": "未发送——那个智能体不可用。",
           "body": "它可能已被删除。列表已刷新。"
         },
         "permission": {
-          "title": "未发送——你不能把此工作项发送给代理。",
-          "body": "这需要此工作项的编辑权限，以及在此项目上使用代理的权限。"
+          "title": "未发送——你不能把此工作项发送给智能体。",
+          "body": "这需要此工作项的编辑权限，以及在此项目上使用智能体的权限。"
         },
         "outOfCredits": {
           "title": "未发送——你的组织积分已用完。"
@@ -11798,24 +11804,24 @@
         "running": "{agent} · {name}"
       },
       "lane": "{name} · {agent}",
-      "laneGone": "已删除的代理",
+      "laneGone": "已删除的智能体",
       "where": {
-        "live": "你的代理正在处理",
-        "ended": "你的代理处理过它",
-        "watch": "在我的代理中观看",
+        "live": "你的智能体正在处理",
+        "ended": "你的智能体处理过它",
+        "watch": "在我的智能体中观看",
         "open": "打开 {name}"
       },
       "meta": {
         "worked": "处理者",
-        "codingAgent": "编码代理"
+        "codingAgent": "编码智能体"
       },
       "cost": {
-        "machineDetail": "{name} 的运行时间——随代理以积分计费。没有令牌：{agent} 使用你自己的登录运行。",
-        "stripMachine": "{name} 的运行时间，随代理计费",
+        "machineDetail": "{name} 的运行时间——随智能体以积分计费。没有令牌：{agent} 使用你自己的登录运行。",
+        "stripMachine": "{name} 的运行时间，随智能体计费",
         "stripNoTokens": "没有令牌——{agent} 使用你自己的登录运行"
       },
       "end": {
-        "notStarted": "运行无法在代理中启动。"
+        "notStarted": "运行无法在智能体中启动。"
       },
       "cancel": {
         "body": "{name} 中本次运行的会话会停止，它的凭据会被吊销。它已经推送的工作会保留在本次运行的分支上，此工作项保持原状。{name} 会继续运行，你在其中的终端不受影响。"
@@ -11907,7 +11913,7 @@
         "never": "从未建立索引"
       },
       "drift": {
-        "commits": "落后 {count} 个提交",
+        "commits": "落后 {count, plural, other {#}} 个提交",
         "unknown": "落后的提交数未知"
       }
     }
@@ -11944,7 +11950,7 @@
       "verbsReturn": "内容成功展示后，操作按钮会重新出现。",
       "failed": {
         "title": "无法审批无法展示的内容。",
-        "next": "请在上方重试，或要求代理重新发布。"
+        "next": "请在上方重试，或要求智能体重新发布。"
       }
     },
     "waitingOn": "等待 {name} 处理。",
@@ -11958,7 +11964,7 @@
     },
     "settingsDoor": {
       "mergeMode": "更改该项目合并拉取请求的方式 →",
-      "reviewAgent": "更改是否由代理审查本项目的拉取请求 →"
+      "reviewAgent": "更改是否由智能体审查本项目的拉取请求 →"
     },
     "confirm": {
       "title": "批准后将会：",
@@ -11967,7 +11973,7 @@
     },
     "record": {
       "unattributed": "已无法追溯到具体成员",
-      "willRepublish": "代理将发布新版本",
+      "willRepublish": "智能体将发布新版本",
       "version": "版本 {version}",
       "filesKept": "已保留文件",
       "filesNotKept": "未保留文件",
@@ -11983,15 +11989,15 @@
         "republished": "发布了更新的设计，因此该问题已撤回。",
         "withdrawn": "设计结果已撤回，该问题随之撤回。",
         "head_moved": "推送改变了提交，因此该问题已撤回。",
-        "member_closed": "一个 Pull Request 已关闭，因此该问题已撤回。",
-        "member_drafted": "一个 Pull Request 已转回草稿，因此该问题已撤回。",
+        "member_closed": "一个拉取请求已关闭，因此该问题已撤回。",
+        "member_drafted": "一个拉取请求已转回草稿，因此该问题已撤回。",
         "conflict": "有拉取请求与其目标分支冲突，因此该问题已撤回。",
-        "set_changed": "Pull Request 集合发生变化，因此该问题已撤回。",
+        "set_changed": "拉取请求集合发生变化，因此该问题已撤回。",
         "pulled_back": "工作已撤回评审，因此该问题已撤回。",
         "ci_failed": "这些提交的检查未通过，因此该问题已撤回。",
         "ci_rerunning": "这些提交的检查重新开始运行，因此该问题已撤回，待检查通过后再次询问。",
         "plan_stale": "此计划要改动的工作已经完成，计划因此过期，该问题已撤回。",
-        "plan_discarded": "计划中的所有建议都已撤回，计划随之结束，该问题也一并撤回。",
+        "plan_discarded": "计划中的所有提案都已撤回，计划随之结束，该问题也一并撤回。",
         "queue_failed": "合并队列未能合并这些提交，因此该问题已撤回。",
         "subject_gone": "此问题针对的内容已不存在，因此该问题已撤回。",
         "no_longer_manual": "该工作项已不再是人工工作，因此该问题已撤回。",
@@ -12020,20 +12026,20 @@
       },
       "stale": {
         "subject": "你阅读期间，发布了更新的版本。",
-        "pullRequests": "你阅读期间，Pull Request 有了新的提交。",
+        "pullRequests": "你阅读期间，拉取请求有了新的提交。",
         "criteria": "你阅读期间，验收标准被修改了。",
         "several": "你阅读期间有多处变化：{things}。",
         "next": "你的决定未被记录。请查看当前版本，然后重新决定。",
         "control": "查看当前版本",
         "noun": {
           "subject": "已发布的版本",
-          "pullRequests": "Pull Request",
+          "pullRequests": "拉取请求",
           "criteria": "验收标准"
         }
       },
       "notAuthorised": {
         "title": "该决定不由你做出。",
-        "next": "可由该工作项的负责人决定；若该工作项没有负责人，则可由其报告人决定；工作区管理员始终可以决定。"
+        "next": "可由该工作项的负责人决定；若该工作项没有负责人，则可由其创建人决定；工作区管理员始终可以决定。"
       },
       "notFound": {
         "title": "该决定已不在此处。",
@@ -12083,7 +12089,7 @@
       },
       "mergeConflict": {
         "title": "该拉取请求与其目标分支存在冲突。",
-        "next": "没有批准，也没有合并任何内容。请在分支上解决冲突（motir fix 可交给代理处理），检查通过后，Motir 会再次请求审批。",
+        "next": "没有批准，也没有合并任何内容。请在分支上解决冲突（motir fix 可交给智能体处理），检查通过后，Motir 会再次请求审批。",
         "atPress": "{host} 报告 {pr} 与 {base} 冲突。该操作在写入任何内容之前即被拒绝，因此 {key} 没有变化。",
         "atPressNoBase": "{host} 报告 {pr} 与其目标分支冲突。该操作在写入任何内容之前即被拒绝，因此 {key} 没有变化。"
       },
@@ -12105,7 +12111,7 @@
       },
       "mergeQueueFailedNeedsFix": {
         "title": "这个拉取请求在合并队列中失败了。",
-        "next": "把同一批提交重新排队只会以同样方式失败，因此没有任何内容进入队列。motir fix 会把它交给代理处理，新的推送检查通过后，Motir 会再次请求审批。"
+        "next": "把同一批提交重新排队只会以同样方式失败，因此没有任何内容进入队列。motir fix 会把它交给智能体处理，新的推送检查通过后，Motir 会再次请求审批。"
       },
       "mergeAppPermissionMissing": {
         "title": "Motir 的 GitHub App 无权在此合并。",
@@ -12127,7 +12133,7 @@
       "bodyRoutedElsewhere": "等待 <person>{name}</person> 处理——你也可以做出决定。请先全屏审阅。"
     },
     "designResult": {
-      "kindLabel": "设计成果",
+      "kindLabel": "设计结果",
       "meta": {
         "withVersion": "版本 {version}",
         "plain": "已发布的设计"
@@ -12165,7 +12171,7 @@
         "rerun": {
           "label": "重新运行",
           "hint": "用于修正已构建的内容。",
-          "consequence": "状态不变；合并审批被撤回，motir fix 会带着你的理由在同一个拉取请求上修复。"
+          "consequence": "状态不变；合并审批被撤回，motir fix 会带着你的理由在{count, plural, =1 {同一个拉取请求} other {同一组拉取请求}}上修复。"
         },
         "replan": {
           "hint": "用于改变故事的结构。",
@@ -12187,20 +12193,20 @@
     "pullRequestApproval": {
       "kindLabel": "拉取请求",
       "meta": {
-        "count": "{count} 个拉取请求",
-        "delivered": "{count} 个拉取请求 · 由 {run} 交付",
-        "approved": "由 {name} 批准 · {count} 个拉取请求",
-        "approvedByYou": "刚刚由你批准 · {count} 个拉取请求",
-        "withdrawn": "{count} 个拉取请求 · {pr} 的最新提交已变更",
-        "withdrawnSet": "{count} 个拉取请求 · 集合已变更",
-        "withdrawnMerged": "{count} 个拉取请求 · {pr} 已在 {host} 上合并",
-        "withdrawnClosed": "{count} 个拉取请求 · {pr} 未合并即关闭",
-        "withdrawnDrafted": "{count} 个拉取请求 · {pr} 已转回草稿",
-        "withdrawnPulledBack": "{count} 个拉取请求 · 已撤出评审",
-        "withdrawnUnknown": "{count} 个拉取请求 · 已撤回",
-        "withdrawnConflict": "{count} 个拉取请求 · {pr} 与 {base} 冲突",
-        "withdrawnConflictNoBase": "{count} 个拉取请求 · {pr} 与目标分支冲突",
-        "withdrawnQueueFailed": "{count} 个拉取请求 · {pr} 在合并队列中失败"
+        "count": "{count, plural, other {#}} 个拉取请求",
+        "delivered": "{count, plural, other {#}} 个拉取请求 · 由 {run} 交付",
+        "approved": "由 {name} 批准 · {count, plural, other {#}} 个拉取请求",
+        "approvedByYou": "刚刚由你批准 · {count, plural, other {#}} 个拉取请求",
+        "withdrawn": "{count, plural, other {#}} 个拉取请求 · {pr} 的最新提交已变更",
+        "withdrawnSet": "{count, plural, other {#}} 个拉取请求 · 集合已变更",
+        "withdrawnMerged": "{count, plural, other {#}} 个拉取请求 · {pr} 已在 {host} 上合并",
+        "withdrawnClosed": "{count, plural, other {#}} 个拉取请求 · {pr} 未合并即关闭",
+        "withdrawnDrafted": "{count, plural, other {#}} 个拉取请求 · {pr} 已转回草稿",
+        "withdrawnPulledBack": "{count, plural, other {#}} 个拉取请求 · 已撤出评审",
+        "withdrawnUnknown": "{count, plural, other {#}} 个拉取请求 · 已撤回",
+        "withdrawnConflict": "{count, plural, other {#}} 个拉取请求 · {pr} 与 {base} 冲突",
+        "withdrawnConflictNoBase": "{count, plural, other {#}} 个拉取请求 · {pr} 与目标分支冲突",
+        "withdrawnQueueFailed": "{count, plural, other {#}} 个拉取请求 · {pr} 在合并队列中失败"
       },
       "verb": {
         "approveAndMerge": "批准并合并"
@@ -12210,12 +12216,12 @@
         "counted": "批准后将合并 {count} 个拉取请求——立即合并，或在仓库要求时通过其合并队列——然后将 {key} 标记为已批准。"
       },
       "confirm": {
-        "records": "记录你已批准这 {count} 个提交，连同时间；",
+        "records": "记录你已批准这 {count, plural, other {#}} 个提交，连同时间；",
         "mergeOrQueue": "立即合并 {pr}，或在其仓库要求时将其加入合并队列；",
         "movesToApproved": "将 {key} 标记为已批准。所有合并完成后将标记为已完成。"
       },
       "record": {
-        "commits": "{count} 个提交"
+        "commits": "{count, plural, other {#}} 个提交"
       },
       "queued": {
         "why": "在合并队列合入 {pr} 之前，{key} 保持已批准状态。"
@@ -12319,7 +12325,7 @@
           "earlierCommit": "批准的是较早的提交"
         },
         "meta": {
-          "approved": "由 {name} 在 GitHub 上批准 · {count} 个拉取请求"
+          "approved": "由 {name} 在 GitHub 上批准 · {count, plural, other {#}} 个拉取请求"
         },
         "record": {
           "approved": "由 {name} 在 GitHub 上批准",
@@ -12328,11 +12334,11 @@
         }
       },
       "reasked": {
-        "meta": "合并队列退回后再次征求批准 · {count} 个拉取请求",
-        "earlier": "<b>{name}</b> 曾于 {date} 批准 · {count} 个提交 — 未合并",
+        "meta": "合并队列退回后再次征求批准 · {count, plural, other {#}} 个拉取请求",
+        "earlier": "<b>{name}</b> 曾于 {date} 批准 · {count, plural, other {#}} 个提交 — 未合并",
         "why": "批准后会把 {pr} 放回其仓库的合并队列，队列检查通过后即合并，并将 {key} 移至“已批准”。",
         "confirm": {
-          "newApproval": "记录你再次批准了这 {count} 个提交及其时间 — 这是一次新的批准，而不是已用掉的那一次；",
+          "newApproval": "记录你再次批准了这 {count, plural, other {#}} 个提交及其时间 — 这是一次新的批准，而不是已用掉的那一次；",
           "requeue": "将 {pr} 重新加入其仓库的合并队列，队列检查通过后即合并；",
           "merge": "在设置放行后合并 {pr}；"
         },
@@ -12345,7 +12351,7 @@
         "line": "<b>{pr}</b> 未合并：仓库上的某项设置阻止了它。",
         "linePermission": "<b>{pr}</b> 未合并：Motir 的 GitHub App 在那里缺少 <b>{permission}</b> 权限。",
         "hostReason": "GitHub 的原话：“{reason}”",
-        "reasked": "改好设置后再按一次 — 这次按下是一次新的批准，并合并相同的提交。这里不提供 <b>motir fix</b>：没有可让代理修改的代码。"
+        "reasked": "改好设置后再按一次 — 这次按下是一次新的批准，并合并相同的提交。这里不提供 <b>motir fix</b>：没有可让智能体修改的代码。"
       },
       "row": {
         "conflicts": "与 {base} 冲突",
@@ -12362,17 +12368,17 @@
     "statusHeld": {
       "decision": "无法直接将状态改为<strong>{status}</strong>——<strong>{decision}</strong>正在等待。",
       "decisionSeeOnly": "无法直接将状态改为<strong>{status}</strong>——<strong>{decision}</strong>正在等待 {name} 处理。",
-      "decisionNotRaised": "无法直接将状态改为<strong>{status}</strong>——合并请求的检查通过后才会发起<strong>{decision}</strong>。",
-      "merge": "无法直接将状态改为<strong>{status}</strong>——合并该合并请求后会自动变更。",
+      "decisionNotRaised": "无法直接将状态改为<strong>{status}</strong>——拉取请求的检查通过后才会发起<strong>{decision}</strong>。",
+      "merge": "无法直接将状态改为<strong>{status}</strong>——合并该拉取请求后会自动变更。",
       "decisionNoun": {
         "design_result": "设计审批",
-        "pull_request_approval": "合并请求审批",
+        "pull_request_approval": "拉取请求审批",
         "decision_approval": "决策审批",
         "pull_request_merge": "合并审批",
         "acceptance_result": "验收审批",
         "decision_choice": "选择",
         "decision_confirmation": "决策",
-        "agent_review": "代理审查",
+        "agent_review": "智能体审查",
         "manual_work": "人工任务"
       },
       "reviewAndApprove": "审阅并批准",
@@ -12401,12 +12407,12 @@
       "metaNoHead": "文件版本 <mono>{blob}</mono>",
       "viewOnHost": "在 GitHub 上查看",
       "headMeta": {
-        "one": "{path} · {count} 个拉取请求 · 由 {run} 交付",
-        "oneNoRun": "{path} · {count} 个拉取请求",
-        "none": "无决策文档 · {count} 个拉取请求 · 由 {run} 交付",
-        "noneNoRun": "无决策文档 · {count} 个拉取请求",
-        "several": "{docs} 份决策文档 · {count} 个拉取请求 · 由 {run} 交付",
-        "severalNoRun": "{docs} 份决策文档 · {count} 个拉取请求",
+        "one": "{path} · {count, plural, other {#}} 个拉取请求 · 由 {run} 交付",
+        "oneNoRun": "{path} · {count, plural, other {#}} 个拉取请求",
+        "none": "无决策文档 · {count, plural, other {#}} 个拉取请求 · 由 {run} 交付",
+        "noneNoRun": "无决策文档 · {count, plural, other {#}} 个拉取请求",
+        "several": "{docs} 份决策文档 · {count, plural, other {#}} 个拉取请求 · 由 {run} 交付",
+        "severalNoRun": "{docs} 份决策文档 · {count, plural, other {#}} 个拉取请求",
         "withdrawn": "{path} · 文件版本 {blob}",
         "page": "页面 · 第 {number} 版 · 无拉取请求 · 由 {run} 交付",
         "pageNoRun": "页面 · 第 {number} 版 · 无拉取请求",
@@ -12448,7 +12454,7 @@
     },
     "choice": {
       "kindLabel": "选择",
-      "meta": "{count} 个选项",
+      "meta": "{count, plural, other {#}} 个选项",
       "question": "问题",
       "options": "选项 · {count}",
       "bestIfYouWant": "如果你更看重",
@@ -12521,7 +12527,7 @@
       },
       "record": {
         "link": "书面记录",
-        "detail": "{size} · {count} 个 Markdown 附件中最新的一个",
+        "detail": "{size} · {count, plural, other {#}} 个 Markdown 附件中最新的一个",
         "none": "没有书面记录。你确认的就是上面的决策。",
         "choose": "选择页面",
         "chooseHelper": "可选。页面的最新版本将作为记录保留；之后的编辑会生成新版本。",
@@ -12592,14 +12598,14 @@
         "unknown_change": "“{value}” 不是决策可记录的变更类型。请使用工作流程、增加需求或减少需求。",
         "no_supersedes_section": "此决策没有说明取代了什么。请添加 ## Supersedes 部分，列出它改变的已批准工作。",
         "empty_supersedes": "## Supersedes 未列出任何工作项。决策会改变已批准的工作——请按键列出每一项。",
-        "no_resulting_direction": "此决策缺少 ## Resulting direction。请完整说明史诗现在的方向，这样无需把多个决策拼在一起理解。",
+        "no_resulting_direction": "此决策缺少 ## Resulting direction。请完整说明篇章现在的方向，这样无需把多个决策拼在一起理解。",
         "tail": "在描述修正之前无人能确认；描述完整后会立即发起确认。它仍可手动移至已完成。"
       },
       "row": {
         "awaiting": "{changes} · 取代 {count} 项 · {decision}",
         "confirmedWith": "已确认（附书面记录）· 取代 {count} 项",
         "confirmedWithout": "已确认（无书面记录）· 取代 {count} 项",
-        "overturned": "已推翻 · {count} 个工作项待重新规划"
+        "overturned": "已推翻 · {count, plural, other {#}} 个工作项待重新规划"
       }
     },
     "reason": {
@@ -12661,7 +12667,7 @@
         "untargeted": "计划 — <title>{name}</title>",
         "untitled": "<title>{project}</title>的计划",
         "moreTargets": "+{count}",
-        "details": "{count} 个建议工作项 · {author}",
+        "details": "{count, plural, other {#}} 个建议工作项 · {author}",
         "author": {
           "motir": "由 Motir AI 撰写",
           "harness": "由 {harness} 撰写",
@@ -12718,23 +12724,23 @@
       "aria": "用 AI 规划 {item} 的后续工作"
     },
     "agentReview": {
-      "kindLabel": "代理审查",
+      "kindLabel": "智能体审查",
       "state": {
         "reviewing": "审查中",
         "couldNotRun": "未能运行"
       },
       "reviewing": {
-        "title": "审查代理正在审查这个版本",
-        "why": "正在等待审查代理。在它给出结论之前，不会合并任何内容，也不会请任何人批准。"
+        "title": "审查智能体正在审查这个版本",
+        "why": "正在等待审查智能体。在它给出结论之前，不会合并任何内容，也不会请任何人批准。"
       },
       "run": {
-        "started": "<run>{label}</run> · <when></when>开始 · {count} 个提交",
-        "decided": "<run>{label}</run> · {when} · {count} 个提交",
-        "decidedNoRun": "{when} · {count} 个提交",
-        "commits": "{count} 个提交"
+        "started": "<run>{label}</run> · <when></when>开始 · {count, plural, other {#}} 个提交",
+        "decided": "<run>{label}</run> · {when} · {count, plural, other {#}} 个提交",
+        "decidedNoRun": "{when} · {count, plural, other {#}} 个提交",
+        "commits": "{count, plural, other {#}} 个提交"
       },
       "passed": {
-        "title": "已由审查代理审查",
+        "title": "已由审查智能体审查",
         "pill": "已通过"
       },
       "findings": {
@@ -12742,8 +12748,8 @@
         "hide": "收起审查发现"
       },
       "sentBack": {
-        "title": "已被审查代理退回",
-        "record": "已被<b>审查代理</b>退回 · {when} · {count} 个提交",
+        "title": "已被审查智能体退回",
+        "record": "已被<b>审查智能体</b>退回 · {when} · {count, plural, other {#}} 个提交",
         "why": "不会合并任何内容，也不会请任何人批准。不会自动重新运行。"
       },
       "couldNotRun": {
@@ -12755,7 +12761,7 @@
           "no_verdict": "审查运行结束时没有给出结论——<run>{label}</run>。",
           "no_verdictNoRun": "审查运行结束时没有给出结论。",
           "boot_failed": "审查所用的托管机器未能启动。",
-          "no_actor": "没有人可以运行它——该工作项没有经办人或报告人，工作区也没有代理管理员。",
+          "no_actor": "没有人可以运行它——该工作项没有负责人或创建人，工作区也没有代理管理员。",
           "unknown": "审查运行未能启动。"
         },
         "why": "在审查完成或有人决定不经审查继续之前，不会合并任何内容。",
@@ -12770,16 +12776,16 @@
         "records": "记录你决定不经审查继续——以你的名义，并附上你的原因。",
         "asks": "发起常规审批：这些拉取请求将等待“批准并合并”。",
         "label": "为什么不经审查继续？",
-        "helper": "必填。它会以你的名义记录——绝不会记为审查代理的通过。",
+        "helper": "必填。它会以你的名义记录——绝不会记为审查智能体的通过。",
         "required": "请说明原因——不经审查继续需要附上原因。",
         "proceed": "确认，不经审查继续",
         "bandTitle": "已不经审查继续",
-        "bandNote": "审查代理没有审查这 {count} 个提交。",
+        "bandNote": "审查智能体没有审查这 {count, plural, other {#}} 个提交。",
         "record": "<b>{name}</b> 决定不经审查继续 · {when}"
       }
     },
     "autoRerun": {
-      "started": "正在托管代理上重新运行",
+      "started": "正在托管智能体上重新运行",
       "startedCount": "第 {ordinal} 次自动重新运行（共 {cap} 次）",
       "viewRun": "查看运行",
       "skipped": "已跳过自动重新运行",
@@ -12796,14 +12802,14 @@
         "card_not_ready": "已有人先领取了此工作项。"
       },
       "next": {
-        "cap_reached": "在托管代理上运行",
-        "dispatcher_gone": "在托管代理上运行",
-        "no_project_access": "在托管代理上运行",
+        "cap_reached": "在托管智能体上运行",
+        "dispatcher_gone": "在托管智能体上运行",
+        "no_project_access": "在托管智能体上运行",
         "ci_credits_exhausted": "账单",
         "model_not_offered": "选择模型并运行",
-        "models_unavailable": "在托管代理上运行",
+        "models_unavailable": "在托管智能体上运行",
         "out_of_credits": "购买额度",
-        "credits_unavailable": "在托管代理上运行",
+        "credits_unavailable": "在托管智能体上运行",
         "repository_not_writable": "仓库"
       }
     },
@@ -12839,13 +12845,13 @@
     },
     "subjectGone": {
       "design_result": "此设计在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。",
-      "decision_approval": "决策文档已不在任何打开的合并请求上，这里已没有可批准的内容。打开工作项查看它现在的内容。",
+      "decision_approval": "决策文档已不在任何打开的拉取请求上，这里已没有可批准的内容。打开工作项查看它现在的内容。",
       "acceptance_result": "此验收视频在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。",
-      "pull_request_approval": "这些合并请求在发起审批后已被取消关联，这里已没有可批准或合并的内容。打开工作项查看它现在的内容。",
+      "pull_request_approval": "这些拉取请求在发起审批后已被取消关联，这里已没有可批准或合并的内容。打开工作项查看它现在的内容。",
       "decision_choice": "工作项中已不再列出可选的选项，这里已没有可选择的内容。打开工作项查看它现在的内容。",
       "decision_confirmation": "工作项已不再是一项待确认的决策，这里已没有可确认的内容。打开工作项查看它现在的内容。",
       "plan_approval": "此计划在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。",
-      "agent_review": "这些合并请求在发起审查后已被取消关联，这里已没有可审查的内容。打开工作项查看它现在的内容。",
+      "agent_review": "这些拉取请求在发起审查后已被取消关联，这里已没有可审查的内容。打开工作项查看它现在的内容。",
       "manual_work": "此工作项已不再需要人工完成，这里已没有可标记完成的内容。打开工作项查看它现在的内容。"
     },
     "withdrawn": {
@@ -12862,7 +12868,7 @@
   "approvals": {
     "acceptanceVideo": {
       "title": "验收视频审批",
-      "desc": "当故事存在验收视频时，该故事会被保留，直到有人批准它——在此之前，它无法完成，其状态也无法手动更改。视频来自何处并不影响这一点：Motir 代理运行会发布一个，任何使用验收 API 的方式也会。",
+      "desc": "当故事存在验收视频时，该故事会被保留，直到有人批准它——在此之前，它无法完成，其状态也无法手动更改。视频来自何处并不影响这一点：Motir 智能体运行会发布一个，任何使用验收 API 的方式也会。",
       "on": "已开启",
       "off": "已关闭",
       "onWhat": "任何带有验收视频的故事都会等待批准——无论由谁发布。",
@@ -12884,21 +12890,21 @@
       "auto": {
         "label": "自动合并",
         "hint": "检查通过后，Motir 会直接合并该拉取请求，无需询问任何人。记录会写明是此设置允许了合并——而不是有人批准了它。",
-        "blockedByReviewAgent": "关闭审查代理后才能自动合并。"
+        "blockedByReviewAgent": "关闭审查智能体后才能自动合并。"
       },
       "saved": "已保存",
       "saveError": "保存失败，请重试。"
     },
     "reviewAgent": {
-      "title": "审查代理",
-      "desc": "当工作项的拉取请求通过检查后，Motir 代理会对照工作项——它的描述、验收标准和测试方法——审查这次变更，<strong>然后才会请你批准</strong>。如果发现问题，工作项会带着代理的发现进入<strong>待修复</strong>，不会请任何人批准。",
+      "title": "审查智能体",
+      "desc": "当工作项的拉取请求通过检查后，Motir 智能体会对照工作项——它的描述、验收标准和测试方法——审查这次变更，<strong>然后才会请你批准</strong>。如果发现问题，工作项会带着智能体的发现进入<strong>待修复</strong>，不会请任何人批准。",
       "on": "已开启",
       "off": "已关闭",
       "onWhat": "每个工作项都会先经过审查，然后才会请你批准。",
       "offWhat": "工作项的检查一通过，就会提交给你批准。",
       "unavailable": "不可用",
-      "unavailableWhat": "该项目会自动合并，因此没有需要等待审查的内容。请选择<strong>合并前询问</strong>以开启审查代理。",
-      "billingNote": "每次审查都是一次托管代理运行，费用从你组织的 AI 额度中扣除。",
+      "unavailableWhat": "该项目会自动合并，因此没有需要等待审查的内容。请选择<strong>合并前询问</strong>以开启审查智能体。",
+      "billingNote": "每次审查都是一次托管智能体运行，费用从你组织的 AI 额度中扣除。",
       "offNote": "关闭后，进行中的审查会被取消——这些工作项将直接进入常规流程。",
       "saved": "已保存",
       "saveError": "保存失败，请重试。"
@@ -12950,7 +12956,7 @@
     "delete": "删除…",
     "deleteTitle": "删除文件夹“{name}”？",
     "deleteLead": "只会移除文件夹。其中归档的所有内容仍保留在项目中。",
-    "deleteMoves": "<strong>{kinds, select, all {{folders} 个文件夹、{items} 个工作项和 {pages} 个页面} foldersItems {{folders} 个文件夹和 {items} 个工作项} foldersPages {{folders} 个文件夹和 {pages} 个页面} itemsPages {{items} 个工作项和 {pages} 个页面} folders {{folders} 个文件夹} pages {{pages} 个页面} other {{items} 个工作项}}</strong>将移动到<strong>{destination}</strong>。不会删除任何工作项或页面。",
+    "deleteMoves": "<strong>{kinds, select, all {{folders, plural, other {#}} 个文件夹、{items, plural, other {#}} 个工作项和 {pages, plural, other {#}} 个页面} foldersItems {{folders, plural, other {#}} 个文件夹和 {items, plural, other {#}} 个工作项} foldersPages {{folders, plural, other {#}} 个文件夹和 {pages, plural, other {#}} 个页面} itemsPages {{items, plural, other {#}} 个工作项和 {pages, plural, other {#}} 个页面} folders {{folders, plural, other {#}} 个文件夹} pages {{pages, plural, other {#}} 个页面} other {{items, plural, other {#}} 个工作项}}</strong>将移动到<strong>{destination}</strong>。不会删除任何工作项或页面。",
     "deleteEmpty": "“{name}”是空的。删除它只会移除该文件夹。",
     "deleteConfirm": "删除文件夹",
     "deleteCounting": "正在统计将要移动的内容…",
@@ -12959,7 +12965,7 @@
   },
   "monitoring": {
     "title": "监控",
-    "description": "连接你的服务已在上报的错误监控，Motir 会把其中的问题转成本项目看板上的工作项。",
+    "description": "连接你的服务已在上报的错误监控，Motir 会把其中的问题转成本项目面板上的工作项。",
     "loading": "正在加载监控…",
     "error": {
       "title": "无法加载本项目的监控",
@@ -12984,17 +12990,17 @@
     },
     "degraded": {
       "says": "Sentry 返回：",
-      "consequence": "在有人重新连接之前，Motir 无法读取该组织的问题——在此期间不会有新内容进入看板。"
+      "consequence": "在有人重新连接之前，Motir 无法读取该组织的问题——在此期间不会有新内容进入面板。"
     },
     "section": {
       "label": "受监控的项目",
-      "hint": "这些 Sentry 项目中的问题会成为本看板上的缺陷工作项。",
+      "hint": "这些 Sentry 项目中的问题会成为本面板上的缺陷工作项。",
       "hintDegraded": "连接处于降级状态期间，这些项目不会有新内容进入。",
       "add": "添加受监控的项目"
     },
     "unbound": {
       "title": "尚未监控任何 Sentry 项目",
-      "body": "Sentry 已连接到 {org}。选择其中哪些项目向本看板发送问题——在你选择之前不会有任何内容进入。",
+      "body": "Sentry 已连接到 {org}。选择其中哪些项目向本面板发送问题——在你选择之前不会有任何内容进入。",
       "action": "选择 Sentry 项目"
     },
     "row": {
@@ -13035,7 +13041,7 @@
       "cancel": "取消",
       "one": {
         "title": "停止监控 {slug}？",
-        "body": "来自 <b>{slug}</b> 的新问题将不再进入本看板。<b>{others}</b> 仍会继续受监控。",
+        "body": "来自 <b>{slug}</b> 的新问题将不再进入本面板。<b>{others}</b> {count, plural, other {仍会继续受监控}}。",
         "action": "停止监控"
       },
       "last": {
@@ -13050,7 +13056,7 @@
       "dismiss": "关闭",
       "connected": {
         "title": "Sentry 已连接。",
-        "body": "选择 {org} 的哪些项目向本看板发送问题。"
+        "body": "选择 {org} 的哪些项目向本面板发送问题。"
       },
       "error": {
         "title": "无法连接 Sentry。",
@@ -13084,7 +13090,7 @@
     },
     "picker": {
       "title": "选择 Sentry 项目",
-      "subtitle": "来自 {org}。你所选项目中的问题会成为本看板上的缺陷工作项。",
+      "subtitle": "来自 {org}。你所选项目中的问题会成为本面板上的缺陷工作项。",
       "loading": "正在加载 {org} 的项目…",
       "filter": "筛选项目",
       "alreadyMonitored": "已受监控",
@@ -13092,7 +13098,7 @@
       "chosen": "已选择",
       "notChosen": "未选择",
       "monitor": "{count, plural, =0 {监控项目} other {监控 # 个项目}}",
-      "partial": "已添加 {added}/{attempted} 个项目。{failed, plural, other {其余项目未能添加。}}",
+      "partial": "已添加 {added}/{attempted} 个项目。{failed, plural, =1 {{attempted, plural, =1 {该项目未能添加。} other {另一个项目未能添加。}}} other {其余项目未能添加。}}",
       "rowError": "无法添加——请重试",
       "done": "完成",
       "retry": "重试",
@@ -13111,7 +13117,7 @@
   "monitorErrors": {
     "title": "错误",
     "gloss": "已关联的 Sentry 错误 · 计数截至上次检查",
-    "seen": "出现 <b>{count, number}</b> 次",
+    "seen": "出现 <b>{count, number}</b> {count, plural, other {次}}",
     "lastSeen": "最近出现于 {when}",
     "openInSentry": "在 Sentry 中打开",
     "resolve": {
@@ -13147,7 +13153,7 @@
     "noMatches": "没有匹配的错误",
     "noMatchesHint": "搜索错误标题中的词语，或粘贴其在 Sentry 中的短 ID。",
     "searchFailed": "<b>无法搜索 {connection}：</b>{reason}",
-    "candidate": "{connection} · 出现 {count, number} 次 · {when}",
+    "candidate": "{connection} · 出现 {count, number} {count, plural, other {次}} · {when}",
     "linkedTo": "已关联到 {key}",
     "linkedHere": "已关联到此处",
     "linkAction": "关联",
@@ -13221,7 +13227,7 @@
       "brandLabel": "motir.co 上的 {project}",
       "projectKey": "项目键 {key}",
       "rateLimitedTitle": "你浏览得有点太快了",
-      "rateLimitedBody": "此公开项目限制了单个读者的访问速度。请在 {seconds} 秒后重试。",
+      "rateLimitedBody": "此公开项目限制了单个读者的访问速度。请在 {seconds, plural, other {#}} 秒后重试。",
       "rateLimitedRetry": "重试"
     },
     "requestedFeatures": {
@@ -13253,7 +13259,7 @@
       "conflicted": "待修复 · 与其目标分支冲突",
       "ci_failed": "待修复 · CI 未通过",
       "changes_requested": "待修复 · 已要求修改",
-      "sent_back_by_agent": "待修复 · 已被审查代理退回",
+      "sent_back_by_agent": "待修复 · 已被审查智能体退回",
       "withHead": "{name} · 随 {head}"
     },
     "banner": {
@@ -13277,13 +13283,13 @@
       "toContinue": "查看如何继续",
       "toStartOver": "查看如何重新开始",
       "openingDevelopment": "正在打开“开发”…",
-      "sentBackByAgent": "需要修复：审查代理已将它退回——“{note}”",
-      "sentBackByAgentNoNote": "需要修复：审查代理已将它退回。",
-      "hostedLead": "在这里用托管代理修复——无需终端：",
+      "sentBackByAgent": "需要修复：审查智能体已将它退回——“{note}”",
+      "sentBackByAgentNoNote": "需要修复：审查智能体已将它退回。",
+      "hostedLead": "在这里用托管智能体修复——无需终端：",
       "orTerminal": "或者在终端中修复：",
       "fixingHosted": "托管修复正在运行——由 <b>{name}</b> 于<when></when>开始 · <run>{label}</run>",
       "fixingHostedByYou": "托管修复正在运行——由<b>你</b>于<when></when>开始 · <run>{label}</run>",
-      "carries": "另有 {count} 个工作项随它受阻：<keys></keys>",
+      "carries": "另有 {count, plural, other {#}} 个工作项随它受阻：<keys></keys>",
       "carriesMore": "等另外 {count} 个",
       "repairedWithHead": "随 <b>{head}</b> 一起修复——它们共用同一个拉取请求。",
       "toHead": "打开 {head}"
@@ -13308,22 +13314,22 @@
         "cancel": "取消",
         "saving": "正在保存…"
       },
-      "lockedHint": "只有已完成的事项才能标记——请改为归档",
+      "lockedHint": "只有已完成的工作项才能标记——请改为归档",
       "refused": {
-        "requiresFinished": "该事项已不再处于完成状态，无法标记。请刷新查看其状态。"
+        "requiresFinished": "该工作项已不再处于完成状态，无法标记。请刷新查看其状态。"
       },
       "badge": {
         "jump": "跳转到时效字段"
       },
       "held": {
         "option": "因标记锁定",
-        "text": "该事项已标记为{mark}，状态无法重新打开。",
-        "sub": "清除标记后才能重新打开此事项。",
+        "text": "该工作项已标记为{mark}，状态无法重新打开。",
+        "sub": "清除标记后才能重新打开此工作项。",
         "door": "清除标记",
         "refusalArrived": "已在别处标记为{mark}——此次变更未执行。"
       },
-      "heldLine": "此事项已标记为<strong>{mark}</strong>。清除标记后才能重新打开此事项。",
-      "openItem": "打开事项"
+      "heldLine": "此工作项已标记为<strong>{mark}</strong>。清除标记后才能重新打开此工作项。",
+      "openItem": "打开工作项"
     }
   },
   "oauthConsent": {
@@ -13595,21 +13601,21 @@
       "menuItem": "归档…",
       "pageActions": "“{title}”的页面操作",
       "confirm": {
-        "title": "归档“{title}”及其 {count} 个子页面？",
+        "title": "归档“{title}”及其 {count, plural, other {#}} 个子页面？",
         "body": "它们将从页面树和搜索中移除，历史记录会被保留。恢复后，它们会全部回到原来的位置。不会删除任何内容。",
-        "impact": "将归档 <b>{total} 个页面</b>：“{title}”以及 {names}。",
+        "impact": "将归档 <b>{total, plural, other {#}} 个页面</b>：“{title}”以及 {names}。",
         "more": "等另外 {count} 个",
-        "action": "归档 {total} 个页面"
+        "action": "归档 {total, plural, other {#}} 个页面"
       },
       "archiving": "正在归档…",
-      "archived": "已归档“{title}”及其 {count} 个子页面",
+      "archived": "已归档“{title}”及其 {count, plural, other {#}} 个子页面",
       "archivedOne": "已归档“{title}”",
       "undo": "撤销",
       "archiveFailed": "无法归档“{title}”，请重试。",
       "banner": {
         "title": "此页面已归档",
         "meta": "由 <b>{name}</b> 于 {date} 归档 · 已从页面树和搜索中隐藏，其历史记录会被保留。",
-        "withSubPages": "它的 {count} 个子页面也一并归档。",
+        "withSubPages": "它的 {count, plural, other {#}} 个子页面也一并归档。",
         "restoreHint": "恢复后它会回到原来的位置。",
         "subTitle": "此页面随“{root}”一起归档",
         "subMeta": "由 <b>{name}</b> 于 {date} 归档 · 恢复“{root}”即可让它回来。"
@@ -13618,7 +13624,7 @@
       "restore": "恢复",
       "restoreLabel": "恢复“{title}”",
       "restoring": "正在恢复…",
-      "restored": "已恢复“{title}”及其 {count} 个子页面",
+      "restored": "已恢复“{title}”及其 {count, plural, other {#}} 个子页面",
       "restoredOne": "已恢复“{title}”",
       "landing": {
         "ancestorPage": "已恢复到“{landing}”下，因为“{parent}”已归档。",
@@ -13634,16 +13640,16 @@
       "delete": {
         "menuItem": "删除…",
         "title": "永久删除“{title}”？",
-        "body": "这将永久删除<b>“{title}”</b>及其 <b>{count} 个子页面</b>，以及它们的全部历史记录——每个已保存的版本和图片。<b>此操作无法撤销。</b>",
+        "body": "这将永久删除<b>“{title}”</b>及其 <b>{count, plural, other {#}} 个子页面</b>，以及它们的全部历史记录——每个已保存的版本和图片。<b>此操作无法撤销。</b>",
         "bodyOne": "这将永久删除<b>“{title}”</b>及其全部历史记录——每个已保存的版本和图片。它没有子页面。<b>此操作无法撤销。</b>",
-        "impact": "将删除 <b>{total} 个页面</b>。它们都已归档——页面树不会有任何变化。",
+        "impact": "将删除 <b>{total, plural, other {#}} 个页面</b>。它们都已归档——页面树不会有任何变化。",
         "impactOne": "将删除 <b>1 个页面</b>。它已归档——页面树不会有任何变化。",
         "history": "它们的版本和图片会一并删除。",
-        "action": "删除 {total} 个页面",
+        "action": "删除 {total, plural, other {#}} 个页面",
         "actionOne": "删除页面",
         "deleting": "正在删除…",
         "failed": "无法删除“{title}”。未删除任何内容——请重试。",
-        "deleted": "{count, plural, =0 {已删除“{title}”} other {已删除“{title}”及其 {count} 个子页面}}"
+        "deleted": "{count, plural, =0 {已删除“{title}”} other {已删除“{title}”及其 # 个子页面}}"
       },
       "list": {
         "link": "已归档页面",
@@ -13657,7 +13663,7 @@
           "archivedAt": "归档时间",
           "actions": "操作"
         },
-        "subPages": "{count} 个子页面",
+        "subPages": "{count, plural, other {#}} 个子页面",
         "noSubPages": "无子页面",
         "archivedAncestor": "（已归档）",
         "projectRoot": "项目根目录",

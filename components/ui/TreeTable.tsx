@@ -484,8 +484,11 @@ export function TreeTable<Row>({
         <div role="rowgroup">
           <div
             role="row"
-            className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
-            style={{ gridTemplateColumns: gridTemplate, height: ROW_PX }}
+            // A MINIMUM height: a header label longer than its fixed track (a
+            // translated "Osoba odpowiedzialna") wraps at a word boundary and
+            // grows the band instead of being cut off (MOTIR-7759).
+            className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) py-1 pr-7 pl-4"
+            style={{ gridTemplateColumns: gridTemplate, minHeight: ROW_PX }}
           >
             {columns.map((col) => (
               <div
@@ -493,7 +496,7 @@ export function TreeTable<Row>({
                 role="columnheader"
                 aria-sort={col.ariaSort}
                 className={cn(
-                  'min-w-0 truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase',
+                  'min-w-0 overflow-hidden text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase hyphens-auto',
                   col.align === 'end' && 'text-right',
                 )}
               >

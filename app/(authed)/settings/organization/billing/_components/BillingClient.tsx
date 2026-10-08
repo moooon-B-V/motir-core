@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -379,15 +379,15 @@ export interface EnterpriseContactProps {
   refresh: () => Promise<EnterpriseRequestDTO | null | undefined>;
 }
 
-function fmt(n: number): string {
-  return n.toLocaleString();
+export function fmt(n: number, locale: string): string {
+  return n.toLocaleString(locale);
 }
 
-function fmtDate(value: string | number | null): string | null {
+function fmtDate(value: string | number | null, locale: string): string | null {
   if (value == null) return null;
   const d = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -581,11 +581,12 @@ function MotirLine({
   memberCount: number;
   goSeats: () => void;
 }) {
+  const locale = useLocale();
   const sub = data.motir.scaledTrackerSubscription;
   const scaled = sub?.status === 'active';
   const seat = data.catalog.seatPlan.prices;
   const annualSeat = seat.annual.amountUsd;
-  const renews = fmtDate(sub?.currentPeriodEnd ?? null);
+  const renews = fmtDate(sub?.currentPeriodEnd ?? null, locale);
   // Panel 3 (d) — REPLACES this line's body for an exempt org; never renders
   // beside it. GONE, each for its own reason: the CAPS block (there are none),
   // the seat calculator and its `N × $5` total (a price quote to the house),
@@ -628,7 +629,7 @@ function MotirLine({
               {t('seats.seatsBilled', { n: memberCount })}
             </span>
             <span className="font-sans text-sm font-medium text-(--el-text-strong)">
-              {t('seats.planFeeYr', { yr: fmt(memberCount * annualSeat) })}
+              {t('seats.planFeeYr', { yr: fmt(memberCount * annualSeat, locale) })}
             </span>
           </div>
           {renews ? (
@@ -652,7 +653,7 @@ function MotirLine({
           <div className="grid gap-3 sm:grid-cols-3">
             <CapCell
               label={t('motir.capWorkItems')}
-              value={t('motir.capWorkItemsValue', { limit: fmt(FREE_CAPS.workItems) })}
+              value={t('motir.capWorkItemsValue', { limit: fmt(FREE_CAPS.workItems, locale) })}
             />
             <CapCell
               label={t('motir.capProjects')}
@@ -674,7 +675,7 @@ function MotirLine({
               {t('motir.seatTotalMo', {
                 n: memberCount,
                 seat: seat.monthly.amountUsd,
-                total: fmt(memberCount * seat.monthly.amountUsd),
+                total: fmt(memberCount * seat.monthly.amountUsd, locale),
               })}
             </span>
           </div>
@@ -728,6 +729,7 @@ function MotirAiLine({
   portal: () => void;
   redirecting: boolean;
 }) {
+  const locale = useLocale();
   const { tier, balance, subscription } = data.motirAi;
   const status = subscription.status;
   const key = statusKey(status);
@@ -740,7 +742,7 @@ function MotirAiLine({
   // against — its meter reads as the one grant it is (MOTIR-5274).
   const oneTime = catalogTier?.allotment?.cadence === 'one_time';
   const fee = catalogTier?.prices?.[cadence]?.amountUsd ?? null;
-  const renews = fmtDate(subscription.currentPeriodEnd);
+  const renews = fmtDate(subscription.currentPeriodEnd, locale);
   // Panel 3 (e) — REPLACES this line's body for an exempt org. GONE: the `Free`
   // chip and "on the one-time free trial" (it is EXEMPT, not trialing — the AI
   // paywall is off for it, `billingService.ts:252`), and `Choose a Motir AI
@@ -793,7 +795,9 @@ function MotirAiLine({
                 <div className="flex flex-wrap items-center gap-2">
                   <TierPill name={tier.name} />
                   <span className="font-sans text-sm text-(--el-text)">
-                    {t(oneTime ? 'ai.creditsOneTime' : 'ai.creditsPerMo', { n: fmt(allotment) })}
+                    {t(oneTime ? 'ai.creditsOneTime' : 'ai.creditsPerMo', {
+                      n: fmt(allotment, locale),
+                    })}
                   </span>
                 </div>
                 {fee !== null ? (
@@ -808,7 +812,10 @@ function MotirAiLine({
                 </p>
                 <Meter pct={pct} low={low} />
                 <p className="mt-2 font-sans text-xs text-(--el-text-muted)">
-                  {t('ai.creditsLeft', { left: fmt(Math.max(0, balance)), total: fmt(allotment) })}
+                  {t('ai.creditsLeft', {
+                    left: fmt(Math.max(0, balance), locale),
+                    total: fmt(allotment, locale),
+                  })}
                 </p>
               </div>
               {key === 'trialing' || oneTime ? (
@@ -913,15 +920,16 @@ function MotirCiLine({
   canManage: boolean;
   goPlans: () => void;
 }) {
+  const locale = useLocale();
   const ci = ciLineFigures(data.ci);
   // `null` is the ADR's not-applicable set (self-host, no provisioning org, the
   // META org) — no line at all, which is what §7.3.7 asks for.
   if (!ci) return null;
 
   const paused = ci.variant === 'paused';
-  const resets = fmtDate(ci.resetsAt);
+  const resets = fmtDate(ci.resetsAt, locale);
   const derivation = ci.floorApplied
-    ? t('ci.deriveFloor', { pool: fmt(ci.poolMinutes) })
+    ? t('ci.deriveFloor', { pool: fmt(ci.poolMinutes, locale) })
     : t('ci.deriveSeats', { perSeat: ci.perSeatMinutes, n: ci.memberCount });
 
   return (
@@ -955,9 +963,9 @@ function MotirCiLine({
               <strong>{canManage ? t('ci.pausedTitle') : t('ci.pausedTitleMember')}</strong>{' '}
               {canManage
                 ? t('ci.pausedBody', {
-                    pool: fmt(ci.poolMinutes),
-                    over: fmt(ci.overageMinutes),
-                    credits: fmt(ci.chargedCredits),
+                    pool: fmt(ci.poolMinutes, locale),
+                    over: fmt(ci.overageMinutes, locale),
+                    credits: fmt(ci.chargedCredits, locale),
                   })
                 : t('ci.pausedBodyMember')}
             </p>
@@ -973,7 +981,7 @@ function MotirCiLine({
             <Coins className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
             <p className="font-sans text-xs text-(--el-text-secondary)">
               <strong className="text-(--el-text-strong)">{t('ci.zeroTitle')}</strong>{' '}
-              {t('ci.zeroBody', { pool: fmt(ci.poolMinutes) })}
+              {t('ci.zeroBody', { pool: fmt(ci.poolMinutes, locale) })}
             </p>
           </div>
         ) : (
@@ -981,7 +989,10 @@ function MotirCiLine({
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <span className="font-sans text-xs text-(--el-text-muted)">{t('ci.usedLabel')}</span>
               <span className="font-sans text-sm font-medium text-(--el-text-strong)">
-                {t('ci.usedOfPool', { used: fmt(ci.usedMinutes), pool: fmt(ci.poolMinutes) })}
+                {t('ci.usedOfPool', {
+                  used: fmt(ci.usedMinutes, locale),
+                  pool: fmt(ci.poolMinutes, locale),
+                })}
               </span>
             </div>
             <Meter pct={ci.meterPct} low={ci.over} tickPct={ci.tickPct} />
@@ -989,10 +1000,10 @@ function MotirCiLine({
               <span className="font-sans text-xs text-(--el-text-muted)">{derivation}</span>
               <span className="font-sans text-xs font-medium text-(--el-text-secondary)">
                 {paused
-                  ? t('ci.creditsDrawn', { credits: fmt(ci.chargedCredits) })
+                  ? t('ci.creditsDrawn', { credits: fmt(ci.chargedCredits, locale) })
                   : ci.over
-                    ? t('ci.minutesOver', { over: fmt(ci.overageMinutes) })
-                    : t('ci.minutesLeft', { left: fmt(ci.remainingMinutes) })}
+                    ? t('ci.minutesOver', { over: fmt(ci.overageMinutes, locale) })
+                    : t('ci.minutesLeft', { left: fmt(ci.remainingMinutes, locale) })}
               </span>
             </div>
           </div>
@@ -1010,8 +1021,8 @@ function MotirCiLine({
             <p className="font-sans text-xs text-(--el-text-strong)">
               <strong>{t('ci.drawingTitle')}</strong>{' '}
               {t('ci.drawingBody', {
-                over: fmt(ci.overageMinutes),
-                credits: fmt(ci.chargedCredits),
+                over: fmt(ci.overageMinutes, locale),
+                credits: fmt(ci.chargedCredits, locale),
               })}
             </p>
           </div>
@@ -1169,6 +1180,7 @@ function AgentsLine({
   canManage: boolean;
   goPlans: () => void;
 }) {
+  const locale = useLocale();
   const agents = agentLineFigures(data.agents);
   const noPlan = agents.variant === 'no_plan' || agents.variant === 'no_plan_with_charges';
   const unavailable = agents.variant === 'unavailable';
@@ -1198,7 +1210,7 @@ function AgentsLine({
               : 'font-sans text-xl font-medium text-(--el-text-secondary) tabular-nums'
           }
         >
-          {fmt(value)}
+          {fmt(value, locale)}
           <span className="ml-1 font-sans text-sm font-medium text-(--el-text-secondary)">
             {t('agents.creditsUnit')}
           </span>
@@ -1296,6 +1308,7 @@ function AgentsLine({
 // button, no checkout and no owner-only affordance on it, so the shipped
 // permission split reaches it unchanged and it needs no member variant of its own.
 function MotirSearchLine({ data, t }: { data: BillingStatusDTO; t: T }) {
+  const locale = useLocale();
   const search = searchLineFigures({
     search: data.search,
     balance: data.motirAi.balance,
@@ -1361,7 +1374,7 @@ function MotirSearchLine({ data, t }: { data: BillingStatusDTO; t: T }) {
                 </span>
               ) : (
                 <span className="font-sans text-xl font-semibold text-(--el-text) tabular-nums">
-                  {fmt(search.monthSpend ?? 0)}
+                  {fmt(search.monthSpend ?? 0, locale)}
                   <span className="ml-1 font-sans text-sm font-medium text-(--el-text-secondary)">
                     {t('search.creditsUnit')}
                   </span>
@@ -1381,7 +1394,7 @@ function MotirSearchLine({ data, t }: { data: BillingStatusDTO; t: T }) {
                 </span>
               ) : (
                 <span className="font-sans text-xl font-medium text-(--el-text-secondary) tabular-nums">
-                  {fmt(search.totalSpend ?? 0)}
+                  {fmt(search.totalSpend ?? 0, locale)}
                   <span className="ml-1 font-sans text-sm font-medium text-(--el-text-secondary)">
                     {t('search.creditsUnit')}
                   </span>
@@ -1492,10 +1505,11 @@ function PlansView({
   enterprise,
   back,
 }: SharedViewProps & { enterprise: EnterpriseContactProps; back: () => void }) {
+  const locale = useLocale();
   const [cadence, setCadence] = useState<BillingCadence>('annual');
   const { tier, balance, subscription } = data.motirAi;
   const allotment = tier?.monthlyCreditAllotment ?? 0;
-  const renews = fmtDate(subscription.currentPeriodEnd);
+  const renews = fmtDate(subscription.currentPeriodEnd, locale);
   const aiPlans = data.catalog.aiPlans;
   const oneTime = aiPlans.find((p) => p.key === tier?.key)?.allotment?.cadence === 'one_time';
   const paidActive =
@@ -1532,12 +1546,12 @@ function PlansView({
               <span className="font-sans text-sm text-(--el-text-muted)">
                 {oneTime
                   ? t('plans.currentStripOneTime', {
-                      n: fmt(allotment),
-                      left: fmt(Math.max(0, balance)),
+                      n: fmt(allotment, locale),
+                      left: fmt(Math.max(0, balance), locale),
                     })
                   : t('plans.currentStrip', {
-                      n: fmt(allotment),
-                      left: fmt(Math.max(0, balance)),
+                      n: fmt(allotment, locale),
+                      left: fmt(Math.max(0, balance), locale),
                       date: renews ?? '—',
                     })}
               </span>
@@ -1651,6 +1665,7 @@ function PlanCard({
   /** The Enterprise card's control (MOTIR-7607) — rendered for the price-less plan. */
   contactSales: React.ReactNode;
 }) {
+  const locale = useLocale();
   const isCurrent = currentKey === plan.key && status !== null && status !== 'canceled';
   const isRecommended = plan.recommended;
   const accent = isCurrent || isRecommended;
@@ -1687,11 +1702,11 @@ function PlanCard({
           </span>
         </div>
         <p className="font-sans text-xs text-(--el-text-muted)">
-          {t('plans.annualSub', { yr: fmt(annual) })}
+          {t('plans.annualSub', { yr: fmt(annual, locale) })}
         </p>
         {save > 0 ? (
           <Pill className="mt-1 bg-(--el-tint-mint) text-(--el-text-strong) border-transparent">
-            {t('plans.annualSave', { n: fmt(save) })}
+            {t('plans.annualSave', { n: fmt(save, locale) })}
           </Pill>
         ) : null}
       </div>
@@ -1706,7 +1721,7 @@ function PlanCard({
           {t('plans.perMoEquiv', { n: monthly })}
         </span>
         <p className="font-sans text-xs text-(--el-text-muted)">
-          {t('plans.monthlySub', { yr: fmt(monthly * 12), n: fmt(save) })}
+          {t('plans.monthlySub', { yr: fmt(monthly * 12, locale), n: fmt(save, locale) })}
         </p>
       </div>
     );
@@ -1799,7 +1814,7 @@ function PlanCard({
               plan.allotment.cadence === 'one_time'
                 ? 'plans.creditsAllotmentOneTime'
                 : 'plans.creditsAllotment',
-              { n: fmt(plan.allotment.credits) },
+              { n: fmt(plan.allotment.credits, locale) },
             )
           : t('plans.customPool')}
       </p>
@@ -1980,6 +1995,7 @@ function TopupCard({
   checkout: (priceLookupKey: string, quantity?: number) => void;
   redirecting: boolean;
 }) {
+  const locale = useLocale();
   // `bundleUnits` comes from the catalog, so the sizes the label prices and the
   // sizes `startCheckout` will accept are the SAME list (MOTIR-2949). A local
   // `[1, 5, 10]` here is a set the service knows nothing about.
@@ -2005,7 +2021,7 @@ function TopupCard({
     >
       <div className="flex flex-col gap-4">
         <p className="font-sans text-sm text-(--el-text)">
-          {t('topup.balance', { n: fmt(Math.max(0, data.motirAi.balance)) })}
+          {t('topup.balance', { n: fmt(Math.max(0, data.motirAi.balance), locale) })}
         </p>
         <div className="flex flex-wrap gap-2" role="group" aria-label={t('topup.title')}>
           {bundleUnits.map((u) => {
@@ -2024,7 +2040,7 @@ function TopupCard({
                 }}
               >
                 <span className="font-sans text-sm font-medium text-(--el-text)">
-                  {t('topup.bundleCredits', { n: fmt(u * unitCredits) })}
+                  {t('topup.bundleCredits', { n: fmt(u * unitCredits, locale) })}
                 </span>
                 <span className="font-sans text-xs text-(--el-text-muted)">
                   {t('topup.bundlePrice', { n: u * unitAmountUsd })}
@@ -2041,12 +2057,12 @@ function TopupCard({
               loading={redirecting}
               onClick={() => checkout(priceLookupKey, units)}
             >
-              {t('topup.buy', { n: fmt(credits), total: fmt(total) })}
+              {t('topup.buy', { n: fmt(credits, locale), total: fmt(total, locale) })}
             </Button>
           </div>
         ) : null}
         <p className="font-sans text-xs text-(--el-text-muted)">
-          {t('topup.rate', { unit: unitAmountUsd, credits: fmt(unitCredits) })}
+          {t('topup.rate', { unit: unitAmountUsd, credits: fmt(unitCredits, locale) })}
         </p>
         {!paidActive ? (
           <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
@@ -2072,6 +2088,7 @@ function SeatsView({
   redirecting,
   back,
 }: SharedViewProps & { back: () => void }) {
+  const locale = useLocale();
   const sub = data.motir.scaledTrackerSubscription;
   const scaled = sub?.status === 'active';
   const seat = data.catalog.seatPlan.prices;
@@ -2085,7 +2102,7 @@ function SeatsView({
   const monthlyTotal = billableSeats * monthlySeat;
   const annualMoEquiv = Math.round(annualTotal / 12);
   const annualSave = monthlyTotal * 12 - annualTotal;
-  const renews = fmtDate(sub?.currentPeriodEnd ?? null);
+  const renews = fmtDate(sub?.currentPeriodEnd ?? null, locale);
 
   // Checkout-screen cadence (the non-scaled upgrade flow), default annual — drives
   // the total line, the terms rows, the CTA, and the seat price Checkout starts on
@@ -2150,11 +2167,11 @@ function SeatsView({
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-sans text-sm font-medium text-(--el-text-strong)">
-                  {t('seats.planFeeYr', { yr: fmt(annualTotal) })}
+                  {t('seats.planFeeYr', { yr: fmt(annualTotal, locale) })}
                 </span>
                 {annualSave > 0 ? (
                   <Pill className="bg-(--el-tint-mint) text-(--el-text-strong) border-transparent">
-                    {t('seats.annualSaves', { n: fmt(annualSave) })}
+                    {t('seats.annualSaves', { n: fmt(annualSave, locale) })}
                   </Pill>
                 ) : null}
               </div>
@@ -2168,7 +2185,7 @@ function SeatsView({
                 {t('seats.annualTotal', {
                   n: memberCount,
                   seat: annualSeat,
-                  total: fmt(annualTotal),
+                  total: fmt(annualTotal, locale),
                 })}
               </span>
             </div>
@@ -2228,7 +2245,7 @@ function SeatsView({
               />
               {isAnnual && annualSave > 0 ? (
                 <Pill className="bg-(--el-tint-mint) text-(--el-text-strong) border-transparent">
-                  {t('seats.annualSaves', { n: fmt(annualSave) })}
+                  {t('seats.annualSaves', { n: fmt(annualSave, locale) })}
                 </Pill>
               ) : null}
             </div>
@@ -2242,12 +2259,12 @@ function SeatsView({
                   ? t('seats.annualTotal', {
                       n: memberCount,
                       seat: annualSeat,
-                      total: fmt(annualTotal),
+                      total: fmt(annualTotal, locale),
                     })
                   : t('seats.monthlyTotal', {
                       n: memberCount,
                       seat: monthlySeat,
-                      total: fmt(monthlyTotal),
+                      total: fmt(monthlyTotal, locale),
                     })}
               </span>
             </div>
@@ -2260,16 +2277,19 @@ function SeatsView({
                 k={t('seats.termBilling')}
                 v={
                   isAnnual
-                    ? t('seats.termBillingValue', { yr: fmt(annualTotal), mo: annualMoEquiv })
-                    : t('seats.termBillingValueMonthly', { mo: fmt(monthlyTotal) })
+                    ? t('seats.termBillingValue', {
+                        yr: fmt(annualTotal, locale),
+                        mo: annualMoEquiv,
+                      })
+                    : t('seats.termBillingValueMonthly', { mo: fmt(monthlyTotal, locale) })
                 }
               />
               <TermRow
                 k={t('seats.termDueToday')}
                 v={
                   isAnnual
-                    ? t('seats.termDueTodayValue', { yr: fmt(annualTotal) })
-                    : t('seats.termDueTodayValueMonthly', { mo: fmt(monthlyTotal) })
+                    ? t('seats.termDueTodayValue', { yr: fmt(annualTotal, locale) })
+                    : t('seats.termDueTodayValueMonthly', { mo: fmt(monthlyTotal, locale) })
                 }
               />
               <TermRow k={t('seats.termAddMember')} v={t('seats.termAddMemberValue')} />
@@ -2287,8 +2307,8 @@ function SeatsView({
                   onClick={() => checkout(seat[cadence].priceLookupKey)}
                 >
                   {isAnnual
-                    ? t('seats.continueCheckout', { yr: fmt(annualTotal) })
-                    : t('seats.continueCheckoutMonthly', { mo: fmt(monthlyTotal) })}
+                    ? t('seats.continueCheckout', { yr: fmt(annualTotal, locale) })
+                    : t('seats.continueCheckoutMonthly', { mo: fmt(monthlyTotal, locale) })}
                 </Button>
                 <Button variant="ghost" size="md" onClick={back}>
                   {t('seats.cancel')}

@@ -156,7 +156,7 @@ describe('the command — from `fixDetail.repair`, never from the reason', () =>
       { repair: 'fix', gate: 'agent_review', notePreview: 'Criteria not met.' },
       { locale: 'zh' },
     );
-    expect(banner().textContent).toContain('需要修复：审查代理已将它退回——“Criteria not met.”');
+    expect(banner().textContent).toContain('需要修复：审查智能体已将它退回——“Criteria not met.”');
   });
 
   it('is `motir fix <KEY>` for an acceptance video sent back — and says where it came from', () => {

@@ -10,7 +10,7 @@ import {
   GitPullRequestArrow,
   GitPullRequestClosed,
 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -638,6 +638,7 @@ export function DevelopmentSectionBody({
   repairHostedDoor?: ReactNode;
 }) {
   const t = useTranslations('github');
+  const locale = useLocale();
   const tDecision = useTranslations('approvalGate.decision');
   const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
   // The rows to draw, and what each one's delivery knows about it. `pullRequests`
@@ -734,7 +735,9 @@ export function DevelopmentSectionBody({
     decision.gate.decidedByLabel
       ? tDecision.rich('acceptedUnchanged', {
           name: decision.gate.decidedByLabel,
-          when: decision.gate.decidedAt ? new Date(decision.gate.decidedAt).toLocaleString() : '',
+          when: decision.gate.decidedAt
+            ? new Date(decision.gate.decidedAt).toLocaleString(locale)
+            : '',
           b: (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>,
         })
       : null;
