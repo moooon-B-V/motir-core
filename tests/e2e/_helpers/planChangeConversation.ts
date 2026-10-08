@@ -197,3 +197,34 @@ export async function finishSessionPlanWithEdge(
   await plansService.markPlanned(plan.id, ctx);
   return { planId: plan.id, blockerTitle: titles[0], blockedTitle: titles[1] };
 }
+
+/**
+ * Finish a session's run with a plan of `titles.length` cards under one parent and
+ * no edges between them — the shape a spec about the LIST's GEOMETRY needs, where
+ * what matters is how many rows there are, not what the canvas draws between them
+ * (MOTIR-7726). One `addProposals` call, since nothing here refers to anything
+ * else in the batch.
+ */
+export async function finishSessionPlanWithCards(
+  sessionId: string,
+  parentWorkItemId: string,
+  titles: readonly string[],
+): Promise<string> {
+  const plan = await adminDb.plan.findFirstOrThrow({
+    where: { sessionId },
+    orderBy: { createdAt: 'desc' },
+  });
+  const session = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } });
+  const ctx: ServiceContext = { userId: session.createdById!, workspaceId: session.workspaceId };
+  await plansService.addProposals(
+    plan.id,
+    titles.map((title) => ({
+      op: 'add' as const,
+      proposedFields: { title, kind: 'subtask' as const },
+      parentRef: parentWorkItemId,
+    })),
+    ctx,
+  );
+  await plansService.markPlanned(plan.id, ctx);
+  return plan.id;
+}

@@ -594,9 +594,18 @@ export function PlanProposalList({
     [items],
   );
 
+  // ⚠️ BOTH BOXES RESERVE `--canvas-foot-inset` AT THEIR BOTTOM (MOTIR-7726). On
+  // the planning surface the confirm bar FLOATS over the pane's bottom edge
+  // (MOTIR-6186, Part XXI 21.8) and the host publishes its height as that
+  // variable. A scroller that ignores it ends its scroll range at the pane's edge,
+  // under the bar: a list that fits the box but not the space above the bar never
+  // overflows — no scrollbar, the wheel does nothing — and a list that does
+  // overflow still ends with its last row behind the bar. Padding the scroller's
+  // own end puts that strip INSIDE the scroll range. The `0px` fallback keeps the
+  // plan page, which sets no inset, exactly as it was.
   if (items.length === 0 && leaving.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center p-8">
+      <div className="flex h-full items-center justify-center p-8 pb-[calc(--spacing(8)+var(--canvas-foot-inset,0px))]">
         <div className="max-w-[24rem] text-center">
           <p className="text-sm font-semibold text-(--el-text)">
             {t(live ? 'listWritingTitle' : 'listEmptyTitle')}
@@ -612,7 +621,10 @@ export function PlanProposalList({
   }
 
   return (
-    <div className="h-full overflow-y-auto p-3" data-testid="plan-proposal-list">
+    <div
+      className="h-full overflow-y-auto p-3 pb-[calc(--spacing(3)+var(--canvas-foot-inset,0px))]"
+      data-testid="plan-proposal-list"
+    >
       {SECTIONS.map((section) => {
         const rows = items.filter((item) => item.op === section.op);
         // A WITHDRAWN row is drawn at the end of its section while it leaves.
