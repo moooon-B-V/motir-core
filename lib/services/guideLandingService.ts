@@ -13,6 +13,7 @@ import {
   type GuideTurnRecord,
 } from '@/lib/ai/guideWorkItem';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
+import { guideReplyBody } from '@/lib/planning/guideReplyNotes';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -525,37 +526,6 @@ async function markManualWorkDone(gateId: string, actor: ServiceContext): Promis
   }
 }
 
-/** The words appended to the reply when an action was skipped, so the turn says
- *  what did not happen and why (A2.4). */
-export function guideSkippedNote(outcomes: readonly GuideActionOutcome[]): string | null {
-  const skipped = outcomes.filter((o) => o.outcome === 'skipped');
-  if (skipped.length === 0) return null;
-  return [
-    'Some of that did not land:',
-    ...skipped.map((o) => `- ${o.type.replace(/_/g, ' ')}: ${o.reason ?? 'refused'}`),
-  ].join('\n');
-}
-
-/** The words appended to the reply naming each bug the turn FILED, by key and
- *  title (MOTIR-7800) — how the person sees the key named back. A refused filing
- *  is in {@link guideSkippedNote} instead, with its reason. */
-export function guideFiledNote(
-  actions: readonly GuideAction[],
-  outcomes: readonly GuideActionOutcome[],
-): string | null {
-  const filed = outcomes.flatMap((o, i) => {
-    const action = actions[i];
-    return o.type === 'file_bug' &&
-      o.outcome === 'landed' &&
-      o.workItemKey &&
-      action?.type === 'file_bug'
-      ? [`- ${o.workItemKey}: ${action.title}`]
-      : [];
-  });
-  if (filed.length === 0) return null;
-  return [filed.length === 1 ? 'Filed a bug:' : 'Filed bugs:', ...filed].join('\n');
-}
-
 export const guideLandingService = {
   /**
    * Read a settled `guide_work_item` job and land what it produced. REPLAYABLE:
@@ -639,14 +609,10 @@ export const guideLandingService = {
           (o, i) => o.outcome === 'landed' && input.result.actions[i]!.type === 'write_todos',
         ),
     };
-    const notes = [
-      guideFiledNote(input.result.actions, outcomes),
-      guideSkippedNote(outcomes),
-    ].filter((n): n is string => n !== null);
     const updated = await planChangeSessionsService.appendGuideReplyTurn(
       {
         jobId: input.jobId,
-        body: [input.result.messageMd, ...notes].join('\n\n'),
+        body: guideReplyBody(input.result.messageMd, input.result.actions, outcomes),
         record,
       },
       ctx,

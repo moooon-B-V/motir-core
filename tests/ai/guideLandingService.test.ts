@@ -705,6 +705,20 @@ describe('file_bug (MOTIR-7800; decision MOTIR-7798 Q3)', () => {
     expect(reply.body).toContain(`${bug.identifier}: The console 500s on save`);
     expect(reply.guide?.outcomes[0]).toMatchObject({ workItemKey: bug.identifier });
     expect(await counter(opened.session.id)).toBe(1);
+
+    // MOTIR-7811: the session read resolves the filed key in its ONE resolve, so
+    // the rail's chip carries the bug's live title — on the settle, and on a
+    // reload of the thread (a replayed settle re-reads it as it stands).
+    const summary = {
+      accessible: true,
+      id: bug.id,
+      identifier: bug.identifier,
+      title: 'The console 500s on save',
+      kind: 'bug',
+    };
+    expect(settled.session.workItemRefs[bug.identifier]).toMatchObject(summary);
+    const reloaded = await settleWith(opened, []);
+    expect(reloaded.session.workItemRefs[bug.identifier]).toMatchObject(summary);
   });
 
   it('keeps a description that already opens with a Found-while line', async () => {
@@ -796,6 +810,11 @@ describe('file_bug (MOTIR-7800; decision MOTIR-7798 Q3)', () => {
     expect(await bugsIn()).toHaveLength(1);
     expect(replyOf(settled).body).toContain(`already filed as ${existing.identifier}`);
     expect(await counter(opened.session.id)).toBe(0);
+    // MOTIR-7811: the duplicate's key resolves for the rail's `alreadyFiled` chip.
+    expect(settled.session.workItemRefs[existing.identifier]).toMatchObject({
+      accessible: true,
+      identifier: existing.identifier,
+    });
   });
 
   it('a DONE bug with the same title is not a duplicate', async () => {
