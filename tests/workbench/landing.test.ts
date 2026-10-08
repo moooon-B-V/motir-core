@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { HomeTabCountsDto } from '@/lib/dto/home';
 import {
   resolveWorkbenchLanding,
   workbenchLandingHref,
@@ -110,5 +111,31 @@ describe('workbenchLandingHref — where the resolver forwards', () => {
     expect(workbenchLandingHref('todo', { tab: ['x', 'y'], other: undefined })).toBe(
       '/workbench?tab=todo',
     );
+  });
+});
+
+// PLANNING IS NEVER A RUNG (Story MOTIR-7820 · MOTIR-7828). `HomeTabCountsDto`
+// gained a `planning` count for the strip; the cascade must not read it.
+describe('the planning count is not a landing input', () => {
+  it('lands on To do when the four rungs are zero, however many plans are being written', () => {
+    const counts: HomeTabCountsDto = {
+      myWork: 0,
+      toDo: 0,
+      inProgress: 0,
+      toFix: 0,
+      toResume: 0,
+      recentlyFinished: 0,
+      approvals: 0,
+      watching: 0,
+      planning: 5,
+    };
+    expect(resolveWorkbenchLanding(counts)).toBe('todo');
+  });
+
+  it('keeps `planning` out of `LandingCounts` (type-level pin)', () => {
+    expectTypeOf<LandingCounts>().not.toHaveProperty('planning');
+    type HasPlanning = 'planning' extends keyof LandingCounts ? true : false;
+    const hasPlanning: HasPlanning = false;
+    expect(hasPlanning).toBe(false);
   });
 });

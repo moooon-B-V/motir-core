@@ -616,6 +616,7 @@ function counts(over: Partial<HomeTabCountsDto> = {}): HomeTabCountsDto {
     recentlyFinished: 0,
     approvals: 0,
     watching: 0,
+    planning: 0,
     ...over,
   };
 }

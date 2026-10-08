@@ -27,6 +27,64 @@ export type AbandonedPlanCandidate = Plan & {
  */
 export type PlanUpdateInput = Prisma.PlanUncheckedUpdateInput;
 
+/**
+ * WHO a plans-being-written read is for (Story MOTIR-7820 · MOTIR-7828): the
+ * reader, their workspace, and the project scope `resolveActiveProjectScope`
+ * resolved (empty when they may not browse the active project).
+ */
+export interface GeneratingRequestedByScope {
+  workspaceId: string;
+  projectIds: readonly string[];
+  userId: string;
+}
+
+/**
+ * THE ONE MEMBERSHIP PREDICATE of the Workbench's Planning tab — the plans this
+ * reader ASKED FOR that are still being written. Both
+ * {@link planRepository.listGeneratingRequestedBy} (the rows) and
+ * {@link planRepository.countGeneratingRequestedBy} (the strip's badge) read it,
+ * so the badge and the list are one question and cannot disagree — the rule
+ * `approvalGateRepository.awaitingRoutedToWhere` states for the approvals tab.
+ *
+ *   - `workspaceId` is explicit because RLS is inert under the dev/CI superuser;
+ *   - `createdById = userId` excludes a cadence plan by construction (its
+ *     requester is null) and a teammate's plan alike — no `origin` test needed;
+ *   - `status = 'generating'` and only that: a plan proposed, declined or failed
+ *     has left the set on the next read.
+ *
+ * Served by `@@index([projectId, status, createdAt])` — `generating` is a small
+ * tail and `createdById` filters inside it, so no new index is added.
+ */
+function generatingRequestedByWhere(scope: GeneratingRequestedByScope): Prisma.PlanWhereInput {
+  return {
+    workspaceId: scope.workspaceId,
+    projectId: { in: [...scope.projectIds] },
+    createdById: scope.userId,
+    status: 'generating',
+  };
+}
+
+/** What the Planning tab's row reads about one plan — one `findMany`, no N+1. */
+const GENERATING_PLAN_SELECT = {
+  id: true,
+  projectId: true,
+  status: true,
+  title: true,
+  origin: true,
+  authorSource: true,
+  authorHarness: true,
+  authorModel: true,
+  sessionId: true,
+  createdAt: true,
+  lastActivityAt: true,
+  session: { select: { targetKeys: true } },
+  project: { select: { name: true } },
+} satisfies Prisma.PlanSelect;
+
+/** One row of {@link planRepository.listGeneratingRequestedBy}, NAMED BY THIS
+ *  REPOSITORY so no `Prisma.*GetPayload` crosses the layer (MOTIR-4296). */
+export type GeneratingPlanRow = Prisma.PlanGetPayload<{ select: typeof GENERATING_PLAN_SELECT }>;
+
 // Plan repository — single Prisma operations on the `plan` table (Story 7.21 ·
 // MOTIR-1336). Writes require `tx` (a compile-time guarantee they run in a
 // transaction); pure read paths use the `db` singleton. No business logic, no
@@ -429,6 +487,42 @@ export const planRepository = {
    *  inside the transaction of every step signal and every content write. */
   async touchActivity(id: string, at: Date, tx: Prisma.TransactionClient): Promise<void> {
     await tx.plan.update({ where: { id }, data: { lastActivityAt: at }, select: { id: true } });
+  },
+
+  /**
+   * ONE OFFSET WINDOW of the reader's plans being written (Story MOTIR-7820 ·
+   * MOTIR-7828), newest first with `id` as the tiebreak so pages are stable.
+   * {@link generatingRequestedByWhere} is the predicate; an empty project scope
+   * short-circuits rather than reaching `{ in: [] }`.
+   */
+  async listGeneratingRequestedBy(
+    scope: GeneratingRequestedByScope,
+    window: { skip: number; take: number },
+    tx?: Prisma.TransactionClient,
+  ): Promise<GeneratingPlanRow[]> {
+    if (scope.projectIds.length === 0) return [];
+    const client = tx ?? dbRead;
+    return client.plan.findMany({
+      where: generatingRequestedByWhere(scope),
+      select: GENERATING_PLAN_SELECT,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: window.skip,
+      take: window.take,
+    });
+  },
+
+  /**
+   * HOW MANY plans {@link listGeneratingRequestedBy} pages over — the Workbench
+   * strip's `planning` badge and the pager's denominator. The SAME builder, so
+   * the badge and the rows cannot drift.
+   */
+  async countGeneratingRequestedBy(
+    scope: GeneratingRequestedByScope,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (scope.projectIds.length === 0) return 0;
+    const client = tx ?? dbRead;
+    return client.plan.count({ where: generatingRequestedByWhere(scope) });
   },
 
   /**

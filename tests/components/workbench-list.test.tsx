@@ -310,6 +310,7 @@ describe('the Workbench tab strip', () => {
     recentlyFinished: 2,
     approvals: 0,
     watching: 4,
+    planning: 0,
   };
 
   it('spells each of the six tabs as a real href, with the active one marked', async () => {
@@ -409,6 +410,7 @@ describe('the Workbench tab strip', () => {
           recentlyFinished: 0,
           approvals: 0,
           watching: 0,
+          planning: 0,
         },
       }),
     );

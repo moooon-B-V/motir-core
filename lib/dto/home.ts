@@ -1,5 +1,7 @@
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
+import type { PlanAuthorSourceDto, PlanOriginDto } from '@/lib/dto/plans';
+import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
 import type { ApprovalGateKindDTO, ApprovalGateStateDTO } from '@/lib/dto/approvalGate';
 import type {
   ExecutorDto,
@@ -187,6 +189,52 @@ export interface HomePageDto {
 }
 
 /**
+ * ONE plan the reader asked for that is still being written — a row of the
+ * Workbench's Planning tab (Story MOTIR-7820 · MOTIR-7828).
+ *
+ * The naming fields (`title`, `projectName`, `targets`) are the shape
+ * `PlanApprovalSubjectSummaryDTO` already carries, so the tab composes § 29's
+ * plan-naming forms from the same fields the To-approve plan row reads.
+ */
+export interface WorkbenchPlanningRowDto {
+  planId: string;
+  /** The plan's conversation (the `planSession` address), or null when it has none. */
+  sessionId: string | null;
+  /** `Plan.title`, as written, or null. */
+  title: string | null;
+  /** The project's name — the leading line's last fallback. */
+  projectName: string;
+  /** The session's `targetKeys` in stored order, each with the target's title
+   *  (null when the key no longer resolves in the project). */
+  targets: { key: string; title: string | null }[];
+  /** Who is WRITING the plan. `model` is carried (unlike the To-approve row) because
+   *  the story names an MCP planner by its harness AND its model. */
+  author: {
+    source: PlanAuthorSourceDto | null;
+    harness: string | null;
+    model: string | null;
+    origin: PlanOriginDto;
+  };
+  /** ISO-8601 — when the plan was asked for. */
+  createdAt: string;
+  /** The ONE progress derivation's snapshot, carried unmodified from
+   *  `planProgressService.snapshotsForPlans`. Never null: a row without one is dropped. */
+  progress: PlanProgressSnapshot;
+}
+
+/** One offset window of the reader's plans being written — {@link HomePageDto}'s
+ *  shape, so the shipped pager consumes it unchanged. */
+export interface WorkbenchPlanningPageDto {
+  items: WorkbenchPlanningRowDto[];
+  /** The size of the whole set — the same number `HomeTabCountsDto.planning` is. */
+  total: number;
+  /** The 1-based page actually served, after clamping. */
+  page: number;
+  /** The window size — `HOME_PAGE_SIZE` unless the caller narrowed it. */
+  pageSize: number;
+}
+
+/**
  * The size of each tab's SET (Subtask MOTIR-2653) — not of the current page.
  *
  * Both numbers ride together because the tab strip shows the size of the tab
@@ -236,6 +284,17 @@ export interface HomeTabCountsDto {
    */
   approvals: number;
   watching: number;
+  /**
+   * The plans this reader ASKED FOR that are still being written in the active
+   * project (Story MOTIR-7820 · MOTIR-7828) — `planRepository.countGeneratingRequestedBy`,
+   * the same builder `workbenchPlanningService.listMyPlansBeingWritten` pages, so it
+   * equals that read's `total`.
+   *
+   * ⚠️ NOT A LANDING RUNG. It rides here because the strip renders every tab's count
+   * from this one DTO; `LandingCounts` (`lib/workbench/landing.ts`) is a `Pick` that
+   * leaves it out, because a plan being written needs nothing from the reader.
+   */
+  planning: number;
 }
 
 /** A gated run, as its To resume entry draws it (MOTIR-7712; § 35.4). */

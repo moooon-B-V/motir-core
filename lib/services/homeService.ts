@@ -13,6 +13,7 @@ import {
 } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { toGateResumeAttemptDto, toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
@@ -98,7 +99,7 @@ export interface HomeListOptions {
   limit?: number;
 }
 
-function clampLimit(limit: number | undefined): number {
+export function clampLimit(limit: number | undefined): number {
   if (limit === undefined) return HOME_PAGE_SIZE;
   if (!Number.isFinite(limit) || limit < 1) return HOME_PAGE_SIZE;
   return Math.min(Math.floor(limit), HOME_MAX_PAGE_SIZE);
@@ -190,7 +191,7 @@ export async function resolveActiveProjectScope(
  * two cannot both hold. What the criterion was protecting — that an
  * out-of-range page is never an ERROR — holds either way, and is asserted.
  */
-function windowFor(total: number, page: number | undefined, pageSize: number) {
+export function windowFor(total: number, page: number | undefined, pageSize: number) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const clamped = Math.min(Math.max(1, Math.trunc(page ?? 1) || 1), totalPages);
   return { page: clamped, skip: (clamped - 1) * pageSize };
@@ -612,65 +613,86 @@ export const homeService = {
   async tabCounts(ctx: HomeActorContext): Promise<HomeTabCountsDto> {
     return withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await resolveActiveProjectScope(ctx, tx);
-      const [toDo, toFixCards, toResumeCards, inProgress, recentlyFinished, watching, approvals] =
-        await Promise.all([
-          workItemRepository.countByAssigneeOrReporterInWorkspace(
-            ctx.userId,
-            ctx.workspaceId,
-            projectScopes,
-            { slice: HOME_SLICE_TODO },
-            tx,
-          ),
-          // TO FIX COUNTS ENTRIES (MOTIR-7589; § 34.2) — the same keys the list pages, so
-          // the badge and the pager's total are one number.
-          workItemRepository.listToFixGroupKeysByAssigneeOrReporterInWorkspace(
-            ctx.userId,
-            ctx.workspaceId,
-            projectScopes,
-            tx,
-          ),
-          // TO RESUME COUNTS ENTRIES too (MOTIR-7707) — one per gated run, as its list pages.
-          workItemRepository.listToResumeRunKeysByAssigneeOrReporterInWorkspace(
-            ctx.userId,
-            ctx.workspaceId,
-            projectScopes,
-            tx,
-          ),
-          workItemRepository.countByAssigneeOrReporterInWorkspace(
-            ctx.userId,
-            ctx.workspaceId,
-            projectScopes,
-            { slice: HOME_SLICE_IN_PROGRESS },
-            tx,
-          ),
-          workItemRepository.countByAssigneeOrReporterInWorkspace(
-            ctx.userId,
-            ctx.workspaceId,
-            projectScopes,
-            { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
-            tx,
-          ),
-          watcherRepository.countByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
-          // THE APPROVALS COUNT (MOTIR-4794), no longer hardwired to `0`.
-          //
-          // ⚠️ IT IS THE LIST'S OWN PREDICATE, reached through the same repository
-          // builder `listAwaitingMe` uses — not a second count written beside it.
-          // The strip's badge and the tab's rows are two reads of ONE question, so
-          // a copy of the predicate here is a copy that can drift, and a badge
-          // saying `3` above a list of two is exactly what that looks like from
-          // the reader's side.
-          //
-          // ⚠️ AND IT IS DELIBERATELY **NOT** `homeService`'s membership `OR`.
-          // The four tabs beside it answer *what is MINE* with assignee-OR-reporter;
-          // a decision queue routes to exactly one recipient (`assigneeId ??
-          // reporterId`, ADR §2), so this number is counted on the gate's own
-          // predicate. Two tabs in one strip meaning two different things by "me"
-          // is the divergence that ADR records itself refusing to "fix" back.
-          approvalGateRepository.countAwaitingRoutedTo(
-            { projectIds: projectScopes.map((scope) => scope.projectId), userId: ctx.userId },
-            tx,
-          ),
-        ]);
+      const [
+        toDo,
+        toFixCards,
+        toResumeCards,
+        inProgress,
+        recentlyFinished,
+        watching,
+        approvals,
+        planning,
+      ] = await Promise.all([
+        workItemRepository.countByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          { slice: HOME_SLICE_TODO },
+          tx,
+        ),
+        // TO FIX COUNTS ENTRIES (MOTIR-7589; § 34.2) — the same keys the list pages, so
+        // the badge and the pager's total are one number.
+        workItemRepository.listToFixGroupKeysByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          tx,
+        ),
+        // TO RESUME COUNTS ENTRIES too (MOTIR-7707) — one per gated run, as its list pages.
+        workItemRepository.listToResumeRunKeysByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          tx,
+        ),
+        workItemRepository.countByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          { slice: HOME_SLICE_IN_PROGRESS },
+          tx,
+        ),
+        workItemRepository.countByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
+          tx,
+        ),
+        watcherRepository.countByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
+        // THE APPROVALS COUNT (MOTIR-4794), no longer hardwired to `0`.
+        //
+        // ⚠️ IT IS THE LIST'S OWN PREDICATE, reached through the same repository
+        // builder `listAwaitingMe` uses — not a second count written beside it.
+        // The strip's badge and the tab's rows are two reads of ONE question, so
+        // a copy of the predicate here is a copy that can drift, and a badge
+        // saying `3` above a list of two is exactly what that looks like from
+        // the reader's side.
+        //
+        // ⚠️ AND IT IS DELIBERATELY **NOT** `homeService`'s membership `OR`.
+        // The four tabs beside it answer *what is MINE* with assignee-OR-reporter;
+        // a decision queue routes to exactly one recipient (`assigneeId ??
+        // reporterId`, ADR §2), so this number is counted on the gate's own
+        // predicate. Two tabs in one strip meaning two different things by "me"
+        // is the divergence that ADR records itself refusing to "fix" back.
+        approvalGateRepository.countAwaitingRoutedTo(
+          { projectIds: projectScopes.map((scope) => scope.projectId), userId: ctx.userId },
+          tx,
+        ),
+        // THE PLANNING COUNT (MOTIR-7828) — the plans this reader asked for that are
+        // still being written. The SAME builder `workbenchPlanningService
+        // .listMyPlansBeingWritten` pages (`generatingRequestedByWhere`), on the same
+        // `tx` and the same scope, so the badge equals that list's `total`.
+        // ⚠️ NOT A LANDING RUNG: `LandingCounts` is a `Pick` that leaves it out.
+        planRepository.countGeneratingRequestedBy(
+          {
+            workspaceId: ctx.workspaceId,
+            projectIds: projectScopes.map((scope) => scope.projectId),
+            userId: ctx.userId,
+          },
+          tx,
+        ),
+      ]);
       const toFix = orderedFixGroupKeys(toFixCards).length;
       const toResume = orderedResumeRunIds(toResumeCards).length;
       return {
@@ -681,6 +703,7 @@ export const homeService = {
         recentlyFinished,
         approvals,
         watching,
+        planning,
         // Transitional — `/home`'s two-tab strip, until MOTIR-4782 replaces it.
         // Derived from the two above rather than counted again, so the old
         // badge and the new ones cannot disagree.
