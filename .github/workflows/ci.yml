@@ -2916,6 +2916,7 @@ jobs:
         story-727-coverage,
         story-7630-coverage,
         story-7631-coverage,
+        story-7602-coverage,
         e2e,
         e2e-at-scale,
         sandbox,
