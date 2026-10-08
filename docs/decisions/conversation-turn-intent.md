@@ -617,6 +617,12 @@ same way. The canvas and the next turn read the list as it now stands.
 settled job result. A refused, failed or out-of-credits turn ticks nothing and
 writes nothing.
 
+**Nothing lands on a card closed while the turn ran** (MOTIR-7817). The door
+refuses a card that is Done or archived (A2.7), and the job runs after it. So
+the landing re-applies that check to the card as it stands: a card archived, or
+moved into the done category, since the turn was sent lands no action. Each is
+skipped with that reason, and the reply still arrives saying so.
+
 #### A2.5 — `edit_item` is the ONE conversation-to-card edit path, and Help with a task reuses it.
 
 `edit_item` lands through `workItemsService.updateWorkItem` with

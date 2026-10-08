@@ -99,6 +99,14 @@ import { CommentForbiddenError } from '@/lib/comments/errors';
 // ── NOTHING LANDS FROM A TURN THAT DID NOT RUN ───────────────────────────────
 // A job that failed, was cancelled, or never produced a `guideTurn` lands no
 // action and appends no reply.
+//
+// ── NOTHING LANDS ON A CARD CLOSED WHILE THE TURN RAN (MOTIR-7817) ───────────
+// The door refuses a card that is Done or archived (A2.7, gate 5 of
+// `aiGuideService`), but the job runs for seconds to minutes after it, and the
+// write services land on an archived card. So the landing re-applies that gate
+// to the card as it stands: a card archived, or moved into the done category,
+// since the turn was sent lands NO action. Each is recorded as skipped with the
+// reason and the reply is still appended, the way A2.4 treats a row that is gone.
 
 /** What a guide settle produced. */
 export type GuideSettleResult =
@@ -526,6 +534,18 @@ async function markManualWorkDone(gateId: string, actor: ServiceContext): Promis
   }
 }
 
+/**
+ * Why NOTHING may land on the card as it stands, or `null` when the turn may land:
+ * the door's own gate 5 (A2.7), re-read at landing because the card can be
+ * archived or finished while the turn's job runs (MOTIR-7817).
+ */
+async function closedSinceSent(item: WorkItemDto, ctx: ProjectContext): Promise<string | null> {
+  if (item.archivedAt) return 'the card was archived while this turn ran';
+  const terminal = await workflowsService.getTerminalStatusKeys(ctx.projectId, ctx.workspaceId);
+  if (terminal.has(item.status)) return 'the card was finished while this turn ran';
+  return null;
+}
+
 export const guideLandingService = {
   /**
    * Read a settled `guide_work_item` job and land what it produced. REPLAYABLE:
@@ -563,7 +583,12 @@ export const guideLandingService = {
     const startedTemporary = card.rows.length === 0;
 
     const outcomes: GuideActionOutcome[] = [];
+    const closed = await closedSinceSent(item, ctx);
     for (const [i, action] of input.result.actions.entries()) {
+      if (closed) {
+        outcomes.push({ type: action.type, outcome: 'skipped', reason: closed });
+        continue;
+      }
       try {
         outcomes.push(await landOne(action, i, card, temporary, input.result, ctx));
       } catch (err) {

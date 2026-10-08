@@ -5,6 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { FilterX, Info, Lightbulb } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import type { StaffIdeaListDto, StaffIdeaTagDto } from '@/lib/dto/ideas';
 import { consoleIdeaActor } from '@/lib/ideas/consoleActor';
 import { type PlatformPrincipal } from '@/lib/platform/auth';
@@ -90,7 +91,10 @@ async function IdeasSection({
   let list: StaffIdeaListDto;
   let tags: StaffIdeaTagDto[];
   try {
-    [list, tags] = await Promise.all([
+    // Both reads settle before either outcome is used: a `Promise.all` would
+    // reject on the list read and return the error card while the tag query was
+    // still running on the database (MOTIR-7795).
+    [list, tags] = await allSettledOrThrow<[StaffIdeaListDto, StaffIdeaTagDto[]]>([
       ideasAdminService.listForStaff(actor, toIdeaListQuery(view)),
       ideasAdminService.listTags(actor),
     ]);

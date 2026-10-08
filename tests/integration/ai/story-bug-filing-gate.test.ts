@@ -675,14 +675,15 @@ describe('a filing’s TURN carries on — every other action the landing takes 
     expect(await statusOf(card.id)).toBe('done');
   });
 
-  it('[file_bug, close] on a card already at Done → nothing to walk, the close still lands', async () => {
+  it('[file_bug, close] on a card finished while the turn ran → nothing lands (MOTIR-7817)', async () => {
     const card = await tickedCard();
     const h = await openGuide(card.identifier);
     await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'done' } });
     const r = await landTurn(h, [fileBug('Found after the fact'), { type: 'close' }]);
+    const finished = 'the card was finished while this turn ran';
     expect(outcomesOf(r)).toEqual([
-      ['file_bug', 'landed', null],
-      ['close', 'landed', null],
+      ['file_bug', 'skipped', finished],
+      ['close', 'skipped', finished],
     ]);
     expect(await statusOf(card.id)).toBe('done');
   });
