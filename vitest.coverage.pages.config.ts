@@ -190,6 +190,10 @@ export default defineConfig({
       'tests/api/workItemPagesRoute.test.ts',
       // The work item page's Pages section (MOTIR-7575).
       'tests/components/pagesSection.test.tsx',
+      // A work item tags a page (Story MOTIR-7694): the item-derived link rows
+      // (MOTIR-7696) and the page mention search route (MOTIR-7697).
+      'tests/services/workItemsService.pageLinks.test.ts',
+      'tests/api/pageMentionSearchRoute.test.ts',
     ],
     coverage: {
       provider: 'v8',
