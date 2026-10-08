@@ -150,6 +150,12 @@
     "mentionNoResults": "「{query}」に一致する作業項目はありません。",
     "mentionSearchFailed": "作業項目を検索できませんでした。",
     "mentionRetry": "再試行",
+    "mentionPages": "ページ",
+    "mentionTypeToSearchPages": "入力を続けてページを検索…",
+    "mentionNoPages": "「{query}」に一致するページはありません。",
+    "mentionPagesSearchFailed": "ページを検索できませんでした。",
+    "pageUntitled": "無題",
+    "pageUnavailable": "利用できないページ",
     "codeLanguage": "言語"
   },
   "common": {
@@ -1468,6 +1474,8 @@
     "pagesSourceMention": "メンション",
     "pagesSourceEmbed": "埋め込み",
     "pagesSourceManual": "リンク",
+    "pagesSourceDescription": "説明でタグ付け",
+    "pagesSourceExplanation": "理由でタグ付け",
     "pagesEmpty": "この作業項目にリンクしているページはまだありません。",
     "pagesShowMore": "さらにページを表示",
     "pagesError": "ページを読み込めませんでした。",
