@@ -10584,5 +10584,13 @@
   "pages.archive.refusal.rootRequired": "Couldn’t restore “{title}”",
   "pages.archive.refusal.rootRequiredBody": "“{title}” is archived as part of “{root}”. Restore “{root}” to bring it back.",
   "pages.mention.unavailable": "Unavailable work item",
-  "pages.mention.unavailableTitle": "This work item was deleted, or you can’t see it."
+  "pages.mention.unavailableTitle": "This work item was deleted, or you can’t see it.",
+  "markdownEditor.mentionPages": "Pages",
+  "markdownEditor.mentionTypeToSearchPages": "Keep typing to search pages…",
+  "markdownEditor.mentionNoPages": "No pages match “{query}”.",
+  "markdownEditor.mentionPagesSearchFailed": "Couldn’t search pages.",
+  "markdownEditor.pageUntitled": "Untitled",
+  "markdownEditor.pageUnavailable": "Page unavailable",
+  "issueViews.pagesSourceDescription": "Tagged in description",
+  "issueViews.pagesSourceExplanation": "Tagged in explanation"
 }
