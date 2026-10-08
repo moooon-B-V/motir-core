@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **91 tools**.
+`initialize` handshake and registers **92 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -4979,6 +4979,66 @@ not-found (404-not-403, no existence leak).
 **No per-repo cost.** The index state comes from ONE ledger query joined against
 the repo list in memory, so the call's query count is invariant to how many
 repositories the grant covers.
+
+#### `get_code_health`
+
+The **planning read** of a project's code health: what the hosted planner reads
+for every planning session it runs (motir-ai's `code_health` retrieval over the
+convention and audit stores), in one call per project. `get_project_state`
+answers "is the code connected and indexed"; this answers "what does each
+repository's code look like, and what conventions does it follow".
+
+For **every realized repository in the project's set** (a proposed row with no
+repository behind it contributes nothing), one entry carrying:
+
+- its code-graph **index state** — `indexState`, `indexedAt`, `commitsBehind`,
+  `refreshFailing`, read from motir-core's own columns through the same join
+  `GET /api/ai/code-context` uses, so the two cannot disagree;
+- its latest **audit's health summary** — the grade, conformance and per-category
+  rollup. No findings page;
+- its current derived **coding convention** — the latest version only, no
+  version history.
+
+**Input**
+
+| Field        | Type   | Required | Notes                       |
+| ------------ | ------ | -------- | --------------------------- |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`. |
+
+**Output** — `structuredContent`: a `PlanningCodeHealthDTO`:
+
+| Field     | Type     | Notes                                                                  |
+| --------- | -------- | ---------------------------------------------------------------------- |
+| `project` | object   | `{ key, name }`.                                                       |
+| `repos`   | object[] | One per realized repository, in set order. `[]` when the set is empty. |
+
+Each `repos[]` entry is
+`{ repoRef, indexState, indexedAt, commitsBehind, refreshFailing, audit, convention }`,
+where `audit` and `convention` each carry a **`state`**:
+
+| `state`       | Meaning                                                                                                                                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `present`     | The store has one. `audit` adds `{ healthSummary, createdAt, codeGraphRef }`; `convention` adds `{ convention }` (a `CodingConventionDTO`: `id`, `repoKey`, `version`, `contentMd`, `provenance`, `createdAt`). |
+| `absent`      | The read succeeded and the store has nothing yet — no audit run, no convention derived. **Not an error.**                                                                                                       |
+| `unavailable` | That one boundary read failed; `code` is the error's (e.g. `MOTIR_AI_UNAVAILABLE`). It degrades **that section only** — the call succeeds and every other section still answers.                                |
+
+`absent` and `unavailable` are kept apart on purpose: a planner must be able to
+tell "no audit yet" from "motir-ai could not be reached".
+
+**A project with no repository returns `repos: []`**, and a summary saying so —
+never an error.
+
+**Permission: `ai:plan`, at the door and in the service.** The `/code-health`
+page's own reads are gated on `ai:configure`; this planning read is gated on
+`ai:plan`, because the hosted planner already composes the same convention and
+audit summary into every `ai:plan` holder's sessions
+(`docs/decisions/member-facing-permissions.md` AMENDMENT 3). The service asserts
+the same key the door checks, so a token narrowed off `ai:plan` is refused at the
+door and an owner whose role lacks it is refused by the service. Re-audit and
+refresh stay on `ai:configure`, and are not reachable here.
+
+**Read-only.** No write, no model job. `projectKey` selects **within** the token's
+workspace; another tenant's key reads as a plain not-found.
 
 #### `skeleton`
 

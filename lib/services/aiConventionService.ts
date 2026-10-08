@@ -10,7 +10,11 @@ import {
 import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
 import { EmptyRepoScopeError, UnknownRepoScopeError } from '@/lib/codeHealth/errors';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { MotirAiError } from '@/lib/ai/errors';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
+import { projectsService } from '@/lib/services/projectsService';
+import { resolveCodeContextState } from '@/lib/services/codeContextService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
   CodingConventionDTO,
   ConventionSurfaceDTO,
@@ -19,6 +23,10 @@ import type {
   CodeHealthSummaryDTO,
   ExternalScannerStateDTO,
   ExternalScannerSource,
+  PlanningCodeHealthAuditDTO,
+  PlanningCodeHealthConventionDTO,
+  PlanningCodeHealthDTO,
+  PlanningCodeHealthRepoDTO,
   ReauditRepoJobsDTO,
   ReauditResultDTO,
 } from '@/lib/dto/codeHealth';
@@ -32,6 +40,12 @@ import type {
 // with refine-via-universal-chat). Per-repo scope per MOTIR-1662.
 
 const FINDINGS_PAGE_SIZE = 100;
+
+// The PLANNING read's page sizes (MOTIR-7793). motir-ai's `parsePositiveInt`
+// REJECTS `0` for both `findingsLimit` and `versionsLimit`, so the cheapest legal
+// summary read is `1` — and the one finding / one version it returns is dropped.
+const PLANNING_FINDINGS_LIMIT = 1;
+const PLANNING_VERSIONS_LIMIT = 1;
 
 function toProvenance(raw: RawConvention['provenance']): CodingConventionDTO['provenance'] {
   return (raw ?? []).map((p) => ({ ruleId: p.ruleId, category: p.category, source: p.source }));
@@ -188,6 +202,58 @@ function resolveReauditTargets(
   return [...new Set(scope)];
 }
 
+// One repository's planning sections (MOTIR-7793). Each boundary read is
+// contained on its own: a `MotirAiError` degrades THAT section to `unavailable`
+// and leaves its sibling — and every other repository — answering. Anything that
+// is not a boundary failure is a defect and propagates.
+async function readPlanningAudit(
+  projectId: string,
+  ctx: AccessActorContext,
+  repoRef: string,
+): Promise<PlanningCodeHealthAuditDTO> {
+  try {
+    const raw = await getCodeAudit({
+      coreWorkspaceId: ctx.workspaceId,
+      coreProjectId: projectId,
+      repoKey: repoRef,
+      findingsLimit: PLANNING_FINDINGS_LIMIT,
+    });
+    if (!raw.audit) return { state: 'absent' };
+    // Built field by field from the summary mapper, never by spreading the
+    // surface DTO — so no `findings` page can ride along by accident.
+    return {
+      state: 'present',
+      healthSummary: toHealthSummary(raw.audit.healthSummary),
+      createdAt: raw.audit.createdAt,
+      codeGraphRef: raw.audit.codeGraphRef,
+    };
+  } catch (err) {
+    if (err instanceof MotirAiError) return { state: 'unavailable', code: err.code };
+    throw err;
+  }
+}
+
+async function readPlanningConvention(
+  projectId: string,
+  ctx: AccessActorContext,
+  repoRef: string,
+): Promise<PlanningCodeHealthConventionDTO> {
+  try {
+    const raw = await getConvention({
+      coreWorkspaceId: ctx.workspaceId,
+      coreProjectId: projectId,
+      repoKey: repoRef,
+      versionsLimit: PLANNING_VERSIONS_LIMIT,
+    });
+    return raw.convention
+      ? { state: 'present', convention: toConventionDTO(raw.convention) }
+      : { state: 'absent' };
+  } catch (err) {
+    if (err instanceof MotirAiError) return { state: 'unavailable', code: err.code };
+    throw err;
+  }
+}
+
 export const aiConventionService = {
   // The latest code-health audit summary + a page of findings. `findingsOffset`
   // pages the (bounded, virtualized) list as it scrolls; `repoKey` scopes to a
@@ -253,6 +319,58 @@ export const aiConventionService = {
       versionsCursor: opts.versionsCursor,
     });
     return toConventionSurfaceDTO(raw, opts.repoKey);
+  },
+
+  // The PLANNING read (Story MOTIR-7782 · Subtask MOTIR-7793) — what
+  // `get_code_health` returns: every realized repository in the project's set,
+  // with its index state, its latest audit's health SUMMARY and its current
+  // derived convention. The same three things the hosted planner composes into
+  // every planning session it runs (motir-ai `code_health`), now reachable by an
+  // agent planning over the MCP.
+  //
+  // ⚠️ GATED ON `ai:plan`, NOT `ai:configure` — and NOT the same gate as
+  // `getAudit` / `getConvention` above, deliberately
+  // (`docs/decisions/member-facing-permissions.md` AMENDMENT 3 to §4). The hosted
+  // planner already shows this content to every `ai:plan` holder through their
+  // own plan, so `ai:plan` is exactly the set of actors who already see it. The
+  // `/code-health` page's reads, and every re-audit and refresh, stay on
+  // `ai:configure`, unchanged. The service asserts the SAME key the MCP door
+  // checks (`TOOL_PERMISSIONS.get_code_health`), so no finer decision is left to
+  // the token owner's role: a token narrowed off `ai:plan` is refused at the
+  // door, and an owner without it is refused here.
+  //
+  // Read-only: no write, no model job, no findings page, no version history.
+  // The index state is motir-core's own columns (`resolveCodeContextState`, the
+  // ungated join — legal here because this method has just gated).
+  async getPlanningCodeHealth(
+    projectKey: string,
+    ctx: ServiceContext,
+  ): Promise<PlanningCodeHealthDTO> {
+    // Workspace-bound and browse-gated: another tenant's key reads as a plain
+    // not-found, the same 404-not-403 answer every project-keyed tool gives.
+    const project = await projectsService.getByKey(projectKey, ctx);
+    await projectAccessService.assertPermission(project.id, ctx, 'ai:plan');
+
+    const { repos } = await resolveCodeContextState(project.id, ctx);
+    const sections: PlanningCodeHealthRepoDTO[] = await Promise.all(
+      repos.map(async (repo) => {
+        const [audit, convention] = await Promise.all([
+          readPlanningAudit(project.id, ctx, repo.repoRef),
+          readPlanningConvention(project.id, ctx, repo.repoRef),
+        ]);
+        return {
+          repoRef: repo.repoRef,
+          indexState: repo.indexState,
+          indexedAt: repo.indexedAt,
+          commitsBehind: repo.commitsBehind,
+          refreshFailing: repo.refreshFailing,
+          audit,
+          convention,
+        };
+      }),
+    );
+
+    return { project: { key: project.identifier, name: project.name }, repos: sections };
   },
 
   // Trigger a re-audit + re-propose for the project (the "Deepen this audit" →

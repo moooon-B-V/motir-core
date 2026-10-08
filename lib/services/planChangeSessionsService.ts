@@ -37,7 +37,7 @@ import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
-import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
+import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
   CopyableSessionDto,
   DebugLandingDto,
@@ -168,8 +168,17 @@ async function toDto(
   // detail page does, and resolving them here keeps a citation chip's title
   // subject to the same access checks as everything else on the thread.
   const citedKeys = turns.flatMap((t) => t.citations);
+  // A guide turn's `file_bug` outcomes name a bug by KEY — the one it filed, or
+  // the existing one a duplicate was refused as (MOTIR-7811). The rail draws it
+  // as a chip, so it rides the same resolve under the same access checks.
+  const filedKeys = turns.flatMap((t) => {
+    const record = t.role === 'assistant' ? readGuideTurnRecord(t.guideTurn) : null;
+    return (record?.outcomes ?? []).flatMap((o) =>
+      o.type === 'file_bug' && o.workItemKey ? [o.workItemKey] : [],
+    );
+  });
   const workItemRefs = await resolveWorkItemRefSummaries(
-    { ids: [...new Set(ids)], keys: [...new Set(citedKeys)] },
+    { ids: [...new Set(ids)], keys: [...new Set([...citedKeys, ...filedKeys])] },
     pctx.projectId,
     { userId: pctx.userId, workspaceId: pctx.workspaceId },
   );

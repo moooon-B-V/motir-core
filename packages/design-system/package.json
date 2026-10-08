@@ -1,6 +1,6 @@
 {
   "name": "@motir/design-system",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Motir's 3-axis design system (colour · style · type): distributable token CSS, the axis registries, the theme-apply API, and framework-agnostic React primitives. Shared by motir-core and planner-scaffolded products.",
   "license": "GPL-3.0-only",
   "repository": {
@@ -59,9 +59,11 @@
     }
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.19.19",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "happy-dom": "^20.9.0",
     "tsup": "^8.5.0",
     "typescript": "^5",
     "vitest": "^4.1.7"

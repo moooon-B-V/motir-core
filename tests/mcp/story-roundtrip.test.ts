@@ -563,6 +563,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // loop asserts every `read` tool actually EXECUTES, and an unconfigured
         // project is exactly the well-formed "nothing configured" answer.
         get_project_state: { projectKey: 'PROD' },
+        // MOTIR-7793 — a project with no repository set: `repos: []`, no boundary call.
+        get_code_health: { projectKey: 'PROD' },
         skeleton: { projectKey: 'PROD' },
         // MOTIR-5409 — `list_folders` is a browse read that executes on the caller's own
         // project; the three writes are `work_item:edit`-gated, and a folder id that

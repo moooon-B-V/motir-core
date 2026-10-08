@@ -7750,7 +7750,10 @@
         "movedTemp": "已在本次引导中移动一个步骤。尚未保存到工作项。",
         "edited": "已编辑 <chip>{key}</chip> 的{fields}。",
         "commented": "已在 <chip>{key}</chip> 上评论：“{reason}”",
-        "closed": "已将 <chip>{key}</chip> 移至“已完成”，并将此总结添加为评论。"
+        "closed": "已将 <chip>{key}</chip> 移至“已完成”，并将此总结添加为评论。",
+        "filed": "已提交缺陷 <bug>{bugKey}</bug>。",
+        "filedBlocking": "已提交缺陷 <bug>{bugKey}</bug>。在它修复之前，<chip>{key}</chip> 将被阻塞。",
+        "alreadyFiled": "已提交为 <bug>{bugKey}</bug>，因此没有重复提交。"
       },
       "files": {
         "attach": "添加文件",
