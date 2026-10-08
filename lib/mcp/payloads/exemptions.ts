@@ -44,6 +44,12 @@ export const EXEMPT_TOOLS = {
     'published component would be the first step toward publishing it. ⚠️ This exemption is ' +
     'therefore LOAD-BEARING rather than a gap to close later: if a v1 component for it ever ' +
     'appears, THAT is the defect, not this line (MOTIR-6086).',
+  report_plan_step:
+    'Returns the step a planner SESSION just reported — `{ planId, sessionKey, step, ' +
+    'targetRef, startedAt }` — an advisory progress signal about a plan being written. The ' +
+    'stored step is read back only on the cookie-authed plan review (`inFlightSteps`); no ' +
+    '`/api/v1` operation returns a plan step, so there is no component to derive from ' +
+    '(MOTIR-7824).',
   validate_work_item:
     'Returns a subtree FINISHABILITY verdict (valid / blockers / advisories) — a planning ' +
     'judgement computed over a tree, not a representation of a resource. No v1 operation ' +

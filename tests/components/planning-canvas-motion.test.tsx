@@ -509,3 +509,82 @@ describe('PlanningCanvas motion — animateInitial (MOTIR-6300)', () => {
     expect(anyMotion()).toBe(0);
   });
 });
+
+// MOTIR-7830 — the DRAFTING / LAYING cue (Part XXV §25.6–25.8) under reduced
+// motion: the SAME static marker, and the cue plays no motion of its own.
+describe('PlanningCanvas — the cue under REDUCED MOTION (MOTIR-7830)', () => {
+  const cue = { kind: 'drafting', label: 'Being drafted now', text: 'Drafting' } as const;
+
+  it('the cued box carries the static class, and the cue adds no enter / relay class', () => {
+    reduced = true;
+    const r = render(
+      <PlanningCanvas
+        nodes={[A, B]}
+        edges={[AB]}
+        renderNode={renderNode}
+        motion
+        nodeCues={new Map([['a', cue]])}
+      />,
+    );
+    r.rerender(
+      <PlanningCanvas
+        nodes={[A, B]}
+        edges={[AB]}
+        renderNode={renderNode}
+        motion
+        nodeCues={
+          new Map([
+            ['a', cue],
+            ['b', cue],
+          ])
+        }
+      />,
+    );
+    for (const id of ['a', 'b']) {
+      expect(cls(node(id))).toContain('canvas-node--drafting');
+      expect(cls(node(id))).not.toMatch(/canvas-node--(enter|relay)/);
+      expect(motionOf(node(id))).toBeNull();
+    }
+  });
+
+  const css = readFileSync(resolve(__dirname, '../../app/globals.css'), 'utf8');
+  const gate = '@media (prefers-reduced-motion: no-preference)';
+  const gated = (selector: string) => {
+    // Every block that NAMES the cue's animation must be inside the gate.
+    let at = 0;
+    const blocks: string[] = [];
+    for (;;) {
+      const start = css.indexOf(gate, at);
+      if (start < 0) break;
+      const open = css.indexOf('{', start);
+      let depth = 1;
+      let i = open + 1;
+      for (; depth > 0; i++) {
+        if (css[i] === '{') depth++;
+        else if (css[i] === '}') depth--;
+      }
+      blocks.push(css.slice(open + 1, i - 1));
+      at = i;
+    }
+    return blocks.join('\n').includes(selector);
+  };
+
+  it('the animated rules sit inside `no-preference`, timed by the tokens; the static form outside', () => {
+    expect(gated('canvas-cue-ring-enter')).toBe(true);
+    const animations = [...css.matchAll(/animation:\s*canvas-cue-ring-enter[^;]*;/g)];
+    expect(animations).toHaveLength(1);
+    expect(animations[0]![0]).toMatch(/var\(--transition-slow\) var\(--canvas-ease-enter\)/);
+    // The static ring: a dotted BORDER in the role token — never `outline`.
+    const ring = /\.canvas-node--laying > \.canvas-cue-ring \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(ring).toMatch(/border:\s*2px dotted var\(--el-status-in-progress\)/);
+    expect(ring).not.toMatch(/outline/);
+    const cueCss = css.slice(css.indexOf('THE DRAFTING / LAYING CUES'));
+    const cueBlock = cueCss.slice(
+      0,
+      cueCss.indexOf('@media (prefers-reduced-motion: no-preference)', 0) + 600,
+    );
+    expect(cueBlock).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(cueBlock).not.toMatch(/var\(--[a-z-]+,/); // no fallback
+    expect(cueBlock).not.toMatch(/var\(--color-/);
+  });
+});

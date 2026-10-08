@@ -1,6 +1,7 @@
 // The provider-agnostic parts of the FILE-READ capability
 // (Story MOTIR-4585 · MOTIR-4586): the repository-relative path guard, and the
-// two small measurements both providers make on a response.
+// two small measurements both providers make on a response — whether a blob is
+// text at all (MOTIR-7873), and a safe description of a failed one.
 //
 // ⚠️ IT LIVES BESIDE THE SEAM, NOT INSIDE ONE PROVIDER, AND EVERY PROVIDER CALLS
 // IT FIRST. The path a `read_file` carries is MODEL-SUPPLIED — it is the one
@@ -84,16 +85,39 @@ export function normalizeRepoFilePath(raw: string): RepoPathOk | RepoPathRefused
 }
 
 /**
- * The byte length of a decoded string — what the cap is measured in.
- *
- * ⚠️ `text.length` IS NOT THIS. It counts UTF-16 code units, so a file of CJK
- * prose or emoji measures roughly a third to a half of its real size, and a cap
- * enforced on it lets through a payload well over the bound while reporting
- * that it did not. The bound exists to protect a model's context and a
- * function's heap, and both are spent in bytes.
+ * How much of a blob is scanned for a NUL — git's own `FIRST_FEW_BYTES`
+ * (`xdiff-interface.c`'s `buffer_is_binary`), so a file this read calls binary
+ * is a file `git diff` calls binary too.
  */
-export function byteLength(text: string): number {
-  return Buffer.byteLength(text, 'utf8');
+export const BINARY_SNIFF_BYTES = 8000;
+
+/** A blob, classified BEFORE it is decoded (MOTIR-7873). */
+export type RepoBlob = { kind: 'text'; text: string } | { kind: 'binary' };
+
+/**
+ * Decide whether a blob is text, and decode it only if it is.
+ *
+ * BINARY when either holds: a NUL in the first {@link BINARY_SNIFF_BYTES}
+ * (git's heuristic — valid UTF-8 can carry a NUL, and no source file does), or
+ * the bytes are not valid UTF-8 (a strict, `fatal` decode). Both are needed: a
+ * PNG fails both, but a run of 0xFF bytes has no NUL, and a NUL-delimited record
+ * is perfectly valid UTF-8.
+ *
+ * ⚠️ IT CLASSIFIES THE BYTES, NEVER A DECODED STRING. The read used to call
+ * `res.text()`, which is a LENIENT decode: every invalid byte becomes U+FFFD and
+ * the call always succeeds, so a PNG came back as `found` — a page of
+ * replacement characters handed to a model as source. And because U+FFFD is
+ * three bytes in UTF-8, measuring that string inflated the size: the repo's own
+ * 4,877-byte `app/apple-icon.png` measured 8,737, and a binary well under the
+ * cap could be reported `too_large`. A size is the blob's own `byteLength`.
+ */
+export function classifyRepoBlob(bytes: Uint8Array): RepoBlob {
+  if (bytes.subarray(0, BINARY_SNIFF_BYTES).includes(0)) return { kind: 'binary' };
+  try {
+    return { kind: 'text', text: new TextDecoder('utf-8', { fatal: true }).decode(bytes) };
+  } catch {
+    return { kind: 'binary' };
+  }
 }
 
 /**

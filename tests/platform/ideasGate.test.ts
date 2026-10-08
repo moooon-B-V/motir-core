@@ -264,7 +264,8 @@ describe('requirePlatformStaffForIdeas — console session', () => {
     const user = await sessionAs('operator');
     const { requirePlatformStaffForIdeas } = await freshGate();
     const req = new Request('http://localhost/api/platform/ideas', {
-      headers: { authorization: 'Basic b3BzOnNlY3JldA==' },
+      // Built at runtime: a literal base64 credential trips secret scanning (MOTIR-7816).
+      headers: { authorization: `Basic ${btoa('ops:secret')}` },
     });
     expect(await requirePlatformStaffForIdeas(req, 'operator')).toMatchObject({
       userId: user.id,

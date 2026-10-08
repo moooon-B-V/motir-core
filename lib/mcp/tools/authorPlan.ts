@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
-import { plansService } from '@/lib/services/plansService';
+import { plansService, PLAN_STEP_SESSION_KEY_MAX } from '@/lib/services/plansService';
 import type {
   PlanDto,
   PlanItemProposedFields,
@@ -23,7 +23,7 @@ import {
   TODO_NOTES_MAX_LENGTH,
   TODO_TEXT_MAX_LENGTH,
 } from '@/lib/workItemTodos/limits';
-import { InvalidProposalError, PlanRefGraphError } from '@/lib/plans/errors';
+import { InvalidPlanStepError, InvalidProposalError, PlanRefGraphError } from '@/lib/plans/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -167,6 +167,7 @@ export const UPDATE_PLAN_PROPOSAL_TOOL_NAME = 'update_plan_proposal';
 export const WITHDRAW_PLAN_PROPOSAL_TOOL_NAME = 'withdraw_plan_proposal';
 export const UPDATE_PLAN_TOOL_NAME = 'update_plan';
 export const RECORD_PLAN_REVISION_REASON_TOOL_NAME = 'record_plan_revision_reason';
+export const REPORT_PLAN_STEP_TOOL_NAME = 'report_plan_step';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arguments
@@ -859,6 +860,18 @@ const updatePlanItemInputSchema = {
         ' REPLACES the list whole — a list has no sparse edit — so send the set you want; ' +
         '`[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
     ),
+  revision: z
+    .boolean()
+    .optional()
+    .describe(
+      'Set true to edit a proposal on a plan you have ALREADY closed — a plan that is ' +
+        '`planned` and in front of a reviewer. Without it such an edit is refused. The plan ' +
+        'does NOT re-open: it is `planned` before, during and after, and the edit is recorded ' +
+        'on its timeline with the harness and model that made it. This is how a card’s WORDS ' +
+        'are corrected on a landed plan — the same card, same id and edges — rather than by ' +
+        'withdrawing it and appending a copy. On a `generating` plan it is unnecessary and ' +
+        'changes nothing. `approved` and `declined` stay frozen.',
+    ),
 };
 
 // ── The CORRECTION door (Story MOTIR-3533 · Subtask MOTIR-3541) ────────────
@@ -887,8 +900,13 @@ const correctionRefField = z
       'are interchangeable (MOTIR-3934).',
   );
 
+// `revision` is `update_plan_item`'s opt-in; the correction door is legal on a
+// `planned` plan already and takes no such flag, so it is dropped from the spread.
+const { revision: _updatePlanItemRevision, ...updatePlanItemFieldsSchema } =
+  updatePlanItemInputSchema;
+
 const updatePlanProposalInputSchema = {
-  ...updatePlanItemInputSchema,
+  ...updatePlanItemFieldsSchema,
   planItemId: z
     .string()
     .trim()
@@ -1124,6 +1142,68 @@ interface RecordPlanRevisionReasonArgs {
   planningBugKey?: string;
 }
 
+// `report_plan_step` (Story MOTIR-7820 · Subtask MOTIR-7824) — the MCP planner's
+// door onto the plan's in-flight STEPS: which step each running planner session
+// is on, so a person following the plan sees what it is doing right now.
+//
+// ONE tool with a fourth step value, `end`, rather than a report tool and a clear
+// tool: the internal route the hosted planner calls carries the same four values,
+// so each emitter writes one call shape.
+//
+// Same grant as the other authoring doors, `ai:view_plan`, which the service
+// asserts on the plan's project as its first act — so a `motir run` credential
+// (`CLI_TOKEN_GRANT`) cannot reach it. A run executing one work item has no
+// business reporting progress on a plan.
+//
+// THIN, and deliberately so: `target` is optional on EVERY step at the schema.
+// Which steps take a target, which refs are legal, the `generating` guard and the
+// clock all belong to `plansService.recordPlanStep`. A copy of "target required"
+// here would refuse the two untargeted forms both walks really have — a lay of
+// the project's top level, and an author session for an item not on the plan yet.
+const PLAN_STEP_VALUES = ['settle', 'lay', 'author', 'end'] as const;
+type PlanStepValue = (typeof PLAN_STEP_VALUES)[number];
+
+const reportPlanStepInputSchema = {
+  planId: z.string().trim().min(1).describe('The plan id `create_plan` returned.'),
+  sessionKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(PLAN_STEP_SESSION_KEY_MAX)
+    .describe(
+      'A stable name for the planner SESSION reporting the step (at most ' +
+        `${PLAN_STEP_SESSION_KEY_MAX} characters) — one per concurrently running session, so ` +
+        'several sessions of one parallel level each hold their own step. A second report under ' +
+        'the same key REPLACES that session’s step.',
+    ),
+  step: z
+    .enum(PLAN_STEP_VALUES)
+    .describe(
+      'The step the session is starting: `settle` (settling the brief — never a target), ' +
+        '`lay` (laying the children of `target`, or the project’s top level with no target), ' +
+        '`author` (writing `target`, or an item not on the plan yet with no target), or `end` ' +
+        '(the session finished — clears its step; never a target).',
+    ),
+  target: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      'What the step works on: a `planItem:<id>` ref naming an `add` on THIS plan, or a ' +
+        'committed work item in the plan’s project by its KEY (`MOTIR-123`) or id. Leave it ' +
+        'out on `lay` for the project’s top level and on `author` for an item not yet on the ' +
+        'plan. Refused on `settle` and `end`.',
+    ),
+};
+
+interface ReportPlanStepArgs {
+  planId: string;
+  sessionKey: string;
+  step: PlanStepValue;
+  target?: string;
+}
+
 interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
   parentRef?: string | null;
   blockedByRefs?: string[];
@@ -1171,6 +1251,7 @@ interface UpdatePlanItemArgs {
   estimateMinutes?: number | null;
   difficulty?: WorkItemDifficultyDto | null;
   todos?: ProposedTodoInput[] | null;
+  revision?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1240,8 +1321,9 @@ function summarizeClose(plan: PlanWithItemsDto): string {
     '',
     'It is in the review queue now. `add_plan_items` is refused from here UNLESS it carries ' +
       '`revision: true` — which appends to the plan where it stands, keeps it `planned`, and ' +
-      `records itself on the timeline; \`${UPDATE_PLAN_ITEM_TOOL_NAME}\` is refused outright ` +
-      `(\`update_plan_proposal\` is a landed plan's edit door). Read it back with ` +
+      `records itself on the timeline; \`${UPDATE_PLAN_ITEM_TOOL_NAME}\` likewise needs ` +
+      '`revision: true` to rewrite a card, and `update_plan_proposal` corrects where one sits. ' +
+      `Read it back with ` +
       `\`${GET_PLAN_TOOL_NAME}\`.`,
     '',
     PROPOSAL_GATE,
@@ -1305,17 +1387,26 @@ function summarizeDeepen(
   plan: PlanWithItemsDto,
   planItemId: string,
   changed: readonly string[],
+  revision = false,
 ): string {
+  const closing =
+    plan.status === 'planned'
+      ? 'This plan is `planned` — it is in front of a reviewer, and this edit is on its ' +
+        'timeline with the harness and model that made it. It did NOT re-open: the plan was ' +
+        `\`planned\` before this call and is \`planned\` after it. Read it back with ` +
+        `\`${GET_PLAN_TOOL_NAME}\`.`
+      : `Still \`generating\` — deepen the rest, then send \`final: true\` on a last ` +
+        `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` batch to put the plan in front of a reviewer. ` +
+        'After that this tool needs `revision: true`: a plan somebody is reading moves only ' +
+        'by an edit that declares itself.';
   return [
-    `Deepened proposal ${planItemId} on plan ${plan.id} — ${plan.status}, ` +
-      `${plan.itemCount} proposal(s) in total.`,
+    `${revision && plan.status === 'planned' ? 'Revised' : 'Deepened'} proposal ${planItemId} ` +
+      `on plan ${plan.id} — ${plan.status}, ${plan.itemCount} proposal(s) in total.`,
     changed.length > 0
       ? `Fields set by this call: ${changed.join(', ')}. Every other field was left as it was.`
       : 'No fields were sent, so nothing changed.',
     '',
-    `Still \`generating\` — deepen the rest, then send \`final: true\` on a last ` +
-      `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` batch to put the plan in front of a reviewer. ` +
-      'After that this tool is refused: a plan somebody is reading does not move.',
+    closing,
     '',
     PROPOSAL_GATE,
   ].join('\n');
@@ -1808,10 +1899,16 @@ export async function runUpdatePlanItem(
     changed.push(key);
   }
 
-  const plan = await plansService.deepenProposal(args.planId, args.planItemId, input, ctx);
+  // ⚠️ The flag is passed through as the CHOICE of service method, not derived
+  // from a status this adapter never read — the same reason `add_plan_items`
+  // hands `revision` through verbatim (AMENDMENT 12): the service re-takes the
+  // status decision under the plan row lock.
+  const plan = args.revision
+    ? await plansService.reviseProposal(args.planId, args.planItemId, input, ctx)
+    : await plansService.deepenProposal(args.planId, args.planItemId, input, ctx);
 
   return toolOk(
-    summarizeDeepen(plan, args.planItemId, changed),
+    summarizeDeepen(plan, args.planItemId, changed, args.revision === true),
     derived(planPayload, presentMcpPlan(plan)),
   );
 }
@@ -2006,6 +2103,57 @@ export async function runRecordPlanRevisionReason(
   );
 }
 
+/**
+ * `report_plan_step` → ONE service call per the step: `recordPlanStep` for
+ * `settle` / `lay` / `author`, `endPlanStep` for `end` (MOTIR-7824).
+ *
+ * The only work of its own is translating a KEY-form target to its id, because
+ * every other plan door accepts a key and the store takes ids only. A key that
+ * names nothing is the store's own refusal, `PLAN_STEP_INVALID`, so an emitter
+ * matches one code for "this target is wrong" whichever spelling it sent.
+ *
+ * `startedAt` is the STORED row's, never this call's clock.
+ */
+export async function runReportPlanStep(
+  args: ReportPlanStepArgs,
+  ctx: ServiceContext,
+): Promise<CallToolResult> {
+  let targetRef: string | null = args.target ?? null;
+  if (targetRef !== null && isWorkItemKey(targetRef)) {
+    try {
+      [targetRef] = (await resolveWorkItemIdsByKeys([targetRef], ctx)) as [string];
+    } catch {
+      throw new InvalidPlanStepError(
+        `\`${args.target}\` names no work item in this workspace — check the key, or pass a ` +
+          '`planItem:<id>` ref.',
+      );
+    }
+  }
+
+  const stored = await plansService.reportPlanStep(
+    args.planId,
+    { sessionKey: args.sessionKey, step: args.step, targetRef },
+    ctx,
+  );
+  const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
+    planId: args.planId,
+    sessionKey: stored?.sessionKey ?? args.sessionKey,
+    step: args.step,
+    targetRef: stored?.targetRef ?? null,
+    startedAt: stored?.startedAt ?? null,
+  });
+  if (!stored) {
+    return toolOk(`Cleared session \`${args.sessionKey}\`'s step on plan ${args.planId}.`, payload);
+  }
+  const on = stored.targetRef ? ` on \`${stored.targetRef}\`` : '';
+  return toolOk(
+    `Recorded \`${stored.kind}\`${on} for session \`${stored.sessionKey}\` on plan ` +
+      `${args.planId}. Send \`step: 'end'\` under the same \`sessionKey\` when the session ` +
+      'finishes.',
+    payload,
+  );
+}
+
 export function registerAuthorPlan(server: McpServer, resolveContext: McpContextResolver): void {
   server.registerTool(
     CREATE_PLAN_TOOL_NAME,
@@ -2109,9 +2257,13 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'description and explanation, its work type, priority, executor and sizing — now that ' +
         'you can see every sibling you proposed. The patch is SPARSE: a field you omit is left ' +
         'exactly as it was, and an explicit `null` clears it. Address the proposal by the id ' +
-        `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` returned for it in \`planItemIds\`. Legal only while ` +
-        'the plan is still `generating` — once you send `final: true` it is in front of a ' +
-        'reviewer and stops moving, and this tool refuses, naming the status. It cannot ' +
+        `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` returned for it in \`planItemIds\`. While the plan ` +
+        'is `generating` it just works. Once you send `final: true` it is in front of a ' +
+        'reviewer, and an edit is refused UNLESS it carries `revision: true`: a REVISION ' +
+        'rewrites the card where it stands — same id, same edges — keeps the plan `planned`, ' +
+        'and is recorded on its timeline with the harness and model that made it. That is the ' +
+        'door for correcting what a card SAYS on a landed plan; never withdraw a card and ' +
+        'append a copy to change its words. `approved` and `declined` stay frozen. It cannot ' +
         're-parent a proposal, change its dependency edges or re-pin its repo: those are the ' +
         'shape you settled in phase one. ' +
         'IMPORTANT: this creates NO work item and changes nothing in the tree. Approving the ' +
@@ -2268,6 +2420,37 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
     async (args, extra) => {
       try {
         return await runRecordPlanRevisionReason(args, resolveContext(extra));
+      } catch (err) {
+        return toToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    REPORT_PLAN_STEP_TOOL_NAME,
+    {
+      title: 'Report the step a planner session is on',
+      description:
+        'Say which step a planner SESSION is on while you write a plan, so a person following ' +
+        'it sees what is being drafted right now and can tell a working plan from a stalled ' +
+        'one. Call it as each session OPENS a step — `settle` while settling the brief, `lay` ' +
+        'while laying the children of `target`, `author` while writing `target` — and with ' +
+        "`step: 'end'` under the same `sessionKey` as the session closes, however it closes. " +
+        'A second report under one `sessionKey` replaces that session’s step; `end` on a ' +
+        'session with no step is a no-op success. Leave `target` OUT on `lay` for the ' +
+        'project’s top level and on `author` for an item that is not on the plan yet; ' +
+        '`target` is otherwise a `planItem:<id>` ref naming an `add` on this plan, or a ' +
+        'committed work item by key or id. The server sets the time. Legal only while the ' +
+        'plan is `generating`: once it is `planned`, `approved` or `declined` the call is ' +
+        'refused with PLAN_NOT_GENERATING and nothing changes. IT IS ADVISORY: every refusal ' +
+        'comes back as a code and a sentence, and a refused report should NOT stop you ' +
+        'planning — carry on with the plan. It changes nothing about the plan’s proposals. ' +
+        `Same grant as \`${ADD_PLAN_ITEMS_TOOL_NAME}\`. Costs nothing and starts no job.`,
+      inputSchema: reportPlanStepInputSchema,
+    },
+    async (args, extra) => {
+      try {
+        return await runReportPlanStep(args, resolveContext(extra));
       } catch (err) {
         return toToolError(err);
       }

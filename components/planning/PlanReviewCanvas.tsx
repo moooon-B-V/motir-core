@@ -36,7 +36,10 @@ import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planRevie
 // every existing importer and every `plan-review-canvas*` test keeps working
 // against this module, unchanged.
 import { arrivalLevel } from '@/lib/planning/planArrival';
-import { liveArrivals, proposalChangeKey } from '@/lib/planning/livePane';
+import { inFlightCues, liveArrivals, proposalChangeKey } from '@/lib/planning/livePane';
+import type { NodeCue } from '@/components/planning/PlanningCanvas';
+import type { PlanProgressStep } from '@/lib/plans/planProgress';
+import { ListTree } from 'lucide-react';
 import { levelChangeFor, planElsewhere } from '@/lib/planning/levelChange';
 import { LevelChangeBand } from '@/components/planning/LevelChangeBand';
 
@@ -148,6 +151,17 @@ export interface PlanReviewCanvasProps {
    * `live` — the arrivals count owns that slot while the plan is written.
    */
   offerPlanElsewhere?: boolean;
+  /**
+   * The steps the planner is on RIGHT NOW (Story MOTIR-7820 · MOTIR-7830; design
+   * Part XXV §25.6–25.7) — `usePlanProgressReading`'s `liveSteps`, the ONE clock's
+   * verdict (withdrawn targets, quiet sessions and every step of a stalled plan
+   * already gone). Mapped, never filtered: an `author` step → the DRAFTING cue on
+   * its node, a `lay` step → the LAYING cue on its parent (or, when the reader
+   * stands inside that parent, the bar's marker); cues the reader cannot see are
+   * counted in the arrivals slot. Read on `progress`, NOT on `live`, so the plan
+   * page draws them too. Absent / `null` → no cue, and the canvas is unchanged.
+   */
+  liveSteps?: readonly PlanProgressStep[] | null;
 }
 
 export function PlanReviewCanvas({
@@ -164,6 +178,7 @@ export function PlanReviewCanvas({
   onLevelChange,
   live = false,
   offerPlanElsewhere = false,
+  liveSteps = null,
 }: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tPlan = useTranslations('planReview');
@@ -540,16 +555,63 @@ export function PlanReviewCanvas({
     [live, items, proposedWord],
   );
 
+  // ── THE CUES (MOTIR-7830; Part XXV §25.6–25.7) ───────────────────────────
+  // The live steps → a cue per node, and where each one is for the arrivals slot.
+  // `liveSteps` is the derivation's: nothing here decides which steps are live.
+  const tCue = useTranslations('planReview.cue');
+  const cueState = useMemo(
+    () => (liveSteps ? inFlightCues(items, liveSteps, proposedWord) : null),
+    [items, liveSteps, proposedWord],
+  );
+  const nodeCues = useMemo<ReadonlyMap<string, NodeCue> | null>(() => {
+    if (!cueState) return null;
+    const out = new Map<string, NodeCue>();
+    for (const [nodeId, kind] of cueState.cues) {
+      out.set(
+        nodeId,
+        kind === 'drafting'
+          ? { kind, label: tCue('draftingName'), text: tCue('drafting') }
+          : { kind, label: tCue('layingName'), text: tCue('laying') },
+      );
+    }
+    return out;
+  }, [cueState, tCue]);
+
   // ── A CHANGE TO THE LEVEL ITSELF (bug MOTIR-6223; design MOTIR-6241) ───────
   // `mergePlanLevel` frames the nodes ON a level, and the level the reader stands
   // in is not one of them — so the plan's change to it is drawn in the bar
   // instead, asked of whichever level is in view (arrived, drilled or followed).
+  //
+  // …and so is the LAYING cue on the level the reader stands INSIDE (§25.7 row 2):
+  // its parent is not a card on this level, so the bar carries *Laying this level*.
+  // Beside the change band when both apply; `null` when neither does, so the bar
+  // stays the one that shipped.
   const levelBand = useCallback(
     (focus: { id: string }) => {
       const change = levelChangeFor(items, focus.id, outcome);
-      return change ? <LevelChangeBand change={change} outcome={outcome} /> : null;
+      const laying = cueState?.cues.get(focus.id) === 'laying';
+      const marker = laying ? (
+        <div
+          data-testid="canvas-crumb-cue"
+          className="mt-[5px] flex min-w-0 items-center border-t border-(--el-border-soft) pt-[5px]"
+        >
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-status-in-progress) bg-(--el-card) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[11px] leading-none font-semibold text-(--el-text-secondary)">
+            <ListTree aria-hidden="true" className="size-3 text-(--el-status-in-progress)" />
+            {tCue('layingHere')}
+          </span>
+        </div>
+      ) : null;
+      if (change && marker) {
+        return (
+          <>
+            <LevelChangeBand change={change} outcome={outcome} />
+            {marker}
+          </>
+        );
+      }
+      return change ? <LevelChangeBand change={change} outcome={outcome} /> : marker;
     },
-    [items, outcome],
+    [items, outcome, cueState, tCue],
   );
   // …and the plan BESIDE the reader, on the surface that opts in.
   const elsewhereOffer = useCallback(
@@ -640,6 +702,9 @@ export function PlanReviewCanvas({
         arrivals={arrivals}
         levelBand={levelBand}
         elsewhereOffer={offerPlanElsewhere && !live ? elsewhereOffer : undefined}
+        // THE CUES (MOTIR-7830) — on the live steps, motion or not.
+        nodeCues={nodeCues}
+        inFlight={cueState?.inFlight ?? null}
       />
       {/* Every PROPOSAL — `add`, `modify` and `remove` — opens the shipped peek in
           proposal mode (MOTIR-4185). A COMMITTED sibling node still opens the

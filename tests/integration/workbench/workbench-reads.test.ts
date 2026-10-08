@@ -535,6 +535,8 @@ describe('the five tab counts agree with the lists they sit beside', () => {
       // than adding a watcher by hand and expecting one, is what keeps this from
       // measuring the fixture instead of the read.
       watching: 2,
+      // No plan is being written (MOTIR-7828).
+      planning: 0,
       // Transitional, and derived rather than counted again, so it cannot
       // disagree with the two above it (MOTIR-4782 removes it with `/workbench`).
       myWork: 2,

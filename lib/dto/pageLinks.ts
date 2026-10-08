@@ -2,8 +2,11 @@
 // service boundary for "which pages link to this work item?" One row per live
 // page, however many link rows it has (`docs/decisions/pages.md` §8.1).
 
-/** How a page links to the work item: a chip in its body, an embed, or by hand. */
-export type PageLinkSourceDto = 'mention' | 'embed' | 'manual';
+/**
+ * How a page links to the work item: a chip in its body, an embed, by hand, or
+ * a tag in the work item's own Description / Explanation (MOTIR-7696).
+ */
+export type PageLinkSourceDto = 'mention' | 'embed' | 'manual' | 'description' | 'explanation';
 
 /** Where the page sits, in the page breadcrumb's vocabulary. */
 export interface WorkItemPageLinkPlaceDto {

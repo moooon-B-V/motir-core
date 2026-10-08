@@ -10,6 +10,7 @@ import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
 import { searchWorkItemMentions } from '@/lib/mentions/workItemMentionSearch';
+import { searchPageMentions } from '@/lib/mentions/pageMentionSearch';
 import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { StatusPicker } from '@/components/issues/StatusPicker';
@@ -61,6 +62,10 @@ export interface EditIssueFormProps {
   /** The undecided PLAN holding the card at Planning (MOTIR-6267) — every move
    *  locked, said on the status field with a Review plan door. Defaults to none. */
   planHold?: PlanHoldDTO | null;
+  /** Whether the viewer may see the project's pages (`page:view`, MOTIR-7698).
+   *  Only then do Description and Explanation offer the `@` picker's Pages
+   *  section. Defaults to false. */
+  canViewPages?: boolean;
 }
 
 export function EditIssueForm({
@@ -70,7 +75,15 @@ export function EditIssueForm({
   aiConfigured = false,
   heldTransitions,
   planHold,
+  canViewPages = false,
 }: EditIssueFormProps) {
+  // The page search behind both editors' Pages section, bound to the item's own
+  // project (MOTIR-7698) — absent for a viewer without `page:view`, so their
+  // picker has no Pages section and sends no request. Created once: the editor
+  // reads it at mount.
+  const [pageSearch] = useState(() =>
+    canViewPages ? (query: string) => searchPageMentions(issue.projectId, query) : undefined,
+  );
   const statusHeld = useStatusHeld(
     heldTransitions,
     workflow.statuses,
@@ -258,6 +271,7 @@ export function EditIssueForm({
         size="full"
         onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
         workItemSearch={searchWorkItemMentions}
+        pageSearch={pageSearch}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -378,6 +392,7 @@ export function EditIssueForm({
         size="full"
         onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
         workItemSearch={searchWorkItemMentions}
+        pageSearch={pageSearch}
       />
       {!aiConfigured ? <DraftGateNotice /> : null}
       {draft.phase === 'error' ? (

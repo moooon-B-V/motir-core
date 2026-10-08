@@ -150,6 +150,12 @@
     "mentionNoResults": "Brak elementów roboczych pasujących do „{query}”.",
     "mentionSearchFailed": "Nie udało się wyszukać elementów roboczych.",
     "mentionRetry": "Spróbuj ponownie",
+    "mentionPages": "Strony",
+    "mentionTypeToSearchPages": "Pisz dalej, aby wyszukać strony…",
+    "mentionNoPages": "Brak stron pasujących do „{query}”.",
+    "mentionPagesSearchFailed": "Nie udało się wyszukać stron.",
+    "pageUntitled": "Bez tytułu",
+    "pageUnavailable": "Strona niedostępna",
     "codeLanguage": "Język"
   },
   "common": {
@@ -289,6 +295,39 @@
     "liveWriting": "W trakcie pisania",
     "liveReconnecting": "Ponowne łączenie — wyświetlana jest ostatnia aktualizacja",
     "liveAnnounce": "{count, plural, one {Dodano # element} few {Dodano # elementy} many {Dodano # elementów} other {Dodano # elementu}} do planu",
+    "liveStarting": "Uruchamianie…",
+    "liveStalled": "Zastój",
+    "progress": {
+      "settling": "Porządkowanie rozmowy",
+      "layingChildrenOf": "Rozkładanie: {title}",
+      "layingTopLevel": "Rozkładanie najwyższego poziomu projektu",
+      "authoring": "Pisanie: {title}",
+      "draftingNew": "Tworzenie szkicu nowego elementu",
+      "moreSteps": "+{count} więcej",
+      "authored": "Napisano {authored} z {proposed}",
+      "elapsedUnderMinute": "<1 min",
+      "elapsedMinutes": "{minutes} min",
+      "elapsedHours": "{hours} godz. {minutes} min",
+      "lastActivityJustNow": "ostatnia aktywność przed chwilą",
+      "lastActivitySeconds": "ostatnia aktywność {seconds} s temu",
+      "lastActivityAgo": "ostatnia aktywność {duration} temu",
+      "stalledFor": "brak aktywności od {duration}",
+      "detailsAria": "Szczegóły postępu planu",
+      "detailsNow": "Teraz w pracy",
+      "detailsNoSteps": "Nie zgłoszono żadnego kroku — ten planista może nie zgłaszać swoich kroków.",
+      "detailsStarted": "Rozpoczęto {time} · trwa {duration}",
+      "detailsLastActivity": "Ostatnia aktywność {time}",
+      "detailsStalled": "Od {duration} nic nie zostało zapisane ani zgłoszone. Plan mógł się zatrzymać.",
+      "pointer": "Śledź w Warsztacie",
+      "pointerSentence": "Możesz wyjść — ten plan jest nadal pisany. Śledź go w widoku Warsztat › Planowanie."
+    },
+    "cue": {
+      "drafting": "Tworzenie szkicu",
+      "draftingName": "Szkic powstaje teraz",
+      "laying": "Rozkładanie elementów podrzędnych",
+      "layingName": "Jego elementy podrzędne są teraz rozkładane",
+      "layingHere": "Rozkładanie tego poziomu"
+    },
     "listWritingTitle": "Brak propozycji",
     "listWritingBody": "Elementy pojawiają się tutaj w miarę pisania planu.",
     "abandonedOutcome": "Generowanie nie zostało ukończone — ten plan zakończono automatycznie",
@@ -339,7 +378,15 @@
     "railAddDeclined": "Ten plan został odrzucony — żadna z tych wartości nie została utworzona.",
     "railRemoveArchived": "Ten plan zarchiwizował {key}.",
     "railRemoveDeclined": "Ten plan zarchiwizowałby {key}. Został odrzucony, więc do tego nie doszło.",
-    "peekNoActivity": "Propozycja nie ma komentarzy, elementów podrzędnych ani aktywności, dopóki nie zostanie zatwierdzona."
+    "peekNoActivity": "Propozycja nie ma komentarzy, elementów podrzędnych ani aktywności, dopóki nie zostanie zatwierdzona.",
+    "approveProgress": {
+      "creating": "Dodawanie {n, plural, one {# elementu} few {# elementów} many {# elementów} other {# elementu}} do Backlogu…",
+      "applying": "Wprowadzanie {n, plural, one {# zmiany} few {# zmian} many {# zmian} other {# zmiany}} w Backlogu…",
+      "together": "Pojawią się wszystkie naraz po zakończeniu.",
+      "slow": "Nadal trwa przetwarzanie – duży plan zajmuje więcej czasu. Nie musisz klikać ponownie.",
+      "timedOutTitle": "Nic nie zostało utworzone – zatwierdzanie trwało zbyt długo.",
+      "timedOutNext": "Ten plan nadal czeka na Twoją decyzję, bez zmian. Możesz bezpiecznie zatwierdzić go ponownie."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "Nie masz dostępu do tego projektu",
@@ -1468,6 +1515,8 @@
     "pagesSourceMention": "Wspomniano",
     "pagesSourceEmbed": "Osadzono",
     "pagesSourceManual": "Połączono",
+    "pagesSourceDescription": "Oznaczono w opisie",
+    "pagesSourceExplanation": "Oznaczono w wyjaśnieniu",
     "pagesEmpty": "Żadna strona nie zawiera jeszcze linku do tego elementu roboczego.",
     "pagesShowMore": "Pokaż więcej stron",
     "pagesError": "Nie udało się załadować stron.",
@@ -7685,6 +7734,10 @@
       "goToTarget": "Plan jest w {identifier} · Przejdź tam",
       "arrivedIn": "Nowe w {identifier}: {count} · Przejdź tam",
       "arrivedAcross": "Nowe gdzie indziej: {count} · najnowsze w {identifier} · Przejdź tam",
+      "draftingIn": "Szkice w {identifier}: {count} · Przejdź tam",
+      "layingIn": "Rozkładanie: {identifier} · Przejdź tam",
+      "newAndDraftingIn": "Nowe: {arrived} · szkice w {identifier}: {drafting} · Przejdź tam",
+      "draftingAcross": "Szkice gdzie indziej: {count} · pierwszy w {identifier} · Przejdź tam",
       "levelChange": {
         "srPrefix": "Oczekująca zmiana tego poziomu:",
         "changed": "Ten poziom",
@@ -8515,14 +8568,17 @@
       "toResume": "Do wznowienia",
       "recentlyFinished": "Niedawno ukończone",
       "watching": "Obserwowane",
-      "toApprove": "Czeka na Ciebie"
+      "toApprove": "Czeka na Ciebie",
+      "planning": "Planowanie"
     },
     "columns": {
       "title": "Tytuł",
       "role": "Twoja rola",
       "assignee": "Osoba odpowiedzialna",
       "status": "Status",
-      "finished": "Ukończono"
+      "finished": "Ukończono",
+      "plan": "Plan",
+      "planner": "Planista"
     },
     "row": {
       "unassigned": "Nieprzypisane",
@@ -8565,6 +8621,11 @@
       "approvals": {
         "title": "Nic na Ciebie nie czeka",
         "body": "Pojawiają się tu zatwierdzenia wymagające Twojej decyzji oraz praca, którą uruchomienie przekazało Ci do wykonania."
+      },
+      "planning": {
+        "title": "Żaden plan nie jest teraz pisany",
+        "body": "Gdy poprosisz Motir AI lub agenta o plan, plan czeka tutaj w trakcie pisania, razem z postępem, a gdy będzie gotowy do przeglądu, przechodzi do zakładki Czeka na Ciebie. Plany, o które poprosili inni, są na stronie Plany.",
+        "action": "Zaplanuj z AI"
       }
     },
     "approvals": {
@@ -8782,6 +8843,28 @@
         "card_not_ready": "Usuń to, co blokuje {key}, lub przenieś go z powrotem do W toku, a potem naciśnij Kontynuuj."
       },
       "copyAria": "Skopiuj polecenie wznowienia dla {key}"
+    },
+    "planning": {
+      "scope": "Twoje plany w <project>{name}</project>, które są nadal pisane. Plany, o które poprosili inni, są na <link>stronie Plany</link>.",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "Agent MCP",
+        "agentModel": "Agent MCP · <mono>{model}</mono>"
+      },
+      "rowAria": "Otwórz pisany plan — {sentence}",
+      "reopened": "Ponownie otwarto z widoku Planowanie · rozpoczęty przez Ciebie · ostatnio aktywny {when}",
+      "left": {
+        "planned": "Napisany",
+        "plannedLine": "Gotowy do przeglądu.",
+        "plannedLink": "Zobacz w zakładce Czeka na Ciebie",
+        "discarded": "Zakończony",
+        "discardedLine": "Zakończony przed zaproponowaniem — nic nie zostało dodane.",
+        "abandoned": "Zatrzymany",
+        "abandonedLine": "Jego planista się zatrzymał, więc plan został zamknięty — nic nie zostało dodane.",
+        "unknownLine": "Nie jest już pisany."
+      },
+      "ceiling": "Wyświetlane są Twoje najnowsze pisane plany ({shown}). Pozostałe ({rest}) są na <link>stronie Plany</link>."
     }
   },
   "approvalRecords": {

@@ -167,30 +167,36 @@ export class EmailDeliveryError extends Error {
 // only kicks in when a caller skipped `text`. Real providers should be given
 // both an html and a text body by the caller, so this fallback is mostly a
 // dev-console nicety.
-function htmlToText(html: string): string {
-  return (
-    html
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      // Surface anchor hrefs inline ("text (url)") so reset links remain
-      // grep-able when a caller passes only html. Critical for the
-      // console-provider's "tests can read the link off stdout" promise.
-      .replace(
-        /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
-        (_, href, inner) =>
-          `${String(inner)
-            .replace(/<[^>]+>/g, '')
-            .trim()} (${href})`,
-      )
-      .replace(/<[^>]+>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/[ \t]+\n/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
+//
+// The strips repeat until nothing changes, because one pass over
+// `<scr<script></script>ipt>` leaves a `<script>` behind (MOTIR-7816), and the
+// entities decode in ONE pass, so `&amp;lt;` becomes `&lt;` and not `<`.
+export function htmlToText(html: string): string {
+  const withoutBlocks = stripUntilStable(html, /<(style|script)\b[^>]*>[\s\S]*?<\/\1\s*>/gi);
+  // Surface anchor hrefs inline ("text (url)") so reset links remain
+  // grep-able when a caller passes only html. Critical for the
+  // console-provider's "tests can read the link off stdout" promise.
+  const withLinks = withoutBlocks.replace(
+    /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
+    (_, href, inner) => `${stripUntilStable(String(inner), /<[^>]+>/g).trim()} (${href})`,
   );
+  return stripUntilStable(withLinks, /<[^>]+>/g)
+    .replace(/&(nbsp|amp|lt|gt);/g, (_, name: string) => HTML_ENTITIES[name] ?? '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+const HTML_ENTITIES: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>' };
+
+function stripUntilStable(input: string, pattern: RegExp): string {
+  let previous: string;
+  let current = input;
+  do {
+    previous = current;
+    current = current.replace(pattern, '');
+  } while (current !== previous);
+  return current;
 }
 
 const consoleProvider: SendEmail = async (msg) => {

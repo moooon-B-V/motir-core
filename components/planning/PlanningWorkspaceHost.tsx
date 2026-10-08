@@ -23,6 +23,7 @@ import {
   PlanChangeConfirmBar,
   PLAN_CONFIRM_BAR_HEIGHT,
 } from '@/components/planning/PlanChangeConfirmBar';
+import type { PlanApproveProgressView } from '@/components/planning/PlanApproveProgress';
 import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { GuideWorkspaceHost } from '@/components/planning/GuideWorkspaceHost';
@@ -702,17 +703,26 @@ function PlanWorkspaceHost({
   // this surface, not the plan.
   const [declineFrom, setDeclineFrom] = useState<PlanDecisionPlace | null>(null);
   const [pressFrom, setPressFrom] = useState<PlanDecisionPlace>('bar');
+  // WHICH decision is in flight: `deciding` covers both, and only an approve has a
+  // progress surface to show (MOTIR-5249).
+  const [decisionKind, setDecisionKind] = useState<'approve' | 'decline' | null>(null);
   const approveFrom = useCallback(
     (place: PlanDecisionPlace) => {
       setPressFrom(place);
       setDeclineFrom(null);
+      setDecisionKind('approve');
       void approve();
     },
     [approve],
   );
+  const discardNow = useCallback(() => {
+    setDecisionKind('decline');
+    void discard();
+  }, [discard]);
   const confirmDecline = useCallback(
     (noteMd: string | null) => {
       setPressFrom(declineFrom ?? 'bar');
+      setDecisionKind('decline');
       void (async () => {
         await discard(noteMd);
         setDeclineFrom(null);
@@ -721,6 +731,27 @@ function PlanWorkspaceHost({
     [discard, declineFrom],
   );
   const staleRefusedAt = state.errorCode === 'stale' ? pressFrom : null;
+
+  // WHAT APPROVE SAYS WHILE IT RUNS (MOTIR-5249; design Part XXV), derived ONCE and
+  // handed to both doors. Running: both doors show it, and only the pressed one is the
+  // live region, so one press is read once (§25.10). Timed out: only the pressed door
+  // shows the band, where the stale band would stand (§25.2). The count is the review's
+  // own; the sentence says "changes" as soon as anything is not an add (§25.8).
+  const approveRunning = deciding && decisionKind === 'approve';
+  const approveTimedOut = state.errorCode === 'timedOut' && !deciding;
+  const progressKind = index.counts.changed + index.counts.removed > 0 ? 'changes' : 'adds';
+  const progressCount = state.review?.itemCount ?? 0;
+  const approveProgressAt = (place: PlanDecisionPlace): PlanApproveProgressView | null =>
+    approveRunning
+      ? {
+          state: 'running',
+          count: progressCount,
+          kind: progressKind,
+          announce: pressFrom === place,
+        }
+      : approveTimedOut && pressFrom === place
+        ? { state: 'timedOut', count: progressCount, kind: progressKind }
+        : null;
 
   // The VETO the overlay consults. Writing it into a ref rather than passing a
   // boolean up keeps the decision here, next to the state it reads, and keeps
@@ -899,6 +930,10 @@ function PlanWorkspaceHost({
                 onCanvasLevelChange={noteReaderLevel}
                 live={paneLive}
                 liveFailing={state.liveFailing}
+                // The progress line (MOTIR-7829) — on the review's own `progress`,
+                // which is null once the plan leaves `generating` (the hand-over).
+                progress={paneReview.progress ?? null}
+                progressFailing={state.liveFailing}
                 discarded={paneDiscarded}
                 // The plan BESIDE the reader's level offers the trip (MOTIR-6223).
                 offerPlanElsewhere
@@ -952,13 +987,14 @@ function PlanWorkspaceHost({
                   index={index}
                   deciding={state.phase === 'deciding'}
                   onApprove={() => approveFrom('bar')}
-                  onDiscard={() => void discard()}
+                  onDiscard={discardNow}
                   view={gateView}
                   declining={declineFrom === 'bar'}
                   onRequestDecline={() => setDeclineFrom('bar')}
                   onCancelDecline={() => setDeclineFrom(null)}
                   onConfirmDecline={confirmDecline}
                   staleRefused={staleRefusedAt === 'bar'}
+                  approveProgress={approveProgressAt('bar')}
                 />
               </div>
             ) : null}
@@ -1006,7 +1042,7 @@ function PlanWorkspaceHost({
           onRetry={retry}
           onCorrectTurn={correctTurn}
           onApprove={() => approveFrom('rail')}
-          onDiscard={() => void discard()}
+          onDiscard={discardNow}
           onStop={stop}
           onStartNewSession={() => void startCopied()}
           onRequestRestart={() => void requestRestart()}
@@ -1017,6 +1053,7 @@ function PlanWorkspaceHost({
           onCancelDecline={() => setDeclineFrom(null)}
           onConfirmDecline={confirmDecline}
           staleRefused={staleRefusedAt === 'rail'}
+          approveProgress={approveProgressAt('rail')}
           conversationElsewhere={conversationElsewhere}
         />
       }

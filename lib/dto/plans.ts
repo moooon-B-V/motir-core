@@ -716,6 +716,23 @@ export interface PlanItemDto {
   createdAt: string;
 }
 
+/** The kind of step a running planner session is on (Story MOTIR-7820 · MOTIR-7822). */
+export type PlanStepKindDto = 'settle' | 'lay' | 'author';
+
+/**
+ * The step ONE running planner session is on (Story MOTIR-7820 · MOTIR-7822).
+ * `targetRef` is the ref exactly as the planner sent it — `planItem:<id>` or a
+ * work-item id — and NULL for `settle`, and for the two UNTARGETED forms: a
+ * `lay` of the project's top level, and an `author` of an item not yet on the
+ * plan. Turning it into words is the progress derivation's job, not this shape's.
+ */
+export interface PlanStepDto {
+  sessionKey: string;
+  kind: PlanStepKindDto;
+  targetRef: string | null;
+  startedAt: string;
+}
+
 /**
  * A plan as the API returns it (list row). The lifecycle timestamps + decider
  * ARE the history surface (when planned / when decided / by whom). `itemCount`

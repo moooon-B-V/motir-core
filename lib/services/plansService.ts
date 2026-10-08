@@ -39,6 +39,7 @@ import {
   type PlanItemUpdateInput,
 } from '@/lib/repositories/planItemRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
+import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
   workItemRepository,
@@ -139,6 +140,7 @@ import {
   InvalidPlanHistoryCursorError,
   PlanRevisionClassificationInvalidError,
   ApprovedShapeVerdictTooManyIdsError,
+  InvalidPlanStepError,
 } from '@/lib/plans/errors';
 import { classifyRevision } from '@/lib/plans/approvedShapeChange';
 import {
@@ -194,6 +196,8 @@ import type {
   ApprovedShapeDivergingRevisionDto,
   WorkItemApprovedShapeVerdictDto,
   WorkItemApprovedShapeVerdictPageDto,
+  PlanStepDto,
+  PlanStepKindDto,
 } from '@/lib/dto/plans';
 import {
   PLAN_ITEM_REASON_MAX,
@@ -203,6 +207,7 @@ import {
 import {
   toPlanDto,
   toPlanItemDto,
+  toPlanStepDto,
   toPlanWithItemsDto,
   toWorkItemPlanHistoryEntryDto,
 } from '@/lib/mappers/planMappers';
@@ -3868,13 +3873,31 @@ async function assertFolderPlacementsLegalAtAppend(
   });
 }
 
+/**
+ * WHICH of the three edits `editAddProposal` is performing — the legal status
+ * and who the trail names both follow from it, so they cannot be chosen apart:
+ *
+ *   • `deepen` — the author filling in a plan it is still writing (`generating`);
+ *     the generation actor.
+ *   • `review` — a PERSON's inline edit on the review surface (`planned`); that
+ *     person and no agent.
+ *   • `revise` — an AGENT revising a plan already in front of a reviewer
+ *     (`update_plan_item { revision: true }`, AMENDMENT 24). Legal on
+ *     `generating` and `planned` — AMENDMENT 8's editable pair, the gate
+ *     `correctProposal` and a revision append use — and recorded under the
+ *     agent, because the reviewer must see WHICH harness and model rewrote a card
+ *     under them, exactly as `correctProposal` records its own agent edits.
+ */
+type AddProposalEditMode = 'deepen' | 'review' | 'revise';
+
 async function editAddProposal(
   planId: string,
   planItemId: string,
   input: UpdateProposalInput,
   ctx: ServiceContext,
-  expectedStatus: 'planned' | 'generating',
+  mode: AddProposalEditMode,
 ): Promise<PlanWithItemsDto> {
+  const expectedStatus = mode === 'deepen' ? 'generating' : 'planned';
   const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
     planRepository.findById(planId, ctx.workspaceId, tx),
   );
@@ -3913,7 +3936,11 @@ async function editAddProposal(
       if (!locked) throw new PlanNotFoundError(planId);
       const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
       if (!fresh) throw new PlanNotFoundError(planId);
-      if (fresh.status !== expectedStatus) {
+      const legal =
+        mode === 'revise'
+          ? fresh.status === 'generating' || fresh.status === 'planned'
+          : fresh.status === expectedStatus;
+      if (!legal) {
         throw new PlanNotInExpectedStatusError(planId, fresh.status, expectedStatus);
       }
       const item = await planItemRepository.findById(planItemId, tx);
@@ -3966,14 +3993,13 @@ async function editAddProposal(
       // without it a proposal deepened five times is byte-indistinguishable from
       // one written once.
       //
-      // ⚠️ WHO acted is decided by `expectedStatus`, which is the ONLY thing that
-      // tells the two callers apart and is exactly the right discriminator:
-      // `deepenProposal` edits a `generating` plan and is the generator, so it
-      // takes the generation actor (null on a cadence plan, the agent triple
-      // beside it); `updateProposal` edits a `planned` one and is only ever
-      // reached by a person reviewing it, so it records that person and NO agent.
-      // Reading the plan's `authorSource` for both would file a reviewer's edit
-      // under the agent that wrote what they were reviewing.
+      // ⚠️ WHO acted is decided by `mode`, never by the plan's status: a `planned`
+      // plan is edited both by a person reviewing it (`review`) and by an agent
+      // revising it (`revise`), so the status alone cannot tell them apart.
+      // `deepen` and `revise` take the generation actor (null on a cadence plan,
+      // the agent triple beside it); `review` records that person and NO agent.
+      // Reading the plan's `authorSource` for a review would file a reviewer's
+      // edit under the agent that wrote what they were reviewing.
       //
       // The diff records the fields the edit SUPPLIED, not a value diff: the old
       // side of a proposal is already gone by the time it is written, and the
@@ -3984,13 +4010,19 @@ async function editAddProposal(
           planId,
           planItemId,
           changeKind: 'edited',
-          ...(expectedStatus === 'generating'
-            ? generationActor(fresh, ctx)
-            : { changedById: ctx.userId, actor: null }),
-          diff: { fields: Object.keys(input), proposalCount: 1 },
+          ...(mode === 'review'
+            ? { changedById: ctx.userId, actor: null }
+            : generationActor(fresh, ctx)),
+          diff: {
+            fields: Object.keys(input),
+            proposalCount: 1,
+            ...(mode === 'revise' ? { revision: true } : {}),
+          },
         },
         tx,
       );
+      // The plan's activity stamp (MOTIR-7822), beside the trail row it mirrors.
+      await planRepository.touchActivity(planId, new Date(), tx);
       const allItems = await planItemRepository.findByPlan(planId, tx);
       return { row: fresh, items: allItems };
     },
@@ -4361,6 +4393,118 @@ async function readerMaySeePlan(
     plan.createdById === ctx.userId ||
     plan.decidedById === ctx.userId ||
     routedPlanIds.includes(plan.id)
+  );
+}
+
+/** The longest `sessionKey` a planner may send (MOTIR-7822). */
+export const PLAN_STEP_SESSION_KEY_MAX = 128;
+
+/** A planner step as a door hands it to the service (Story MOTIR-7820 ·
+ *  MOTIR-7822). `targetRef` null on `lay` / `author` is the UNTARGETED form. */
+export interface RecordPlanStepInput {
+  sessionKey: string;
+  kind: PlanStepKindDto;
+  targetRef: string | null;
+}
+
+const PLAN_STEP_KINDS: readonly PlanStepKindDto[] = ['settle', 'lay', 'author'];
+
+function assertSessionKey(sessionKey: unknown): string {
+  if (typeof sessionKey !== 'string' || sessionKey.trim().length === 0) {
+    throw new InvalidPlanStepError('A step needs a non-empty `sessionKey`.');
+  }
+  if (sessionKey.length > PLAN_STEP_SESSION_KEY_MAX) {
+    throw new InvalidPlanStepError(
+      `A step's \`sessionKey\` is at most ${PLAN_STEP_SESSION_KEY_MAX} characters.`,
+    );
+  }
+  return sessionKey;
+}
+
+/**
+ * Validate a step's target against THIS plan, inside the step's transaction
+ * (MOTIR-7822). `settle` never names one; `lay` / `author` name a proposal
+ * (`planItem:<id>`, which must be an `add` on this plan) or a committed work item
+ * in the plan's project — or nothing, which is the untargeted form and legal.
+ * Any other shape (a `folder:` ref, a key, an empty string) is refused.
+ */
+async function assertStepTarget(
+  plan: { id: string; projectId: string },
+  kind: PlanStepKindDto,
+  targetRef: string | null,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (!PLAN_STEP_KINDS.includes(kind)) {
+    throw new InvalidPlanStepError(`Unknown step kind \`${String(kind)}\`.`);
+  }
+  if (targetRef === null) return;
+  if (kind === 'settle') {
+    throw new InvalidPlanStepError('A `settle` step names no target.');
+  }
+  if (typeof targetRef !== 'string' || targetRef.trim().length === 0) {
+    throw new InvalidPlanStepError(
+      'A step target is a `planItem:<id>` ref or a work-item id; omit it for an untargeted step.',
+    );
+  }
+  if (targetRef.startsWith(TEMP_REF_PREFIX)) {
+    const item = await planItemRepository.findById(targetRef.slice(TEMP_REF_PREFIX.length), tx);
+    if (!item || item.planId !== plan.id || item.op !== 'add') {
+      throw new InvalidPlanStepError(`\`${targetRef}\` names no \`add\` proposal on this plan.`);
+    }
+    return;
+  }
+  if (isFolderRef(targetRef) || targetRef.includes(':') || /\s/.test(targetRef)) {
+    throw new InvalidPlanStepError(
+      `\`${targetRef}\` is not a step target: send a \`planItem:<id>\` ref or a work-item id.`,
+    );
+  }
+  const rows = await withProjectNarrowingSuspended(tx, plan.projectId, () =>
+    workItemRepository.findByIdsInWorkspace([targetRef], ctx.workspaceId, tx),
+  );
+  if (rows.length === 0 || rows[0]!.projectId !== plan.projectId) {
+    throw new InvalidPlanStepError(
+      `\`${targetRef}\` is not a work item in this plan's project (a key is not an id).`,
+    );
+  }
+}
+
+/**
+ * The one transaction both step writes share (MOTIR-7822): find the plan, assert
+ * `ai:view_plan` on the PLAN's project, then lock, re-read, refuse anything but
+ * `generating`, run `write`, and stamp the activity — all under the plan row's
+ * `FOR UPDATE`, which is also what serialises a report against `markPlanned`.
+ */
+async function withGeneratingPlanStep<T>(
+  planId: string,
+  ctx: ServiceContext,
+  write: (plan: Plan, tx: Prisma.TransactionClient, now: Date) => Promise<T>,
+): Promise<T> {
+  const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    planRepository.findById(planId, ctx.workspaceId, tx),
+  );
+  if (!plan) throw new PlanNotFoundError(planId);
+  await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+  return withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+    async (tx) => {
+      const locked = await planRepository.lockById(planId, tx);
+      if (!locked) throw new PlanNotFoundError(planId);
+      const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+      if (!fresh) throw new PlanNotFoundError(planId);
+      if (fresh.status !== 'generating') {
+        throw new PlanNotGeneratingError(
+          planId,
+          fresh.status,
+          `Plan ${planId} is ${fresh.status}, not generating — a step is only recorded while ` +
+            'the plan is being written. Nothing was changed.',
+        );
+      }
+      const now = new Date();
+      const out = await write(fresh, tx, now);
+      await planRepository.touchActivity(planId, now, tx);
+      return out;
+    },
   );
 }
 
@@ -4886,6 +5030,9 @@ export const plansService = {
               tx,
             );
           }
+          // The plan's activity stamp (MOTIR-7822) — EVERY append, an empty one
+          // included: an append is a planner alive and writing.
+          await planRepository.touchActivity(planId, new Date(), tx);
           const allItems = await planItemRepository.findByPlan(planId, tx);
           return { row: fresh, items: allItems, appendedItemIds };
         },
@@ -5401,7 +5548,7 @@ export const plansService = {
     input: UpdateProposalInput,
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
-    return editAddProposal(planId, planItemId, input, ctx, 'planned');
+    return editAddProposal(planId, planItemId, input, ctx, 'review');
   },
 
   /**
@@ -5431,7 +5578,29 @@ export const plansService = {
     input: UpdateProposalInput,
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
-    return editAddProposal(planId, planItemId, input, ctx, 'generating');
+    return editAddProposal(planId, planItemId, input, ctx, 'deepen');
+  },
+
+  /**
+   * REVISE a proposed `add` in place on a plan an AGENT already closed
+   * (AMENDMENT 24) — `update_plan_item { revision: true }`. The same sparse
+   * merge and re-validation as {@link updateProposal} and `deepenProposal`,
+   * legal on `generating` AND `planned`, and recorded on the trail under the
+   * AGENT (`generationActor`), never as the reviewer's own edit. The plan does
+   * not re-open: it stays `planned` before, during and after, as a revision
+   * append leaves it (AMENDMENT 12).
+   *
+   * It exists so a correction to a card's WORDS on a landed plan is an edit of
+   * that card — same id, same edges, same history — rather than a withdraw and a
+   * re-append, which loses all three (the runbook's archive-and-re-propose rule).
+   */
+  async reviseProposal(
+    planId: string,
+    planItemId: string,
+    input: UpdateProposalInput,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    return editAddProposal(planId, planItemId, input, ctx, 'revise');
   },
 
   /**
@@ -5533,6 +5702,8 @@ export const plansService = {
           },
           tx,
         );
+        // The plan's activity stamp (MOTIR-7822).
+        await planRepository.touchActivity(planId, new Date(), tx);
         return { row: updated, items: await planItemRepository.findByPlan(planId, tx) };
       },
     );
@@ -6002,6 +6173,8 @@ export const plansService = {
           },
           tx,
         );
+        // The plan's activity stamp (MOTIR-7822).
+        await planRepository.touchActivity(planId, new Date(), tx);
         return { row: fresh, items: await planItemRepository.findByPlan(planId, tx) };
       },
     );
@@ -6101,6 +6274,8 @@ export const plansService = {
           },
           tx,
         );
+        // The plan's activity stamp (MOTIR-7822).
+        await planRepository.touchActivity(planId, new Date(), tx);
 
         const remaining = await planItemRepository.findByPlan(planId, tx);
 
@@ -6203,6 +6378,73 @@ export const plansService = {
    * frozen, and a classification recorded against one would be a judgement about
    * a change that can no longer happen.
    */
+  /**
+   * Record the step ONE running planner session is on (Story MOTIR-7820 ·
+   * MOTIR-7822), REPLACING the step that session reported before. Legal only
+   * while the plan is `generating`; anything else is {@link PlanNotGeneratingError}
+   * and writes nothing. `startedAt` and the activity stamp are the SERVER's
+   * clock. A null target on `lay` / `author` is the untargeted form, never an
+   * error. No door calls this yet beyond the signal routes that wrap it.
+   */
+  async recordPlanStep(
+    planId: string,
+    input: RecordPlanStepInput,
+    ctx: ServiceContext,
+  ): Promise<PlanStepDto> {
+    const sessionKey = assertSessionKey(input.sessionKey);
+    const targetRef = input.targetRef ?? null;
+    return withGeneratingPlanStep(planId, ctx, async (plan, tx, now) => {
+      await assertStepTarget(plan, input.kind, targetRef, ctx, tx);
+      const row = await planStepRepository.upsertForSession(
+        planId,
+        sessionKey,
+        { kind: input.kind, targetRef, startedAt: now },
+        tx,
+      );
+      return toPlanStepDto(row);
+    });
+  },
+
+  /**
+   * Clear a session's step (MOTIR-7822). A session with no step is a no-op
+   * SUCCESS — a planner clearing on every exit must not be able to fail — and
+   * still stamps the activity: an ending session is a sign of life. Refused on a
+   * plan that is not `generating`, exactly like {@link recordPlanStep}.
+   */
+  async endPlanStep(planId: string, sessionKey: string, ctx: ServiceContext): Promise<void> {
+    const key = assertSessionKey(sessionKey);
+    await withGeneratingPlanStep(planId, ctx, async (_plan, tx) => {
+      await planStepRepository.deleteForSession(planId, key, tx);
+    });
+  },
+
+  /**
+   * The ONE dispatch both step DOORS make (MOTIR-7824): `report_plan_step` and
+   * `POST /api/internal/ai/plan-step` carry four values, `settle` · `lay` ·
+   * `author` · `end`, and this maps them onto {@link recordPlanStep} /
+   * {@link endPlanStep} — so the one rule `endPlanStep` cannot see, that an `end`
+   * names no target, lives here once rather than in each door. Returns the
+   * stored step, or `null` for an `end`.
+   */
+  async reportPlanStep(
+    planId: string,
+    input: { sessionKey: string; step: PlanStepKindDto | 'end'; targetRef: string | null },
+    ctx: ServiceContext,
+  ): Promise<PlanStepDto | null> {
+    if (input.step === 'end') {
+      if (input.targetRef !== null) {
+        throw new InvalidPlanStepError('An `end` step names no target — send it with none.');
+      }
+      await plansService.endPlanStep(planId, input.sessionKey, ctx);
+      return null;
+    }
+    return plansService.recordPlanStep(
+      planId,
+      { sessionKey: input.sessionKey, kind: input.step, targetRef: input.targetRef },
+      ctx,
+    );
+  },
+
   async recordRevisionClassification(
     args: {
       planId: string;

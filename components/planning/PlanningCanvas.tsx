@@ -9,7 +9,7 @@ import {
   type PointerEvent as RPointerEvent,
   type ReactNode,
 } from 'react';
-import { Flag, Maximize2, Minus, Plus } from 'lucide-react';
+import { Flag, ListTree, Maximize2, Minus, PenLine, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   type Rect,
@@ -169,7 +169,31 @@ export interface PlanningCanvasProps {
    * appearing settled. Anything else keeps "the first read plays nothing" (§23.4).
    */
   animateInitial?: boolean;
+  /**
+   * THE DRAFTING / LAYING CUES (Story MOTIR-7820 · MOTIR-7830; design
+   * `design/ai-planning/design-notes.md` Part XXV §25.6–25.8) — a node id → cue map
+   * of the items the planner is writing RIGHT NOW. A cued node's BOX (the
+   * `data-node-id` element, never the card `renderNode` returns) gains
+   * `data-cue`, the class `canvas-node--drafting` / `canvas-node--laying`, a
+   * dotted ring and a labelled chip, and an `aria-describedby` naming the chip.
+   *
+   * It is INDEPENDENT of `motion`: the plan page reads it with motion off. It
+   * composes with every motion class (the deepen outline sits inside the ring)
+   * and adds none of them; an exiting node carries no cue.
+   *
+   * ⚠️ Absent or `null`, the rendered DOM is byte for byte what it was before
+   * this prop existed — `/roadmap`, runs, onboarding and work-item roadmaps.
+   */
+  nodeCues?: ReadonlyMap<string, NodeCue> | null;
   className?: string;
+}
+
+/** One cue on a node box (§25.6 / §25.7). `label` is its accessible name
+ *  (*Being drafted now*); `text` is the chip's visible word (*Drafting*). */
+export interface NodeCue {
+  kind: 'drafting' | 'laying';
+  label: string;
+  text: string;
 }
 
 // ── MOTION state (MOTIR-6297) ─────────────────────────────────────────────────
@@ -387,6 +411,7 @@ export function PlanningCanvas({
   arrival,
   motion = false,
   animateInitial = false,
+  nodeCues = null,
   className,
 }: PlanningCanvasProps) {
   const t = useTranslations('roadmap.canvas');
@@ -942,11 +967,25 @@ export function PlanningCanvas({
           {drawnNodes.map((n) => {
             const r = rectOf(n);
             const mv = nodeMotion(n.id);
+            // THE CUE (MOTIR-7830) — never on a node that is leaving.
+            const cue =
+              nodeCues && mv?.motion !== 'exit' && nodeById.has(n.id)
+                ? (nodeCues.get(n.id) ?? null)
+                : null;
+            const cueId = cue ? `${mId}-cue-${n.id}` : undefined;
+            const boxClass = withMotion(
+              `absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) ${
+                onNodeMove ? 'cursor-grab active:cursor-grabbing' : ''
+              }`,
+              mv,
+            );
             return (
               <div
                 key={n.id}
                 data-node-id={n.id}
                 data-motion={mv?.motion}
+                data-cue={cue?.kind}
+                aria-describedby={cueId}
                 tabIndex={0}
                 onKeyDown={
                   onNodeActivate
@@ -970,12 +1009,7 @@ export function PlanningCanvas({
                       }
                     : undefined
                 }
-                className={withMotion(
-                  `absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) ${
-                    onNodeMove ? 'cursor-grab active:cursor-grabbing' : ''
-                  }`,
-                  mv,
-                )}
+                className={cue ? `${boxClass} canvas-node--${cue.kind}` : boxClass}
                 style={
                   mv?.delay !== undefined
                     ? { left: r.x, top: r.y, animationDelay: `${mv.delay}ms` }
@@ -983,6 +1017,29 @@ export function PlanningCanvas({
                 }
               >
                 {renderNode(n)}
+                {cue ? (
+                  <>
+                    {/* The dotted RING — outside the deepen outline (7px vs 2px),
+                        never `outline`, so a drafted card that deepens shows both. */}
+                    <span aria-hidden="true" className="canvas-cue-ring" />
+                    {/* The labelled CHIP — the cue's name; drafting on the top
+                        edge, laying on the bottom, where the children will hang. */}
+                    <span
+                      id={cueId}
+                      role="img"
+                      aria-label={cue.label}
+                      data-testid={`canvas-cue-${cue.kind}`}
+                      className="canvas-cue-chip"
+                    >
+                      {cue.kind === 'drafting' ? (
+                        <PenLine aria-hidden="true" className="size-3" />
+                      ) : (
+                        <ListTree aria-hidden="true" className="size-3" />
+                      )}
+                      {cue.text}
+                    </span>
+                  </>
+                ) : null}
               </div>
             );
           })}

@@ -7,6 +7,9 @@ import { fullestContainer } from '@/lib/planning/planShape';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
+import { planStepRepository } from '@/lib/repositories/planStepRepository';
+import { planProgressService } from '@/lib/services/planProgressService';
+import { toPlanStepDto } from '@/lib/mappers/planMappers';
 import { DERIVED_EVENT_KINDS, mergeTimeline, revisionCount } from '@/lib/plans/timeline';
 import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
 import {
@@ -772,6 +775,24 @@ export const planReviewService = {
     // EMPTY trail rather than an error — a plan's whole history silently gone.
     const revisions = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRevisionRepository.listByPlan(planId, tx),
+    );
+    // The plan's LIVE-PROGRESS facts (Story MOTIR-7820 · MOTIR-7822): when it last
+    // did anything, and the step each running planner session is on. Bound for
+    // the same reason as the trail — `plan_step`'s policy joins to `plan`, so an
+    // unbound read is an empty set, which reads as "nobody is working on it".
+    // The steps are read only while the plan is `generating`: a session that
+    // never cleared must not outlive its plan on any surface.
+    const { lastActivityAt, inFlightSteps } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => {
+        const row = await planRepository.findById(planId, ctx.workspaceId, tx);
+        const steps =
+          plan.status === 'generating' ? await planStepRepository.listByPlan(planId, tx) : [];
+        return {
+          lastActivityAt: (row?.lastActivityAt ?? new Date(plan.createdAt)).toISOString(),
+          inFlightSteps: steps.map(toPlanStepDto),
+        };
+      },
     );
 
     // ── THE REVISION, read off the SAME trail (Subtask MOTIR-3601) ────────────
@@ -1848,6 +1869,27 @@ export const planReviewService = {
     // is drawn, the truncation arm reads what was dropped.
     const arrivalLevelSize = Math.min(arrivalLevelTotal, TREE_LEVEL_MAX_TAKE);
 
+    // THE PLAN'S PROGRESS (Story MOTIR-7820 · MOTIR-7825) — the one derivation,
+    // built from the items and steps this read already holds. The committed rows
+    // it read for targets and ancestors already name most step targets, so the
+    // poll gains at most one small titles read.
+    const knownTitles = new Map<string, string>();
+    for (const row of ancestorById.values()) knownTitles.set(row.id, row.title);
+    const progress = await planProgressService.snapshotForReview(
+      {
+        id: plan.id,
+        projectId: plan.projectId,
+        status: plan.status,
+        createdAt: plan.createdAt,
+        lastActivityAt,
+        authorSource: plan.authorSource,
+      },
+      plan.items,
+      inFlightSteps,
+      ctx,
+      knownTitles,
+    );
+
     return {
       id: plan.id,
       projectId: plan.projectId,
@@ -1881,6 +1923,9 @@ export const planReviewService = {
             startedAt: (revisionStartedAt ?? new Date()).toISOString(),
           }
         : null,
+      lastActivityAt,
+      inFlightSteps,
+      progress,
       gate,
       conversation,
       history,

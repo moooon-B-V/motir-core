@@ -121,6 +121,11 @@ const STORY_FILES = [
   // The work item page's Pages section (MOTIR-7575) and its fetch helper.
   'app/**/items/*/_components/PagesSection.tsx',
   'lib/workItems/pageLinksClient.ts',
+  // Story MOTIR-7694 (a work item tags a page; MOTIR-7699): the page-token
+  // grammar and the item-body row derivation. The mention-search route is
+  // gated by the `app/api/pages/*/route.ts` glob above.
+  'lib/mentions/pageRefs.ts',
+  'lib/workItems/bodyPageLinks.ts',
 ] as const;
 
 const SHARED_FILES = [
@@ -190,6 +195,14 @@ export default defineConfig({
       'tests/api/workItemPagesRoute.test.ts',
       // The work item page's Pages section (MOTIR-7575).
       'tests/components/pagesSection.test.tsx',
+      // A work item tags a page (Story MOTIR-7694): the item-derived link rows
+      // (MOTIR-7696) and the page mention search route (MOTIR-7697).
+      'tests/services/workItemsService.pageLinks.test.ts',
+      'tests/api/pageMentionSearchRoute.test.ts',
+      // Its story gate is `tests/pages/pageTags.story.integration.test.ts`
+      // (matched above); the token grammar and the Visitor's label redaction.
+      'tests/mentions/pageRefs.test.ts',
+      'tests/visitor/redactPageRefLabels.test.ts',
     ],
     coverage: {
       provider: 'v8',

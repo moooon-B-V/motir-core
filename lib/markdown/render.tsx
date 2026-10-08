@@ -4,6 +4,9 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
 import { WORKITEM_HREF_RE } from '@/lib/mentions/workItemRefs';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
+import { PageRefChip } from '@/components/markdown/PageRefChip';
+import { PAGE_HREF_RE } from '@/lib/mentions/pageRefs';
+import type { PageRefMap } from '@/lib/dto/pages';
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
@@ -24,7 +27,7 @@ const sanitizeSchema = {
   ...defaultSchema,
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), 'mention', 'motir'],
+    href: [...(defaultSchema.protocols?.href ?? []), 'mention', 'motir', 'motir-page'],
   },
 };
 
@@ -37,7 +40,9 @@ const MENTION_HREF_RE = /^mention:[A-Za-z0-9_-]+$/;
 // default transform (a malformed one is scrubbed exactly as before, then
 // degrades to plain text in the `a` component below).
 function urlTransform(url: string): string {
-  return MENTION_HREF_RE.test(url) || WORKITEM_HREF_RE.test(url) ? url : defaultUrlTransform(url);
+  return MENTION_HREF_RE.test(url) || WORKITEM_HREF_RE.test(url) || PAGE_HREF_RE.test(url)
+    ? url
+    : defaultUrlTransform(url);
 }
 
 // Rendered Markdown links must be distinguishable WITHOUT relying on color
@@ -60,6 +65,12 @@ function urlTransform(url: string): string {
 // `workItemRefs` summary map threaded in from the surface; a malformed one
 // degrades to the plain authored key. The components are built per-render so the
 // `a` handler can close over that map.
+//
+// A `motir-page:` href is the PAGE analogue (Story MOTIR-7694 · MOTIR-7698): a
+// well-formed token renders as `PageRefChip` from the `pageRefs` map, and an id
+// missing from the map renders as unavailable. The token's stored label is NEVER
+// rendered — it is the title at insert, which a reader without `page:view`, or
+// of an archived or deleted page, must not see. A malformed one is plain text.
 //
 // A GFM `table` is wrapped in its OWN scroll block (MOTIR-2039). A `<table>` is
 // sized by its content: when its min-content width exceeds the column it does
@@ -84,7 +95,11 @@ function urlTransform(url: string): string {
 // their render changes. It is a `pre` override here — inside the ONE pipeline —
 // rather than a second renderer, so the sanitize and highlight passes still run
 // over the code first.
-function buildComponents(workItemRefs?: WorkItemRefMap, copyableCode = false): Components {
+function buildComponents(
+  workItemRefs?: WorkItemRefMap,
+  copyableCode = false,
+  pageRefs?: PageRefMap,
+): Components {
   return {
     ...(copyableCode
       ? {
@@ -116,6 +131,11 @@ function buildComponents(workItemRefs?: WorkItemRefMap, copyableCode = false): C
         if (!WORKITEM_HREF_RE.test(href)) return <>{children}</>;
         const id = href.slice('motir:'.length);
         return <WorkItemRefChip summary={workItemRefs?.[id]} fallbackLabel={children} />;
+      }
+      if (typeof href === 'string' && href.startsWith('motir-page:')) {
+        if (!PAGE_HREF_RE.test(href)) return <>{children}</>;
+        const id = href.slice('motir-page:'.length);
+        return <PageRefChip summary={pageRefs?.[id]} />;
       }
       return (
         <a {...props} href={href} style={{ ...style, textDecorationLine: 'underline' }}>
@@ -191,6 +211,12 @@ export interface RenderMarkdownOptions {
    * gets a control.
    */
   copyableCode?: boolean;
+  /**
+   * Resolved page reference summaries (MOTIR-7698), keyed by page id, that the
+   * `motir-page:` token chip renders against. Omitted or missing an id, the
+   * chip renders "Page unavailable" — never the token's stored title.
+   */
+  pageRefs?: PageRefMap;
 }
 
 export function renderMarkdown(md: string, opts: RenderMarkdownOptions = {}) {
@@ -198,7 +224,7 @@ export function renderMarkdown(md: string, opts: RenderMarkdownOptions = {}) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeHighlight]}
-      components={buildComponents(opts.workItemRefs, opts.copyableCode)}
+      components={buildComponents(opts.workItemRefs, opts.copyableCode, opts.pageRefs)}
       urlTransform={urlTransform}
     >
       {md}

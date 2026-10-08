@@ -2,6 +2,7 @@ import type { HeldTransitionDTO, PullRequestApprovalMemberDTO } from '@/lib/dto/
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { PageRefMap } from '@/lib/dto/pages';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   ExecutorDto,
@@ -130,6 +131,12 @@ export interface QuickViewData {
    * id, so the peek's description renders the live internal-link chip.
    */
   workItemRefs: WorkItemRefMap;
+  /**
+   * Resolved `motir-page:` tags in `descriptionMd` / `explanationMd`
+   * (MOTIR-7697) — keyed by page id, each the live title or the unavailable
+   * state. Absent on a payload built before the tag existed (a proposal).
+   */
+  pageRefs?: PageRefMap;
   /** The NATURE of the work (Story 2.7) — null on a container kind / untyped leaf. */
   type: WorkItemTypeDto | null;
   /** WHO executes the work (Story 2.7) — null when no type is set. */

@@ -28,7 +28,7 @@
 // defensively (falls back to the id when an expansion is absent). No DB writes.
 
 import { ConnectorConfigError } from './errors';
-import { fetchWithRetry, type RetryOptions } from './http';
+import { fetchWithRetry, trimTrailingSlashes, type RetryOptions } from './http';
 import type {
   ConnectResult,
   IssueSourceConnector,
@@ -120,7 +120,7 @@ export class PlaneConnector implements IssueSourceConnector {
       throw new ConnectorConfigError('a Plane workspace slug and project id are required', 'plane');
     }
     this.config = config;
-    this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = trimTrailingSlashes(config.baseUrl ?? DEFAULT_BASE_URL);
     this.perPage = Math.min(100, config.perPage ?? DEFAULT_PER_PAGE);
     this.includeComments = config.includeComments ?? true;
   }

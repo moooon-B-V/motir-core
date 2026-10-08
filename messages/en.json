@@ -150,6 +150,12 @@
     "mentionNoResults": "No work items match “{query}”.",
     "mentionSearchFailed": "Couldn’t search work items.",
     "mentionRetry": "Try again",
+    "mentionPages": "Pages",
+    "mentionTypeToSearchPages": "Keep typing to search pages…",
+    "mentionNoPages": "No pages match “{query}”.",
+    "mentionPagesSearchFailed": "Couldn’t search pages.",
+    "pageUntitled": "Untitled",
+    "pageUnavailable": "Page unavailable",
     "codeLanguage": "Language"
   },
   "common": {
@@ -289,6 +295,39 @@
     "liveWriting": "Being written",
     "liveReconnecting": "Reconnecting — showing the last update",
     "liveAnnounce": "{count, plural, one {# item} other {# items}} added to the plan",
+    "liveStarting": "Starting…",
+    "liveStalled": "Stalled",
+    "progress": {
+      "settling": "Settling the conversation",
+      "layingChildrenOf": "Laying: {title}",
+      "layingTopLevel": "Laying the project's top level",
+      "authoring": "Authoring: {title}",
+      "draftingNew": "Drafting a new item",
+      "moreSteps": "+{count} more",
+      "authored": "{authored} of {proposed} authored",
+      "elapsedUnderMinute": "<1 min",
+      "elapsedMinutes": "{minutes} min",
+      "elapsedHours": "{hours} h {minutes} min",
+      "lastActivityJustNow": "last activity just now",
+      "lastActivitySeconds": "last activity {seconds} s ago",
+      "lastActivityAgo": "last activity {duration} ago",
+      "stalledFor": "no activity for {duration}",
+      "detailsAria": "Plan progress details",
+      "detailsNow": "Working on now",
+      "detailsNoSteps": "No step reported — the planner may not report its steps.",
+      "detailsStarted": "Started {time} · running {duration}",
+      "detailsLastActivity": "Last activity {time}",
+      "detailsStalled": "Nothing has been written or reported for {duration}. The plan may have stopped.",
+      "pointer": "Follow from Workbench",
+      "pointerSentence": "You can leave — this plan keeps being written. Follow it from Workbench › Planning."
+    },
+    "cue": {
+      "drafting": "Drafting",
+      "draftingName": "Being drafted now",
+      "laying": "Laying its children",
+      "layingName": "Its children are being laid now",
+      "layingHere": "Laying this level"
+    },
     "listWritingTitle": "Nothing proposed yet",
     "listWritingBody": "Items appear here as the plan is written.",
     "abandonedOutcome": "Generation never finished — this plan was ended automatically",
@@ -339,7 +378,15 @@
     "railAddDeclined": "This plan was declined — none of these values was created.",
     "railRemoveArchived": "This plan archived {key}.",
     "railRemoveDeclined": "This plan would have archived {key}. It was declined, so it was not.",
-    "peekNoActivity": "A proposal has no comments, children or activity until it is approved."
+    "peekNoActivity": "A proposal has no comments, children or activity until it is approved.",
+    "approveProgress": {
+      "creating": "Adding {n, plural, one {# item} other {# items}} to your backlog…",
+      "applying": "Applying {n, plural, one {# change} other {# changes}} to your backlog…",
+      "together": "They all arrive together when it finishes.",
+      "slow": "Still working — a large plan takes longer. There’s no need to press again.",
+      "timedOutTitle": "Nothing was created — approving took too long.",
+      "timedOutNext": "This plan still awaits your decision, unchanged. It’s safe to approve again."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "You don’t have access to this project",
@@ -1468,6 +1515,8 @@
     "pagesSourceMention": "Mentioned",
     "pagesSourceEmbed": "Embedded",
     "pagesSourceManual": "Linked",
+    "pagesSourceDescription": "Tagged in description",
+    "pagesSourceExplanation": "Tagged in explanation",
     "pagesEmpty": "No page links to this work item yet.",
     "pagesShowMore": "Show more pages",
     "pagesError": "Couldn't load pages.",
@@ -7682,6 +7731,10 @@
       "goToTarget": "Plan is in {identifier} · Go there",
       "arrivedIn": "{count} new in {identifier} · Go there",
       "arrivedAcross": "{count} new elsewhere · latest in {identifier} · Go there",
+      "draftingIn": "{count} being drafted in {identifier} · Go there",
+      "layingIn": "Laying {identifier} · Go there",
+      "newAndDraftingIn": "{arrived} new · {drafting} being drafted in {identifier} · Go there",
+      "draftingAcross": "{count} being drafted elsewhere · first in {identifier} · Go there",
       "levelChange": {
         "srPrefix": "Pending change to this level:",
         "changed": "This level",
@@ -8512,14 +8565,17 @@
       "toResume": "To resume",
       "recentlyFinished": "Recently finished",
       "watching": "Watching",
-      "toApprove": "Waiting on you"
+      "toApprove": "Waiting on you",
+      "planning": "Planning"
     },
     "columns": {
       "title": "Title",
       "role": "Your role",
       "assignee": "Assignee",
       "status": "Status",
-      "finished": "Finished"
+      "finished": "Finished",
+      "plan": "Plan",
+      "planner": "Planner"
     },
     "row": {
       "unassigned": "Unassigned",
@@ -8562,6 +8618,11 @@
       "approvals": {
         "title": "Nothing is waiting on you",
         "body": "Approvals that need your decision, and work a run handed to you to do, show up here."
+      },
+      "planning": {
+        "title": "No plans being written",
+        "body": "When you ask Motir AI or an agent for a plan, it waits here while it is being written, with how far it has got, and moves to Waiting on you when it is ready for your review. Plans others asked for are on the Plans page.",
+        "action": "Plan with AI"
       }
     },
     "approvals": {
@@ -8779,6 +8840,28 @@
         "card_not_ready": "Clear what blocks {key} or move it back to In Progress, then press Continue."
       },
       "copyAria": "Copy the resume command for {key}"
+    },
+    "planning": {
+      "scope": "Plans you asked for in <project>{name}</project> that are still being written. Plans others asked for are on the <link>Plans page</link>.",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "MCP agent",
+        "agentModel": "MCP agent · <mono>{model}</mono>"
+      },
+      "rowAria": "Open the plan being written — {sentence}",
+      "reopened": "Reopened from Planning · started by you · last active {when}",
+      "left": {
+        "planned": "Written",
+        "plannedLine": "Ready for your review.",
+        "plannedLink": "See it in Waiting on you",
+        "discarded": "Ended",
+        "discardedLine": "Ended before it was proposed — nothing was added.",
+        "abandoned": "Stopped",
+        "abandonedLine": "Its planner stopped, so the plan was closed — nothing was added.",
+        "unknownLine": "No longer being written."
+      },
+      "ceiling": "Showing your {shown} newest plans being written. The other {rest} are on the <link>Plans page</link>."
     }
   },
   "approvalRecords": {

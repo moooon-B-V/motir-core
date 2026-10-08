@@ -10,6 +10,7 @@ import {
   Link2,
   NotebookText,
   Rows3,
+  Tag,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -60,8 +61,15 @@ export interface PagesSectionProps {
   headerAction?: ReactNode;
 }
 
-/** The sources in the design's fixed order: Mentioned, Embedded, Linked. */
-const SOURCE_ORDER: readonly PageLinkSourceDto[] = ['mention', 'embed', 'manual'];
+/** The sources in the design's fixed order: Mentioned, Embedded, Linked, then
+ *  the work item's own tags (MOTIR-7696). */
+const SOURCE_ORDER: readonly PageLinkSourceDto[] = [
+  'mention',
+  'embed',
+  'manual',
+  'description',
+  'explanation',
+];
 
 type IssueViewsT = ReturnType<typeof useTranslations<'issueViews'>>;
 
@@ -78,6 +86,10 @@ export function sourceChip(
       return { label: t('pagesSourceEmbed'), Icon: Rows3 };
     case 'manual':
       return { label: t('pagesSourceManual'), Icon: Link2 };
+    case 'description':
+      return { label: t('pagesSourceDescription'), Icon: Tag };
+    case 'explanation':
+      return { label: t('pagesSourceExplanation'), Icon: Tag };
     /* v8 ignore next 4 -- the compile-time exhaustiveness arm; the union is closed */
     default: {
       const unreachable: never = source;

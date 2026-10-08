@@ -109,6 +109,9 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // proposal, so a non-member must be refused on the PLAN. Recording a
     // judgement about a plan is as much a leak as reading one.
     record_plan_revision_reason: { planId: t.planId, branch: 'new_ask', evidenceMd: 'leak?' },
+    // A planner session's step (MOTIR-7824) — plan-id-keyed, so a non-member
+    // must be refused on the PLAN before anything is written.
+    report_plan_step: { planId: t.planId, sessionKey: 'leak?', step: 'settle' },
     // Is A's card still what its plan approved? (MOTIR-6227) — item-keyed, so a
     // non-member must read the key as not-found rather than learn A's plan
     // history or a verdict about it.

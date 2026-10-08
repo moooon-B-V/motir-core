@@ -889,9 +889,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '71733ed8eccf',
   },
   update_plan_item: {
+    // AMENDMENT 24 widened the door: on a plan already closed for review it now
+    // rewrites a card's words IN PLACE behind `revision: true`, which is the one
+    // thing a caller choosing it over a withdraw-and-re-append has to know.
     summary:
-      'Fill in a proposal you appended — the deepen turn, while the plan is still being written.',
-    descriptionFingerprint: 'b5b5fb20ecb2',
+      'Fill in a proposal you appended — the deepen turn while the plan is being written, or, with `revision: true`, a rewrite of a card on a plan already in review, in place.',
+    descriptionFingerprint: 'da4bb089ff36',
   },
   update_plan_proposal: {
     // The line has to carry what SEPARATES it from the deepen above, because a
@@ -935,6 +938,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Record WHY an unapproved plan had to change — four branches, two of which file a planning bug; it changes nothing about the plan.',
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: 'f58da227efc6',
+  },
+  report_plan_step: {
+    // What a reader picks this one on: it is the only plan door that says what
+    // a planner is DOING rather than what it proposes, and it is advisory.
+    summary:
+      'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '3909bbcb4967',
   },
   open_plan_session: {
     // Re-worded for MOTIR-6028: a scope holds MANY conversations now, and the

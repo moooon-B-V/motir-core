@@ -64,7 +64,7 @@ export function VisitorRail({
   const footer = isDrawer ? undefined : (
     <div
       className={
-        collapsed ? 'flex flex-col items-center gap-1' : 'flex items-center justify-between'
+        collapsed ? 'flex flex-col items-center gap-0.5' : 'flex items-center justify-between'
       }
     >
       {helpMenu}

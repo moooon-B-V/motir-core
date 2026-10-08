@@ -1432,3 +1432,116 @@ describe('PlanningWorkspaceHost — the conversation happened ELSEWHERE (MOTIR-6
     expect(note()).toBeNull();
   });
 });
+
+describe('PlanningWorkspaceHost — what Approve says while it runs (MOTIR-5249 / MOTIR-5251)', () => {
+  // The host DERIVES the progress once and hands it to both doors (design Part XXV
+  // §25.10): both show it while the approve runs, and only the pressed door is the
+  // live region, so one press is read once. A timeout is said only at the pressed door.
+  const REVIEW: PlanChangeConversationState = {
+    ...IDLE,
+    phase: 'review',
+    jobId: 'job-1',
+    planId: 'plan-1',
+    review: planReview([
+      planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', kind: 'story', title: 'Recurring' }),
+      planReviewItem({ planItemId: 'pi_2', nodeId: 'pi_2', kind: 'task', title: 'Invoices' }),
+      planReviewItem({ planItemId: 'pi_3', nodeId: 'pi_3', kind: 'task', title: 'Receipts' }),
+    ]),
+  };
+
+  // The canvas bar's verb reads *Approve changes*; the rail review block's mirror
+  // reads *Approve*.
+  const barVerb = () => screen.queryByRole('button', { name: /Approve changes/ });
+  const railVerb = () => screen.queryByRole('button', { name: 'Approve' });
+  function pressApprove(door: 0 | 1) {
+    fireEvent.click((door === 0 ? barVerb() : railVerb())!);
+  }
+
+  it('shows the progress in BOTH doors once an approve is in flight, live only where it was pressed', () => {
+    const { rerender } = renderHost({ mode: 'replan', from: 'project' }, { state: REVIEW });
+    pressApprove(0);
+    expect(conversation.approve).toHaveBeenCalledTimes(1);
+
+    conversation.state = { ...REVIEW, phase: 'deciding' };
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+
+    const shown = screen.getAllByTestId('plan-approve-progress');
+    expect(shown.map((el) => el.getAttribute('data-place')).sort()).toEqual(['bar', 'rail']);
+    const live = shown.filter((el) => el.getAttribute('role') === 'status');
+    expect(live).toHaveLength(1);
+    expect(live[0]!.getAttribute('data-place')).toBe('bar');
+    // An all-adds plan of three says it creates three.
+    expect(live[0]!.textContent).toContain('Adding 3 items to your backlog…');
+    // No verb is left to press twice, in either door.
+    expect(barVerb()).toBeNull();
+    expect(railVerb()).toBeNull();
+  });
+
+  it('moves the live region to the RAIL when the rail’s Approve was the press', () => {
+    const { rerender } = renderHost({ mode: 'replan', from: 'project' }, { state: REVIEW });
+    pressApprove(1);
+    conversation.state = { ...REVIEW, phase: 'deciding' };
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+
+    const live = screen
+      .getAllByTestId('plan-approve-progress')
+      .filter((el) => el.getAttribute('role') === 'status');
+    expect(live).toHaveLength(1);
+    expect(live[0]!.getAttribute('data-place')).toBe('rail');
+  });
+
+  it('says "changes" once any proposal is not an add', () => {
+    const mixed: PlanChangeConversationState = {
+      ...REVIEW,
+      review: planReview([
+        planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', kind: 'story', title: 'Recurring' }),
+        planReviewItem({
+          planItemId: 'pi_2',
+          op: 'modify',
+          nodeId: 'wi_21',
+          identifier: 'PAY-21',
+          title: 'Email reminders',
+          changes: [{ field: 'title', from: 'Payment reminders', to: 'Email reminders' }],
+        }),
+      ]),
+    };
+    const { rerender } = renderHost({ mode: 'replan', from: 'project' }, { state: mixed });
+    pressApprove(0);
+    conversation.state = { ...mixed, phase: 'deciding' };
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+
+    const live = screen
+      .getAllByTestId('plan-approve-progress')
+      .find((el) => el.getAttribute('role') === 'status');
+    expect(live!.textContent).toContain('Applying 2 changes to your backlog…');
+  });
+
+  it('shows NO approve progress while a DECLINE is in flight', () => {
+    const { rerender } = renderHost({ mode: 'replan', from: 'project' }, { state: REVIEW });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Discard' })[0]!);
+    expect(conversation.discard).toHaveBeenCalledTimes(1);
+
+    conversation.state = { ...REVIEW, phase: 'deciding' };
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+    expect(screen.queryByTestId('plan-approve-progress')).toBeNull();
+  });
+
+  it('says a TIMEOUT only at the door that was pressed, with the verbs back', () => {
+    const { rerender } = renderHost({ mode: 'replan', from: 'project' }, { state: REVIEW });
+    pressApprove(1);
+    conversation.state = { ...REVIEW, phase: 'deciding' };
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+
+    conversation.state = { ...REVIEW, errorCode: 'timedOut' };
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+
+    const bands = screen.getAllByTestId('plan-approve-timed-out');
+    expect(bands).toHaveLength(1);
+    expect(bands[0]!.getAttribute('data-place')).toBe('rail');
+    expect(bands[0]!.getAttribute('role')).toBe('alert');
+    expect(screen.queryByTestId('plan-approve-progress')).toBeNull();
+    // Deciding again is safe, so both verbs are back.
+    expect(barVerb()).toBeTruthy();
+    expect(railVerb()).toBeTruthy();
+  });
+});

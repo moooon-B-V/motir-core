@@ -16,8 +16,10 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 // through, so what the poll shows and what the gate later confirms cannot be two
 // different shapes.
 //
-// ⚠️ SNAPSHOT SEMANTICS. `Plan` / `PlanItem` carry no `updatedAt`, so there is no
-// delta to merge — each response REPLACES the review whole. A proposal withdrawn
+// ⚠️ SNAPSHOT SEMANTICS. `PlanItem` carries no `updatedAt`, and the plan's
+// `lastActivityAt` (MOTIR-7822) says only WHEN something last happened, not WHAT —
+// so there is no delta to merge, and each response REPLACES the review whole
+// (its `lastActivityAt` and `inFlightSteps` included). A proposal withdrawn
 // between two ticks disappears on the next one and cannot come back from a
 // cache. Responses are applied in ISSUE order: a monotonic sequence drops any
 // response older than the last one applied, so a slow early read can never

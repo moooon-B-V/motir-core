@@ -56,9 +56,11 @@ test.describe.configure({ timeout: 240_000 });
 // To fix joined second in the strip with Story MOTIR-6588 (design § 30). This
 // receipt's own claim — the strip reads in the order the landing decides — is
 // unchanged; the strip it reads has one more tab. To resume joined third with Story
-// MOTIR-7701 (design § 35) on the same terms.
+// MOTIR-7701 (design § 35) on the same terms, and Planning joined second with Story
+// MOTIR-7820 (MOTIR-7831), on the same terms again.
 const TAB_IDS = [
   'approvals',
+  'planning',
   'to-fix',
   'to-resume',
   'in-progress',

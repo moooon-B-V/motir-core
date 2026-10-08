@@ -39,6 +39,10 @@ import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { PlanningTargetKeyChip } from '@/components/planning/PlanningTargetChip';
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
+import {
+  PlanApproveProgress,
+  type PlanApproveProgressView,
+} from '@/components/planning/PlanApproveProgress';
 import type { PlanGateView } from '@/lib/planning/planGateView';
 import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import { claimPickAutoSend } from '@/lib/planning/pickAutoSend';
@@ -233,6 +237,9 @@ export interface PlanChangeRailProps {
   onConfirmDecline?: (noteMd: string | null) => void;
   /** A press from THIS block was refused as stale. */
   staleRefused?: boolean;
+  /** The approve's progress in this block's rail form (MOTIR-5249; Part XXV): running
+   *  replaces the verbs, a timeout puts the band where the stale band goes. */
+  approveProgress?: PlanApproveProgressView | null;
   /**
    * THE CONVERSATION HAPPENED ELSEWHERE (MOTIR-6298; design Part XXIII §23.11 ·
    * sheet 10 B). An MCP-authored plan's session can hold no turns, because the
@@ -290,6 +297,7 @@ export function PlanChangeRail({
   onCancelDecline,
   onConfirmDecline,
   staleRefused = false,
+  approveProgress = null,
   conversationElsewhere = null,
   onStartNewSession,
   onRequestRestart,
@@ -311,6 +319,8 @@ export function PlanChangeRail({
   const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
   const ts = useTranslations('planningWorkspace.session');
+  // The Planning tab's own copy (§ 36.13) — its reopened line, nothing else.
+  const tWorkbenchPlanning = useTranslations('workbench.planning');
   const tr = useTranslations('planningWorkspace.restart');
   const format = useFormatter();
   const [draft, setDraft] = useState(initialDraft ?? '');
@@ -543,7 +553,24 @@ export function PlanChangeRail({
             reopened from the Plans page says where it came from; a FRESH start
             with an earlier conversation for this scope points to it — until this
             conversation has a turn, when the rail is about it instead. */}
-        {state.reopened && launch.via === 'approvals' ? (
+        {state.reopened && launch.via === 'planning' ? (
+          // REOPENED FROM PLANNING (MOTIR-7831; design `design/workbench/design-notes.md`
+          // § 36.6): the Planning tab's row carries `planVia=planning`, so this line names
+          // that entrance. Only the plan's own requester reaches that tab, so there is one
+          // form and no *started by {name}* twin; the glyph is the tab's `PenLine`, in the
+          // slot the `approvals` line gives `Inbox`.
+          <p
+            data-testid="planning-reopened-from-planning"
+            className="flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+          >
+            <PenLine className="mt-px size-3.5 flex-none" aria-hidden />
+            <span>
+              {tWorkbenchPlanning('reopened', {
+                when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+              })}
+            </span>
+          </p>
+        ) : state.reopened && launch.via === 'approvals' ? (
           // REOPENED FROM TO APPROVE (MOTIR-6037; design Part XXII §22.2, §22.5): the
           // row's address carries `planVia=approvals`, so this line names the entrance
           // the reader actually used — MOTIR-6019's shape, its own glyph.
@@ -839,6 +866,7 @@ export function PlanChangeRail({
                 busy={busy}
                 declining={declining}
                 staleRefused={staleRefused}
+                approveProgress={approveProgress}
                 decidedFirst={state.errorCode === 'decided'}
                 onApprove={onApprove}
                 onRequestDecline={onRequestDecline}
@@ -856,21 +884,25 @@ export function PlanChangeRail({
                   {tc('nothingSavedYet')}
                 </span>
                 {/* The gate itself lives on the canvas bar; this MIRRORS it so the
-                  decision is reachable from wherever the reader is looking. */}
-                <div className="flex items-center justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={onDiscard} disabled={busy}>
-                    {tc('discard')}
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    leftIcon={<Check className="size-4" aria-hidden="true" />}
-                    onClick={onApprove}
-                    disabled={busy}
-                  >
-                    {tc('approve')}
-                  </Button>
-                </div>
+                  decision is reachable from wherever the reader is looking. While the
+                  approve runs the verbs step aside for its progress (MOTIR-5249). */}
+                {approveProgress ? <PlanApproveProgress {...approveProgress} place="rail" /> : null}
+                {approveProgress?.state === 'running' ? null : (
+                  <div className="flex items-center justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={onDiscard} disabled={busy}>
+                      {tc('discard')}
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      leftIcon={<Check className="size-4" aria-hidden="true" />}
+                      onClick={onApprove}
+                      disabled={busy}
+                    >
+                      {tc('approve')}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -964,6 +996,7 @@ export function PlanChangeRail({
 
         {state.errorCode &&
         !ended &&
+        state.errorCode !== 'timedOut' &&
         !(gated && (state.errorCode === 'stale' || state.errorCode === 'decided')) ? (
           <div className="flex flex-col items-start gap-2">
             <p
@@ -1798,6 +1831,7 @@ function GatedReviewBlock({
   deciding,
   declining,
   staleRefused,
+  approveProgress = null,
   decidedFirst,
   decidedFirstLines,
   onApprove,
@@ -1810,6 +1844,7 @@ function GatedReviewBlock({
   deciding: boolean;
   declining: boolean;
   staleRefused: boolean;
+  approveProgress?: PlanApproveProgressView | null;
   /** The door answered *already decided*: somebody else pressed first (Panel 6). */
   decidedFirst: boolean;
   decidedFirstLines: { title: string; next: string };
@@ -1872,9 +1907,15 @@ function GatedReviewBlock({
           <Lock className="mt-px size-3.5 flex-none" aria-hidden="true" />
           <SeeOnlyLine waitingOn={view.waitingOn} />
         </span>
+      ) : approveProgress?.state === 'running' ? (
+        // The approve is running: its progress stands where the verbs were, so there
+        // is no Approve left to press twice (MOTIR-5249; Part XXV §25.4).
+        <PlanApproveProgress {...approveProgress} place="rail" />
       ) : (
         <>
-          {staleRefused ? (
+          {approveProgress?.state === 'timedOut' ? (
+            <PlanApproveProgress {...approveProgress} place="rail" />
+          ) : staleRefused ? (
             <PlanStaleBand place="rail" />
           ) : (
             <span id="plan-change-review-line" className="text-xs text-(--el-text-secondary)">

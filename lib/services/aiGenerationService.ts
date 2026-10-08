@@ -26,6 +26,8 @@ import type { RevisionReasonBranch } from '@/lib/plans/revisionReason';
 import type {
   CorrectProposalInput,
   PlanItemDto,
+  PlanStepDto,
+  PlanStepKindDto,
   PlanWithItemsDto,
   ProposalInput,
   UpdateProposalInput,
@@ -418,6 +420,40 @@ export const aiGenerationService = {
       ctx,
     );
     return { revisionId: recorded.revisionId, planId: plan.id, branch: recorded.branch };
+  },
+
+  /**
+   * The hosted planner's in-flight STEP (Story MOTIR-7820 · Subtask MOTIR-7824):
+   * resolve the JOB's plan — never a caller-supplied one — and make the one step
+   * write `report_plan_step` makes. `planId` is a cross-check only, and a
+   * mismatch is the same `NoPlanForJobError` as a foreign job, exactly as
+   * {@link recordRevisionReason}. Everything about what may be recorded (the
+   * grant, the `generating` guard, the target rules, the clock) is the step
+   * store's, in `plansService`.
+   */
+  async recordPlanStepForJob(
+    input: {
+      jobId: string;
+      planId?: string | null;
+      sessionKey: string;
+      step: PlanStepKindDto | 'end';
+      targetRef: string | null;
+    },
+    auth: { ctx: ServiceContext; projectId: string },
+  ): Promise<{ planId: string; step: PlanStepKindDto | 'end'; inFlight: PlanStepDto | null }> {
+    const { ctx, projectId } = auth;
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(input.jobId, ctx.workspaceId, tx),
+    );
+    if (!plan || plan.projectId !== projectId) throw new NoPlanForJobError(input.jobId);
+    if (input.planId && input.planId !== plan.id) throw new NoPlanForJobError(input.jobId);
+
+    const inFlight = await plansService.reportPlanStep(
+      plan.id,
+      { sessionKey: input.sessionKey, step: input.step, targetRef: input.targetRef },
+      ctx,
+    );
+    return { planId: plan.id, step: input.step, inFlight };
   },
 
   async appendProposals(

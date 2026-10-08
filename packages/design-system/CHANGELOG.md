@@ -1,5 +1,11 @@
 # @motir/design-system
 
+## 0.12.0
+
+### Minor Changes
+
+- Per-language font sets (MOTIR-7733). The package now exports a locale → font-set registry: `FONT_SET_REGISTRY` (the `latin`, `zh-Hans`, `ja` and `ko` sets, each with its members and default per sans / serif / mono role), `LOCALE_FONT_SET`, `FONT_SET_LOCALES`, and the resolvers `resolveFontSet`, `resolveFontSetMember` and `fontSetMemberVar`. `theme.css` composes each role token from three parts: the Type pairing's named faces (`--font-<role>-pairing`), the language's script face (`--font-script-<role>`, set by `[lang]:lang()` blocks for zh, ja and ko and reset for the Latin locales) and the pairing's generic tail (`--font-<role>-tail`). A non-default member is applied by name with `data-font-set-<role>="<member id>"`. The package loads no face: a consumer declares each member with `next/font` and sets the `--font-set-*` variable `fontSetMemberVar` names. Without those variables every stack falls back to the pairing's own faces, so a consumer that loads nothing renders as before.
+
 ## 0.11.0
 
 ### Minor Changes

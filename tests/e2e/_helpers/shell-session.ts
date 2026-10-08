@@ -7,7 +7,7 @@
 // Load the job registry in THIS process — see the file for why the emit path
 // cannot do it itself here.
 import './job-registry';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { AUTHED_LANDING_PATH, ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 import { isLandedWorkbenchUrl } from './workbench-landing';
 
@@ -189,13 +189,27 @@ async function clearReconsentHold(page: Page): Promise<void> {
 const SESSION_COOKIE_MARKER = 'better-auth';
 
 /**
+ * The credential form's email box, found by ROLE rather than by placeholder.
+ *
+ * A placeholder lookup also matches hidden elements. When the first load's
+ * server render and client render disagree, React re-renders the card and a
+ * hidden copy of the server's input can stay in the DOM beside the live one,
+ * so `getByPlaceholder('Email address')` resolves to two elements and fails
+ * strict mode (merge-queue run 37821281731, `acceptance-choice-gate.spec.ts`).
+ * The accessibility tree excludes the hidden copy, so `getByRole` finds one.
+ */
+export function emailBox(page: Page): Locator {
+  return page.getByRole('textbox', { name: 'Email address', exact: true });
+}
+
+/**
  * Drop the SESSION, keep everything else — the state a person is in when they
  * arrive at a credential form.
  *
  * ⚠️ Required since MOTIR-3372: `/sign-in` and `/sign-up` are server shells that
  * REDIRECT a reader who is already signed in (to `?next=`, else `/workbench`), so a
  * spec that authenticates as a second identity mid-test no longer reaches the
- * form at all — `getByPlaceholder('Email address').fill(…)` times out on a page
+ * form at all — `emailBox(page).fill(…)` times out on a page
  * that has already navigated to `/workbench`. That is the product behaving correctly:
  * a credential form is for somebody who needs credentials, and switching
  * accounts means leaving the first one, exactly as it does in the browser.
@@ -249,7 +263,7 @@ export async function signUp(page: Page, email: string): Promise<void> {
 export async function signUpToOnboarding(page: Page, email: string): Promise<void> {
   await startSignedOut(page);
   await page.goto('/sign-up');
-  await page.getByPlaceholder('Email address').fill(email);
+  await emailBox(page).fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(SHELL_PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
@@ -307,7 +321,7 @@ export async function signIn(
 ): Promise<void> {
   await startSignedOut(page);
   await page.goto('/sign-in');
-  await page.getByPlaceholder('Email address').fill(email);
+  await emailBox(page).fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Password').fill(password);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();

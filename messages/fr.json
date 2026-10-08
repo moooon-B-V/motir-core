@@ -150,6 +150,12 @@
     "mentionNoResults": "Aucun élément de travail ne correspond à « {query} ».",
     "mentionSearchFailed": "Impossible de rechercher les éléments de travail.",
     "mentionRetry": "Réessayer",
+    "mentionPages": "Pages",
+    "mentionTypeToSearchPages": "Continuez à taper pour rechercher des pages…",
+    "mentionNoPages": "Aucune page ne correspond à « {query} ».",
+    "mentionPagesSearchFailed": "Impossible de rechercher les pages.",
+    "pageUntitled": "Sans titre",
+    "pageUnavailable": "Page indisponible",
     "codeLanguage": "Langage"
   },
   "common": {
@@ -289,6 +295,39 @@
     "liveWriting": "Rédaction en cours",
     "liveReconnecting": "Reconnexion : affichage de la dernière mise à jour",
     "liveAnnounce": "{count, plural, one {# élément ajouté} other {# éléments ajoutés}} au plan",
+    "liveStarting": "Démarrage…",
+    "liveStalled": "Au point mort",
+    "progress": {
+      "settling": "Synthèse de la conversation",
+      "layingChildrenOf": "Organisation : {title}",
+      "layingTopLevel": "Organisation du niveau supérieur du projet",
+      "authoring": "Rédaction : {title}",
+      "draftingNew": "Rédaction d’un nouvel élément",
+      "moreSteps": "+{count} de plus",
+      "authored": "{authored} sur {proposed} rédigés",
+      "elapsedUnderMinute": "<1 min",
+      "elapsedMinutes": "{minutes} min",
+      "elapsedHours": "{hours} h {minutes} min",
+      "lastActivityJustNow": "dernière activité à l’instant",
+      "lastActivitySeconds": "dernière activité il y a {seconds} s",
+      "lastActivityAgo": "dernière activité il y a {duration}",
+      "stalledFor": "aucune activité depuis {duration}",
+      "detailsAria": "Détails de l’avancement du plan",
+      "detailsNow": "En cours maintenant",
+      "detailsNoSteps": "Aucune étape signalée — le planificateur ne signale peut-être pas ses étapes.",
+      "detailsStarted": "Démarré {time} · en cours depuis {duration}",
+      "detailsLastActivity": "Dernière activité {time}",
+      "detailsStalled": "Rien n’a été écrit ni signalé depuis {duration}. Le plan s’est peut-être arrêté.",
+      "pointer": "Suivre depuis l’atelier",
+      "pointerSentence": "Vous pouvez quitter cette page — la rédaction de ce plan continue. Suivez-le depuis Atelier › En planification."
+    },
+    "cue": {
+      "drafting": "Rédaction",
+      "draftingName": "En cours de rédaction",
+      "laying": "Organisation de ses éléments enfants",
+      "layingName": "Ses éléments enfants sont en cours d’organisation",
+      "layingHere": "Organisation de ce niveau"
+    },
     "listWritingTitle": "Rien de proposé pour l’instant",
     "listWritingBody": "Les éléments apparaissent ici au fur et à mesure de la rédaction du plan.",
     "abandonedOutcome": "La génération n’a jamais abouti : ce plan a été clôturé automatiquement",
@@ -339,7 +378,15 @@
     "railAddDeclined": "Ce plan a été refusé : aucune de ces valeurs n’a été créée.",
     "railRemoveArchived": "Ce plan a archivé {key}.",
     "railRemoveDeclined": "Ce plan aurait archivé {key}. Il a été refusé : l’élément ne l’a donc pas été.",
-    "peekNoActivity": "Une proposition n’a ni commentaires, ni enfants, ni activité tant qu’elle n’est pas approuvée."
+    "peekNoActivity": "Une proposition n’a ni commentaires, ni enfants, ni activité tant qu’elle n’est pas approuvée.",
+    "approveProgress": {
+      "creating": "Ajout de {n, plural, one {# élément} other {# éléments}} à votre Backlog…",
+      "applying": "Application de {n, plural, one {# modification} other {# modifications}} à votre Backlog…",
+      "together": "Ils arriveront tous ensemble une fois l’opération terminée.",
+      "slow": "Traitement en cours – un plan volumineux prend plus de temps. Inutile de cliquer à nouveau.",
+      "timedOutTitle": "Rien n’a été créé – l’approbation a pris trop de temps.",
+      "timedOutNext": "Ce plan attend toujours votre décision, sans modification. Vous pouvez l’approuver à nouveau en toute sécurité."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "Vous n’avez pas accès à ce projet",
@@ -1468,6 +1515,8 @@
     "pagesSourceMention": "Mentionné",
     "pagesSourceEmbed": "Intégré",
     "pagesSourceManual": "Lié",
+    "pagesSourceDescription": "Référencée dans la description",
+    "pagesSourceExplanation": "Référencée dans l’explication",
     "pagesEmpty": "Aucune page ne renvoie encore vers cet élément de travail.",
     "pagesShowMore": "Afficher plus de pages",
     "pagesError": "Impossible de charger les pages.",
@@ -7688,6 +7737,10 @@
       "goToTarget": "Le plan se trouve dans {identifier} · Y aller",
       "arrivedIn": "{count} nouveaux dans {identifier} · Y aller",
       "arrivedAcross": "{count} nouveaux ailleurs · le plus récent dans {identifier} · Y aller",
+      "draftingIn": "{count} en cours de rédaction dans {identifier} · Y aller",
+      "layingIn": "Organisation de {identifier} · Y aller",
+      "newAndDraftingIn": "{arrived} nouveaux · {drafting} en cours de rédaction dans {identifier} · Y aller",
+      "draftingAcross": "{count} en cours de rédaction ailleurs · le premier dans {identifier} · Y aller",
       "levelChange": {
         "srPrefix": "Modification en attente pour ce niveau :",
         "changed": "Ce niveau",
@@ -8518,14 +8571,17 @@
       "toResume": "À reprendre",
       "recentlyFinished": "Terminés récemment",
       "watching": "Suivis",
-      "toApprove": "En attente de votre part"
+      "toApprove": "En attente de votre part",
+      "planning": "En planification"
     },
     "columns": {
       "title": "Titre",
       "role": "Votre rôle",
       "assignee": "Responsable",
       "status": "Statut",
-      "finished": "Terminé"
+      "finished": "Terminé",
+      "plan": "Plan",
+      "planner": "Planificateur"
     },
     "row": {
       "unassigned": "Non attribué",
@@ -8568,6 +8624,11 @@
       "approvals": {
         "title": "Rien n'attend votre intervention",
         "body": "Les approbations qui nécessitent votre décision, et le travail qu'une exécution vous a confié, apparaissent ici."
+      },
+      "planning": {
+        "title": "Aucun plan en cours de rédaction",
+        "body": "Lorsque vous sollicitez un plan auprès de Motir AI ou d’un agent, il attend ici pendant sa rédaction, avec son avancement, puis passe dans « En attente de votre part » lorsqu’il est prêt pour votre relecture. Les plans demandés par d’autres se trouvent sur la page Plans.",
+        "action": "Planifier avec l’IA"
       }
     },
     "approvals": {
@@ -8785,6 +8846,28 @@
         "card_not_ready": "Levez ce qui bloque {key} ou repassez-le à En cours, puis appuyez sur Poursuivre."
       },
       "copyAria": "Copier la commande de reprise de {key}"
+    },
+    "planning": {
+      "scope": "Les plans que vous avez demandés dans <project>{name}</project> et qui sont encore en cours de rédaction. Les plans demandés par d’autres se trouvent sur la <link>page Plans</link>.",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "Agent MCP",
+        "agentModel": "Agent MCP · <mono>{model}</mono>"
+      },
+      "rowAria": "Ouvrir le plan en cours de rédaction — {sentence}",
+      "reopened": "Rouvert depuis En planification · lancé par vous · dernière activité {when}",
+      "left": {
+        "planned": "Rédigé",
+        "plannedLine": "Prêt pour votre relecture.",
+        "plannedLink": "Le voir dans « En attente de votre part »",
+        "discarded": "Terminé",
+        "discardedLine": "Terminé avant d’être proposé — rien n’a été ajouté.",
+        "abandoned": "Arrêté",
+        "abandonedLine": "Son planificateur s’est arrêté, le plan a donc été fermé — rien n’a été ajouté.",
+        "unknownLine": "N’est plus en cours de rédaction."
+      },
+      "ceiling": "Affichage de vos {shown} plans en cours de rédaction les plus récents. Les {rest} autres se trouvent sur la <link>page Plans</link>."
     }
   },
   "approvalRecords": {

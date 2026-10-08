@@ -441,5 +441,8 @@ describe('withheld: the section is absent and its route is never read', () => {
 
     // Building either tree reads nothing: the section's one read is its own, on mount.
     expect(fn).not.toHaveBeenCalled();
-  });
+    // The cold dynamic import of the item page's lower sections (comments,
+    // activity and attachments, with their editors) is ~14s on its own and
+    // longer under the coverage lane's load, so the 15s default sat on the edge.
+  }, 60_000);
 });

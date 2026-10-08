@@ -150,6 +150,12 @@
     "mentionNoResults": "没有与「{query}」匹配的工作项。",
     "mentionSearchFailed": "无法搜索工作项。",
     "mentionRetry": "重试",
+    "mentionPages": "页面",
+    "mentionTypeToSearchPages": "继续输入以搜索页面…",
+    "mentionNoPages": "没有与「{query}」匹配的页面。",
+    "mentionPagesSearchFailed": "无法搜索页面。",
+    "pageUntitled": "无标题",
+    "pageUnavailable": "页面不可用",
     "codeLanguage": "语言"
   },
   "common": {
@@ -289,6 +295,39 @@
     "liveWriting": "正在编写",
     "liveReconnecting": "正在重新连接 — 显示的是最近一次更新",
     "liveAnnounce": "计划新增了 {count, plural, other {#}} 个工作项",
+    "liveStarting": "正在启动…",
+    "liveStalled": "已停滞",
+    "progress": {
+      "settling": "正在梳理对话",
+      "layingChildrenOf": "正在铺设：{title}",
+      "layingTopLevel": "正在铺设项目的顶层",
+      "authoring": "正在编写：{title}",
+      "draftingNew": "正在起草一个新工作项",
+      "moreSteps": "另有 {count} 项",
+      "authored": "已编写 {authored}/{proposed} 项",
+      "elapsedUnderMinute": "不到 1 分钟",
+      "elapsedMinutes": "{minutes} 分钟",
+      "elapsedHours": "{hours} 小时 {minutes} 分钟",
+      "lastActivityJustNow": "刚刚有活动",
+      "lastActivitySeconds": "最近活动 {seconds} 秒前",
+      "lastActivityAgo": "最近活动 {duration}前",
+      "stalledFor": "已 {duration} 无活动",
+      "detailsAria": "计划进度详情",
+      "detailsNow": "当前进行中",
+      "detailsNoSteps": "未报告步骤 — 该规划器可能不报告其步骤。",
+      "detailsStarted": "开始于 {time} · 已运行 {duration}",
+      "detailsLastActivity": "最近活动于 {time}",
+      "detailsStalled": "已 {duration} 没有写入或报告。计划可能已停止。",
+      "pointer": "在工作台跟进",
+      "pointerSentence": "你可以离开 — 此计划会继续编写。可在“工作台 › 规划”中跟进。"
+    },
+    "cue": {
+      "drafting": "起草中",
+      "draftingName": "正在起草",
+      "laying": "正在铺设子项",
+      "layingName": "正在铺设其子项",
+      "layingHere": "正在铺设此层级"
+    },
     "listWritingTitle": "尚无提案",
     "listWritingBody": "计划编写过程中，工作项会出现在这里。",
     "abandonedOutcome": "生成始终未完成 — 该计划已自动结束",
@@ -339,7 +378,15 @@
     "railAddDeclined": "此计划已被拒绝——这些值均未创建。",
     "railRemoveArchived": "此计划已归档 {key}。",
     "railRemoveDeclined": "此计划本将归档 {key}，但因被拒绝，未执行归档。",
-    "peekNoActivity": "提案在获得批准之前没有评论、子项或动态。"
+    "peekNoActivity": "提案在获得批准之前没有评论、子项或动态。",
+    "approveProgress": {
+      "creating": "正在将 {n, plural, other {# 个工作项}}加入待办列表…",
+      "applying": "正在应用 {n, plural, other {# 项变更}}…",
+      "together": "完成后它们会一起出现。",
+      "slow": "仍在处理 —— 计划越大，耗时越长。无需再次点击。",
+      "timedOutTitle": "未创建任何内容 —— 批准耗时过长。",
+      "timedOutNext": "这份计划仍在等待你的决定，内容未变。可以放心再次批准。"
+    }
   },
   "projectAccess": {
     "noAccessTitle": "你无权访问此项目",
@@ -1468,6 +1515,8 @@
     "pagesSourceMention": "已提及",
     "pagesSourceEmbed": "已嵌入",
     "pagesSourceManual": "已链接",
+    "pagesSourceDescription": "已在描述中标记",
+    "pagesSourceExplanation": "已在说明中标记",
     "pagesEmpty": "尚无页面链接到此工作项。",
     "pagesShowMore": "显示更多页面",
     "pagesError": "无法加载页面。",
@@ -7678,6 +7727,10 @@
       "goToTarget": "方案在 {identifier} · 前往",
       "arrivedIn": "{identifier} 中有 {count} 项新内容 · 前往",
       "arrivedAcross": "其他层级有 {count} 项新内容 · 最新在 {identifier} · 前往",
+      "draftingIn": "{identifier} 中有 {count} 项正在起草 · 前往",
+      "layingIn": "正在铺设 {identifier} · 前往",
+      "newAndDraftingIn": "{identifier} 中有 {arrived} 项新内容 · {drafting} 项正在起草 · 前往",
+      "draftingAcross": "其他层级有 {count} 项正在起草 · 首个在 {identifier} · 前往",
       "levelChange": {
         "srPrefix": "此层级的待定变更：",
         "changed": "当前层级",
@@ -8508,14 +8561,17 @@
       "toResume": "待继续",
       "recentlyFinished": "最近完成",
       "watching": "关注中",
-      "toApprove": "等你处理"
+      "toApprove": "等你处理",
+      "planning": "规划"
     },
     "columns": {
       "title": "标题",
       "role": "你的角色",
       "assignee": "负责人",
       "status": "状态",
-      "finished": "完成于"
+      "finished": "完成于",
+      "plan": "计划",
+      "planner": "规划者"
     },
     "row": {
       "unassigned": "未分配",
@@ -8558,6 +8614,11 @@
       "approvals": {
         "title": "没有等你处理的事项",
         "body": "需要你决定的审批，以及运行交给你完成的工作，都会显示在这里。"
+      },
+      "planning": {
+        "title": "没有正在编写的计划",
+        "body": "当你请 Motir AI 或智能体编写计划时，计划会在编写期间显示在这里，并附上进度；写好后会移到“等你处理”等你审阅。其他人发起的计划请见计划页。",
+        "action": "用 AI 规划"
       }
     },
     "approvals": {
@@ -8775,6 +8836,28 @@
         "card_not_ready": "解除 {key} 的阻塞或将其移回进行中后按“继续”。"
       },
       "copyAria": "复制 {key} 的继续命令"
+    },
+    "planning": {
+      "scope": "你在 <project>{name}</project> 中发起、仍在编写的计划。其他人发起的计划请见<link>计划页</link>。",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "MCP 智能体",
+        "agentModel": "MCP 智能体 · <mono>{model}</mono>"
+      },
+      "rowAria": "打开正在编写的计划 — {sentence}",
+      "reopened": "从“规划”重新打开 · 由你发起 · 最近活动 {when}",
+      "left": {
+        "planned": "已写好",
+        "plannedLine": "等你审阅。",
+        "plannedLink": "在“等你处理”中查看",
+        "discarded": "已结束",
+        "discardedLine": "在提出之前已结束——没有添加任何内容。",
+        "abandoned": "已中止",
+        "abandonedLine": "其规划者已停止，计划已关闭——没有添加任何内容。",
+        "unknownLine": "已不再编写。"
+      },
+      "ceiling": "显示你最新的 {shown} 个正在编写的计划。其余 {rest} 个请见<link>计划页</link>。"
     }
   },
   "approvalRecords": {
