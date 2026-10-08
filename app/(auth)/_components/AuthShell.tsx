@@ -40,8 +40,9 @@ export function AuthShell({
   return (
     <section className={tight ? 'flex flex-col gap-3' : 'flex flex-col gap-8'}>
       {/* ⚠️ The header's own gaps are UNCHANGED by the eyebrow. `/device`'s fold
-          budget is MEASURED (622px inside 1366×648 — 26px of headroom, all of
-          it), so widening `tight`'s gap to make room for a chip would spend a
+          budget is MEASURED (CTAs ending at 631px inside 1366×648 with the
+          ten-key CLI grant, MOTIR-7818 — and asserted by `cli-connect.spec.ts`),
+          so widening `tight`'s gap to make room for a chip would spend a
           screen's margin that this card never uses. The eyebrow pays its own
           spacing instead, and a page that passes none renders byte-identically
           to before. */}
