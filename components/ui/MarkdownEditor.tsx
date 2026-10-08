@@ -99,7 +99,10 @@ export function buildEditorExtensions(opts?: {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
-      link: { openOnClick: false },
+      // `motir-page:` is named so a page tag survives as an ordinary link where
+      // no `pageMention` node is registered (MOTIR-7698). tiptap 3.31 stopped
+      // accepting a hyphenated scheme it was not told about, and dropped the href.
+      link: { openOnClick: false, protocols: ['motir-page'] },
       // The language field replaces StarterKit's own code block with the same
       // node plus a node view (MOTIR-5458) — never both, which would be a
       // duplicate extension name.
