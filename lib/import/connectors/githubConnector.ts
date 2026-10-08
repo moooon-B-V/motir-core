@@ -15,7 +15,13 @@
 // the rest. No DB, no Prisma — an external API read only.
 
 import { ConnectorConfigError } from './errors';
-import { fetchWithRetry, parseLinkHeader, queryParam, type RetryOptions } from './http';
+import {
+  fetchWithRetry,
+  parseLinkHeader,
+  queryParam,
+  trimTrailingSlashes,
+  type RetryOptions,
+} from './http';
 import type {
   ConnectResult,
   IssueSourceConnector,
@@ -86,7 +92,7 @@ export class GithubConnector implements IssueSourceConnector {
     if (!config.owner || !config.repo)
       throw new ConnectorConfigError('owner and repo are required', 'github');
     this.config = config;
-    this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = trimTrailingSlashes(config.baseUrl ?? DEFAULT_BASE_URL);
     this.perPage = Math.min(100, config.perPage ?? DEFAULT_PER_PAGE);
     this.includeComments = config.includeComments ?? true;
   }

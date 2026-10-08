@@ -58,14 +58,12 @@ minimumReleaseAgeExclude:
   - '@better-auth/telemetry@1.7.7'
   - better-auth@1.7.7
 
-# ⚠️ `next` VENDORS the React the App Router renders with, and 16.2.6's copy
-# drops a Suspense ping that lands during render — a late section whose data has
-# arrived never paints and its transition never settles (MOTIR-5255). The patch
-# is React's own upstream fix (shipped in react-dom 19.3.0 / vendored by next
-# 16.3.x) on the four client builds. When `next` is bumped, pnpm refuses the
-# stale entry: delete it only if `tests/react-dom-ping-patch.test.ts` still
-# passes on the unpatched install. A patch change always moves pnpm-lock.yaml's
-# patch_hash, so CI's install-input lanes see it without a path of its own.
+# `next` VENDORS the React the App Router renders with, and 16.2.6's copy
+# dropped a Suspense ping that lands during render (MOTIR-5255), so it carried a
+# patch with React's upstream fix. next 16.3.x vendors the fixed build, and
+# MOTIR-7816 removed the patch on the bump to 16.3.6 after
+# `tests/react-dom-ping-patch.test.ts` passed on the unpatched install. That test
+# still guards the vendored build on every later bump.
 #
 # ⚠️ `mcp-handler@1.1.0` pumps each `/api/mcp` POST's SSE body into a stream of
 # its own and enqueues into it unguarded, so a client that disconnects while a
@@ -77,7 +75,46 @@ minimumReleaseAgeExclude:
 # instead, while no head has been written, and `lib/mcp/clientAbort.ts` answers
 # it. 1.1.0 is the last 1.x; 2.x moves to `@modelcontextprotocol/server` v2. On
 # a bump, delete the entry only if `tests/mcp/stream-cancel.test.ts` AND
-# `tests/mcp/body-abort.test.ts` pass on the unpatched install.
+# `tests/mcp/body-abort.test.ts` pass on the unpatched install. Its peer range
+# pins `@modelcontextprotocol/sdk@1.26.0`; the app runs 1.31.0 (MOTIR-7816, the
+# OAuth-client advisory fixed in 1.31.0) and `pnpm peers check` reports that
+# mismatch on purpose — both tests above pass against 1.31.0.
 patchedDependencies:
   mcp-handler@1.1.0: patches/mcp-handler@1.1.0.patch
-  next@16.2.6: patches/next@16.2.6.patch
+
+# MOTIR-7816 — security floors for TRANSITIVE dependencies. Each entry lifts
+# only the versions a Dependabot advisory names (`<fix`) to its first patched
+# release, so a parent that already resolves a fixed version is untouched. Three
+# cross a breaking boundary because the advisory left no fix on the old line:
+# `deepmerge-ts` 7 → 8 (only `@prisma/config` uses it), `sharp` 0.34 → 0.35 and
+# `esbuild` 0.27 → 0.28 (build tooling). Drop an entry once every parent's own range resolves at or
+# above its floor (`pnpm why -r <name>` shows who still pins it low).
+overrides:
+  '@babel/core@<7.29.6': ^7.29.6
+  '@hono/node-server@<1.19.15': ^1.19.15
+  'baseline-browser-mapping@<2.11.0': ^2.11.0
+  'body-parser@>=2 <2.3.0': ^2.3.0
+  'brace-expansion@<1.1.21': ^1.1.21
+  'brace-expansion@>=2 <2.1.7': ^2.1.7
+  'brace-expansion@>=3 <5.0.12': ^5.0.12
+  'deepmerge-ts@<8.0.0': ^8.0.0
+  'esbuild@>=0.27.3 <0.28.1': ^0.28.1
+  'fast-uri@<3.1.8': ^3.1.8
+  'find-my-way@<9.7.0': ^9.7.0
+  'hono@<4.13.7': ^4.13.7
+  'ip-address@<10.7.1': ^10.7.1
+  'js-yaml@>=4 <4.3.2': ^4.3.2
+  'linkify-it@<5.0.2': ^5.0.2
+  'markdown-it@<14.3.1': ^14.3.1
+  'mysql2@<3.23.1': ^3.23.1
+  'nanoid@<3.3.18': ^3.3.18
+  'next@<16.3.6': 16.3.6
+  'postcss@<8.5.23': ^8.5.23
+  'proxy-addr@<2.0.8': ^2.0.8
+  'qs@<6.16.0': ^6.16.0
+  'sharp@<0.35.5': ^0.35.5
+  'shell-quote@<1.11.0': ^1.11.0
+  'source-map-js@<1.2.2': ^1.2.2
+  'undici@>=6 <6.28.1': ^6.28.1
+  'valibot@<1.4.2': ^1.4.2
+  'vite@<8.0.16': ^8.0.16

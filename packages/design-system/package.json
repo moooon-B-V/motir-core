@@ -64,6 +64,6 @@
     "@types/react-dom": "^19",
     "tsup": "^8.5.0",
     "typescript": "^5",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.11"
   }
 }

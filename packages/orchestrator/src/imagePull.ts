@@ -211,13 +211,33 @@ export function parseImageReference(image: string): ParsedImageReference | null 
  */
 export function parseBearerChallenge(header: string | null): Record<string, string> | null {
   if (!header) return null;
-  const match = /^\s*Bearer\s+(.*)$/i.exec(header);
-  if (!match) return null;
-  const params: Record<string, string> = {};
-  for (const part of (match[1] as string).matchAll(/([a-zA-Z_]+)="([^"]*)"/g)) {
-    params[part[1] as string] = part[2] as string;
-  }
+  const challenge = header.trimStart();
+  // A scan rather than a regex: the header is the registry's, and both regexes
+  // this replaced backtracked polynomially on a long run of spaces or letters
+  // (CodeQL js/polynomial-redos, MOTIR-7816).
+  if (!/^bearer\s/i.test(challenge)) return null;
+  const params = parseAuthParams(challenge.slice('bearer'.length));
   return params['realm'] ? params : null;
+}
+
+/** Every `name="value"` pair in a challenge's parameter list, in one linear pass. */
+function parseAuthParams(input: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  let i = 0;
+  while (i < input.length) {
+    const nameStart = i;
+    while (i < input.length && /[a-zA-Z_]/.test(input[i] as string)) i++;
+    if (i > nameStart && input.startsWith('="', i)) {
+      const valueStart = i + 2;
+      const valueEnd = input.indexOf('"', valueStart);
+      if (valueEnd === -1) break;
+      params[input.slice(nameStart, i)] = input.slice(valueStart, valueEnd);
+      i = valueEnd + 1;
+    } else if (i === nameStart) {
+      i++;
+    }
+  }
+  return params;
 }
 
 async function registryFetch(url: string, headers: Record<string, string>): Promise<Response> {
