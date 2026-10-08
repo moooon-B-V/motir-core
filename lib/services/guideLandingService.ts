@@ -3,6 +3,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { getJob } from '@/lib/ai/motirAiClient';
 import {
   deriveTemporaryList,
+  GUIDE_BUGS_PER_TURN,
   GUIDE_SKIP_LINKED_PULL_REQUEST,
   parseGuideTurn,
   type GuideAction,
@@ -18,12 +19,17 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { deliveryMemberState } from '@/lib/workItems/deliverySet';
 import { commentsService } from '@/lib/services/commentsService';
+import { guideBugFilingService } from '@/lib/services/guideBugFilingService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { PlanChangeSessionNotFoundError } from '@/lib/planChange/errors';
+import {
+  GuideBugCapExceededError,
+  GuideBugDuplicateError,
+  PlanChangeSessionNotFoundError,
+} from '@/lib/planChange/errors';
 import { PermissionDeniedError, ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { ApprovalGatePendingError, WorkItemError } from '@/lib/workItems/errors';
 import { ApprovalGateError } from '@/lib/approvalGates/errors';
@@ -54,6 +60,8 @@ import { CommentForbiddenError } from '@/lib/comments/errors';
 //   | `edit_item`                              | `workItemsService.updateWorkItem`            | same           |
 //   | `cannot_do` / `needs_replan`             | `commentsService.addComment`                 | same           |
 //   | `close`                                  | `workItemsService.updateStatus`, walked      | same           |
+//   | `file_bug`                               | `guideBugFilingService.fileGuideBug` →       | same           |
+//   |                                          | `workItemsService.createWorkItem` (a `bug`)  |                |
 //   | `propose_todos` / `current_step` /       | recorded on the conversation                 | recorded       |
 //   | `offer_close` / `local_agent_prompt`     |                                              |                |
 //
@@ -97,13 +105,25 @@ export type GuideSettleResult =
   | { outcome: 'failed'; session: PlanChangeSessionDto }
   | { outcome: 'silent'; session: PlanChangeSessionDto };
 
-/** A refusal an action's guard raises — recorded on the turn, never thrown out. */
-class Skip extends Error {}
+/** A refusal an action's guard raises — recorded on the turn, never thrown out.
+ *  A `file_bug` refused as a duplicate carries the existing bug's key. */
+class Skip extends Error {
+  constructor(
+    message: string,
+    readonly workItemKey?: string,
+  ) {
+    super(message);
+  }
+}
 
 /** The guided card as it stands at landing, with its saved rows. */
 interface LandingCard {
   item: WorkItemDto;
   rows: WorkItemTodoDto[];
+  /** The guide conversation the turn belongs to — what a `file_bug` is counted on. */
+  sessionId: string;
+  /** How many bugs THIS turn has filed so far (`GUIDE_BUGS_PER_TURN`). */
+  bugsFiledThisTurn: number;
 }
 
 function actorOf(ctx: ProjectContext): ServiceContext {
@@ -406,6 +426,34 @@ async function landOne(
       return landed();
     }
 
+    case 'file_bug': {
+      // One per turn (decision MOTIR-7798 Q3); the per-conversation bound is
+      // held under the session's row lock inside the filing itself.
+      if (card.bugsFiledThisTurn >= GUIDE_BUGS_PER_TURN) {
+        throw new Skip('a guide turn files at most one bug');
+      }
+      try {
+        const filed = await guideBugFilingService.fileGuideBug(
+          action,
+          { id: card.sessionId },
+          card.item,
+          ctx,
+        );
+        card.bugsFiledThisTurn += 1;
+        return { type: action.type, outcome: 'landed', workItemKey: filed.key };
+      } catch (err) {
+        if (err instanceof GuideBugCapExceededError) {
+          throw new Skip(
+            `this conversation has already filed ${err.filed} bugs, the most one guide conversation may file`,
+          );
+        }
+        if (err instanceof GuideBugDuplicateError) {
+          throw new Skip(`already filed as ${err.existingKey}`, err.existingKey);
+        }
+        throw err;
+      }
+    }
+
     case 'close': {
       const list = temporary.active ? temporary.rows : card.rows;
       if (list.length === 0 || list.some((r) => !r.done)) {
@@ -488,6 +536,26 @@ export function guideSkippedNote(outcomes: readonly GuideActionOutcome[]): strin
   ].join('\n');
 }
 
+/** The words appended to the reply naming each bug the turn FILED, by key and
+ *  title (MOTIR-7800) — how the person sees the key named back. A refused filing
+ *  is in {@link guideSkippedNote} instead, with its reason. */
+export function guideFiledNote(
+  actions: readonly GuideAction[],
+  outcomes: readonly GuideActionOutcome[],
+): string | null {
+  const filed = outcomes.flatMap((o, i) => {
+    const action = actions[i];
+    return o.type === 'file_bug' &&
+      o.outcome === 'landed' &&
+      o.workItemKey &&
+      action?.type === 'file_bug'
+      ? [`- ${o.workItemKey}: ${action.title}`]
+      : [];
+  });
+  if (filed.length === 0) return null;
+  return [filed.length === 1 ? 'Filed a bug:' : 'Filed bugs:', ...filed].join('\n');
+}
+
 export const guideLandingService = {
   /**
    * Read a settled `guide_work_item` job and land what it produced. REPLAYABLE:
@@ -514,7 +582,12 @@ export const guideLandingService = {
     const claimed = await planChangeSessionsService.claimGuideLanding(input.turn.id, ctx, address);
     if (!claimed) return { outcome: 'silent', session };
 
-    const card: LandingCard = { item, rows: await readRows(item, ctx) };
+    const card: LandingCard = {
+      item,
+      rows: await readRows(item, ctx),
+      sessionId: session.id,
+      bugsFiledThisTurn: 0,
+    };
     const derived = deriveTemporaryList(recordsOf(session));
     const temporary = { active: card.rows.length === 0 && derived.length > 0, rows: derived };
     const startedTemporary = card.rows.length === 0;
@@ -543,6 +616,7 @@ export const guideLandingService = {
             type: action.type,
             outcome: 'skipped',
             reason: err instanceof Skip ? err.message : 'the card refused the change',
+            ...(err instanceof Skip && err.workItemKey ? { workItemKey: err.workItemKey } : {}),
           });
           continue;
         }
@@ -565,11 +639,14 @@ export const guideLandingService = {
           (o, i) => o.outcome === 'landed' && input.result.actions[i]!.type === 'write_todos',
         ),
     };
-    const note = guideSkippedNote(outcomes);
+    const notes = [
+      guideFiledNote(input.result.actions, outcomes),
+      guideSkippedNote(outcomes),
+    ].filter((n): n is string => n !== null);
     const updated = await planChangeSessionsService.appendGuideReplyTurn(
       {
         jobId: input.jobId,
-        body: note ? `${input.result.messageMd}\n\n${note}` : input.result.messageMd,
+        body: [input.result.messageMd, ...notes].join('\n\n'),
         record,
       },
       ctx,

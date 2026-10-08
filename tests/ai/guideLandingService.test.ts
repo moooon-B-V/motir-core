@@ -7,12 +7,17 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { manualWorkGateService } from '@/lib/services/manualWorkGateService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { GUIDE_BUGS_PER_CONVERSATION } from '@/lib/ai/guideWorkItem';
+import { GuideBugCapExceededError } from '@/lib/planChange/errors';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import {
   createTestWorkItem,
   makeWorkItemFixture,
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
+import { seededBugsFolderId } from '../fixtures/projectFixtures';
+import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPr } from '../helpers/prLink';
@@ -50,6 +55,8 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 const { POST: guide } = await import('@/app/api/ai/guide/route');
 const { POST: guideSettle } = await import('@/app/api/ai/guide/settle/route');
 const { POST: askSettle } = await import('@/app/api/ai/ask/settle/route');
+const { guideBugFilingService } = await import('@/lib/services/guideBugFilingService');
+const { guideLandingService } = await import('@/lib/services/guideLandingService');
 
 const BASE = 'http://localhost:3000';
 const post = (path: string, body: unknown) =>
@@ -66,7 +73,9 @@ interface Opened {
 interface Settled {
   outcome: string;
   session: PlanChangeSessionDto;
-  record?: { outcomes: Array<{ type: string; outcome: string; reason?: string }> };
+  record?: {
+    outcomes: Array<{ type: string; outcome: string; reason?: string; workItemKey?: string }>;
+  };
 }
 
 let fx: WorkItemFixture;
@@ -617,5 +626,300 @@ describe('a temporary walk', () => {
       ['Open the console', true],
       ['Rotate', false],
     ]);
+  });
+});
+
+describe('file_bug (MOTIR-7800; decision MOTIR-7798 Q3)', () => {
+  const fileBug = (title: string, extra: Record<string, unknown> = {}) => ({
+    type: 'file_bug',
+    title,
+    descriptionMd: `Saving a rotated key returns HTTP 500 (${title}).`,
+    ...extra,
+  });
+  const bugsIn = () =>
+    adminDb.workItem.findMany({ where: { projectId: fx.projectId, kind: 'bug' } });
+  const replyOf = (s: Settled) => s.session.turns.filter((t) => t.role === 'assistant').at(-1)!;
+  const counter = async (sessionId: string) =>
+    (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } }))
+      .guideBugsFiled;
+
+  /** A guided task under a story — the placement cases' shape. */
+  async function cardUnderStory(storyStatus = 'todo') {
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Key rotation' });
+    await adminDb.workItem.update({ where: { id: story.id }, data: { status: storyStatus } });
+    const task = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Rotate the signing key',
+      type: 'manual',
+      executor: 'human',
+      parentId: story.id,
+    });
+    const card = await adminDb.workItem.update({
+      where: { id: task.id },
+      data: { status: 'todo' },
+    });
+    return { story, card };
+  }
+
+  async function links(fromId: string, toId: string) {
+    return (await adminDb.workItemLink.findMany({ where: { fromId, toId } })).map((l) => l.kind);
+  }
+
+  it('files ONE bug as the person, opening with the Found-while line, `relates_to` the card, and names its key in the reply', async () => {
+    const card = await manualCard();
+    const opened = await open(card.identifier);
+    const settled = await settleWith(
+      opened,
+      [
+        fileBug('The console 500s on save', {
+          explanationMd: 'The save handler reads the old key id.',
+        }),
+      ],
+      'That is a defect — I have filed it.',
+    );
+
+    const [outcome] = settled.record!.outcomes;
+    expect(outcome).toMatchObject({ type: 'file_bug', outcome: 'landed' });
+    const bugs = await bugsIn();
+    expect(bugs).toHaveLength(1);
+    const bug = bugs[0]!;
+    expect(outcome!.workItemKey).toBe(bug.identifier);
+    expect(bug.title).toBe('The console 500s on save');
+    expect(bug.reporterId).toBe(fx.ownerId);
+    expect(bug.projectId).toBe(fx.projectId);
+    // The person's own filing: no planning provenance.
+    expect(bug.planningSource).toBeNull();
+    // The create stores the key as its canonical mention link (`[KEY](motir:id)`).
+    expect(bug.descriptionMd!.split('\n')[0]).toBe(
+      `**Found while:** guiding [${card.identifier}](motir:${card.id}) (Guide me through)`,
+    );
+    expect(bug.explanationMd).toBe('The save handler reads the old key id.');
+    // Not blocking → the project's bug destination, no parent, and no block edge.
+    expect(bug.parentId).toBeNull();
+    expect(bug.folderId).toBe(await seededBugsFolderId(fx.projectId));
+    expect(await links(bug.id, card.id)).toEqual(['relates_to']);
+    expect(await links(card.id, bug.id)).toEqual(['relates_to']);
+
+    // The reply names the key and title; the record round-trips it.
+    const reply = replyOf(settled);
+    expect(reply.body).toContain(`${bug.identifier}: The console 500s on save`);
+    expect(reply.guide?.outcomes[0]).toMatchObject({ workItemKey: bug.identifier });
+    expect(await counter(opened.session.id)).toBe(1);
+  });
+
+  it('keeps a description that already opens with a Found-while line', async () => {
+    const card = await manualCard();
+    const opened = await open(card.identifier);
+    await settleWith(opened, [
+      fileBug('Own line', { descriptionMd: '**Found while:** guiding it by hand\n\nSteps.' }),
+    ]);
+    const [bug] = await bugsIn();
+    expect(bug!.descriptionMd).toBe('**Found while:** guiding it by hand\n\nSteps.');
+  });
+
+  it('a bug that BLOCKS the card goes under the card’s not-done parent, and the card is `blocked_by` it', async () => {
+    const { story, card } = await cardUnderStory();
+    const opened = await open(card.identifier);
+    const settled = await settleWith(opened, [fileBug('Blocks it', { blocksGuidedCard: true })]);
+    expect(outcomesOf(settled)).toEqual([['file_bug', 'landed']]);
+
+    const [bug] = await bugsIn();
+    expect(bug!.parentId).toBe(story.id);
+    expect(bug!.folderId).toBeNull();
+    // The guided card is blocked_by the bug; the two also relate.
+    expect((await links(card.id, bug!.id)).sort()).toEqual(['is_blocked_by', 'relates_to']);
+  });
+
+  it('a blocking bug whose card has a DONE parent goes to the Bugs folder, and the parent stays done', async () => {
+    const { story, card } = await cardUnderStory('done');
+    const opened = await open(card.identifier);
+    await settleWith(opened, [fileBug('Blocks it', { blocksGuidedCard: true })]);
+
+    const [bug] = await bugsIn();
+    expect(bug!.parentId).toBeNull();
+    expect(bug!.folderId).toBe(await seededBugsFolderId(fx.projectId));
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status).toBe(
+      'done',
+    );
+    // Still blocking the guided card: the placement moved, the edge did not.
+    expect(await links(card.id, bug!.id)).toContain('is_blocked_by');
+  });
+
+  it('a blocking bug on a ROOT card goes to the Bugs folder', async () => {
+    const card = await manualCard();
+    const opened = await open(card.identifier);
+    await settleWith(opened, [fileBug('Blocks a root card', { blocksGuidedCard: true })]);
+    const [bug] = await bugsIn();
+    expect(bug!.parentId).toBeNull();
+    expect(bug!.folderId).toBe(await seededBugsFolderId(fx.projectId));
+  });
+
+  it('a non-blocking bug on a card with a parent still goes to the Bugs folder', async () => {
+    const { card } = await cardUnderStory();
+    const opened = await open(card.identifier);
+    await settleWith(opened, [fileBug('Merely related')]);
+    const [bug] = await bugsIn();
+    expect(bug!.parentId).toBeNull();
+    expect(bug!.folderId).toBe(await seededBugsFolderId(fx.projectId));
+    expect(await links(card.id, bug!.id)).toEqual(['relates_to']);
+  });
+
+  it('a DUPLICATE of an open bug related to the card is skipped with that bug’s key, and nothing is filed', async () => {
+    const card = await manualCard();
+    const existing = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'bug',
+        title: 'The console 500s on save',
+        links: [{ targetId: card.id, relationship: 'relates_to' }],
+      },
+      fx.ctx,
+    );
+    const opened = await open(card.identifier);
+    // The context the model reads carries the known bug.
+    const sent = (
+      submitJobMock.mock.calls.at(-1)![2] as {
+        guideContext: { card: { openBugs: Array<{ key: string; title: string }> } };
+      }
+    ).guideContext;
+    expect(sent.card.openBugs).toEqual([
+      { key: existing.identifier, title: 'The console 500s on save', status: 'todo' },
+    ]);
+
+    const settled = await settleWith(opened, [fileBug('  the CONSOLE 500s on save ')]);
+    expect(settled.record!.outcomes[0]).toEqual({
+      type: 'file_bug',
+      outcome: 'skipped',
+      reason: `already filed as ${existing.identifier}`,
+      workItemKey: existing.identifier,
+    });
+    expect(await bugsIn()).toHaveLength(1);
+    expect(replyOf(settled).body).toContain(`already filed as ${existing.identifier}`);
+    expect(await counter(opened.session.id)).toBe(0);
+  });
+
+  it('a DONE bug with the same title is not a duplicate', async () => {
+    const card = await manualCard();
+    const old = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'bug',
+        title: 'Same title',
+        links: [{ targetId: card.id, relationship: 'relates_to' }],
+      },
+      fx.ctx,
+    );
+    await adminDb.workItem.update({ where: { id: old.id }, data: { status: 'done' } });
+    const opened = await open(card.identifier);
+    const settled = await settleWith(opened, [fileBug('Same title')]);
+    expect(outcomesOf(settled)).toEqual([['file_bug', 'landed']]);
+  });
+
+  it('a second file_bug in ONE turn is skipped, and the first lands', async () => {
+    const card = await manualCard();
+    const opened = await open(card.identifier);
+    const settled = await settleWith(opened, [fileBug('First'), fileBug('Second')]);
+    expect(outcomesOf(settled)).toEqual([
+      ['file_bug', 'landed'],
+      ['file_bug', 'skipped'],
+    ]);
+    expect(settled.record!.outcomes[1]!.reason).toBe('a guide turn files at most one bug');
+    expect((await bugsIn()).map((b) => b.title)).toEqual(['First']);
+  });
+
+  it(`after ${GUIDE_BUGS_PER_CONVERSATION} filings ACROSS TURNS the next is skipped with the cap reason, and the turn’s other actions still land`, async () => {
+    const card = await manualCard();
+    const [r1] = await addRows(card.id, ['One']);
+    const opened = await open(card.identifier);
+    // Four filed on earlier turns of this conversation …
+    await adminDb.planChangeSession.update({
+      where: { id: opened.session.id },
+      data: { guideBugsFiled: GUIDE_BUGS_PER_CONVERSATION - 1 },
+    });
+    // … the fifth lands on this turn …
+    const fifth = await settleWith(opened, [fileBug('Fifth')]);
+    expect(outcomesOf(fifth)).toEqual([['file_bug', 'landed']]);
+    expect(await counter(opened.session.id)).toBe(GUIDE_BUGS_PER_CONVERSATION);
+
+    // … and on the next turn the sixth is refused while its tick still lands.
+    const second = await next(opened.session.id, 'Another one, and I did step one');
+    const sixth = await settleWith(second, [fileBug('Sixth'), { type: 'tick', rowId: r1 }]);
+    expect(outcomesOf(sixth)).toEqual([
+      ['file_bug', 'skipped'],
+      ['tick', 'landed'],
+    ]);
+    expect(sixth.record!.outcomes[0]!.reason).toBe(
+      `this conversation has already filed ${GUIDE_BUGS_PER_CONVERSATION} bugs, the most one guide conversation may file`,
+    );
+    expect((await bugsIn()).map((b) => b.title)).toEqual(['Fifth']);
+    expect((await rows(card.id))[0]!.done).toBe(true);
+    expect(await counter(opened.session.id)).toBe(GUIDE_BUGS_PER_CONVERSATION);
+  });
+
+  it('a person without `work_item:edit` files nothing — the landing’s own gate', async () => {
+    const card = await manualCard();
+    const opened = await open(card.identifier);
+    const viewer = await createTestUser();
+    await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
+    await adminDb.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: viewer.id, workspaceId: fx.workspaceId } },
+      data: { workspaceRole: 'viewer' },
+    });
+    const turn = opened.session.turns.find((t) => t.role === 'user' && t.jobId === opened.jobId)!;
+
+    await expect(
+      guideLandingService.land(
+        {
+          jobId: opened.jobId,
+          turn,
+          result: { messageMd: 'm', actions: [fileBug('Not mine to file') as never], dropped: [] },
+        },
+        opened.session,
+        { ...activeCtx.current!, userId: viewer.id },
+      ),
+    ).rejects.toThrow();
+    expect(await bugsIn()).toHaveLength(0);
+    expect(await counter(opened.session.id)).toBe(0);
+  });
+
+  it('UNDER REAL CONCURRENCY at cap − 1, parallel filings on one conversation file exactly ONE', async () => {
+    // A count read outside the session's row lock would let every racer see
+    // `cap − 1` and file. The lock serialises them on the count, so exactly one
+    // passes and the others count its increment.
+    const card = await manualCard();
+    const opened = await open(card.identifier);
+    await adminDb.planChangeSession.update({
+      where: { id: opened.session.id },
+      data: { guideBugsFiled: GUIDE_BUGS_PER_CONVERSATION - 1 },
+    });
+    const item = await workItemsService.getWorkItem(card.id, fx.ctx);
+
+    const RACERS = 4;
+    const settled = await Promise.allSettled(
+      Array.from({ length: RACERS }, (_, i) =>
+        guideBugFilingService.fileGuideBug(
+          {
+            type: 'file_bug',
+            title: `Racer ${i}`,
+            descriptionMd: 'Steps.',
+            explanationMd: null,
+            blocksGuidedCard: false,
+          },
+          { id: opened.session.id },
+          item,
+          activeCtx.current!,
+        ),
+      ),
+    );
+    const won = settled.filter((s) => s.status === 'fulfilled');
+    const lost = settled.filter((s): s is PromiseRejectedResult => s.status === 'rejected');
+    expect(won).toHaveLength(1);
+    expect(lost).toHaveLength(RACERS - 1);
+    for (const l of lost) {
+      expect(l.reason).toBeInstanceOf(GuideBugCapExceededError);
+      expect((l.reason as GuideBugCapExceededError).filed).toBe(GUIDE_BUGS_PER_CONVERSATION);
+    }
+    expect(await counter(opened.session.id)).toBe(GUIDE_BUGS_PER_CONVERSATION);
+    expect(await bugsIn()).toHaveLength(1);
   });
 });

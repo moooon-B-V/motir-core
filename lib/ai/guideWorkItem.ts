@@ -28,6 +28,17 @@ import type { GuideContextFile, GuideContextFileNote } from '@/lib/ai/guideFiles
 export const GUIDE_SKIP_LINKED_PULL_REQUEST =
   'a linked pull request closes this card when it merges';
 
+/**
+ * The bound on a guide's `file_bug` action (Story MOTIR-7797 · MOTIR-7800;
+ * decision MOTIR-7798 Q3): at most this many bugs per guide CONVERSATION — the
+ * unit a person reviews, as a plan is for the planner — mirroring
+ * `PLANNER_BUGS_PER_JOB` rather than choosing a value of its own. Counted on
+ * `plan_change_session.guide_bugs_filed` under the session's row lock.
+ */
+export const GUIDE_BUGS_PER_CONVERSATION = 5;
+/** …and at most this many in one TURN. A second `file_bug` in a turn is skipped. */
+export const GUIDE_BUGS_PER_TURN = 1;
+
 /** A bound on the rail message, applied on READ (motir-ai caps it at 4 000). */
 export const GUIDE_MESSAGE_MAX = 4_000;
 /** A bound on a correction's / edit's / cannot-do's reason (motir-ai: 500). */
@@ -80,12 +91,23 @@ export interface GuideContext {
     descriptionMd: string;
     explanationMd: string;
     pullRequests: Array<{ url: string | null; state: string | null }>;
+    /** The not-done bugs of the card's project linked `relates_to` the guided
+     *  card (MOTIR-7800) — so the model cites a known bug instead of filing it
+     *  again. A `file_bug` whose title matches one is refused with its key. */
+    openBugs: GuideOpenBug[];
   };
   todos: { temporary: boolean; rows: GuideContextRow[] };
   turns: GuideContextTurn[];
   /** The CURRENT (latest `user`) turn's files, resolved (`guide-turn-files.md`
    *  A3.4). Absent when the turn carried none. */
   files?: GuideContextFile[];
+}
+
+/** A known, not-done bug linked `relates_to` the guided card. */
+export interface GuideOpenBug {
+  key: string;
+  title: string;
+  status: string;
 }
 
 /** What {@link buildGuideContext} reads off the card. */
@@ -98,6 +120,8 @@ export interface GuideCardInput {
   descriptionMd: string | null;
   explanationMd: string | null;
   pullRequests: ReadonlyArray<{ url: string | null; state: string | null }>;
+  /** The open bugs related to the card; absent reads as none. */
+  openBugs?: readonly GuideOpenBug[];
 }
 
 export interface GuideRowInput {
@@ -131,6 +155,9 @@ export function buildGuideContext(
       descriptionMd: card.descriptionMd ?? '',
       explanationMd: card.explanationMd ?? '',
       pullRequests: card.pullRequests.map((pr) => ({ url: pr.url, state: pr.state })),
+      openBugs: (card.openBugs ?? [])
+        .slice(0, GUIDE_ROWS_MAX)
+        .map((b) => ({ key: b.key, title: b.title, status: b.status })),
     },
     todos: {
       temporary: opts.temporary === true && rows.length > 0,
@@ -198,7 +225,17 @@ export type GuideAction =
   | { type: 'local_agent_prompt'; rowId: string; prompt: string }
   // A3.9 (b): the change asked for would alter the card's TARGET. Edits nothing;
   // landed like `cannot_do`, as a comment on the guided card.
-  | { type: 'needs_replan'; reason: string };
+  | { type: 'needs_replan'; reason: string }
+  // MOTIR-7800 (decision MOTIR-7798 Q3): file ONE confirmed defect as a `bug`, as
+  // the person. No kind and no project field: the landing hard-wires both.
+  // `explanationMd` is written at birth by the same create; null means none.
+  | {
+      type: 'file_bug';
+      title: string;
+      descriptionMd: string;
+      explanationMd: string | null;
+      blocksGuidedCard: boolean;
+    };
 
 export type GuideActionType = GuideAction['type'];
 
@@ -219,6 +256,7 @@ export const GUIDE_ACTION_TYPES = [
   'cannot_do',
   'local_agent_prompt',
   'needs_replan',
+  'file_bug',
 ] as const satisfies readonly GuideActionType[];
 
 export interface GuideTurn {
@@ -436,6 +474,32 @@ function parseAction(raw: unknown, i: number): GuideAction {
       }
       return { type, rowId: id('rowId'), prompt };
     }
+    case 'file_bug': {
+      const allowed = new Set([
+        'type',
+        'title',
+        'descriptionMd',
+        'explanationMd',
+        'blocksGuidedCard',
+      ]);
+      const extra = Object.keys(raw).filter((k) => !allowed.has(k));
+      if (extra.length > 0) {
+        throw new InvalidGuideTurnError(where, `file_bug may not name ${extra.join(', ')}`);
+      }
+      const title = text(raw, 'title', GUIDE_TITLE_MAX, where);
+      if (/\n/.test(title)) throw new InvalidGuideTurnError(`${where}.title`, 'must be one line');
+      const blocks = raw['blocksGuidedCard'];
+      if (blocks !== undefined && typeof blocks !== 'boolean') {
+        throw new InvalidGuideTurnError(`${where}.blocksGuidedCard`, 'must be a boolean');
+      }
+      return {
+        type,
+        title,
+        descriptionMd: text(raw, 'descriptionMd', GUIDE_DESCRIPTION_MAX, where),
+        explanationMd: optText(raw, 'explanationMd', GUIDE_EXPLANATION_MAX, where),
+        blocksGuidedCard: blocks === true,
+      };
+    }
     default:
       throw new InvalidGuideTurnError(
         `${where}.type`,
@@ -483,6 +547,9 @@ export interface GuideActionOutcome {
   reason?: string;
   /** The to-do row it touched on the CARD, when it landed on one. */
   todoId?: string;
+  /** A `file_bug`'s key: the bug it filed, or the existing bug it was refused as
+   *  a duplicate of (MOTIR-7800). */
+  workItemKey?: string;
 }
 
 /** The `guide_turn` column on an assistant turn: the validated actions, each
@@ -516,6 +583,9 @@ export function readGuideTurnRecord(value: unknown): GuideTurnRecord | null {
       outcome: kind === 'landed' || kind === 'recorded' ? kind : 'skipped',
       ...(isRecord(o) && typeof o['reason'] === 'string' ? { reason: o['reason'] } : {}),
       ...(isRecord(o) && typeof o['todoId'] === 'string' ? { todoId: o['todoId'] } : {}),
+      ...(isRecord(o) && typeof o['workItemKey'] === 'string'
+        ? { workItemKey: o['workItemKey'] }
+        : {}),
     };
   });
   return { actions, outcomes, temporary: value['temporary'] === true };

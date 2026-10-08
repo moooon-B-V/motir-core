@@ -29,6 +29,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { deliveryMemberState } from '@/lib/workItems/deliverySet';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { guideBugFilingService } from '@/lib/services/guideBugFilingService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
@@ -194,6 +195,9 @@ async function readGuideCard(item: WorkItemDto, ctx: ProjectContext): Promise<Gu
       url: `https://github.com/${d.repo.owner}/${d.repo.name}/pull/${d.pullRequest.number}`,
       state: deliveryMemberState(d.pullRequest),
     })),
+    // The bugs already filed against this card (MOTIR-7800), so the model can
+    // cite one instead of filing it again through `file_bug`.
+    openBugs: await guideBugFilingService.listOpenBugs(item, ctx),
   };
 }
 
