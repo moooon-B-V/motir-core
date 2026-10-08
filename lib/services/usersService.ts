@@ -101,6 +101,19 @@ export const usersService = {
   },
 
   /**
+   * Save the account language (Story MOTIR-7730 · MOTIR-7747) — what a choice
+   * in Settings writes, so the language follows the person to every device. A
+   * value outside the locale set writes nothing. No row lock: a standalone
+   * column, last writer wins, and the value is not derived from a prior read.
+   */
+  async setSavedLocale(userId: string, locale: Locale): Promise<void> {
+    if (!isLocale(locale)) return;
+    await db.$transaction(async (tx) => {
+      await userRepository.setLocale(userId, locale, tx);
+    });
+  },
+
+  /**
    * Whether the user can CHANGE a password (true) or must SET one via the
    * reset-link path (false). True iff a credential Account row with a stored
    * hash exists; OAuth-only users (Google sign-in, no credential row) are

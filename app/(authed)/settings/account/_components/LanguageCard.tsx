@@ -10,8 +10,8 @@ import { setLocale } from '@/lib/i18n/actions';
 
 // The Language preference card inside the account-settings area's Language pane
 // (Story 7.8 · Subtask 7.8.12, moved from the flat account page). Behaviour is
-// unchanged — it writes the NEXT_LOCALE cookie via the setLocale server action
-// inside a transition, then router.refresh() re-renders server components in the
+// unchanged — it saves the choice on the account and the NEXT_LOCALE cookie via
+// the setLocale server action (MOTIR-7747) inside a transition, then router.refresh() re-renders server components in the
 // new locale (the same no-full-reload UX as the top-nav toggle). Only the layout
 // follows the design (`account-settings.mock.html` Panel 1): a titled Card with
 // the SETTINGS-ROW grammar (a label + description on the left, the control on the
@@ -31,7 +31,13 @@ export function LanguageCard() {
   function change(next: Locale) {
     if (next === current) return;
     startTransition(async () => {
-      await setLocale(next);
+      // A failed save leaves the language as it was (MOTIR-7747): no refresh,
+      // so the control stays on the current language rather than half-changing.
+      try {
+        await setLocale(next);
+      } catch {
+        return;
+      }
       router.refresh();
     });
   }
