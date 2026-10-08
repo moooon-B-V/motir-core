@@ -184,7 +184,8 @@ export async function expectSignUpNamesTheDocuments(page: Page): Promise<void> {
  * did not render" are otherwise the same observation.
  */
 export async function expectSignUpHasNoLegalNotice(page: Page): Promise<void> {
-  await expect(page.getByPlaceholder('Email address')).toBeVisible();
+  // By role, not placeholder: see `emailBox` in shell-session.ts.
+  await expect(page.getByRole('textbox', { name: 'Email address', exact: true })).toBeVisible();
   await expect(page.getByText(/you agree to our/i)).toHaveCount(0);
   await expect(page.getByText(/Terms of Service/i)).toHaveCount(0);
   await expect(page.locator('a[href*="legal"]')).toHaveCount(0);
