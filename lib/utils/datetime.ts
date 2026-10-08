@@ -1,8 +1,9 @@
 // Locale-aware, hydration-safe date/time formatters. The formatting LOCALE is
 // the user's active locale (passed in by the caller — `useLocale()` in a client
 // component, `getLocale()` on the server), mapped to a BCP-47 tag below. Because
-// that locale comes from the NEXT_LOCALE cookie it is IDENTICAL on the server
-// and on the client, so passing it explicitly is hydration-safe — unlike a
+// that locale is resolved once per request by the request config
+// (`i18n/request.ts`) and handed to the client provider, it is IDENTICAL on the
+// server and on the client, so passing it explicitly is hydration-safe — unlike a
 // runtime default (`toLocaleString(undefined, …)`), which differs between the
 // two and triggers a React mismatch.
 //
@@ -22,6 +23,17 @@ import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 const BCP47: Record<Locale, string> = {
   en: 'en-US',
   zh: 'zh-CN',
+  ja: 'ja-JP',
+  ko: 'ko-KR',
+  de: 'de-DE',
+  fr: 'fr-FR',
+  es: 'es-ES',
+  it: 'it-IT',
+  nl: 'nl-NL',
+  pl: 'pl-PL',
+  // Brazilian Portuguese: the catalogue is written in it (Story MOTIR-7730's
+  // recorded assumption — most Portuguese speakers are there).
+  pt: 'pt-BR',
 };
 
 /** Date + time, e.g. "Jun 3, 02:45 PM UTC" (en) · "6月3日 下午02:45 UTC" (zh). */

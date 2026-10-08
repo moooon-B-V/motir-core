@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { BarChart, type BarGroup } from '@/components/ui/charts/BarChart';
 import { niceTicks } from '@/components/ui/charts/scale';
 import { chartColor } from '@/components/ui/charts/tokens';
@@ -30,13 +30,13 @@ const UNIT_KEY: Record<ReportPeriodDto, string> = {
   month: 'unitMonth',
 };
 
-function bucketLabel(dateIso: string, period: ReportPeriodDto): string {
+export function bucketLabel(dateIso: string, period: ReportPeriodDto, locale: string): string {
   const d = new Date(`${dateIso}T00:00:00Z`);
   const opts: Intl.DateTimeFormatOptions =
     period === 'month'
       ? { month: 'short', year: '2-digit', timeZone: 'UTC' }
       : { month: 'short', day: 'numeric', timeZone: 'UTC' };
-  return new Intl.DateTimeFormat('en-US', opts).format(d);
+  return new Intl.DateTimeFormat(locale, opts).format(d);
 }
 
 export function AgeReportBody({
@@ -55,6 +55,7 @@ export function AgeReportBody({
   onReconfigure?: () => void;
 }) {
   const t = useTranslations('dashboards');
+  const locale = useLocale();
 
   const isResolution = type === 'resolution_time';
   const endpoint = isResolution ? '/api/reports/resolution-time' : '/api/reports/average-age';
@@ -84,7 +85,7 @@ export function AgeReportBody({
 
   const legendLabel = t(legendKey);
   const groups: BarGroup[] = data.buckets.map((b) => ({
-    label: bucketLabel(b.date, config.period),
+    label: bucketLabel(b.date, config.period, locale),
     values: [b.avgDays ?? 0],
   }));
 

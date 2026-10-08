@@ -275,6 +275,8 @@ export function usdCents(decimal: string): string {
   if (Number(digits[2]) >= 5) cents += ONE;
   const units = cents / HUNDRED;
   const rest = (cents % HUNDRED).toString().padStart(2, '0');
+  // Deliberately en-US (MOTIR-7771): the platform operator's console is not
+  // translated, and this is a USD amount.
   return `${sign}$${units.toLocaleString('en-US')}.${rest}`;
 }
 

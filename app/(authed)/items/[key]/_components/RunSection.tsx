@@ -449,7 +449,7 @@ export function RunSection({
                     : lastHeardFrom(current)
                 ).toISOString();
                 return (
-                  <time dateTime={iso} title={formatRunInstant(iso)}>
+                  <time dateTime={iso} title={formatRunInstant(iso, locale)}>
                     {relativeLabel(iso, locale, mountedAt)}
                   </time>
                 );

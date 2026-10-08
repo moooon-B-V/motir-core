@@ -145,6 +145,9 @@ export interface McpTestServer {
   /** Every request the server saw, in order — lets a test assert that a command
    *  really did (or did not) go to the server. */
   requests: { method: string; pathname: string; authorization: string | null }[];
+  /** How many client sockets the server still holds open — lets a test wait
+   *  until the server has SEEN a client hang up, rather than sleeping. */
+  openConnections(): Promise<number>;
   close(): Promise<void>;
 }
 
@@ -173,6 +176,16 @@ function toHeaders(req: IncomingMessage): Headers {
  *  than buffering it: the streamable-HTTP transport answers a tool call with a
  *  `text/event-stream` the client reads incrementally. */
 async function writeResponse(response: Response, res: ServerResponse): Promise<void> {
+  // A client that hung up while the route was still working has already had its
+  // 'close' emitted, so the listener below would never fire, and a body piped
+  // into a destroyed socket never reaches 'end' either: the tracked request then
+  // pinned the settle until its deadline (MOTIR-7855, the MCP SDK's un-awaited
+  // SSE GET overtaken by `client.close()`). Nobody is reading, so cancel the
+  // route's answer and finish.
+  if (res.destroyed) {
+    await response.body?.cancel();
+    return;
+  }
   const headers: Record<string, string | string[]> = {};
   response.headers.forEach((value, key) => {
     const existing = headers[key];
@@ -292,6 +305,10 @@ export async function startMcpHttpServer(
   return {
     url: `http://127.0.0.1:${port}`,
     requests,
+    openConnections: () =>
+      new Promise<number>((resolve, reject) => {
+        server.getConnections((err, count) => (err ? reject(err) : resolve(count)));
+      }),
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.closeAllConnections();

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { AlertTriangle, Clock, Cloud, Fingerprint, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -77,6 +77,7 @@ const ERROR_COPY: Record<string, Exclude<NoticeKey, 'generic' | ''> | null> = {
 };
 
 export function PasskeyManager({ passkeys, onPasskeysChange }: Props) {
+  const locale = useLocale();
   const t = useTranslations('settings.account.passkeys');
 
   const [registering, setRegistering] = useState(false);
@@ -251,7 +252,7 @@ export function PasskeyManager({ passkeys, onPasskeysChange }: Props) {
                     )}
                   </div>
                   <p className="mt-0.5 font-sans text-xs text-(--el-text-muted)">
-                    {t('row.added', { date: formatDate(p.createdAt) })}
+                    {t('row.added', { date: formatDate(p.createdAt, locale) })}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
@@ -426,8 +427,8 @@ function toDTO(row: {
  * `toLocaleDateString` is implementation-defined and a component test asserts on
  * this output.
  */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

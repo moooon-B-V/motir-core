@@ -80,12 +80,15 @@ export function ApprovalsList({
         <div role="rowgroup" className="hidden md:block">
           <div
             role="row"
-            className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-4 pl-4"
-            style={{ gridTemplateColumns: GRID_TEMPLATE, height: 40 }}
+            // A MINIMUM height, and header labels that wrap at a word boundary
+            // rather than truncate: "Czas oczekiwania" runs wider than its track
+            // (MOTIR-7759).
+            className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) py-1 pr-4 pl-4"
+            style={{ gridTemplateColumns: GRID_TEMPLATE, minHeight: 40 }}
           >
             {[t('columns.subject'), t('columns.details'), t('columns.waited'), ''].map((c, i) => (
               <div key={c || `c${i}`} role="columnheader" className="flex min-w-0 items-center">
-                <span className="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
+                <span className="min-w-0 text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase hyphens-auto">
                   {c}
                 </span>
               </div>

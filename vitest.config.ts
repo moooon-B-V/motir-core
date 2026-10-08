@@ -3049,6 +3049,76 @@ export default defineConfig({
         'lib/ai/guideFiles.ts',
         'lib/hooks/useGuideTurnFiles.ts',
         'components/planning/GuideTurnFiles.tsx',
+        // ── Story MOTIR-7730 · THE APP IN ELEVEN LANGUAGES (gate MOTIR-7760) ──
+        // The changed LANGUAGE SURFACE, enumerated from
+        // `git diff --name-only origin/main...HEAD` on the story branch, not from
+        // a list: the request's resolution (`i18n/request.ts`), every changed
+        // `lib/i18n/` module (the matcher and the four-step order live in
+        // `acceptLanguage.ts` / `resolveLocale.ts`, the sign-up seed's request
+        // reading in `seedLocale.ts`), the sign-in alignment (`localeSync.ts`),
+        // the translation script and its shape gate (`scripts/i18n/`), the
+        // signed-out language control and the date formatter. MEASURED FIRST on
+        // the story branch over the story's suites — tests/integration/i18n,
+        // tests/i18n, tests/auth/locale-*, tests/auth/user-locale-field,
+        // tests/i18n-catalog, tests/i18n-message-shape, tests/i18n-source-record,
+        // tests/components/auth-language-control, tests/services/users-*-locale
+        // (stmts / branches / funcs / lines):
+        //
+        //   i18n/request.ts                    100   / 100   / 100   / 100
+        //   lib/i18n/acceptLanguage.ts          96.87 /  90.47 / 100   / 100
+        //   lib/i18n/actions.ts                100   / 100   / 100   / 100
+        //   lib/i18n/englishFallback.ts        100   / 100   / 100   / 100
+        //   lib/i18n/localeCookie.ts           100   / 100   / 100   / 100
+        //   lib/i18n/locales.ts                100   / 100   / 100   / 100
+        //   lib/i18n/messages.ts               100   / 100   / 100   / 100
+        //   lib/i18n/resolveLocale.ts          100   / 100   / 100   / 100
+        //   lib/i18n/seedLocale.ts              93.75 / 100   / 100   /  91.66
+        //   lib/auth/localeSync.ts              93.75 /  91.66 / 100   /  91.66
+        //   lib/utils/datetime.ts              100   / 100   / 100   / 100
+        //   scripts/i18n/catalogue.ts           99.44 /  98.31 / 100   /  99.39
+        //   scripts/i18n/glossary.ts           100   /  97.56 / 100   / 100
+        //   scripts/i18n/messageShape.ts       100   /  98.68 / 100   / 100
+        //   scripts/i18n/sourceRecord.ts       100   /  98.07 / 100   / 100
+        //   AuthLanguageControl.tsx             96.96 /  94.44 / 100   / 100
+        //
+        // Eight of those sat under the floor after the integration test alone and
+        // were brought up by cases in their sibling test files (before → after):
+        // actions 90.9/87.5/100/100 → 100; englishFallback 87.5/90.9/100/100 →
+        // 100; messages 100/83.33/100/100 → 100; seedLocale 87.5/87.5/100/91.66
+        // → 93.75/100/100/91.66; datetime 66.66/50/50/66.66 → 100; catalogue
+        // 93.85/79.83/96.29/95.73 → 99.44/98.31/100/99.39; glossary
+        // 94.28/82.92/100/95.23 → 100/97.56/100/100; messageShape
+        // 95.68/88.15/100/96.26 → 100/98.68/100/100; sourceRecord
+        // 90.76/78.84/86.66/96 → 100/98.07/100/100; AuthLanguageControl
+        // 96.96/83.33/100/100 → 96.96/94.44/100/100. GATED at the project floor
+        // in `thresholds`.
+        //
+        // ⚠️ `lib/auth/index.ts` is REPORT-ONLY, by the MOTIR-7170 block's rule
+        // above for the same file: it is the whole Better-Auth wiring, and the
+        // story changed three things in it (the `locale` additional field, the
+        // `user.create.before` seed and the `localeSync()` plugin entry). Over the
+        // story's suites the FILE measures 50.98 / 38.46 / 53.33 / 52.38, which
+        // describes the other stories' hooks, not this one; the seed hook the
+        // story added is reached 27 times with all three arms of its
+        // `ctx?.headers ?? ctx?.request?.headers ?? null` taken. Gating the file
+        // whole would gate this story on code it did not write.
+        'i18n/request.ts',
+        'lib/i18n/acceptLanguage.ts',
+        'lib/i18n/actions.ts',
+        'lib/i18n/englishFallback.ts',
+        'lib/i18n/localeCookie.ts',
+        'lib/i18n/locales.ts',
+        'lib/i18n/messages.ts',
+        'lib/i18n/resolveLocale.ts',
+        'lib/i18n/seedLocale.ts',
+        'lib/auth/localeSync.ts',
+        'lib/auth/index.ts',
+        'lib/utils/datetime.ts',
+        'scripts/i18n/catalogue.ts',
+        'scripts/i18n/glossary.ts',
+        'scripts/i18n/messageShape.ts',
+        'scripts/i18n/sourceRecord.ts',
+        'app/**/_components/AuthLanguageControl.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -7001,6 +7071,28 @@ export default defineConfig({
           statements: 90,
         },
         'components/planning/GuideTurnFiles.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-7730 · MOTIR-7760 — measured above (`include`), pinned at the floor.
+        'i18n/request.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/i18n/acceptLanguage.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/i18n/actions.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/i18n/englishFallback.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/i18n/localeCookie.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/i18n/locales.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/i18n/messages.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/i18n/resolveLocale.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/i18n/seedLocale.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/auth/localeSync.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/utils/datetime.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'scripts/i18n/catalogue.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'scripts/i18n/glossary.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'scripts/i18n/messageShape.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'scripts/i18n/sourceRecord.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'app/**/_components/AuthLanguageControl.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

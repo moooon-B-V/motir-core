@@ -665,13 +665,13 @@ describe('To resume — the empty tab and zh (§ 35.6, Panel 8)', () => {
     await act(async () => {});
     expect(line('ACME-12').textContent).toContain('停在审批处 · 等待 1 项审批');
     const aside = screen.getByTestId('workbench-resume-aside-ACME-12').textContent;
-    expect(aside).toContain('Mara S. 在托管代理上运行');
+    expect(aside).toContain('Mara S. 在托管智能体上运行');
     expect(aside).toContain('分支 story/ACME-12-quotas');
     const row = screen.getByTestId('workbench-resume-gate-ACME-13');
-    expect(row.textContent).toContain('设计成果');
+    expect(row.textContent).toContain('设计结果');
     expect(row.textContent).toContain('由你决定');
     expect(row.textContent).toContain('等你处理');
     expect(screen.getByRole('button', { name: '查看并决定' })).toBeTruthy();
-    expect(next('ACME-12').textContent).toBe('审批通过后，此运行会在托管代理上自动继续。');
+    expect(next('ACME-12').textContent).toBe('审批通过后，此运行会在托管智能体上自动继续。');
   });
 });

@@ -327,7 +327,7 @@ describe('zh', () => {
     mount(gated(), [run()], { locale: 'zh', messages: zhMessages });
     expect(screen.getByTestId('run-gated-pill').textContent).toBe('停在审批处');
     expect(line().textContent).toBe(
-      '此运行停在审批处——正在等待ACME-13 的设计成果。其工作保留在分支 story/ACME-12-quotas 上，审批通过后会在托管代理上自动继续。',
+      '此运行停在审批处——正在等待ACME-13 的设计结果。其工作保留在分支 story/ACME-12-quotas 上，审批通过后会在托管智能体上自动继续。',
     );
   });
 });

@@ -85,7 +85,9 @@ export function Segmented<T extends string>({
             type="button"
             aria-pressed={active}
             disabled={disabled || opt.disabled}
-            title={opt.title}
+            // A FILL segment may truncate its label, so it defaults its tooltip
+            // to the full label — a cut-off word stays readable (MOTIR-7759).
+            title={opt.title ?? (fill ? opt.label : undefined)}
             onClick={() => {
               if (!active) onChange(opt.value);
             }}
@@ -100,7 +102,12 @@ export function Segmented<T extends string>({
               // In FILL mode the segment's width comes from the track, so the
               // per-style control padding no longer sizes it — keeping it would
               // re-introduce the token dependency the variant exists to remove.
-              fill ? 'min-w-0 flex-1 justify-center px-1' : 'px-(--spacing-control-x)',
+              // Outside fill mode a segment sizes to its label and never wraps,
+              // so a longer translation widens it rather than spilling out of
+              // the one-line control height (MOTIR-7759).
+              fill
+                ? 'min-w-0 flex-1 justify-center px-1'
+                : 'px-(--spacing-control-x) whitespace-nowrap',
               'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50',
               active

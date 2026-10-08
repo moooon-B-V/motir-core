@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   ArrowUp,
@@ -117,6 +117,7 @@ export function TwoFactorManager({
   initialTrustedDevices,
   passkeySection,
 }: Props) {
+  const locale = useLocale();
   const t = useTranslations('settings.account.twoFactor');
   const tc = useTranslations('common');
   // The hero's callout and the methods card's passkey row are passkey copy, so
@@ -432,10 +433,10 @@ export function TwoFactorManager({
                     />
                     <div className="min-w-0 flex-1">
                       <div className="font-sans text-sm text-(--el-text)">
-                        {t('devices.trustedOn', { date: formatDate(device.trustedAt) })}
+                        {t('devices.trustedOn', { date: formatDate(device.trustedAt, locale) })}
                       </div>
                       <div className="mt-0.5 font-sans text-xs text-(--el-text-muted)">
-                        {t('devices.expires', { date: formatDate(device.expiresAt) })}
+                        {t('devices.expires', { date: formatDate(device.expiresAt, locale) })}
                       </div>
                     </div>
                     <Button
@@ -897,8 +898,8 @@ function downloadCodes(codes: string[]): void {
  * the bare form is implementation-defined, and this component is a client
  * island whose output a component test asserts on.
  */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

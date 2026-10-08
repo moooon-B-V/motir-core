@@ -72,7 +72,7 @@ describe("a run's record (Panel 12a)", () => {
     renderBlock(recordDto());
     const part = screen.getByRole('group', { name: t.title });
     expect(within(part).getByRole('heading', { level: 4, name: t.title })).toBeTruthy();
-    expect(part.textContent).toContain('Written by Parent run #318 · 13 Sept, 14:05 UTC');
+    expect(part.textContent).toContain('Written by Parent run #318 · Sep 13, 14:05 UTC');
     // The agent's `##` sections render as headings through the ONE pipeline.
     for (const name of ['Precondition', 'Set up', 'Click-path']) {
       expect(within(part).getByRole('heading', { level: 2, name })).toBeTruthy();
@@ -129,7 +129,7 @@ describe("a person's record (Panel 13f)", () => {
   it('names the person, renders the body, and draws no box and no stale line', () => {
     renderBlock(personRecord());
     const part = screen.getByRole('group', { name: t.title });
-    expect(part.textContent).toContain('Written by Ada · 13 Sept, 14:05 UTC');
+    expect(part.textContent).toContain('Written by Ada · Sep 13, 14:05 UTC');
     expect(within(part).getByRole('heading', { level: 2, name: 'Precondition' })).toBeTruthy();
     expect(screen.getAllByRole('group')).toEqual([part]);
     expect(screen.queryByRole('status')).toBeNull();
@@ -253,10 +253,10 @@ describe('earlier versions (Panel 12j · 13f)', () => {
     expect(screen.queryByText(/Run #301/)).toBeNull();
     fireEvent.click(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(document.body.textContent).toContain('Written by Run #301 · 11 Sept, 09:00 UTC');
+    expect(document.body.textContent).toContain('Written by Run #301 · Sep 11, 09:00 UTC');
     // A person's row is drawn the SAME way — one record with two author kinds,
     // never two features.
-    expect(document.body.textContent).toContain('Written by Ada · 10 Sept, 09:00 UTC');
+    expect(document.body.textContent).toContain('Written by Ada · Sep 10, 09:00 UTC');
   });
 
   it('is absent when there are none', () => {

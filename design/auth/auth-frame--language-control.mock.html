@@ -1,0 +1,3389 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · The language control on the signed-out frame (MOTIR-7746)</title>
+    <!--
+      DESIGN ASSET (HTML mockup, a DELTA) — MOTIR-7746, for the card that builds it
+      ("Build the language control on the signed-out pages"). Amends design-notes.md
+      § The frame every screen inherits, and composes /device's wide confirm screen from
+      ../cli-connect/cli-connect.mock.html. Neither of those, nor any other asset in
+      design/auth/ or design/cli-connect/, is edited: this file holds only the panels that
+      change.
+
+      WHAT CHANGES: the (auth) frame gains ONE control, a language Combobox, in the page's
+      top-right corner on the --el-auth-wash, outside the card and outside the centred
+      column's flow. Every (auth) route inherits it from app/(auth)/layout.tsx, as it
+      inherits the lockup. It costs the card zero height on every screen, /device's wide
+      confirm step included (measured — see design-notes.md).
+
+      COMPOSED, NOT REDRAWN: the token block is the one oauth-consent--sticky-actions.mock.html
+      carries (packages/design-system/theme.css's Tier 0 + dark + the Tier-3 --el-* layer); the
+      frame, AuthShell, Button, Input, IdeaCarried, CodeChip and the Combobox trigger and listbox
+      are drawn from the shipped class strings; icons are the installed lucide-react paths.
+
+      PANELS — review every one:
+        1  Rest — /sign-in step 1, 1280 × 900
+        2  Open — the eleven, English selected, keyboard focus on 日本語
+        3  Switched — 日本語, the typed email still in the field
+        4  Pending — the trigger's busy state
+        5  Failed — the quiet line on the control, with Try again
+        6  Sign-up — step 1 and step 2
+        7  Invite arrival — /sign-in?next=/invite/accept?token=… in 中文
+        8  /device — signed out
+        9  /device — wide confirm at 1366 × 648
+        10 Mobile 375 — rest and open
+        11 Dark — rest
+        12 Dark — open
+        13 Open — the list scrolled to its end
+      Every viewport is drawn at its real size; captions carry the Chromium measurements.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --width-rail-chrome: 20px;
+        --spacing-rail-inset: 0px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+        --el-overlay-scrim: #000000a6;
+      }
+
+      /* ── Review board chrome (NOT part of the design — just this review page) ── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-width: 1420px;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .sprite {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      .board-head {
+        max-width: 1366px;
+        margin: 0 0 8px;
+      }
+      .board-head h1 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 22px;
+        color: var(--el-text);
+      }
+      .board-head p {
+        margin: 6px 0 0;
+        max-width: 110ch;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+      .panel-label {
+        margin: 48px 0 10px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .panel-label span {
+        font-family: var(--font-sans);
+        font-weight: 400;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        width: max-content;
+      }
+      .panel-note {
+        max-width: 1280px;
+        margin: 10px 0 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .panel-note b {
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .panel-note i {
+        color: var(--el-text);
+      }
+      .duo {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+      .narrow-duo {
+        gap: 48px;
+      }
+      .vp-wrap {
+        margin: 0;
+      }
+      .urlbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 12px;
+        border: 1px solid var(--el-border);
+        border-bottom: 0;
+        border-radius: var(--radius-card) var(--radius-card) 0 0;
+        background: var(--el-page-bg);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .urlbar b {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .vp {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        box-sizing: content-box;
+        color: var(--el-text);
+      }
+      .vp-cap {
+        margin: 8px 0 0;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── lucide icon slots ──────────────────────────────────────────────── */
+      .i12 {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .i14 {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .i16 {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .i18 {
+        width: 18px;
+        height: 18px;
+        flex: none;
+      }
+      .i20 {
+        width: 20px;
+        height: 20px;
+        flex: none;
+      }
+
+      /* ═══ The (auth) FRAME — app/(auth)/layout.tsx, shipped ═══════════════════
+         The page: `relative` is the ONE addition this design makes to it, so the
+         corner control has a box to sit in. min-h-dvh · items-center ·
+         bg-(--el-auth-wash) · px-6 py-12 · sm:px-10; data-auth-wide → py-8. */
+      .wash {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100%;
+        padding: 48px 40px;
+        background: var(--el-auth-wash);
+      }
+      .wash.wide {
+        padding: 32px 40px;
+      }
+      .wash.narrow {
+        padding: 48px 24px;
+      }
+      /* <main> — max-w-[28rem]; data-auth-wide → 40rem. */
+      .col {
+        width: 100%;
+        max-width: 28rem;
+      }
+      .col.wide {
+        max-width: 40rem;
+      }
+      /* The card — flex-col gap-8 · --radius-card · --el-page-bg · px-10 py-10 ·
+         --shadow-elevated; data-auth-wide → py-5 sm:px-8 and NO lockup. */
+      .card {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+        padding: 40px;
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+      }
+      .card.narrow {
+        padding: 40px 24px;
+      }
+      .card.wide {
+        padding: 20px 32px;
+      }
+      /* BrandMark size=28 — the glyph in --el-accent, the wordmark on --el-text. */
+      .lockup {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        align-self: flex-start;
+        height: 28px;
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .lockup .mark {
+        width: 28px;
+        height: 28px;
+        color: var(--el-accent);
+      }
+      .lockup .wm {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        line-height: 1;
+      }
+
+      /* ── AuthShell (app/(auth)/_components/AuthShell.tsx) ───────────────── */
+      .shell {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+      }
+      .shell.tight {
+        gap: 12px;
+      }
+      .shell-head {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .shell.tight .shell-head {
+        gap: 4px;
+      }
+      .shell-head h1 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 48px;
+        font-weight: 600;
+        line-height: 1.25;
+        letter-spacing: -0.025em;
+        color: var(--el-text);
+      }
+      .card.narrow .shell-head h1 {
+        font-size: 36px;
+      }
+      .shell.tight .shell-head h1 {
+        font-size: 24px;
+      }
+      /* The subhead is --el-text-muted in the shipped AuthShell, on the white card —
+         the one surface muted clears AA on (4.54:1). */
+      .shell-head p {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .shell.tight .shell-head p {
+        font-size: 14px;
+      }
+      .form {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .helper {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Button (buttonVariants) — size lg: h-(--height-btn-lg) px-6 text-base ── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-btn-lg);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 16px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        border: 1px solid var(--el-button-border);
+        background: transparent;
+        color: var(--el-text);
+      }
+      /* DeviceApproval's Deny — the danger hue in the border + glyph, label on --el-text. */
+      .btn-deny {
+        border-color: var(--el-danger);
+      }
+      .deny-glyph {
+        color: var(--el-danger-on-surface);
+      }
+      /* Google's mark carries its own fills and must not inherit an ink. */
+      .gmark {
+        color: initial;
+      }
+
+      /* ── OrDivider ──────────────────────────────────────────────────────── */
+      .or {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .or .rule {
+        flex: 1;
+        height: 1px;
+        background: var(--el-border);
+      }
+      .or-tx {
+        font-size: 12px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Input (components/ui/Input) ────────────────────────────────────── */
+      .input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+      }
+      .input.is-focus {
+        box-shadow:
+          0 0 0 2px var(--el-page-bg),
+          0 0 0 4px var(--focus-ring-color);
+      }
+      .affix {
+        color: var(--el-icon-muted);
+      }
+      .ival {
+        flex: 1;
+        min-width: 0;
+        color: var(--el-text);
+      }
+      .iph {
+        flex: 1;
+        color: var(--el-text-muted);
+      }
+      .foot-line {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .foot-line a {
+        font-weight: 500;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      /* The Plan with AI door — border-t pt-6, gap-3, its lead centred. */
+      .plan {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding-top: 24px;
+        border-top: 1px solid var(--el-border);
+      }
+      .plan p {
+        margin: 0;
+        text-align: center;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      /* The sign-up card's foot — legal.signUpNotice, on BOTH steps. */
+      .legal {
+        margin: 0;
+        padding-top: 16px;
+        border-top: 1px solid var(--el-border);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .legal a {
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .legal a .i12 {
+        margin-left: 2px;
+        vertical-align: -1px;
+      }
+      /* Step 2's identity recap — read-only, --el-surface fill. */
+      .recap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        font-size: 14px;
+      }
+      .recap-edit {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      /* IdeaCarried + CodeChip (AuthShell.tsx). */
+      .carried {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: var(--spacing-sm) var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+      }
+      .carried-label {
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .carried-value {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .code-chip {
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border-radius: var(--radius-control);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+        white-space: nowrap;
+      }
+      .body-copy {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.625;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── /device wide confirm — DeviceApproval (DetailColumn / DetailBlock) ── */
+      .confirm {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .detail {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .dcol {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        padding: 0 16px;
+      }
+      .dcol.divided {
+        border-left: 1px solid var(--el-border-soft);
+      }
+      .dblock {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        padding: 10px 0;
+      }
+      .dblock + .dblock {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      /* The key carries meaning → --el-text-muted on the white card (4.54:1). */
+      .dkey {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-muted);
+      }
+      .dval {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .dsub {
+        font-size: 12px;
+        line-height: 1.625;
+        color: var(--el-text-muted);
+      }
+      .dicon {
+        color: var(--el-icon-muted);
+      }
+      .who {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .who-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .who-name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .inline-link {
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .perms {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .perm {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      /* Callout tone="warn" — hue in the tint, strong ink on top. */
+      .callout {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .callout p {
+        margin: 0;
+      }
+      .callout .i20 {
+        margin-top: 2px;
+      }
+      .cmd {
+        font-family: var(--font-mono);
+        font-size: 0.95em;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+      }
+
+      /* ═══ THE DELTA (MOTIR-7746) — everything below is new ═══════════════════
+         The language control: ONE Combobox, absolutely positioned in the page's
+         top-right corner — top-2 right-6 at every width. Out of the centred
+         column's flow, so it adds nothing to the card or the page; 8 + 36 = 44px
+         ends inside the frame's 48px top padding, so it can never sit on a card. */
+      .lang {
+        position: absolute;
+        top: 8px;
+        right: 24px;
+        z-index: 10;
+      }
+      /* The shipped Combobox trigger, at its content width (className="w-auto"):
+         h-(--height-control) · px-(--spacing-control-x) · rounded-(--radius-input) ·
+         border-(--el-border) · bg-(--el-page-bg) · text-sm. Its own fill means the
+         endonym sits on --el-page-bg, never on the wash. */
+      .cb-trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 20px;
+        white-space: nowrap;
+      }
+      /* focus-visible:ring-2 ring-(--focus-ring-color) — drawn as a static state. */
+      .cb-trigger.is-focus {
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      /* The languages glyph — decorative (aria-hidden), the trigger's one cue that
+         reads in every script. --el-text-secondary: 6.8:1 on the page fill. */
+      .glyph {
+        color: var(--el-text-secondary);
+      }
+      .cb-val {
+        color: var(--el-text);
+      }
+      .chev {
+        color: var(--el-icon-muted);
+      }
+      /* Pending — the spinner takes the chevron's 16px slot, so nothing moves. */
+      .spin {
+        animation: lc-spin 0.8s linear infinite;
+      }
+      @keyframes lc-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spin {
+          animation: none;
+        }
+      }
+      /* The Combobox menu — w-max max-w-[18rem] · rounded-(--radius-card) ·
+         bg-(--el-page-bg) · p-1 · --shadow-elevated · border-(--el-border).
+         Drawn END-aligned under the trigger (see the planning flag in the notes). */
+      .menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        z-index: 50;
+        width: max-content;
+        min-width: 100%;
+        max-width: 18rem;
+        padding: 4px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+      }
+      /* The listbox — max-h-64 overflow-y-auto. */
+      .listbox {
+        max-height: 256px;
+        overflow-y: auto;
+      }
+      /* Panel 13 — a script scrolls this one to its end; nothing else differs. */
+      .listbox.at-end {
+        scroll-behavior: auto;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        color: var(--el-text);
+        font-size: 14px;
+        line-height: 20px;
+      }
+      /* The keyboard's active row (aria-activedescendant): the primitive's
+         --el-option-active-bg, plus the focus ring this design asks for. */
+      .opt.is-active {
+        background: var(--el-option-active-bg);
+        box-shadow: inset 0 0 0 2px var(--focus-ring-color);
+      }
+      .opt-label {
+        white-space: nowrap;
+      }
+      .ck {
+        margin-left: auto;
+        padding-left: 4px;
+        box-sizing: content-box;
+        color: var(--el-accent-on-surface);
+      }
+      /* Visually hidden live region (sr-only). */
+      .vh {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      /* Failed — a quiet line ON the control, end-aligned under the trigger. */
+      .lang-msg {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-size: 12px;
+        line-height: 18px;
+        white-space: nowrap;
+      }
+      .warn {
+        color: var(--el-danger-on-surface);
+      }
+      .retry {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-link);
+        font: inherit;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sprite" aria-hidden="true">
+      <defs>
+        <g
+          id="i-languages"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="i-chevrons"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-loader"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </g>
+        <g
+          id="i-retry"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+        </g>
+        <g
+          id="i-mail"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-key"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </g>
+        <g
+          id="i-terminal"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 19h8" />
+          <path d="m4 17 6-6-6-6" />
+        </g>
+        <g
+          id="i-shield-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </g>
+        <g
+          id="i-circle-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m15 9-6 6" />
+          <path d="m9 9 6 6" />
+        </g>
+        <g
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </g>
+        <g
+          id="i-square-pen"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path
+            d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"
+          />
+        </g>
+        <g
+          id="i-message"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+          />
+        </g>
+        <!-- The REAL BrandMark glyph — components/brand/waveBand.ts's WAVE_BAND_PATH, filled. -->
+        <g id="i-brandmark">
+          <path
+            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+            fill="currentColor"
+          />
+        </g>
+        <!-- Google's OWN four-colour mark, GoogleButton.tsx's GoogleGlyph verbatim — the hues are
+             Google's (their branding guidelines require the asset), the same exception
+             passkey-sign-in.mock.html records. -->
+        <g id="i-google-color">
+          <path
+            fill="#4285F4"
+            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+          />
+          <path
+            fill="#34A853"
+            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+          />
+          <path
+            fill="#EA4335"
+            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+          />
+        </g>
+      </defs>
+    </svg>
+    <header class="board-head">
+      <h1>The language control on the signed-out frame</h1>
+      <p>
+        MOTIR-7746 · a delta of <span class="mono">design/auth</span> § The frame every screen
+        inherits. One Combobox in the page's top-right corner, on the wash, outside the card — so
+        every <span class="mono">(auth)</span> route inherits it and no card grows by a pixel.
+        Captions under each viewport are measured in Chromium against this file.
+      </p>
+    </header>
+    <h2 class="panel-label" id="p1">1 · Rest <span>/sign-in step 1 · 1280 × 900 · light</span></h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/sign-in</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-rest"
+          data-vp="vp-rest"
+          style="width: 1280px; height: 900px"
+          lang="en"
+        >
+          <div class="wash">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-label="Language: English"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="en">English</span>
+                <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+            </div>
+            <main class="col">
+              <div class="card">
+                <a class="lockup" href="#" data-brand-lockup="">
+                  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-brandmark" /></svg
+                  ><span class="wm">Motir</span>
+                </a>
+                <section class="shell">
+                  <header class="shell-head">
+                    <h1>Welcome back!</h1>
+                    <p>Use Motir to turn any product idea into reality.</p>
+                  </header>
+                  <div class="form">
+                    <span class="btn btn-secondary"
+                      ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-google-color" /></svg
+                      >Continue with Google</span
+                    >
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-key" /></svg
+                      >Sign in with a passkey</span
+                    >
+                    <div class="or" role="separator" aria-orientation="horizontal" aria-label="or">
+                      <span class="rule" aria-hidden="true"></span><span class="or-tx">OR</span
+                      ><span class="rule" aria-hidden="true"></span>
+                    </div>
+                    <div class="input is-focus">
+                      <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-mail" /></svg
+                      ><span class="ival">mei.tanaka@example.com</span>
+                    </div>
+                    <span class="btn btn-primary">Continue</span>
+                    <p class="foot-line">Don't have an account? <a href="#">Sign up</a></p>
+                  </div>
+                  <div class="plan">
+                    <p>Have a project idea?</p>
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-sparkles" /></svg
+                      >Plan with AI</span
+                    >
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">
+          Card 722 px with the control · 722 px without · Δ 0 px
+        </figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      The control sits in the page's <b>top-right corner, on the wash, outside the card</b> —
+      positioned against the frame (<span class="mono">absolute top-2 right-6</span>), so it is not
+      in the centred column's flow and adds nothing to the card or the page. Trigger: the shipped
+      <b>Combobox</b> trigger at its content width — a <span class="mono">languages</span> glyph
+      (aria-hidden), the current language's endonym, the chevrons. Its accessible name is
+      <span class="mono">auth.language.label</span> → <i>“Language: English”</i>. The person has
+      already typed their email; the next panels keep it.
+    </p>
+
+    <h2 class="panel-label" id="p2">
+      2 · Open <span>the list of eleven · keyboard focus on 日本語 · 1280 × 900</span>
+    </h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/sign-in</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-open"
+          data-vp="vp-open"
+          style="width: 1280px; height: 900px"
+          lang="en"
+        >
+          <div class="wash">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger is-focus"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="true"
+                aria-controls="lb-2"
+                aria-label="Language: English"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="en">English</span>
+                <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="menu" data-menu-surface="">
+                <div
+                  class="listbox"
+                  role="listbox"
+                  id="lb-2"
+                  aria-label="Language: English"
+                  tabindex="-1"
+                  aria-activedescendant="lb-2-ja"
+                >
+                  <div class="opt" role="option" id="lb-2-en" lang="en" aria-selected="true">
+                    <span class="opt-label">English</span>
+                    <svg class="i16 ck" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-check" />
+                    </svg>
+                  </div>
+                  <div class="opt" role="option" id="lb-2-zh" lang="zh" aria-selected="false">
+                    <span class="opt-label">中文</span>
+                  </div>
+                  <div
+                    class="opt is-active"
+                    role="option"
+                    id="lb-2-ja"
+                    lang="ja"
+                    aria-selected="false"
+                  >
+                    <span class="opt-label">日本語</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-2-ko" lang="ko" aria-selected="false">
+                    <span class="opt-label">한국어</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-2-de" lang="de" aria-selected="false">
+                    <span class="opt-label">Deutsch</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-2-fr" lang="fr" aria-selected="false">
+                    <span class="opt-label">Français</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-2-es" lang="es" aria-selected="false">
+                    <span class="opt-label">Español</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-2-it" lang="it" aria-selected="false">
+                    <span class="opt-label">Italiano</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-2-nl" lang="nl" aria-selected="false">
+                    <span class="opt-label">Nederlands</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-2-pl" lang="pl" aria-selected="false">
+                    <span class="opt-label">Polski</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-2-pt" lang="pt" aria-selected="false">
+                    <span class="opt-label">Português</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <main class="col">
+              <div class="card">
+                <a class="lockup" href="#" data-brand-lockup="">
+                  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-brandmark" /></svg
+                  ><span class="wm">Motir</span>
+                </a>
+                <section class="shell">
+                  <header class="shell-head">
+                    <h1>Welcome back!</h1>
+                    <p>Use Motir to turn any product idea into reality.</p>
+                  </header>
+                  <div class="form">
+                    <span class="btn btn-secondary"
+                      ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-google-color" /></svg
+                      >Continue with Google</span
+                    >
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-key" /></svg
+                      >Sign in with a passkey</span
+                    >
+                    <div class="or" role="separator" aria-orientation="horizontal" aria-label="or">
+                      <span class="rule" aria-hidden="true"></span><span class="or-tx">OR</span
+                      ><span class="rule" aria-hidden="true"></span>
+                    </div>
+                    <div class="input">
+                      <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-mail" /></svg
+                      ><span class="ival">mei.tanaka@example.com</span>
+                    </div>
+                    <span class="btn btn-primary">Continue</span>
+                    <p class="foot-line">Don't have an account? <a href="#">Sign up</a></p>
+                  </div>
+                  <div class="plan">
+                    <p>Have a project idea?</p>
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-sparkles" /></svg
+                      >Plan with AI</span
+                    >
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">
+          List 117.7 × 266 px, right edge on the trigger's · 274.3 px clear of the card's right edge
+        </figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      The Combobox's own listbox: eleven <span class="mono">role="option"</span> rows in
+      <span class="mono">lib/i18n/locales.ts</span> order, each named in its own script and carrying
+      its own <span class="mono">lang</span>; <b>English</b> is
+      <span class="mono">aria-selected="true"</span> with the accent check. The keyboard's active
+      row (<span class="mono">aria-activedescendant</span>) is 日本語 —
+      <span class="mono">--el-option-active-bg</span> plus the focus ring. The panel keeps the
+      primitive's 256px cap, so the last three rows scroll (panel 13 shows the list at its end). It
+      opens <b>below the trigger, end-aligned</b>, over the wash: at 1280 it never reaches the card.
+    </p>
+
+    <h2 class="panel-label" id="p3">
+      3 · Switched <span>after choosing 日本語 · the email is still in the field</span>
+    </h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/sign-in</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-switched"
+          data-vp="vp-switched"
+          style="width: 1280px; height: 900px"
+          lang="ja"
+        >
+          <div class="wash">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger is-focus"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-label="言語：日本語"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="ja">日本語</span>
+                <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+            </div>
+            <main class="col">
+              <div class="card">
+                <a class="lockup" href="#" data-brand-lockup="">
+                  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-brandmark" /></svg
+                  ><span class="wm">Motir</span>
+                </a>
+                <section class="shell">
+                  <header class="shell-head">
+                    <h1>おかえりなさい！</h1>
+                    <p>Motir で、あらゆるプロダクトのアイデアを形にしましょう。</p>
+                  </header>
+                  <div class="form">
+                    <span class="btn btn-secondary"
+                      ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-google-color" /></svg
+                      >Google で続行</span
+                    >
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-key" /></svg
+                      >パスキーでサインイン</span
+                    >
+                    <div
+                      class="or"
+                      role="separator"
+                      aria-orientation="horizontal"
+                      aria-label="または"
+                    >
+                      <span class="rule" aria-hidden="true"></span><span class="or-tx">または</span
+                      ><span class="rule" aria-hidden="true"></span>
+                    </div>
+                    <div class="input">
+                      <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-mail" /></svg
+                      ><span class="ival">mei.tanaka@example.com</span>
+                    </div>
+                    <span class="btn btn-primary">続行</span>
+                    <p class="foot-line">アカウントをお持ちでないですか？ <a href="#">登録</a></p>
+                  </div>
+                  <div class="plan">
+                    <p>プロジェクトのアイデアがありますか？</p>
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-sparkles" /></svg
+                      >AI で計画</span
+                    >
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">
+          Card 812 px · trigger keeps focus · <span class="mono">&lt;html lang="ja"&gt;</span>
+        </figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      The same page re-rendered in place: <span class="mono">setLocale('ja')</span>, then
+      <span class="mono">router.refresh()</span> — no navigation, no reload. The card's client state
+      survives a refresh, so <b>mei.tanaka@example.com</b> is still in the field, and the URL is
+      untouched, so <span class="mono">?next=</span>, <span class="mono">?draft=</span> and
+      <span class="mono">user_code</span> are still there. Focus returns to the trigger, which now
+      reads 日本語. <b>Placeholder copy:</b> the Japanese strings are taken from
+      <span class="mono">messages/ja.json</span> on this branch and stand in for the catalogue work
+      items' final text; they render in the current Type axis fallback (per-language font sets is a
+      separate card).
+    </p>
+
+    <h2 class="panel-label" id="p4">
+      4 · Pending
+      <span>between the choice and the re-render · nothing is disabled, nothing moves</span>
+    </h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/sign-in</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-pending"
+          data-vp="vp-pending"
+          style="width: 1280px; height: 900px"
+          lang="en"
+        >
+          <div class="wash">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-label="Language: English"
+                aria-busy="true"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="en">English</span>
+                <svg class="i16 chev spin" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-loader" />
+                </svg>
+              </button>
+              <span class="vh" role="status">Switching to 日本語…</span>
+            </div>
+            <main class="col">
+              <div class="card">
+                <a class="lockup" href="#" data-brand-lockup="">
+                  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-brandmark" /></svg
+                  ><span class="wm">Motir</span>
+                </a>
+                <section class="shell">
+                  <header class="shell-head">
+                    <h1>Welcome back!</h1>
+                    <p>Use Motir to turn any product idea into reality.</p>
+                  </header>
+                  <div class="form">
+                    <span class="btn btn-secondary"
+                      ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-google-color" /></svg
+                      >Continue with Google</span
+                    >
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-key" /></svg
+                      >Sign in with a passkey</span
+                    >
+                    <div class="or" role="separator" aria-orientation="horizontal" aria-label="or">
+                      <span class="rule" aria-hidden="true"></span><span class="or-tx">OR</span
+                      ><span class="rule" aria-hidden="true"></span>
+                    </div>
+                    <div class="input">
+                      <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-mail" /></svg
+                      ><span class="ival">mei.tanaka@example.com</span>
+                    </div>
+                    <span class="btn btn-primary">Continue</span>
+                    <p class="foot-line">Don't have an account? <a href="#">Sign up</a></p>
+                  </div>
+                  <div class="plan">
+                    <p>Have a project idea?</p>
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-sparkles" /></svg
+                      >Plan with AI</span
+                    >
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">
+          Trigger 117.7 × 36 px — identical to rest (117.7 × 36)
+        </figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      The spinner takes the chevron's 16px slot, so the trigger does not change size. The endonym
+      stays the CURRENT language until the page has re-rendered — it is the truth until then. The
+      trigger carries <span class="mono">aria-busy="true"</span> and a visually hidden
+      <span class="mono">role="status"</span> says <i>“Switching to 日本語…”</i> (<span class="mono"
+        >auth.language.switching</span
+      >). The form is <b>not</b> disabled: the shipped Settings card sets
+      <span class="mono">disabled</span> on the Combobox while pending; this one does not, because a
+      second choice simply supersedes the first.
+    </p>
+
+    <h2 class="panel-label" id="p5">
+      5 · Failed <span>the choice could not be saved · the page stays in English</span>
+    </h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/sign-in</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-failed"
+          data-vp="vp-failed"
+          style="width: 1280px; height: 900px"
+          lang="en"
+        >
+          <div class="wash">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-label="Language: English"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="en">English</span>
+                <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="lang-msg" role="status">
+                <svg class="i14 warn" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-alert" />
+                </svg>
+                <span>Couldn’t change the language.</span>
+                <button type="button" class="retry">
+                  <svg class="i14" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-retry" /></svg
+                  >Try again
+                </button>
+              </div>
+            </div>
+            <main class="col">
+              <div class="card">
+                <a class="lockup" href="#" data-brand-lockup="">
+                  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-brandmark" /></svg
+                  ><span class="wm">Motir</span>
+                </a>
+                <section class="shell">
+                  <header class="shell-head">
+                    <h1>Welcome back!</h1>
+                    <p>Use Motir to turn any product idea into reality.</p>
+                  </header>
+                  <div class="form">
+                    <span class="btn btn-secondary"
+                      ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-google-color" /></svg
+                      >Continue with Google</span
+                    >
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-key" /></svg
+                      >Sign in with a passkey</span
+                    >
+                    <div class="or" role="separator" aria-orientation="horizontal" aria-label="or">
+                      <span class="rule" aria-hidden="true"></span><span class="or-tx">OR</span
+                      ><span class="rule" aria-hidden="true"></span>
+                    </div>
+                    <div class="input">
+                      <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-mail" /></svg
+                      ><span class="ival">mei.tanaka@example.com</span>
+                    </div>
+                    <span class="btn btn-primary">Continue</span>
+                    <p class="foot-line">Don't have an account? <a href="#">Sign up</a></p>
+                  </div>
+                  <div class="plan">
+                    <p>Have a project idea?</p>
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-sparkles" /></svg
+                      >Plan with AI</span
+                    >
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">
+          Message 288.8 × 28 px under the trigger · card 722 px (unchanged)
+        </figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      A quiet line on the control, not a <span class="mono">FormAlert</span>: sign-in still works,
+      and the failure is about the language, not the form.
+      <span class="mono">--el-page-bg</span> chip with an
+      <span class="mono">--el-border</span> hairline, a <span class="mono">circle-alert</span> glyph
+      in <span class="mono">--el-danger-on-surface</span> (aria-hidden), the line in
+      <span class="mono">--el-text</span> — <i>“Couldn’t change the language.”</i> — and
+      <b>Try again</b> in <span class="mono">--el-link</span>, which repeats the same choice.
+      <span class="mono">role="status"</span>, polite. It clears on the next choice or a successful
+      retry.
+    </p>
+
+    <h2 class="panel-label" id="p6">
+      6 · Sign-up — both steps
+      <span>/sign-up step 1 (identity) and step 2 (password) · in Deutsch</span>
+    </h2>
+    <div class="panel">
+      <div class="duo">
+        <figure class="vp-wrap">
+          <div class="urlbar">
+            <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co</span><b>/sign-up</b>
+          </div>
+          <div
+            class="vp"
+            id="vp-signup-1"
+            data-vp="vp-signup-1"
+            style="width: 640px; height: 900px"
+            lang="de"
+          >
+            <div class="wash">
+              <div class="lang">
+                <button
+                  type="button"
+                  class="cb-trigger"
+                  role="combobox"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-label="Sprache: Deutsch"
+                >
+                  <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-languages" />
+                  </svg>
+                  <span class="cb-val" lang="de">Deutsch</span>
+                  <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chevrons" />
+                  </svg>
+                </button>
+              </div>
+              <main class="col">
+                <div class="card">
+                  <a class="lockup" href="#" data-brand-lockup="">
+                    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-brandmark" /></svg
+                    ><span class="wm">Motir</span>
+                  </a>
+                  <section class="shell">
+                    <header class="shell-head">
+                      <h1>Willkommen bei Motir!</h1>
+                      <p>Registrieren Sie sich und machen Sie jede Produktidee wahr.</p>
+                    </header>
+                    <div class="form">
+                      <span class="btn btn-secondary"
+                        ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-google-color" /></svg
+                        >Weiter mit Google</span
+                      >
+                      <div
+                        class="or"
+                        role="separator"
+                        aria-orientation="horizontal"
+                        aria-label="oder"
+                      >
+                        <span class="rule" aria-hidden="true"></span><span class="or-tx">ODER</span
+                        ><span class="rule" aria-hidden="true"></span>
+                      </div>
+                      <div class="field">
+                        <div class="input is-focus">
+                          <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-mail" /></svg
+                          ><span class="ival">mei.tanaka@example.com</span>
+                        </div>
+                        <p class="helper">Damit melden Sie sich an.</p>
+                      </div>
+                      <span class="btn btn-primary">Weiter</span>
+                      <p class="foot-line">Sie haben bereits ein Konto? <a href="#">Anmelden</a></p>
+                    </div>
+                    <p class="legal">
+                      Mit dem Erstellen eines Motir-Kontos stimmen Sie unseren
+                      <a href="#"
+                        >Nutzungsbedingungen<svg class="i12" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-external" /></svg
+                      ></a>
+                      und unserer
+                      <a href="#"
+                        >Datenschutzerklärung<svg
+                          class="i12"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-external" /></svg
+                      ></a>
+                      zu.
+                    </p>
+                  </section>
+                </div>
+              </main>
+            </div>
+          </div>
+          <figcaption class="vp-cap">Step 1 · card 735.5 px · Δ 0</figcaption>
+        </figure>
+        <figure class="vp-wrap">
+          <div class="urlbar">
+            <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co</span><b>/sign-up</b>
+          </div>
+          <div
+            class="vp"
+            id="vp-signup-2"
+            data-vp="vp-signup-2"
+            style="width: 640px; height: 900px"
+            lang="de"
+          >
+            <div class="wash">
+              <div class="lang">
+                <button
+                  type="button"
+                  class="cb-trigger"
+                  role="combobox"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-label="Sprache: Deutsch"
+                >
+                  <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-languages" />
+                  </svg>
+                  <span class="cb-val" lang="de">Deutsch</span>
+                  <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chevrons" />
+                  </svg>
+                </button>
+              </div>
+              <main class="col">
+                <div class="card">
+                  <a class="lockup" href="#" data-brand-lockup="">
+                    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-brandmark" /></svg
+                    ><span class="wm">Motir</span>
+                  </a>
+                  <section class="shell">
+                    <header class="shell-head">
+                      <h1>Willkommen bei Motir!</h1>
+                      <p>Registrieren Sie sich und machen Sie jede Produktidee wahr.</p>
+                    </header>
+                    <div class="form">
+                      <div class="field">
+                        <div class="recap">
+                          <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-mail" /></svg
+                          ><span class="ival">mei.tanaka@example.com</span
+                          ><a class="recap-edit" href="#">Bearbeiten</a>
+                        </div>
+                      </div>
+                      <div class="field">
+                        <div class="input is-focus">
+                          <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-lock" /></svg
+                          ><span class="ival">••••••••••</span
+                          ><svg class="i16 affix" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-eye" />
+                          </svg>
+                        </div>
+                        <p class="helper">Mindestens 8 Zeichen.</p>
+                      </div>
+                      <span class="btn btn-primary">Konto erstellen</span>
+                      <p class="foot-line">Sie haben bereits ein Konto? <a href="#">Anmelden</a></p>
+                    </div>
+                    <p class="legal">
+                      Mit dem Erstellen eines Motir-Kontos stimmen Sie unseren
+                      <a href="#"
+                        >Nutzungsbedingungen<svg class="i12" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-external" /></svg
+                      ></a>
+                      und unserer
+                      <a href="#"
+                        >Datenschutzerklärung<svg
+                          class="i12"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-external" /></svg
+                      ></a>
+                      zu.
+                    </p>
+                  </section>
+                </div>
+              </main>
+            </div>
+          </div>
+          <figcaption class="vp-cap">Step 2 · card 696.5 px · Δ 0</figcaption>
+        </figure>
+      </div>
+    </div>
+    <p class="panel-note">
+      The control is on BOTH steps because it is the frame's, not the form's. That matters on step
+      1: <b>Weiter mit Google</b> creates the account from here and never reaches step 2, so the
+      language chosen in the corner is the one the new account is seeded with (the seeding itself is
+      the account-language card). Viewports drawn at 640 wide to fit two side by side; the frame is
+      the same at 1280.
+    </p>
+
+    <h2 class="panel-label" id="p7">
+      7 · Invite arrival <span>/sign-in?next=/invite/accept?token=… · in 中文</span>
+    </h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/sign-in?next=%2Finvite%2Faccept%3Ftoken%3Dq7Wd…</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-invite"
+          data-vp="vp-invite"
+          style="width: 1280px; height: 900px"
+          lang="zh"
+        >
+          <div class="wash">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-label="语言：中文"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="zh">中文</span>
+                <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+            </div>
+            <main class="col">
+              <div class="card">
+                <a class="lockup" href="#" data-brand-lockup="">
+                  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-brandmark" /></svg
+                  ><span class="wm">Motir</span>
+                </a>
+                <section class="shell">
+                  <header class="shell-head">
+                    <h1>欢迎回来！</h1>
+                    <p>用Motir把任何产品创意变为现实。</p>
+                  </header>
+                  <div class="form">
+                    <span class="btn btn-secondary"
+                      ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-google-color" /></svg
+                      >使用Google继续</span
+                    >
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-key" /></svg
+                      >用通行密钥登录</span
+                    >
+                    <div class="or" role="separator" aria-orientation="horizontal" aria-label="或">
+                      <span class="rule" aria-hidden="true"></span><span class="or-tx">或</span
+                      ><span class="rule" aria-hidden="true"></span>
+                    </div>
+                    <div class="input">
+                      <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-mail" /></svg
+                      ><span class="iph">邮箱地址</span>
+                    </div>
+                    <span class="btn btn-primary">继续</span>
+                    <p class="foot-line">还没有账户？ <a href="#">注册</a></p>
+                  </div>
+                  <div class="plan">
+                    <p>有产品创意？</p>
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-sparkles" /></svg
+                      >用 AI 规划</span
+                    >
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">
+          Card 728 px · Δ 0 · the <span class="mono">next</span> parameter survives a switch
+        </figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      The signed-out half of invite acceptance is this card:
+      <span class="mono">proxy.ts</span> sends an invitee with no session to
+      <span class="mono">/sign-in?next=/invite/accept?token=…</span>. A switch here is a refresh, so
+      <span class="mono">next</span> — and the token inside it — comes back unchanged and the
+      invitee still lands on the accept card. <b>The accept card itself gets no control:</b> it
+      renders under the signed-in shell, follows the ACCOUNT language, and a signed-in person
+      changes language in Settings → Account → Language.
+    </p>
+
+    <h2 class="panel-label" id="p8">
+      8 · /device — signed out
+      <span>DeviceSignedOut · /device?user_code=K4TP9RXM · 1280 × 900</span>
+    </h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/device?user_code=K4TP9RXM</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-device-out"
+          data-vp="vp-device-out"
+          style="width: 1280px; height: 900px"
+          lang="en"
+        >
+          <div class="wash">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-label="Language: English"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="en">English</span>
+                <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+            </div>
+            <main class="col">
+              <div class="card">
+                <a class="lockup" href="#" data-brand-lockup="">
+                  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-brandmark" /></svg
+                  ><span class="wm">Motir</span>
+                </a>
+                <section class="shell">
+                  <header class="shell-head">
+                    <h1>Sign in to connect the CLI</h1>
+                    <p>We’ll bring you straight back to this code.</p>
+                  </header>
+                  <div class="form">
+                    <div class="carried">
+                      <span class="carried-label">Connecting</span>
+                      <p class="carried-value">
+                        Motir CLI · code <code class="code-chip">K4TP-9RXM</code>
+                      </p>
+                    </div>
+                    <p class="body-copy">
+                      Only the account you sign in as can approve this — and only that account’s
+                      workspaces can be picked.
+                    </p>
+                    <span class="btn btn-primary">Sign in to continue</span>
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">Card 523.5 px · Δ 0</figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      The code stays in the URL across a switch, so the carried banner still names it and the
+      <b>Sign in to continue</b> link still encodes
+      <span class="mono">/device?user_code=…</span> into <span class="mono">next</span>.
+    </p>
+
+    <h2 class="panel-label" id="p9">
+      9 · /device — wide confirm <span>1366 × 648 · the measured fold budget</span>
+    </h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/device?user_code=K4TP9RXM</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-device-wide"
+          data-vp="vp-device-wide"
+          style="width: 1366px; height: 648px"
+          lang="en"
+        >
+          <div class="wash wide">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-label="Language: English"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="en">English</span>
+                <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+            </div>
+            <main class="col wide">
+              <div class="card wide">
+                <div data-auth-wide="">
+                  <section class="shell tight">
+                    <header class="shell-head">
+                      <h1>Connect this terminal?</h1>
+                      <p>
+                        Check all four before you approve — this is the only gate on what it gets.
+                      </p>
+                    </header>
+                    <div class="confirm">
+                      <div class="detail">
+                        <div class="dcol">
+                          <div class="dblock">
+                            <span class="dkey">You</span>
+                            <span class="who"
+                              ><span class="avatar" aria-hidden="true">M</span
+                              ><span class="who-text"
+                                ><span class="who-name">Mei Tanaka</span
+                                ><span class="dsub">mei.tanaka@example.com</span></span
+                              ></span
+                            >
+                            <span class="dsub"
+                              >Not you?
+                              <button type="button" class="inline-link">Sign out</button> and sign
+                              in as them.</span
+                            >
+                          </div>
+                          <div class="dblock">
+                            <span class="dkey">Connecting</span>
+                            <span class="dval"
+                              ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-terminal" /></svg
+                              >Motir CLI on studio-mbp</span
+                            >
+                            <span class="dsub"
+                              >Code <code class="code-chip">K4TP-9RXM</code> · asked 12 seconds
+                              ago</span
+                            >
+                          </div>
+                          <div class="dblock">
+                            <span class="dkey">Workspace</span>
+                            <span class="dval">Tanaka Studio</span>
+                            <span class="dsub">Your only workspace.</span>
+                          </div>
+                        </div>
+                        <div class="dcol divided">
+                          <div class="dblock">
+                            <span class="dkey">It can</span>
+                            <span class="perms">
+                              <span class="perm"
+                                ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                >View project</span
+                              >
+                              <span class="perm"
+                                ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                >View the lesson library</span
+                              >
+                              <span class="perm"
+                                ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                >Record a lesson recurrence</span
+                              >
+                              <span class="perm"
+                                ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-square-pen" /></svg
+                                >Edit work items</span
+                              >
+                              <span class="perm"
+                                ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-message" /></svg
+                                >Add comments</span
+                              >
+                              <span class="perm"
+                                ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                >See every plan</span
+                              >
+                              <span class="perm"
+                                ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                >See every agent run</span
+                              >
+                              <span class="perm"
+                                ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                >Read pages</span
+                              >
+                              <span class="perm"
+                                ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                >Edit pages</span
+                              >
+                              <span class="perm"
+                                ><svg class="i16 dicon" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-sparkles" /></svg
+                                >Run AI planning</span
+                              >
+                            </span>
+                            <span class="dsub"
+                              >Not: archive or delete work items, members, billing.</span
+                            >
+                          </div>
+                          <div class="dblock">
+                            <span class="dkey">Expires</span>
+                            <span class="dval">In 90 days</span>
+                            <span class="dsub">Revoke it in Tokens to disconnect.</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="callout">
+                        <svg class="i20" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-shield-alert" />
+                        </svg>
+                        <p>
+                          Approve only if you just ran <code class="cmd">motir login</code> on
+                          studio-mbp yourself. If someone sent you this code — a chat, an email, a
+                          support ticket — <strong>deny it</strong>: approving hands THEIR terminal
+                          everything above, as you.
+                        </p>
+                      </div>
+                      <div
+                        class="actions"
+                        role="group"
+                        aria-label="Approve or deny this terminal"
+                        data-measure="actions"
+                      >
+                        <span class="btn btn-secondary btn-deny"
+                          ><svg class="i16 deny-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-circle-x" /></svg
+                          >Deny</span
+                        >
+                        <span class="btn btn-primary">Approve and connect</span>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">
+          Page 717.4 px with the control · 717.4 px without (shipped baseline 622) · Approve/Deny
+          end at 665.4 px · fold 648
+        </figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      The one screen the frame has no room on: <span class="mono">data-auth-wide</span> suppresses
+      the lockup and tightens the padding to fit a 1366 × 648 viewport. The control is out of the
+      column's flow, so the page measures the same with and without it. At 1366 the trigger sits
+      221.3 px clear of the 40rem card. <b>Measured with today's ten-permission CLI grant</b> (<span
+        class="mono"
+        >CLI_TOKEN_GRANT</span
+      >
+      as <span class="mono">DeviceApproval</span> renders it), this reconstruction is 717.4px with
+      Approve/Deny ending at 665.4px — the same with and without the control. With the three scope
+      rows the 622px baseline was measured on, it is 590.4px (actions at 567.2px), again identical
+      either way. The notes flag the gap between the docstring's 622 and today's grant; the control
+      does not touch it.
+    </p>
+
+    <h2 class="panel-label" id="p10">
+      10 · Mobile 375 — rest and open <span>/sign-in step 1 · 375 × 812</span>
+    </h2>
+    <div class="panel">
+      <div class="duo narrow-duo">
+        <figure class="vp-wrap">
+          <div class="urlbar">
+            <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co</span><b>/sign-in</b>
+          </div>
+          <div
+            class="vp"
+            id="vp-mobile-rest"
+            data-vp="vp-mobile-rest"
+            style="width: 375px; height: 812px"
+            lang="en"
+          >
+            <div class="wash narrow">
+              <div class="lang">
+                <button
+                  type="button"
+                  class="cb-trigger"
+                  role="combobox"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-label="Language: English"
+                >
+                  <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-languages" />
+                  </svg>
+                  <span class="cb-val" lang="en">English</span>
+                  <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chevrons" />
+                  </svg>
+                </button>
+              </div>
+              <main class="col">
+                <div class="card narrow">
+                  <a class="lockup" href="#" data-brand-lockup="">
+                    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-brandmark" /></svg
+                    ><span class="wm">Motir</span>
+                  </a>
+                  <section class="shell">
+                    <header class="shell-head">
+                      <h1>Welcome back!</h1>
+                      <p>Use Motir to turn any product idea into reality.</p>
+                    </header>
+                    <div class="form">
+                      <span class="btn btn-secondary"
+                        ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-google-color" /></svg
+                        >Continue with Google</span
+                      >
+                      <span class="btn btn-secondary"
+                        ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-key" /></svg
+                        >Sign in with a passkey</span
+                      >
+                      <div
+                        class="or"
+                        role="separator"
+                        aria-orientation="horizontal"
+                        aria-label="or"
+                      >
+                        <span class="rule" aria-hidden="true"></span><span class="or-tx">OR</span
+                        ><span class="rule" aria-hidden="true"></span>
+                      </div>
+                      <div class="input is-focus">
+                        <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-mail" /></svg
+                        ><span class="ival">mei.tanaka@example.com</span>
+                      </div>
+                      <span class="btn btn-primary">Continue</span>
+                      <p class="foot-line">Don't have an account? <a href="#">Sign up</a></p>
+                    </div>
+                    <div class="plan">
+                      <p>Have a project idea?</p>
+                      <span class="btn btn-secondary"
+                        ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-sparkles" /></svg
+                        >Plan with AI</span
+                      >
+                    </div>
+                  </section>
+                </div>
+              </main>
+            </div>
+          </div>
+          <figcaption class="vp-cap">
+            Trigger ends at y 44 · card starts at y 48 · Δ card 0
+          </figcaption>
+        </figure>
+        <figure class="vp-wrap">
+          <div class="urlbar">
+            <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co</span><b>/sign-in</b>
+          </div>
+          <div
+            class="vp"
+            id="vp-mobile-open"
+            data-vp="vp-mobile-open"
+            style="width: 375px; height: 812px"
+            lang="en"
+          >
+            <div class="wash narrow">
+              <div class="lang">
+                <button
+                  type="button"
+                  class="cb-trigger is-focus"
+                  role="combobox"
+                  aria-haspopup="listbox"
+                  aria-expanded="true"
+                  aria-controls="lb-12"
+                  aria-label="Language: English"
+                >
+                  <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-languages" />
+                  </svg>
+                  <span class="cb-val" lang="en">English</span>
+                  <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chevrons" />
+                  </svg>
+                </button>
+                <div class="menu" data-menu-surface="">
+                  <div
+                    class="listbox"
+                    role="listbox"
+                    id="lb-12"
+                    aria-label="Language: English"
+                    tabindex="-1"
+                    aria-activedescendant="lb-12-ja"
+                  >
+                    <div class="opt" role="option" id="lb-12-en" lang="en" aria-selected="true">
+                      <span class="opt-label">English</span>
+                      <svg class="i16 ck" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-check" />
+                      </svg>
+                    </div>
+                    <div class="opt" role="option" id="lb-12-zh" lang="zh" aria-selected="false">
+                      <span class="opt-label">中文</span>
+                    </div>
+                    <div
+                      class="opt is-active"
+                      role="option"
+                      id="lb-12-ja"
+                      lang="ja"
+                      aria-selected="false"
+                    >
+                      <span class="opt-label">日本語</span>
+                    </div>
+                    <div class="opt" role="option" id="lb-12-ko" lang="ko" aria-selected="false">
+                      <span class="opt-label">한국어</span>
+                    </div>
+                    <div class="opt" role="option" id="lb-12-de" lang="de" aria-selected="false">
+                      <span class="opt-label">Deutsch</span>
+                    </div>
+                    <div class="opt" role="option" id="lb-12-fr" lang="fr" aria-selected="false">
+                      <span class="opt-label">Français</span>
+                    </div>
+                    <div class="opt" role="option" id="lb-12-es" lang="es" aria-selected="false">
+                      <span class="opt-label">Español</span>
+                    </div>
+                    <div class="opt" role="option" id="lb-12-it" lang="it" aria-selected="false">
+                      <span class="opt-label">Italiano</span>
+                    </div>
+                    <div class="opt" role="option" id="lb-12-nl" lang="nl" aria-selected="false">
+                      <span class="opt-label">Nederlands</span>
+                    </div>
+                    <div class="opt" role="option" id="lb-12-pl" lang="pl" aria-selected="false">
+                      <span class="opt-label">Polski</span>
+                    </div>
+                    <div class="opt" role="option" id="lb-12-pt" lang="pt" aria-selected="false">
+                      <span class="opt-label">Português</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <main class="col">
+                <div class="card narrow">
+                  <a class="lockup" href="#" data-brand-lockup="">
+                    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-brandmark" /></svg
+                    ><span class="wm">Motir</span>
+                  </a>
+                  <section class="shell">
+                    <header class="shell-head">
+                      <h1>Welcome back!</h1>
+                      <p>Use Motir to turn any product idea into reality.</p>
+                    </header>
+                    <div class="form">
+                      <span class="btn btn-secondary"
+                        ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-google-color" /></svg
+                        >Continue with Google</span
+                      >
+                      <span class="btn btn-secondary"
+                        ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-key" /></svg
+                        >Sign in with a passkey</span
+                      >
+                      <div
+                        class="or"
+                        role="separator"
+                        aria-orientation="horizontal"
+                        aria-label="or"
+                      >
+                        <span class="rule" aria-hidden="true"></span><span class="or-tx">OR</span
+                        ><span class="rule" aria-hidden="true"></span>
+                      </div>
+                      <div class="input">
+                        <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-mail" /></svg
+                        ><span class="ival">mei.tanaka@example.com</span>
+                      </div>
+                      <span class="btn btn-primary">Continue</span>
+                      <p class="foot-line">Don't have an account? <a href="#">Sign up</a></p>
+                    </div>
+                    <div class="plan">
+                      <p>Have a project idea?</p>
+                      <span class="btn btn-secondary"
+                        ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-sparkles" /></svg
+                        >Plan with AI</span
+                      >
+                    </div>
+                  </section>
+                </div>
+              </main>
+            </div>
+          </div>
+          <figcaption class="vp-cap">
+            List 117.7 × 266 px, inside the 24px gutter (right edge at x 351)
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+    <p class="panel-note">
+      The same <span class="mono">top-2 right-6</span> as on desktop: at 375 the trigger's right
+      edge meets the card's, and it ends at 44px — inside the frame's 48px top padding — so it never
+      overlaps the card. Open, the list overlays the card's top as any popover does and stays inside
+      the gutter.
+    </p>
+
+    <h2 class="panel-label" id="p11">
+      11 · Dark — rest <span>/sign-in step 1 · 1280 × 900 · data-theme="dark"</span>
+    </h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/sign-in</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-dark-rest"
+          data-vp="vp-dark-rest"
+          style="width: 1280px; height: 900px"
+          data-theme="dark"
+          lang="en"
+        >
+          <div class="wash">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-label="Language: English"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="en">English</span>
+                <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+            </div>
+            <main class="col">
+              <div class="card">
+                <a class="lockup" href="#" data-brand-lockup="">
+                  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-brandmark" /></svg
+                  ><span class="wm">Motir</span>
+                </a>
+                <section class="shell">
+                  <header class="shell-head">
+                    <h1>Welcome back!</h1>
+                    <p>Use Motir to turn any product idea into reality.</p>
+                  </header>
+                  <div class="form">
+                    <span class="btn btn-secondary"
+                      ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-google-color" /></svg
+                      >Continue with Google</span
+                    >
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-key" /></svg
+                      >Sign in with a passkey</span
+                    >
+                    <div class="or" role="separator" aria-orientation="horizontal" aria-label="or">
+                      <span class="rule" aria-hidden="true"></span><span class="or-tx">OR</span
+                      ><span class="rule" aria-hidden="true"></span>
+                    </div>
+                    <div class="input is-focus">
+                      <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-mail" /></svg
+                      ><span class="ival">mei.tanaka@example.com</span>
+                    </div>
+                    <span class="btn btn-primary">Continue</span>
+                    <p class="foot-line">Don't have an account? <a href="#">Sign up</a></p>
+                  </div>
+                  <div class="plan">
+                    <p>Have a project idea?</p>
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-sparkles" /></svg
+                      >Plan with AI</span
+                    >
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">Card 722 px · Δ 0</figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      Every colour is an <span class="mono">--el-*</span> token, so the dark palette flips the
+      trigger with the card: <span class="mono">--el-page-bg</span> fill,
+      <span class="mono">--el-border</span> hairline, <span class="mono">--el-text</span> endonym,
+      <span class="mono">--el-text-secondary</span> glyph.
+    </p>
+
+    <h2 class="panel-label" id="p12">
+      12 · Dark — open <span>the list at rest at the top · 1280 × 900</span>
+    </h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/sign-in</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-dark-open"
+          data-vp="vp-dark-open"
+          style="width: 1280px; height: 900px"
+          data-theme="dark"
+          lang="en"
+        >
+          <div class="wash">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger is-focus"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="true"
+                aria-controls="lb-14"
+                aria-label="Language: English"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="en">English</span>
+                <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="menu" data-menu-surface="">
+                <div
+                  class="listbox"
+                  role="listbox"
+                  id="lb-14"
+                  aria-label="Language: English"
+                  tabindex="-1"
+                  aria-activedescendant="lb-14-ja"
+                >
+                  <div class="opt" role="option" id="lb-14-en" lang="en" aria-selected="true">
+                    <span class="opt-label">English</span>
+                    <svg class="i16 ck" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-check" />
+                    </svg>
+                  </div>
+                  <div class="opt" role="option" id="lb-14-zh" lang="zh" aria-selected="false">
+                    <span class="opt-label">中文</span>
+                  </div>
+                  <div
+                    class="opt is-active"
+                    role="option"
+                    id="lb-14-ja"
+                    lang="ja"
+                    aria-selected="false"
+                  >
+                    <span class="opt-label">日本語</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-14-ko" lang="ko" aria-selected="false">
+                    <span class="opt-label">한국어</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-14-de" lang="de" aria-selected="false">
+                    <span class="opt-label">Deutsch</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-14-fr" lang="fr" aria-selected="false">
+                    <span class="opt-label">Français</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-14-es" lang="es" aria-selected="false">
+                    <span class="opt-label">Español</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-14-it" lang="it" aria-selected="false">
+                    <span class="opt-label">Italiano</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-14-nl" lang="nl" aria-selected="false">
+                    <span class="opt-label">Nederlands</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-14-pl" lang="pl" aria-selected="false">
+                    <span class="opt-label">Polski</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-14-pt" lang="pt" aria-selected="false">
+                    <span class="opt-label">Português</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <main class="col">
+              <div class="card">
+                <a class="lockup" href="#" data-brand-lockup="">
+                  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-brandmark" /></svg
+                  ><span class="wm">Motir</span>
+                </a>
+                <section class="shell">
+                  <header class="shell-head">
+                    <h1>Welcome back!</h1>
+                    <p>Use Motir to turn any product idea into reality.</p>
+                  </header>
+                  <div class="form">
+                    <span class="btn btn-secondary"
+                      ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-google-color" /></svg
+                      >Continue with Google</span
+                    >
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-key" /></svg
+                      >Sign in with a passkey</span
+                    >
+                    <div class="or" role="separator" aria-orientation="horizontal" aria-label="or">
+                      <span class="rule" aria-hidden="true"></span><span class="or-tx">OR</span
+                      ><span class="rule" aria-hidden="true"></span>
+                    </div>
+                    <div class="input">
+                      <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-mail" /></svg
+                      ><span class="ival">mei.tanaka@example.com</span>
+                    </div>
+                    <span class="btn btn-primary">Continue</span>
+                    <p class="foot-line">Don't have an account? <a href="#">Sign up</a></p>
+                  </div>
+                  <div class="plan">
+                    <p>Have a project idea?</p>
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-sparkles" /></svg
+                      >Plan with AI</span
+                    >
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">Same list, dark palette</figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      The selected check is <span class="mono">--el-accent-on-surface</span>, which the dark palette
+      mixes toward the body ink so it reads on the dark menu.
+    </p>
+
+    <h2 class="panel-label" id="p13">
+      13 · Open — scrolled to the end
+      <span>the same eleven, the last three reached · 1280 × 900</span>
+    </h2>
+    <div class="panel">
+      <figure class="vp-wrap">
+        <div class="urlbar">
+          <svg class="i12" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co</span><b>/sign-in</b>
+        </div>
+        <div
+          class="vp"
+          id="vp-open-end"
+          data-vp="vp-open-end"
+          style="width: 1280px; height: 900px"
+          lang="en"
+        >
+          <div class="wash">
+            <div class="lang">
+              <button
+                type="button"
+                class="cb-trigger is-focus"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="true"
+                aria-controls="lb-15"
+                aria-label="Language: English"
+              >
+                <svg class="i16 glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-languages" />
+                </svg>
+                <span class="cb-val" lang="en">English</span>
+                <svg class="i16 chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="menu" data-menu-surface="">
+                <div
+                  class="listbox at-end"
+                  role="listbox"
+                  id="lb-15"
+                  aria-label="Language: English"
+                  tabindex="-1"
+                  aria-activedescendant="lb-15-pt"
+                >
+                  <div class="opt" role="option" id="lb-15-en" lang="en" aria-selected="true">
+                    <span class="opt-label">English</span>
+                    <svg class="i16 ck" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-check" />
+                    </svg>
+                  </div>
+                  <div class="opt" role="option" id="lb-15-zh" lang="zh" aria-selected="false">
+                    <span class="opt-label">中文</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-15-ja" lang="ja" aria-selected="false">
+                    <span class="opt-label">日本語</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-15-ko" lang="ko" aria-selected="false">
+                    <span class="opt-label">한국어</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-15-de" lang="de" aria-selected="false">
+                    <span class="opt-label">Deutsch</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-15-fr" lang="fr" aria-selected="false">
+                    <span class="opt-label">Français</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-15-es" lang="es" aria-selected="false">
+                    <span class="opt-label">Español</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-15-it" lang="it" aria-selected="false">
+                    <span class="opt-label">Italiano</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-15-nl" lang="nl" aria-selected="false">
+                    <span class="opt-label">Nederlands</span>
+                  </div>
+                  <div class="opt" role="option" id="lb-15-pl" lang="pl" aria-selected="false">
+                    <span class="opt-label">Polski</span>
+                  </div>
+                  <div
+                    class="opt is-active"
+                    role="option"
+                    id="lb-15-pt"
+                    lang="pt"
+                    aria-selected="false"
+                  >
+                    <span class="opt-label">Português</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <main class="col">
+              <div class="card">
+                <a class="lockup" href="#" data-brand-lockup="">
+                  <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-brandmark" /></svg
+                  ><span class="wm">Motir</span>
+                </a>
+                <section class="shell">
+                  <header class="shell-head">
+                    <h1>Welcome back!</h1>
+                    <p>Use Motir to turn any product idea into reality.</p>
+                  </header>
+                  <div class="form">
+                    <span class="btn btn-secondary"
+                      ><svg class="i18 gmark" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-google-color" /></svg
+                      >Continue with Google</span
+                    >
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-key" /></svg
+                      >Sign in with a passkey</span
+                    >
+                    <div class="or" role="separator" aria-orientation="horizontal" aria-label="or">
+                      <span class="rule" aria-hidden="true"></span><span class="or-tx">OR</span
+                      ><span class="rule" aria-hidden="true"></span>
+                    </div>
+                    <div class="input">
+                      <svg class="i20 affix" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-mail" /></svg
+                      ><span class="ival">mei.tanaka@example.com</span>
+                    </div>
+                    <span class="btn btn-primary">Continue</span>
+                    <p class="foot-line">Don't have an account? <a href="#">Sign up</a></p>
+                  </div>
+                  <div class="plan">
+                    <p>Have a project idea?</p>
+                    <span class="btn btn-secondary"
+                      ><svg class="i16" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-sparkles" /></svg
+                      >Plan with AI</span
+                    >
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </div>
+        <figcaption class="vp-cap">
+          End / ArrowDown reaches Português; the list scrolls inside its own box
+        </figcaption>
+      </figure>
+    </div>
+    <p class="panel-note">
+      The primitive caps its list at 256px (8 rows of 32px); eleven rows are 352px, so the end of
+      the list is one scroll away. Kept rather than lifting the cap for this instance: the Settings
+      pane shows the same eleven through the same primitive, and a fix belongs in the primitive for
+      both.
+    </p>
+    <script>
+      // Panel 13 draws the list at its END: the listbox scrolls inside its own box.
+      for (const list of document.querySelectorAll('.listbox.at-end'))
+        list.scrollTop = list.scrollHeight;
+    </script>
+  </body>
+</html>
