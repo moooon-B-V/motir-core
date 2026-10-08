@@ -9391,3 +9391,166 @@ block's `rv-` rules are carried verbatim from `design/workbench/workbench--to-fi
 | -------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
 | **MOTIR-7589** (the build) | ELEMENT: the tag's `withHead` name, the four banner variants, the meta line, every string above. | Nothing                                                                                          |
 | **MOTIR-6878**             | Nothing                                                                                          | A leg's banner link now opens the head's page instead of scrolling to its own Development block. |
+
+## Tag a page in Description and Explanation (MOTIR-7695)
+
+**The asset:** [`internal-links--page-tag.mock.html`](./internal-links--page-tag.mock.html)
+(`design/work-items/internal-links--page-tag.mock.html`), a new delta mock, panels **1–9**. **It edits no
+existing mock.** It amends:
+
+- **panel 3 of `design/work-items/internal-links.mock.html`**, the unified `@` picker (People + Work items),
+  § _Work-item mentions & internal links_ above. The picker gains a third section, **Pages**.
+- **the page editor's work-item chip and its unavailable state (MOTIR-7568)**,
+  the mock `page--work-item-mention.mock.html` in the pages area, which `markdownEditorMentions.tsx` and the
+  `@motir/pages` mention chip cite. The page chip's unavailable state is that chip's rule carried across: one
+  state, no title anywhere. That mock is a published design result (card MOTIR-7568) and is not committed to
+  this tree, so it is named here by file name rather than by repository path.
+- **the work item's Pages section with its source labels (MOTIR-7569)**,
+  the mock `item--pages-section.mock.html` in this area, which `PagesSection.tsx` cites. Its row gains two
+  source labels. Also a published design result (card MOTIR-7569), not committed here.
+
+The picker belongs to the shared `MarkdownEditor`, but the Pages section is offered only where the host wires
+a page search: a work item's **Description** and **Explanation** editors. Comments, and every other
+`MarkdownEditor`, keep the People + Work items picker unchanged.
+
+### Panels
+
+| panel | what it draws                                                                                                                                   |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Picker idle at `@r` (under 2 characters): People lists members; Work items and Pages each show their "Keep typing" hint                         |
+| 2     | Picker results at `@ro`: People, then Work items, then Pages; the first Pages row active                                                        |
+| 3     | The Pages section alone in three states: searching, no match, failed (with Try again)                                                           |
+| 4     | A reader without `page:view`: People + Work items only, no Pages header, no empty state                                                         |
+| 5     | The inserted page chip in the editor, beside the person chip and the work-item chip; and the chip selected                                      |
+| 6     | The chip in read view: rest, hover (title underlines), keyboard focus (focus ring)                                                              |
+| 7     | **Page unavailable**: one chip for three causes                                                                                                 |
+| 8     | The work item's Pages section: a row "Mentioned · Tagged in description" (drawn hovered) and a row whose only source is "Tagged in explanation" |
+| 9     | Dark theme for panels 2, 5, 6 and 7, on a nested `data-theme="dark"` board                                                                      |
+
+### The picker (panels 1–4)
+
+- **Section order is fixed: People, Work items, Pages.** ↑/↓ wraps across all three; Enter inserts the active
+  row. The option list is the three sections concatenated in that order, so the `mention-option-<n>` index
+  space just grows by the page rows.
+- **Pages waits for 2 characters** (`QUICK_SEARCH_MIN_QUERY_LENGTH`), like Work items. Under it, both sections
+  show their hint line. People filters from the first character, unchanged.
+- **The Pages search is its own debounced request** (250 ms, the work-item debounce), beside the work-item one.
+  Each section loads, empties and fails on its own.
+- **Failed is never "no match".** A rejected page search shows the alert line and one **Try again** option,
+  which re-runs the same query for Pages only. That option takes its place in the option list after the
+  page-section position, as the work-item retry does.
+- **Without `page:view`** the host passes no page search, so the section is absent: no header, no hint, no
+  request. The listbox keeps today's name, "Mention a person or work item". With a page search wired the name
+  becomes "Mention a person, work item or page".
+
+### The page row (panel 2)
+
+The row is `WorkItemMentionRow`'s layout: leading glyph, truncating title, trailing meta.
+
+| element        | primitive / markup                         | colour (`--el-*`)                  | shape                                       |
+| -------------- | ------------------------------------------ | ---------------------------------- | ------------------------------------------- |
+| row            | `div role="option"` in the `MentionList`   | `--el-text`; active `--el-surface` | `--radius-control`, `--spacing-control-x/y` |
+| glyph          | lucide `FileText`, 14 px, `aria-hidden`    | `--el-text-secondary`              | —                                           |
+| title          | `span`, one line, ellipsis                 | `--el-text`                        | —                                           |
+| place          | `span`, right-aligned, 12 px, max 9rem     | `--el-text-secondary`              | —                                           |
+| section header | the mono uppercase `p` (People/Work items) | `--el-text-secondary`              | `--spacing-control-x` inline                |
+
+- **The place** is the page's folder path joined with `›` (`Product › Roadmaps`), or, for a child page, its
+  parent page's title (`Q4 roadmap`). A page at the top level shows no place. An untitled page reads
+  "Untitled" (`pages.untitled`).
+- **The place is `--el-text-secondary`, not `--el-text-muted`**: the active row's fill is `--el-surface`, where
+  muted is 4.17:1 and fails AA. Secondary clears AA on both the popup's `--el-page-bg` and the active tint.
+
+### Section states (panels 1, 3)
+
+| state          | markup                                                              | colour                                                          |
+| -------------- | ------------------------------------------------------------------- | --------------------------------------------------------------- |
+| under 2 chars  | the hint `p`, centred, 12 px                                        | `--el-text-secondary`                                           |
+| searching      | lucide `Loader2` (spinning, `aria-hidden`) + "Searching…"           | line and glyph `--el-text-secondary`                            |
+| no match       | the hint `p`: No pages match “zzqq”.                                | `--el-text-secondary`                                           |
+| failed         | `p role="alert"`: lucide `TriangleAlert` + "Couldn’t search pages." | line `--el-text`; the glyph alone `--el-danger-on-surface`      |
+| failed — retry | one `div role="option"`: lucide `RotateCw` + "Try again"            | `--el-text`, glyph `--el-text-secondary`; active `--el-surface` |
+
+The Pages hint lines are drawn in `--el-text-secondary`. The shipped Work items lines paint `--el-text-muted`
+on the popup's white `--el-page-bg`, which passes (4.54:1); the mock draws both sections in secondary so they
+read the same, and the build may move the work-item lines to secondary in the same change.
+
+### The page chip (panels 5–6)
+
+| element | primitive / markup                                        | colour                                       | shape                                  |
+| ------- | --------------------------------------------------------- | -------------------------------------------- | -------------------------------------- |
+| chip    | editor: an atomic inline node; read view: `a` to the page | fill `--el-tint-sky`, ink `--el-text-strong` | `--radius-badge`, `--spacing-chip-x/y` |
+| glyph   | lucide `FileText`, 13 px, `aria-hidden`                   | inherits `--el-text-strong`                  | —                                      |
+| title   | `span`, ellipsis when long                                | inherits `--el-text-strong`                  | —                                      |
+
+- **Tint slot.** The work-item chip (`.wi-chip`) is a bordered `--el-surface-soft` box with `--radius-control`,
+  and the person chip (`.mention-chip`) is `--el-tint-lavender` with `--radius-badge`. The page chip takes
+  `--el-tint-sky`, which neither uses, so the three references read apart in one paragraph (panel 5).
+- **The title is the page's CURRENT title**, read when the body renders; a rename shows the new name.
+- **In the editor** a click selects the chip (the focus-ring outline, as the work-item atom) and never opens
+  the page.
+- **In the read view** the chip is a link to the page in the same tab. Hover underlines the title and changes
+  no colour. Keyboard focus draws `ring-(--focus-ring-color)` at `--focus-ring-width`, offset 1 px.
+
+### Page unavailable (panel 7)
+
+- **One state for three causes**: the reader has no `page:view`, the page is archived, or it is deleted. The
+  chip never says which.
+- **The title appears nowhere**: not in the text, not in a `title` attribute, not in screen-reader-only text,
+  not in a `data-*` attribute. The stored token keeps the page id; the render reads no title for it.
+- **It is a `span`, not a link**: no hover state, no focus stop, default cursor.
+
+| element | markup                              | colour                                       | shape                                  |
+| ------- | ----------------------------------- | -------------------------------------------- | -------------------------------------- |
+| chip    | `span`                              | fill `--el-muted`, ink `--el-text-secondary` | `--radius-badge`, `--spacing-chip-x/y` |
+| glyph   | lucide `Lock`, 13 px, `aria-hidden` | inherits `--el-text-secondary`               | —                                      |
+| label   | "Page unavailable"                  | inherits                                     | —                                      |
+
+### The Pages section rows (panel 8)
+
+The row is `PagesSection.tsx`'s `PageRow`, unchanged: `NotebookText` glyph (`--el-icon-muted`), title
+(`--el-text`, underlined on row hover), the place breadcrumb (`--el-text-secondary`, `ChevronRight` separators
+and `Folder` glyphs in `--el-icon-muted`), the source Pills, and the relative time (`--el-text-secondary`). The
+row hover is `--el-surface` at `--radius-control` with `--spacing-control-x/y`; rows are divided by
+`--el-border-soft`.
+
+- **Two new sources** join the fixed order after Mentioned, Embedded and Linked: **Tagged in description**
+  (`issueViews.pagesSourceDescription`) and **Tagged in explanation** (`issueViews.pagesSourceExplanation`).
+- Each is a `Pill tone="neutral"` (`--el-chip-bg` fill, `--el-chip-border` edge, `--el-text-secondary` ink,
+  `--radius-badge`, `--spacing-chip-x/y`) with a lucide `Tag` glyph. A page tagged in both fields shows both.
+- The section card is `ContentSectionCard`: "Pages — where this item is written about", `--radius-card`,
+  `--spacing-card-padding`, `--shadow-card`.
+
+### Primitives used
+
+`MentionList` and its option row (`components/ui/markdownEditorMentions.tsx`), `WorkItemMentionRow`'s row
+layout, `Pill` (status tones in the work-item rows; `tone="neutral"` for sources), `IssueTypeIcon` (work-item
+rows), the `MarkdownEditor` wrapper, `.mention-chip` and `.wi-chip` (contrast only), `PagesSection` /
+`ContentSectionCard` / `PageBreadcrumb`'s place vocabulary. Lucide glyphs: `FileText`, `Lock`, `Tag`,
+`AtSign`, `NotebookText`, `Folder`, `ChevronRight`, `Loader2`, `TriangleAlert`, `RotateCw`.
+
+### Copy
+
+| key (proposed unless noted)                     | en                                  |
+| ----------------------------------------------- | ----------------------------------- |
+| `markdownEditor.mentionPages`                   | Pages                               |
+| `markdownEditor.mentionTypeToSearchPages`       | Keep typing to search pages…        |
+| `markdownEditor.mentionSearching` (existing)    | Searching…                          |
+| `markdownEditor.mentionNoPages`                 | No pages match “{query}”.           |
+| `markdownEditor.mentionPagesSearchFailed`       | Couldn’t search pages.              |
+| `markdownEditor.mentionRetry` (existing)        | Try again                           |
+| `markdownEditor.mentionTypeToSearch` (existing) | Keep typing to search work items…   |
+| `markdownEditor.pageUnavailable`                | Page unavailable                    |
+| `issueViews.pagesSourceDescription` (existing)  | Tagged in description               |
+| `issueViews.pagesSourceExplanation` (existing)  | Tagged in explanation               |
+| listbox name, with a page search                | Mention a person, work item or page |
+
+The "Keep typing" hint is one sentence shape across both sections: the work-item line keeps its existing
+string, and the Pages line is its parallel with "pages". `pages.untitled` ("Untitled") names an untitled page
+in a row or chip.
+
+### Dark (panel 9)
+
+Panels 2, 5, 6 and 7 redrawn on a nested `data-theme="dark"` board. The mock re-emits its Tier-3 block on
+`[data-theme]`, so the board recomputes against the dark Tier-0 values. Every ink above clears AA on every dark
+surface; the sky chip reads `--el-text-strong` on the dimmed sky tint.
