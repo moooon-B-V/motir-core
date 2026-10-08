@@ -425,6 +425,12 @@ export const planRepository = {
     return tx.plan.update({ where: { id }, data });
   },
 
+  /** Stamp the plan's `lastActivityAt` (Story MOTIR-7820 · MOTIR-7822) — called
+   *  inside the transaction of every step signal and every content write. */
+  async touchActivity(id: string, at: Date, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.plan.update({ where: { id }, data: { lastActivityAt: at }, select: { id: true } });
+  },
+
   /**
    * A project's plans, newest first, keyset-paginated. `cursorId` is the id of
    * the last plan on the previous page (omitted for the first page); `limit`

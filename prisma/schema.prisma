@@ -7210,6 +7210,14 @@ model Plan {
   /// write a plan during a rollout; "every plan has a session" is enforced by
   /// the author paths (MOTIR-6022) and the MOTIR-6020 backfill.
   sessionId      String?                 @map("session_id")
+  /// WHEN anything last happened to this plan while it was being written
+  /// (Story MOTIR-7820 · MOTIR-7822): stamped by every planner step signal and
+  /// by every content write (create, append, deepen, edit, correction,
+  /// withdrawal, brief correction), in the same transaction as the write. A
+  /// DECISION (`planned` / `approved` / `declined`) is not activity and does not
+  /// stamp it. What tells a stalled plan from a busy one — `createdAt` and the
+  /// decision timestamps cannot, because a plan records nothing between them.
+  lastActivityAt DateTime                @default(now()) @map("last_activity_at")
 
   workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -7218,6 +7226,10 @@ model Plan {
   createdBy   User?              @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   items       PlanItem[]
   revisions   PlanRevision[]
+  /// The step each RUNNING planner session is on (Story MOTIR-7820 ·
+  /// MOTIR-7822) — one row per session, replaced on its next report and
+  /// deleted when it ends. Read only while the plan is `generating`.
+  steps       PlanStep[]
   /// The targets this plan has PARKED at `planning` while it is open
   /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
   /// nothing — the restore is the release path's job, not the FK's.
@@ -7435,6 +7447,47 @@ model PlanRevision {
   @@index([planItemId])
   @@index([changedById])
   @@map("plan_revision")
+}
+
+/// The KIND of step a running planner session is on (Story MOTIR-7820 ·
+/// MOTIR-7822). `settle` never names a target; `lay` and `author` may name one
+/// or, in their UNTARGETED forms, none (laying the project's top level, and
+/// authoring an item not yet on the plan).
+enum PlanStepKind {
+  settle
+  lay
+  author
+
+  @@map("plan_step_kind")
+}
+
+/// The step ONE running planner session is on (Story MOTIR-7820 · MOTIR-7822).
+/// A SET per plan, not one "latest step": after a lay, both planners author a
+/// level's children at once, so one slot would show one and drop the rest, and
+/// parallel reports writing one slot would overwrite each other. One row per
+/// `(planId, sessionKey)` makes "replace my step" and "clear my step"
+/// independent upserts and deletes.
+///
+/// No `workspace_id`, deliberately — the `PlanRevision` tenancy: the RLS policy
+/// joins to the parent `plan`.
+model PlanStep {
+  id         String       @id @default(cuid())
+  planId     String       @map("plan_id")
+  /// The planner's own opaque id for one running session (≤ 128 chars).
+  sessionKey String       @map("session_key")
+  kind       PlanStepKind
+  /// `planItem:<id>` or a work-item id, exactly as the planner sent it. NULL for
+  /// `settle` always, and for the two untargeted forms of `lay` / `author` —
+  /// "no ref exists yet", never "unknown".
+  targetRef  String?      @map("target_ref")
+  /// The SERVER's clock at the report, never a caller field.
+  startedAt  DateTime     @map("started_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, sessionKey])
+  @@index([planId])
+  @@map("plan_step")
 }
 
 /// A Motir member's GitHub OAuth user-identity binding (Story 7.10 ·

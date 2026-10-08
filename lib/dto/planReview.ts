@@ -23,6 +23,7 @@
 import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ApprovalGateStateDTO, PlanGateHeldDTO } from '@/lib/dto/approvalGate';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import type { PlanStepDto } from '@/lib/dto/plans';
 import type { ExecutorDto, WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import type {
   PlanItemOpDto,
@@ -1116,6 +1117,22 @@ export interface PlanReviewDto {
    * held button needs to say.
    */
   revision: PlanRevisionStateDto | null;
+
+  /**
+   * WHEN anything last happened to the plan (Story MOTIR-7820 · MOTIR-7822) —
+   * stamped by every planner step signal and every content write, never by a
+   * decision. What tells a stalled plan from a busy one. OPTIONAL on the type
+   * only so hand-built review fixtures stay valid; `getPlanReview` always sets it.
+   */
+  lastActivityAt?: string;
+  /**
+   * The step each RUNNING planner session is on, oldest first (MOTIR-7822) — raw
+   * refs as the planner sent them. ALWAYS `[]` when the plan is not
+   * `generating`, so a session that never cleared cannot outlive its plan on any
+   * surface. OPTIONAL on the type only so hand-built review fixtures stay valid;
+   * `getPlanReview` always sets it.
+   */
+  inFlightSteps?: PlanStepDto[];
 
   /**
    * THE PLAN'S QUESTION — its latest `plan_approval` gate, as the render read returns it

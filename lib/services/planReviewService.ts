@@ -7,6 +7,8 @@ import { fullestContainer } from '@/lib/planning/planShape';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
+import { planStepRepository } from '@/lib/repositories/planStepRepository';
+import { toPlanStepDto } from '@/lib/mappers/planMappers';
 import { DERIVED_EVENT_KINDS, mergeTimeline, revisionCount } from '@/lib/plans/timeline';
 import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
 import {
@@ -772,6 +774,24 @@ export const planReviewService = {
     // EMPTY trail rather than an error — a plan's whole history silently gone.
     const revisions = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRevisionRepository.listByPlan(planId, tx),
+    );
+    // The plan's LIVE-PROGRESS facts (Story MOTIR-7820 · MOTIR-7822): when it last
+    // did anything, and the step each running planner session is on. Bound for
+    // the same reason as the trail — `plan_step`'s policy joins to `plan`, so an
+    // unbound read is an empty set, which reads as "nobody is working on it".
+    // The steps are read only while the plan is `generating`: a session that
+    // never cleared must not outlive its plan on any surface.
+    const { lastActivityAt, inFlightSteps } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => {
+        const row = await planRepository.findById(planId, ctx.workspaceId, tx);
+        const steps =
+          plan.status === 'generating' ? await planStepRepository.listByPlan(planId, tx) : [];
+        return {
+          lastActivityAt: (row?.lastActivityAt ?? new Date(plan.createdAt)).toISOString(),
+          inFlightSteps: steps.map(toPlanStepDto),
+        };
+      },
     );
 
     // ── THE REVISION, read off the SAME trail (Subtask MOTIR-3601) ────────────
@@ -1881,6 +1901,8 @@ export const planReviewService = {
             startedAt: (revisionStartedAt ?? new Date()).toISOString(),
           }
         : null,
+      lastActivityAt,
+      inFlightSteps,
       gate,
       conversation,
       history,

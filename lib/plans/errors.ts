@@ -40,6 +40,18 @@ export class NoPlanForJobError extends Error {
 }
 
 /** The plan id does not resolve (in this workspace). → 404 */
+/** A planner STEP signal that is not well-formed (Story MOTIR-7820 · MOTIR-7822)
+ *  — `settle` naming a target, a ref this plan cannot resolve, a ref of the wrong
+ *  shape, or an empty / over-long session key. Raised before anything is written.
+ *  → 422 */
+export class InvalidPlanStepError extends Error {
+  readonly code = 'PLAN_STEP_INVALID' as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidPlanStepError';
+  }
+}
+
 export class PlanNotFoundError extends Error {
   readonly code = 'PLAN_NOT_FOUND' as const;
   constructor(planId: string) {
@@ -76,15 +88,18 @@ export class PlanItemNotFoundError extends Error {
  */
 export class PlanNotGeneratingError extends Error {
   readonly code = 'PLAN_NOT_GENERATING' as const;
-  constructor(planId: string, status: string) {
+  /** `message` overrides the APPEND-shaped default, for a write that is not an
+   *  append — the planner step signal (MOTIR-7822), which has no revision form. */
+  constructor(planId: string, status: string, message?: string) {
     super(
-      `Plan ${planId} is ${status}, not generating — this append was not declared a revision. ` +
-        (status === 'planned'
-          ? 'It is in the review queue: send the same batch with `revision: true` to append to ' +
-            'it where it stands. The plan stays `planned`, and the append lands on its timeline ' +
-            'with the harness and model that made it.'
-          : 'Only a `generating` plan takes an ordinary append, and only a `planned` one takes a ' +
-            'revision.'),
+      message ??
+        `Plan ${planId} is ${status}, not generating — this append was not declared a revision. ` +
+          (status === 'planned'
+            ? 'It is in the review queue: send the same batch with `revision: true` to append to ' +
+              'it where it stands. The plan stays `planned`, and the append lands on its timeline ' +
+              'with the harness and model that made it.'
+            : 'Only a `generating` plan takes an ordinary append, and only a `planned` one takes a ' +
+              'revision.'),
     );
     this.name = 'PlanNotGeneratingError';
   }
