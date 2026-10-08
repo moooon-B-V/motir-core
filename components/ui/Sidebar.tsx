@@ -318,7 +318,9 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
       className={cn(
         'flex h-full flex-col bg-(--el-sidebar-bg)',
         'border-r border-(--el-sidebar-border)',
-        collapsed ? 'px-2 py-3' : 'px-3 py-3',
+        // The collapsed rail is a tighter frame vertically as well as
+        // horizontally (MOTIR-7872) — see the scroller note below.
+        collapsed ? 'px-2 py-2' : 'px-3 py-3',
         className,
       )}
     >
@@ -338,15 +340,29 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
         is ~15px of a rail that is 56px wide when collapsed. `thin` costs about a
         third of that, and the colour comes from the palette so it follows a
         `data-palette` swap like everything else.
+
+        COLLAPSED, the rail draws NO bar at all (MOTIR-7872). Its footer stacks
+        two controls that sit side by side when expanded, so the collapsed rail
+        has ~36px less vertical room than the expanded one, and under 3D /
+        Immersive (taller rows, a floating inset) that tipped it into a scrollbar
+        at common laptop heights where the expanded rail fit. Even a `thin` bar
+        is wider than the 3-4px of slack the collapsed content box keeps around
+        its one `--height-control` square, so it also clipped the row squares.
+        Two halves, then: the collapsed frame's own vertical chrome is trimmed
+        (`py-2`, `gap-2`, `mt-2`) to win most of that room back, and whatever
+        overflow remains still SCROLLS — wheel, touch, and focus scrolling a
+        row into view all work — without painting a bar inside an icon rail.
       */}
       <div
         className={cn(
-          'flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden',
-          '[scrollbar-width:thin] [scrollbar-color:var(--el-border-strong)_transparent]',
+          'flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden',
+          collapsed
+            ? 'gap-2 [scrollbar-width:none]'
+            : 'gap-3 [scrollbar-width:thin] [scrollbar-color:var(--el-border-strong)_transparent]',
         )}
       >
         {sections.map((section, index) => (
-          <div key={section.id} className="flex flex-col gap-3">
+          <div key={section.id} className={cn('flex flex-col', collapsed ? 'gap-2' : 'gap-3')}>
             {/* A DIV separator, not an <hr>: the Hand-Drawn style roughens
                 dividers via an `::after` overlay, and Chromium does not render
                 generated content on <hr> — so an <hr> splitter stayed
@@ -360,7 +376,7 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
         ))}
       </div>
 
-      {footer ? <div className="mt-3 shrink-0">{footer}</div> : null}
+      {footer ? <div className={cn('shrink-0', collapsed ? 'mt-2' : 'mt-3')}>{footer}</div> : null}
     </nav>
   );
 });

@@ -898,6 +898,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'shell-a11y-tokens.spec.ts': 0,
   'shell-a11y-wide.spec.ts': 0,
   'shell-a11y.spec.ts': 0,
+  // MOTIR-7872 — measured LOCALLY against a production build on 2026-10-08:
+  // 5.8 s for the one test body (sign-up, a style PATCH, two rail readings).
+  // Recorded as 7.0 to cover its two `resetDatabase()` hooks (≈1.03 s each, the
+  // `shell-viewport-floor` figure below), rounded UP. RE-MEASURE from CI.
+  'shell-collapsed-rail-fit.spec.ts': 7.0,
   'shell-context-path.spec.ts': 14.1,
   'shell-empty-projects.spec.ts': 1.8,
   'shell-flows.spec.ts': 41.1,
