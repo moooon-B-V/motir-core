@@ -2,6 +2,7 @@ import { expect, test, type Page, type Response } from '@playwright/test';
 import { getGlobalDispatcher, setGlobalDispatcher, type Dispatcher, type MockAgent } from 'undici';
 import type { CiRunnerProvisioningIntent } from '@/generated/prisma/client';
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
+import { holdScheduledJob } from './_helpers/scheduled-job-hold';
 import {
   seedBillingOwner,
   setOrgBillingState,
@@ -13,6 +14,7 @@ import { E2E_PROVISIONING_ORG } from './_helpers/github-const';
 import { installSharedMockAgent } from '@/lib/test-mock-agent';
 import { installBillingBoundaryMock } from '@/lib/test-billing-mock';
 import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
+import { CI_LIVE_CHARGE_CRON, ciLiveCharge } from '@/lib/jobs/definitions/ciLiveCharge';
 import {
   ciRunnerAdmissionService,
   BALANCE_UNAVAILABLE_DETAIL,
@@ -61,6 +63,13 @@ import { FLEET_CONTAINER_SIZE, fakeOrchestrator, type ContainerHandle } from '@m
 // (`ciLiveChargeService.accrueContainer` floors negative elapsed time at zero).
 // The anchor falls back to the month's first instant only in the last hour of
 // the month, where the lead would carry the ticks into the next one.
+//
+// ⚠️ SO THE LEAD ALONE LEAVES THAT HOUR OPEN, AND `beforeEach` HOLDS THE CRON.
+// In the fallback hour a real tick would charge the run from the 1st again. So
+// every test first holds `system.ci-live-charge` off with the scheduler's own
+// dedupe (`holdScheduledJob`): its most recent fire — which `resetDatabase` has
+// just made owed again — and its next one are written as already run, and the
+// test starts once no tick is in flight. The lead stays as a second guard.
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -121,6 +130,8 @@ test.afterAll(async () => {
 
 test.beforeEach(async () => {
   await resetDatabase();
+  // After the reset: it truncates `job_queue`, which is where the hold lives.
+  await holdScheduledJob(ciLiveCharge.id, CI_LIVE_CHARGE_CRON);
   resetBillingFixture();
   fakeOrchestrator.reset();
 });
