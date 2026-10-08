@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState, type DragEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ArrowRight,
+  Bug,
   Check,
   CircleCheck,
   FilePenLine,
@@ -37,6 +38,7 @@ import type { PlanChangeTurnDto, PlanChangeSessionDto } from '@/lib/dto/planChan
 import type { WorkItemRefSummaryDto } from '@/lib/dto/workItems';
 import type { GuidePersonMarker, GuidePhase } from '@/lib/hooks/useGuideConversation';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
+import { guideRailBody } from '@/lib/planning/guideReplyNotes';
 import {
   guideOutcomeLines,
   type GuideOutcomeLine,
@@ -443,7 +445,18 @@ const OUTCOME_GLYPH: Record<GuideOutcomeLine['kind'], typeof Check> = {
   edited: FilePenLine,
   commented: MessageSquare,
   closed: CircleCheck,
+  filed: Bug,
+  filedBlocking: Bug,
+  alreadyFiled: Bug,
 };
+
+/** The glyph's ink. A filed bug takes the bug kind's own hue (design MOTIR-7810);
+ *  every other line, a duplicate included (nothing new happened), the shared one. */
+function glyphInk(kind: GuideOutcomeLine['kind']): string {
+  return kind === 'filed' || kind === 'filedBlocking'
+    ? 'text-(--el-type-bug)'
+    : 'text-(--el-text-secondary)';
+}
 
 function GuideAssistantTurn({
   turn,
@@ -463,12 +476,18 @@ function GuideAssistantTurn({
   );
   return (
     <Bubble role="assistant" testId="guide-turn">
-      <MarkdownView value={turn.body} workItemRefs={workItemRefs} copyableCode />
+      {/* A filed bug is named by its outcome line, not again by the body's note
+          (design MOTIR-7810, decision (a)). */}
+      <MarkdownView
+        value={guideRailBody(turn.body, turn.guide)}
+        workItemRefs={workItemRefs}
+        copyableCode
+      />
       {edits.map((edit, i) => (
         <EditStatement key={i} edit={edit} />
       ))}
       {lines.map((line, i) => (
-        <OutcomeLine key={i} line={line} chip={chip} first={i === 0} />
+        <OutcomeLine key={i} line={line} chip={chip} workItemRefs={workItemRefs} first={i === 0} />
       ))}
     </Bubble>
   );
@@ -500,10 +519,12 @@ function EditStatement({ edit }: { edit: Extract<GuideAction, { type: 'edit_item
 function OutcomeLine({
   line,
   chip,
+  workItemRefs,
   first,
 }: {
   line: GuideOutcomeLine;
   chip: WorkItemRefSummaryDto;
+  workItemRefs: PlanChangeSessionDto['workItemRefs'];
   first: boolean;
 }) {
   const tg = useTranslations('planningWorkspace.guide.outcome');
@@ -558,6 +579,22 @@ function OutcomeLine({
     case 'closed':
       body = tg.rich('closed', { key: chipKey, chip: renderChip });
       break;
+    case 'filed':
+    case 'filedBlocking':
+    case 'alreadyFiled': {
+      // The BUG's chip, resolved by the session read under the reader's access
+      // checks; the fallback is the bug's KEY, never an id.
+      const renderBug = () => (
+        <WorkItemRefChip summary={workItemRefs[line.bugKey]} fallbackLabel={line.bugKey} />
+      );
+      body = tg.rich(line.kind, {
+        bugKey: line.bugKey,
+        bug: renderBug,
+        key: chipKey,
+        chip: renderChip,
+      });
+      break;
+    }
   }
 
   return (
@@ -568,7 +605,7 @@ function OutcomeLine({
       data-testid="guide-outcome"
       data-outcome={line.kind}
     >
-      <Glyph className="mt-px size-3.5 flex-none text-(--el-text-secondary)" aria-hidden="true" />
+      <Glyph className={`mt-px size-3.5 flex-none ${glyphInk(line.kind)}`} aria-hidden="true" />
       <span className="wi-chip-host min-w-0">{body}</span>
     </p>
   );
