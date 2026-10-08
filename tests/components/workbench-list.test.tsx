@@ -327,12 +327,13 @@ describe('the Workbench tab strip', () => {
     expect(href('approvals')).toBe('/workbench?tab=approvals');
     expect(href('to-fix')).toBe('/workbench?tab=to-fix');
     expect(href('to-resume')).toBe('/workbench?tab=to-resume');
+    expect(href('planning')).toBe('/workbench?tab=planning');
 
     expect(screen.getByTestId('workbench-tab-todo').getAttribute('aria-current')).toBe('page');
     expect(screen.getByTestId('workbench-tab-watching').getAttribute('aria-current')).toBeNull();
   });
 
-  it('reads the design s labels — and the fifth names an ACTION, not a set', async () => {
+  it('reads the design s labels — and the first names an ACTION, not a set', async () => {
     renderRaw(await WorkbenchTabs({ active: 'todo', counts }));
     expect(screen.getAllByRole('link').map((l) => l.textContent?.replace(/\d+$/, ''))).toEqual([
       // ⚠️ The LABEL and the SLUG differ on purpose: the other four name a state
@@ -341,8 +342,12 @@ describe('the Workbench tab strip', () => {
       // `?tab=approvals` above; the two spellings are checked together so
       // neither can be "fixed" into agreement.
       'Waiting on you',
+      // § 36.2: Planning is SECOND — what will arrive on the first tab once it is
+      // written sits beside what is waiting there now. It is never a landing rung.
+      'Planning',
       'To fix',
-      // § 35.3: To resume is THIRD — after To fix, before In progress.
+      // § 35.3 as § 36.2 re-numbers it: To resume is FOURTH — after To fix, before
+      // In progress.
       'To resume',
       'In progress',
       'To do',
@@ -359,6 +364,7 @@ describe('the Workbench tab strip', () => {
     const anchors = [...container.querySelectorAll('[data-testid^="workbench-tab-"]')];
     expect(anchors.map((a) => a.getAttribute('data-testid'))).toEqual([
       'workbench-tab-approvals',
+      'workbench-tab-planning',
       'workbench-tab-to-fix',
       'workbench-tab-to-resume',
       'workbench-tab-in-progress',
@@ -368,6 +374,7 @@ describe('the Workbench tab strip', () => {
     ]);
     expect(anchors.map((a) => a.querySelector('svg')?.getAttribute('class'))).toEqual([
       expect.stringContaining('lucide-inbox'),
+      expect.stringContaining('lucide-pen-line'),
       expect.stringContaining('lucide-wrench'),
       expect.stringContaining('lucide-circle-pause'),
       expect.stringContaining('lucide-circle-dot'),

@@ -132,6 +132,42 @@ describe('the planning count is not a landing input', () => {
     expect(resolveWorkbenchLanding(counts)).toBe('todo');
   });
 
+  it('never lands on Planning even when it is the ONLY non-zero count (MOTIR-7831)', () => {
+    // The tab is reachable and is never a destination: a plan being written needs
+    // nothing from the reader (§ 36.2). Every rung is zero here, so the cascade's
+    // terminal rung — To do — is the answer, with 40 plans being written.
+    const counts: HomeTabCountsDto = {
+      myWork: 0,
+      toDo: 0,
+      inProgress: 0,
+      toFix: 0,
+      toResume: 0,
+      recentlyFinished: 0,
+      approvals: 0,
+      watching: 0,
+      planning: 40,
+    };
+    expect(resolveWorkbenchLanding(counts)).toBe('todo');
+    // And it is not reachable from any point of the rungs' space either.
+    for (const approvals of [0, 3])
+      for (const toFix of [0, 3])
+        for (const toResume of [0, 3])
+          for (const inProgress of [0, 3])
+            for (const toDo of [0, 3]) {
+              const landed = resolveWorkbenchLanding({
+                ...counts,
+                approvals,
+                toFix,
+                toResume,
+                inProgress,
+                toDo,
+              });
+              expect(landed, `${approvals}/${toFix}/${toResume}/${inProgress}/${toDo}`).not.toBe(
+                'planning',
+              );
+            }
+  });
+
   it('keeps `planning` out of `LandingCounts` (type-level pin)', () => {
     expectTypeOf<LandingCounts>().not.toHaveProperty('planning');
     type HasPlanning = 'planning' extends keyof LandingCounts ? true : false;

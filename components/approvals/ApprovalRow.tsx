@@ -19,6 +19,7 @@ import { Pill } from '@/components/ui/Pill';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { planRowDestination } from '@/lib/planning/planDestination';
+import { planSentenceOf } from '@/lib/planning/planSentence';
 import { PlanDestinationTag } from '@/components/planning/PlanDestinationTag';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { usePeekRowClick } from '@/app/(authed)/items/_components/IssueQuickView';
@@ -1055,29 +1056,15 @@ function MarkDoneButton({
   );
 }
 
-/**
- * THE PLAN's LEADING LINE (design Part XXII §22.3, DECIDED): what the plan is ABOUT, never
- * the gate kind. Four forms, one ICU message each, so the ORDER is the catalogue's (zh puts
- * the title first):
- *   · a target → *Plan for {target title}* — the title is the shipped quick-view door;
- *   · no target, a title → *Plan — {plan title}* — plain text, a plan has no quick view;
- *   · neither → *Plan for {project name}*.
- * A target whose title no longer resolves (the key is gone from the project) cannot be
- * named, and the row never shows a bare key as a title — so it FALLS to the next form
- * (the plan's title, then its project) rather than printing a blank. The key cell still
- * names the keys the plan targets.
+/* ⚠️ `planSentenceOf` LIVES IN `lib/planning/planSentence.ts` NOW (MOTIR-7831), and
+ * this note is what a reader meeting the old local name lands on. The rule — design
+ * Part XXII §22.3's THREE FORMS of *what the plan is about*, never the gate kind — is
+ * unchanged, down to the fall-through when a target's title no longer resolves. What
+ * changed is that the Workbench's **Planning** tab names the same plans one step
+ * earlier (while they are being WRITTEN; `design/workbench/design-notes.md` § 36.4), so
+ * the rule is shared rather than copied: two lists that show plans cannot name one plan
+ * two ways. This row's rendering below is untouched.
  */
-type PlanSentence =
-  | { form: 'targeted'; name: string; key: string }
-  | { form: 'untargeted'; name: string }
-  | { form: 'untitled'; name: string };
-
-function planSentenceOf(subject: PlanApprovalSubjectSummaryDTO): PlanSentence {
-  const first = subject.targets[0];
-  if (first && first.title) return { form: 'targeted', name: first.title, key: first.key };
-  if (subject.title) return { form: 'untargeted', name: subject.title };
-  return { form: 'untitled', name: subject.projectName };
-}
 
 /* ⚠️ `planDoorContext` IS GONE (Story MOTIR-6043 · MOTIR-6045), and this note is
  * what a reader meeting the old name lands on. It decided this row's destination

@@ -8540,14 +8540,17 @@
       "toResume": "To resume",
       "recentlyFinished": "Recently finished",
       "watching": "Watching",
-      "toApprove": "Waiting on you"
+      "toApprove": "Waiting on you",
+      "planning": "Planning"
     },
     "columns": {
       "title": "Title",
       "role": "Your role",
       "assignee": "Assignee",
       "status": "Status",
-      "finished": "Finished"
+      "finished": "Finished",
+      "plan": "Plan",
+      "planner": "Planner"
     },
     "row": {
       "unassigned": "Unassigned",
@@ -8590,6 +8593,11 @@
       "approvals": {
         "title": "Nothing is waiting on you",
         "body": "Approvals that need your decision, and work a run handed to you to do, show up here."
+      },
+      "planning": {
+        "title": "No plans being written",
+        "body": "When you ask Motir AI or an agent for a plan, it waits here while it is being written, with how far it has got, and moves to Waiting on you when it is ready for your review. Plans others asked for are on the Plans page.",
+        "action": "Plan with AI"
       }
     },
     "approvals": {
@@ -8807,6 +8815,28 @@
         "card_not_ready": "Clear what blocks {key} or move it back to In Progress, then press Continue."
       },
       "copyAria": "Copy the resume command for {key}"
+    },
+    "planning": {
+      "scope": "Plans you asked for in <project>{name}</project> that are still being written. Plans others asked for are on the <link>Plans page</link>.",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "MCP agent",
+        "agentModel": "MCP agent · <mono>{model}</mono>"
+      },
+      "rowAria": "Open the plan being written — {sentence}",
+      "reopened": "Reopened from Planning · started by you · last active {when}",
+      "left": {
+        "planned": "Written",
+        "plannedLine": "Ready for your review.",
+        "plannedLink": "See it in Waiting on you",
+        "discarded": "Ended",
+        "discardedLine": "Ended before it was proposed — nothing was added.",
+        "abandoned": "Stopped",
+        "abandonedLine": "Its planner stopped, so the plan was closed — nothing was added.",
+        "unknownLine": "No longer being written."
+      },
+      "ceiling": "Showing your {shown} newest plans being written. The other {rest} are on the <link>Plans page</link>."
     }
   },
   "approvalRecords": {

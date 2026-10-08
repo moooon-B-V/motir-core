@@ -8536,14 +8536,17 @@
       "toResume": "待继续",
       "recentlyFinished": "最近完成",
       "watching": "关注中",
-      "toApprove": "等你处理"
+      "toApprove": "等你处理",
+      "planning": "规划"
     },
     "columns": {
       "title": "标题",
       "role": "你的角色",
       "assignee": "负责人",
       "status": "状态",
-      "finished": "完成于"
+      "finished": "完成于",
+      "plan": "计划",
+      "planner": "规划者"
     },
     "row": {
       "unassigned": "未分配",
@@ -8586,6 +8589,11 @@
       "approvals": {
         "title": "没有等你处理的事项",
         "body": "需要你决定的审批，以及运行交给你完成的工作，都会显示在这里。"
+      },
+      "planning": {
+        "title": "没有正在编写的计划",
+        "body": "当你请 Motir AI 或智能体编写计划时，计划会在编写期间显示在这里，并附上进度；写好后会移到“等你处理”等你审阅。其他人发起的计划请见计划页。",
+        "action": "用 AI 规划"
       }
     },
     "approvals": {
@@ -8803,6 +8811,28 @@
         "card_not_ready": "解除 {key} 的阻塞或将其移回进行中后按“继续”。"
       },
       "copyAria": "复制 {key} 的继续命令"
+    },
+    "planning": {
+      "scope": "你在 <project>{name}</project> 中发起、仍在编写的计划。其他人发起的计划请见<link>计划页</link>。",
+      "planner": {
+        "motir": "Motir AI",
+        "harnessModel": "{harness} · <mono>{model}</mono>",
+        "agent": "MCP 智能体",
+        "agentModel": "MCP 智能体 · <mono>{model}</mono>"
+      },
+      "rowAria": "打开正在编写的计划 — {sentence}",
+      "reopened": "从“规划”重新打开 · 由你发起 · 最近活动 {when}",
+      "left": {
+        "planned": "已写好",
+        "plannedLine": "等你审阅。",
+        "plannedLink": "在“等你处理”中查看",
+        "discarded": "已结束",
+        "discardedLine": "在提出之前已结束——没有添加任何内容。",
+        "abandoned": "已中止",
+        "abandonedLine": "其规划者已停止，计划已关闭——没有添加任何内容。",
+        "unknownLine": "已不再编写。"
+      },
+      "ceiling": "显示你最新的 {shown} 个正在编写的计划。其余 {rest} 个请见<link>计划页</link>。"
     }
   },
   "approvalRecords": {

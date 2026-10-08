@@ -22,6 +22,7 @@ import { WorkbenchTabs } from './_components/WorkbenchTabs';
 import { WorkbenchReconnecting } from './_components/WorkbenchLive';
 import { WorkbenchList } from './_components/WorkbenchList';
 import { ApprovalsTab } from './_components/ApprovalsTab';
+import { PlanningTab } from './_components/PlanningTab';
 import { toWorkbenchRowViews } from './_components/workbenchRows';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
@@ -70,6 +71,7 @@ const TAB_LABEL_KEY: Readonly<Record<WorkbenchTab, string>> = {
   finished: 'tabs.recentlyFinished',
   watching: 'tabs.watching',
   approvals: 'tabs.toApprove',
+  planning: 'tabs.planning',
 };
 
 /**
@@ -106,20 +108,28 @@ function readTab(tab: WorkbenchTab, ctx: HomeActorContext, page: number): Promis
       // Read by `<ApprovalsTab>` instead — see the note above. This arm is
       // unreachable: the render branches on the tab before calling this.
       return Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE });
+    case 'planning':
+      // Read by `<PlanningTab>`, for the same reason and in the same shape
+      // (MOTIR-7831): its rows are PLANS, not work items — a different DTO and a
+      // different list — and it awaits inside its own component so a `<Suspense>`
+      // can sit between the page's gate and it. Unreachable, like the arm above.
+      return Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE });
   }
 }
 
 /**
  * An empty tab's drawn state — glyph, copy, and an action only where one helps.
  *
- * ⚠️ **ONLY TWO OF THE FIVE CARRY AN ACTION, and that is a decision rather than
- * an omission** (`design/workbench/design-notes.md` § Empty states). To do sends
+ * ⚠️ **ONLY TWO OF THE SEVEN DRAWN HERE CARRY AN ACTION, and that is a decision
+ * rather than an omission** (`design/workbench/design-notes.md` § Empty states;
+ * Planning's own, § 36.9, is drawn by `<PlanningTab>` and DOES carry one, for that
+ * same rule's reason — starting a plan is what puts a row on that tab). To do sends
  * you to Ready; In progress sends you to the To do TAB rather than mounting a
  * second Ready button one screen from the first. Nothing finishes work on your
  * behalf, nothing makes you watch an item, and nothing conjures an approval, so
- * those three offer no button rather than inventing one. Written as five
- * explicit arms rather than a table for exactly that reason: whether a state has
- * a button is visible where the state is, not a column somebody fills in.
+ * those three offer no button rather than inventing one. Written as explicit arms
+ * rather than a table for exactly that reason: whether a state has a button is
+ * visible where the state is, not a column somebody fills in.
  */
 async function EmptyTab({ tab }: { tab: WorkbenchTab }): Promise<ReactNode> {
   const t = await getTranslations('workbench');
@@ -199,19 +209,30 @@ async function EmptyTab({ tab }: { tab: WorkbenchTab }): Promise<ReactNode> {
           description={t('empty.approvals.body')}
         />
       );
+    case 'planning':
+      // ⚠️ DRAWN BY `<PlanningTab>` INSTEAD (§ 36.9), because its action is gated
+      // on who the reader is: *Plan with AI* renders only for somebody who can
+      // actually start a plan in the active project. This arm is unreachable — the
+      // render branches on the tab before mounting the list that would ask for it —
+      // and it is kept so this switch stays TOTAL over the union, which is what
+      // makes an eighth tab a compile error here rather than a blank screen.
+      return null;
   }
 }
 
 /**
- * The Approvals tab's pending FRAME — window 2's drawing, at the list's own
- * shape so nothing shifts when the rows arrive.
+ * A LIST TAB's pending FRAME — window 2's drawing, at the list's own shape so
+ * nothing shifts when the rows arrive. Shared by the two tabs that read inside
+ * their own component (Approvals and Planning): both become a bordered card with a
+ * 40px column-header band over rows, so one frame is the shape both are about to
+ * take, and drawing two would be two things to keep in agreement.
  *
  * It reuses the list's container and its 40px header band rather than a bespoke
  * skeleton: `design/shell/design-notes.md` is explicit that the shell must not
  * guess a destination's shape, and the corollary for a page drawing its own
  * frame is that the frame should be the shape it is about to become.
  */
-function ApprovalsPending() {
+function ListPending() {
   return (
     <div
       data-surface="card"
@@ -287,11 +308,15 @@ export default async function WorkbenchPage({
   const t = await getTranslations('workbench');
 
   const isApprovals = tab === 'approvals';
+  // The second tab that reads inside its own `<Suspense>` (MOTIR-7831). Its rows
+  // are plans, so the page's work-item window stays empty for it, exactly as it
+  // does for Approvals.
+  const isPlanning = tab === 'planning';
 
   const [window, counts, members, workflow] = await Promise.all([
     // The Approvals tab's rows are read inside `<ApprovalsTab>` so a boundary
     // can sit around them; this window stays empty for it and is not rendered.
-    isApprovals
+    isApprovals || isPlanning
       ? Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE })
       : readTab(tab, ctx, page),
     homeService.tabCounts(ctx),
@@ -367,8 +392,17 @@ export default async function WorkbenchPage({
              the boundary sits here, below the session and active-project reads
              that decide who may see this page. The fallback is the list's own
              shape so the frame does not shift when the rows arrive. */
-          <Suspense fallback={<ApprovalsPending />}>
+          <Suspense fallback={<ListPending />}>
             <ApprovalsTab ctx={ctx} />
+          </Suspense>
+        ) : isPlanning ? (
+          /* PLANNING (§ 36) — the same instrument for the same reason: the read is
+             inside the tab, so the boundary sits between the page's gate and it.
+             No `page` is passed, because the tab has no pager: it reads page 1 at
+             its 50-row ceiling (§ 36.10) and the note under the last row says when
+             the set is larger. */
+          <Suspense fallback={<ListPending />}>
+            <PlanningTab ctx={ctx} projectName={ctx.project.name} />
           </Suspense>
         ) : (
           <WorkbenchList

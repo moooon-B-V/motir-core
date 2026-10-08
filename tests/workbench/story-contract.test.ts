@@ -31,6 +31,7 @@ const ROOT = resolve(__dirname, '..', '..');
  */
 const EVERY_TAB: Readonly<Record<WorkbenchTab, true>> = {
   approvals: true,
+  planning: true,
   'to-fix': true,
   'to-resume': true,
   'in-progress': true,
@@ -68,7 +69,7 @@ describe('GUARD · every tab is addressable, and no tab is spelled as the bare p
     }
   });
 
-  it('ONE address per tab: five distinct hrefs, each parsing back to its own tab', () => {
+  it('ONE address per tab: a distinct href each, every one parsing back to its own tab', () => {
     // Catches: two tabs sharing a slug, or a slug that does not round-trip — the
     // property that makes an address shareable.
     const hrefs = UNION.map((tab) => workbenchTabHref(tab));
@@ -182,6 +183,12 @@ describe('GUARD · the cascade is TOTAL, and its order is its own', () => {
     // the other.
     expect(WORKBENCH_TABS).toEqual([
       'approvals',
+      // ⚠️ PLANNING IS SECOND AND IS NOT A RUNG (MOTIR-7831; design § 36.2). This
+      // assertion and the cascade one above now DISAGREE about position 2, which
+      // is exactly why they are two assertions: the strip order stopped being the
+      // cascade order when this tab landed, and neither may be computed from the
+      // other.
+      'planning',
       'to-fix',
       // To resume sits beside To fix: a stopped run is the other half of "a run
       // left this" (MOTIR-7707).

@@ -25,12 +25,31 @@ import type { WorkbenchPlanningPageDto, WorkbenchPlanningRowDto } from '@/lib/dt
 // `planProgressService.snapshotsForPlans` and each snapshot is carried through
 // unchanged; nothing here reads a step, counts an `add` or compares a clock.
 
+/**
+ * THE PLANNING TAB'S CEILING — 50 rows, and the tab reads page 1 only
+ * (`design/workbench/design-notes.md` § 36.10, MOTIR-7823/7831).
+ *
+ * ⚠️ IT IS A CEILING, NOT A PAGE SIZE WITH A PAGER. The tab draws **no pager**
+ * (§ 28 DECISION 5's form, not § *The pager*'s): a person writes a handful of
+ * plans at once, so a pager would be a control that is almost never more than
+ * `[1]`. The read stays offset-paged — the window is still `{ page, limit }`, so
+ * nothing about the service or the route is special-cased — and what the tab
+ * renders is page 1 at this limit, with `total` saying when the ceiling bit. The
+ * strip's count stays the TRUE total; the note under the last row is what says
+ * why the two differ.
+ */
+export const PLANNING_TAB_CEILING = 50;
+
 export const workbenchPlanningService = {
   /**
    * One offset window of the reader's own `generating` plans in the active
    * project, newest first, each with its progress. An out-of-range page clamps
    * to the last page, exactly as `homeService`'s tabs do; a reader who may not
    * browse the active project gets an empty page, never an error.
+   *
+   * The window size defaults to {@link PLANNING_TAB_CEILING}, the one size the
+   * tab and its route read (§ 36.10) — a caller may still narrow it, which is
+   * what the paging tests do.
    *
    * A plan that stopped generating between the window read and the snapshot read
    * has no snapshot and is DROPPED from `items` — never rendered with a missing
@@ -44,7 +63,7 @@ export const workbenchPlanningService = {
     ctx: HomeActorContext,
     options: HomeListOptions = {},
   ): Promise<WorkbenchPlanningPageDto> {
-    const pageSize = clampLimit(options.limit);
+    const pageSize = clampLimit(options.limit ?? PLANNING_TAB_CEILING);
     const { rows, total, page, titles } = await withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await resolveActiveProjectScope(ctx, tx);
       const scope = {

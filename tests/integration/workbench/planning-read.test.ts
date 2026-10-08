@@ -181,7 +181,7 @@ describe('listMyPlansBeingWritten — membership', () => {
     const { fx, older, newer } = await fixture();
     const page = await workbenchPlanningService.listMyPlansBeingWritten(hctx(fx));
     expect(page.items.map((r) => r.planId)).toEqual([newer, older]);
-    expect(page).toMatchObject({ total: 2, page: 1, pageSize: 25 });
+    expect(page).toMatchObject({ total: 2, page: 1, pageSize: 50 });
   });
 
   it('the planning badge is the list total — and both drop a plan once it is proposed', async () => {
@@ -207,7 +207,7 @@ describe('listMyPlansBeingWritten — membership', () => {
 
     expect((await homeService.tabCounts(ctx)).planning).toBe(0);
     const page = await workbenchPlanningService.listMyPlansBeingWritten(ctx);
-    expect(page).toEqual({ items: [], total: 0, page: 1, pageSize: 25 });
+    expect(page).toEqual({ items: [], total: 0, page: 1, pageSize: 50 });
   });
 });
 
@@ -314,7 +314,7 @@ describe('GET /api/workbench/planning', () => {
     const res = await planningRoute(new Request('http://localhost/api/workbench/planning?page=7'));
     expect(res.status).toBe(200);
     const body = (await res.json()) as WorkbenchPlanningPageDto;
-    expect(body).toMatchObject({ total: 1, page: 1, pageSize: 25 });
+    expect(body).toMatchObject({ total: 1, page: 1, pageSize: 50 });
     expect(body.items).toHaveLength(1);
     expect(Object.keys(body.items[0]!).sort()).toEqual(
       [

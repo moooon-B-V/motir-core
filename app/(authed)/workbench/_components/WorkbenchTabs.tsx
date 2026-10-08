@@ -1,5 +1,14 @@
 import Link from 'next/link';
-import { Circle, CircleCheck, CircleDot, CirclePause, Inbox, Star, Wrench } from 'lucide-react';
+import {
+  Circle,
+  CircleCheck,
+  CircleDot,
+  CirclePause,
+  Inbox,
+  PenLine,
+  Star,
+  Wrench,
+} from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils/cn';
@@ -8,9 +17,13 @@ import type { HomeTabCountsDto } from '@/lib/dto/home';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 
 // The Workbench tab strip (Story MOTIR-4777 · MOTIR-4782, per
-// `design/workbench/design-notes.md` §"The tab strip") — Waiting on you · To fix ·
-// In progress · To do · Recently finished · Watching (re-ordered by MOTIR-5217; To fix
-// inserted second by § 30, MOTIR-6605). The first tab read **To approve** until
+// `design/workbench/design-notes.md` §"The tab strip") — Waiting on you · Planning ·
+// To fix · To resume · In progress · To do · Recently finished · Watching (re-ordered by
+// MOTIR-5217; To fix inserted second by § 30, MOTIR-6605; To resume third by § 35,
+// MOTIR-7707; **Planning second by § 36.2, MOTIR-7831** — EIGHT tabs, and the strip order
+// is no longer the landing cascade's order, which § 36.2 amends on the record: the rungs
+// are tabs 1, 3, 4, 5 and 6, and Planning is never one). The first tab read **To approve**
+// until
 // MOTIR-7476 (design § 33.1): it now lists work a run handed the reader to DO as well
 // as decisions to approve, so it is named for the reader, not the verb. Its slug
 // `approvals` and its message key `tabs.toApprove` are unchanged identifiers.
@@ -63,9 +76,11 @@ export async function WorkbenchTabs({
   // Strip order is the design's (`design-notes.md` § 21, MOTIR-5216), and it is
   // the order a person's attention should run in when agents do the work: what
   // is waiting on YOUR decision first — an unmade decision holds up somebody
-  // else's card — then what is moving, then what to start, then what just
-  // landed and what you follow. The first four are also the landing cascade's
-  // four rungs, so the strip explains where a reader was just landed.
+  // else's card — then what is being WRITTEN for you, then what is waiting to be
+  // repaired or resumed, then what is moving, what to start, what just landed and
+  // what you follow. ⚠️ The cascade's rungs are tabs 1, 3, 4, 5 and 6 (§ 36.2's
+  // amendment): Planning is second and is NEVER a rung, so the strip explains where
+  // a reader was landed when it is read with Planning skipped.
   const tabs: TabSpec[] = [
     {
       // ⚠️ The LABEL is an action and the SLUG is a set. The other four name a
@@ -78,7 +93,20 @@ export async function WorkbenchTabs({
       count: counts.approvals,
     },
     {
-      // TO FIX (§ 30 Panel 1) — second: what is waiting on you to DECIDE, then what
+      // PLANNING (§ 36.2) — SECOND, and never a landing rung: tab 1 is what is
+      // waiting on you, tab 2 is what will arrive on tab 1 once it is written, so
+      // the two sit together and the work tabs follow. The glyph is `PenLine`, the
+      // same one Part XXV's *Drafting* cue wears on the canvas, so "being written"
+      // is one picture on the strip and on the plan. Not `Sparkles`: on a strip a
+      // sparkle reads as an AI badge, and many of these plans are written by an MCP
+      // agent rather than by Motir AI — § 29 keeps `Sparkles` on the ROW.
+      key: 'planning',
+      label: t('tabs.planning'),
+      icon: <PenLine className="h-3.5 w-3.5" />,
+      count: counts.planning,
+    },
+    {
+      // TO FIX (§ 30 Panel 1) — third: what is waiting on you to DECIDE, then what
       // is waiting on you to REPAIR. Also an action rather than a state, and the
       // landing cascade's second rung. Its count is the shipped chip, like every tab's.
       key: 'to-fix',
@@ -87,7 +115,7 @@ export async function WorkbenchTabs({
       count: counts.toFix,
     },
     {
-      // TO RESUME (§ 35.3) — third: a run that stopped at a gate waits on an approval,
+      // TO RESUME (§ 35.3) — fourth: a run that stopped at a gate waits on an approval,
       // which needs the reader less than a repair does and more than work that moves
       // without them. The landing cascade's third rung; its count is entries (runs).
       key: 'to-resume',
@@ -122,10 +150,10 @@ export async function WorkbenchTabs({
   ];
 
   // Every count is suppressed while ALL are zero (the design's all-empty
-  // panel): a row of five "0"s is five numbers a brand-new user has to read and
+  // panel): a row of eight "0"s is eight numbers a brand-new user has to read and
   // then discard. A zero beside a NON-zero sibling still shows — that one is
-  // information ("nothing over there either"). The rule is the shipped one; it
-  // now suppresses six.
+  // information ("nothing over there either"). The rule is the shipped one,
+  // unchanged by § 36.2; it now counts EIGHT, Planning included.
   const showCounts = tabs.some((tab) => tab.count > 0);
 
   return (
