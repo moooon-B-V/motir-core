@@ -3,6 +3,7 @@ import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { pageRefresh } from './_helpers/authoritative-signal';
+import { holdScheduledMonitorPoll } from './_helpers/monitor-poll-hold';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -207,6 +208,10 @@ test('a project admin connects Sentry, chooses projects, sees a degraded grant, 
   });
 
   await chapter('A grant whose credential Sentry revoked says so, in Sentry’s words', async () => {
+    // ⚠️ The lane's worker polls the two bound projects every five minutes, and a
+    // successful poll writes `connected` over this fixture. Hold it off first,
+    // or a chapter that straddles a fire films the wrong state (MOTIR-7840).
+    await holdScheduledMonitorPoll();
     // The credential-lifecycle card's writer, as it records a refused refresh.
     await adminDb.monitorInstallation.updateMany({
       data: {
