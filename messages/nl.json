@@ -339,7 +339,15 @@
     "railAddDeclined": "Dit plan is afgewezen — geen van deze waarden is aangemaakt.",
     "railRemoveArchived": "Dit plan heeft {key} gearchiveerd.",
     "railRemoveDeclined": "Dit plan zou {key} hebben gearchiveerd. Het is afgewezen, dus dat is niet gebeurd.",
-    "peekNoActivity": "Een voorstel heeft geen opmerkingen, onderliggende items of activiteit totdat het is goedgekeurd."
+    "peekNoActivity": "Een voorstel heeft geen opmerkingen, onderliggende items of activiteit totdat het is goedgekeurd.",
+    "approveProgress": {
+      "creating": "{n, plural, one {# item} other {# items}} toevoegen aan je Backlog…",
+      "applying": "{n, plural, one {# wijziging} other {# wijzigingen}} toepassen op je Backlog…",
+      "together": "Ze verschijnen allemaal tegelijk zodra het klaar is.",
+      "slow": "Nog bezig – een groot plan duurt langer. Je hoeft niet opnieuw te klikken.",
+      "timedOutTitle": "Er is niets aangemaakt – goedkeuren duurde te lang.",
+      "timedOutNext": "Dit plan wacht nog steeds ongewijzigd op je beslissing. Je kunt het veilig opnieuw goedkeuren."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "Je hebt geen toegang tot dit project",

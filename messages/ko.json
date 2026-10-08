@@ -339,7 +339,15 @@
     "railAddDeclined": "이 계획은 거절되었으므로 이 값은 하나도 생성되지 않았습니다.",
     "railRemoveArchived": "이 계획이 {key}을(를) 보관했습니다.",
     "railRemoveDeclined": "이 계획은 {key}을(를) 보관할 예정이었지만 거절되어 보관되지 않았습니다.",
-    "peekNoActivity": "제안은 승인되기 전까지 댓글, 하위 항목, 활동이 없습니다."
+    "peekNoActivity": "제안은 승인되기 전까지 댓글, 하위 항목, 활동이 없습니다.",
+    "approveProgress": {
+      "creating": "{n, plural, other {항목 #개}}를 백로그에 추가하는 중…",
+      "applying": "{n, plural, other {변경 사항 #개}}를 백로그에 적용하는 중…",
+      "together": "완료되면 모두 함께 표시됩니다.",
+      "slow": "아직 처리 중입니다. 계획이 클수록 오래 걸립니다. 다시 누를 필요가 없습니다.",
+      "timedOutTitle": "아무것도 생성되지 않았습니다. 승인에 시간이 너무 오래 걸렸습니다.",
+      "timedOutNext": "이 계획은 변경 없이 여전히 결정을 기다리고 있습니다. 다시 승인해도 안전합니다."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "이 프로젝트에 액세스할 수 없습니다",

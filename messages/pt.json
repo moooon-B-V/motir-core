@@ -339,7 +339,15 @@
     "railAddDeclined": "Este plano foi recusado — nenhum destes valores foi criado.",
     "railRemoveArchived": "Este plano arquivou {key}.",
     "railRemoveDeclined": "Este plano teria arquivado {key}. Ele foi recusado, então isso não aconteceu.",
-    "peekNoActivity": "Uma proposta não tem comentários, filhos nem atividade até ser aprovada."
+    "peekNoActivity": "Uma proposta não tem comentários, filhos nem atividade até ser aprovada.",
+    "approveProgress": {
+      "creating": "Adicionando {n, plural, one {# item} other {# itens}} ao seu Backlog…",
+      "applying": "Aplicando {n, plural, one {# alteração} other {# alterações}} ao seu Backlog…",
+      "together": "Todos chegam juntos quando terminar.",
+      "slow": "Ainda processando: um plano grande demora mais. Não é preciso clicar de novo.",
+      "timedOutTitle": "Nada foi criado: a aprovação demorou demais.",
+      "timedOutNext": "Este plano continua aguardando sua decisão, sem alterações. É seguro aprovar novamente."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "Você não tem acesso a este projeto",

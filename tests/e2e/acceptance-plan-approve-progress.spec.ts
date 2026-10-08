@@ -290,7 +290,8 @@ test('the progress and the timeout read in Chinese', async ({ page }) => {
   const answered = approveResponse(page, planId);
   await verb(zhBar, zhSurface.approve).click();
   const live = progressIn(zhBar);
-  await expect(live).toContainText(copy.creating.replace('{n}', '3'));
+  // zh's plural has one branch, so the rendered line is fixed text.
+  await expect(live).toContainText('正在将 3 个工作项加入待办列表…');
   await expect(live).toContainText(copy.together);
 
   hold.release();

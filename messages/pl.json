@@ -339,7 +339,15 @@
     "railAddDeclined": "Ten plan został odrzucony — żadna z tych wartości nie została utworzona.",
     "railRemoveArchived": "Ten plan zarchiwizował {key}.",
     "railRemoveDeclined": "Ten plan zarchiwizowałby {key}. Został odrzucony, więc do tego nie doszło.",
-    "peekNoActivity": "Propozycja nie ma komentarzy, elementów podrzędnych ani aktywności, dopóki nie zostanie zatwierdzona."
+    "peekNoActivity": "Propozycja nie ma komentarzy, elementów podrzędnych ani aktywności, dopóki nie zostanie zatwierdzona.",
+    "approveProgress": {
+      "creating": "Dodawanie {n, plural, one {# elementu} few {# elementów} many {# elementów} other {# elementu}} do Backlogu…",
+      "applying": "Wprowadzanie {n, plural, one {# zmiany} few {# zmian} many {# zmian} other {# zmiany}} w Backlogu…",
+      "together": "Pojawią się wszystkie naraz po zakończeniu.",
+      "slow": "Nadal trwa przetwarzanie – duży plan zajmuje więcej czasu. Nie musisz klikać ponownie.",
+      "timedOutTitle": "Nic nie zostało utworzone – zatwierdzanie trwało zbyt długo.",
+      "timedOutNext": "Ten plan nadal czeka na Twoją decyzję, bez zmian. Możesz bezpiecznie zatwierdzić go ponownie."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "Nie masz dostępu do tego projektu",
