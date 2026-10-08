@@ -16,6 +16,13 @@ import type { PlatformAuditLogWithActor } from '@/lib/repositories/platformAudit
 import type { RawPlatformRun } from '@/lib/ai/motirAiClient';
 import type { PlatformTenantEventRow } from '@/lib/repositories/platformEstateRepository';
 import type { PlatformActivityItemDTO } from '@/lib/dto/platform';
+import {
+  ENTERPRISE_REQUEST_STATUSES,
+  type EnterpriseRequestStatusValue,
+  type PlatformEnterpriseRequestDTO,
+  type PlatformEnterpriseRequestMoveDTO,
+} from '@/lib/dto/platformEnterpriseRequest';
+import type { EnterpriseRequestWithParties } from '@/lib/repositories/enterpriseRequestRepository';
 
 /** A `platform_audit_log` row → the DTO. */
 export function toPlatformAuditLogDTO(row: PlatformAuditLog): PlatformAuditLogDTO {
@@ -212,5 +219,54 @@ export function toPlatformRunActivityDTO(
     detail: null,
     model: run.model,
     credits: run.credits,
+  };
+}
+
+/** An `enterprise_request` row with its parties → the console's view (MOTIR-7608). */
+export function toPlatformEnterpriseRequestDTO(
+  row: EnterpriseRequestWithParties,
+): PlatformEnterpriseRequestDTO {
+  return {
+    id: row.id,
+    status: row.status,
+    organizationId: row.organizationId,
+    organizationName: row.organization.name,
+    tierKeyAtRequest: row.tierKeyAtRequest,
+    requester: row.requestedBy
+      ? { id: row.requestedBy.id, name: row.requestedBy.name, email: row.requestedBy.email }
+      : null,
+    contact: row.contact,
+    note: row.note,
+    cardsPerDay: row.cardsPerDay,
+    parallelAgents: row.parallelAgents,
+    agentPath: row.agentPath,
+    autonomy: row.autonomy,
+    startWhen: row.startWhen,
+    teamSize: row.teamSize,
+    createdAt: row.createdAt.toISOString(),
+    closedAt: row.closedAt?.toISOString() ?? null,
+  };
+}
+
+/**
+ * One `enterprise_request.transition` audit row → one History entry, or null
+ * for a row whose metadata does not carry a known `from` / `to` (a row written
+ * by a build this one does not understand is left out rather than misdrawn).
+ */
+export function toPlatformEnterpriseRequestMoveDTO(
+  row: PlatformAuditLogWithActor,
+): PlatformEnterpriseRequestMoveDTO | null {
+  const meta = row.metadata as { from?: unknown; to?: unknown } | null;
+  const known = new Set<string>(ENTERPRISE_REQUEST_STATUSES);
+  const from = typeof meta?.from === 'string' && known.has(meta.from) ? meta.from : null;
+  const to = typeof meta?.to === 'string' && known.has(meta.to) ? meta.to : null;
+  if (!from || !to) return null;
+  return {
+    from: from as EnterpriseRequestStatusValue,
+    to: to as EnterpriseRequestStatusValue,
+    actorUserId: row.actorUserId,
+    actorName: row.actor.name,
+    actorEmail: row.actor.email,
+    at: row.createdAt.toISOString(),
   };
 }

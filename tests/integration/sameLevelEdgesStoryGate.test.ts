@@ -343,7 +343,11 @@ describe('validity over a PROJECTION', () => {
 });
 
 describe('a COMMITTED cross-level edge over a PROJECTION (MOTIR-6509)', () => {
-  it('validate_plan and validate_work_item with a planId both report it, and a plan touching nothing of it stays INVALID', async () => {
+  // REVERSED by MOTIR-7727. This case used to pin "a plan touching nothing of it
+  // stays INVALID" — the shape that made every plan on a project with one old
+  // bad edge read `valid: false` with no blocker and no rejection. A PLAN now
+  // answers for the edges it owns; the committed verdict still reports the edge.
+  it('a plan touching nothing of it is VALID through validate_plan and validate_work_item with a planId; the committed validate_work_item still reports it', async () => {
     const fx = await makeWorkItemFixture();
     const t = await seed(fx);
     await link(fx, t.x.id, t.a.id); // depth 2 → 1
@@ -362,10 +366,22 @@ describe('a COMMITTED cross-level edge over a PROJECTION (MOTIR-6509)', () => {
     });
     expect(appended.isError, text(appended)).toBeFalsy();
 
-    const plan = await call(client, 'validate_plan', { planId });
-    const planVerdict = plan.structuredContent as unknown as Validity;
-    expect(planVerdict.valid).toBe(false);
-    expect(planVerdict.crossLevelEdges).toEqual([
+    const planVerdict = (await call(client, 'validate_plan', { planId }))
+      .structuredContent as unknown as Validity;
+    expect(planVerdict.valid).toBe(true);
+    expect(planVerdict.crossLevelEdges).toEqual([]);
+    expect(planVerdict.invalidEdges).toEqual([]);
+
+    const subtree = (await call(client, 'validate_work_item', { key: t.e1.identifier, planId }))
+      .structuredContent as unknown as Validity;
+    expect(subtree.valid).toBe(true);
+    expect(subtree.crossLevelEdges).toEqual([]);
+    expect(subtree.invalidEdges).toEqual([]);
+
+    const committed = await call(client, 'validate_work_item', { key: t.e1.identifier });
+    const committedVerdict = committed.structuredContent as unknown as Validity;
+    expect(committedVerdict.valid).toBe(false);
+    expect(committedVerdict.crossLevelEdges).toEqual([
       expect.objectContaining({
         item: t.x.identifier,
         blockedBy: t.a.identifier,
@@ -374,14 +390,60 @@ describe('a COMMITTED cross-level edge over a PROJECTION (MOTIR-6509)', () => {
         reason: 'blocked_elsewhere',
       }),
     ]);
-    expect(text(plan)).toContain('blocked elsewhere');
+    expect(text(committed)).toContain('blocked elsewhere');
+    await client.close();
+  });
 
+  it('a plan that re-wires the item end makes the old edge its own: reported, and INVALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await seed(fx);
+    const x2 = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'subtask', title: 'X2', parentId: t.b.id },
+      fx.ctx,
+    );
+    await link(fx, t.x.id, t.a.id); // depth 2 → 1
+    const client = await connectClient(fx.ctx);
+
+    const planId = await openPlan(client, fx);
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      // An edge UNRELATED to the old one, on its item end.
+      proposals: [{ op: 'modify', workItemId: t.x.id, patch: { blockedByAdd: [x2.id] } }],
+    });
+    expect(appended.isError, text(appended)).toBeFalsy();
+
+    const planVerdict = (await call(client, 'validate_plan', { planId }))
+      .structuredContent as unknown as Validity;
+    expect(planVerdict.valid).toBe(false);
+    expect(planVerdict.crossLevelEdges.map((e) => [e.item, e.blockedBy])).toEqual([
+      [t.x.identifier, t.a.identifier],
+    ]);
     const subtree = (await call(client, 'validate_work_item', { key: t.e1.identifier, planId }))
       .structuredContent as unknown as Validity;
     expect(subtree.valid).toBe(false);
     expect(subtree.crossLevelEdges.map((e) => [e.item, e.blockedBy])).toEqual([
       [t.x.identifier, t.a.identifier],
     ]);
+    await client.close();
+  });
+
+  it("a title-only modify on the item end does NOT make the old edge the plan's", async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await seed(fx);
+    await link(fx, t.x.id, t.a.id);
+    const client = await connectClient(fx.ctx);
+
+    const planId = await openPlan(client, fx);
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: t.x.id, patch: { title: 'X, renamed' } }],
+    });
+    expect(appended.isError, text(appended)).toBeFalsy();
+
+    const planVerdict = (await call(client, 'validate_plan', { planId }))
+      .structuredContent as unknown as Validity;
+    expect(planVerdict.valid).toBe(true);
+    expect(planVerdict.crossLevelEdges).toEqual([]);
     await client.close();
   });
 
@@ -400,9 +462,180 @@ describe('a COMMITTED cross-level edge over a PROJECTION (MOTIR-6509)', () => {
     await link(fx, t.x.id, far.id);
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
+    // Re-parent x in place so the plan OWNS its edges (MOTIR-7727) — otherwise
+    // the far edge would go unreported for the ownership reason, not this one.
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: t.x.id, patch: { parentRef: t.b.id } }],
+    });
+    expect(appended.isError, text(appended)).toBeFalsy();
     const verdict = (await call(client, 'validate_plan', { planId }))
       .structuredContent as unknown as Validity;
     expect(verdict.crossLevelEdges).toEqual([]);
+    await client.close();
+  });
+});
+
+describe('a PLAN owns only the edge findings it introduces (MOTIR-7727)', () => {
+  // Both old findings on one committed tree: X → Y is an uncovered cross-parent
+  // edge (B carries no edge to A), X → A a cross-level one. Neither is touched by
+  // the plans below unless the case says so.
+  async function oldBadEdges(fx: WorkItemFixture) {
+    const t = await seed(fx);
+    await link(fx, t.x.id, t.y.id);
+    await link(fx, t.x.id, t.a.id);
+    return t;
+  }
+  const validatePlan = async (client: Client, planId: string) =>
+    (await call(client, 'validate_plan', { planId })).structuredContent as unknown as Validity;
+  const validateProjected = async (client: Client, key: string, planId: string) =>
+    (await call(client, 'validate_work_item', { key, planId }))
+      .structuredContent as unknown as Validity;
+
+  it('a plan adding an unrelated item is VALID with both arrays empty, through both validators', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await oldBadEdges(fx);
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        { op: 'add', proposedFields: { title: 'Unrelated', kind: 'story' }, parentRef: t.e2.id },
+      ],
+    });
+    expect(appended.isError, text(appended)).toBeFalsy();
+
+    for (const verdict of [
+      await validatePlan(client, planId),
+      await validateProjected(client, t.e1.identifier, planId),
+    ]) {
+      expect(verdict.valid).toBe(true);
+      expect(verdict.invalidEdges).toEqual([]);
+      expect(verdict.crossLevelEdges).toEqual([]);
+    }
+    // The committed verdict is unmoved: both old edges, still reported.
+    const committed = (await call(client, 'validate_work_item', { key: t.e1.identifier }))
+      .structuredContent as unknown as Validity;
+    expect(committed.valid).toBe(false);
+    expect(committed.invalidEdges.map((e) => [e.item, e.blockedBy])).toEqual([
+      [t.x.identifier, t.y.identifier],
+    ]);
+    expect(committed.crossLevelEdges.map((e) => [e.item, e.blockedBy])).toEqual([
+      [t.x.identifier, t.a.identifier],
+    ]);
+    await client.close();
+  });
+
+  it('a NEW uncovered edge is still caught — exactly that one, none of the old', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await oldBadEdges(fx);
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'Subtask under C', kind: 'subtask' },
+          parentRef: t.c.id,
+          blockedByRefs: [t.y.id],
+        },
+      ],
+    });
+    expect(appended.isError, text(appended)).toBeFalsy();
+    const added = (appended.structuredContent as unknown as { planItemIds: string[] })
+      .planItemIds[0];
+
+    const verdict = await validatePlan(client, planId);
+    expect(verdict.valid).toBe(false);
+    expect(verdict.invalidEdges).toEqual([
+      {
+        item: `planItem:${added}`,
+        blockedBy: t.y.identifier,
+        itemParent: t.c.identifier,
+        blockerParent: t.a.identifier,
+      },
+    ]);
+    expect(verdict.crossLevelEdges).toEqual([]);
+    await client.close();
+  });
+
+  it('a plan that REMOVES an ancestor of an edge end owns that edge, and reports it as the post-plan tree judges it', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await seed(fx);
+    await link(fx, t.x.id, t.y.id); // uncovered: B carries no edge to A
+    const client = await connectClient(fx.ctx);
+
+    // Removing E1 orphans A and B. The projected chains stop at the removed node,
+    // so only the removed-parent clause of the ownership test can see that the
+    // plan reached X → Y — and the post-plan tree still finds it uncovered.
+    const removingEpic = await openPlan(client, fx);
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId: removingEpic,
+      proposals: [{ op: 'remove', workItemId: t.e1.id }],
+    });
+    expect(appended.isError, text(appended)).toBeFalsy();
+    const verdict = await validatePlan(client, removingEpic);
+    expect(verdict.valid).toBe(false);
+    expect(verdict.invalidEdges).toEqual([
+      {
+        item: t.x.identifier,
+        blockedBy: t.y.identifier,
+        itemParent: t.b.identifier,
+        blockerParent: t.a.identifier,
+      },
+    ]);
+    await client.close();
+  });
+
+  it('a plan that REMOVES the parent a covered child edge read reports whatever the post-plan tree says of it — here, nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await seed(fx);
+    await link(fx, t.b.id, t.a.id);
+    await link(fx, t.x.id, t.y.id); // covered by B → A
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'remove', workItemId: t.a.id }],
+    });
+    expect(appended.isError, text(appended)).toBeFalsy();
+
+    // The plan OWNS X → Y (A is Y's removed parent). The projection orphans Y, so
+    // the edge joins two depths and both rules leave it unjudged — the same
+    // verdict the whole-tree walk gave before MOTIR-7727 (measured at 5920f4f),
+    // so nothing is being HIDDEN by the ownership filter.
+    const verdict = await validatePlan(client, planId);
+    expect(verdict.valid).toBe(true);
+    expect(verdict.invalidEdges).toEqual([]);
+    expect(verdict.crossLevelEdges).toEqual([]);
+    await client.close();
+  });
+
+  it('an EMPTY plan, and an all-remove plan that uncovers nothing, report no edge findings', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await oldBadEdges(fx);
+    const client = await connectClient(fx.ctx);
+
+    const empty = await openPlan(client, fx);
+    const emptyVerdict = await validatePlan(client, empty);
+    expect(emptyVerdict.invalidEdges).toEqual([]);
+    expect(emptyVerdict.crossLevelEdges).toEqual([]);
+    expect(emptyVerdict.valid).toBe(true);
+
+    const removing = await openPlan(client, fx);
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId: removing,
+      proposals: [{ op: 'remove', workItemId: t.c.id }],
+    });
+    expect(appended.isError, text(appended)).toBeFalsy();
+    for (const verdict of [
+      await validatePlan(client, removing),
+      await validateProjected(client, t.e1.identifier, removing),
+    ]) {
+      expect(verdict.invalidEdges).toEqual([]);
+      expect(verdict.crossLevelEdges).toEqual([]);
+    }
     await client.close();
   });
 });

@@ -16,7 +16,7 @@ describe('primitives + specimen render', () => {
     );
   });
 
-  it('the TokensSpecimen mounts (ThemeProvider + scoped StyleVignettes + primitives)', () => {
+  it('the TokensSpecimen mounts (scoped StyleVignettes + primitives)', () => {
     const html = renderToStaticMarkup(createElement(TokensSpecimen));
     // Header + a primitive prove the tree rendered end-to-end.
     expect(html).toContain('@motir/design-system');

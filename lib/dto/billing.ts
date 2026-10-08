@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 import type { BillingCatalog } from '@/lib/billing/catalog';
 import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
@@ -209,4 +210,104 @@ export interface SeatSummaryDTO {
   /** True only for an org OWNER — may manage the seat plan (ADR §7). An admin
    *  manages membership but sees the seat band READ-ONLY (no manage CTA). */
   canManageBilling: boolean;
+}
+
+// ── Enterprise requests (Story MOTIR-7602 · Subtask MOTIR-7605) ─────────────
+//
+// What the Enterprise card's Contact-sales form sends, and the org's view of the
+// request it sent. The value lists are RUNTIME constants so the form can render
+// its choices without importing the Prisma client, and the input schema below
+// refuses anything outside them.
+
+export const ENTERPRISE_AGENT_PATHS = ['hosted', 'own', 'both'] as const;
+export const ENTERPRISE_AUTONOMIES = ['autonomous_lead', 'volume_only', 'unsure'] as const;
+export const ENTERPRISE_START_WHENS = [
+  'now',
+  'within_month',
+  'within_quarter',
+  'exploring',
+] as const;
+export const ENTERPRISE_TEAM_SIZES = [
+  'size_1_10',
+  'size_11_50',
+  'size_51_200',
+  'size_201_plus',
+] as const;
+
+export type EnterpriseAgentPathValue = (typeof ENTERPRISE_AGENT_PATHS)[number];
+export type EnterpriseAutonomyValue = (typeof ENTERPRISE_AUTONOMIES)[number];
+export type EnterpriseStartWhenValue = (typeof ENTERPRISE_START_WHENS)[number];
+export type EnterpriseTeamSizeValue = (typeof ENTERPRISE_TEAM_SIZES)[number];
+
+/** Upper bounds on the free-form answers — generous, but not unbounded. */
+export const ENTERPRISE_REQUEST_LIMITS = {
+  maxCardsPerDay: 100_000,
+  maxParallelAgents: 10_000,
+  maxContactLength: 320,
+  maxNoteLength: 4_000,
+} as const;
+
+const optionalCount = (max: number) => z.number().int().min(1).max(max).nullable().optional();
+
+/**
+ * The Contact-sales body. Every answer is optional EXCEPT the note; an enum
+ * answer outside its set, a non-integer or out-of-range count, or an empty note
+ * is refused. `contact` absent or blank means "use my account email" — the
+ * service fills it in.
+ */
+export const enterpriseRequestInputSchema = z
+  .object({
+    cardsPerDay: optionalCount(ENTERPRISE_REQUEST_LIMITS.maxCardsPerDay),
+    parallelAgents: optionalCount(ENTERPRISE_REQUEST_LIMITS.maxParallelAgents),
+    agentPath: z.enum(ENTERPRISE_AGENT_PATHS).nullable().optional(),
+    autonomy: z.enum(ENTERPRISE_AUTONOMIES).nullable().optional(),
+    startWhen: z.enum(ENTERPRISE_START_WHENS).nullable().optional(),
+    teamSize: z.enum(ENTERPRISE_TEAM_SIZES).nullable().optional(),
+    contact: z
+      .string()
+      .trim()
+      .max(ENTERPRISE_REQUEST_LIMITS.maxContactLength)
+      .nullable()
+      .optional(),
+    note: z.string().trim().min(1).max(ENTERPRISE_REQUEST_LIMITS.maxNoteLength),
+  })
+  .strict();
+
+export type EnterpriseRequestInput = z.infer<typeof enterpriseRequestInputSchema>;
+
+/**
+ * Where an open request stands, in the org's words. Staff's `new` reads
+ * "received" and `contacted` "in conversation"; the org never sees `won` /
+ * `lost` as such — a closed request is simply no longer open.
+ */
+export type EnterpriseRequestOrgStatus = 'received' | 'in_conversation' | 'offer_sent' | 'closed';
+
+/** The org-visible view of one Enterprise request. No price, ever. */
+export interface EnterpriseRequestDTO {
+  id: string;
+  status: EnterpriseRequestOrgStatus;
+  /** ISO-8601. */
+  createdAt: string;
+  cardsPerDay: number | null;
+  parallelAgents: number | null;
+  agentPath: EnterpriseAgentPathValue | null;
+  autonomy: EnterpriseAutonomyValue | null;
+  startWhen: EnterpriseStartWhenValue | null;
+  teamSize: EnterpriseTeamSizeValue | null;
+  contact: string;
+  note: string;
+  /** Who sent it, as the org reads it (the user's name, else their email);
+   *  null once the sender's account is gone. The read-only view's "by …". */
+  requestedByName: string | null;
+}
+
+/**
+ * What the Contact-sales form shows read-only beside the person's answers
+ * (MOTIR-7607): read server-side, never trusted from the client. `null` from
+ * the service when the viewer cannot send a request (off-cloud, or no
+ * `manageBilling`), so the page passes nothing for the form to show.
+ */
+export interface EnterpriseRequestFormContextDTO {
+  /** The org's connected repositories — `project_repository` rows across its workspaces. */
+  repositoryCount: number;
 }
