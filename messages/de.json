@@ -345,7 +345,15 @@
     "railAddDeclined": "Dieser Plan wurde abgelehnt – keiner dieser Werte wurde erstellt.",
     "railRemoveArchived": "Dieser Plan hat {key} archiviert.",
     "railRemoveDeclined": "Dieser Plan hätte {key} archiviert. Er wurde abgelehnt, daher ist das nicht geschehen.",
-    "peekNoActivity": "Ein Vorschlag hat bis zu seiner Genehmigung keine Kommentare, untergeordneten Elemente oder Aktivitäten."
+    "peekNoActivity": "Ein Vorschlag hat bis zu seiner Genehmigung keine Kommentare, untergeordneten Elemente oder Aktivitäten.",
+    "approveProgress": {
+      "creating": "{n, plural, one {# Element wird} other {# Elemente werden}} zu Ihrem Backlog hinzugefügt…",
+      "applying": "{n, plural, one {# Änderung wird} other {# Änderungen werden}} auf Ihr Backlog angewendet…",
+      "together": "Sie erscheinen alle gemeinsam, sobald alles fertig ist.",
+      "slow": "Wird noch bearbeitet – ein großer Plan dauert länger. Sie müssen nicht erneut klicken.",
+      "timedOutTitle": "Es wurde nichts erstellt – die Genehmigung hat zu lange gedauert.",
+      "timedOutNext": "Dieser Plan wartet weiterhin unverändert auf Ihre Entscheidung. Sie können ihn bedenkenlos erneut genehmigen."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "Sie haben keinen Zugriff auf dieses Projekt",

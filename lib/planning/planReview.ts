@@ -69,10 +69,14 @@ export function isProposedReview(review: PlanReviewDto): boolean {
  *    done/cancelled under the proposal (nothing was written).
  *  • `PLAN_NOT_IN_EXPECTED_STATUS` / a 404 — someone (or another tab) already
  *    decided this plan, so there is nothing left to confirm.
+ *  • `PLAN_APPROVE_TIMED_OUT` — the approve transaction ran out of budget and rolled
+ *    back, so nothing was written and approving again is safe (MOTIR-5249; design
+ *    Part XXV §25.2). The one refusal with that promise, so it gets its own key.
  */
 export function planDecisionErrorCode(err: unknown, fallback = 'APPROVE_ERROR'): string {
   if (!(err instanceof PlanRequestError)) return fallback;
   if (err.code === 'PLAN_TARGET_IMMUTABLE') return 'immutable';
+  if (err.code === 'PLAN_APPROVE_TIMED_OUT') return 'timedOut';
   // A second press of a decided plan answers the same on every surface, whichever
   // refusal carried it: the door's (the plan's gate is decided or withdrawn) or the
   // plan's own status.
