@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createTranslator } from 'next-intl';
 import en from '@/messages/en.json';
 import ja from '@/messages/ja.json';
-import { locales } from '@/lib/i18n/locales';
+import { locales, type Locale } from '@/lib/i18n/locales';
 import { getMessagesFor, withEnglishFallback } from '@/lib/i18n/messages';
-import { formatDate } from '@/lib/utils/datetime';
+import { formatDate, formatDateTime } from '@/lib/utils/datetime';
 
 // Story MOTIR-7730 · MOTIR-7757 — a message a catalogue lacks renders its
 // ENGLISH text, never its raw key path, and the eleven locales each format a
@@ -55,5 +55,26 @@ describe('dates in the reader’s language', () => {
   it('writes October 7 the Japanese and the German way', () => {
     expect(formatDate('2026-10-07T00:00:00Z', 'ja')).toContain('10月7日');
     expect(formatDate('2026-10-07T00:00:00Z', 'de')).toContain('7. Okt.');
+  });
+});
+
+// Story gate MOTIR-7760 — the remaining arms of the loader and the formatter.
+describe('the loader and the formatter at their edges (MOTIR-7760)', () => {
+  it('keeps a key the locale holds that English does not', () => {
+    expect(withEnglishFallback({ extra: 'E', c: 'シー' }, { c: 'C' })).toEqual({
+      c: 'シー',
+      extra: 'E',
+    });
+  });
+
+  it('answers English for a locale it does not know, rather than throwing', () => {
+    expect(getMessagesFor('xx' as Locale)).toBe(getMessagesFor('en'));
+  });
+
+  it('formats a date and time in the reader’s language, US English by default', () => {
+    const iso = '2026-10-07T14:05:00Z';
+    expect(formatDateTime(iso)).toBe('Oct 7, 02:05 PM UTC');
+    expect(formatDateTime(iso, 'de')).toBe('7. Okt., 14:05 UTC');
+    expect(formatDate(iso)).toBe('Oct 7, 2026');
   });
 });

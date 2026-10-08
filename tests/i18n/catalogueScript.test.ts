@@ -9,14 +9,19 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GlossaryShapeError,
   loadGlossary,
   renderInstructions,
   validateGlossary,
 } from '@/scripts/i18n/glossary';
-import { classifyKeys, flattenCatalogue } from '@/scripts/i18n/sourceRecord';
+import {
+  arrayParentOf,
+  buildCatalogue,
+  classifyKeys,
+  flattenCatalogue,
+} from '@/scripts/i18n/sourceRecord';
 import {
   baseline,
   extract,
@@ -311,5 +316,182 @@ describe('baseline', () => {
 
   it('never touches a missing file it was not asked about', () => {
     expect(existsSync(join(root, 'messages/sources/zz.json'))).toBe(false);
+  });
+});
+
+// ── Story gate MOTIR-7760: the paths the cases above do not walk ──────────────
+// Added to bring the script and its model to the project's per-file coverage
+// floor; each case still asserts behaviour a person running the script meets.
+
+describe('glossary edge shapes (MOTIR-7760)', () => {
+  it('refuses a glossary that is not an object, a term that is not one, and a missing file', () => {
+    expect(() => validateGlossary([], 'xx', 'f')).toThrow(/\(root\): not an object/);
+    expect(() =>
+      validateGlossary({ locale: 'xx', register: {}, terms: { a: 'b' } }, 'xx', 'f'),
+    ).toThrow(/terms\.a: not an object/);
+    expect(() => loadGlossary('zz', root)).toThrow(GlossaryShapeError);
+    expect(() => loadGlossary('zz', root)).toThrow(/\(file\)/);
+  });
+
+  it('renders a bare register and a banned list with no allowed sense', () => {
+    const text = renderInstructions(
+      validateGlossary(
+        { locale: 'xx', register: {}, terms: { board: { translation: 'tablero', banned: ['b'] } } },
+        'xx',
+        'f',
+      ),
+    );
+    expect(text).not.toContain('Formality');
+    expect(text).not.toContain('Quotation marks');
+    expect(text).toContain('- For "board" never write: b.');
+    expect(text).not.toContain('Allowed senses');
+  });
+});
+
+describe('the catalogue model (MOTIR-7760)', () => {
+  const en = { a: { list: ['x', 'y'] }, b: 'top' };
+
+  it('flattens arrays per element and rebuilds them only when complete', () => {
+    expect([...flattenCatalogue(['p', 'q']).entries()]).toEqual([
+      ['0', 'p'],
+      ['1', 'q'],
+    ]);
+    expect(arrayParentOf(en, 'a.list.1')).toBe('a.list');
+    expect(arrayParentOf(en, 'b')).toBeNull();
+    expect(
+      buildCatalogue(
+        en,
+        new Map([
+          ['a.list.0', 'X'],
+          ['a.list.1', 'Y'],
+        ]),
+      ),
+    ).toEqual({ a: { list: ['X', 'Y'] } });
+    // Half an array is not written; nothing at all builds an empty catalogue.
+    expect(buildCatalogue(en, new Map([['a.list.0', 'X']]))).toEqual({});
+  });
+
+  it('lists a key only the record still holds as an orphan', () => {
+    const c = classifyKeys(
+      new Map([['b', 'top']]),
+      new Map(),
+      new Map([
+        ['b', 'top'],
+        ['gone', 'Gone'],
+      ]),
+    );
+    expect(c).toMatchObject({ missing: ['b'], orphans: ['gone'] });
+    // With no record at all, a held key is untracked and nothing is an orphan.
+    expect(classifyKeys(new Map([['b', 'top']]), new Map([['b', 'arriba']]), null)).toMatchObject({
+      untracked: ['b'],
+      orphans: [],
+    });
+  });
+
+  it('finds the array a key sits in when the catalogue itself is an array', () => {
+    expect(arrayParentOf(['x', ['y', 'z']] as never, '1.0')).toBe('1');
+  });
+});
+
+describe('extract / merge edge paths (MOTIR-7760)', () => {
+  it('keeps an array whole when a batch boundary falls inside it', () => {
+    write('messages/en.json', { ...EN, c: { list: ['x', 'y', 'z'] } });
+    extract({ rootDir: root, locale: 'xx', batchSize: 1, log });
+    const withList = batches().find((b) => 'c.list.0' in b.source)!;
+    expect(Object.keys(withList.source)).toEqual(['c.list.0', 'c.list.1', 'c.list.2']);
+  });
+
+  it('a merge with nothing extracted writes nothing and still reports the gaps', () => {
+    rmSync(join(root, 'messages/xx.json'));
+    rmSync(join(root, 'messages/sources/xx.json'));
+    const r = merge({ rootDir: root, locale: 'xx', log });
+    expect(r).toMatchObject({ merged: [], rejected: [], stillMissing: 5, exitCode: 0 });
+    expect(existsSync(join(root, 'messages/xx.json'))).toBe(false);
+  });
+
+  it('rejects a key en does not hold, an empty value and an untracked key; skips an empty batch', () => {
+    write('messages/sources/xx.json', { 'a.two': 'Two old items' }); // a.one untracked
+    write('.i18n-work/xx/batch-001.json', {
+      locale: 'xx',
+      instructions: '',
+      source: { 'a.one': 'One {name}', 'a.three': 'Plan the Sprint' },
+      previous: {},
+      target: { 'a.zzz': 'nope', 'a.three': '', 'a.one': 'Otro {name}' },
+    });
+    // A batch with no target, and a file whose JSON is null, contribute nothing.
+    write('.i18n-work/xx/batch-002.json', { locale: 'xx', source: {}, previous: {} });
+    writeFileSync(join(root, '.i18n-work/xx/batch-003.json'), 'null\n');
+    const r = merge({ rootDir: root, locale: 'xx', log });
+    const reasons = Object.fromEntries(r.rejected.map((x) => [x.key, x.reasons.join(' | ')]));
+    expect(reasons['a.zzz']).toBe('not a key in en.json');
+    expect(reasons['a.three']).toBe('empty or not a string');
+    expect(reasons['a.one']).toContain('untracked (extract with --include-untracked)');
+    expect(r.merged).toEqual([]);
+  });
+
+  it('accepts an untracked key from a batch extracted with --include-untracked', () => {
+    write('messages/sources/xx.json', { 'a.two': 'Two old items' });
+    extract({ rootDir: root, locale: 'xx', includeUntracked: true, log });
+    fill((key) => (key === 'a.one' ? 'Otro {name}' : undefined));
+    const r = merge({ rootDir: root, locale: 'xx', log });
+    expect(r.merged).toEqual(['a.one']);
+    expect(JSON.parse(read('messages/sources/xx.json'))).toHaveProperty('a.one', 'One {name}');
+  });
+
+  it('baseline with no record yet records every untracked key', () => {
+    rmSync(join(root, 'messages/sources/xx.json'));
+    expect(baseline({ rootDir: root, locale: 'xx', confirm: true, log })).toEqual({
+      recorded: 2,
+      exitCode: 0,
+    });
+  });
+});
+
+describe('the command line (MOTIR-7760)', () => {
+  const cli = (...argv: string[]) => runCatalogueCli(argv, { rootDir: root, log });
+
+  it('runs each command and answers with its exit code', () => {
+    expect(
+      cli(
+        'extract',
+        '--locale',
+        'xx',
+        '--batch-size',
+        '2',
+        '--namespaces',
+        'a,',
+        '--include-untracked',
+      ),
+    ).toBe(0);
+    expect(Object.keys(batches()[0]!.source)).toEqual(['a.two', 'a.three']);
+    expect(cli('merge', '--locale', 'xx')).toBe(0);
+    expect(cli('baseline', '--locale', 'xx')).toBe(1);
+    expect(cli('baseline', '--locale', 'xx', '--confirm')).toBe(0);
+    expect(cli('status')).toBe(0);
+  });
+
+  it('prints the usage for an unknown command, and refuses a bad or missing locale with 2', () => {
+    expect(cli()).toBe(2);
+    expect(logs.at(-1)).toMatch(/^usage: catalogue\.ts/);
+    expect(cli('merge')).toBe(2);
+    expect(logs.at(-1)).toBe('error: --locale is required');
+    expect(cli('merge', '--locale', 'X!')).toBe(2);
+    expect(logs.at(-1)).toBe('error: not a locale code: X!');
+  });
+
+  it('answers 1 for a failure that is not a usage error', () => {
+    rmSync(join(root, 'messages/en.json'));
+    expect(cli('status')).toBe(1);
+    expect(logs.at(-1)).toMatch(/^error: .*en\.json not found$/);
+  });
+
+  it('logs to the console when no logger is given', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      expect(runCatalogueCli([], { rootDir: root })).toBe(2);
+      expect(spy).toHaveBeenCalledWith(expect.stringMatching(/^usage: /));
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

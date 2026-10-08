@@ -132,3 +132,51 @@ describe('compareMessageShape — names the violation', () => {
     ).toEqual(['argument-set:project']);
   });
 });
+
+// Story gate MOTIR-7760 — the argument kinds and branches the cases above do not
+// reach, so the shape gate is measured at the project floor.
+describe('compareMessageShape — the remaining kinds (MOTIR-7760)', () => {
+  it('keeps a date, a time and an ordinal when the translation keeps them', () => {
+    expect(
+      compareMessageShape(
+        'Due {d, date, short} at {t, time, short}',
+        '{d, date, short} {t, time, short}締切',
+        'ja',
+      ),
+    ).toEqual([]);
+    expect(
+      compareMessageShape(
+        '{n, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}',
+        '{n, selectordinal, other {#.}}',
+        'de',
+      ),
+    ).toEqual([]);
+  });
+
+  it('names an ordinal turned into a cardinal plural by its kind', () => {
+    expect(
+      kinds('{n, selectordinal, one {#st} other {#th}}', '{n, plural, other {#}}', 'de'),
+    ).toEqual(['argument-kind:n']);
+  });
+
+  it('reports a select dropped to plain text once, as a missing argument', () => {
+    expect(kinds('{role, select, admin {Admin} other {Member}}', 'Mitglied', 'de')).toEqual([
+      'argument-set:role',
+    ]);
+  });
+
+  it('names a select that only ADDS an option', () => {
+    const v = compareMessageShape(
+      '{role, select, other {Member}}',
+      '{role, select, admin {Admin} other {Mitglied}}',
+      'de',
+    );
+    expect(v.map((x) => x.detail)).toEqual([
+      'select {role} options differ (missing: —; extra: admin)',
+    ]);
+  });
+
+  it('a raw source: an invented literal placeholder is an argument-set violation', () => {
+    expect(kinds('Run <command> now', 'Run <command> {now}', 'de')).toEqual(['argument-set:{now}']);
+  });
+});

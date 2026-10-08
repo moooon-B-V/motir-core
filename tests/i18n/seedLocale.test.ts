@@ -34,4 +34,8 @@ describe('localeFromRequestHeaders', () => {
     expect(localeFromRequestHeaders(h({ 'accept-language': 'sv-SE' }))).toBe('en');
     expect(localeFromRequestHeaders(h({}))).toBe('en');
   });
+
+  it('skips a cookie part with no value (MOTIR-7760)', () => {
+    expect(localeFromRequestHeaders(h({ cookie: 'flag; NEXT_LOCALE=ko' }))).toBe('ko');
+  });
 });

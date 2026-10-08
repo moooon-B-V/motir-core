@@ -26,6 +26,7 @@ vi.mock('@/lib/auth', async () => {
     SessionUnavailableError,
     getSession: vi.fn(async () => {
       if (session.throws === 'unavailable') throw new SessionUnavailableError('down');
+      if (session.throws === 'other') throw new Error('staff gate refused');
       return session.current;
     }),
   };
@@ -99,6 +100,13 @@ describe('setLocale', () => {
 
   it('an invalid value writes neither', async () => {
     await setLocale('xx' as Locale);
+    expect(jar.size).toBe(0);
+    expect(await stored()).toBeNull();
+  });
+
+  it('any other session failure rejects and writes neither (MOTIR-7760)', async () => {
+    session.throws = 'other';
+    await expect(setLocale('zh')).rejects.toThrow('staff gate refused');
     expect(jar.size).toBe(0);
     expect(await stored()).toBeNull();
   });

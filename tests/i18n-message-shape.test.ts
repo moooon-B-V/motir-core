@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { compareMessageShape } from '../scripts/i18n/messageShape';
 import { flattenCatalogue } from '../scripts/i18n/sourceRecord';
+import { locales as appLocales } from '../lib/i18n/locales';
 
 // MOTIR-7745 — every translated string keeps the ICU shape of its English
 // source: the same arguments, of the same kind, the same select options, plural
@@ -62,6 +63,12 @@ describe('i18n message shape (MOTIR-7745)', () => {
     const locales = targetLocales();
     expect(locales).toContain('zh');
     expect(locales).not.toContain('en');
+  });
+
+  it('the listing reaches every locale the app speaks (MOTIR-7760)', () => {
+    // So a green run is a claim about all ten translated catalogues, not about
+    // whichever happen to sit in the directory.
+    expect(targetLocales()).toEqual(appLocales.filter((l) => l !== 'en').sort());
   });
 
   it('every translated string keeps its English source shape, apart from the listed debt', () => {

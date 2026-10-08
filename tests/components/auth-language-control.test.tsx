@@ -199,6 +199,44 @@ describe('AuthLanguageControl — a choice', () => {
     await act(async () => pending[1]!());
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });
+  it('choosing the language already on its way changes nothing more (MOTIR-7760)', async () => {
+    let resolve!: () => void;
+    setLocale.mockImplementation(
+      (l) =>
+        new Promise<void>((r) => {
+          lastSet = l;
+          resolve = r;
+        }),
+    );
+    render(<Harness />);
+    await choose('日本語');
+    expect(trigger().getAttribute('aria-busy')).toBe('true');
+    // The in-flight target, chosen again while it is pending, is not re-sent.
+    await choose('日本語');
+    expect(setLocale).toHaveBeenCalledTimes(1);
+    await act(async () => resolve());
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  });
+
+  it('a superseded choice that fails shows no failure (MOTIR-7760)', async () => {
+    const settle: Array<{ ok: () => void; fail: (e: Error) => void }> = [];
+    setLocale.mockImplementation(
+      (l) =>
+        new Promise<void>((ok, fail) => {
+          lastSet = l;
+          settle.push({ ok, fail });
+        }),
+    );
+    render(<Harness />);
+    await choose('日本語');
+    await choose('Deutsch');
+    // The first (now superseded) choice fails: the newer one is still the page's.
+    await act(async () => settle[0]!.fail(new Error('offline')));
+    expect(screen.queryByText('Couldn’t change the language.')).toBeNull();
+    await act(async () => settle[1]!.ok());
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Couldn’t change the language.')).toBeNull();
+  });
 });
 
 describe('AuthLanguageControl — failure', () => {
