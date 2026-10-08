@@ -191,6 +191,8 @@ describe('the production resolver — the file at the captured HEAD, every outco
     [{ outcome: 'provider_unavailable', repoRef: 'acme/web', detail: 'x' }, 'host_unreachable'],
     [{ outcome: 'repo_not_connected', repoRef: 'acme/web' }, 'not_connected'],
     [{ outcome: 'invalid_path', path: identity.path, reason: 'dots' }, 'unreadable'],
+    // A binary blob at the document's path is not Markdown (MOTIR-7873).
+    [{ outcome: 'binary', ...at, bytes: 4877 }, 'unreadable'],
   ])('%o → unresolvable %s', (result, reason) => {
     expect(contentFromRead(identity, result)).toEqual({ outcome: 'unresolvable', reason });
   });
