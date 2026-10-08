@@ -25,7 +25,7 @@
 // waits on a timeout (CLAUDE.md, the authoritative-signal rule).
 
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { assertLabelsFit } from './_helpers/label-fit';
 import {
@@ -114,7 +114,7 @@ function surfaces(seed: LabelFitSeed): Surface[] {
 }
 
 async function setAccountLanguage(email: string, locale: string): Promise<void> {
-  await db.user.update({ where: { email }, data: { locale } });
+  await adminDb.user.update({ where: { email }, data: { locale } });
 }
 
 /** Opens every popup trigger `selector` matches — a menu, a picker's listbox, the
@@ -152,7 +152,7 @@ test.describe('labels fit their controls in the longer-running languages', () =>
 
   test.afterAll(async () => {
     await setAccountLanguage(EMAIL, 'en').catch(() => undefined);
-    await db.$disconnect();
+    await adminDb.$disconnect();
   });
 
   for (const run of RUNS) {

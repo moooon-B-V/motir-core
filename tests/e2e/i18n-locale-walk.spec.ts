@@ -29,7 +29,7 @@
 // authoritative-signal rule).
 
 import { expect, test } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { assertLabelsFit } from './_helpers/label-fit';
 import { seedLabelFitTenant, type LabelFitSeed } from './_helpers/label-fit-seed';
 import {
@@ -69,16 +69,16 @@ test.describe('every main surface in each new language', () => {
     // approval in the queue). Its sprint and one work item are then pinned to the
     // story's fixed date — seeding, not the account language.
     seed = await seedLabelFitTenant(EMAIL);
-    const sprint = await db.sprint.findFirstOrThrow({ where: { name: 'Sprint 1' } });
-    const item = await db.workItem.findFirstOrThrow({ where: { identifier: seed.itemKey } });
+    const sprint = await adminDb.sprint.findFirstOrThrow({ where: { name: 'Sprint 1' } });
+    const item = await adminDb.workItem.findFirstOrThrow({ where: { identifier: seed.itemKey } });
     await pinSeededDates(sprint.id, item.id);
     // A sprint name that is not the word under test, so "Sprint" on the backlog
     // can only come from the product's own copy.
-    await db.sprint.update({ where: { id: sprint.id }, data: { name: 'Autumn push' } });
+    await adminDb.sprint.update({ where: { id: sprint.id }, data: { name: 'Autumn push' } });
   });
 
   test.afterAll(async () => {
-    await db.$disconnect();
+    await adminDb.$disconnect();
   });
 
   for (const locale of NEW_LOCALES) {
@@ -89,7 +89,7 @@ test.describe('every main surface in each new language', () => {
         test.setTimeout(240_000);
         await signInHere(page, seed.email, seed.password);
         await saveAccountLanguageInSettings(page, locale);
-        const row = await db.user.findUniqueOrThrow({ where: { email: EMAIL } });
+        const row = await adminDb.user.findUniqueOrThrow({ where: { email: EMAIL } });
         expect(row.locale, 'the account language the Settings choice saved').toBe(locale);
 
         for (const surface of walkSurfaces(seed)) {

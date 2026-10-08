@@ -25,6 +25,7 @@ import { sendAuthEmail } from '@/lib/auth/authMail';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { isLocale, type Locale } from '@/lib/i18n/locales';
+import { withUserContext } from '@/lib/workspaces/context';
 import { deletePublicAsset, putPublicAsset } from '@/lib/blob/uploader';
 import { avatarBlobPrefix, isOwnAvatarRef, storedAssetKey } from '@/lib/blob/referencedUrls';
 import { MAX_UPLOAD_BYTES, isImageType } from '@/lib/blob/allowlist';
@@ -108,9 +109,7 @@ export const usersService = {
    */
   async setSavedLocale(userId: string, locale: Locale): Promise<void> {
     if (!isLocale(locale)) return;
-    await db.$transaction(async (tx) => {
-      await userRepository.setLocale(userId, locale, tx);
-    });
+    await withUserContext(userId, (tx) => userRepository.setLocale(userId, locale, tx));
   },
 
   /**

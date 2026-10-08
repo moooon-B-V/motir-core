@@ -37,7 +37,7 @@
 import { writeFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 import {
   chooseLanguage,
@@ -75,7 +75,7 @@ const ENDONYMS = [
 ];
 
 test.afterAll(async () => {
-  await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The signed-out language control, scoped to the `(auth)` frame's banner. */
@@ -210,7 +210,7 @@ test.describe('a German sign-up', () => {
       await expect(settingsLanguageControl(page, 'de')).toContainText('Deutsch', {
         timeout: FIRST_PAINT_MS,
       });
-      const row = await db.user.findUniqueOrThrow({ where: { email: EMAIL } });
+      const row = await adminDb.user.findUniqueOrThrow({ where: { email: EMAIL } });
       expect(row.locale, 'the account language the browser seeded').toBe('de');
       await beat();
     });
@@ -282,7 +282,7 @@ test.describe('the in-place switch', () => {
         page.getByRole('button', { name: msg('ko', 'shell.userMenu.account') }),
       ).toBeVisible();
       await expect(settingsLanguageControl(page, 'ko')).toContainText('한국어');
-      const row = await db.user.findUniqueOrThrow({ where: { email: EMAIL } });
+      const row = await adminDb.user.findUniqueOrThrow({ where: { email: EMAIL } });
       expect(row.locale).toBe('ko');
     });
   });
@@ -434,7 +434,9 @@ test.describe('a Korean choice carried into a Google sign-up', () => {
         .getByRole('button', { name: msg('ko', 'auth.continueWithGoogle'), exact: true })
         .click();
       await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
-      await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: FIRST_PAINT_MS });
+      await expect(page.getByRole('main').getByTestId('workbench-page')).toBeVisible({
+        timeout: FIRST_PAINT_MS,
+      });
       await expect(page.locator('html')).toHaveAttribute('lang', 'ko');
     });
 
@@ -451,7 +453,7 @@ test.describe('a Korean choice carried into a Google sign-up', () => {
         ).toHaveAttribute('aria-selected', 'true');
         await beat();
         await closeListbox(page);
-        const row = await db.user.findUniqueOrThrow({ where: { email: EMAIL } });
+        const row = await adminDb.user.findUniqueOrThrow({ where: { email: EMAIL } });
         expect(row.locale, 'the Google-created account holds the carried choice').toBe('ko');
       },
     );

@@ -23,7 +23,7 @@ import {
   type Response,
 } from '@playwright/test';
 import { localeLabel, locales, type Locale } from '@/lib/i18n/locales';
-import { db } from '@/lib/db';
+import { adminDb } from '@/tests/helpers/adminDb';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { backlogService } from '@/lib/services/backlogService';
 import { plansService } from '@/lib/services/plansService';
@@ -220,7 +220,9 @@ export async function signInHere(page: Page, email: string, password: string): P
   await main.getByPlaceholder(msg(lang, 'auth.password'), { exact: true }).fill(password);
   await main.getByRole('button', { name: msg(lang, 'auth.continue'), exact: true }).click();
   await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
-  await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('main').getByTestId('workbench-page')).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 /** True for the POST a `setLocale` server action makes. */
@@ -416,13 +418,15 @@ export interface OwnProjectSeed {
  * `label-fit-seed.ts` composes, pointed at an existing account.
  */
 export async function seedOwnProject(email: string): Promise<OwnProjectSeed> {
-  const user = await db.user.findUniqueOrThrow({ where: { email } });
-  const membership = await db.workspaceMembership.findFirstOrThrow({ where: { userId: user.id } });
-  const project = await db.project.findFirstOrThrow({
+  const user = await adminDb.user.findUniqueOrThrow({ where: { email } });
+  const membership = await adminDb.workspaceMembership.findFirstOrThrow({
+    where: { userId: user.id },
+  });
+  const project = await adminDb.project.findFirstOrThrow({
     where: { workspaceId: membership.workspaceId },
     orderBy: { createdAt: 'asc' },
   });
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { id: membership.id },
     data: { activeProjectId: project.id },
   });
@@ -457,9 +461,9 @@ export async function seedOwnProject(email: string): Promise<OwnProjectSeed> {
 
 /** Pin the sprint's dates and the work item's due date to the seeded date. */
 export async function pinSeededDates(sprintId: string, workItemId: string): Promise<void> {
-  await db.sprint.update({
+  await adminDb.sprint.update({
     where: { id: sprintId },
     data: { startDate: SEEDED_DATE, endDate: SEEDED_SPRINT_END },
   });
-  await db.workItem.update({ where: { id: workItemId }, data: { dueDate: SEEDED_DATE } });
+  await adminDb.workItem.update({ where: { id: workItemId }, data: { dueDate: SEEDED_DATE } });
 }

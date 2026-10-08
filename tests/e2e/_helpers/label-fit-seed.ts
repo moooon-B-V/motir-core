@@ -6,7 +6,7 @@
 // narrower product than people use (the lesson `cloud-top-bar-budget.spec.ts`
 // records). Everything is seeded through the shipped services.
 
-import { db } from '@/lib/db';
+import { adminDb } from '@/tests/helpers/adminDb';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -59,7 +59,7 @@ export async function seedLabelFitTenant(email: string): Promise<LabelFitSeed> {
     workspaceId: workspace.id,
     actorUserId: owner.id,
   });
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
   });
@@ -114,8 +114,8 @@ export async function seedLabelFitTenant(email: string): Promise<LabelFitSeed> {
   await plansService.markPlanned(plan.id, ctx);
 
   // A public project and an unread notification: the top bar's crowded state.
-  await setProjectAccess(db, project.id, 'public');
-  await db.notification.create({
+  await setProjectAccess(adminDb, project.id, 'public');
+  await adminDb.notification.create({
     data: {
       workspaceId: workspace.id,
       recipientUserId: owner.id,
