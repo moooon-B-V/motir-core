@@ -3,6 +3,15 @@ import {
   IBM_Plex_Mono,
   Inter,
   JetBrains_Mono,
+  LXGW_WenKai_TC,
+  M_PLUS_Rounded_1c,
+  Nanum_Gothic,
+  Noto_Sans_JP,
+  Noto_Sans_KR,
+  Noto_Sans_SC,
+  Noto_Serif_JP,
+  Noto_Serif_KR,
+  Noto_Serif_SC,
   Source_Serif_4,
   Space_Grotesk,
 } from 'next/font/google';
@@ -66,6 +75,83 @@ const fraunces = Fraunces({
   display: 'swap',
 });
 
+// ── Font sets (Story MOTIR-7733 · MOTIR-7847) ─────────────────────────────
+// One loader per FACE in `FONT_SET_REGISTRY` (`@motir/design-system`,
+// `fontSets.ts`): the CJK faces each locale's script is drawn in, behind the
+// pairing's Latin faces. `variable` is the name `fontSetMemberVar(set, role,
+// member)` returns; next/font only accepts literal options, so the names are
+// written out and `tests/theme/fontSetFaces.test.ts` holds them to the registry.
+// A CJK mono role re-uses its set's sans face (`sameFaceAs`), so it has no
+// loader of its own.
+//
+// Declaring a face downloads nothing by itself. It emits `@font-face` rules,
+// one per `unicode-range` slice, and the browser fetches a slice only when an
+// element's `font-family` names the family AND a rendered character falls in
+// that slice. A family is named only under its own `:lang()` block in
+// `theme.css`, so an English page fetches no CJK file and a ja page no zh or ko
+// file. `preload: false` keeps every CJK file out of the preload list, which
+// would otherwise download it on every page. No `subsets`: next/font fetches
+// every slice regardless and uses `subsets` only to choose what to preload.
+// Static faces declare dooooWeb's two weights, `400` and `700`
+// (`docs/typography/font-sets.md`).
+
+const notoSansSC = Noto_Sans_SC({
+  variable: '--font-set-zh-Hans-sans-noto-sans-sc',
+  display: 'swap',
+  preload: false,
+});
+
+const notoSerifSC = Noto_Serif_SC({
+  variable: '--font-set-zh-Hans-serif-noto-serif-sc',
+  display: 'swap',
+  preload: false,
+});
+
+const lxgwWenKaiTC = LXGW_WenKai_TC({
+  weight: ['400', '700'],
+  variable: '--font-set-zh-Hans-serif-lxgw-wenkai-tc',
+  display: 'swap',
+  preload: false,
+});
+
+const notoSansJP = Noto_Sans_JP({
+  variable: '--font-set-ja-sans-noto-sans-jp',
+  display: 'swap',
+  preload: false,
+});
+
+const mPlusRounded1c = M_PLUS_Rounded_1c({
+  weight: ['400', '700'],
+  variable: '--font-set-ja-sans-m-plus-rounded-1c',
+  display: 'swap',
+  preload: false,
+});
+
+const notoSerifJP = Noto_Serif_JP({
+  variable: '--font-set-ja-serif-noto-serif-jp',
+  display: 'swap',
+  preload: false,
+});
+
+const notoSansKR = Noto_Sans_KR({
+  variable: '--font-set-ko-sans-noto-sans-kr',
+  display: 'swap',
+  preload: false,
+});
+
+const nanumGothic = Nanum_Gothic({
+  weight: ['400', '700'],
+  variable: '--font-set-ko-sans-nanum-gothic',
+  display: 'swap',
+  preload: false,
+});
+
+const notoSerifKR = Noto_Serif_KR({
+  variable: '--font-set-ko-serif-noto-serif-kr',
+  display: 'swap',
+  preload: false,
+});
+
 // MOTIR-2505 — a FUNCTION, not `export const metadata`. The object carries
 // `metadataBase`, which is read from the environment, and a static export is
 // evaluated at module load — build time for a statically-rendered route, where
@@ -82,4 +168,13 @@ export const fontVariables = [
   ibmPlexMono.variable,
   spaceGrotesk.variable,
   fraunces.variable,
+  notoSansSC.variable,
+  notoSerifSC.variable,
+  lxgwWenKaiTC.variable,
+  notoSansJP.variable,
+  mPlusRounded1c.variable,
+  notoSerifJP.variable,
+  notoSansKR.variable,
+  nanumGothic.variable,
+  notoSerifKR.variable,
 ].join(' ');
