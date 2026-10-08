@@ -9,6 +9,8 @@ import type {
   PageParentDto,
   PageTrailDto,
   PageTreeRowDto,
+  PageMentionCandidateDto,
+  PageRefSummaryDto,
   PageVersionDto,
   PageVersionListItemDto,
 } from '@/lib/dto/pages';
@@ -439,4 +441,25 @@ export function toPageMarkdownDto(
     markdown: record.bodyMarkdown,
     updatedAt: record.updatedAt.toISOString(),
   };
+}
+
+/** A live page as the `@` picker's Pages section lists it (MOTIR-7697). */
+export function toPageMentionCandidateDto(
+  row: { id: string; title: string },
+  folderPath: string[],
+  parentPageTitle: string | null,
+): PageMentionCandidateDto {
+  return { id: row.id, title: row.title, place: { folderPath, parentPageTitle } };
+}
+
+/**
+ * A page chip's summary (MOTIR-7697). Only a LIVE page is `available`; the
+ * unavailable shape is built without the title, never by deleting it.
+ */
+export function toPageRefSummaryDto(
+  id: string,
+  row: { title: string; archivedAt: Date | null } | undefined,
+): PageRefSummaryDto {
+  if (!row || row.archivedAt !== null) return { state: 'unavailable', id };
+  return { state: 'available', id, title: row.title };
 }

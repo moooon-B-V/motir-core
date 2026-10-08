@@ -17,7 +17,7 @@ import {
   REPO_TARBALL_TIMEOUT_MS,
   type GitProvider,
 } from '../provider';
-import { byteLength, describeBody, normalizeRepoFilePath } from '../fileRead';
+import { classifyRepoBlob, describeBody, normalizeRepoFilePath } from '../fileRead';
 import {
   MergeChangeRequestError,
   RepoFileReadError,
@@ -999,15 +999,27 @@ export const githubProvider: GitProvider = {
       throw new RepoFileReadError('github', res.status, await describeBody(res));
     }
 
-    const text = await res.text();
+    // The BYTES, never `res.text()` — a lenient decode turns a binary blob into
+    // `found` and inflates its size (`classifyRepoBlob`, MOTIR-7873).
+    const blob = new Uint8Array(await res.arrayBuffer());
     // The size arm the host did not take. A directory read, a repo whose blob
     // limit differs, a future endpoint change: whatever the reason, a caller
     // must never receive more than the named bound WITHOUT being told, so the
-    // check is ours as well as GitHub's.
-    if (byteLength(text) > REPO_FILE_MAX_BYTES) {
+    // check is ours as well as GitHub's — on the blob's REAL length.
+    if (blob.byteLength > REPO_FILE_MAX_BYTES) {
       return { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES };
     }
-    return { outcome: 'found', path: guarded.path, ref, text, bytes: byteLength(text) };
+    const classified = classifyRepoBlob(blob);
+    if (classified.kind === 'binary') {
+      return { outcome: 'binary', path: guarded.path, ref, bytes: blob.byteLength };
+    }
+    return {
+      outcome: 'found',
+      path: guarded.path,
+      ref,
+      text: classified.text,
+      bytes: blob.byteLength,
+    };
   },
 
   async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {

@@ -1,5 +1,6 @@
 import { renderMarkdown } from '@/lib/markdown/render';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import type { PageRefMap } from '@/lib/dto/pages';
 import './markdown-editor.css';
 
 // MarkdownView — the read-only render surface for work-item Markdown content
@@ -39,6 +40,11 @@ export interface MarkdownViewProps {
    * passed straight to `renderMarkdown`. Omitted, no copy control renders.
    */
   copyableCode?: boolean;
+  /**
+   * Resolved page reference summaries (MOTIR-7698) for the `motir-page:` token
+   * chips in `value`. Omitted, every page token renders "Page unavailable".
+   */
+  pageRefs?: PageRefMap;
 }
 
 export function MarkdownView({
@@ -46,6 +52,7 @@ export function MarkdownView({
   className,
   workItemRefs,
   copyableCode,
+  pageRefs,
   ...rest
 }: MarkdownViewProps) {
   // Link underlining (WCAG link-in-text-block) is handled inside renderMarkdown
@@ -56,7 +63,7 @@ export function MarkdownView({
       className={['wmde-markdown', 'motir-prose', className].filter(Boolean).join(' ')}
       {...rest}
     >
-      {renderMarkdown(value, { workItemRefs, copyableCode })}
+      {renderMarkdown(value, { workItemRefs, copyableCode, pageRefs })}
     </div>
   );
 }

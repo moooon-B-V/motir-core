@@ -8,6 +8,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { MarkdownEditor, buildEditorExtensions } from '@/components/ui/MarkdownEditor';
 import type {
   MentionWiring,
+  PageMentionCandidate,
   WorkItemMentionCandidate,
 } from '@/components/ui/markdownEditorMentions';
 import { renderWithIntl } from '../helpers/renderWithIntl';
@@ -696,5 +697,244 @@ describe('Unified @ picker — People + Work items (component, 5.8.5)', () => {
     expect(listbox?.getAttribute('aria-label')).toBe('Mention a member');
     expect(listbox?.textContent).not.toContain('Work items');
     expect(listbox?.textContent).toContain('Isaac');
+  });
+});
+
+// ── Page tags (Story MOTIR-7694 · MOTIR-7698) ───────────────────────────────
+// `design/work-items/internal-links--page-tag.mock.html` panels 1–5. A third
+// section, Pages, joins the picker when the host wires a page search; a pick
+// inserts a `pageMention` node serializing to `[<title>](motir-page:<pageId>)`.
+// Without the search the node is not registered and the token is kept as an
+// ordinary link by the Link mark, so nothing is lost.
+const PAGE_WIRING: MentionWiring = {
+  getCandidates: () => [],
+  getAnchor: () => null,
+  searchWorkItems: async () => [],
+  searchPages: async () => [],
+};
+
+function roundTripWithPages(markdown: string): string {
+  const element = document.createElement('div');
+  const editor = new Editor({
+    element,
+    extensions: buildEditorExtensions({ mentions: PAGE_WIRING }),
+    content: markdown,
+  });
+  const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+    getMarkdown: () => string;
+  };
+  const out = storage.getMarkdown();
+  editor.destroy();
+  return out.trim();
+}
+
+describe('Page tag token round-trip (storage invariant, MOTIR-7698)', () => {
+  it('preserves a page token through load → serialize, byte-stable', () => {
+    const doc = 'Spec lives in [Roadmap Q4](motir-page:cmpage123abc) — read it first.';
+    const once = roundTripWithPages(doc);
+    expect(once).toBe(doc);
+    expect(roundTripWithPages(once)).toBe(once);
+  });
+
+  it('keeps the user and work-item tokens byte-identical beside a page token', () => {
+    const doc =
+      'cc [@Bo Philips](mention:user_bo) on [MOTIR-805](motir:wi_a) per [Roadmap](motir-page:pg_a)';
+    expect(roundTripWithPages(doc)).toBe(doc);
+  });
+
+  it('a malformed page token (empty id) is not a page chip — it stays an ordinary link', () => {
+    expect(roundTripWithPages('ghost [Roadmap](motir-page:) here')).toBe(
+      'ghost [Roadmap](motir-page:) here',
+    );
+  });
+
+  it('WITHOUT searchPages the page token survives as an ordinary link (never lost)', () => {
+    // No `pageMention` node is registered, so the anchor falls to the Link mark,
+    // which keeps it — a comment or to-do that quotes a tagged body loses nothing.
+    expect(roundTripWithWorkItems('See [Roadmap](motir-page:pg_a) please')).toBe(
+      'See [Roadmap](motir-page:pg_a) please',
+    );
+  });
+});
+
+describe('Unified @ picker — the Pages section (component, MOTIR-7698)', () => {
+  const PEOPLE = [{ id: 'user_rosa', name: 'Rosa', email: 'rosa@motir.co' }];
+  const PAGES: PageMentionCandidate[] = [
+    {
+      id: 'pg_roadmap',
+      title: 'Roadmap Q4',
+      place: { folderPath: ['Product', 'Roadmaps'], parentPageTitle: null },
+    },
+    { id: 'pg_child', title: 'Rollout notes', place: { folderPath: [], parentPageTitle: 'Q4' } },
+    { id: 'pg_top', title: '', place: { folderPath: [], parentPageTitle: null } },
+  ];
+
+  function PagesHarness({
+    onReady,
+    searchPages,
+  }: {
+    onReady: (editor: Editor) => void;
+    searchPages?: (q: string) => Promise<PageMentionCandidate[]>;
+  }) {
+    const anchorRef = useRef<HTMLDivElement>(null);
+    const editor = useEditor({
+      immediatelyRender: false,
+      extensions: buildEditorExtensions({
+        mentions: {
+          getCandidates: () => PEOPLE,
+          getAnchor: () => anchorRef.current,
+          searchWorkItems: async () => [],
+          searchPages,
+        },
+      }),
+      content: '',
+    });
+    useEffect(() => {
+      if (editor) onReady(editor);
+    }, [editor, onReady]);
+    return (
+      <div ref={anchorRef} data-testid="anchor" className="relative">
+        {editor && <EditorContent editor={editor} />}
+      </div>
+    );
+  }
+
+  async function mount(searchPages?: (q: string) => Promise<PageMentionCandidate[]>) {
+    let editor: Editor | null = null;
+    render(<PagesHarness onReady={(e) => (editor = e)} searchPages={searchPages} />);
+    await waitFor(() => expect(editor).toBeTruthy());
+    return { editor: editor as unknown as Editor, anchor: screen.getByTestId('anchor') };
+  }
+
+  function markdownOf(editor: Editor): string {
+    const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+      getMarkdown: () => string;
+    };
+    return storage.getMarkdown();
+  }
+
+  it('under 2 characters the Pages section shows its hint, after Work items', async () => {
+    const search = vi.fn(async () => PAGES);
+    const { editor, anchor } = await mount(search);
+    editor.commands.focus('end');
+    editor.commands.insertContent('@r');
+
+    await waitFor(() => {
+      const listbox = anchor.querySelector('[role="listbox"]');
+      expect(listbox?.getAttribute('aria-label')).toBe('Mention a person, work item or page');
+      const text = listbox?.textContent ?? '';
+      expect(text.indexOf('Work items')).toBeLessThan(text.indexOf('Pages'));
+      expect(text).toContain('Keep typing to search pages…');
+    });
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it('shows page rows with title and place; ↓ + Enter inserts the page token', async () => {
+    const search = vi.fn(async () => PAGES);
+    const { editor, anchor } = await mount(search);
+    editor.commands.focus('end');
+    editor.commands.insertContent('@ro');
+
+    // Rosa + 3 pages (the work-item search resolves nothing).
+    await waitFor(() => expect(anchor.querySelectorAll('[role="option"]').length).toBe(4));
+    expect(search).toHaveBeenCalledWith('ro');
+    const options = anchor.querySelectorAll('[role="option"]');
+    expect(options[1]?.textContent).toBe('Roadmap Q4Product › Roadmaps');
+    expect(options[2]?.textContent).toBe('Rollout notesQ4');
+    // A top-level, untitled page reads "Untitled" and shows no place.
+    expect(options[3]?.textContent).toBe('Untitled');
+
+    fireEvent.keyDown(editor.view.dom, { key: 'ArrowDown' });
+    await waitFor(() =>
+      expect(anchor.querySelector('[role="option"][aria-selected="true"]')?.textContent).toContain(
+        'Roadmap Q4',
+      ),
+    );
+    fireEvent.keyDown(editor.view.dom, { key: 'Enter' });
+    await waitFor(() =>
+      expect(markdownOf(editor)).toContain('[Roadmap Q4](motir-page:pg_roadmap)'),
+    );
+    expect(anchor.querySelector('[role="listbox"]')).toBeNull();
+    // The editor chip is the page chip with the stored title.
+    const chip = editor.view.dom.querySelector('[data-type="pageMention"]');
+    expect(chip?.className).toContain('page-chip');
+    expect(chip?.textContent).toBe('Roadmap Q4');
+  });
+
+  it('↑ wraps from the first row to the last page row', async () => {
+    const { editor, anchor } = await mount(async () => PAGES);
+    editor.commands.focus('end');
+    editor.commands.insertContent('@ro');
+    await waitFor(() => expect(anchor.querySelectorAll('[role="option"]').length).toBe(4));
+    fireEvent.keyDown(editor.view.dom, { key: 'ArrowUp' });
+    await waitFor(() =>
+      expect(anchor.querySelector('[role="listbox"]')?.getAttribute('aria-activedescendant')).toBe(
+        'mention-option-3',
+      ),
+    );
+  });
+
+  it('no match says so for Pages', async () => {
+    const { editor, anchor } = await mount(async () => []);
+    editor.commands.focus('end');
+    editor.commands.insertContent('@zzqq');
+    await waitFor(() => expect(anchor.textContent).toContain('No pages match “zzqq”.'));
+  });
+
+  it('a rejected page search shows the failure and Try again re-runs it', async () => {
+    const search = vi
+      .fn<(q: string) => Promise<PageMentionCandidate[]>>()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue(PAGES);
+    const { editor, anchor } = await mount(search);
+    editor.commands.focus('end');
+    editor.commands.insertContent('@ro');
+
+    await waitFor(() =>
+      expect(anchor.querySelector('[role="alert"]')?.textContent).toBe('Couldn’t search pages.'),
+    );
+    expect(anchor.textContent).not.toContain('No pages match');
+    // Rosa is row 0; the work-item section is empty; Try again is row 1.
+    const retry = anchor.querySelectorAll('[role="option"]')[1]!;
+    expect(retry.textContent).toBe('Try again');
+    fireEvent.mouseDown(retry);
+    await waitFor(() => expect(anchor.querySelectorAll('[role="option"]').length).toBe(4));
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(anchor.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('without searchPages there is no Pages section and no page request', async () => {
+    const { editor, anchor } = await mount(undefined);
+    editor.commands.focus('end');
+    editor.commands.insertContent('@ro');
+    await waitFor(() => expect(anchor.querySelector('[role="listbox"]')).toBeTruthy());
+    const listbox = anchor.querySelector('[role="listbox"]');
+    expect(listbox?.getAttribute('aria-label')).toBe('Mention a person or work item');
+    expect(listbox?.textContent).not.toContain('Pages');
+  });
+});
+
+describe('MarkdownEditor wires pageSearch (component, MOTIR-7698)', () => {
+  it('reopening a body with a page tag shows the chip, and an untouched body reports no diff', async () => {
+    const onChange = vi.fn();
+    renderWithIntl(
+      <MarkdownEditor
+        label="Description"
+        value="Read [Roadmap Q4](motir-page:pg_roadmap) first."
+        onChange={onChange}
+        workItemSearch={async () => []}
+        pageSearch={async () => []}
+      />,
+    );
+    const chip = await waitFor(() => {
+      const el = document.querySelector('[data-type="pageMention"]');
+      expect(el).toBeTruthy();
+      return el!;
+    });
+    expect(chip.textContent).toBe('Roadmap Q4');
+    // Whatever the editor reports at mount is the body it was given, byte for byte.
+    for (const [value] of onChange.mock.calls) {
+      expect(value).toBe('Read [Roadmap Q4](motir-page:pg_roadmap) first.');
+    }
   });
 });

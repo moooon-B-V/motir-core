@@ -236,6 +236,8 @@ async function openChat(id: string): Promise<Browser> {
   // The first frame the machine sees proves the upstream socket is open.
   b.ws.send('{"t":"list"}');
   await until(() => machine.received.length === 1);
+  // ...and its echo back through the relay, so the bump it causes lands before a test moves the clock.
+  await until(() => b.inbox.length === 1);
   return b;
 }
 

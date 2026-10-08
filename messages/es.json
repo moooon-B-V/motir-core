@@ -150,6 +150,12 @@
     "mentionNoResults": "Ningún elemento de trabajo coincide con “{query}”.",
     "mentionSearchFailed": "No se pudieron buscar elementos de trabajo.",
     "mentionRetry": "Reintentar",
+    "mentionPages": "Páginas",
+    "mentionTypeToSearchPages": "Sigue escribiendo para buscar páginas…",
+    "mentionNoPages": "Ninguna página coincide con “{query}”.",
+    "mentionPagesSearchFailed": "No se pudieron buscar páginas.",
+    "pageUntitled": "Sin título",
+    "pageUnavailable": "Página no disponible",
     "codeLanguage": "Lenguaje"
   },
   "common": {
@@ -372,7 +378,15 @@
     "railAddDeclined": "Este plan se rechazó: no se creó ninguno de estos valores.",
     "railRemoveArchived": "Este plan archivó {key}.",
     "railRemoveDeclined": "Este plan habría archivado {key}. Se rechazó, así que no se archivó.",
-    "peekNoActivity": "Una propuesta no tiene comentarios, elementos secundarios ni actividad hasta que se aprueba."
+    "peekNoActivity": "Una propuesta no tiene comentarios, elementos secundarios ni actividad hasta que se aprueba.",
+    "approveProgress": {
+      "creating": "Añadiendo {n, plural, one {# elemento} other {# elementos}} a tu Backlog…",
+      "applying": "Aplicando {n, plural, one {# cambio} other {# cambios}} a tu Backlog…",
+      "together": "Llegarán todos juntos cuando termine.",
+      "slow": "Seguimos trabajando: un plan grande tarda más. No hace falta volver a pulsar.",
+      "timedOutTitle": "No se creó nada: la aprobación tardó demasiado.",
+      "timedOutNext": "Este plan sigue esperando tu decisión, sin cambios. Puedes volver a aprobarlo con seguridad."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "No tienes acceso a este proyecto",
@@ -1501,6 +1515,8 @@
     "pagesSourceMention": "Mencionado",
     "pagesSourceEmbed": "Insertado",
     "pagesSourceManual": "Vinculado",
+    "pagesSourceDescription": "Etiquetada en la descripción",
+    "pagesSourceExplanation": "Etiquetada en la explicación",
     "pagesEmpty": "Todavía ninguna página enlaza a este elemento de trabajo.",
     "pagesShowMore": "Mostrar más páginas",
     "pagesError": "No se pudieron cargar las páginas.",

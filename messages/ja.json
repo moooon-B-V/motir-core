@@ -150,6 +150,12 @@
     "mentionNoResults": "「{query}」に一致する作業項目はありません。",
     "mentionSearchFailed": "作業項目を検索できませんでした。",
     "mentionRetry": "再試行",
+    "mentionPages": "ページ",
+    "mentionTypeToSearchPages": "入力を続けてページを検索…",
+    "mentionNoPages": "「{query}」に一致するページはありません。",
+    "mentionPagesSearchFailed": "ページを検索できませんでした。",
+    "pageUntitled": "無題",
+    "pageUnavailable": "利用できないページ",
     "codeLanguage": "言語"
   },
   "common": {
@@ -372,7 +378,15 @@
     "railAddDeclined": "この計画は却下されたため、これらの値はどれも作成されていません。",
     "railRemoveArchived": "この計画は {key} をアーカイブしました。",
     "railRemoveDeclined": "この計画は {key} をアーカイブする予定でしたが、却下されたためアーカイブされていません。",
-    "peekNoActivity": "提案には、承認されるまでコメント、子項目、アクティビティはありません。"
+    "peekNoActivity": "提案には、承認されるまでコメント、子項目、アクティビティはありません。",
+    "approveProgress": {
+      "creating": "{n, plural, other {# 件の項目}}をバックログに追加しています…",
+      "applying": "{n, plural, other {# 件の変更}}をバックログに適用しています…",
+      "together": "完了すると、すべてがまとめて表示されます。",
+      "slow": "処理を続けています。大きな計画ほど時間がかかります。もう一度押す必要はありません。",
+      "timedOutTitle": "何も作成されませんでした。承認に時間がかかりすぎました。",
+      "timedOutNext": "この計画は変更されないまま、引き続きあなたの判断を待っています。もう一度承認しても問題ありません。"
+    }
   },
   "projectAccess": {
     "noAccessTitle": "このプロジェクトへのアクセス権がありません",
@@ -1501,6 +1515,8 @@
     "pagesSourceMention": "メンション",
     "pagesSourceEmbed": "埋め込み",
     "pagesSourceManual": "リンク",
+    "pagesSourceDescription": "説明でタグ付け",
+    "pagesSourceExplanation": "理由でタグ付け",
     "pagesEmpty": "この作業項目にリンクしているページはまだありません。",
     "pagesShowMore": "さらにページを表示",
     "pagesError": "ページを読み込めませんでした。",

@@ -3873,13 +3873,31 @@ async function assertFolderPlacementsLegalAtAppend(
   });
 }
 
+/**
+ * WHICH of the three edits `editAddProposal` is performing — the legal status
+ * and who the trail names both follow from it, so they cannot be chosen apart:
+ *
+ *   • `deepen` — the author filling in a plan it is still writing (`generating`);
+ *     the generation actor.
+ *   • `review` — a PERSON's inline edit on the review surface (`planned`); that
+ *     person and no agent.
+ *   • `revise` — an AGENT revising a plan already in front of a reviewer
+ *     (`update_plan_item { revision: true }`, AMENDMENT 24). Legal on
+ *     `generating` and `planned` — AMENDMENT 8's editable pair, the gate
+ *     `correctProposal` and a revision append use — and recorded under the
+ *     agent, because the reviewer must see WHICH harness and model rewrote a card
+ *     under them, exactly as `correctProposal` records its own agent edits.
+ */
+type AddProposalEditMode = 'deepen' | 'review' | 'revise';
+
 async function editAddProposal(
   planId: string,
   planItemId: string,
   input: UpdateProposalInput,
   ctx: ServiceContext,
-  expectedStatus: 'planned' | 'generating',
+  mode: AddProposalEditMode,
 ): Promise<PlanWithItemsDto> {
+  const expectedStatus = mode === 'deepen' ? 'generating' : 'planned';
   const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
     planRepository.findById(planId, ctx.workspaceId, tx),
   );
@@ -3918,7 +3936,11 @@ async function editAddProposal(
       if (!locked) throw new PlanNotFoundError(planId);
       const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
       if (!fresh) throw new PlanNotFoundError(planId);
-      if (fresh.status !== expectedStatus) {
+      const legal =
+        mode === 'revise'
+          ? fresh.status === 'generating' || fresh.status === 'planned'
+          : fresh.status === expectedStatus;
+      if (!legal) {
         throw new PlanNotInExpectedStatusError(planId, fresh.status, expectedStatus);
       }
       const item = await planItemRepository.findById(planItemId, tx);
@@ -3971,14 +3993,13 @@ async function editAddProposal(
       // without it a proposal deepened five times is byte-indistinguishable from
       // one written once.
       //
-      // ⚠️ WHO acted is decided by `expectedStatus`, which is the ONLY thing that
-      // tells the two callers apart and is exactly the right discriminator:
-      // `deepenProposal` edits a `generating` plan and is the generator, so it
-      // takes the generation actor (null on a cadence plan, the agent triple
-      // beside it); `updateProposal` edits a `planned` one and is only ever
-      // reached by a person reviewing it, so it records that person and NO agent.
-      // Reading the plan's `authorSource` for both would file a reviewer's edit
-      // under the agent that wrote what they were reviewing.
+      // ⚠️ WHO acted is decided by `mode`, never by the plan's status: a `planned`
+      // plan is edited both by a person reviewing it (`review`) and by an agent
+      // revising it (`revise`), so the status alone cannot tell them apart.
+      // `deepen` and `revise` take the generation actor (null on a cadence plan,
+      // the agent triple beside it); `review` records that person and NO agent.
+      // Reading the plan's `authorSource` for a review would file a reviewer's
+      // edit under the agent that wrote what they were reviewing.
       //
       // The diff records the fields the edit SUPPLIED, not a value diff: the old
       // side of a proposal is already gone by the time it is written, and the
@@ -3989,10 +4010,14 @@ async function editAddProposal(
           planId,
           planItemId,
           changeKind: 'edited',
-          ...(expectedStatus === 'generating'
-            ? generationActor(fresh, ctx)
-            : { changedById: ctx.userId, actor: null }),
-          diff: { fields: Object.keys(input), proposalCount: 1 },
+          ...(mode === 'review'
+            ? { changedById: ctx.userId, actor: null }
+            : generationActor(fresh, ctx)),
+          diff: {
+            fields: Object.keys(input),
+            proposalCount: 1,
+            ...(mode === 'revise' ? { revision: true } : {}),
+          },
         },
         tx,
       );
@@ -5523,7 +5548,7 @@ export const plansService = {
     input: UpdateProposalInput,
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
-    return editAddProposal(planId, planItemId, input, ctx, 'planned');
+    return editAddProposal(planId, planItemId, input, ctx, 'review');
   },
 
   /**
@@ -5553,7 +5578,29 @@ export const plansService = {
     input: UpdateProposalInput,
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
-    return editAddProposal(planId, planItemId, input, ctx, 'generating');
+    return editAddProposal(planId, planItemId, input, ctx, 'deepen');
+  },
+
+  /**
+   * REVISE a proposed `add` in place on a plan an AGENT already closed
+   * (AMENDMENT 24) — `update_plan_item { revision: true }`. The same sparse
+   * merge and re-validation as {@link updateProposal} and `deepenProposal`,
+   * legal on `generating` AND `planned`, and recorded on the trail under the
+   * AGENT (`generationActor`), never as the reviewer's own edit. The plan does
+   * not re-open: it stays `planned` before, during and after, as a revision
+   * append leaves it (AMENDMENT 12).
+   *
+   * It exists so a correction to a card's WORDS on a landed plan is an edit of
+   * that card — same id, same edges, same history — rather than a withdraw and a
+   * re-append, which loses all three (the runbook's archive-and-re-propose rule).
+   */
+  async reviseProposal(
+    planId: string,
+    planItemId: string,
+    input: UpdateProposalInput,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    return editAddProposal(planId, planItemId, input, ctx, 'revise');
   },
 
   /**

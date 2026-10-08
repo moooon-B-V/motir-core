@@ -150,6 +150,12 @@
     "mentionNoResults": "Aucun élément de travail ne correspond à « {query} ».",
     "mentionSearchFailed": "Impossible de rechercher les éléments de travail.",
     "mentionRetry": "Réessayer",
+    "mentionPages": "Pages",
+    "mentionTypeToSearchPages": "Continuez à taper pour rechercher des pages…",
+    "mentionNoPages": "Aucune page ne correspond à « {query} ».",
+    "mentionPagesSearchFailed": "Impossible de rechercher les pages.",
+    "pageUntitled": "Sans titre",
+    "pageUnavailable": "Page indisponible",
     "codeLanguage": "Langage"
   },
   "common": {
@@ -372,7 +378,15 @@
     "railAddDeclined": "Ce plan a été refusé : aucune de ces valeurs n’a été créée.",
     "railRemoveArchived": "Ce plan a archivé {key}.",
     "railRemoveDeclined": "Ce plan aurait archivé {key}. Il a été refusé : l’élément ne l’a donc pas été.",
-    "peekNoActivity": "Une proposition n’a ni commentaires, ni enfants, ni activité tant qu’elle n’est pas approuvée."
+    "peekNoActivity": "Une proposition n’a ni commentaires, ni enfants, ni activité tant qu’elle n’est pas approuvée.",
+    "approveProgress": {
+      "creating": "Ajout de {n, plural, one {# élément} other {# éléments}} à votre Backlog…",
+      "applying": "Application de {n, plural, one {# modification} other {# modifications}} à votre Backlog…",
+      "together": "Ils arriveront tous ensemble une fois l’opération terminée.",
+      "slow": "Traitement en cours – un plan volumineux prend plus de temps. Inutile de cliquer à nouveau.",
+      "timedOutTitle": "Rien n’a été créé – l’approbation a pris trop de temps.",
+      "timedOutNext": "Ce plan attend toujours votre décision, sans modification. Vous pouvez l’approuver à nouveau en toute sécurité."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "Vous n’avez pas accès à ce projet",
@@ -1501,6 +1515,8 @@
     "pagesSourceMention": "Mentionné",
     "pagesSourceEmbed": "Intégré",
     "pagesSourceManual": "Lié",
+    "pagesSourceDescription": "Référencée dans la description",
+    "pagesSourceExplanation": "Référencée dans l’explication",
     "pagesEmpty": "Aucune page ne renvoie encore vers cet élément de travail.",
     "pagesShowMore": "Afficher plus de pages",
     "pagesError": "Impossible de charger les pages.",

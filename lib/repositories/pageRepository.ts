@@ -244,6 +244,70 @@ export const pageRepository = {
   },
 
   /**
+   * Which of `ids` are pages of `projectId` — ARCHIVED ONES INCLUDED — in ONE
+   * query (MOTIR-7696). The work-item save keeps a `motir-page:` tag's link row
+   * only for a page this returns, so a pasted token naming another project's
+   * page, or an id that never existed, is skipped rather than aborting the save
+   * on the same-project trigger. Archived pages count: their row is kept so a
+   * restore brings the link back, and the Pages read already hides them.
+   */
+  async findIdsInProject(
+    ids: readonly string[],
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await tx.page.findMany({
+      where: { id: { in: [...ids] }, projectId },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  },
+
+  /**
+   * The LIVE pages of one project whose title contains `q` (case-insensitive),
+   * most recently edited first, at most `take` — the `@` picker's Pages section
+   * (MOTIR-7697). Prisma's `contains` escapes `%` and `_`, so a query is matched
+   * literally. Carries what the row's PLACE needs: the ancestor chain (its last
+   * entry is the parent page) and the folder.
+   */
+  async searchLiveByTitle(
+    projectId: string,
+    q: string,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<Page, 'id' | 'title' | 'ancestorPageIds' | 'folderId'>>> {
+    return tx.page.findMany({
+      where: {
+        projectId,
+        archivedAt: null,
+        title: { contains: escapeLikePattern(q), mode: 'insensitive' },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take,
+      select: { id: true, title: true, ancestorPageIds: true, folderId: true },
+    });
+  },
+
+  /**
+   * The current title and archive state of each of `ids` that is a page of
+   * `projectId`, in ONE query — the live page chip's summaries (MOTIR-7697).
+   * Archived pages come back (the caller marks them unavailable); an id of
+   * another project, or one that is gone, does not.
+   */
+  async findSummariesByIds(
+    ids: readonly string[],
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<Page, 'id' | 'title' | 'archivedAt'>>> {
+    if (ids.length === 0) return [];
+    return tx.page.findMany({
+      where: { id: { in: [...ids] }, projectId },
+      select: { id: true, title: true, archivedAt: true },
+    });
+  },
+
+  /**
    * Serialise every PLACEMENT write in one project — a create, a move, a subtree
    * rewrite — for the length of the caller's transaction (MOTIR-7369).
    *
@@ -675,3 +739,12 @@ export const pageRepository = {
     }
   },
 };
+
+/**
+ * Escape LIKE metacharacters so a title search matches `%` and `_` LITERALLY —
+ * Prisma's `contains` passes the value into the pattern unescaped. Backslash is
+ * Postgres's default LIKE escape (the `workItemRepository` helper's rule).
+ */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}

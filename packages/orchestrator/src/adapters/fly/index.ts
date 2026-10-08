@@ -85,14 +85,18 @@ const FLEET_MACHINE_NAME_PREFIXES: Record<FleetWorkloadKind, string> = {
 
 /** Fly machine names are lower-case alphanumerics and hyphens. */
 function slug(value: string, maxLength: number): string {
-  return (
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, maxLength)
-      .replace(/-+$/, '') || 'x'
-  );
+  // The hyphens are trimmed by scanning, not by `/-+$/`, which backtracks
+  // polynomially on a long run of them (CodeQL js/polynomial-redos, MOTIR-7816).
+  const hyphenated = trimHyphens(value.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+  return trimHyphens(hyphenated.slice(0, maxLength)) || 'x';
+}
+
+function trimHyphens(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '-') start++;
+  while (end > start && value[end - 1] === '-') end--;
+  return value.slice(start, end);
 }
 
 /** FNV-1a, 32-bit, as 8 hex digits — a stable discriminator for a name whose

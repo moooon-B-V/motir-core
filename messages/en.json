@@ -150,6 +150,12 @@
     "mentionNoResults": "No work items match “{query}”.",
     "mentionSearchFailed": "Couldn’t search work items.",
     "mentionRetry": "Try again",
+    "mentionPages": "Pages",
+    "mentionTypeToSearchPages": "Keep typing to search pages…",
+    "mentionNoPages": "No pages match “{query}”.",
+    "mentionPagesSearchFailed": "Couldn’t search pages.",
+    "pageUntitled": "Untitled",
+    "pageUnavailable": "Page unavailable",
     "codeLanguage": "Language"
   },
   "common": {
@@ -372,7 +378,15 @@
     "railAddDeclined": "This plan was declined — none of these values was created.",
     "railRemoveArchived": "This plan archived {key}.",
     "railRemoveDeclined": "This plan would have archived {key}. It was declined, so it was not.",
-    "peekNoActivity": "A proposal has no comments, children or activity until it is approved."
+    "peekNoActivity": "A proposal has no comments, children or activity until it is approved.",
+    "approveProgress": {
+      "creating": "Adding {n, plural, one {# item} other {# items}} to your backlog…",
+      "applying": "Applying {n, plural, one {# change} other {# changes}} to your backlog…",
+      "together": "They all arrive together when it finishes.",
+      "slow": "Still working — a large plan takes longer. There’s no need to press again.",
+      "timedOutTitle": "Nothing was created — approving took too long.",
+      "timedOutNext": "This plan still awaits your decision, unchanged. It’s safe to approve again."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "You don’t have access to this project",
@@ -1501,6 +1515,8 @@
     "pagesSourceMention": "Mentioned",
     "pagesSourceEmbed": "Embedded",
     "pagesSourceManual": "Linked",
+    "pagesSourceDescription": "Tagged in description",
+    "pagesSourceExplanation": "Tagged in explanation",
     "pagesEmpty": "No page links to this work item yet.",
     "pagesShowMore": "Show more pages",
     "pagesError": "Couldn't load pages.",

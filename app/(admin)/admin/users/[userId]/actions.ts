@@ -98,7 +98,7 @@ async function run(
     // unexplained. It is LOGGED rather than swallowed silently, because the
     // operator's screen can only say "it failed" and somebody has to be able to
     // find out why.
-    console.error(`[admin] support action failed for user ${userId}`, err);
+    console.error('[admin] support action failed for user %s', userId, err);
     return { ok: false, code: 'FAILED' };
   }
 }

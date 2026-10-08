@@ -889,9 +889,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '71733ed8eccf',
   },
   update_plan_item: {
+    // AMENDMENT 24 widened the door: on a plan already closed for review it now
+    // rewrites a card's words IN PLACE behind `revision: true`, which is the one
+    // thing a caller choosing it over a withdraw-and-re-append has to know.
     summary:
-      'Fill in a proposal you appended — the deepen turn, while the plan is still being written.',
-    descriptionFingerprint: 'b5b5fb20ecb2',
+      'Fill in a proposal you appended — the deepen turn while the plan is being written, or, with `revision: true`, a rewrite of a card on a plan already in review, in place.',
+    descriptionFingerprint: 'da4bb089ff36',
   },
   update_plan_proposal: {
     // The line has to carry what SEPARATES it from the deepen above, because a

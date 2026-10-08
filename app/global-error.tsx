@@ -39,10 +39,10 @@ function applyStoredAppearance() {
 
 export default function GlobalError({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  retry: () => void;
 }) {
   const locale = useGlobalErrorLocale();
   useLayoutEffect(applyStoredAppearance, []);
@@ -58,7 +58,7 @@ export default function GlobalError({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
-        <GlobalErrorContent error={error} unstable_retry={unstable_retry} locale={locale} />
+        <GlobalErrorContent error={error} retry={retry} locale={locale} />
       </body>
     </html>
   );

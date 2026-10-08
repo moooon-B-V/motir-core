@@ -734,7 +734,7 @@ describe('every new string exists in both catalogs', () => {
     ['en', enMessages],
     ['zh', zhMessages],
   ] as const)('%s', (_locale, messages) => {
-    const block = messages.planReview as unknown as Record<string, string>;
+    const block = messages.planReview as Record<string, unknown>;
     for (const key of KEYS) expect(block[key], key).toBeTruthy();
   });
   it('the design’s own words', () => {

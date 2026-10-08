@@ -32,7 +32,7 @@
 // delete + link assertions, so this spec is self-contained (its own seeded
 // project + items) and has no ordering dependency on sibling specs. Selectors
 // target the stable role/text/class hooks the 5.8.x components expose (the
-// "Mention a person or work item" listbox, the `.wi-chip` chip + its `is-archived`
+// "Mention a person, work item or page" listbox (the owner holds `page:view`, so the picker carries its Pages section), the `.wi-chip` chip + its `is-archived`
 // / `is-deleted` state classes, the `Quick view: <key>` dialog, the "Relates to"
 // relationship group), never brittle markup.
 
@@ -133,7 +133,7 @@ test('@smoke @-mention a work item → live chip + relates_to → peek, live ren
   // the "Work items" section shows the keep-typing hint and NEVER hits the
   // network (the picker gates below QUICK_SEARCH_MIN_QUERY_LENGTH).
   await page.keyboard.type('@P');
-  const picker = page.getByRole('listbox', { name: 'Mention a person or work item' });
+  const picker = page.getByRole('listbox', { name: 'Mention a person, work item or page' });
   await expect(picker).toBeVisible();
   await expect(picker.getByText('Keep typing to search work items…')).toBeVisible();
 

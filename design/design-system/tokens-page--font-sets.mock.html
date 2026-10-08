@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · /tokens — Font sets section (MOTIR-7844)</title>
+    <!--
+      DELTA MOCK — Subtask MOTIR-7844 (Story MOTIR-7733). Spec:
+      design/design-system/design-notes.md § "9. /tokens — Font sets section (MOTIR-7844)".
+
+      IT EDITS NO EXISTING MOCK, and no published design draws /tokens. It draws ONE
+      new section of app/tokens/page.tsx (read at origin/main 959708288), placed
+      directly after <Section title="Typography">. The rest of the page is undrawn:
+      it is the shipped page, unchanged.
+
+      Every set, role, member and default comes from docs/typography/font-sets.md
+      (MOTIR-7841, commit 144b53826) and its registry,
+      packages/design-system/src/theme/fontSets.ts (MOTIR-7843).
+
+      The faces load from Google Fonts here only so a reviewer sees each member in
+      its own face. In the app they are self-hosted by next/font (MOTIR-7847).
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Source+Serif+4:wght@400;600&family=JetBrains+Mono:wght@400&family=Noto+Sans+SC&family=Noto+Serif+SC&family=LXGW+WenKai+TC&family=Noto+Sans+JP&family=M+PLUS+Rounded+1c&family=Noto+Serif+JP&family=Noto+Sans+KR&family=Nanum+Gothic&family=Noto+Serif+KR&display=swap"
+    />
+    <style>
+      /* ── TOKEN LAYER — copied from packages/design-system/theme.css at origin/main
+         959708288: the base (motir) light Tier-0 values, the Tier-3 --el-* tokens
+         this section paints with (var() references only), and the shape tokens.
+         These are the ONLY literal colour values in this file. ── */
+      :root {
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-border: #e5e3df;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-tint-sky: #dcecfa;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+
+        --el-page-bg: var(--color-background);
+        --el-card: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-border: var(--color-border);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+
+        --radius-card: 12px;
+        --radius-badge: 9999px;
+        --spacing-card-padding: 24px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-section: 64px;
+        --spacing-xl: 24px;
+        --spacing-lg: 20px;
+        --spacing-md: 16px;
+        --spacing-sm: 12px;
+        --spacing-xs: 8px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+
+        /* The pairing roles as the base (motir) pairing resolves them. */
+        --font-sans: 'Inter', sans-serif;
+        --font-serif: 'Source Serif 4', serif;
+        --font-mono: 'JetBrains Mono', monospace;
+      }
+
+      /* ── BOARD CHROME — the review frame, not part of the design ── */
+      body {
+        margin: 0;
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+      }
+      .fs-board {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+      }
+      .fs-board-title {
+        font-family: var(--font-serif);
+        font-size: 28px;
+        margin: 0 0 8px;
+      }
+      .fs-board-lede {
+        color: var(--el-text-secondary);
+        font-size: 14px;
+        line-height: 1.5;
+        margin: 0 0 32px;
+        max-width: 760px;
+      }
+      .fs-panel {
+        margin-bottom: 48px;
+      }
+      .fs-panel-label {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 0 0 4px;
+      }
+      .fs-panel-note {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 0 0 12px;
+        max-width: 760px;
+      }
+
+      /* ── THE PAGE — app/tokens/page.tsx's own frame around the new section ── */
+      .fs-page {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 32px;
+      }
+      .fs-page-narrow {
+        max-width: 360px;
+        padding: 16px;
+      }
+      /* The page's <Section>: id slug, serif h2, a bottom rule. */
+      .fs-section {
+        padding-bottom: var(--spacing-xl);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .fs-h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0 0 var(--spacing-lg);
+      }
+      .fs-caption {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .fs-eyebrow {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0 0 var(--spacing-md);
+      }
+      .fs-sets {
+        display: grid;
+        gap: var(--spacing-xl);
+      }
+      /* One set — the Card primitive's surface and shape. */
+      .fs-set {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .fs-set-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: var(--spacing-xs);
+        margin-bottom: var(--spacing-md);
+      }
+      .fs-set-id {
+        font-family: var(--font-mono);
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      /* A role row: role label column + members. Stacks at narrow width. */
+      .fs-role {
+        display: grid;
+        grid-template-columns: 96px 1fr;
+        gap: var(--spacing-md);
+        padding: var(--spacing-sm) 0;
+        border-top: 1px solid var(--el-border);
+      }
+      .fs-page-narrow .fs-role {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-xs);
+      }
+      .fs-members {
+        display: grid;
+        gap: var(--spacing-sm);
+      }
+      .fs-member-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--spacing-xs);
+        margin-bottom: 2px;
+      }
+      .fs-member-name {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      /* Badge primitive — hue in the tint, ink on --el-text-strong (finding #35). */
+      .fs-badge {
+        display: inline-block;
+        font-size: 11px;
+        line-height: 18px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        color: var(--el-text-strong);
+      }
+      .fs-badge-default {
+        background: var(--el-tint-mint);
+      }
+      .fs-badge-added {
+        background: var(--el-tint-peach);
+      }
+      .fs-badge-loading {
+        background: var(--el-tint-sky);
+      }
+      .fs-badge-failed {
+        background: var(--el-tint-rose);
+      }
+      .fs-sample {
+        font-size: 20px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .fs-why {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+      /* The arrival placeholder: a labelled empty frame, no script glyphs. */
+      .fs-placeholder {
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        color: var(--el-text-secondary);
+        font-size: 14px;
+      }
+      /* Region forms — three labelled columns, wrapping with labels intact. */
+      .fs-region {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: var(--spacing-md);
+      }
+      .fs-region-cell {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-md);
+        text-align: center;
+      }
+      .fs-region-glyphs {
+        font-size: 56px;
+        line-height: 1.2;
+        color: var(--el-text);
+      }
+      .fs-apply {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: var(--spacing-md);
+      }
+      .fs-subhead {
+        margin-top: var(--spacing-xl);
+      }
+
+      /* The faces, each named by the family font-sets.md lists. The Latin glyphs
+         of a CJK sample come from the pairing face first, as theme.css composes it
+         (MOTIR-7845): pairing chain, then the set's script face. */
+      .ff-pair-sans {
+        font-family: var(--font-sans);
+      }
+      .ff-pair-serif {
+        font-family: var(--font-serif);
+      }
+      .ff-pair-mono {
+        font-family: var(--font-mono);
+      }
+      .ff-noto-sans-sc {
+        font-family: 'Inter', 'Noto Sans SC', sans-serif;
+      }
+      .ff-noto-serif-sc {
+        font-family: 'Source Serif 4', 'Noto Serif SC', serif;
+      }
+      .ff-lxgw-wenkai-tc {
+        font-family: 'Source Serif 4', 'LXGW WenKai TC', serif;
+      }
+      .ff-mono-sc {
+        font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+      }
+      .ff-noto-sans-jp {
+        font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      }
+      .ff-m-plus-rounded-1c {
+        font-family: 'Inter', 'M PLUS Rounded 1c', sans-serif;
+      }
+      .ff-noto-serif-jp {
+        font-family: 'Source Serif 4', 'Noto Serif JP', serif;
+      }
+      .ff-mono-jp {
+        font-family: 'JetBrains Mono', 'Noto Sans JP', monospace;
+      }
+      .ff-noto-sans-kr {
+        font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      }
+      .ff-nanum-gothic {
+        font-family: 'Inter', 'Nanum Gothic', sans-serif;
+      }
+      .ff-noto-serif-kr {
+        font-family: 'Source Serif 4', 'Noto Serif KR', serif;
+      }
+      .ff-mono-kr {
+        font-family: 'JetBrains Mono', 'Noto Sans KR', monospace;
+      }
+      /* The loading / failed states: the generic fallback, never a member face. */
+      .ff-fallback {
+        font-family: sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="fs-board">
+      <h1 class="fs-board-title">/tokens — Font sets</h1>
+      <p class="fs-board-lede">
+        A new section of <code>app/tokens/page.tsx</code>, directly after Typography. It shows every
+        locale's font set: its locales, each role's members with the default marked, and each
+        member's sample in its own face and its set's script. The rest of /tokens is the shipped
+        page and is not drawn here.
+      </p>
+
+      <!-- ═══ PANEL 1 — POPULATED ═══ -->
+      <section class="fs-panel" aria-labelledby="p1">
+        <p class="fs-panel-label" id="p1">1 · Populated — every set, role and member loaded</p>
+        <p class="fs-panel-note">
+          One card per set, in registry order. A role with one member draws that member alone, with
+          no empty slot for others (most roles here). The mono rows of the CJK sets are a
+          composition rather than a face, and say so.
+        </p>
+        <div class="fs-page">
+          <section class="fs-section" id="font-sets">
+            <h2 class="fs-h2">Font sets</h2>
+            <p class="fs-eyebrow">Each locale's script, behind the active Type pairing</p>
+            <div class="fs-sets">
+              <!-- latin -->
+              <article class="fs-set" lang="en">
+                <div class="fs-set-head">
+                  <span class="fs-set-id">latin</span>
+                  <span class="fs-caption">— en · de · fr · es · it · nl · pl · pt</span>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">sans</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">type-pairing · Inter</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                        <span class="fs-badge fs-badge-added">added (not in dooooWeb)</span>
+                      </div>
+                      <div class="fs-sample ff-pair-sans">Zażółć gęślą jaźń · Ĳsselmeer · Ça</div>
+                      <div class="fs-why">
+                        The active pairing's own face. The set loads nothing.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">serif</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">type-pairing · Source Serif 4</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                        <span class="fs-badge fs-badge-added">added (not in dooooWeb)</span>
+                      </div>
+                      <div class="fs-sample ff-pair-serif">Zażółć gęślą jaźń · Ĳsselmeer · Ça</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">mono</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">type-pairing · JetBrains Mono</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                        <span class="fs-badge fs-badge-added">added (not in dooooWeb)</span>
+                      </div>
+                      <div class="fs-sample ff-pair-mono">Zażółć gęślą jaźń · Ĳsselmeer · Ça</div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <!-- zh-Hans -->
+              <article class="fs-set">
+                <div class="fs-set-head">
+                  <span class="fs-set-id">zh-Hans</span>
+                  <span class="fs-caption">— zh</span>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">sans</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">noto-sans-sc · Noto Sans SC</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                        <span class="fs-badge fs-badge-added">added (not in dooooWeb)</span>
+                      </div>
+                      <div class="fs-sample ff-noto-sans-sc" lang="zh">
+                        敏捷的棕色狐狸跳过了懒狗 · 直 骨
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">serif</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">noto-serif-sc · Noto Serif SC</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                      </div>
+                      <div class="fs-sample ff-noto-serif-sc" lang="zh">
+                        敏捷的棕色狐狸跳过了懒狗 · 直 骨
+                      </div>
+                    </div>
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">lxgw-wenkai-tc · LXGW WenKai TC</span>
+                      </div>
+                      <div class="fs-sample ff-lxgw-wenkai-tc" lang="zh">
+                        敏捷的棕色狐狸跳过了懒狗 · 直 骨
+                      </div>
+                      <div class="fs-why">
+                        Draws Traditional (inherited) forms, so never the default.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">mono</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">noto-sans-sc · Noto Sans SC</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                        <span class="fs-badge fs-badge-added">added (not in dooooWeb)</span>
+                      </div>
+                      <div class="fs-sample ff-mono-sc" lang="zh">const 任务 = "已完成";</div>
+                      <div class="fs-why">
+                        Composition: the pairing's mono face for Latin, the set's sans face for Han.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <!-- ja -->
+              <article class="fs-set">
+                <div class="fs-set-head">
+                  <span class="fs-set-id">ja</span>
+                  <span class="fs-caption">— ja</span>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">sans</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">noto-sans-jp · Noto Sans JP</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                      </div>
+                      <div class="fs-sample ff-noto-sans-jp" lang="ja">
+                        いろはにほへと 素早い茶色の狐 · 直 骨
+                      </div>
+                    </div>
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">m-plus-rounded-1c · M PLUS Rounded 1c</span>
+                      </div>
+                      <div class="fs-sample ff-m-plus-rounded-1c" lang="ja">
+                        いろはにほへと 素早い茶色の狐 · 直 骨
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">serif</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">noto-serif-jp · Noto Serif JP</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                        <span class="fs-badge fs-badge-added">added (not in dooooWeb)</span>
+                      </div>
+                      <div class="fs-sample ff-noto-serif-jp" lang="ja">
+                        いろはにほへと 素早い茶色の狐 · 直 骨
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">mono</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">noto-sans-jp · Noto Sans JP</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                        <span class="fs-badge fs-badge-added">added (not in dooooWeb)</span>
+                      </div>
+                      <div class="fs-sample ff-mono-jp" lang="ja">const 課題 = "完了";</div>
+                      <div class="fs-why">
+                        Composition: the pairing's mono face for Latin, the set's sans face for kana
+                        and kanji.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <!-- ko -->
+              <article class="fs-set">
+                <div class="fs-set-head">
+                  <span class="fs-set-id">ko</span>
+                  <span class="fs-caption">— ko</span>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">sans</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">noto-sans-kr · Noto Sans KR</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                      </div>
+                      <div class="fs-sample ff-noto-sans-kr" lang="ko">
+                        다람쥐 헌 쳇바퀴에 타고파 · 直 骨
+                      </div>
+                    </div>
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">nanum-gothic · Nanum Gothic</span>
+                      </div>
+                      <div class="fs-sample ff-nanum-gothic" lang="ko">
+                        다람쥐 헌 쳇바퀴에 타고파 · 直 骨
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">serif</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">noto-serif-kr · Noto Serif KR</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                        <span class="fs-badge fs-badge-added">added (not in dooooWeb)</span>
+                      </div>
+                      <div class="fs-sample ff-noto-serif-kr" lang="ko">
+                        다람쥐 헌 쳇바퀴에 타고파 · 直 骨
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="fs-role">
+                  <div class="fs-caption">mono</div>
+                  <div class="fs-members">
+                    <div>
+                      <div class="fs-member-head">
+                        <span class="fs-member-name">noto-sans-kr · Noto Sans KR</span>
+                        <span class="fs-badge fs-badge-default">default</span>
+                        <span class="fs-badge fs-badge-added">added (not in dooooWeb)</span>
+                      </div>
+                      <div class="fs-sample ff-mono-kr" lang="ko">const 작업 = "완료";</div>
+                      <div class="fs-why">
+                        Composition: the pairing's mono face for Latin, the set's sans face for
+                        Hangul.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <!-- Region forms -->
+            <div class="fs-subhead">
+              <p class="fs-eyebrow">Region forms</p>
+              <div class="fs-region">
+                <div class="fs-region-cell">
+                  <div class="fs-region-glyphs ff-noto-sans-sc" lang="zh">直 骨</div>
+                  <div class="fs-caption">zh-Hans · Noto Sans SC</div>
+                </div>
+                <div class="fs-region-cell">
+                  <div class="fs-region-glyphs ff-noto-sans-jp" lang="ja">直 骨</div>
+                  <div class="fs-caption">ja · Noto Sans JP</div>
+                </div>
+                <div class="fs-region-cell">
+                  <div class="fs-region-glyphs ff-noto-sans-kr" lang="ko">直 骨</div>
+                  <div class="fs-caption">ko · Noto Sans KR</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Apply a member by name -->
+            <div class="fs-subhead">
+              <p class="fs-eyebrow">Apply a member by name</p>
+              <div class="fs-apply">
+                <div>
+                  <div class="fs-caption">ja · sans · default (noto-sans-jp)</div>
+                  <div class="fs-sample ff-noto-sans-jp" lang="ja">
+                    いろはにほへと 素早い茶色の狐
+                  </div>
+                </div>
+                <div data-font-set-sans="m-plus-rounded-1c">
+                  <div class="fs-caption">ja · sans · data-font-set-sans="m-plus-rounded-1c"</div>
+                  <div class="fs-sample ff-m-plus-rounded-1c" lang="ja">
+                    いろはにほへと 素早い茶色の狐
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ═══ PANEL 2 — NOT YET ON SCREEN ═══ -->
+      <section class="fs-panel" aria-labelledby="p2">
+        <p class="fs-panel-label" id="p2">2 · Not yet on screen — placeholders, no script glyphs</p>
+        <p class="fs-panel-note">
+          Until the section scrolls into view it renders its heading and one labelled placeholder
+          per set. Every word is Latin: no Han, kana or Hangul character is in the DOM, because one
+          glyph would make the browser fetch that face on arrival.
+        </p>
+        <div class="fs-page">
+          <section class="fs-section">
+            <h2 class="fs-h2">Font sets</h2>
+            <p class="fs-eyebrow">Each locale's script, behind the active Type pairing</p>
+            <div class="fs-sets">
+              <div class="fs-placeholder">
+                latin · en, de, fr, es, it, nl, pl, pt · samples load when this section is on screen
+              </div>
+              <div class="fs-placeholder">
+                zh-Hans · Simplified Chinese · samples load when this section is on screen
+              </div>
+              <div class="fs-placeholder">
+                ja · Japanese · samples load when this section is on screen
+              </div>
+              <div class="fs-placeholder">
+                ko · Korean · samples load when this section is on screen
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ═══ PANEL 3 — LOADING ═══ -->
+      <section class="fs-panel" aria-labelledby="p3">
+        <p class="fs-panel-label" id="p3">3 · Loading — fallback face, labelled</p>
+        <p class="fs-panel-note">
+          Once in view, every set's samples mount at once, each with its own lang, and their faces
+          are requested. Until a face arrives its sample shows in the fallback face with a "loading"
+          badge naming the face, so a fallback is never mistaken for the member.
+        </p>
+        <div class="fs-page">
+          <article class="fs-set">
+            <div class="fs-set-head">
+              <span class="fs-set-id">ja</span>
+              <span class="fs-caption">— ja</span>
+            </div>
+            <div class="fs-role">
+              <div class="fs-caption">sans</div>
+              <div class="fs-members">
+                <div>
+                  <div class="fs-member-head">
+                    <span class="fs-member-name">noto-sans-jp · Noto Sans JP</span>
+                    <span class="fs-badge fs-badge-default">default</span>
+                    <span class="fs-badge fs-badge-loading">loading Noto Sans JP</span>
+                  </div>
+                  <div class="fs-sample ff-fallback" lang="ja">
+                    いろはにほへと 素早い茶色の狐 · 直 骨
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ═══ PANEL 4 — FAILED ═══ -->
+      <section class="fs-panel" aria-labelledby="p4">
+        <p class="fs-panel-label" id="p4">4 · Face failed to load — said, never silent</p>
+        <p class="fs-panel-note">
+          A face that errors (or a member font-sets.md marks not loadable; none is today) keeps the
+          fallback, and the member says it is not loaded and why.
+        </p>
+        <div class="fs-page">
+          <article class="fs-set">
+            <div class="fs-set-head">
+              <span class="fs-set-id">ko</span>
+              <span class="fs-caption">— ko</span>
+            </div>
+            <div class="fs-role">
+              <div class="fs-caption">sans</div>
+              <div class="fs-members">
+                <div>
+                  <div class="fs-member-head">
+                    <span class="fs-member-name">nanum-gothic · Nanum Gothic</span>
+                    <span class="fs-badge fs-badge-failed">not loaded</span>
+                  </div>
+                  <div class="fs-sample ff-fallback" lang="ko">
+                    다람쥐 헌 쳇바퀴에 타고파 · 直 骨
+                  </div>
+                  <div class="fs-why">
+                    The face file failed to load. Shown in the fallback face.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ═══ PANEL 5 — NARROW ═══ -->
+      <section class="fs-panel" aria-labelledby="p5">
+        <p class="fs-panel-label" id="p5">5 · Narrow width — role rows stack, region forms wrap</p>
+        <p class="fs-panel-note">
+          At 360px the role label sits above its members. The region-forms cells wrap, each keeping
+          its label.
+        </p>
+        <div class="fs-page fs-page-narrow">
+          <article class="fs-set">
+            <div class="fs-set-head">
+              <span class="fs-set-id">ja</span>
+              <span class="fs-caption">— ja</span>
+            </div>
+            <div class="fs-role">
+              <div class="fs-caption">sans</div>
+              <div class="fs-members">
+                <div>
+                  <div class="fs-member-head">
+                    <span class="fs-member-name">noto-sans-jp · Noto Sans JP</span>
+                    <span class="fs-badge fs-badge-default">default</span>
+                  </div>
+                  <div class="fs-sample ff-noto-sans-jp" lang="ja">
+                    いろはにほへと 素早い茶色の狐
+                  </div>
+                </div>
+                <div>
+                  <div class="fs-member-head">
+                    <span class="fs-member-name">m-plus-rounded-1c · M PLUS Rounded 1c</span>
+                  </div>
+                  <div class="fs-sample ff-m-plus-rounded-1c" lang="ja">
+                    いろはにほへと 素早い茶色の狐
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+          <div class="fs-subhead">
+            <p class="fs-eyebrow">Region forms</p>
+            <div class="fs-region">
+              <div class="fs-region-cell">
+                <div class="fs-region-glyphs ff-noto-sans-sc" lang="zh">直 骨</div>
+                <div class="fs-caption">zh-Hans · Noto Sans SC</div>
+              </div>
+              <div class="fs-region-cell">
+                <div class="fs-region-glyphs ff-noto-sans-jp" lang="ja">直 骨</div>
+                <div class="fs-caption">ja · Noto Sans JP</div>
+              </div>
+              <div class="fs-region-cell">
+                <div class="fs-region-glyphs ff-noto-sans-kr" lang="ko">直 骨</div>
+                <div class="fs-caption">ko · Noto Sans KR</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

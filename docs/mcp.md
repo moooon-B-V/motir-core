@@ -4317,6 +4317,23 @@ add_plan_items({ planId, proposals: [], final: true })
 an executor from the work type — a proposal that never carried one materializes
 unassigned — so the deepen turn is where a leaf gets both.
 
+**`revision: true` — rewriting a card on a plan you already closed** (AMENDMENT 24
+of `docs/decisions/agent-authored-plans.md`). Once `final: true` has put the plan
+in front of a reviewer, this tool is refused (`PLAN_NOT_IN_EXPECTED_STATUS`,
+naming the status) UNLESS the call carries `revision: true`. A revision is the
+same sparse patch, applied to the SAME proposal — its id, its parent and its edges
+are untouched — and the plan stays `planned` before, during and after. It lands on
+the plan's timeline as an `edited` row under the harness and model that made it,
+never as the reviewer's own edit. It is how a correction changes what a card
+SAYS; never withdraw a proposal and append a copy to change its words, which loses
+its id, its edges and its history. On a `generating` plan the flag changes
+nothing; `approved` and `declined` stay frozen.
+
+```jsonc
+update_plan_item({ planId, planItemId: "ck_story", revision: true,
+  descriptionMd: "## What to do\n… (corrected)" })
+```
+
 **What it deliberately cannot do**, because that is the shape you settled in the
 skeleton pass: re-parent a proposal (`parentRef`), change its dependency edges
 (`blockedByRefs`), or re-pin its repo (`targetRepo` / `targetRepoRole`). Nor can

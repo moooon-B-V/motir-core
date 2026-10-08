@@ -854,6 +854,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               value={data.descriptionMd}
               aria-label={t('issueDescriptionAria')}
               workItemRefs={data.workItemRefs}
+              pageRefs={data.pageRefs}
             />
           ) : (
             <p className="text-sm text-(--el-text-secondary) italic">{t('noDescription')}</p>
@@ -875,6 +876,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                   value={data.explanationMd}
                   aria-label={t('issueExplanationAria')}
                   workItemRefs={data.workItemRefs}
+                  pageRefs={data.pageRefs}
                 />
               ) : (
                 <p className="text-sm text-(--el-text-secondary) italic">

@@ -135,11 +135,20 @@
   --color-link-pressed: #005bab;
 
   /* ── Typography ─────────────────────────────────────────────────── */
-  /* CSS variables set by next/font in app/layout.tsx. */
+  /* The three role tokens, composed from a pairing chain, a script face and a
+     generic tail (MOTIR-7845). Declared here so Tailwind registers the
+     font-sans / font-serif / font-mono utilities; the same composition is
+     re-declared, unlayered, in the FONT SETS section, which is where it is
+     explained. The -source variables are set by next/font in app/fonts.ts. */
   --font-sans:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-serif: var(--font-serif-source, Georgia), serif;
-  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+    var(--font-sans-pairing, 'Segoe UI'),
+    var(--font-script-sans, var(--font-sans-tail, sans-serif)), var(--font-sans-tail, sans-serif);
+  --font-serif:
+    var(--font-serif-pairing, Georgia), var(--font-script-serif, var(--font-serif-tail, serif)),
+    var(--font-serif-tail, serif);
+  --font-mono:
+    var(--font-mono-pairing, 'SF Mono'), var(--font-script-mono, var(--font-mono-tail, monospace)),
+    var(--font-mono-tail, monospace);
 
   /* Type scale — Notion-ish hierarchy.
      Headings (xl and up) default to serif; body defaults to sans. */
@@ -260,6 +269,22 @@
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
   --focus-ring-color: var(--color-primary);
+}
+
+/* The BASE (motir) pairing's chains for the three roles (MOTIR-7845). Kept
+   outside @theme so Tailwind does not mint font-sans-pairing utilities, and
+   placed before every [data-type] block so each pairing overrides it. The
+   pairing chain names faces only; its generic keywords live in the tail, and
+   so do -apple-system and BlinkMacSystemFont, which name the platform's UI font
+   with its own CJK cascade (PingFang, Hiragino) and would draw the commonest
+   Han glyphs ahead of the font set's face (MOTIR-7880). */
+:root {
+  --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif-pairing: var(--font-serif-source, Georgia);
+  --font-serif-tail: serif;
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -4331,12 +4356,14 @@
 
 /* The `motir` BASE type pairing, re-asserted (MOTIR-3933) — same reason as
    the base palette above. The type axis carries no descendant rules, so these
-   three role tokens are the whole of it. */
+   three roles' pairing chains and tails are the whole of it. */
 [data-appearance-scope][data-type='motir'] {
-  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
-  --font-sans:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-serif: var(--font-serif-source, Georgia), serif;
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
+  --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif-pairing: var(--font-serif-source, Georgia);
+  --font-serif-tail: serif;
 }
 
 /* ── Palette: Cobalt (data-palette="cobalt") — Subtask 7.3.49 ───────────────
@@ -4968,17 +4995,18 @@
 
 [data-type='motir-sans'] {
   /* Sans headlines — re-point the editorial serif role at the sans stack. */
-  --font-serif:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-serif-tail: -apple-system, BlinkMacSystemFont, sans-serif;
   /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
        inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
        nested scope: this pairing under a mono ancestor rendered mono. Unlike the
        colour axis there is no `[data-appearance-scope]` layer to fall back
        through — `--font-*` are role tokens, not `--el-*` — so every
        `[data-type]` block must be TOTAL over the three roles. */
-  --font-sans:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
 }
 
 [data-type='motir-mono'] {
@@ -4987,15 +5015,18 @@
      content) re-types to a code-native monospace voice, not just headlines (Yue,
      2026-06-19: the type axis must re-type the whole UI, chrome included). Meta
      already is mono. ONLY --font-* tokens (the disjointness guard). */
-  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
-  --font-sans: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  --font-serif-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-serif-tail: monospace;
+  --font-sans-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-sans-tail: monospace;
   /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
        inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
        nested scope: this pairing under a mono ancestor rendered mono. Unlike the
        colour axis there is no `[data-appearance-scope]` layer to fall back
        through — `--font-*` are role tokens, not `--el-*` — so every
        `[data-type]` block must be TOTAL over the three roles. */
-  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
 }
 
 /* ── Palette: Spectrum (data-palette="spectrum") — Subtask 7.3.52 ───────────
@@ -6011,15 +6042,18 @@
      (Yue, 2026-06-19: the type axis must re-type the whole UI, chrome included).
      Meta stays JetBrains Mono (--font-mono). ONLY font tokens here (the
      disjointness guard): no colour (--el / --color) or shape token. */
-  --font-serif: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
+  --font-serif-pairing: var(--font-grotesk-source);
+  --font-serif-tail: ui-sans-serif, system-ui, sans-serif;
+  --font-sans-pairing: var(--font-grotesk-source);
+  --font-sans-tail: ui-sans-serif, system-ui, sans-serif;
   /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
        inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
        nested scope: this pairing under a mono ancestor rendered mono. Unlike the
        colour axis there is no `[data-appearance-scope]` layer to fall back
        through — `--font-*` are role tokens, not `--el-*` — so every
        `[data-type]` block must be TOTAL over the three roles. */
-  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
 }
 
 [data-type='editorial'] {
@@ -6030,16 +6064,18 @@
      so the change is a real, visible FACE swap — magazine, considered — not a
      size tweak. ONLY --font-* role tokens here (the disjointness guard): no
      colour (--el/--color) or shape (--radius/--spacing/--shadow) token. */
-  --font-serif: var(--font-editorial-source), 'Fraunces', Georgia, serif;
+  --font-serif-pairing: var(--font-editorial-source), 'Fraunces', Georgia;
+  --font-serif-tail: serif;
   /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
        inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
        nested scope: this pairing under a mono ancestor rendered mono. Unlike the
        colour axis there is no `[data-appearance-scope]` layer to fall back
        through — `--font-*` are role tokens, not `--el-*` — so every
        `[data-type]` block must be TOTAL over the three roles. */
-  --font-sans:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
 }
 
 [data-type='mono-technical'] {
@@ -6052,7 +6088,132 @@
      JetBrains mono stack). Only --font-* role tokens are touched — colour
      (--el/--color) and shape (--radius/--spacing) are the other two, independent
      axes (the disjointness guard). */
-  --font-serif: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
-  --font-mono: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
-  --font-sans: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  --font-serif-pairing: var(--font-mono-technical-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-serif-tail: monospace;
+  --font-mono-pairing: var(--font-mono-technical-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
+  --font-sans-pairing: var(--font-mono-technical-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-sans-tail: monospace;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FONT SETS — the script face behind the pairing (Story MOTIR-7733 · MOTIR-7845)
+   A Type pairing (the [data-type] blocks above) decides each role's LATIN
+   faces. A font set decides the SCRIPT face that sits BEHIND them, chosen by
+   the language of the element: on <html lang="ja" data-type="editorial">
+   --font-serif resolves to Fraunces (Latin glyphs), then the ja set's serif
+   face (kana and kanji), then the generic tail.
+
+   The two axes are composed ONCE, in the rule below, from three tokens per
+   role, so neither axis multiplies the other:
+     --font-<role>-pairing  the pairing's named faces, with NO generic keyword.
+                            A generic (serif, sans-serif, system-ui, ui-*) maps
+                            to one system font, which on a CJK system covers
+                            CJK and would pre-empt the set's face.
+     --font-script-<role>   the set's face for the language (the blocks below).
+     --font-<role>-tail     the pairing's generic tail, as it was before.
+
+   Every name in this section comes from packages/design-system/src/theme/
+   fontSets.ts (FONT_SET_REGISTRY, LOCALE_FONT_SET, fontSetMemberVar). The
+   consuming app's next/font loader assigns the --font-set-* variables; this
+   file assigns none of them. motir.co imports this file and loads no CJK
+   face, so every var() here carries a fallback: an undefined variable without
+   one would make the whole font-family invalid at computed time, and the
+   pairing's Latin face would be lost with it.
+
+   Only --font-* custom properties are set here: no @font-face, no
+   unicode-range, no colour or shape token.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* The composition. A custom property's var() is resolved on the element that
+   DECLARES it, so every element that can change one of the inputs (a pairing,
+   a language, a picked member) re-composes the three roles itself. */
+:root,
+[data-type],
+[lang],
+[data-font-set-sans],
+[data-font-set-serif],
+[data-font-set-mono] {
+  --font-sans:
+    var(--font-sans-pairing, 'Segoe UI'),
+    var(--font-script-sans, var(--font-sans-tail, sans-serif)), var(--font-sans-tail, sans-serif);
+  --font-serif:
+    var(--font-serif-pairing, Georgia), var(--font-script-serif, var(--font-serif-tail, serif)),
+    var(--font-serif-tail, serif);
+  --font-mono:
+    var(--font-mono-pairing, 'SF Mono'), var(--font-script-mono, var(--font-mono-tail, monospace)),
+    var(--font-mono-tail, monospace);
+}
+
+/* The script token is declared only on an element that carries a lang
+   attribute, and every element below it INHERITS the value. `:lang()` alone
+   would match every descendant and re-declare the set's default on each one,
+   so a nested [data-type] preview inside a page with a picked member would
+   re-compose with the default and lose the pick.
+
+   Latin: no script face. `initial` makes the token the guaranteed-invalid
+   value, so the composition's fallback (the pairing's own tail) takes the slot
+   and the stack equals the pairing's stack exactly. Listed per locale so a
+   Latin-language element nested in a CJK page resets. A page whose language no
+   set lists matches no block and also gets Latin, as resolveFontSet falls
+   back. */
+[lang]:lang(en),
+[lang]:lang(de),
+[lang]:lang(fr),
+[lang]:lang(es),
+[lang]:lang(it),
+[lang]:lang(nl),
+[lang]:lang(pl),
+[lang]:lang(pt) {
+  --font-script-sans: initial;
+  --font-script-serif: initial;
+  --font-script-mono: initial;
+}
+
+/* Simplified Chinese (zh-Hans): each role's default member. A CJK mono role
+   draws its Han glyphs from the set's sans face (fontSets.ts sameFaceAs), so
+   the block stays total over the three roles while loading no extra face. */
+[lang]:lang(zh) {
+  --font-script-sans: var(--font-set-zh-Hans-sans-noto-sans-sc, sans-serif);
+  --font-script-serif: var(--font-set-zh-Hans-serif-noto-serif-sc, serif);
+  --font-script-mono: var(--font-set-zh-Hans-sans-noto-sans-sc, monospace);
+}
+
+/* A member picked by name. Comes after the set's block, so on an element
+   carrying both a lang and the attribute this one wins the specificity tie.
+   An id the registry does not list matches nothing and keeps the default. */
+:lang(zh)[data-font-set-serif='lxgw-wenkai-tc'] {
+  --font-script-serif: var(--font-set-zh-Hans-serif-lxgw-wenkai-tc, serif);
+}
+
+/* Japanese (ja): each role's default member. A CJK mono role
+   draws its Han glyphs from the set's sans face (fontSets.ts sameFaceAs), so
+   the block stays total over the three roles while loading no extra face. */
+[lang]:lang(ja) {
+  --font-script-sans: var(--font-set-ja-sans-noto-sans-jp, sans-serif);
+  --font-script-serif: var(--font-set-ja-serif-noto-serif-jp, serif);
+  --font-script-mono: var(--font-set-ja-sans-noto-sans-jp, monospace);
+}
+
+/* A member picked by name. Comes after the set's block, so on an element
+   carrying both a lang and the attribute this one wins the specificity tie.
+   An id the registry does not list matches nothing and keeps the default. */
+:lang(ja)[data-font-set-sans='m-plus-rounded-1c'] {
+  --font-script-sans: var(--font-set-ja-sans-m-plus-rounded-1c, sans-serif);
+}
+
+/* Korean (ko): each role's default member. A CJK mono role
+   draws its Han glyphs from the set's sans face (fontSets.ts sameFaceAs), so
+   the block stays total over the three roles while loading no extra face. */
+[lang]:lang(ko) {
+  --font-script-sans: var(--font-set-ko-sans-noto-sans-kr, sans-serif);
+  --font-script-serif: var(--font-set-ko-serif-noto-serif-kr, serif);
+  --font-script-mono: var(--font-set-ko-sans-noto-sans-kr, monospace);
+}
+
+/* A member picked by name. Comes after the set's block, so on an element
+   carrying both a lang and the attribute this one wins the specificity tie.
+   An id the registry does not list matches nothing and keeps the default. */
+:lang(ko)[data-font-set-sans='nanum-gothic'] {
+  --font-script-sans: var(--font-set-ko-sans-nanum-gothic, sans-serif);
 }

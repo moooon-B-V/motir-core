@@ -95,10 +95,12 @@ async function scrollerClasses(): Promise<string[]> {
   const source = await readFile(join(ROOT, 'components/ui/Sidebar.tsx'), 'utf8');
   // Both quote styles: the scroller was a bare `className="…"` attribute before
   // this card gave it a `cn(...)` call, and the extraction has to survive that.
-  const match = /["'](flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto[^"']*)["']/.exec(source);
+  const match = /["'](flex min-h-0 flex-1 flex-col overflow-y-auto[^"']*)["']/.exec(source);
   if (!match) throw new Error('Sidebar paints no rail scroller');
-  const scrollbar = /["'](\[scrollbar-width[^"']*)["']/.exec(source);
-  return [...match[1]!.split(/\s+/), ...(scrollbar ? scrollbar[1]!.split(/\s+/) : [])];
+  // The scrollbar arms are per MODE since MOTIR-7872 (`thin` expanded, `none`
+  // collapsed), so every quoted string carrying one is collected.
+  const scrollbars = [...source.matchAll(/["']([^"']*\[scrollbar-width[^"']*)["']/g)];
+  return [...match[1]!.split(/\s+/), ...scrollbars.flatMap((m) => m[1]!.split(/\s+/))];
 }
 
 /** Resolve an `@import` the way the app's bundler does. */
@@ -258,5 +260,15 @@ describe("the rail's scroller states BOTH axes (MOTIR-4232)", () => {
     expect(color, 'no scrollbar-color declaration was generated').not.toBeNull();
     expect(color![1]).toContain('var(--el-');
     expect(color![1]).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+  });
+
+  it('draws NO bar on the collapsed rail, where any bar clips the row squares (MOTIR-7872)', async () => {
+    // The collapsed content box keeps 3-4px of slack around one
+    // `--height-control` square (the table above), and even a `thin` bar is
+    // wider than that. The collapsed arm still scrolls; it just paints nothing.
+    const source = await readFile(join(ROOT, 'components/ui/Sidebar.tsx'), 'utf8');
+    expect(source).toMatch(/collapsed\s*\?\s*'gap-2 \[scrollbar-width:none\]'/);
+    const css = await compileGlobals();
+    expect(css).toMatch(/scrollbar-width:\s*none;/);
   });
 });

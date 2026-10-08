@@ -133,12 +133,14 @@ describe('runtime contract in globals.css', () => {
   });
 
   it('re-points the Editorial serif role at the LOADED Fraunces -source face', () => {
-    // The editorial block must drive --font-serif off `--font-editorial-source`,
+    // The editorial block must drive the serif role off `--font-editorial-source`,
     // the variable next/font binds to Fraunces in app/fonts.ts — so the
     // headline actually renders Fraunces (the -source indirection the type axis
     // requires; a role pointed at an unbacked -source falls back to a system face).
     expect(GLOBALS_CSS).toMatch(
-      /\[data-type='editorial'\][^{}]*\{[^}]*--font-serif:[^}]*--font-editorial-source/,
+      // Since MOTIR-7845 a pairing sets the role's PAIRING chain; the role token
+      // itself is composed once, with the font set's script face behind it.
+      /\[data-type='editorial'\][^{}]*\{[^}]*--font-serif-pairing:[^}]*--font-editorial-source/,
     );
     expect(FONTS_TS).toContain("variable: '--font-editorial-source'");
     expect(FONTS_TS).toContain('Fraunces');

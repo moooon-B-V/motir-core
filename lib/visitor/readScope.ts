@@ -1,6 +1,7 @@
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import type { VisitorReadContext } from '@/lib/visitor/context';
+import { relabelPageTokens } from '@/lib/mentions/pageRefs';
 
 // How a collection read serves a VISITOR (Story MOTIR-6170 · MOTIR-6644;
 // `epic-privacy.md` §3–§5). A read that accepts a `VisitorReadContext` in place
@@ -83,4 +84,22 @@ export function redactWithheldWorkItemRefs<T extends string | null>(
   return markdown.replace(WORK_ITEM_TOKEN, (token, id: string) =>
     hidden.has(id) ? WITHHELD_WORK_ITEM_LABEL : token,
   ) as T;
+}
+
+/**
+ * The label every page chip carries in a Visitor's body (MOTIR-7697). A Visitor
+ * route serves no page (`epic-privacy.md` §3), so a tagged page's title — kept
+ * in the token's label at insert — must not cross the wire.
+ */
+export const REDACTED_PAGE_LABEL = 'page';
+
+/**
+ * A Markdown body as a Visitor reads it: every `[label](motir-page:<id>)` chip's
+ * label replaced by {@link REDACTED_PAGE_LABEL}, the id kept so the chip still
+ * renders its unavailable state. Every other token and all other text are
+ * untouched. `null` stays `null`.
+ */
+export function redactPageRefLabels<T extends string | null>(markdown: T): T {
+  if (markdown === null) return markdown;
+  return relabelPageTokens(markdown, () => REDACTED_PAGE_LABEL) as T;
 }

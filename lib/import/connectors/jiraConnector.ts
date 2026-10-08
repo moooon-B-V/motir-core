@@ -14,7 +14,7 @@
 // No DB, no Prisma — an external API read only.
 
 import { ConnectorConfigError } from './errors';
-import { fetchWithRetry, type RetryOptions } from './http';
+import { fetchWithRetry, trimTrailingSlashes, type RetryOptions } from './http';
 import type {
   ConnectResult,
   IssueSourceConnector,
@@ -152,7 +152,7 @@ export class JiraConnector implements IssueSourceConnector {
     if (!config.baseUrl) throw new ConnectorConfigError('a Jira base URL is required', 'jira');
     if (!config.apiToken) throw new ConnectorConfigError('a Jira API token is required', 'jira');
     this.config = config;
-    this.baseUrl = config.baseUrl.replace(/\/+$/, '');
+    this.baseUrl = trimTrailingSlashes(config.baseUrl);
     this.pageSize = Math.min(100, config.pageSize ?? DEFAULT_PAGE_SIZE);
     this.includeComments = config.includeComments ?? true;
     this.includeAttachments = config.includeAttachments ?? true;

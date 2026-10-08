@@ -150,6 +150,12 @@
     "mentionNoResults": "Nessun elemento di lavoro corrisponde a «{query}».",
     "mentionSearchFailed": "Impossibile cercare gli elementi di lavoro.",
     "mentionRetry": "Riprova",
+    "mentionPages": "Pagine",
+    "mentionTypeToSearchPages": "Continua a digitare per cercare pagine…",
+    "mentionNoPages": "Nessuna pagina corrisponde a «{query}».",
+    "mentionPagesSearchFailed": "Impossibile cercare le pagine.",
+    "pageUntitled": "Senza titolo",
+    "pageUnavailable": "Pagina non disponibile",
     "codeLanguage": "Linguaggio"
   },
   "common": {
@@ -372,7 +378,15 @@
     "railAddDeclined": "Questo piano è stato rifiutato: nessuno di questi valori è stato creato.",
     "railRemoveArchived": "Questo piano ha archiviato {key}.",
     "railRemoveDeclined": "Questo piano avrebbe archiviato {key}. È stato rifiutato, quindi non è successo.",
-    "peekNoActivity": "Una proposta non ha commenti, elementi figli o attività finché non viene approvata."
+    "peekNoActivity": "Una proposta non ha commenti, elementi figli o attività finché non viene approvata.",
+    "approveProgress": {
+      "creating": "Aggiunta di {n, plural, one {# elemento} other {# elementi}} al tuo Backlog…",
+      "applying": "Applicazione di {n, plural, one {# modifica} other {# modifiche}} al tuo Backlog…",
+      "together": "Arriveranno tutti insieme al termine.",
+      "slow": "Ancora in corso: un piano grande richiede più tempo. Non serve premere di nuovo.",
+      "timedOutTitle": "Non è stato creato nulla: l’approvazione ha richiesto troppo tempo.",
+      "timedOutNext": "Questo piano attende ancora la tua decisione, invariato. Puoi approvarlo di nuovo in sicurezza."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "Non hai accesso a questo progetto",
@@ -1501,6 +1515,8 @@
     "pagesSourceMention": "Menzionato",
     "pagesSourceEmbed": "Incorporato",
     "pagesSourceManual": "Collegato",
+    "pagesSourceDescription": "Taggata nella descrizione",
+    "pagesSourceExplanation": "Taggata nella spiegazione",
     "pagesEmpty": "Nessuna pagina rimanda ancora a questo elemento di lavoro.",
     "pagesShowMore": "Mostra altre pagine",
     "pagesError": "Impossibile caricare le pagine.",

@@ -435,3 +435,30 @@ export interface CreatePageFromMarkdownInput {
   /** The initial body; an empty or omitted one leaves the page empty, as New page does. */
   markdown?: string;
 }
+
+// ── Page tags in a work item's text (Story MOTIR-7694 · MOTIR-7697) ─────────
+
+/** One row of the `@` picker's Pages section: a live page and where it sits. */
+export interface PageMentionCandidateDto {
+  id: string;
+  title: string;
+  place: {
+    /** The folder chain its topmost page is filed in, root first; `[]` at the root. */
+    folderPath: string[];
+    /** Its direct parent page's title; `null` for a top-level page. */
+    parentPageTitle: string | null;
+  };
+}
+
+/**
+ * The live data a page chip renders. `unavailable` carries NO title by
+ * construction: it is the one answer for a reader without `page:view`, a
+ * Visitor, an archived page, a deleted page and an id of another project, so
+ * the chip never says which.
+ */
+export type PageRefSummaryDto =
+  | { state: 'available'; id: string; title: string }
+  | { state: 'unavailable'; id: string };
+
+/** Page-chip summaries keyed by page id — `{}` for a body that tags no page. */
+export type PageRefMap = Record<string, PageRefSummaryDto>;
