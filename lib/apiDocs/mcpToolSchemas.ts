@@ -3030,6 +3030,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the sequence they are performed in — and approving the plan writes one real to-do row per element, none ticked. A `manual` card’s steps belong HERE, not only in the description: the reviewer reads the list they will tick before they approve it, and the created card carries it from birth. Leaf kinds only — a container’s steps are its children. REPLACES the list whole — a list has no sparse edit — so send the set you want; `[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
       },
+      revision: {
+        type: 'boolean',
+        description:
+          'Set true to edit a proposal on a plan you have ALREADY closed — a plan that is `planned` and in front of a reviewer. Without it such an edit is refused. The plan does NOT re-open: it is `planned` before, during and after, and the edit is recorded on its timeline with the harness and model that made it. This is how a card’s WORDS are corrected on a landed plan — the same card, same id and edges — rather than by withdrawing it and appending a copy. On a `generating` plan it is unnecessary and changes nothing. `approved` and `declined` stay frozen.',
+      },
     },
     required: ['planId', 'planItemId'],
     additionalProperties: false,

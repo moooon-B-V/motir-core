@@ -4029,3 +4029,29 @@ fresh one. The full decision — the backfill order, the callers of the end, the
 decision page `cmuvqpwut00k3hxoibeafy0he`, which is the record of authority. MOTIR-7636 landed its
 §1 (the columns, the `closed` state and the backfill in
 `20261005220000_plan_change_session_end`).
+
+## AMENDMENT 24 — a REVISION rewrites a landed card in place: `update_plan_item { revision: true }` (2026-10-08)
+
+AMENDMENT 12 gave a `planned` plan its third verb — the append — behind a declared `revision: true`,
+and AMENDMENT 8 gave it the correction (`update_plan_proposal`) and the withdraw. One edit was still
+missing: rewriting what an existing card SAYS. `update_plan_item` called `deepenProposal`, which is
+`generating`-only, so an agent asked to change a landed card's description, criteria or title had two
+moves left, both wrong: decline the plan and author a new one, or withdraw the card and append a
+copy — an archive-and-re-propose that loses the card's id, every edge a sibling holds to it, and its
+history. The runbook forbids the second outright. The service already had the edit — `updateProposal`
+(MOTIR-1370), the review surface's inline edit — but recorded it as a PERSON's.
+
+**Decision.** `update_plan_item` takes `revision: true`, the same opt-in `add_plan_items` declares, and
+it routes to a new `plansService.reviseProposal`: the same sparse merge and re-validation as
+`updateProposal` / `deepenProposal` (`editAddProposal`), legal on `generating` and `planned` —
+AMENDMENT 8's editable pair — and recorded on the trail under the AGENT (`generationActor`, with
+`diff.revision: true`), exactly as `correctProposal` records an agent's correction. The plan does not
+re-open. Without the flag a landed plan is refused as before; with it a decided plan stays frozen.
+`update_plan_proposal` does not take the flag: it is legal on a `planned` plan already.
+
+**Why declared, not inferred** — AMENDMENT 12 D1's reason, unchanged: the same call must not mean
+_fill in the tree I am writing_ or _change a plan somebody is reading_ depending on a status the caller
+may not have re-read. **What it does not change:** the permission (`ai:view_plan` on the tool, so a
+CLI-minted token is still refused), the editable fields (a revision, like a deepen, cannot re-parent,
+re-edge or re-pin — those are `update_plan_proposal`'s), and `updateProposal`'s own attribution (a
+reviewer's inline edit is still that person's).
