@@ -248,11 +248,13 @@
   background: transparent;
   border-style: dashed;
   border-color: var(--el-border);
-  color: var(--el-text-muted);
+  /* --el-text-secondary, not -muted: muted is 4.34:1 on a tinted surface such as
+     the guide bubble's --el-surface-soft and fails AA there (MOTIR-7810). */
+  color: var(--el-text-secondary);
   cursor: not-allowed;
 }
 :is(.motir-prose, .wi-chip-host) .wi-chip.is-noaccess .wi-key {
-  color: var(--el-text-muted);
+  color: var(--el-text-secondary);
 }
 
 /* THE COPYABLE CODE BLOCK inside prose (MOTIR-5336, design/github §20). The

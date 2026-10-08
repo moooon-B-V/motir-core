@@ -386,6 +386,41 @@ export class GuideSessionNotPlannableError extends Error {
 }
 
 /**
+ * A guide conversation has already filed `GUIDE_BUGS_PER_CONVERSATION` bugs
+ * through its `file_bug` action (Story MOTIR-7797 · MOTIR-7800; decision
+ * MOTIR-7798 Q3, the VOLUME bound). Counted on `plan_change_session.guide_bugs_filed`
+ * under the session's row lock. The landing records it as a skipped action with
+ * this reason; it never fails the turn.
+ */
+export class GuideBugCapExceededError extends Error {
+  readonly code = 'GUIDE_BUG_CAP_EXCEEDED' as const;
+  constructor(
+    readonly sessionId: string,
+    readonly cap: number,
+    readonly filed: number,
+  ) {
+    super(
+      `This guide conversation has already filed ${filed} bugs; the most it may file is ${cap}.`,
+    );
+    this.name = 'GuideBugCapExceededError';
+  }
+}
+
+/**
+ * A guide's `file_bug` names a bug that is already filed: a not-done bug of the
+ * project, linked `relates_to` the guided card, carries the same title (trimmed,
+ * case-insensitive) — MOTIR-7800, decision MOTIR-7798 Q3 "Duplicates". Nothing is
+ * filed; the landing records the existing bug's key on the skipped outcome.
+ */
+export class GuideBugDuplicateError extends Error {
+  readonly code = 'GUIDE_BUG_DUPLICATE' as const;
+  constructor(readonly existingKey: string) {
+    super(`This bug is already filed as ${existingKey}.`);
+    this.name = 'GuideBugDuplicateError';
+  }
+}
+
+/**
  * A turn carrying files on a conversation that is not a GUIDE conversation
  * (Story MOTIR-7471 · MOTIR-7484; `docs/decisions/guide-turn-files.md` A3.2 /
  * A3.7). Only a guide conversation has one card to attach a file to; `ask`,

@@ -289,7 +289,12 @@ export type GuideOutcomeLine =
     }
   | { kind: 'edited'; fields: Array<'title' | 'description' | 'explanation'> }
   | { kind: 'commented'; reason: string }
-  | { kind: 'closed' };
+  | { kind: 'closed' }
+  // A `file_bug` (design MOTIR-7810): the bug it filed, and whether that bug now
+  // blocks the guided card; or the existing bug a duplicate was refused as. The
+  // record does not carry WHERE the bug was placed, so no line says.
+  | { kind: 'filed' | 'filedBlocking'; bugKey: string }
+  | { kind: 'alreadyFiled'; bugKey: string };
 
 /**
  * The outcome lines of one assistant turn (design panels 2–18). `rows` is the
@@ -316,6 +321,21 @@ export function guideOutcomeLines(
   const lines: GuideOutcomeLine[] = [];
   record.actions.forEach((action, i) => {
     const outcome = record.outcomes[i];
+    // The one action whose SKIPPED outcome can draw a line: a duplicate names the
+    // bug it was refused as. A refusal with no key (the cap, one per turn) draws
+    // none — its reason stays in the reply's *did not land* note.
+    if (action.type === 'file_bug') {
+      if (!outcome?.workItemKey) return;
+      if (outcome.outcome === 'landed') {
+        lines.push({
+          kind: action.blocksGuidedCard ? 'filedBlocking' : 'filed',
+          bugKey: outcome.workItemKey,
+        });
+      } else if (outcome.outcome === 'skipped') {
+        lines.push({ kind: 'alreadyFiled', bugKey: outcome.workItemKey });
+      }
+      return;
+    }
     if (!took(outcome)) return;
     // A temporary walk's recorded acts say so; a saved list's say where they landed.
     const onWalk = outcome?.outcome === 'recorded';

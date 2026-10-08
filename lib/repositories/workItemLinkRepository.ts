@@ -625,6 +625,34 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The unarchived BUGS of one project joined to a work item by `relates_to`, in
+   * either direction (MOTIR-7800 — what a guide conversation may cite instead of
+   * filing again, and what its `file_bug` is checked against for a duplicate).
+   * One row per link, so a reciprocal pair yields the same bug twice; the caller
+   * dedupes. Workspace-scoped, so it takes the caller's bound `tx`.
+   */
+  async findRelatedBugs(
+    workItemId: string,
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; identifier: string; title: string; status: string }>> {
+    const bug = { kind: 'bug' as const, projectId, archivedAt: null };
+    const pick = { select: { id: true, identifier: true, title: true, status: true } };
+    const rows = await tx.workItemLink.findMany({
+      where: {
+        kind: 'relates_to',
+        OR: [
+          { fromId: workItemId, toItem: bug },
+          { toId: workItemId, fromItem: bug },
+        ],
+      },
+      select: { fromId: true, fromItem: pick, toItem: pick },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((r) => (r.fromId === workItemId ? r.toItem : r.fromItem));
+  },
+
+  /**
    * Create a link. Required `tx`. The DB triggers validate cycle /
    * self-link / workspace consistency on insert; their SQLSTATE-23514
    * rejections and a P2002 unique violation are translated to typed errors

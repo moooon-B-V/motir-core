@@ -8803,6 +8803,12 @@ model PlanChangeSession {
   /// §6) — written once, at creation, by the copy start; NULL otherwise. SetNull:
   /// the copy outlives its source.
   copiedFromSessionId String?               @map("copied_from_session_id")
+  /// How many bugs a GUIDE conversation has filed through its `file_bug` action
+  /// (Story MOTIR-7797 · MOTIR-7800; decision MOTIR-7798 Q3). Read and bumped
+  /// under this row's lock in the transaction that files the bug, so two
+  /// concurrent filings cannot both pass `GUIDE_BUGS_PER_CONVERSATION`. Always 0
+  /// on a session that is not a guide.
+  guideBugsFiled      Int                   @default(0) @map("guide_bugs_filed")
   createdAt           DateTime              @default(now()) @map("created_at")
   updatedAt           DateTime              @updatedAt @map("updated_at")
 
