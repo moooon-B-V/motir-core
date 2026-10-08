@@ -3962,7 +3962,7 @@ shared `lib/planning/` module and called by both rows** (MOTIR-7831) — a targe
 | `mcp`, both null                      | MCP agent             | MCP 智能体             |
 
 **A long value truncates at the cell's END** (CSS ellipsis), so a long model id loses its tail first and the
-harness stays readable: `Claude Code · claude-opus-5-5[1…` (Panel 4). Harnesses are free text, so a long one
+harness stays readable: `Claude Code · frontier-model-long-con…` (Panel 4). Harnesses are free text, so a long one
 truncates the same way (`Claude Code (prompts/plan.py)` fits). Nothing is shortened in data.
 
 **Line 2 — HOW FAR IT HAS GOT.** `<PlanProgressLine density="compact" progress={row.progress} />`, indented
