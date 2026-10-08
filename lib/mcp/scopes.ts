@@ -199,6 +199,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   list_projects: 'read',
   get_project_state: 'read',
   get_code_health: 'read',
+  read_file: 'read',
+  code_explore: 'read',
+  code_search: 'read',
   skeleton: 'read',
   list_folders: 'read',
   // MOTIR-7410 — a page read. Mapped into the RETIRED vocabulary only because

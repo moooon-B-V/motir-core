@@ -272,6 +272,13 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // token the billable planning submits; and the tool postdates the six
       // strings, so no stale row ever had it to lose.
       get_code_health: true,
+      // MOTIR-7861 — `read_file`, the same loss as `get_code_health`: a read filed
+      // under `read` whose service asserts `ai:plan`, and a tool that postdates
+      // the six strings.
+      read_file: true,
+      // MOTIR-7862 — the two graph reads, the same loss and the same reason.
+      code_explore: true,
+      code_search: true,
       // MOTIR-7410. A FIFTH loss, of the lesson tools' kind: no legacy scope ever
       // gated `get_page`, because `page:view` did not exist when the six strings
       // were written. Its `TOOL_SCOPES` row files it under `read` as the nearest

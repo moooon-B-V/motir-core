@@ -108,6 +108,21 @@ process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH'] ??= MOTIR_GITHUB_MERGE_CONTROL_PA
 process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'] ??= MOTIR_GITHUB_MERGE_JOURNAL_PATH;
 process.env['E2E_JOB_WORKER_GITHUB_MERGE_SEAM'] ??= '1';
 
+// ── The motir-ai CODE-GRAPH READ seam (Story MOTIR-7858 · MOTIR-7866) ───────
+// `cloud-mcp-code-read.spec.ts` pages a `code_explore` result over `/api/mcp`, and the
+// server calls motir-ai's `POST /v1/code-graph/read` itself, so the fake lives in the
+// Next process (lib/test-code-graph-read-mock.ts, behind E2E_TEST_CODE_GRAPH_READ=1).
+// The spec WRITES the fixture and READS the journal, so both paths are set on the
+// runner as well as the server.
+const MOTIR_AI_CODE_GRAPH_READ_FIXTURE_PATH = path.resolve(
+  '/tmp/motir-cloud-code-graph-read-fixture.json',
+);
+const MOTIR_AI_CODE_GRAPH_READ_JOURNAL_PATH = path.resolve(
+  '/tmp/motir-cloud-code-graph-read-journal.jsonl',
+);
+process.env['MOTIR_AI_CODE_GRAPH_READ_FIXTURE_PATH'] ??= MOTIR_AI_CODE_GRAPH_READ_FIXTURE_PATH;
+process.env['MOTIR_AI_CODE_GRAPH_READ_JOURNAL_PATH'] ??= MOTIR_AI_CODE_GRAPH_READ_JOURNAL_PATH;
+
 /** The Studio App's credentials. The private key is GENERATED per run rather
  *  than committed: `createAppJwt` really signs RS256 with it (the shipped path
  *  runs unchanged), and a PEM in the repo is a secret-scanner finding for no
@@ -274,6 +289,9 @@ export default defineConfig({
         MOTIR_AI_LESSONS_FIXTURE_PATH: LESSONS_FIXTURE,
         E2E_TEST_PLANNER_MODEL: '1',
         MOTIR_AI_PLANNER_MODEL_FIXTURE_PATH: PLANNER_MODEL_FIXTURE,
+        E2E_TEST_CODE_GRAPH_READ: '1',
+        MOTIR_AI_CODE_GRAPH_READ_FIXTURE_PATH,
+        MOTIR_AI_CODE_GRAPH_READ_JOURNAL_PATH,
         E2E_TEST_GITHUB_REPOS: '1',
         MOTIR_GITHUB_CONTROL_PATH,
         MOTIR_GITHUB_JOURNAL_PATH,
