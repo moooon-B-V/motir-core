@@ -619,3 +619,87 @@ describe('a temporary walk', () => {
     ]);
   });
 });
+
+describe('a card closed while the turn ran (MOTIR-7817)', () => {
+  // The door refuses a Done or archived card (A2.7, `GuideCardClosedError`), but
+  // the job runs for seconds to minutes after it. The landing re-applies that gate
+  // against the card as it stands: nothing lands, each action is recorded as
+  // skipped with the reason, and the reply still arrives saying so.
+  it('ARCHIVED: a tick, a comment and a close all land nothing, and the reply says why', async () => {
+    const card = await manualCard();
+    const [r1] = await addRows(card.id, ['Only step']);
+    const opened = await open(card.identifier);
+    await workItemsService.archiveWorkItem(card.id, fx.ctx);
+    const settled = await settleWith(
+      opened,
+      [
+        { type: 'current_step', rowId: r1 },
+        { type: 'tick', rowId: r1 },
+        { type: 'cannot_do', reason: 'Stuck' },
+        { type: 'close' },
+      ],
+      'Ticked it, closing.',
+    );
+    expect(settled.outcome).toBe('guided');
+    expect(outcomesOf(settled)).toEqual([
+      ['current_step', 'skipped'],
+      ['tick', 'skipped'],
+      ['cannot_do', 'skipped'],
+      ['close', 'skipped'],
+    ]);
+    expect(settled.record!.outcomes.map((o) => o.reason)).toEqual(
+      Array(4).fill('the card was archived while this turn ran'),
+    );
+    expect((await rows(card.id))[0]!.done).toBe(false);
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(after.status).toBe('todo');
+    expect(after.archivedAt).not.toBeNull();
+    expect(await adminDb.comment.count({ where: { workItemId: card.id } })).toBe(0);
+    const reply = settled.session.turns.at(-1)!;
+    expect(reply.role).toBe('assistant');
+    expect(reply.body).toContain('Some of that did not land:');
+    expect(reply.body).toContain('- close: the card was archived while this turn ran');
+  });
+
+  it('ARCHIVED with every row ticked: the close does not walk the card to Done', async () => {
+    const card = await manualCard();
+    const [r1] = await addRows(card.id, ['Only step']);
+    await workItemTodosService.setTodoDone(r1!, true, fx.ctx);
+    const opened = await open(card.identifier);
+    await workItemsService.archiveWorkItem(card.id, fx.ctx);
+    const settled = await settleWith(opened, [{ type: 'close' }], 'All done, closing it.');
+    expect(outcomesOf(settled)).toEqual([['close', 'skipped']]);
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).status).toBe(
+      'todo',
+    );
+    expect(await adminDb.comment.count({ where: { workItemId: card.id } })).toBe(0);
+  });
+
+  it('DONE by hand while the turn ran: an untick and a close land nothing', async () => {
+    const card = await manualCard();
+    const [r1] = await addRows(card.id, ['Only step']);
+    await workItemTodosService.setTodoDone(r1!, true, fx.ctx);
+    const opened = await open(card.identifier);
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'done' } });
+    const settled = await settleWith(opened, [{ type: 'untick', rowId: r1 }, { type: 'close' }]);
+    expect(outcomesOf(settled)).toEqual([
+      ['untick', 'skipped'],
+      ['close', 'skipped'],
+    ]);
+    expect(settled.record!.outcomes[0]!.reason).toBe('the card was finished while this turn ran');
+    expect((await rows(card.id))[0]!.done).toBe(true);
+    expect(await adminDb.comment.count({ where: { workItemId: card.id } })).toBe(0);
+  });
+
+  it('a replay of the skipped turn writes nothing more', async () => {
+    const card = await manualCard();
+    const [r1] = await addRows(card.id, ['Only step']);
+    const opened = await open(card.identifier);
+    await workItemsService.archiveWorkItem(card.id, fx.ctx);
+    await settleWith(opened, [{ type: 'tick', rowId: r1 }]);
+    const replay = await settleWith(opened, [{ type: 'tick', rowId: r1 }]);
+    expect(outcomesOf(replay)).toEqual([['tick', 'skipped']]);
+    expect(replay.session.turns.filter((t) => t.role === 'assistant')).toHaveLength(1);
+    expect((await rows(card.id))[0]!.done).toBe(false);
+  });
+});
