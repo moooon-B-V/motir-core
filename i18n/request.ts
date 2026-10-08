@@ -1,6 +1,8 @@
 import { getRequestConfig } from 'next-intl/server';
 import { cookies, headers } from 'next/headers';
 import { getSession } from '@/lib/auth';
+import en from '@/messages/en.json';
+import { withEnglishFallback } from '@/lib/i18n/englishFallback';
 import { resolveLocale } from '@/lib/i18n/resolveLocale';
 
 // next-intl's per-request configuration (the "without i18n routing" setup).
@@ -45,11 +47,17 @@ export default getRequestConfig(async () => {
     acceptLanguage: requestHeaders.get('accept-language'),
   });
 
+  // Relative path (not the @/ alias) so the bundler can statically glob the
+  // messages/ directory and code-split each catalog.
+  const catalogue = (await import(`../messages/${locale}.json`)).default;
+
   return {
     locale,
-    // Relative path (not the @/ alias) so the bundler can statically glob the
-    // messages/ directory and code-split each catalog.
-    messages: (await import(`../messages/${locale}.json`)).default,
+    // A key this locale's catalogue lacks renders its ENGLISH text, never its
+    // raw key path (MOTIR-7757). Merged here rather than through a
+    // `getMessageFallback` callback because the merged object reaches
+    // `NextIntlClientProvider` (app/layout.tsx) and a function cannot.
+    messages: locale === 'en' ? catalogue : withEnglishFallback(catalogue, en),
     // A single `now` per request, shared by SSR and the client. Without it,
     // next-intl's `format.relativeTime(...)` falls back to calling `new Date()`
     // independently on the server and again on the client (the

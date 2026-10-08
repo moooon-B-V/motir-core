@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createTranslator } from 'next-intl';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
-import { locales } from '@/lib/i18n/locales';
+import { locales, type Locale } from '@/lib/i18n/locales';
 import { PLATFORM_AUDIT_ACTION_KEYS, isPlatformAuditWrite } from '@/lib/platform/auditActions';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 
@@ -102,29 +102,53 @@ function flattenEntries(obj: Record<string, unknown>, prefix = ''): [string, str
   });
 }
 
+// Every catalogue, read off `locales` rather than imported one by one, so a
+// twelfth locale is held by every gate below the moment it is declared
+// (Story MOTIR-7730 · MOTIR-7757 widened them from `en` / `zh` to all eleven).
+const MESSAGES_DIR = new URL('../messages/', import.meta.url);
+
+function readCatalogue(locale: string): string {
+  return readFileSync(new URL(`${locale}.json`, MESSAGES_DIR), 'utf8');
+}
+
+const catalogues = Object.fromEntries(
+  locales.map((locale) => [locale, JSON.parse(readCatalogue(locale)) as Record<string, unknown>]),
+) as Record<Locale, Record<string, unknown>>;
+
+const translatedLocales = locales.filter((locale) => locale !== 'en');
+
 describe('message catalogs', () => {
   const enKeys = flatten(en).sort();
 
-  it('ships a catalog per declared locale', () => {
-    // `en` and `zh` are the two declared locales; both are imported here.
-    expect(locales).toContain('en');
-    expect(locales).toContain('zh');
+  it('ships a catalog per declared locale, and declares every catalog', () => {
+    // Top-level files only — `messages/glossary/` and `messages/sources/` hold
+    // the translation record, not catalogues.
+    const files = readdirSync(MESSAGES_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .map((entry) => entry.name.replace(/\.json$/, ''))
+      .sort();
+    expect(files).toEqual([...locales].sort());
   });
 
-  it('zh has the exact same key set as en (no missing, no orphan keys)', () => {
-    const zhKeys = flatten(zh as Record<string, unknown>).sort();
-    const missingInZh = enKeys.filter((k) => !zhKeys.includes(k));
-    const orphanInZh = zhKeys.filter((k) => !enKeys.includes(k));
-    expect(missingInZh, `keys missing from zh.json: ${missingInZh.join(', ')}`).toEqual([]);
-    expect(orphanInZh, `orphan keys in zh.json: ${orphanInZh.join(', ')}`).toEqual([]);
-  });
+  it.each(translatedLocales)(
+    '%s has the exact same key set as en (no missing, no orphan keys)',
+    (locale) => {
+      const keys = flatten(catalogues[locale]).sort();
+      const keySet = new Set(keys);
+      const enSet = new Set(enKeys);
+      const missing = enKeys.filter((k) => !keySet.has(k));
+      const orphan = keys.filter((k) => !enSet.has(k));
+      expect(missing, `keys missing from ${locale}.json: ${missing.join(', ')}`).toEqual([]);
+      expect(orphan, `orphan keys in ${locale}.json: ${orphan.join(', ')}`).toEqual([]);
+    },
+  );
 
   // The parity check above parses the JSON, so duplicate keys are already
   // collapsed (last wins) and invisible to it. Detect them on the RAW text so a
   // shadowing duplicate (the MOTIR-1373 cause) fails loudly instead of silently
   // dropping a whole namespace.
-  it.each(['en', 'zh'])('%s.json has no duplicate keys at any level', (locale) => {
-    const raw = readFileSync(new URL(`../messages/${locale}.json`, import.meta.url), 'utf8');
+  it.each(locales)('%s.json has no duplicate keys at any level', (locale) => {
+    const raw = readCatalogue(locale);
     const dups = duplicateKeyPaths(raw);
     expect(dups, `duplicate keys in ${locale}.json: ${dups.join(', ')}`).toEqual([]);
   });
@@ -239,8 +263,8 @@ describe('product noun (a work item is never called a "card")', () => {
 // both locales carried the same broken key, parity held, and the surface
 // rendered raw key paths (MOTIR-3686, shipped by MOTIR-1167).
 describe('catalog keys are resolvable (no `.` inside a key name)', () => {
-  it.each(['en', 'zh'])('%s.json has no key containing a `.`', (locale) => {
-    const messages = (locale === 'en' ? en : zh) as Record<string, unknown>;
+  it.each(locales)('%s.json has no key containing a `.`', (locale) => {
+    const messages = catalogues[locale];
     const dotted: string[] = [];
     const walk = (node: Record<string, unknown>, path: string[]) => {
       for (const [key, value] of Object.entries(node)) {
@@ -275,8 +299,8 @@ describe('platform support-action labels resolve for every operator write', () =
     expect(operatorWrites.length).toBeGreaterThan(0);
   });
 
-  it.each(['en', 'zh'])('%s labels every operator write in the support log', (locale) => {
-    const messages = (locale === 'en' ? en : zh) as Record<string, unknown>;
+  it.each(locales)('%s labels every operator write in the support log', (locale) => {
+    const messages = catalogues[locale];
     const errors: string[] = [];
     const t = createTranslator({
       locale,
@@ -435,30 +459,31 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
 const TYPE_LABEL_NAMESPACE = 'labels.workItemType.';
 
 describe('work-item type labels do not silently name something else', () => {
-  const catalogs = { en, zh } as Record<'en' | 'zh', Record<string, unknown>>;
+  const catalogs = catalogues;
 
-  function typeLabels(locale: 'en' | 'zh'): Map<string, string> {
+  function typeLabels(locale: Locale): Map<string, string> {
     const entries = new Map(flattenEntries(catalogs[locale]));
     return new Map(
       WORK_ITEM_TYPES.map((type) => [type, entries.get(`${TYPE_LABEL_NAMESPACE}${type}`)!]),
     );
   }
 
-  it.each(['en', 'zh'] as const)(
-    '%s labels all fifteen types (the derivation is real)',
-    (locale) => {
-      const labels = typeLabels(locale);
-      const unlabelled = [...labels].filter(([, value]) => !value).map(([type]) => type);
-      expect(
-        unlabelled,
-        `${locale}.json has no ${TYPE_LABEL_NAMESPACE}* label for: ${unlabelled.join(', ')}`,
-      ).toEqual([]);
-      expect(labels.size).toBe(WORK_ITEM_TYPES.length);
-    },
-  );
+  it.each(locales)('%s labels all fifteen types (the derivation is real)', (locale) => {
+    const labels = typeLabels(locale);
+    const unlabelled = [...labels].filter(([, value]) => !value).map(([type]) => type);
+    expect(
+      unlabelled,
+      `${locale}.json has no ${TYPE_LABEL_NAMESPACE}* label for: ${unlabelled.join(', ')}`,
+    ).toEqual([]);
+    expect(labels.size).toBe(WORK_ITEM_TYPES.length);
+  });
 
-  // A. THE HARD BAN. No allowlist, deliberately — see the header above.
-  it.each(['en', 'zh'] as const)('%s: no shell.* label reuses a type label', (locale) => {
+  // A. THE HARD BAN. No allowlist, deliberately — see the header above. It needs
+  // no judgement, so it holds every catalogue (MOTIR-7757); tier B below stays
+  // `en` / `zh` by decision — each of its entries is a reader's written judgement
+  // that a frame disambiguates a word, and only a reader of the language can
+  // make it.
+  it.each(locales)('%s: no shell.* label reuses a type label', (locale) => {
     const labels = new Set([...typeLabels(locale).values()].map((v) => v.trim().toLowerCase()));
     const leaks = flattenEntries(catalogs[locale]).filter(
       ([path, value]) => path.startsWith('shell.') && labels.has(value.trim().toLowerCase()),
@@ -519,5 +544,411 @@ describe('work-item type labels do not silently name something else', () => {
     expect(zhEntries.get(`${TYPE_LABEL_NAMESPACE}legal`)).not.toBe(
       zhEntries.get('shell.help.legal'),
     );
+  });
+});
+
+// ── The glossary's banned words are a HARD gate (Story MOTIR-7730 · MOTIR-7757) ──
+//
+// `messages/glossary/<l>.json` records, per term, the words that language must
+// NOT use for it — for "work item", that language's words for "issue" and
+// "card". The catalogue script (`scripts/i18n/`) reported them as merge-time
+// warnings; this gate makes a hit fail. A hit that is legitimately another sense
+// — a PAYMENT card, a UI PANEL (the glossary's `allowedSenses`) — is listed in
+// `BANNED_WORD_ALLOWLIST` with that sense, and the list is asserted tight.
+//
+// Matching is case-insensitive. Latin-script locales match the WORD (Unicode
+// letter/number boundaries, so `Karte` does not hit `Kartei`); `zh` / `ja` / `ko`
+// have no word spaces and match a substring.
+interface GlossaryTerm {
+  translation: string;
+  banned?: string[];
+}
+
+function glossaryBans(locale: Locale): { term: string; word: string }[] {
+  const file = new URL(`glossary/${locale}.json`, MESSAGES_DIR);
+  if (!existsSync(file)) return [];
+  const { terms } = JSON.parse(readFileSync(file, 'utf8')) as {
+    terms: Record<string, GlossaryTerm>;
+  };
+  return Object.entries(terms).flatMap(([term, entry]) =>
+    (entry.banned ?? []).map((word) => ({ term, word })),
+  );
+}
+
+const UNSPACED_SCRIPTS: readonly Locale[] = ['zh', 'ja', 'ko'];
+
+function containsBannedWord(locale: Locale, value: string, word: string): boolean {
+  if (UNSPACED_SCRIPTS.includes(locale)) return value.toLowerCase().includes(word.toLowerCase());
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu').test(value);
+}
+
+// Every entry is a hit in another SENSE, dispositioned when the gate turned on
+// (MOTIR-7757): a payment card, a UI panel, a browser tab, a notification,
+// French `demande` (a request, market demand), and in `zh` the ordinary
+// `问题` (a problem — and the imported tracker's or Sentry's own "issue").
+const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
+  zh: {
+    'device.errors.unexpected': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'planReview.actionError': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'errors.serverError.pageBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'errors.serverError.appBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'email.automationRuleFailed.autoDisabled':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'auth.somethingWentWrong': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'auth.twoFactor.errors.generic': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'shell.aiCallout.actions.ask.description':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'comments.errorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'activity.errorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'attachments.errorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.members.errorUnexpected': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.workflow.toast.genericError':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.board.errorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.customFields.errorDescription':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.components.errorDescription':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.access.errorGeneric': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.codeAccess.failedBanner': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.account.data.export.failed.headline':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.account.twoFactor.errors.generic':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.profile.email.modal.errors.generic':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.connectedApps.revokeError.body':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.apiTokens.createModal.errorGeneric':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.apiTokens.revokeConfirm.errorGeneric':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.gitAccounts.noInstallation.body':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'settings.bugs.pageDescription': "a Sentry issue — the monitor's own noun",
+    'boards.errorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'ready.nudge.error': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'backlog.errorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'backlog.sprintsErrorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'backlog.startSprintFlow.errorDescription':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'backlog.deleteSprintFlow.errorDescription':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'backlog.renameSprintFlow.errorDescription':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'backlog.editSprintDatesFlow.errorDescription':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'backlog.createSprintErrorDescription':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'savedFilters.edit.errorGeneric': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'savedFilters.changeOwnerDialog.errorGeneric':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'savedFilters.deleteDialog.errorGeneric':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'savedFilters.save.errorGeneric': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'notifications.error.body': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'orgAdmin.transfer.errorGeneric': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'orgAdmin.states.errorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'orgAdmin.delete.errorGeneric': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'orgAdmin.cancel.error': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'triage.toast.error': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'triage.widget.heading': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'publicProjects.submitErrorBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'publicProjects.faqTitle': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'publicProjects.editErrGeneric': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'workItemActions.archiveErrorBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'aiUsage.summary.searchUnavailable': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'billing.ci.pausedBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'billing.agents.unavailable': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'billing.search.unavailable': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'onboarding.entrance.hintDefault': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'onboarding.howItWorks.body': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'onboarding.chat.composerPlaceholder':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'github.development.fix.rearm': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'planningWorkspace.refusalSeed.askAcceptanceRemedy':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'planningWorkspace.conversation.composerPlaceholderReplan':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'planningWorkspace.conversation.correctToAsk':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'planningWorkspace.conversation.debug.ungrounded':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'planningWorkspace.handoff.stepDiscovery':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'planningWorkspace.routing.refusalMessage':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'codeHealth.errorLoadMore': 'a code-health finding (a problem in the code), not a work item',
+    'codeHealth.audit.findingsTotal':
+      'a code-health finding (a problem in the code), not a work item',
+    'codeHealth.audit.findingsCount':
+      'a code-health finding (a problem in the code), not a work item',
+    'codeHealth.audit.noFindings': 'a code-health finding (a problem in the code), not a work item',
+    'codeHealth.audit.loadMore': 'a code-health finding (a problem in the code), not a work item',
+    'import.connect.body': "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.connect.scopeAll':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.connect.csv.dropzoneHint':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.connect.csv.idColumnLabel':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.connect.reachable':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.connect.reachableUnknown':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.map.rowType': "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.map.unresolved': "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.preview.empty': "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.preview.emptyBody':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.preview.rerunTitle':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.preview.confirm':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.run.importing': "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.run.completeTitle':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.run.partialTitle':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.run.partialBody':
+      "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'import.errors.generic': "an issue in the SOURCE tracker being imported — that tool's own noun",
+    'onboardingMigrate.rail.discoveryStep':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'designResult.frameFailedBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'workbench.approvals.subjectGone.manual_work':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'platformAdmin.users.action.error.FAILED':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'platformAdmin.monitoring.subtitle': 'UI panel — a tile on the page, not a work item',
+    'platformAdmin.monitoring.signal.errors.degradedDetail':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'platformAdmin.monitoring.signal.errors.linkOut':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'platformAdmin.monitoring.indexAllowance.subtitle':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'platformAdmin.aiPlanning.confirm.reasonHint':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'platformAdmin.lessons.refused.failed':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'platformAdmin.usage.unavailable.description':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'platformAdmin.ops.error.FAILED': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'platformAdmin.tenant.fleet.confirm.reasonHint':
+      'UI panel — a tile on the page, not a work item',
+    'platformAdmin.tenant.fleet.error.failedBody': 'UI panel — a tile on the page, not a work item',
+    'platformAdmin.modelLists.error.failed':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'platformAdmin.ideas.refused.failed': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'workItemTodos.errors.generic': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'myAgents.panel.chat.error': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.port': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.republished':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.withdrawn':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.head_moved':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.member_closed':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.member_drafted':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.conflict':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.set_changed':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.pulled_back':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.ci_failed':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.ci_rerunning':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.plan_stale':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.plan_discarded':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.queue_failed':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.subject_gone':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.no_longer_manual':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.closed_without_decision':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.unknown':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.causeByKind.decision_approval.head_moved':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.causeByKind.manual_work.pulled_back':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.refusal.superseded.title':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.refusal.superseded.staleTab':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.pullRequestApproval.withdrawn.port':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.pullRequestApproval.withdrawn.portSet':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.pullRequestApproval.withdrawn.portMerged':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.pullRequestApproval.withdrawn.portClosed':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.pullRequestApproval.withdrawn.portDrafted':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.pullRequestApproval.withdrawn.portConflict':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.pullRequestApproval.withdrawn.portConflictNoBase':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.pullRequestApproval.withdrawn.portQueueFailed':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.choice.question': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalOverlay.withdrawn.conflict': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvals.reviewAgent.desc': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'monitoring.description': "a Sentry issue — the monitor's own noun",
+    'monitoring.error.body': "a Sentry issue — the monitor's own noun",
+    'monitoring.empty.body': "a Sentry issue — the monitor's own noun",
+    'monitoring.degraded.consequence': "a Sentry issue — the monitor's own noun",
+    'monitoring.section.hint': "a Sentry issue — the monitor's own noun",
+    'monitoring.unbound.body': "a Sentry issue — the monitor's own noun",
+    'monitoring.row.level.helper': "a Sentry issue — the monitor's own noun",
+    'monitoring.row.sync.resolve.label': "a Sentry issue — the monitor's own noun",
+    'monitoring.row.sync.resolve.hint': "a Sentry issue — the monitor's own noun",
+    'monitoring.row.sync.resolveFailed': "a Sentry issue — the monitor's own noun",
+    'monitoring.confirm.one.body': "a Sentry issue — the monitor's own noun",
+    'monitoring.banner.connected.body': "a Sentry issue — the monitor's own noun",
+    'monitoring.picker.subtitle': "a Sentry issue — the monitor's own noun",
+    'oauthConsent.refused.next': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'oauthConsent.errors.unexpected': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+  },
+  ja: {
+    'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
+    'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
+    'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
+    'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
+  },
+  ko: {
+    'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
+    'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
+    'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
+    'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
+  },
+  de: {
+    'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
+  },
+  fr: {
+    'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
+    'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
+    'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
+    'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
+    'onboarding.landing.optional.demandDesc': 'market demand — not a work item',
+    'onboarding.chat.proveDemandLabel': 'market demand — not a work item',
+    'onboarding.chat.replies.proveDemand': 'market demand — not a work item',
+    'onboarding.chat.canvas.stations.validation.subtitle': 'market demand — not a work item',
+    'onboarding.chat.validate.body': 'market demand — not a work item',
+    'aiPlanning.sessions.emptyMineDescription':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'import.connect.connectHint': 'to ask / a request (ordinary verb or noun) — not a work item',
+    'repositoryTakeover.reinstallDetail':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'repositoryTakeover.costTransferDetail':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'apiDocs.sandboxLede': 'to ask / a request (ordinary verb or noun) — not a work item',
+    'workbench.toResume.next.changes_requested':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'platformAdmin.users.confirm.reasonHint':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'myAgents.profileLine.claude': 'to ask / a request (ordinary verb or noun) — not a work item',
+    'myAgents.profileLine.codex': 'to ask / a request (ordinary verb or noun) — not a work item',
+    'myAgents.profileLine.kimi': 'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvalGate.acceptanceResult.verdict.replan.consequence':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvalGate.acceptanceResult.refusal.noRerun':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvalGate.choice.consequence.picked':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvalGate.reason.required': 'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvalOverlay.subjectGone.design_result':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvalOverlay.subjectGone.acceptance_result':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvalOverlay.subjectGone.pull_request_approval':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvalOverlay.subjectGone.plan_approval':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvalOverlay.subjectGone.agent_review':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvals.reviewAgent.desc': 'to ask / a request (ordinary verb or noun) — not a work item',
+    'approvals.reviewAgent.onWhat': 'to ask / a request (ordinary verb or noun) — not a work item',
+    'monitoring.banner.state_error.body':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'visitor.requestedFeatures.featureRequest':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'visitor.requestedFeatures.emptyBody':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'oauthConsent.heading.refused': 'to ask / a request (ordinary verb or noun) — not a work item',
+    'oauthConsent.refused.reason.expired':
+      'to ask / a request (ordinary verb or noun) — not a work item',
+    'oauthConsent.signIn.foot': 'to ask / a request (ordinary verb or noun) — not a work item',
+  },
+  es: {
+    'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
+    'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
+    'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
+    'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
+  },
+  it: {
+    'settings.publicAddress.subdomain.open': 'browser tab — "open in a new tab"',
+  },
+  nl: {
+    'settings.account.notifications.helper': 'a notification — the notification sense of "melding"',
+    'notifications.summary.genericNoKey': 'a notification — the notification sense of "melding"',
+    'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
+  },
+  pt: {
+    'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
+    'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
+    'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
+    'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
+    'platformAdmin.monitoring.subtitle': 'UI panel — each monitoring tile, not a work item',
+  },
+};
+
+describe('glossary banned words (hard gate)', () => {
+  const glossaryLocales = locales.filter((locale) => glossaryBans(locale).length > 0);
+
+  function hits(locale: Locale): { path: string; word: string }[] {
+    const bans = glossaryBans(locale);
+    return flattenEntries(catalogues[locale]).flatMap(([path, value]) =>
+      bans
+        .filter(({ word }) => containsBannedWord(locale, value, word))
+        .map(({ word }) => ({ path, word })),
+    );
+  }
+
+  it('reads a glossary with banned words for every translated locale', () => {
+    expect(glossaryLocales).toEqual(translatedLocales);
+  });
+
+  it.each(glossaryLocales)('%s.json uses no banned glossary word', (locale) => {
+    const allow = BANNED_WORD_ALLOWLIST[locale] ?? {};
+    const leaks = hits(locale).filter(({ path }) => !(path in allow));
+    expect(
+      leaks.map(({ path, word }) => `${path} (${word})`),
+      `banned glossary words in ${locale}.json — use the glossary's translation ` +
+        `(messages/glossary/${locale}.json), or, if the hit is a payment card or a ` +
+        `UI panel, list it in BANNED_WORD_ALLOWLIST.${locale} with the sense: `,
+    ).toEqual([]);
+  });
+
+  it.each(glossaryLocales)('%s allowlist has no stale entry', (locale) => {
+    const hitPaths = new Set(hits(locale).map(({ path }) => path));
+    const stale = Object.keys(BANNED_WORD_ALLOWLIST[locale] ?? {}).filter(
+      (path) => !hitPaths.has(path),
+    );
+    expect(
+      stale,
+      `allowlisted keys that no longer hold a banned word: ${stale.join(', ')}`,
+    ).toEqual([]);
   });
 });

@@ -23,6 +23,17 @@ import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 const BCP47: Record<Locale, string> = {
   en: 'en-US',
   zh: 'zh-CN',
+  ja: 'ja-JP',
+  ko: 'ko-KR',
+  de: 'de-DE',
+  fr: 'fr-FR',
+  es: 'es-ES',
+  it: 'it-IT',
+  nl: 'nl-NL',
+  pl: 'pl-PL',
+  // Brazilian Portuguese: the catalogue is written in it (Story MOTIR-7730's
+  // recorded assumption — most Portuguese speakers are there).
+  pt: 'pt-BR',
 };
 
 /** Date + time, e.g. "Jun 3, 02:45 PM UTC" (en) · "6月3日 下午02:45 UTC" (zh). */

@@ -42,7 +42,12 @@ vi.mock('next-intl/server', () => ({
   getRequestConfig: (fn: unknown) => fn,
 }));
 
+// A Japanese catalogue holding ONE key, so every other key is absent from it —
+// the request's messages must still carry it, in English (MOTIR-7757).
+vi.mock('@/messages/ja.json', () => ({ default: { common: { retry: '再試行' } } }));
+
 const { default: requestConfig } = await import('@/i18n/request');
+const { default: en } = await import('@/messages/en.json');
 async function resolve() {
   const config = await (
     requestConfig as unknown as (p: unknown) => Promise<Record<string, unknown>>
@@ -104,6 +109,15 @@ describe('i18n request config', () => {
     expect(config['now']).toBeInstanceOf(Date);
     const messages = config['messages'] as Record<string, unknown>;
     expect(messages).toHaveProperty('common');
+  });
+
+  it('fills a key the locale lacks from English, and keeps the translated ones', async () => {
+    state.cookie = 'ja';
+    const config = await resolve();
+    expect(config['locale']).toBe('ja');
+    const messages = config['messages'] as typeof en;
+    expect(messages.common.retry).toBe('再試行');
+    expect(messages.errors.serverError.appTitle).toBe(en.errors.serverError.appTitle);
   });
 
   it('the session carries `locale`, typed', () => {
