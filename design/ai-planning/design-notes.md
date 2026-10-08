@@ -31,6 +31,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **The surface's List \| Canvas for a plan**     | **`plan-review--surface-views.mock.html`**                | MOTIR-6184           | Part XXI   |
 | **Approve or decline a plan, in place**         | `plan-review--decide.mock.html` (on the design result)    | MOTIR-6033           | Part XXII  |
 | **The plan drawn as it is written**             | **`plan-review--live-drawing.mock.html`**                 | MOTIR-6294           | Part XXIII |
+| **A plan being written: progress and cues**     | **`plan-review--live-progress.mock.html`**                | MOTIR-7821           | Part XXV   |
 | **A Plans row NAMES its refused work item**     | **`plans-sessions--seeded.mock.html`**                    | MOTIR-6206           | § at end   |
 
 **A Part number is an address in THIS file.** Before taking the next number, check the area's
@@ -7022,3 +7023,441 @@ Over every `MOTIR-<n>` the new mock and this Part name:
 - **The plan page's own live poll**, which is unchanged.
 - **Motion anywhere but the planning canvas's nodes and edges** and the list's rows. The motion is
   OPT-IN on `PlanningCanvas`; `/roadmap`, runs and onboarding do not get it.
+
+# Part XXV — a plan being written: its PROGRESS, which items are being written NOW, and when it has STALLED (MOTIR-7821 · Story MOTIR-7820 — `plan-review--live-progress.mock.html`)
+
+A DELTA over **Part XXIII** (`plan-review--live-drawing.mock.html`, MOTIR-6294). Part XXIII and its
+mock are not edited; every rule there holds unless a section below says it amends it, and each such
+section names the § it amends.
+
+**The number.** Part XXIV is taken: MOTIR-6628's result (_plan review shows a proposed OBSOLESCENCE
+mark_) was published under it on 2026-09-27 and has not landed in this file. This Part takes **XXV**,
+per the rule at the top of this file.
+
+## 25.0 What this Part adds
+
+Story MOTIR-7820 stores, on a `generating` plan, the SET of in-flight steps (one per running planner
+session: `settle` · `lay` with a parent or with none · `author` with a target or with none, each with
+its `startedAt`) and a `lastActivityAt` stamped by every signal and every proposal write (MOTIR-7822).
+MOTIR-7825 derives from them ONE progress value for every surface. This Part designs what that value
+looks like:
+
+1. **The progress line, PANE form** — in the pane header of the planning surface and the plan page
+   (sheets 1–2), with a details popover and the requester's pointer to Workbench › Planning.
+2. **The progress line, COMPACT form** — one row, the thing a Workbench › Planning row composes
+   (sheet 3).
+3. **The DRAFTING cue** — on every card a current `author` step targets (sheets 4–5).
+4. **The LAYING cue** — on the parent a current `lay` step targets, in three places (sheet 6).
+5. **The off-level wording** of Part XXIII's one arrivals slot (sheet 7).
+6. **The STALLED state** and its threshold, as ONE constant (25.9).
+
+It adds no second canvas, no second level builder and no second live read: the cue is a layer on the
+shipped node box of the ONE canvas, and the steps travel on the ONE generating-plan read
+(`useGeneratingPlanPoll`, 2.5 s).
+
+## 25.1 Every panel is labelled `PlanStatus · step kind`
+
+The PlanStatus is always `generating` while anything here shows, except the hand-over panels
+(`planned`, `declined`). The step kinds are `settle`, `lay (targeted)`, `lay (untargeted)`,
+`author (targeted)`, `author (untargeted)`, plus the two non-kinds the derivation can return:
+**no step yet** (no signal ever — _Starting…_) and **no step reported** (the planner signals nothing,
+or is between sessions).
+
+| state (MOTIR-7825)                                     | marker word (shipped slot)             | progress line                                     | canvas cues                | sheet |
+| ------------------------------------------------------ | -------------------------------------- | ------------------------------------------------- | -------------------------- | ----- |
+| `starting` — no signal yet                             | **Starting…**                          | elapsed · last activity (counts once M > 0)       | none                       | 1A, 2 |
+| `working` — ≥ 1 current step                           | Being written                          | step words · +N more · N of M · elapsed · last    | every targeted step        | 1B, 2 |
+| `writing` — signalled before, none now / never signals | Being written                          | N of M · elapsed · last activity                  | none                       | 2, 9  |
+| `stalled` — quiet > threshold                          | **Stalled** (warning dot)              | N of M · elapsed · **no activity for {duration}** | none (every step aged out) | 2, 9  |
+| read failing (Part XXIII §23.10)                       | Reconnecting — showing the last update | the last snapshot, unchanged                      | the last snapshot, held    | 2, 9  |
+| `planned` / `declined`                                 | — (leaves)                             | — (leaves)                                        | — (leave, same frame)      | 10    |
+
+The marker's WORD carries the state, so a reader who reads one thing reads it right; the line is the
+detail. The stalled/recovered pair is drawn in sheet 9.
+
+## 25.2 The pane form — placement and anatomy (sheets 1–2)
+
+**Where:** in the shipped pane header (`PlanProposalViews`, `h-11`), right of the shipped live marker
+(`data-testid="plan-live-state"`, unchanged except for its word). The header is the one strip both
+the planning surface and the plan page carry, and it is already where "this plan is live" is said —
+so the hand-over (§25.12) removes things and moves nothing.
+
+**Order, left to right:** `[Segmented]` … `[marker]` `[progress button]` `[pointer]` `[sr-only announce]`.
+
+- **The progress button** (`data-testid="plan-progress"`, `<button aria-expanded aria-controls>`):
+  `step words` (`min-w-[7rem] truncate`, `--el-text`, medium) · `+N more` · `N of M authored` ·
+  `elapsed` · `last activity`, separated by `·` glyphs (`aria-hidden`), then a `chevron-down`
+  (`chevron-up` open). Text `text-xs --el-text-secondary`; box `h-(--height-control)`,
+  `px-(--spacing-control-x)`, `rounded-(--radius-control)`, hover `--el-surface-soft`, open state
+  `--el-surface-soft` fill; `max-w-[44rem]`.
+- **The details popover** (sheet 1C) is the shipped `Popover` surface (`data-surface="popover"`,
+  `--el-page-bg`, `--el-border`, `--shadow-elevated`, `--radius-card`, `p-(--spacing-card-padding)`),
+  24rem wide, aligned to the header's right end. Content: an eyebrow _Working on now_; one row per
+  current step — full words (`text-sm --el-text`), then _Started {time} · running {duration}_
+  (`text-xs --el-text-secondary`); the counts; _Started {time} · running {duration}_ for the plan;
+  _Last activity {time}_; the stalled sentence when stalled; the pointer sentence with its link. With
+  no step it says _No step reported — the planner may not report its steps._ It is the only place a
+  truncated title is read whole (besides the step span's `title`).
+- **The pointer** (`data-testid="plan-progress-pointer"`): _Follow from Workbench_ + `arrow-up-right`,
+  `--el-link`, `text-xs` medium, an `<a href>` to Workbench › Planning, `aria-label` = the full
+  sentence _You can leave — this plan keeps being written. Follow it from Workbench › Planning._ **It
+  shows only to the plan's requester** (`Plan.createdById` = the reader) — the tab lists only the
+  reader's own plans, so for anyone else it would lead nowhere (sheet 2).
+
+**N of M authored** is hidden while M = 0 (before the first lay result). **Elapsed** is from
+`Plan.createdAt`.
+
+**Width — the drop order (sheet 2).** The step words truncate first (CSS ellipsis, never below 7rem).
+When the line still does not fit: **last activity** drops, then **elapsed**, then the pointer moves
+into the popover. Counts never drop. Drawn at 720 px and 560 px pane widths, and while the
+Reconnecting word is long (it costs the same space as a narrow pane). Implement it on the header's
+own width (a container query or a measured width), not the viewport's.
+
+## 25.3 One step, two, many — and which one is in words
+
+**Only one step is ever in words in the line: the EARLIEST by `startedAt`, ties by `sessionKey`** —
+the order MOTIR-7825 returns. Earliest, not latest, because a later step starting must not change the
+words the reader is reading; the words change only when that session ends. Then:
+
+| current steps | line                                | canvas                                    |
+| ------------- | ----------------------------------- | ----------------------------------------- |
+| 0             | no words (§25.1 decides the marker) | nothing                                   |
+| 1             | `Authoring: {title}`                | its one cue (if targeted and on the plan) |
+| 2             | `Authoring: {title}` `+1 more`      | both cues                                 |
+| many (6)      | `Authoring: {title}` `+5 more`      | every targeted cue at once (sheet 4)      |
+
+`+N more` counts the steps the derivation returned, so a dropped step (withdrawn target, aged-out
+session) is not counted (sheet 9). The popover lists them all in the same order.
+
+**Long titles truncate with CSS ellipsis** on the step span alone; the counts and the times never
+truncate. The compact form caps the words at 28ch.
+
+## 25.4 Times — formats and the tick
+
+The client ticks **once a second** off the derivation's `serverNow` (MOTIR-7825's clock correction),
+so no poll is needed to advance a time; what the reader sees changes only at these granularities:
+
+| value         | < 10 s                                                                                                          | 10 s – 59 s                                  | 1 – 59 min                | ≥ 60 min                                         |
+| ------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------- | ------------------------------------------------ |
+| elapsed       | `<1 min`                                                                                                        | `<1 min`                                     | `{m} min`                 | `{h} h {m} min`                                  |
+| last activity | `just now`                                                                                                      | `{s} s ago`, in **10 s steps** (10, 20 … 50) | `{m} min ago`             | `{h} h {m} min ago` (uses the elapsed formatter) |
+| stalled       | —                                                                                                               | —                                            | `no activity for {m} min` | `no activity for {h} h {m} min`                  |
+| popover       | clock time `HH:mm:ss` in the reader's locale and timezone for _Started_ / _Last activity_; durations as elapsed |
+
+Ten-second steps, because a counter that changes every second is motion in the corner of the eye;
+minutes are what a waiting person reads. **The tick never decides stalled** — stalled comes from the
+derivation on a read, so a dropped read cannot make a plan look stalled (§25.10).
+
+## 25.5 The compact form (sheet 3)
+
+One line, `data-testid="plan-progress-compact"`: **dot** (the marker's dot and colour) · step words
+(≤ 28ch) · +N more · N of M authored · elapsed · last activity. With no step the **state word**
+leads (_Starting…_ / _Being written_ / _Stalled_ / _Reconnecting_). No button, no popover, no pointer —
+the row it sits in is the way into the plan. It reads the SAME derivation through the SAME
+formatter as the pane form, so the two never disagree. The same drop order applies at narrow widths.
+
+**What this Part does not draw for the row:** the row's title, target, planner name
+(`Motir AI` / `{harness} · {model}`), its link and the tab itself — the Workbench tab item composes
+this line into its row and owns the rest.
+
+## 25.6 The DRAFTING cue (sheets 4–5)
+
+**A layer on the shipped node box, never on the card.** The node box
+(`[data-node-id]`, `absolute rounded-(--radius-card)`) gains `data-cue="drafting"` and two children:
+
+- **ring** — `pointer-events-none absolute -inset-[7px] rounded-[calc(var(--radius-card)+7px)]
+border-2 border-dotted border-(--el-status-in-progress)`, `aria-hidden`;
+- **chip** — on the TOP edge, `absolute -top-[18px] left-3`, `pen-line` (size-3,
+  `--el-status-in-progress`) + **Drafting**, `rounded-(--radius-badge)`,
+  `px-(--spacing-chip-x) py-(--spacing-chip-y)`, `border --el-status-in-progress`, fill `--el-card`,
+  `text-[11px]` semibold `--el-text-secondary`; `role="img"`, name _Being drafted now_,
+  `data-testid="canvas-cue-drafting"`.
+
+Because it never repaints the card it **composes with every Part VI op treatment** (the dashed accent
+`add`, the info-ring `modify`, the struck `remove`) and with **Part XXIII's deepen**, whose 2px outline
+at offset 2px sits inside the ring at 7px. Sheet 4 draws it on three adds, one modify and one remove
+at once.
+
+**It does NOT loop.** No pulse, no marching dots, no shimmer — a static mark, for four reasons:
+
+1. **Part XXIII §23.1's precedent** — the live marker is static because a moving thing in a reading
+   surface is an attention sink; a level authored in parallel would put SIX of them on screen at once.
+2. **A loop runs on the client's clock** and so asserts liveness the server has not reported. During a
+   dropped read (§25.10) or the minutes before a stall is declared, a pulsing cue would say "working"
+   when nothing is known.
+3. **The deepen is the motion.** The moment that matters — the item landing — already animates
+   (§23.4). A looping cue would compete with the one motion that carries news.
+4. **Reduced motion then needs no second design** (§25.8).
+
+**Untargeted author (_Drafting a new item_) draws NOTHING on the canvas.** An item not yet appended
+has no level and no cell: a placeholder would have to guess a level, would re-lay the level twice
+(once for the ghost, once for the real card) and would add a second arrival motion. It appears only in
+words; when it lands it ARRIVES by §23.3, and that arrival is its cue (sheet 4, right).
+
+**A cue draws only where its target is ON the viewed level and ON the plan.** A step whose target was
+withdrawn, or is not on the plan, draws nothing and is dropped from the words (sheet 9); a target on
+another level is the pill's (§25.7).
+
+## 25.7 The LAYING cue — three places (sheet 6), and off-level (sheet 7)
+
+A lay step names a PARENT (or none, for the top level):
+
+| where the parent is                    | mark                                                                                                                                                                                                                                                           |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1 · a card on the viewed level**     | the same ring, `data-cue="laying"`, chip on the **BOTTOM** edge (`-bottom-[18px]`) — `list-tree` + _Laying its children_, name _Its children are being laid now_, `data-testid="canvas-cue-laying"` — the bottom, because that is where its children will hang |
+| **2 · the level the reader is INSIDE** | a chip on the **current breadcrumb** (`data-testid="canvas-crumb-cue"`): `list-tree` + _Laying this level_                                                                                                                                                     |
+| **3 · none — the project's top level** | the same chip on the **root crumb**: _Laying the top level_, wherever the reader stands                                                                                                                                                                        |
+| any other level                        | the arrivals slot (below)                                                                                                                                                                                                                                      |
+
+**Off-level — Part XXIII §23.7's ONE slot, re-worded; AMENDS §23.7's copy, not its behaviour.** No
+second pill, no jump, the follow offer still wins the slot. The slot names in-flight steps on levels
+the reader is not viewing, in this order of precedence:
+
+| situation                                   | wording (key)                                                                              |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| arrivals only (shipped)                     | `{count} new in {identifier} · Go there` (`arrivedIn`)                                     |
+| author steps on ONE other level             | `{count} being drafted in {identifier} · Go there` (`draftingIn`)                          |
+| a lay step on another level                 | `Laying {identifier} · Go there` (`layingIn`)                                              |
+| arrivals AND author steps on the same level | `{arrived} new · {drafting} being drafted in {identifier} · Go there` (`newAndDraftingIn`) |
+| author steps on several other levels        | `{count} being drafted elsewhere · first in {identifier} · Go there` (`draftingAcross`)    |
+| reader outside the plan's scope             | the follow offer (shipped, MOTIR-6161) — wins                                              |
+
+When arrivals and steps are on DIFFERENT levels, arrivals win the slot (they are news; steps are
+state). **Go there** goes to the latest arrival's level, else the earliest in-flight step's level.
+
+## 25.8 The interaction spec — motion
+
+Same idiom as §23.4: CSS transitions in `app/globals.css`, gated behind
+`@media (prefers-reduced-motion: no-preference)`; static form is the default. Easings are §23.4's two
+constants, `--canvas-ease-enter` and `--canvas-ease-exit`.
+
+| #   | change                                         | before → during → after (sheet)                                                 | what moves · property                                             | duration token          | easing       | reduced-motion form                            |
+| --- | ---------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------- | ------------ | ---------------------------------------------- |
+| C1  | a cue ARRIVES (step starts)                    | no mark → ring + chip at ½ → settled (5 ④⑤, 8)                                  | ring + chip `opacity 0 → 1`; ring `transform: scale(1.03) → none` | `--transition-slow`     | enter        | drawn in one frame, no scale                   |
+| C2  | a cue LEAVES (step clears / ages out)          | settled → ½ → gone (5 ①②)                                                       | ring + chip `opacity 1 → 0`                                       | `--transition-duration` | exit         | removed in one frame                           |
+| C3  | the planner MOVES to the next item             | C2 on the old card, then C1 on the new one (5 ①–⑤)                              | as C2, then C1 — **the cue never travels** between cards          | as C2 / C1              | exit → enter | both in one frame                              |
+| C4  | a drafted item LANDS (its fields fill)         | cue → C2 → §23.4 DEEPEN (5 ③)                                                   | C2 first, then the shipped DEEPEN outline (held 600 ms, fade)     | C2, then §23.4          | exit, §23.4  | cue gone in one frame; §23.5's 1200 ms outline |
+| C5  | a lay result lands                             | laying cue → C2 → §23.3 staging (arrivals) → C1 on newly drafted children       | as named                                                          | as named                | as named     | one frame                                      |
+| C6  | a crumb chip arrives / leaves                  | as C1 / C2 (6 ②③)                                                               | chip `opacity`                                                    | as C1 / C2              | enter / exit | one frame                                      |
+| C7  | the line's text changes (words, counts, times) | swapped in place                                                                | **nothing animates**                                              | —                       | —            | same                                           |
+| C8  | stalled ↔ recovered                            | marker word + dot swap; cues C2 on stall, C1 on recovery (9)                    | the cues only; the marker is static (§23.1)                       | as C2 / C1              | exit / enter | one frame                                      |
+| C9  | the pill's wording changes                     | swapped in place                                                                | nothing                                                           | —                       | —            | same                                           |
+| C10 | hand-over (`planned` / `declined`)             | line, popover, pointer, cues gone in ONE frame; §23.13 for everything else (10) | nothing animates out — the plan is no longer being written        | —                       | —            | same                                           |
+
+- **Several cues in one read stagger 40 ms, capped at 160 ms**, §23.4's arrival stagger, and they
+  follow — never interleave with — that read's arrivals: exits (C2) → §23.4 exits / re-lays /
+  arrivals → deepens → C1.
+- **The cue is diffed by snapshot** like everything in §23.4: a (target, kind) pair that appears is
+  C1, one that disappears is C2. A step whose `startedAt` changes but whose target does not is not a
+  change.
+- **A dropped read plays nothing** (§25.10).
+- **Suggested class names** (the cue card settles them): `canvas-cue`, `canvas-cue--enter`,
+  `canvas-cue--exit`, beside `.canvas-node--*` in `globals.css`.
+
+**Reduced motion (sheet 8).** The cue is the SAME static marker with every fade removed. It is
+distinguishable from §23.5's reduced-motion deepen without colour: the cue is a **dotted** ring with a
+**labelled chip** that **stays for as long as the step**; the deepen is a **solid**
+`--el-accent-on-surface` outline, **no label**, held 1200 ms and gone.
+
+## 25.9 THE STALLED THRESHOLD — `PLAN_STALLED_AFTER_MS = 900_000` (15 min)
+
+**One constant**, exported by MOTIR-7825 beside the derivation, read by every surface and by the
+derivation's two uses of it:
+
+1. **the plan is `stalled`** when `serverNow − lastActivityAt > PLAN_STALLED_AFTER_MS` (equal is not
+   stalled; +1 ms is);
+2. **a single step is dropped as quiet** when `serverNow − step.startedAt > PLAN_STALLED_AFTER_MS` —
+   so the constant must ALSO exceed the longest normal single session.
+
+**The story assumed 10 minutes. Measured, 10 minutes is too tight; 15 minutes is the number.**
+
+**How it was measured (2026-10-08).** `Plan` / `PlanItem` carry no `updatedAt`, so the only gaps
+readable today are between consecutive **proposal appends** (`PlanItem.createdAt`) and from the last
+append to `plannedAt`. Read through the Motir MCP `get_plan` (item timestamps) and
+`GET /api/v1/plans/{id}` (`createdAt` / `plannedAt`) on the live tenant, over **every plan id named
+in the reachable record** — motir-meta's `audits/obsolescence/*.md` and motir-core's `docs/` —
+**16 plans**:
+
+| plan                        | author                                                                                                                           | proposals | created → planned (span)             | longest gap while `generating`                      |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------ | --------------------------------------------------- |
+| `cmu1iamkg009rhutxld323mnw` | MCP · Claude Code · `claude-opus-5[1m]`                                                                                          | 16        | 17:17:55 → 17:32:01 (846 s)          | **582 s** (17:21:14 → 17:30:56)                     |
+| `cmuiv4wdy002fhvoio4f2c2af` | MCP · Claude Code · `claude-opus-5-5`                                                                                            | 19        | 20:49:28 → 21:03:42 (855 s)          | **477 s** (then 107 s, 67 s)                        |
+| `cmtdl09xr003jhvphju1lwjoy` | not in the read                                                                                                                  | 3         | 23:27:22 → 23:31:23 (240 s)          | ≤ 240 s                                             |
+| `cmul8zc73…`                | obsolescence-audit plan                                                                                                          | small     | 92 s                                 | 51 s                                                |
+| ten more small plans        | `cmt9dk0bs`, `cmt9dlzvg`, `cmtfw5tjr`, `cmul91f0u`, `cmul97twq`, `cmul98jow`, `cmul99aj6`, `cmul9af5n`, `cmul9hbal`, `cmul9ipf2` | 1–6       | 28–88 s                              | < 88 s                                              |
+| `cmul9otyl…`                | obsolescence-audit plan                                                                                                          | small     | 6 s                                  | —                                                   |
+| `cmt0nxdb600qni3phtsm1jpdp` | —                                                                                                                                | —         | **declined, never planned — 36.7 h** | the ABANDONED case: this is what stalled must catch |
+
+(`cmul2odsj` was a 0-proposal dry run and is excluded; items appended to `cmu1iamkg` after it was
+`planned` — 17:54 — are review revisions, excluded.)
+
+**Result.** The longest normal quiet stretch observed is **582 s (9.7 min)** — inside a real
+two-level walk, while the planner authored a level's children before appending them. A 10-minute
+threshold leaves **3 % headroom** over that and would flash _Stalled_ on a healthy plan; the next plan
+a little larger crosses it. **15 minutes is ≈ 1.55× the longest observed gap**, still catches the
+abandoned plan within a quarter-hour, and also bounds the per-step quiet drop (2) for one long session.
+
+**What the measurement could NOT see, so nobody reads it as more than it is:**
+
+- the gaps are **upper bounds**: deepens and edits write no row with a timestamp today, so a planner
+  that was writing (but not appending) inside a gap is invisible to this method;
+- **no hosted Motir AI plan id** was reachable, and no `plan.py` run ledger with per-session durations;
+  the two real walks are both MCP / Claude Code, and the small plans' author fields are not in the v1 read;
+- `plan.py` sessions have no subprocess timeout, so nothing bounds a single session from above.
+
+**So the constant is a measured starting point, not a law.** Once MOTIR-7822 stamps
+`lastActivityAt` and step `startedAt`, the same query over real signals (longest
+`lastActivityAt` gap per plan that reached `planned`, both planners) re-checks it; change the ONE
+constant, never a surface.
+
+## 25.10 The dropped read — AMENDS nothing in §23.10
+
+Three failed polls → _Reconnecting — showing the last update_, exactly as shipped. Added: **the last
+snapshot holds** — step words, counts, cues all stay as they were, nothing animates out (a failed read
+is not news about the planner). Elapsed and last activity keep ticking from the snapshot's stored
+times (they are facts about that snapshot), but **stalled is never computed client-side**: only a read
+can declare it. The Reconnecting word wins over every other marker word. The compact form shows the
+warning dot and the snapshot.
+
+## 25.11 Stalled, and recovered
+
+Stalled is the derivation's verdict (§25.9). On the canvas every step has aged out by then, so every
+cue has left by C2 — **a stalled plan never shows anything as being drafted**. The marker reads
+_Stalled_ with the `--el-warning` dot; the line shows counts, elapsed, _no activity for {duration}_;
+the popover adds _Nothing has been written or reported for {duration}. The plan may have stopped._
+**Recovery** is the next read that sees a later `lastActivityAt`: the marker returns to _Being
+written_ and any new step's cue arrives by C1 (sheet 9). There is no resume or cancel control here
+(story scope).
+
+## 25.12 The hand-over — adds to §23.13
+
+When the plan leaves `generating` (`planned`, `declined`, failed), in the **same frame** the shipped
+marker leaves: the progress line, its popover (closed if open), the pointer, every cue and every crumb
+chip leave too, with no exit motion (C10). Everything else is §23.13 / §23.12. A plan that leaves
+`generating` leaves Workbench › Planning on the tab's next read (the tab item's).
+
+## 25.13 Copy — `messages/en.json` AND `messages/zh.json`
+
+The reader-facing noun is _item_ / 工作项, never _card_ (the catalogue guard).
+
+| key                                          | en                                                                                  | zh                                                                  |
+| -------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `planReview.liveStarting`                    | Starting…                                                                           | 正在启动…                                                           |
+| `planReview.liveStalled`                     | Stalled                                                                             | 已停滞                                                              |
+| `planReview.progress.settling`               | Settling the conversation                                                           | 正在梳理对话                                                        |
+| `planReview.progress.layingChildrenOf`       | Laying: {title}                                                                     | 正在铺设：{title}                                                   |
+| `planReview.progress.layingTopLevel`         | Laying the project's top level                                                      | 正在铺设项目的顶层                                                  |
+| `planReview.progress.authoring`              | Authoring: {title}                                                                  | 正在编写：{title}                                                   |
+| `planReview.progress.draftingNew`            | Drafting a new item                                                                 | 正在起草一个新工作项                                                |
+| `planReview.progress.moreSteps`              | +{count} more                                                                       | 另有 {count} 项                                                     |
+| `planReview.progress.authored`               | {authored} of {proposed} authored                                                   | 已编写 {authored}/{proposed} 项                                     |
+| `planReview.progress.elapsedUnderMinute`     | <1 min                                                                              | 不到 1 分钟                                                         |
+| `planReview.progress.elapsedMinutes`         | {minutes} min                                                                       | {minutes} 分钟                                                      |
+| `planReview.progress.elapsedHours`           | {hours} h {minutes} min                                                             | {hours} 小时 {minutes} 分钟                                         |
+| `planReview.progress.lastActivityJustNow`    | last activity just now                                                              | 刚刚有活动                                                          |
+| `planReview.progress.lastActivitySeconds`    | last activity {seconds} s ago                                                       | 最近活动 {seconds} 秒前                                             |
+| `planReview.progress.lastActivityAgo`        | last activity {duration} ago                                                        | 最近活动 {duration}前                                               |
+| `planReview.progress.stalledFor`             | no activity for {duration}                                                          | 已 {duration} 无活动                                                |
+| `planReview.progress.detailsAria`            | Plan progress details                                                               | 计划进度详情                                                        |
+| `planReview.progress.detailsNow`             | Working on now                                                                      | 当前进行中                                                          |
+| `planReview.progress.detailsNoSteps`         | No step reported — the planner may not report its steps.                            | 未报告步骤 — 该规划器可能不报告其步骤。                             |
+| `planReview.progress.detailsStarted`         | Started {time} · running {duration}                                                 | 开始于 {time} · 已运行 {duration}                                   |
+| `planReview.progress.detailsLastActivity`    | Last activity {time}                                                                | 最近活动于 {time}                                                   |
+| `planReview.progress.detailsStalled`         | Nothing has been written or reported for {duration}. The plan may have stopped.     | 已 {duration} 没有写入或报告。计划可能已停止。                      |
+| `planReview.progress.pointer`                | Follow from Workbench                                                               | 在工作台跟进                                                        |
+| `planReview.progress.pointerSentence`        | You can leave — this plan keeps being written. Follow it from Workbench › Planning. | 你可以离开 — 此计划会继续编写。可在“工作台 › 规划”中跟进。          |
+| `planReview.cue.drafting`                    | Drafting                                                                            | 起草中                                                              |
+| `planReview.cue.draftingName`                | Being drafted now                                                                   | 正在起草                                                            |
+| `planReview.cue.laying`                      | Laying its children                                                                 | 正在铺设子项                                                        |
+| `planReview.cue.layingName`                  | Its children are being laid now                                                     | 正在铺设其子项                                                      |
+| `planReview.cue.layingHere`                  | Laying this level                                                                   | 正在铺设此层级                                                      |
+| `planReview.cue.layingTop`                   | Laying the top level                                                                | 正在铺设顶层                                                        |
+| `planningWorkspace.arrival.draftingIn`       | {count} being drafted in {identifier} · Go there                                    | {identifier} 中有 {count} 项正在起草 · 前往                         |
+| `planningWorkspace.arrival.layingIn`         | Laying {identifier} · Go there                                                      | 正在铺设 {identifier} · 前往                                        |
+| `planningWorkspace.arrival.newAndDraftingIn` | {arrived} new · {drafting} being drafted in {identifier} · Go there                 | {identifier} 中有 {arrived} 项新内容 · {drafting} 项正在起草 · 前往 |
+| `planningWorkspace.arrival.draftingAcross`   | {count} being drafted elsewhere · first in {identifier} · Go there                  | 其他层级有 {count} 项正在起草 · 首个在 {identifier} · 前往          |
+
+**Reused verbatim:** `planReview.liveWriting`, `planReview.liveReconnecting`,
+`planReview.liveAnnounce`, `planningWorkspace.arrival.arrivedIn` / `arrivedAcross` / `goToTarget`.
+`{title}` is the target's title (a proposal's or a committed work item's); `{duration}` is formatted
+by the elapsed keys; `{time}` by the reader's locale. `Workbench` / `Planning` follow the shipped
+catalogue's 工作台 / 规划. The `{count}` keys take no plural form in either language, for §23.14's
+reason.
+
+## 25.14 a11y — what is live, and what is not
+
+| element                     | role / live                                                         | what it announces                                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| live marker (shipped)       | `role="status"`, `aria-live="polite"`                               | **only the state word's changes**: Starting… → Being written → Stalled → Being written; Reconnecting                                                      |
+| arrivals announce (shipped) | sr-only `role="status"`                                             | §23.15 unchanged: `liveAnnounce`, once per batch                                                                                                          |
+| progress button             | `<button aria-expanded aria-controls>` — **NOT live**               | nothing; read on focus (its text is its name). Step changes, counts and ticking times are never announced — six sessions would announce every few seconds |
+| details popover             | `role="dialog"`, `aria-label` = `detailsAria`                       | nothing; focus moves in on open and back to the button on close (the shipped `Popover`)                                                                   |
+| pointer                     | `<a>`, `aria-label` = `pointerSentence`                             | nothing                                                                                                                                                   |
+| drafting / laying chip      | `role="img"` with `draftingName` / `layingName`; ring `aria-hidden` | nothing; read with the node when the canvas walks focus to it                                                                                             |
+| crumb chip                  | text inside the crumb's `<li>`                                      | nothing; read with the breadcrumb                                                                                                                         |
+| arrivals pill (re-worded)   | `<button>` (shipped)                                                | nothing; its text is its name                                                                                                                             |
+| compact line                | plain text inside the row — **NOT live**                            | the Workbench tab's own count is the tab's concern                                                                                                        |
+
+**Not colour alone:** the cue is a dotted ring + a labelled chip; stalled is a word, not just the
+warning dot.
+
+## 25.15 Token and shape roles
+
+| element          | colour (`--el-*`)                                                                                   | shape                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| marker dot       | `--el-status-in-progress` (starting, writing) · `--el-warning` (stalled, reconnecting)              | `size-1.5`, `--radius-badge` (shipped)                                            |
+| progress button  | `--el-text-secondary`; step words `--el-text`; hover / open `--el-surface-soft`                     | `--height-control`, `--spacing-control-x`, `--radius-control`                     |
+| popover          | `--el-page-bg`, `--el-border`, `--el-border-soft` divider; text `--el-text` / `--el-text-secondary` | shipped `Popover`: `--radius-card`, `--shadow-elevated`, `--spacing-card-padding` |
+| pointer          | `--el-link`                                                                                         | `--radius-control` focus box                                                      |
+| cue ring         | `--el-status-in-progress`, dotted 2px                                                               | `calc(var(--radius-card) + 7px)`                                                  |
+| cue / crumb chip | border + glyph `--el-status-in-progress`, fill `--el-card`, text `--el-text-secondary`              | `--radius-badge`, `--spacing-chip-x/y`                                            |
+
+`--el-text-muted` and `--el-text-faint` carry nothing new. **For the cue item to measure:** the ring is
+a non-text mark on `--el-canvas` and owes 3:1 in every palette × theme; the chip's text carries the
+meaning, so a palette where the ring misses 3:1 degrades to a still-labelled chip, but the cue item
+measures it before shipping and, if it fails, adds an `--el-cue` token rather than inventing a hue.
+
+## 25.16 How the asset was produced
+
+- Every pane, header, card, edge, breadcrumb and pill is the real components' DOM, rendered through
+  `tests/helpers/renderWithIntl.tsx` in happy-dom on `origin/main` @ `066fb94`, with the roadmap
+  read stubbed as the plan-review-canvas suites stub it: an epic MOTIR-6010 → stories MOTIR-7782
+  (done) and MOTIR-7820 → committed MOTIR-7821 / -7822 / -7819, and the proposals A–E + a modify of
+  MOTIR-7822 + a remove of MOTIR-7819 arriving around them. Thirteen renders (starting, full, early
+  ×2, withdrawn, epic level, failing, planned, discarded, two pill states, follow offer, reduced
+  motion). The harness was temporary and is not committed.
+- The NEW layers (§25.0) are spliced into those renders; a "during" frame is the real render with the
+  cue's inline `opacity` / `transform` at the transition's midpoint. The world transform is set per
+  frame to frame the cards; the dependency legend is drawn COLLAPSED (a real state), as in §23.17.
+- The first stylesheet is Tailwind v4.3.0's output compiled over this document's class attributes with
+  `@motir/design-system/theme.css`; the second is the board chrome (`--el-*` only), with `.seg-ic`
+  declared presentation-free for Part XXI 21.9's reason.
+- Every lucide glyph is a `<symbol>` in one sprite with its provenance comment;
+  `node scripts/audit-mock-sprites.mjs … --strict`: **25 symbols, 0 undeclared, 0 drifted** against
+  `lucide-react@1.16.0`. New glyphs: `pen-line`, `list-tree`, `arrow-up-right`, `chevron-down`.
+- It was rendered and looked at in headless Chromium, sheet by sheet.
+
+## 25.17 GIVES / TAKES
+
+- **MOTIR-7820** (the story) — neither; the container.
+- **MOTIR-7822** (steps + `lastActivityAt`) — **TAKES** nothing from here but the step kinds' names it
+  already has; **GIVES** this Part its inputs.
+- **MOTIR-7825** (the ONE derivation) — **GIVES** the states, the order, the drop rules and
+  `serverNow`; **TAKES** from here **`PLAN_STALLED_AFTER_MS = 900_000`** (§25.9), the "earliest step in
+  words" order (§25.3) and the formats (§25.4) if it owns the formatter.
+- **The progress-line item** — **TAKES** §25.1–25.5, 25.10–25.14.
+- **The cues item** — **TAKES** §25.6–25.8, 25.15's measurement note.
+- **The Workbench Planning tab item** — **TAKES** §25.5's compact line, composed into its row.
+- **The emitter items (motir-ai walk, `plan.py`)** — neither; they write steps, they draw nothing.
+- **The E2E / acceptance item** — **TAKES** the `data-testid`s: `plan-progress`,
+  `plan-progress-steps`, `plan-progress-pointer`, `plan-progress-compact`, `canvas-cue-drafting`,
+  `canvas-cue-laying`, `canvas-crumb-cue`, and `data-cue` on the node box.
+
+## 25.18 What Part XXV does NOT draw or decide
+
+- The Workbench tab, its count, its rows' title / target / planner, its empty state, its place in the
+  strip — the tab item's (the story fixes the place: right after the first tab, never a landing rung).
+- A cue in the **List** view. The list's rows already change in place as items land (§23.9); the
+  steps are in the header line above it. If a list cue is wanted, it is a new delta.
+- Any pause, cancel, ETA or percentage (story scope).
+- A notification when a plan is proposed.
