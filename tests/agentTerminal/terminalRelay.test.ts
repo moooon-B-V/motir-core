@@ -132,6 +132,8 @@ const reported: Error[] = [];
 const touches: string[] = [];
 const heartbeats: { id: string; workspaceId: string }[][] = [];
 let failTouch = false;
+/** While set, every touch waits on it — a touch still writing when the relay closes. */
+let holdTouch: Promise<void> | null = null;
 
 async function startRelay(
   overrides: { pingIntervalMs?: number; heartbeatIntervalMs?: number } = {},
@@ -143,6 +145,7 @@ async function startRelay(
     closeConnection: (input) => relayService.closeConnection(input),
     touchActivity: async (instanceId) => {
       touches.push(instanceId);
+      if (holdTouch) await holdTouch;
       if (failTouch) throw new Error(`touch failed while carrying ${MARKER}`);
     },
     heartbeat: async (held) => {
@@ -170,6 +173,7 @@ beforeEach(async () => {
   touches.length = 0;
   heartbeats.length = 0;
   failTouch = false;
+  holdTouch = null;
   nowMs = 1_000_000;
   fake = await startFakeTerminal();
   fleet.setTerminalAddress(fake.url);
@@ -574,6 +578,30 @@ describe('activity (Q6) — throttled, and silent after close', () => {
     await new Promise((r) => setTimeout(r, 100));
     expect(touches).toHaveLength(5);
     expect(new Set(touches)).toEqual(new Set([id]));
+  });
+
+  it('a shutdown waits for a touch still writing, so none outlives the relay (MOTIR-7815)', async () => {
+    let release!: () => void;
+    holdTouch = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const id = await runningAgent();
+    const b = await openTerminal(id);
+    await until(() => touches.length === 1); // the open's touch, now held mid-write
+
+    let shutDown = false;
+    const closing = relay.close().then(() => {
+      shutDown = true;
+    });
+    expect(await b.closed).toBe(1012);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(shutDown).toBe(false);
+
+    release();
+    await closing;
+    expect(shutDown).toBe(true);
+    holdTouch = null;
+    await startRelay(); // for afterEach
   });
 });
 
