@@ -250,4 +250,26 @@ describe('the detail', () => {
     await expect(list()).rejects.toBeInstanceOf(NotFoundSentinel);
     await expect(detail(row.id)).rejects.toBeInstanceOf(NotFoundSentinel);
   });
+
+  // MOTIR-7610 (the story's integration gate): the detail's other two outcomes
+  // of a read that did not succeed. A store fault is the error card, never a
+  // thrown digest; a principal the service refuses after the page gate let the
+  // session through is the same 404 as a non-staff viewer.
+  it('a read that fails is the error card; one the service refuses is the 404', async () => {
+    const row = await seedRequest('Acme');
+    await signInAs('operator');
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const get = vi.spyOn(platformEnterpriseRequestService, 'get');
+    get.mockRejectedValueOnce(new Error('db down'));
+    const html = await detail(row.id);
+    expect(html).toContain('Couldn’t load the requests');
+    expect(html).not.toContain('Acme would like a call.');
+
+    const { NotPlatformStaffError } = await import('@/lib/platform/errors');
+    get.mockRejectedValueOnce(new NotPlatformStaffError());
+    await expect(detail(row.id)).rejects.toBeInstanceOf(NotFoundSentinel);
+    get.mockRestore();
+    quiet.mockRestore();
+  });
 });
