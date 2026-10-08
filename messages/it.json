@@ -4875,11 +4875,11 @@
       "subtitle": "Analisi integrate degli elementi di lavoro, degli sprint e del throughput di questo progetto.",
       "agileGroup": "Agile",
       "analysisGroup": "Analisi degli elementi di lavoro",
-      "burndownTitle": "Grafico dello sprint",
+      "burndownTitle": "Grafico dello Sprint",
       "burndownBody": "Ambito e lavoro completato nel corso di uno sprint, con un selettore di sprint.",
       "velocityTitle": "Grafico della velocità",
       "velocityBody": "Punti impegnati e completati negli sprint recenti.",
-      "sprintReportTitle": "Report dello sprint",
+      "sprintReportTitle": "Report dello Sprint",
       "sprintReportBody": "Ambito, lavoro completato e lavoro riportato per uno sprint.",
       "createdVsResolvedTitle": "Creati e risolti",
       "createdVsResolvedBody": "Quanto velocemente gli elementi di lavoro vengono aperti rispetto a quelli chiusi in un intervallo di tempo.",
@@ -4958,7 +4958,7 @@
       "unknownStatistic": "Sconosciuto"
     },
     "burndown": {
-      "title": "Grafico dello sprint",
+      "title": "Grafico dello Sprint",
       "sprintLabel": "Sprint",
       "sprintSearch": "Cerca sprint…",
       "activeGroup": "Attivi",

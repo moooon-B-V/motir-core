@@ -5316,7 +5316,7 @@
       "billingSub": "Plan, kredyty i użycie są sumowane na poziomie organizacji.",
       "billingNote": "Rozliczenia, kredyty i użycie tej organizacji znajdą się tutaj — zostaną dodane w późniejszym wydaniu. Żadne ustawienia rozliczeń nie są jeszcze aktywne; ten placeholder oznacza miejsce, w którym się pojawią, aby układ pozostał stabilny.",
       "workspaceConfig": "Konfiguracja obszaru roboczego",
-      "workspaceConfigSub": "{count, plural, one {Zarządzana tutaj, dopóki masz jeden obszar roboczy — po dodaniu drugiego zostanie wydzielona do osobnej sekcji.} other {Zarządzana tutaj — po dodaniu kolejnego obszaru roboczego zostanie wydzielona do osobnej sekcji.}}",
+      "workspaceConfigSub": "{count, plural, one {Zarządzana tutaj, dopóki masz jeden obszar roboczy — po dodaniu drugiego zostanie wydzielona do osobnej sekcji.} few {Zarządzana tutaj — po dodaniu kolejnego obszaru roboczego zostanie wydzielona do osobnej sekcji.} many {Zarządzana tutaj — po dodaniu kolejnego obszaru roboczego zostanie wydzielona do osobnej sekcji.} other {Zarządzana tutaj — po dodaniu kolejnego obszaru roboczego zostanie wydzielona do osobnej sekcji.}}",
       "workspaceConfigBadge": "{count, plural, one {# obszar roboczy} few {# obszary robocze} many {# obszarów roboczych} other {# obszaru roboczego}}",
       "dangerZone": "Strefa zagrożenia",
       "transferTitle": "Przekaż własność",
