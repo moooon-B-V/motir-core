@@ -280,7 +280,7 @@ export function WorkbenchResumeLine({
   const when = (iso: string) =>
     function ResumeWhen() {
       return (
-        <time className="whitespace-nowrap" dateTime={iso} title={formatRunInstant(iso)}>
+        <time className="whitespace-nowrap" dateTime={iso} title={formatRunInstant(iso, locale)}>
           {relativeLabel(iso, locale, clock)}
         </time>
       );

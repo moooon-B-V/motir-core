@@ -281,24 +281,24 @@ describe('the pair on the page — each card reads the other’s CURRENT value',
 
   it('renders in zh with every string from the catalog', () => {
     renderPair('manual', true, 'zh');
-    expect(screen.getByRole('heading', { name: '审查代理' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '审查智能体' })).toBeTruthy();
     expect(screen.getByText('已开启')).toBeTruthy();
     expect(screen.getByText('每个工作项都会先经过审查，然后才会请你批准。')).toBeTruthy();
     expect(
-      screen.getByText('每次审查都是一次托管代理运行，费用从你组织的 AI 额度中扣除。'),
+      screen.getByText('每次审查都是一次托管智能体运行，费用从你组织的 AI 额度中扣除。'),
     ).toBeTruthy();
     expect(
       screen.getByText('关闭后，进行中的审查会被取消——这些工作项将直接进入常规流程。'),
     ).toBeTruthy();
-    expect(screen.getByText('关闭审查代理后才能自动合并。')).toBeTruthy();
-    expect(reviewSwitch('审查代理').getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText('关闭审查智能体后才能自动合并。')).toBeTruthy();
+    expect(reviewSwitch('审查智能体').getAttribute('aria-checked')).toBe('true');
   });
 
   it('renders the Unavailable state in zh', () => {
     renderPair('auto', false, 'zh');
     expect(screen.getByText('不可用')).toBeTruthy();
     expect(textOf(screen.getByText(/该项目会自动合并/))).toBe(
-      '该项目会自动合并，因此没有需要等待审查的内容。请选择合并前询问以开启审查代理。',
+      '该项目会自动合并，因此没有需要等待审查的内容。请选择合并前询问以开启审查智能体。',
     );
   });
 });

@@ -410,3 +410,45 @@ test('the confirm screen reports that it is checking, while the code is being re
 
   await terminal.dispose();
 });
+
+/**
+ * MOTIR-7818 — the confirm screen's FOLD BUDGET, measured rather than recorded.
+ *
+ * `app/(auth)/layout.tsx` and the confirm screen's own comments rest on one claim:
+ * at 1366×648, a laptop-height window, Approve and Deny end above the fold, so the
+ * person sees both buttons beside the facts they are deciding on. That claim was
+ * true at three scope rows and quietly false at ten, because the scope list is
+ * DERIVED from `CLI_TOKEN_GRANT` and nothing re-measured it when the grant grew.
+ * This test is the re-measurement, so the next permission added to the grant is
+ * told here rather than by a person scrolling for the buttons.
+ */
+test('the confirm screen fits a 1366×648 laptop — Approve and Deny end above the fold', async ({
+  page,
+}) => {
+  const seed = await seedCliConnect(`cli-connect-fold-${Date.now()}@example.com`);
+  const terminal = await terminalContext();
+  const grant = await startGrant(terminal, TERMINAL_HOSTNAME);
+
+  await page.setViewportSize({ width: 1366, height: 648 });
+  await signIn(page, seed.email, seed.password);
+  await page.goto(grant.verificationUriComplete);
+  await advanceToConfirm(page, grant);
+  // The fit must be measured with the real fonts in, or a fallback face's
+  // metrics decide it.
+  await page.evaluate(() => document.fonts.ready);
+
+  // Measured on the PAGE, not the viewport: `scrollY` is added so a screen that
+  // happened to scroll a focused control into view cannot pass by having moved.
+  const bottomOf = (name: string) =>
+    page
+      .getByRole('button', { name, exact: true })
+      .evaluate((el) => el.getBoundingClientRect().bottom + window.scrollY);
+  const [denyBottom, approveBottom] = [
+    await bottomOf('Deny'),
+    await bottomOf('Approve and connect'),
+  ];
+  expect(denyBottom).toBeLessThanOrEqual(648);
+  expect(approveBottom).toBeLessThanOrEqual(648);
+
+  await terminal.dispose();
+});

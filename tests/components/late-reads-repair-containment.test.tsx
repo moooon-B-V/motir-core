@@ -31,6 +31,7 @@ vi.mock('next/navigation', async (importOriginal) => ({
   }),
 }));
 vi.mock('next-intl/server', () => ({
+  getLocale: async () => 'en',
   getTranslations: async (namespace: string) =>
     createTranslator({ locale: 'en', messages, namespace: namespace as never }),
 }));

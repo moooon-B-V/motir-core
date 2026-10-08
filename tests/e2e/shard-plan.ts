@@ -660,6 +660,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // three steps, ~3 s for the last three. Re-measure from the first green
   // `playwright-report-bulk-*` artifact that includes it.
   'how-to-test.spec.ts': 9.2,
+  // MOTIR-7761 — nine languages × seven surfaces, ESTIMATED from a local
+  // production-build run (2026-10-08: 8.6–14.5 s per language, ~90 s summed,
+  // seed included) and rounded UP to 120.0 because under-estimating unbalances
+  // the bin-packer. Re-measure from the first green CI run that includes it.
+  'i18n-locale-walk.spec.ts': 120.0,
   'workbench.spec.ts': 10.9,
   'import.spec.ts': 9.1,
   'implemented-lifecycle.spec.ts': 16.0,
@@ -680,6 +685,14 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'jobs-flow.spec.ts': 25.7,
   'jobs-postgres-engine.spec.ts': 24.8,
   'jobs-scheduled-engine.spec.ts': 14.6,
+  // MOTIR-7759 / MOTIR-7761 — ten tests (eight locales at 1280×800, two at
+  // 768×1024), each a sign-in and a walk of eleven surfaces with their menus.
+  // Measured LOCALLY against a production build on 2026-10-08, JSON reporter,
+  // per-test `durationMs` summed (seed included): 118.4 s alone and 113.8 s
+  // beside `i18n-locale-walk.spec.ts`. The higher reading, rounded UP to 120.0,
+  // because under-estimating unbalances the bin-packer. Re-measure from the
+  // first green CI run that includes it.
+  'label-fit-long-locales.spec.ts': 120.0,
   'labels-components-watch.spec.ts': 28.5,
   // MOTIR-6564 — ESTIMATED, not measured: seven serial cases, ten sign-ins and a
   // workspace created through the UI; priced from `workspace-flows.spec.ts`'s

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   DifferenceAreaChart,
   type DiffSeriesPoint,
@@ -32,13 +32,13 @@ const UNIT_KEY: Record<ReportPeriodDto, string> = {
   month: 'unitMonth',
 };
 
-function bucketLabel(dateIso: string, period: ReportPeriodDto): string {
+export function bucketLabel(dateIso: string, period: ReportPeriodDto, locale: string): string {
   const d = new Date(`${dateIso}T00:00:00Z`);
   const opts: Intl.DateTimeFormatOptions =
     period === 'month'
       ? { month: 'short', year: '2-digit', timeZone: 'UTC' }
       : { month: 'short', day: 'numeric', timeZone: 'UTC' };
-  return new Intl.DateTimeFormat('en-US', opts).format(d);
+  return new Intl.DateTimeFormat(locale, opts).format(d);
 }
 
 /** Pick ≤ `max` evenly-spread tick indices across `n` buckets (always the
@@ -65,6 +65,7 @@ export function CreatedVsResolvedBody({
   onReconfigure?: () => void;
 }) {
   const t = useTranslations('dashboards');
+  const locale = useLocale();
 
   const search = useMemo(() => {
     const params = sourceParams(source);
@@ -99,7 +100,7 @@ export function CreatedVsResolvedBody({
   const yTop = yTickValues[yTickValues.length - 1] ?? maxY;
   const xTicks: AxisTick[] = spreadTicks(n).map((i) => ({
     value: i,
-    label: bucketLabel(data.buckets[i]!.date, config.period),
+    label: bucketLabel(data.buckets[i]!.date, config.period, locale),
   }));
 
   const x: ChartAxis = {

@@ -177,7 +177,12 @@ export default async function BoardView({
                   {t('subtitle', { project: ctx.project.name })}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              {/* `flex-wrap`: the toolbar is wider than the header in a long or CJK
+                  language (fr "Changer de Tableau", ja デフォルト / グループ化),
+                  and a squeezed control clipped its label or broke it across
+                  lines. The cluster wraps onto a second row instead, so every
+                  control keeps its own width (MOTIR-7761's walk; remedy 2). */}
+              <div className="flex flex-wrap items-center gap-2">
                 {/* The board switcher (Subtask 3.7.4) — left of the filter
                     affordances + [+ New issue]. Owns its own board-list fetch +
                     the `?board=` selection, so it stays present across the

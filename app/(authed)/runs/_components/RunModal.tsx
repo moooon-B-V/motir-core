@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { Cloud, CloudOff, TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -325,6 +325,7 @@ function RunHeader({
 }) {
   const routes = useReaderRoutes();
   const t = useTranslations('runs');
+  const locale = useLocale();
   const tHosted = useTranslations('runs.hosted');
   const tAgent = useTranslations('runs.agent');
   const commandKey =
@@ -402,7 +403,7 @@ function RunHeader({
           hydration mismatch `runClock.ts` exists to avoid, and the status pill
           beside it already says the run is going. */}
       <span className="text-xs text-(--el-text-secondary)">
-        {formatRunInstant(run.startedAt)}
+        {formatRunInstant(run.startedAt, locale)}
         {run.endedAt !== null ? ` · ${formatRunDuration(run.startedAt, run.endedAt)}` : ''}
       </span>
       <span className="ml-auto flex items-center gap-2">

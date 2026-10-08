@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { AlertTriangle, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { StaffSessionDTO } from '@/lib/dto/platformImpersonation';
@@ -43,10 +43,11 @@ const noSubscription = () => () => {};
  * server snapshot, so hydration never mismatches).
  */
 function useEndsAt(expiresAt: string): string {
+  const locale = useLocale();
   return useSyncExternalStore(
     noSubscription,
     () =>
-      new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(
+      new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(
         new Date(expiresAt),
       ),
     () => `${new Date(expiresAt).toISOString().slice(11, 16)} UTC`,

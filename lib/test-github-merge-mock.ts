@@ -18,7 +18,9 @@
 //   - POST /graphql (`enqueuePullRequest`)              → the queue entry
 //   - GET  /repos/{owner}/{name}/pulls/{number}/files   → the pull request's paths (empty, or
 //                                                         the head's files the control names)
-//   - GET  /repos/{owner}/{name}/contents/{path}?ref=   → a file's raw text (MOTIR-5681)
+//   - GET  /repos/{owner}/{name}/contents/{path}?ref=   → a file's raw text (MOTIR-5681),
+//                                                         at that ref when the control
+//                                                         keys it by ref (MOTIR-7866)
 //   - GET  /repos/{owner}/{name}/commits/{sha}/check-runs
 //                                                       → a commit's check runs, ONLY for a
 //                                                         commit the control names (MOTIR-6851)
@@ -108,7 +110,11 @@ export interface GithubMergeControl {
    *  Omitted, the list is empty — the merge webhook's paths capture, as before. */
   pullRequestFiles?: Record<string, { path: string; sha: string; status?: string }[]>;
   /** `owner/name:path` → the file's text, served RAW at any ref (MOTIR-5681) — what the
-   *  decision port reads through the resolver. A path with no entry is GitHub's 404. */
+   *  decision port reads through the resolver. A path with no entry is GitHub's 404.
+   *
+   *  `owner/name@ref:path` → the text AT THAT REF ONLY (MOTIR-7866), tried first — the
+   *  request's `ref` query parameter, decoded — so a spec can prove a read reached the
+   *  host at the ref it asked for. A ref-blind key still answers every ref. */
   fileContents?: Record<string, string>;
   /** `owner/name@sha` → the check runs GitHub reports for that commit (Story MOTIR-6843 ·
    *  MOTIR-6851) — what the reconcile tick reads for a merge group whose `check_run`
@@ -310,6 +316,12 @@ function parseBody(raw: unknown): Record<string, unknown> | null {
   }
 }
 
+/** One query parameter of a request path, decoded; `null` when absent. */
+function queryParam(path: string, name: string): string | null {
+  const q = path.includes('?') ? path.slice(path.indexOf('?') + 1) : '';
+  return new URLSearchParams(q).get(name);
+}
+
 export function installGithubMergeMock(agent: MockAgent): void {
   const pool = agent.get(GITHUB_ORIGIN);
 
@@ -434,11 +446,18 @@ export function installGithubMergeMock(agent: MockAgent): void {
     .reply((req: MockRequest): MockReply => {
       const path = String(req.path);
       const m = CONTENTS_PATH.exec(path)!;
-      const file = `${m[1]}/${m[2]}:${decodeURIComponent(m[3]!)}`;
+      const repository = `${m[1]}/${m[2]}`;
+      const filePath = decodeURIComponent(m[3]!);
+      const ref = queryParam(path, 'ref');
       journal({ method: 'GET', path, body: null, pullRequest: null });
-      const text = Object.entries(readControl().fileContents ?? {}).find(([k]) =>
-        same(k, file),
-      )?.[1];
+      // The REF-qualified key first (`owner/name@ref:path`, MOTIR-7866), so one path can
+      // read differently at two refs; then the ref-blind `owner/name:path` key every
+      // earlier spec writes, which still answers at any ref.
+      const contents = Object.entries(readControl().fileContents ?? {});
+      const lookup = (key: string) => contents.find(([k]) => same(k, key))?.[1];
+      const text =
+        (ref !== null ? lookup(`${repository}@${ref}:${filePath}`) : undefined) ??
+        lookup(`${repository}:${filePath}`);
       return text === undefined
         ? reply(404, { message: 'Not Found' })
         : reply(200, text, { 'content-type': 'text/plain; charset=utf-8' });

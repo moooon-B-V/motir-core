@@ -13,7 +13,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
@@ -41,10 +41,11 @@ const STATUS_TINT: Record<PlanStatusDto, string> = {
   declined: 'bg-(--el-muted) text-(--el-text-secondary)',
 };
 
-function formatAt(iso: string | null): string {
+export function formatAt(iso: string | null, locale: string): string {
   if (!iso) return '—';
-  // Fixed UTC formatting so the server + client renders match (finding #89).
-  return new Intl.DateTimeFormat('en', {
+  // Fixed UTC formatting so the server + client renders match (finding #89), in
+  // the reader's language (MOTIR-7771).
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'UTC',
@@ -480,6 +481,17 @@ export function PlanReviewRail({
                 disabled={!planned || busy || held || folderMissingCount > 0}
                 loading={busy}
                 leftIcon={<Check className="size-4" aria-hidden="true" />}
+                // The rail is a fixed 352px, so this full-width button cannot
+                // widen: its sentence-long label ("Genehmigen – 1 Element zum
+                // Backlog hinzufügen") wraps at a word onto a second line and the
+                // button grows from its token MINIMUM height (MOTIR-7759).
+                // `break-keep` (word-break: keep-all) makes that wrap land at a
+                // SPACE in Chinese, Japanese and Korean too: by default a CJK
+                // line may break between any two characters, which split ja 追加
+                // across the lines. Every CJK value of this label carries spaces
+                // around its count, and keep-all changes nothing for Latin text
+                // (MOTIR-7761).
+                className="h-auto min-h-(--height-btn-md) py-(--spacing-btn-y) text-center leading-snug break-keep whitespace-normal"
               >
                 {t('approveCta', { n: review.itemCount })}
               </Button>
@@ -731,6 +743,7 @@ function actorLabel(ev: PlanHistoryEventDto, t: ReturnType<typeof useTranslation
 }
 
 function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof useTranslations> }) {
+  const locale = useLocale();
   // A CONTENT event carries a count; a lifecycle event does not. The label is
   // the only thing that tells the two apart, and that is the decision — Part X
   // §2: one sequence, one grammar, and the wording is the discriminator.
@@ -754,8 +767,8 @@ function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof u
             timestamp uses — no badge, no chip, no second line (Part X §5). */}
         <span className="text-xs text-(--el-text-secondary)">
           {ev.until
-            ? t('eventSpan', { from: formatAt(ev.at), to: formatAt(ev.until) })
-            : formatAt(ev.at)}
+            ? t('eventSpan', { from: formatAt(ev.at, locale), to: formatAt(ev.until, locale) })
+            : formatAt(ev.at, locale)}
         </span>
       </div>
     </li>

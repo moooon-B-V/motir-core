@@ -1,0 +1,224 @@
+{
+  "locale": "ja",
+  "register": {
+    "formality": "です・ます調 (polite). Buttons and labels are noun phrases or plain verbs (保存, 削除); sentences end in です/ます.",
+    "quotes": "「」 (nested 『』)",
+    "note": "Full-width punctuation (、。) in running text. A sentence-final ellipsis is \"…\" (one character). A {placeholder} in running text takes no surrounding spaces; Latin words (Motir, Sprint) keep a half-width space only where Japanese UIs normally put one."
+  },
+  "terms": {
+    "Motir": {
+      "translation": "Motir",
+      "doNotTranslate": true,
+      "source": "Product name (story MOTIR-7730 copy rules)",
+      "note": "Never translated, transliterated or inflected."
+    },
+    "Motir AI": {
+      "translation": "Motir AI",
+      "doNotTranslate": true,
+      "source": "Product name (story MOTIR-7730 copy rules)",
+      "note": "Never translated, transliterated or inflected."
+    },
+    "Sprint": {
+      "translation": "Sprint",
+      "source": "messages/zh.json issueViews.sprint (\"Sprint\", kept Latin) and story MOTIR-7730 copy rules",
+      "note": "Kept in Latin script by decision, in every language. DELIBERATE: Japanese Jira writes スプリント; Motir keeps the Latin \"Sprint\" as Chinese already does, knowing that convention. Do not write スプリント."
+    },
+    "work item": {
+      "translation": "作業項目",
+      "banned": ["課題", "イシュー", "カード", "チケット"],
+      "allowedSenses": "'card' (and its translation) stays correct for a PAYMENT card (billing) and a UI PANEL (a dashboard or board card component) — the same senses tests/i18n-catalog.test.ts's CARD_SENSE_ALLOWLIST allows in en and zh. It is banned only as a name for a work item.",
+      "source": "Microsoft Terminology / Azure DevOps Boards, Japanese UI (\"work item\")",
+      "note": "The ONE product noun. Never the language's word for \"issue\" or \"card\", even where its Jira says so. Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "item": {
+      "translation": "項目",
+      "source": "Microsoft Terminology / Azure DevOps Boards, Japanese UI (\"work item\")",
+      "note": "Short form of \"work item\" where the full term would repeat (e.g. \"3 items\"). Same banned list as \"work item\". Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "epic": {
+      "translation": "エピック",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "story": {
+      "translation": "ストーリー",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "task": {
+      "translation": "タスク",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "bug": {
+      "translation": "バグ",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "subtask": {
+      "translation": "サブタスク",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "To do": {
+      "translation": "未着手",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Blocked": {
+      "translation": "ブロック中",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Planning": {
+      "translation": "計画中",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "In progress": {
+      "translation": "進行中",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Implemented": {
+      "translation": "実装済み",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "In review": {
+      "translation": "レビュー中",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Done": {
+      "translation": "完了",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "backlog": {
+      "translation": "バックログ",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "board": {
+      "translation": "ボード",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "dashboard": {
+      "translation": "ダッシュボード",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "story points": {
+      "translation": "ストーリーポイント",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "estimate": {
+      "translation": "見積もり",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "assignee": {
+      "translation": "担当者",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "reporter": {
+      "translation": "報告者",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "priority": {
+      "translation": "優先度",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "label": {
+      "translation": "ラベル",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "component": {
+      "translation": "コンポーネント",
+      "source": "Atlassian Jira Software, Japanese UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "folder": {
+      "translation": "フォルダー",
+      "source": "Microsoft 365 / Azure DevOps, Japanese UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "project": {
+      "translation": "プロジェクト",
+      "source": "Microsoft 365 / Azure DevOps, Japanese UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "workspace": {
+      "translation": "ワークスペース",
+      "source": "Microsoft 365 / Azure DevOps, Japanese UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "organization": {
+      "translation": "組織",
+      "source": "Microsoft 365 / Azure DevOps, Japanese UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "member": {
+      "translation": "メンバー",
+      "source": "Microsoft 365 / Azure DevOps, Japanese UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "plan": {
+      "translation": "計画",
+      "source": "Atlassian Jira Software / GitHub, Japanese UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "proposal": {
+      "translation": "提案",
+      "source": "Atlassian Jira Software / GitHub, Japanese UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "approve": {
+      "translation": "承認する",
+      "source": "Atlassian Jira Software / GitHub, Japanese UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "approval": {
+      "translation": "承認",
+      "source": "Atlassian Jira Software / GitHub, Japanese UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "acceptance criteria": {
+      "translation": "受け入れ基準",
+      "source": "Atlassian Jira Software / GitHub, Japanese UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "agent": {
+      "translation": "エージェント",
+      "source": "Atlassian Jira Software / GitHub, Japanese UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "run": {
+      "translation": "実行",
+      "source": "Atlassian Jira Software / GitHub, Japanese UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "pull request": {
+      "translation": "プルリクエスト",
+      "source": "GitHub, Japanese UI (pull request)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "design result": {
+      "translation": "デザイン結果",
+      "source": "Atlassian Jira Software / GitHub, Japanese UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "acceptance video": {
+      "translation": "受け入れ動画",
+      "source": "Atlassian Jira Software / GitHub, Japanese UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    }
+  }
+}

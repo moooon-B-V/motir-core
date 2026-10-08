@@ -67,3 +67,6 @@ next-env.d.ts
 # Throwaway tsc probe dirs (tests/approval-gate-registry.test.ts) — removed in its own `finally`;
 # ignored so a hard-killed run cannot leave one in `git status`.
 .tsprobe-*/
+
+# MOTIR-7745 — translation batch files written by `pnpm i18n:extract`
+/.i18n-work/

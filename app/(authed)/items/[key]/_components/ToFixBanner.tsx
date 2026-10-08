@@ -119,7 +119,7 @@ export function ToFixBanner({
   const when = (iso: string) =>
     function BannerWhen() {
       return (
-        <time className="whitespace-nowrap" dateTime={iso} title={formatRunInstant(iso)}>
+        <time className="whitespace-nowrap" dateTime={iso} title={formatRunInstant(iso, locale)}>
           {relativeLabel(iso, locale, clock)}
         </time>
       );

@@ -96,7 +96,10 @@ export function CommentComposer({
 
   if (!expanded) {
     return (
-      <div className="flex items-start gap-2.5">
+      // `flex-wrap` + the button's `flex-auto`: in a narrow column the button
+      // drops below the avatar rather than squeezing its label's longest word
+      // ("hinzufügen…") out of the box (MOTIR-7759).
+      <div className="flex flex-wrap items-start gap-2.5">
         {authorName ? <Avatar name={authorName} /> : null}
         <button
           ref={restRef}
@@ -105,7 +108,9 @@ export function CommentComposer({
           // The placeholder ink was `--el-text-muted`, which is 4.17:1 on this
           // button's own `--el-surface` (MOTIR-2477); the hover step it used to
           // make is now the resting state, so only the border moves on hover.
-          className="border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) hover:border-(--el-border-strong) h-(--height-control) min-w-0 flex-1 rounded-(--radius-input) border px-(--spacing-control-x) text-left font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          // A MINIMUM height with control padding: when the label wraps at a word
+          // the button grows around it instead of spilling (MOTIR-7759).
+          className="border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) hover:border-(--el-border-strong) min-h-(--height-control) min-w-0 flex-auto rounded-(--radius-input) border px-(--spacing-control-x) py-(--spacing-control-y) text-left font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           {t('addPlaceholder')}
         </button>

@@ -139,8 +139,10 @@ async function setGroupBy(
 async function dragCardOnto(page: Page, cardTestId: string, target: Locator): Promise<void> {
   const card = page.getByTestId(cardTestId);
   await card.scrollIntoViewIfNeeded();
-  const from = (await card.boundingBox())!;
   await target.scrollIntoViewIfNeeded();
+  // Measure BOTH after the last scroll: scrolling the target into view can move
+  // the page, and a card box read before it points the press at stale pixels.
+  const from = (await card.boundingBox())!;
   const to = (await target.boundingBox())!;
   const fx = from.x + from.width / 2;
   const fy = from.y + from.height / 2;

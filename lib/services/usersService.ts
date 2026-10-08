@@ -24,6 +24,8 @@ import {
 import { sendAuthEmail } from '@/lib/auth/authMail';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { currentLocale } from '@/lib/i18n/serverLocale';
+import { isLocale, type Locale } from '@/lib/i18n/locales';
+import { withUserContext } from '@/lib/workspaces/context';
 import { deletePublicAsset, putPublicAsset } from '@/lib/blob/uploader';
 import { avatarBlobPrefix, isOwnAvatarRef, storedAssetKey } from '@/lib/blob/referencedUrls';
 import { MAX_UPLOAD_BYTES, isImageType } from '@/lib/blob/allowlist';
@@ -84,6 +86,30 @@ export const usersService = {
   async getProfile(userId: string): Promise<UserProfileDto | null> {
     const user = await userRepository.findById(userId);
     return user ? toUserProfileDto(user) : null;
+  },
+
+  /**
+   * The person's saved interface language, read BY USER ID with no request in
+   * scope (Story MOTIR-7730 · MOTIR-7743) — what server code without a cookie
+   * (an email rendered in a job) asks to learn the language a person reads.
+   * `null` when nothing is saved, the user does not exist, or the stored value is
+   * not a locale this build speaks (a retired one): the caller falls through to
+   * its own default rather than trusting it.
+   */
+  async getSavedLocale(userId: string): Promise<Locale | null> {
+    const stored = await userRepository.findLocaleById(userId);
+    return isLocale(stored) ? stored : null;
+  },
+
+  /**
+   * Save the account language (Story MOTIR-7730 · MOTIR-7747) — what a choice
+   * in Settings writes, so the language follows the person to every device. A
+   * value outside the locale set writes nothing. No row lock: a standalone
+   * column, last writer wins, and the value is not derived from a prior read.
+   */
+  async setSavedLocale(userId: string, locale: Locale): Promise<void> {
+    if (!isLocale(locale)) return;
+    await withUserContext(userId, (tx) => userRepository.setLocale(userId, locale, tx));
   },
 
   /**

@@ -1,5 +1,17 @@
 # @motir/design-system
 
+## 0.11.0
+
+### Minor Changes
+
+- 9597082: `Combobox` gains four optional props for the signed-out language control (MOTIR-7758). An option's `lang` is rendered as the `lang` attribute on its row, and on the trigger's label while it is selected, so a list that names each language in its own script is announced in that language. `triggerIcon` draws a decorative leading glyph on the trigger only, never in the rows. `busy` marks the trigger `aria-busy` and puts a spinner in the chevron's slot without disabling it. `align="end"` lines the menu's right edge up with the trigger's, so a menu opened from a right-hand corner grows leftwards instead of running past the viewport. Existing callers are unchanged.
+
+## 0.10.1
+
+### Patch Changes
+
+- ab67f23: `TokensSpecimen` no longer re-themes the page it is dropped into (MOTIR-7725). It used to wrap itself in `ThemeProvider`, whose effects write `data-theme`, `data-style`, `data-palette` and `data-type` onto `<html>` from the visitor's stored choice or the app defaults, and rewrite `data-theme` whenever the OS colour scheme changes. Nothing inside the specimen reads the theme context, so the provider is gone: the specimen now renders under whatever appearance its host applied. A consumer that relied on the specimen to set up appearance wraps it in its own `ThemeProvider`.
+
 ## 0.10.0
 
 ### Minor Changes

@@ -1382,7 +1382,11 @@ function SortHeader({
         alignEnd && '-mr-1 ml-auto flex-row-reverse',
       )}
     >
-      <span className="truncate">{label}</span>
+      {/* Wraps at a word boundary rather than truncating: a translated header
+          ("Osoba odpowiedzialna") can run wider than its column (MOTIR-7759). */}
+      <span className={cn('min-w-0 hyphens-auto', alignEnd ? 'text-right' : 'text-left')}>
+        {label}
+      </span>
       <Caret
         className={cn(
           'h-3 w-3 shrink-0 transition-opacity',
