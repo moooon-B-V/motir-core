@@ -5,6 +5,10 @@ import { Check, LoaderCircle, Lock, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
+import {
+  PlanApproveProgress,
+  type PlanApproveProgressView,
+} from '@/components/planning/PlanApproveProgress';
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanGateView } from '@/lib/planning/planGateView';
 
@@ -71,6 +75,10 @@ export interface PlanChangeConfirmBarProps {
   onConfirmDecline?: (noteMd: string | null) => void;
   /** A press HERE was refused as stale — the band says so above the verbs. */
   staleRefused?: boolean;
+  /** The approve's progress (MOTIR-5249; Part XXV). `running`: the bar's contents
+   *  become the progress, inside this same element at its own height. `timedOut`: the
+   *  band stacks above the bar, as the stale band does, with the verbs back. */
+  approveProgress?: PlanApproveProgressView | null;
 }
 
 export function PlanChangeConfirmBar({
@@ -84,10 +92,19 @@ export function PlanChangeConfirmBar({
   onCancelDecline,
   onConfirmDecline,
   staleRefused = false,
+  approveProgress = null,
 }: PlanChangeConfirmBarProps) {
   const t = useTranslations('planningWorkspace.conversation');
   const tp = useTranslations('approvalGate.planApproval.surface');
   const gated = view.kind !== 'ungated';
+  const running = approveProgress?.state === 'running';
+  const timedOutBand =
+    approveProgress?.state === 'timedOut' ? (
+      <PlanApproveProgress {...approveProgress} place="bar" />
+    ) : null;
+  // While the approve runs the bar's CONTENTS are the progress — no verb remains to
+  // press twice — inside the element that was already there (§25.4, §25.7).
+  const progressInBar = running ? <PlanApproveProgress {...approveProgress} place="bar" /> : null;
 
   const counts = (
     <span className="truncate text-sm font-semibold text-(--el-text)">
@@ -100,34 +117,46 @@ export function PlanChangeConfirmBar({
   );
 
   if (!gated) {
-    return (
+    const bar = (
       <div
         data-testid="plan-change-confirm-bar"
         className="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
         style={{ minHeight: PLAN_CONFIRM_BAR_HEIGHT }}
       >
-        <span className="flex min-w-0 flex-col">
-          {counts}
-          <span className="truncate text-xs text-(--el-text-secondary)">
-            {t('barNothingSaved')}
-          </span>
-        </span>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {deciding ? <Spinner size="sm" aria-hidden="true" /> : null}
-          <Button variant="ghost" size="sm" onClick={onDiscard} disabled={deciding}>
-            {t('discard')}
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<Check className="size-4" aria-hidden="true" />}
-            onClick={onApprove}
-            disabled={deciding}
-          >
-            {t('approveChanges')}
-          </Button>
-        </div>
+        {progressInBar ?? (
+          <>
+            <span className="flex min-w-0 flex-col">
+              {counts}
+              <span className="truncate text-xs text-(--el-text-secondary)">
+                {t('barNothingSaved')}
+              </span>
+            </span>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {deciding ? <Spinner size="sm" aria-hidden="true" /> : null}
+              <Button variant="ghost" size="sm" onClick={onDiscard} disabled={deciding}>
+                {t('discard')}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Check className="size-4" aria-hidden="true" />}
+                onClick={onApprove}
+                disabled={deciding}
+              >
+                {t('approveChanges')}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
+    );
+    return timedOutBand ? (
+      <div className="flex shrink-0 flex-col">
+        {timedOutBand}
+        {bar}
+      </div>
+    ) : (
+      bar
     );
   }
 
@@ -145,68 +174,73 @@ export function PlanChangeConfirmBar({
         />
       ) : null}
       {staleRefused && !declining ? <PlanStaleBand place="bar" /> : null}
+      {!declining ? timedOutBand : null}
       <div
         data-testid="plan-change-confirm-bar"
         className="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
         style={{ minHeight: PLAN_CONFIRM_BAR_HEIGHT }}
       >
-        <span className="flex min-w-0 flex-col">
-          {counts}
-          {/* The consequence line — or, while a revision holds the plan, WHY the verbs
+        {progressInBar ?? (
+          <>
+            <span className="flex min-w-0 flex-col">
+              {counts}
+              {/* The consequence line — or, while a revision holds the plan, WHY the verbs
               are unavailable, which replaces it and is allowed to wrap. */}
-          <span
-            id="plan-change-bar-line"
-            className={
-              held
-                ? 'text-xs text-(--el-text-secondary)'
-                : 'truncate text-xs text-(--el-text-secondary)'
-            }
-          >
-            {held ? heldLine : tp('consequence')}
-          </span>
-        </span>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {view.kind === 'seeOnly' ? (
-            // SEE BUT NOT DECIDE — no verbs at all, not disabled ones (Panel 7).
-            <span
-              data-testid="plan-decide-see-only"
-              className="flex max-w-[20rem] items-start gap-1.5 text-xs text-(--el-text-secondary)"
-            >
-              <Lock className="mt-px size-3.5 flex-none" aria-hidden="true" />
-              <SeeOnlyLine waitingOn={view.waitingOn} />
+              <span
+                id="plan-change-bar-line"
+                className={
+                  held
+                    ? 'text-xs text-(--el-text-secondary)'
+                    : 'truncate text-xs text-(--el-text-secondary)'
+                }
+              >
+                {held ? heldLine : tp('consequence')}
+              </span>
             </span>
-          ) : declining ? null : (
-            <>
-              {held ? (
-                <LoaderCircle
-                  className="size-4 shrink-0 animate-spin text-(--el-text-secondary)"
-                  aria-hidden="true"
-                />
-              ) : deciding ? (
-                <Spinner size="sm" aria-hidden="true" />
-              ) : null}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRequestDecline}
-                disabled={deciding || held}
-                aria-describedby={held ? 'plan-change-bar-line' : undefined}
-              >
-                {tp('decline')}
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Check className="size-4" aria-hidden="true" />}
-                onClick={onApprove}
-                disabled={deciding || held}
-                aria-describedby={held ? 'plan-change-bar-line' : undefined}
-              >
-                {tp('approve')}
-              </Button>
-            </>
-          )}
-        </div>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {view.kind === 'seeOnly' ? (
+                // SEE BUT NOT DECIDE — no verbs at all, not disabled ones (Panel 7).
+                <span
+                  data-testid="plan-decide-see-only"
+                  className="flex max-w-[20rem] items-start gap-1.5 text-xs text-(--el-text-secondary)"
+                >
+                  <Lock className="mt-px size-3.5 flex-none" aria-hidden="true" />
+                  <SeeOnlyLine waitingOn={view.waitingOn} />
+                </span>
+              ) : declining ? null : (
+                <>
+                  {held ? (
+                    <LoaderCircle
+                      className="size-4 shrink-0 animate-spin text-(--el-text-secondary)"
+                      aria-hidden="true"
+                    />
+                  ) : deciding ? (
+                    <Spinner size="sm" aria-hidden="true" />
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onRequestDecline}
+                    disabled={deciding || held}
+                    aria-describedby={held ? 'plan-change-bar-line' : undefined}
+                  >
+                    {tp('decline')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<Check className="size-4" aria-hidden="true" />}
+                    onClick={onApprove}
+                    disabled={deciding || held}
+                    aria-describedby={held ? 'plan-change-bar-line' : undefined}
+                  >
+                    {tp('approve')}
+                  </Button>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -339,7 +339,15 @@
     "railAddDeclined": "This plan was declined — none of these values was created.",
     "railRemoveArchived": "This plan archived {key}.",
     "railRemoveDeclined": "This plan would have archived {key}. It was declined, so it was not.",
-    "peekNoActivity": "A proposal has no comments, children or activity until it is approved."
+    "peekNoActivity": "A proposal has no comments, children or activity until it is approved.",
+    "approveProgress": {
+      "creating": "Adding {n, plural, one {# item} other {# items}} to your backlog…",
+      "applying": "Applying {n, plural, one {# change} other {# changes}} to your backlog…",
+      "together": "They all arrive together when it finishes.",
+      "slow": "Still working — a large plan takes longer. There’s no need to press again.",
+      "timedOutTitle": "Nothing was created — approving took too long.",
+      "timedOutNext": "This plan still awaits your decision, unchanged. It’s safe to approve again."
+    }
   },
   "projectAccess": {
     "noAccessTitle": "You don’t have access to this project",

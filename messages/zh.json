@@ -339,7 +339,15 @@
     "railAddDeclined": "此计划已被拒绝——这些值均未创建。",
     "railRemoveArchived": "此计划已归档 {key}。",
     "railRemoveDeclined": "此计划本将归档 {key}，但因被拒绝，未执行归档。",
-    "peekNoActivity": "提案在获得批准之前没有评论、子项或动态。"
+    "peekNoActivity": "提案在获得批准之前没有评论、子项或动态。",
+    "approveProgress": {
+      "creating": "正在将 {n} 个工作项加入待办列表…",
+      "applying": "正在应用 {n} 项变更…",
+      "together": "完成后它们会一起出现。",
+      "slow": "仍在处理 —— 计划越大，耗时越长。无需再次点击。",
+      "timedOutTitle": "未创建任何内容 —— 批准耗时过长。",
+      "timedOutNext": "这份计划仍在等待你的决定，内容未变。可以放心再次批准。"
+    }
   },
   "projectAccess": {
     "noAccessTitle": "你无权访问此项目",
