@@ -420,3 +420,66 @@ body {
   outline: 2px solid var(--el-accent-on-surface);
   outline-offset: 2px;
 }
+/* THE DRAFTING / LAYING CUES (Story MOTIR-7820 · MOTIR-7830; design Part XXV
+   §25.6–25.8, `plan-review--live-progress.mock.html` sheets 4–8). A layer on the
+   canvas's NODE BOX, never on the card, so every Part VI op treatment and the
+   deepen are untouched. The STATIC form is the default and the whole cue under
+   reduced motion — a dotted ring and a labelled chip that stay for as long as the
+   step does. It DOES NOT LOOP (§25.6): only its arrival fades in, below. The ring
+   is a BORDER at 7px, never `outline`, so the deepen's 2px outline sits inside it
+   and a drafted card that deepens shows both. */
+.canvas-node--drafting > .canvas-cue-ring,
+.canvas-node--laying > .canvas-cue-ring {
+  pointer-events: none;
+  position: absolute;
+  inset: -7px;
+  border: 2px dotted var(--el-status-in-progress);
+  border-radius: calc(var(--radius-card) + 7px);
+}
+.canvas-node--drafting > .canvas-cue-chip,
+.canvas-node--laying > .canvas-cue-chip {
+  pointer-events: none;
+  position: absolute;
+  left: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  border: 1px solid var(--el-status-in-progress);
+  border-radius: var(--radius-badge);
+  background: var(--el-card);
+  padding: var(--spacing-chip-y) var(--spacing-chip-x);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--el-text-secondary);
+}
+.canvas-cue-chip > svg {
+  color: var(--el-status-in-progress);
+}
+/* Drafting: the chip on the TOP edge. Laying: on the BOTTOM — where its children
+   will hang (§25.7). */
+.canvas-node--drafting > .canvas-cue-chip {
+  top: -18px;
+}
+.canvas-node--laying > .canvas-cue-chip {
+  bottom: -18px;
+}
+/* C1 — a cue ARRIVES: ring and chip fade in, the ring settling from 1.03. Under
+   reduced motion it is drawn in one frame (the static form above). */
+@keyframes canvas-cue-ring-enter {
+  from {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .canvas-node--drafting > .canvas-cue-ring,
+  .canvas-node--laying > .canvas-cue-ring {
+    animation: canvas-cue-ring-enter var(--transition-slow) var(--canvas-ease-enter) both;
+  }
+  .canvas-node--drafting > .canvas-cue-chip,
+  .canvas-node--laying > .canvas-cue-chip {
+    animation: canvas-fade-in var(--transition-slow) var(--canvas-ease-enter) both;
+  }
+}

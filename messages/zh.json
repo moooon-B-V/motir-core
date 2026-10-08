@@ -315,6 +315,13 @@
       "pointer": "在工作台跟进",
       "pointerSentence": "你可以离开 — 此计划会继续编写。可在“工作台 › 规划”中跟进。"
     },
+    "cue": {
+      "drafting": "起草中",
+      "draftingName": "正在起草",
+      "laying": "正在铺设子项",
+      "layingName": "正在铺设其子项",
+      "layingHere": "正在铺设此层级"
+    },
     "listWritingTitle": "尚无提案",
     "listWritingBody": "计划编写过程中，工作项会出现在这里。",
     "abandonedOutcome": "生成始终未完成 — 该计划已自动结束",
@@ -7698,6 +7705,10 @@
       "goToTarget": "方案在 {identifier} · 前往",
       "arrivedIn": "{identifier} 中有 {count} 项新内容 · 前往",
       "arrivedAcross": "其他层级有 {count} 项新内容 · 最新在 {identifier} · 前往",
+      "draftingIn": "{identifier} 中有 {count} 项正在起草 · 前往",
+      "layingIn": "正在铺设 {identifier} · 前往",
+      "newAndDraftingIn": "{identifier} 中有 {arrived} 项新内容 · {drafting} 项正在起草 · 前往",
+      "draftingAcross": "其他层级有 {count} 项正在起草 · 首个在 {identifier} · 前往",
       "levelChange": {
         "srPrefix": "此层级的待定变更：",
         "changed": "当前层级",

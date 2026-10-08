@@ -190,6 +190,10 @@ export function PlanProposalViews({
       onLevelChange={onCanvasLevelChange}
       live={live}
       offerPlanElsewhere={offerPlanElsewhere}
+      // THE CUES (MOTIR-7830) — the line's own clock's live steps, so the words
+      // and the canvas stop naming a step at the same instant. A dropped read
+      // holds them because the hook does. The List gets no cue (§25.18).
+      liveSteps={progressReading?.liveSteps ?? null}
     />
   );
   // THE DISCARDED BAND (§23.12) — the band idiom (`--el-surface-soft` +

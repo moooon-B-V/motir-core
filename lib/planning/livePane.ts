@@ -178,3 +178,145 @@ export function arrivalsSummary(
     latest,
   };
 }
+
+// ── The IN-FLIGHT cues (Story MOTIR-7820 · MOTIR-7830; Part XXV §25.6–25.7) ──
+//
+// ⚠️ A PRESENT STATE, NOT AN EVENT — and so kept OUT of the arrivals log above.
+// An arrival is news that stays counted until the reader visits its level; a cue
+// is "the planner is writing this now", counted from the CURRENT live steps on
+// every render. A cue that leaves stops being counted at once, with nothing to
+// clear. The steps themselves are the derivation's (`readPlanProgress`'s
+// `liveSteps`): withdrawn targets and quiet sessions are already gone, so nothing
+// here filters, ages or compares a time.
+
+/** What a step marks. `author` → the item being DRAFTED; `lay` → the parent whose
+ *  children are being LAID. */
+export type InFlightCueKind = 'drafting' | 'laying';
+
+/** One cue as the canvas's arrivals slot sees it: the node it marks, and the
+ *  trail *Go there* drills to see it — the item's own level for `drafting`, the
+ *  parent's own level (where its children land) for `laying`. */
+export interface InFlightCue {
+  nodeId: string;
+  kind: InFlightCueKind;
+  trail: readonly CanvasCrumb[];
+}
+
+/** The fields of a live step the mapping reads (`PlanProgressStep`'s). */
+export interface InFlightStep {
+  kind: 'settle' | 'lay' | 'author';
+  targetNodeId: string | null;
+}
+
+/**
+ * Map the live steps to cues. A `settle` step, and any step with no target node
+ * (the untargeted lay and author), mark nothing (§25.6: an item not yet on the
+ * plan has no cell). Several steps → several cues; one node named by both kinds
+ * is `drafting`. `inFlight` holds one entry per cue whose level the plan's items
+ * can place — a committed target the walk has not written a `modify` for, or a
+ * parent with no child proposed yet, keeps its node cue wherever it is drawn and
+ * adds no entry, because *Go there* would have nowhere to go. Order: the steps'
+ * (earliest first).
+ */
+export function inFlightCues(
+  items: readonly PlanReviewItemDto[],
+  steps: readonly InFlightStep[],
+  proposedWord: string,
+): { cues: Map<string, InFlightCueKind>; inFlight: InFlightCue[] } {
+  const cues = new Map<string, InFlightCueKind>();
+  for (const step of steps) {
+    if (step.kind === 'settle' || step.targetNodeId === null) continue;
+    const kind: InFlightCueKind = step.kind === 'author' ? 'drafting' : 'laying';
+    if (cues.get(step.targetNodeId) !== 'drafting') cues.set(step.targetNodeId, kind);
+  }
+  const inFlight: InFlightCue[] = [];
+  for (const [nodeId, kind] of cues) {
+    if (kind === 'drafting') {
+      const item = items.find((i) => i.nodeId === nodeId);
+      if (!item) continue;
+      inFlight.push({
+        nodeId,
+        kind,
+        trail: levelTrail(items, proposalLevelKey(item), proposedWord),
+      });
+    } else {
+      if (!items.some((i) => proposalLevelKey(i) === nodeId)) continue;
+      const trail = levelTrail(items, nodeId, proposedWord);
+      if (trail[trail.length - 1]?.id !== nodeId) continue;
+      inFlight.push({ nodeId, kind, trail });
+    }
+  }
+  return { cues, inFlight };
+}
+
+/**
+ * The cues the reader CANNOT see: the node is not on the drawn level, and it is
+ * not a `laying` cue on the level the reader stands in (that one is the bar's
+ * marker, §25.7 row 2).
+ */
+export function offLevelInFlight(
+  inFlight: readonly InFlightCue[],
+  drawnIds: ReadonlySet<string>,
+  focusId: string | null,
+): InFlightCue[] {
+  return inFlight.filter(
+    (c) => !drawnIds.has(c.nodeId) && !(c.kind === 'laying' && c.nodeId === focusId),
+  );
+}
+
+/** What the ONE arrivals slot says (§25.7's table) — a copy key under
+ *  `planningWorkspace.arrival`, its counts, and the trail *Go there* drills. */
+export type LiveSlot =
+  | { key: 'arrivedIn' | 'arrivedAcross'; count: number; trail: readonly CanvasCrumb[] }
+  | { key: 'draftingIn' | 'draftingAcross'; count: number; trail: readonly CanvasCrumb[] }
+  | { key: 'layingIn'; trail: readonly CanvasCrumb[] }
+  | { key: 'newAndDraftingIn'; arrived: number; drafting: number; trail: readonly CanvasCrumb[] };
+
+const levelOfTrail = (trail: readonly CanvasCrumb[]): string | null =>
+  trail[trail.length - 1]?.id ?? null;
+
+/**
+ * The slot's wording, by §25.7's precedence. Arrivals are NEWS and in-flight
+ * steps are STATE, so arrivals win the slot — except when arrivals and drafting
+ * steps are on the SAME one level, which reads as one combined sentence. With no
+ * arrivals: drafting on one level, drafting across several (named by the
+ * earliest), then a lay. *Go there* goes to the latest arrival's level, else the
+ * earliest in-flight step's. (The follow offer outranks all of it — the caller's.)
+ */
+export function liveSlot(
+  arrivals: { count: number; levels: number; latest: PendingArrival } | null,
+  offLevel: readonly InFlightCue[],
+): LiveSlot | null {
+  const drafting = offLevel.filter((c) => c.kind === 'drafting');
+  const draftLevels = new Set(drafting.map((c) => levelOfTrail(c.trail)));
+  if (arrivals) {
+    if (
+      arrivals.levels === 1 &&
+      drafting.length > 0 &&
+      draftLevels.size === 1 &&
+      draftLevels.has(arrivals.latest.levelId)
+    ) {
+      return {
+        key: 'newAndDraftingIn',
+        arrived: arrivals.count,
+        drafting: drafting.length,
+        trail: arrivals.latest.trail,
+      };
+    }
+    return {
+      key: arrivals.levels > 1 ? 'arrivedAcross' : 'arrivedIn',
+      count: arrivals.count,
+      trail: arrivals.latest.trail,
+    };
+  }
+  const first = drafting[0];
+  if (first) {
+    return {
+      key: draftLevels.size > 1 ? 'draftingAcross' : 'draftingIn',
+      count: drafting.length,
+      trail: first.trail,
+    };
+  }
+  const lay = offLevel.find((c) => c.kind === 'laying');
+  return lay ? { key: 'layingIn', trail: lay.trail } : null;
+}

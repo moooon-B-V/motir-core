@@ -315,6 +315,13 @@
       "pointer": "Follow from Workbench",
       "pointerSentence": "You can leave — this plan keeps being written. Follow it from Workbench › Planning."
     },
+    "cue": {
+      "drafting": "Drafting",
+      "draftingName": "Being drafted now",
+      "laying": "Laying its children",
+      "layingName": "Its children are being laid now",
+      "layingHere": "Laying this level"
+    },
     "listWritingTitle": "Nothing proposed yet",
     "listWritingBody": "Items appear here as the plan is written.",
     "abandonedOutcome": "Generation never finished — this plan was ended automatically",
@@ -7702,6 +7709,10 @@
       "goToTarget": "Plan is in {identifier} · Go there",
       "arrivedIn": "{count} new in {identifier} · Go there",
       "arrivedAcross": "{count} new elsewhere · latest in {identifier} · Go there",
+      "draftingIn": "{count} being drafted in {identifier} · Go there",
+      "layingIn": "Laying {identifier} · Go there",
+      "newAndDraftingIn": "{arrived} new · {drafting} being drafted in {identifier} · Go there",
+      "draftingAcross": "{count} being drafted elsewhere · first in {identifier} · Go there",
       "levelChange": {
         "srPrefix": "Pending change to this level:",
         "changed": "This level",
