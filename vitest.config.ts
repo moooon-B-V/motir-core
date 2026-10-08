@@ -2465,6 +2465,8 @@ export default defineConfig({
         'components/planning/PlanningWorkspaceOverlay.tsx',
         'components/planning/PlanCloseGuard.tsx',
         'components/planning/PlanningWorkspaceHost.tsx',
+        // MOTIR-5251 — what Approve says while it runs (design Part XXV).
+        'components/planning/PlanApproveProgress.tsx',
         // Story MOTIR-6155 · Subtask MOTIR-6186 — the plan page's List | Canvas
         // pane, lifted into ONE component that the plan page AND the planning
         // surface both mount. It is this story's own file and carries only the
@@ -4080,6 +4082,12 @@ export default defineConfig({
           statements: 90,
         },
         'components/planning/PlanningWorkspaceHost.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/PlanApproveProgress.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
