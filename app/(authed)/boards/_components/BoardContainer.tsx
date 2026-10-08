@@ -457,7 +457,9 @@ function GroupByControl({
   const t = useTranslations('boards');
   const control = (
     <div className="flex items-center gap-2" data-read-only={readOnlyReason ? '' : undefined}>
-      <span className="text-xs font-medium text-(--el-text-muted)">{t('groupByLabel')}</span>
+      <span className="text-xs font-medium whitespace-nowrap text-(--el-text-muted)">
+        {t('groupByLabel')}
+      </span>
       <Segmented<BoardSwimlaneGroupByDto>
         label={t('groupByAria')}
         value={value}

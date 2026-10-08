@@ -418,8 +418,8 @@ describe('the MARK refusal (MOTIR-6682)', () => {
       { locale: 'zh', messages: zhMessages },
     );
     expect(screen.getByTestId('status-held-notice').textContent).toContain(
-      '此事项已标记为已过时。清除标记后才能重新打开此事项。',
+      '此工作项已标记为已过时。清除标记后才能重新打开此工作项。',
     );
-    screen.getByRole('link', { name: '打开事项' });
+    screen.getByRole('link', { name: '打开工作项' });
   });
 });

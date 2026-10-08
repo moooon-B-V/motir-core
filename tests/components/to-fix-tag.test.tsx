@@ -130,7 +130,7 @@ describe('ToFixTag — the label form (board card, quick view)', () => {
       />,
       { locale: 'zh', messages: zhMessages },
     );
-    expect(screen.getByRole('img', { name: '待修复 · 已被审查代理退回' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: '待修复 · 已被审查智能体退回' })).toBeTruthy();
     cleanup();
     render(
       <ToFixTag

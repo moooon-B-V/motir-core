@@ -27,10 +27,10 @@ import { formatRunInstant } from '@/lib/runs/runClock';
  * — formatting once and handing the strings down, so this section has no clock
  * of its own to disagree with on first paint.
  */
-export function formatRunTimes(runs: DispatchRunDto[]): Record<string, string> {
+export function formatRunTimes(runs: DispatchRunDto[], locale: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const run of runs) {
-    out[run.id] = formatRunInstant(run.startedAt);
+    out[run.id] = formatRunInstant(run.startedAt, locale);
   }
   return out;
 }

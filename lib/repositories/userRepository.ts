@@ -54,6 +54,13 @@ export const userRepository = {
     return client.user.findUnique({ where: { id } });
   },
 
+  /** The saved interface language column alone (Story MOTIR-7730 · MOTIR-7743) —
+   *  read by id with no request in scope. Unvalidated: the service narrows it. */
+  async findLocaleById(id: string): Promise<string | null> {
+    const row = await dbRead.user.findUnique({ where: { id }, select: { locale: true } });
+    return row?.locale ?? null;
+  },
+
   /**
    * Batch-resolve users by id — the one round-trip the board swimlane
    * projection (Subtask 3.3.4) uses to label assignee lanes (id → name) without
@@ -231,6 +238,12 @@ export const userRepository = {
    * intended "most recent"). Required `tx` per CLAUDE.md (write method). The
    * `projectId` FK is validated by Postgres; an invalid id raises `P2003`.
    */
+  /** The saved account language (Story MOTIR-7730 · MOTIR-7747) — one column,
+   *  last writer wins. */
+  async setLocale(id: string, locale: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.user.update({ where: { id }, data: { locale } });
+  },
+
   async setLastActiveProject(
     id: string,
     projectId: string,

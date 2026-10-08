@@ -121,7 +121,8 @@ function DecidedMeta({
   count: number;
 }) {
   const t = useTranslations('approvalGate.agentReview');
-  const when = decidedAt ? new Date(decidedAt).toLocaleString() : '';
+  const locale = useLocale();
+  const when = decidedAt ? new Date(decidedAt).toLocaleString(locale) : '';
   return (
     <span className={META}>
       {run
@@ -161,7 +162,7 @@ export function ReviewingBand({
                 count,
                 run: runLink(run),
                 when: () => (
-                  <time dateTime={run.startedAt} title={formatRunInstant(run.startedAt)}>
+                  <time dateTime={run.startedAt} title={formatRunInstant(run.startedAt, locale)}>
                     {relativeLabel(run.startedAt, locale, clock)}
                   </time>
                 ),
@@ -333,6 +334,7 @@ export function OverrideBand({
   count: number;
 }) {
   const t = useTranslations('approvalGate.agentReview');
+  const locale = useLocale();
   const tGate = useTranslations('approvalGate');
   const note = noteMd?.trim() ?? '';
   return (
@@ -356,7 +358,7 @@ export function OverrideBand({
           {t.rich('override.record', {
             // An unattributable decider is SAID, never shown as nobody (§6b).
             name: name ?? tGate('record.unattributed'),
-            when: decidedAt ? new Date(decidedAt).toLocaleString() : '',
+            when: decidedAt ? new Date(decidedAt).toLocaleString(locale) : '',
             b: (chunks) => <b className="font-semibold text-(--el-text)">{chunks}</b>,
           })}
         </span>

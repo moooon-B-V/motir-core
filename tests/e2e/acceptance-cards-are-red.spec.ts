@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
+import { setReaderLanguage } from './_helpers/reader-language';
 import { projectsService } from '@/lib/services/projectsService';
 import {
   checkSuitePayload,
@@ -242,7 +243,8 @@ test('a person scanning sees which cards are RED, lists them, and watches one go
   // The receipt belongs to the STORY, not to this subtask.
   acceptanceStory('MOTIR-5469');
 
-  await signUp(page, `red-cards-${Date.now()}@example.com`);
+  const email = `red-cards-${Date.now()}@example.com`;
+  await signUp(page, email);
   const tenant = await seedTenant(page);
   // BOTH repositories: the TWO card is delivered by a pull request in each, which
   // is the shape the fold exists for — one red delivery outranks a green one.
@@ -460,9 +462,7 @@ test('a person scanning sees which cards are RED, lists them, and watches one go
   await chapter('In 简体中文, through the catalogue’s own strings', async () => {
     // ⚠️ ASSERTED POSITIVELY, never by checking an English literal is absent —
     // that passes on a blank page.
-    await page
-      .context()
-      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
+    await setReaderLanguage(page, email, 'zh');
     await gotoLoadedBoard(page);
     await expect(boardBadge(page, two, 'failing')).toContainText('检查失败');
     await expect(boardBadge(page, amber, 'running')).toContainText('检查运行中');

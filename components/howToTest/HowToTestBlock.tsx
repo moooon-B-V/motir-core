@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { ChevronDown, ChevronRight, CornerLeftUp, FileQuestionMark } from 'lucide-react';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { formatRunInstant } from '@/lib/runs/runClock';
@@ -215,13 +215,18 @@ function RecordPart({ howToTest }: HowToTestBlockProps) {
  */
 function AuthorLine({ author, createdAt }: { author: HowToTestAuthorDto; createdAt: string }) {
   const t = useTranslations('github.development.howToTest');
+  const locale = useLocale();
   return (
     <span className="text-xs text-(--el-text-secondary)">
       {author.kind === 'run'
-        ? t.rich('writtenBy', { run: author.label, time: formatRunInstant(createdAt), b: bold })
+        ? t.rich('writtenBy', {
+            run: author.label,
+            time: formatRunInstant(createdAt, locale),
+            b: bold,
+          })
         : t.rich('writtenByPerson', {
             name: author.label,
-            time: formatRunInstant(createdAt),
+            time: formatRunInstant(createdAt, locale),
             b: bold,
           })}
     </span>

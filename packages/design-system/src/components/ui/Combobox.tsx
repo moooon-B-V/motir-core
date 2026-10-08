@@ -14,7 +14,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, LoaderCircle } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { useFullscreenElement } from '../../utils/fullscreen';
 
@@ -111,6 +111,14 @@ export interface ComboboxOption<T extends string> {
    * reads in `--el-text-secondary`, never an opacity dim, which keeps AA.
    */
   disabled?: boolean;
+  /**
+   * The language the LABEL is written in (a BCP 47 code), rendered as the `lang`
+   * attribute on this option's row and, when it is selected, on the trigger's
+   * label (MOTIR-7758 — a language picker names each language in its own script,
+   * so a reader announces 日本語 in Japanese inside an English page). Omit it and
+   * the label inherits the page's language, as before.
+   */
+  lang?: string;
 }
 
 export interface ComboboxProps<T extends string> {
@@ -163,6 +171,29 @@ export interface ComboboxProps<T extends string> {
    * unaffected, and it is announced as ordinary text. Omit it for no note.
    */
   footer?: ReactNode;
+  /**
+   * A leading glyph drawn on the TRIGGER only, before the selected label (or the
+   * placeholder), and never in the option rows — unlike an option's `icon`,
+   * which is drawn in both (MOTIR-7758: the signed-out language control's
+   * `Languages` glyph). Decorative: it is rendered `aria-hidden`, and the
+   * trigger's accessible name stays `label`.
+   */
+  triggerIcon?: ReactNode;
+  /**
+   * The value the trigger shows is being applied (MOTIR-7758). The trigger is
+   * marked `aria-busy` and a spinner takes the chevron's 16px slot, so the
+   * trigger keeps its size. It does NOT disable the control — a caller that
+   * wants that passes `disabled` as well. Pair it with a polite status that says
+   * what is happening; this prop draws nothing a reader hears.
+   */
+  busy?: boolean;
+  /**
+   * Which edge of the trigger the menu lines up with (MOTIR-7758). `start`
+   * (the default) aligns the menu's left edge with the trigger's, as before;
+   * `end` aligns the RIGHT edges, so a menu wider than a trigger that sits in a
+   * right-hand corner grows leftwards instead of running past the viewport.
+   */
+  align?: 'start' | 'end';
 }
 
 // Walk up from a node to the nearest ancestor that clips overflow, classifying
@@ -215,12 +246,25 @@ function fixedContainingBlock(el: HTMLElement): HTMLElement | null {
 // An element's padding box in viewport coordinates — the edge its overflow
 // clips at (and, for a containing block, the box fixed offsets are measured
 // from).
-function paddingBox(el: HTMLElement): { top: number; left: number; bottom: number } {
+function paddingBox(el: HTMLElement): {
+  top: number;
+  left: number;
+  bottom: number;
+  right: number;
+} {
   const r = el.getBoundingClientRect();
   const top = r.top + el.clientTop;
-  // happy-dom reports clientHeight 0; fall back to the border box there.
+  const left = r.left + el.clientLeft;
+  // happy-dom reports clientHeight/Width 0; fall back to the border box there.
   const height = el.clientHeight || r.height;
-  return { top, left: r.left + el.clientLeft, bottom: top + height };
+  const width = el.clientWidth || r.width;
+  return { top, left, bottom: top + height, right: left + width };
+}
+
+// The right edge of the viewport a `position: fixed` box is laid out against —
+// the layout viewport, which excludes a vertical scrollbar (`innerWidth` does not).
+function viewportRight(): number {
+  return document.documentElement.clientWidth || window.innerWidth;
 }
 
 export function Combobox<T extends string>({
@@ -242,6 +286,9 @@ export function Combobox<T extends string>({
   query: controlledQuery,
   onQueryChange,
   footer,
+  triggerIcon,
+  busy = false,
+  align = 'start',
 }: ComboboxProps<T>) {
   // A DISABLED combobox never opens — not even when it mounts with `autoOpen`
   // (MOTIR-6173). An inline editor that mounts open for an actor who may not
@@ -333,13 +380,15 @@ export function Combobox<T extends string>({
     setListMaxHeight(Math.max(80, Math.min(256, avail - (searchable ? 52 : 12))));
     const style: CSSProperties = {
       position: 'fixed',
-      left: Math.round(rect.left),
       minWidth: Math.round(rect.width),
     };
+    // `end` pins the menu's right edge to the trigger's, so it grows leftwards.
+    if (align === 'end') style.right = Math.round(viewportRight() - rect.right);
+    else style.left = Math.round(rect.left);
     if (placeBelow) style.top = Math.round(rect.bottom + gap);
     else style.bottom = Math.round(viewportH - rect.top + gap);
     setMenuStyle(style);
-  }, [searchable]);
+  }, [searchable, align]);
 
   // The in-dialog branch renders INLINE (an absolute child of the trigger),
   // so — unlike the body-portaled branch — it cannot escape the modal's
@@ -409,12 +458,15 @@ export function Combobox<T extends string>({
       setListMaxHeight(Math.max(80, Math.min(256, avail - chrome)));
       // Fixed offsets are measured from the containing block's padding box
       // (the viewport when there is none).
-      const origin = cb ? paddingBox(cb) : { top: 0, left: 0, bottom: window.innerHeight };
+      const origin = cb
+        ? paddingBox(cb)
+        : { top: 0, left: 0, bottom: window.innerHeight, right: viewportRight() };
       const style: CSSProperties = {
         position: 'fixed',
-        left: Math.round(rect.left - origin.left),
         minWidth: Math.round(rect.width),
       };
+      if (align === 'end') style.right = Math.round(origin.right - rect.right);
+      else style.left = Math.round(rect.left - origin.left);
       if (placeAbove) style.bottom = Math.round(origin.bottom - (rect.top - gap));
       else style.top = Math.round(rect.bottom + gap - origin.top);
       setInlineAbove(placeAbove);
@@ -434,7 +486,7 @@ export function Combobox<T extends string>({
     // Reserve room for the optional search input + container padding (same
     // budget as the portaled branch).
     setListMaxHeight(Math.max(80, Math.min(256, avail - (searchable ? 52 : 12))));
-  }, [searchable]);
+  }, [searchable, align]);
 
   // On open: focus the right control (the only side effect — query/active reset
   // happens in openMenu so this effect never calls setState).
@@ -661,6 +713,7 @@ export function Combobox<T extends string>({
                   role="option"
                   aria-selected={isSelected}
                   aria-disabled={opt.disabled ? true : undefined}
+                  lang={opt.lang}
                   onMouseEnter={() => setActiveIndex(i)}
                   onClick={() => commit(i)}
                   className={cn(
@@ -746,7 +799,11 @@ export function Combobox<T extends string>({
         // modal's bottom edge isn't clipped (clamped + scrolled).
         inlineFixed
           ? null
-          : cn('absolute left-0 min-w-full', inlineAbove ? 'bottom-full mb-1' : 'top-full mt-1'),
+          : cn(
+              'absolute min-w-full',
+              align === 'end' ? 'right-0' : 'left-0',
+              inlineAbove ? 'bottom-full mb-1' : 'top-full mt-1',
+            ),
       )}
     >
       {menuInner}
@@ -782,6 +839,7 @@ export function Combobox<T extends string>({
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-label={label}
+        aria-busy={busy || undefined}
         disabled={disabled}
         onClick={() => (open ? closeMenu() : openMenu())}
         onKeyDown={onTriggerKeyDown}
@@ -792,6 +850,11 @@ export function Combobox<T extends string>({
           className,
         )}
       >
+        {triggerIcon ? (
+          <span aria-hidden className={ICON_SLOT}>
+            {triggerIcon}
+          </span>
+        ) : null}
         {selected ? (
           <>
             {selected.icon ? (
@@ -799,7 +862,9 @@ export function Combobox<T extends string>({
                 {selected.icon}
               </span>
             ) : null}
-            <span className="text-(--el-text) truncate">{selected.label}</span>
+            <span lang={selected.lang} className="text-(--el-text) truncate">
+              {selected.label}
+            </span>
             {selected.secondary ? (
               // identifier (= slate, the -secondary weight): AA on the trigger surface at 12px (as above).
               <span className="text-(--el-text-identifier) ml-auto truncate text-xs">
@@ -810,7 +875,16 @@ export function Combobox<T extends string>({
         ) : (
           <span className="text-(--el-text-muted) truncate">{placeholder}</span>
         )}
-        <ChevronsUpDown className="text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0" aria-hidden />
+        {busy ? (
+          // The spinner takes the chevron's 16px slot, so the trigger keeps its size.
+          <LoaderCircle
+            data-combobox-busy=""
+            className="text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0 animate-spin"
+            aria-hidden
+          />
+        ) : (
+          <ChevronsUpDown className="text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0" aria-hidden />
+        )}
       </button>
 
       {open

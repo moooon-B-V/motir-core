@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { deriveGuideView, guideOutcomeLines } from '@/lib/planning/guideView';
 import {
+  guideFiledNote,
+  guideRailBody,
+  guideReplyBody,
+  guideSkippedNote,
+} from '@/lib/planning/guideReplyNotes';
+import {
   GUIDE_SKIP_LINKED_PULL_REQUEST,
   temporaryAddedStepId,
   type GuideAction,
@@ -327,5 +333,148 @@ describe('guideOutcomeLines', () => {
       3,
     );
     expect(lines).toEqual([{ kind: 'ticked', step: 2, temporary: false, noStatus: true }]);
+  });
+});
+
+// MOTIR-7811 (design MOTIR-7810): a `file_bug` draws a line from the record —
+// the one action whose SKIPPED outcome can draw one.
+describe('guideOutcomeLines — file_bug', () => {
+  const rows = deriveGuideView([], [todo('r1', 'One'), todo('r2', 'Two')], { idle: true }).rows;
+  const fileBug = (blocksGuidedCard = false): GuideAction => ({
+    type: 'file_bug',
+    title: 'The console 500s on save',
+    descriptionMd: 'Steps.',
+    explanationMd: null,
+    blocksGuidedCard,
+  });
+
+  it('a landed filing is `filed`, carrying the NEW key', () => {
+    expect(
+      guideOutcomeLines(record([[fileBug(), 'landed', { workItemKey: 'PAY-231' }]]), rows, 2),
+    ).toEqual([{ kind: 'filed', bugKey: 'PAY-231' }]);
+  });
+
+  it('a landed filing that blocks the guided card is `filedBlocking`', () => {
+    expect(
+      guideOutcomeLines(record([[fileBug(true), 'landed', { workItemKey: 'PAY-231' }]]), rows, 2),
+    ).toEqual([{ kind: 'filedBlocking', bugKey: 'PAY-231' }]);
+  });
+
+  it('a duplicate (skipped WITH a key) is `alreadyFiled`, naming the existing bug', () => {
+    expect(
+      guideOutcomeLines(
+        record([
+          [fileBug(), 'skipped', { workItemKey: 'PAY-198', reason: 'already filed as PAY-198' }],
+        ]),
+        rows,
+        2,
+      ),
+    ).toEqual([{ kind: 'alreadyFiled', bugKey: 'PAY-198' }]);
+  });
+
+  it('a refusal with NO key (the cap, one per turn) draws no line', () => {
+    expect(
+      guideOutcomeLines(
+        record([[fileBug(), 'skipped', { reason: 'a guide turn files at most one bug' }]]),
+        rows,
+        2,
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps ACTION order beside ordinary acts — [tick, file_bug]', () => {
+    expect(
+      guideOutcomeLines(
+        record([
+          [{ type: 'tick', rowId: 'r1' }, 'landed'],
+          [fileBug(), 'landed', { workItemKey: 'PAY-231' }],
+        ]),
+        rows,
+        3,
+      ),
+    ).toEqual([
+      { kind: 'ticked', step: 1, temporary: false, noStatus: false },
+      { kind: 'filed', bugKey: 'PAY-231' },
+    ]);
+  });
+
+  it('keeps ACTION order beside a stop — [file_bug, cannot_do]', () => {
+    expect(
+      guideOutcomeLines(
+        record([
+          [fileBug(), 'landed', { workItemKey: 'PAY-231' }],
+          [{ type: 'cannot_do', reason: 'needs the console' }, 'landed'],
+        ]),
+        rows,
+        3,
+      ),
+    ).toEqual([
+      { kind: 'filed', bugKey: 'PAY-231' },
+      { kind: 'commented', reason: 'needs the console' },
+    ]);
+  });
+});
+
+// Decision (a): the landing keeps writing the notes; the rail strips EXACTLY what
+// it appended, recomputed from the record.
+describe('guideRailBody', () => {
+  const fileBug: GuideAction = {
+    type: 'file_bug',
+    title: 'The console 500s on save',
+    descriptionMd: 'Steps.',
+    explanationMd: null,
+    blocksGuidedCard: false,
+  };
+  const stored = (r: GuideTurnRecord, message = 'I filed it.') =>
+    guideReplyBody(message, r.actions, r.outcomes);
+
+  it('the stored body is the message then the notes, as the landing wrote it', () => {
+    const r = record([[fileBug, 'landed', { workItemKey: 'PAY-231' }]]);
+    expect(guideFiledNote(r.actions, r.outcomes)).toBe(
+      'Filed a bug:\n- PAY-231: The console 500s on save',
+    );
+    expect(stored(r)).toBe('I filed it.\n\nFiled a bug:\n- PAY-231: The console 500s on save');
+  });
+
+  it('drops the filed note on the rail', () => {
+    const r = record([[fileBug, 'landed', { workItemKey: 'PAY-231' }]]);
+    expect(guideRailBody(stored(r), r)).toBe('I filed it.');
+  });
+
+  it('drops a duplicate’s bullet, and the whole note when it was the only one', () => {
+    const r = record([
+      [fileBug, 'skipped', { workItemKey: 'PAY-198', reason: 'already filed as PAY-198' }],
+    ]);
+    expect(stored(r)).toContain('- file bug: already filed as PAY-198');
+    expect(guideRailBody(stored(r), r)).toBe('I filed it.');
+  });
+
+  it('keeps a keyless refusal in the did-not-land note, and every other skipped act', () => {
+    const r = record([
+      [fileBug, 'landed', { workItemKey: 'PAY-231' }],
+      [fileBug, 'skipped', { reason: 'a guide turn files at most one bug' }],
+      [{ type: 'tick', rowId: 'x' }, 'skipped', { reason: 'not on this card' }],
+    ]);
+    expect(guideRailBody(stored(r), r)).toBe(
+      [
+        'I filed it.',
+        guideSkippedNote([
+          { type: 'file_bug', outcome: 'skipped', reason: 'a guide turn files at most one bug' },
+          { type: 'tick', outcome: 'skipped', reason: 'not on this card' },
+        ]),
+      ].join('\n\n'),
+    );
+    expect(guideRailBody(stored(r), r)).not.toContain('PAY-231');
+  });
+
+  it('renders a turn with no file_bug exactly as stored', () => {
+    const r = record([[{ type: 'tick', rowId: 'x' }, 'skipped', { reason: 'nope' }]]);
+    expect(guideRailBody(stored(r), r)).toBe(stored(r));
+    expect(guideRailBody('plain', null)).toBe('plain');
+  });
+
+  it('leaves a body that does not end with the recomputed suffix untouched', () => {
+    const r = record([[fileBug, 'landed', { workItemKey: 'PAY-231' }]]);
+    expect(guideRailBody('Edited by hand.', r)).toBe('Edited by hand.');
   });
 });

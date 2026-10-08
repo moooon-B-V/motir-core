@@ -270,7 +270,7 @@ function Command({
 function When({ iso, now }: { iso: string; now: number }) {
   const locale = useLocale();
   return (
-    <time className="whitespace-nowrap" dateTime={iso} title={formatRunInstant(iso)}>
+    <time className="whitespace-nowrap" dateTime={iso} title={formatRunInstant(iso, locale)}>
       {relativeLabel(iso, locale, now)}
     </time>
   );

@@ -119,6 +119,19 @@ model User {
   /// a log read. Cleared on unsuspend, together with `suspendedAt`. The audit
   /// log keeps every reason ever given; this holds only the live one.
   suspendedReason     String?       @map("suspended_reason")
+  /// The person's saved INTERFACE language (Story MOTIR-7730 · MOTIR-7743) — the
+  /// first step of every request's locale resolution (`lib/i18n/resolveLocale.ts`:
+  /// saved account language, then the browser's `NEXT_LOCALE` choice, then the
+  /// best `Accept-Language` match, then English). NULL means "nothing saved —
+  /// fall through", which is every account made before this column and any whose
+  /// best-effort sign-up seed was lost. Read BY USER ID, with no request in scope
+  /// (`usersService.getSavedLocale`), so server code that has no cookie — an email
+  /// being rendered in a job — can still ask what a person reads. A plain string
+  /// validated in code by `isLocale`, never a Postgres enum, so adding a locale
+  /// needs no migration and a value from a retired locale is skipped, not trusted.
+  /// It is the interface language only: an organisation's CONTENT language is a
+  /// separate setting with its own story.
+  locale              String?       @map("locale")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -8856,6 +8869,12 @@ model PlanChangeSession {
   /// §6) — written once, at creation, by the copy start; NULL otherwise. SetNull:
   /// the copy outlives its source.
   copiedFromSessionId String?               @map("copied_from_session_id")
+  /// How many bugs a GUIDE conversation has filed through its `file_bug` action
+  /// (Story MOTIR-7797 · MOTIR-7800; decision MOTIR-7798 Q3). Read and bumped
+  /// under this row's lock in the transaction that files the bug, so two
+  /// concurrent filings cannot both pass `GUIDE_BUGS_PER_CONVERSATION`. Always 0
+  /// on a session that is not a guide.
+  guideBugsFiled      Int                   @default(0) @map("guide_bugs_filed")
   createdAt           DateTime              @default(now()) @map("created_at")
   updatedAt           DateTime              @updatedAt @map("updated_at")
 

@@ -45,6 +45,9 @@ function userRow(extra: Record<string, unknown> = {}) {
     // double as the proof that it does not reach the wire. `null` would have
     // satisfied the type and proved nothing.
     platformRole: 'superadmin' as PlatformRole | null,
+    // The saved interface language (MOTIR-7743) — a real column the v1 identity
+    // contract does not carry.
+    locale: 'zh' as string | null,
     // SUSPENSION STATE (MOTIR-1167), set on purpose for the same reason as
     // `platformRole` above: `suspendedReason` is written by a platform operator
     // FOR other operators — "suspected payment fraud" is not a sentence to hand

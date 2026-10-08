@@ -32,6 +32,7 @@ import {
 // runtime (`as never`), so a typed catalogue checks nothing here — it only makes
 // next-intl compute every key path in all ~600 KB of it.
 vi.mock('next-intl/server', () => ({
+  getLocale: async () => 'en',
   getTranslations: async (namespace: string) =>
     createTranslator({
       locale: 'en',

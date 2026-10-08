@@ -24,6 +24,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
+import { setReaderLanguage } from './_helpers/reader-language';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
@@ -270,9 +271,7 @@ test('7 · Chinese: the refusal reads in the zh.json text', async ({ page }) => 
   await seedRefused(t, repoId);
 
   await page.goto('/code');
-  await page
-    .context()
-    .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
+  await setReaderLanguage(page, EMAIL, 'zh');
   await page.reload();
 
   // The list's accessible name is translated too, so the row is found by its

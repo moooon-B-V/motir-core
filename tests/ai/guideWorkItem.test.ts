@@ -55,6 +55,8 @@ describe('buildGuideContext', () => {
       descriptionMd: '',
       explanationMd: 'Why.',
       pullRequests: [{ url: 'https://github.com/acme/web/pull/7', state: 'open' }],
+      // Absent on the input reads as none (MOTIR-7800).
+      openBugs: [],
     });
     expect(ctx.todos.temporary).toBe(false);
     expect(ctx.todos.rows.map((r) => [r.id, r.done, r.executor])).toEqual([
@@ -98,6 +100,20 @@ describe('buildGuideContext', () => {
     expect(ctx.turns[1]).not.toHaveProperty('files');
     expect(ctx.turns[2]).not.toHaveProperty('files');
     expect(buildGuideContext(card, [], [], { files: [] })).not.toHaveProperty('files');
+  });
+
+  it('carries the card’s open related bugs by key, title and status (MOTIR-7800)', () => {
+    const ctx = buildGuideContext(
+      {
+        ...card,
+        openBugs: [{ key: 'MOTIR-12', title: 'The console 500s on save', status: 'todo' }],
+      },
+      [],
+      [],
+    );
+    expect(ctx.card.openBugs).toEqual([
+      { key: 'MOTIR-12', title: 'The console 500s on save', status: 'todo' },
+    ]);
   });
 
   it('marks a temporary list only when it has rows, and drops an unknown executor', () => {
@@ -158,6 +174,14 @@ const VALID: Record<GuideActionType, Record<string, unknown>> = {
     prompt: '  Rotate the signing key with the CLI. Read the key from your keychain.  ',
   },
   needs_replan: { type: 'needs_replan', reason: 'A different provider is a different card' },
+  // MOTIR-7800 (decision MOTIR-7798 Q3): a confirmed defect, filed as the person.
+  file_bug: {
+    type: 'file_bug',
+    title: '  The console 500s when the key is saved  ',
+    descriptionMd: 'Saving a rotated key returns HTTP 500.',
+    explanationMd: 'The save handler reads the old key id.',
+    blocksGuidedCard: true,
+  },
 };
 
 describe('parseGuideTurn', () => {
@@ -220,6 +244,40 @@ describe('parseGuideTurn', () => {
     ]);
   });
 
+  it('reads a file_bug: a trimmed one-line title, and `blocksGuidedCard` / `explanationMd` defaulted when absent', () => {
+    const turn = parseGuideTurn({
+      messageMd: 'ok',
+      actions: [
+        VALID.file_bug,
+        { type: 'file_bug', title: 'Another', descriptionMd: 'Steps.' },
+        { type: 'file_bug', title: 'Third', descriptionMd: 'Steps.', explanationMd: '   ' },
+      ],
+    });
+    expect(turn.actions).toEqual([
+      {
+        type: 'file_bug',
+        title: 'The console 500s when the key is saved',
+        descriptionMd: 'Saving a rotated key returns HTTP 500.',
+        explanationMd: 'The save handler reads the old key id.',
+        blocksGuidedCard: true,
+      },
+      {
+        type: 'file_bug',
+        title: 'Another',
+        descriptionMd: 'Steps.',
+        explanationMd: null,
+        blocksGuidedCard: false,
+      },
+      {
+        type: 'file_bug',
+        title: 'Third',
+        descriptionMd: 'Steps.',
+        explanationMd: null,
+        blocksGuidedCard: false,
+      },
+    ]);
+  });
+
   it('accepts a turn with no actions at all', () => {
     expect(parseGuideTurn({ messageMd: 'Hello.' }).actions).toEqual([]);
   });
@@ -246,6 +304,30 @@ describe('parseGuideTurn', () => {
     ['an edit that changes nothing', { type: 'edit_item', reason: 'x' }, 'actions[0]'],
     ['a move with a bad anchor', { ...VALID.move_step, afterRowId: 7 }, 'actions[0].afterRowId'],
     ['a cannot_do with no reason', { type: 'cannot_do' }, 'actions[0].reason'],
+    ['a two-line bug title', { ...VALID.file_bug, title: 'a\nb' }, 'actions[0].title'],
+    [
+      'a bug title over 200 characters',
+      { ...VALID.file_bug, title: 'x'.repeat(201) },
+      'actions[0].title',
+    ],
+    ['a bug with no title', { ...VALID.file_bug, title: undefined }, 'actions[0].title'],
+    [
+      'an empty bug description',
+      { ...VALID.file_bug, descriptionMd: '  ' },
+      'actions[0].descriptionMd',
+    ],
+    [
+      'a bug description over the cap',
+      { ...VALID.file_bug, descriptionMd: 'x'.repeat(20_001) },
+      'actions[0].descriptionMd',
+    ],
+    [
+      'a non-boolean blocksGuidedCard',
+      { ...VALID.file_bug, blocksGuidedCard: 'yes' },
+      'actions[0].blocksGuidedCard',
+    ],
+    ['a bug naming a kind', { ...VALID.file_bug, kind: 'task' }, 'actions[0]'],
+    ['a bug naming a project', { ...VALID.file_bug, projectKey: 'OTHER' }, 'actions[0]'],
     ['a needs_replan with no reason', { type: 'needs_replan' }, 'actions[0].reason'],
     [
       'a local-agent prompt with no row',
@@ -372,6 +454,25 @@ describe('readGuideTurnRecord', () => {
       ],
       temporary: true,
     });
+  });
+
+  it('round-trips a file_bug outcome’s key, landed or refused as a duplicate (MOTIR-7800)', () => {
+    const record = readGuideTurnRecord({
+      actions: [VALID.file_bug, VALID.file_bug],
+      outcomes: [
+        { outcome: 'landed', workItemKey: 'PROD-41' },
+        { outcome: 'skipped', reason: 'already filed as PROD-7', workItemKey: 'PROD-7' },
+      ],
+    });
+    expect(record?.outcomes).toEqual([
+      { type: 'file_bug', outcome: 'landed', workItemKey: 'PROD-41' },
+      {
+        type: 'file_bug',
+        outcome: 'skipped',
+        reason: 'already filed as PROD-7',
+        workItemKey: 'PROD-7',
+      },
+    ]);
   });
 
   it('reads anything that no longer parses as null', () => {

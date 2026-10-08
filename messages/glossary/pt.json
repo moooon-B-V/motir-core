@@ -1,0 +1,224 @@
+{
+  "locale": "pt",
+  "register": {
+    "formality": "\"você\" (Brazilian Portuguese), as the Atlassian and GitHub pt-BR UIs address the reader. Buttons are infinitives (Salvar, Excluir).",
+    "quotes": "“…” (nested ‘…’)",
+    "note": "Brazilian Portuguese spelling and vocabulary (arquivo, tela, excluir). Sentence case. A sentence-final ellipsis is \"…\"."
+  },
+  "terms": {
+    "Motir": {
+      "translation": "Motir",
+      "doNotTranslate": true,
+      "source": "Product name (story MOTIR-7730 copy rules)",
+      "note": "Never translated, transliterated or inflected."
+    },
+    "Motir AI": {
+      "translation": "Motir AI",
+      "doNotTranslate": true,
+      "source": "Product name (story MOTIR-7730 copy rules)",
+      "note": "Never translated, transliterated or inflected."
+    },
+    "Sprint": {
+      "translation": "Sprint",
+      "source": "messages/zh.json issueViews.sprint (\"Sprint\", kept Latin) and story MOTIR-7730 copy rules",
+      "note": "Kept in Latin script by decision, in every language."
+    },
+    "work item": {
+      "translation": "item de trabalho",
+      "banned": ["issue", "cartão", "ticket", "chamado", "incidente"],
+      "allowedSenses": "'card' (and its translation) stays correct for a PAYMENT card (billing) and a UI PANEL (a dashboard or board card component) — the same senses tests/i18n-catalog.test.ts's CARD_SENSE_ALLOWLIST allows in en and zh. It is banned only as a name for a work item.",
+      "source": "Microsoft Terminology / Azure DevOps Boards, Portuguese (Brazil) UI (\"work item\")",
+      "note": "The ONE product noun. Never the language's word for \"issue\" or \"card\", even where its Jira says so. Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "item": {
+      "translation": "item",
+      "source": "Microsoft Terminology / Azure DevOps Boards, Portuguese (Brazil) UI (\"work item\")",
+      "note": "Short form of \"work item\" where the full term would repeat (e.g. \"3 items\"). Same banned list as \"work item\". Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "epic": {
+      "translation": "Épico",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "story": {
+      "translation": "História",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "task": {
+      "translation": "Tarefa",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "bug": {
+      "translation": "Bug",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "subtask": {
+      "translation": "Subtarefa",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "To do": {
+      "translation": "A fazer",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Blocked": {
+      "translation": "Bloqueado",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Planning": {
+      "translation": "Em planejamento",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "In progress": {
+      "translation": "Em andamento",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Implemented": {
+      "translation": "Implementado",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "In review": {
+      "translation": "Em revisão",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "Done": {
+      "translation": "Concluído",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "backlog": {
+      "translation": "Backlog",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "board": {
+      "translation": "Quadro",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "dashboard": {
+      "translation": "Painel",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "story points": {
+      "translation": "Pontos de história",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "estimate": {
+      "translation": "Estimativa",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "assignee": {
+      "translation": "Responsável",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "reporter": {
+      "translation": "Criador",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "priority": {
+      "translation": "Prioridade",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "label": {
+      "translation": "Etiqueta",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "component": {
+      "translation": "Componente",
+      "source": "Atlassian Jira Software, Portuguese (Brazil) UI (issue-type, status and field names)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "folder": {
+      "translation": "Pasta",
+      "source": "Microsoft 365 / Azure DevOps, Portuguese (Brazil) UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "project": {
+      "translation": "Projeto",
+      "source": "Microsoft 365 / Azure DevOps, Portuguese (Brazil) UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "workspace": {
+      "translation": "Espaço de trabalho",
+      "source": "Microsoft 365 / Azure DevOps, Portuguese (Brazil) UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "organization": {
+      "translation": "Organização",
+      "source": "Microsoft 365 / Azure DevOps, Portuguese (Brazil) UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "member": {
+      "translation": "Membro",
+      "source": "Microsoft 365 / Azure DevOps, Portuguese (Brazil) UI (common navigation nouns)",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "plan": {
+      "translation": "Plano",
+      "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "proposal": {
+      "translation": "Proposta",
+      "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "approve": {
+      "translation": "aprovar",
+      "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "approval": {
+      "translation": "Aprovação",
+      "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "acceptance criteria": {
+      "translation": "Critérios de aceitação",
+      "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "agent": {
+      "translation": "Agente",
+      "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "run": {
+      "translation": "Execução",
+      "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "pull request": {
+      "translation": "pull request",
+      "source": "GitHub, Portuguese (Brazil) UI (pull request)",
+      "note": "Kept in Latin (lower case mid-sentence), as developers using GitHub in this language read it. Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "design result": {
+      "translation": "Resultado de design",
+      "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    },
+    "acceptance video": {
+      "translation": "Vídeo de aceitação",
+      "source": "Atlassian Jira Software / GitHub, Portuguese (Brazil) UI",
+      "note": "Not fetched in this session (no reference was reachable from the run); chosen from the translator's knowledge of that product's localized UI. Re-check against the live product before changing it."
+    }
+  }
+}

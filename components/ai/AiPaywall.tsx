@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Pause, Sparkles, Lock, ArrowUp } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button, buttonVariants } from '@/components/ui/Button';
@@ -126,6 +126,7 @@ function AiPaywallCard({
   onDismiss?: () => void;
   className?: string;
 }) {
+  const locale = useLocale();
   const t = useTranslations('billing');
   const org = resolved.organizationName ?? t('paywall.fallbackOrg');
 
@@ -212,7 +213,9 @@ function AiPaywallCard({
       }
       note={
         resolved.renewsAt
-          ? t('paywall.outOfCredits.renewNote', { date: formatRenewDate(resolved.renewsAt) })
+          ? t('paywall.outOfCredits.renewNote', {
+              date: formatRenewDate(resolved.renewsAt, locale),
+            })
           : t('paywall.outOfCredits.renewNoteUndated')
       }
     />
@@ -267,11 +270,11 @@ function PaywallShell({
   );
 }
 
-// Locale-agnostic, absolute (not relative) date — formatted on the client only
+// In the reader's language (MOTIR-7771), absolute (not relative) date — formatted on the client only
 // (this card renders post-mount on an error / blocked state), so no SSR/hydration
 // skew. Falls back to the raw ISO string if it can't parse.
-function formatRenewDate(iso: string): string {
+function formatRenewDate(iso: string, locale: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 }

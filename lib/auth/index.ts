@@ -37,6 +37,8 @@ import {
 import { PASSKEY_RESIDENT_KEY, PASSKEY_RP_NAME, PASSKEY_USER_VERIFICATION } from './passkeyConfig';
 import { hash, verify } from './passwords';
 import { mcpOAuthPolicy } from './mcpOAuthPolicy';
+import { localeSync } from './localeSync';
+import { localeFromRequestHeaders } from '@/lib/i18n/seedLocale';
 import { seedResourcesLazily } from './lazyResourceSeed';
 import {
   CIMD_FETCH_POLICY,
@@ -120,10 +122,19 @@ export const authOptions: BetterAuthOptions & {
     ReturnType<typeof twoFactor>,
     ReturnType<typeof passkey>,
     ReturnType<typeof mcpOAuthPolicy>,
+    ReturnType<typeof localeSync>,
     ReturnType<typeof oauthProvider>,
     ReturnType<typeof cimd>,
     ReturnType<typeof nextCookies>,
   ];
+  // Named so `Auth<typeof authOptions>` infers the saved language onto the
+  // session user (MOTIR-7743) — the annotation above would otherwise widen
+  // `user` to `BetterAuthOptions['user']` and drop the field from the type.
+  user: {
+    additionalFields: {
+      locale: { type: 'string'; required: false; input: false };
+    };
+  };
 } = {
   database: prismaAdapter(db, { provider: 'postgresql' }),
 
@@ -230,6 +241,19 @@ export const authOptions: BetterAuthOptions & {
         window: 3600,
         max: 3,
       },
+    },
+  },
+
+  // The person's saved interface language (Story MOTIR-7730 · MOTIR-7743) rides
+  // on the session through Better-Auth's own seam for extra user columns, so a
+  // signed-in render reads it from the session lookup it already pays for —
+  // `i18n/request.ts` resolves the request's locale from it without a second
+  // query. `input: false`: no sign-up or update-user BODY may set it. The writes
+  // are the product's (the Settings choice and the sign-up seed), never a
+  // client-supplied field.
+  user: {
+    additionalFields: {
+      locale: { type: 'string', required: false, input: false },
     },
   },
 
@@ -350,6 +374,26 @@ export const authOptions: BetterAuthOptions & {
     },
     user: {
       create: {
+        // ⚠️ THE ACCOUNT LANGUAGE IS SEEDED IN THE INSERT ITSELF (Story
+        // MOTIR-7730 · MOTIR-7747), from the language the signing-up request
+        // resolves to — its NEXT_LOCALE choice, else the best Accept-Language
+        // match, else English (`lib/i18n/seedLocale.ts`). In `before`, not
+        // `after`, so it lands atomically with the row: no best-effort window
+        // and no second write. A `create` hook fires only when a user row is
+        // inserted — a new email sign-up or a new Google account — so signing
+        // in, and Google LINKING onto an existing account, never reach it, and
+        // it cannot overwrite a saved language. The second argument is
+        // better-auth's endpoint context (`tryGetCurrentAuthEndpointContext()`
+        // in `db/with-hooks.mjs` at 1.7.7): `ctx.headers` carries the request
+        // headers on both paths (and `ctx.request.headers` on the route
+        // handler). With no context — a server-side create such as a seed
+        // script — `locale` stays null rather than guessing.
+        before: async (user, ctx) => ({
+          data: {
+            ...user,
+            locale: localeFromRequestHeaders(ctx?.headers ?? ctx?.request?.headers ?? null),
+          },
+        }),
         after: async (user) => {
           // ⚠️ THE LEGAL ACCEPTANCE IS RECORDED FIRST, AND IN ITS OWN
           // try/catch (Story 8.4 · Subtask MOTIR-1135).
@@ -667,6 +711,9 @@ export const authOptions: BetterAuthOptions & {
     // at registration and a missing or foreign `resource` at authorize, neither
     // of which the provider checks (`./mcpOAuthPolicy.ts`).
     mcpOAuthPolicy(),
+    // Sign-in brings this browser's NEXT_LOCALE in line with the saved account
+    // language (MOTIR-7747) — `lib/auth/localeSync.ts`.
+    localeSync(),
     // Seeds the MCP resource on first use, not at import (`./lazyResourceSeed.ts`).
     seedResourcesLazily(
       oauthProvider({

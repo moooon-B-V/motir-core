@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { ContentSectionCard } from './ContentSectionCard';
 import { DEVELOPMENT_SECTION_ID, LATE_FALLBACK_ATTR } from './decisionAnchor';
 import type { ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
@@ -347,14 +347,17 @@ export async function LateUpperSections({
   parentIdentifier?: string | null;
 }) {
   const r = await reads;
-  const [tGithub, tAcceptance, tDesignResult, tRuns, tChoice, tConfirm] = await Promise.all([
-    getTranslations('github'),
-    getTranslations('acceptance'),
-    getTranslations('designResult'),
-    getTranslations('runs'),
-    getTranslations('approvalGate.choice'),
-    getTranslations('approvalGate.decisionConfirm'),
-  ]);
+  const [tGithub, tAcceptance, tDesignResult, tRuns, tChoice, tConfirm, locale] = await Promise.all(
+    [
+      getTranslations('github'),
+      getTranslations('acceptance'),
+      getTranslations('designResult'),
+      getTranslations('runs'),
+      getTranslations('approvalGate.choice'),
+      getTranslations('approvalGate.decisionConfirm'),
+      getLocale(),
+    ],
+  );
   // ⚠️ A DESIGN RESULT ON A CARD WITH AN OPEN LINKED PULL REQUEST IS NOT A SECTION
   // (`design-result.md` AMENDMENT 4 Q8). Those pull requests carry the decision —
   // one approve-to-merge gate over all of them — so the result renders ONCE as
@@ -442,9 +445,9 @@ export async function LateUpperSections({
           r.runs && r.runs.length === RUN_HISTORY_PAGE ? (r.runs.at(-1)?.id ?? null) : null
         }
         itemKey={itemIdentifier}
-        formattedTimes={formatRunTimes(r.runs ?? [])}
+        formattedTimes={formatRunTimes(r.runs ?? [], locale)}
         scopeRun={r.scopeRun}
-        scopeRunTime={r.scopeRun ? formatRunInstant(r.scopeRun.startedAt) : null}
+        scopeRunTime={r.scopeRun ? formatRunInstant(r.scopeRun.startedAt, locale) : null}
         gated={r.gatedRun}
         viewerId={currentUserId}
       />
