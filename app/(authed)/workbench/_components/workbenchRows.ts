@@ -132,6 +132,9 @@ function resolveRole(row: HomeWorkItemRowDto, isWatchingTab: boolean): Workbench
   if (row.fixGroupKind !== null) return 'none';
   // The same for a To resume entry's head (MOTIR-7712): only that read sets `resumeRun`.
   if (row.resumeRun !== undefined) return 'none';
+  // A grouped work tab's CONTEXT head (MOTIR-8015; § 36.2): not on the tab, and here only
+  // to name its members' container — the reader may hold neither role on it.
+  if (row.groupHead === 'context') return 'none';
   // Only reachable on the Watching tab — every WORK read's predicate IS
   // assignee-or-reporter, so a row there always matched one of the two above.
   return isWatchingTab ? 'watching' : 'assigned';
@@ -188,5 +191,9 @@ export function toWorkbenchRowViews(
       resume: isMember ? null : resumeOf(row),
     };
   };
-  return rows.map((row) => view(row, false));
+  // ⚠️ INTERIM FLATTENING (MOTIR-8015): the grouped work tabs send a head carrying its
+  // `groupMembers`. Until the page draws the group row (MOTIR-8016), each head is followed
+  // by its members as plain rows, in the order the service sent, so every item on the tab
+  // stays visible.
+  return rows.flatMap((row) => [view(row, false), ...row.groupMembers.map((m) => view(m, false))]);
 }

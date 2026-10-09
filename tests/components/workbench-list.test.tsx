@@ -102,6 +102,8 @@ function dto(over: Partial<HomeWorkItemRowDto> & { identifier: string }): HomeWo
     resumeState: null,
     resumeRunId: null,
     resumeMembers: [],
+    groupHead: null,
+    groupMembers: [],
     canFixHosted: false,
     repairRun: null,
     ...over,
@@ -297,6 +299,29 @@ describe('toWorkbenchRowViews — the role fallback', () => {
       false,
     );
     expect(row?.role).toBe('assigned');
+  });
+});
+
+describe('toWorkbenchRowViews — the grouped tabs, flattened until the page draws groups (MOTIR-8015)', () => {
+  it('emits a context head first, with no role, then its members in the order sent', () => {
+    const members = ['S-2', 'S-3', 'S-4'].map((identifier) => dto({ identifier, kind: 'subtask' }));
+    const rows = toWorkbenchRowViews(
+      [
+        dto({
+          identifier: 'S-1',
+          kind: 'story',
+          viewerIsAssignee: false,
+          viewerIsReporter: false,
+          groupHead: 'context',
+          groupMembers: members,
+        }),
+      ],
+      WORKFLOW,
+      MEMBERS,
+      false,
+    );
+    expect(rows.map((r) => r.identifier)).toEqual(['S-1', 'S-2', 'S-3', 'S-4']);
+    expect(rows.map((r) => r.role)).toEqual(['none', 'both', 'both', 'both']);
   });
 });
 

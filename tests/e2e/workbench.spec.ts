@@ -458,10 +458,17 @@ const GLYPH_RANK: Record<string, number> = {
 const PAGER_OWNER = 'pager-owner@example.com';
 const PAGER_EMPTY = 'pager-empty@example.com';
 
-/** The rendered rows' kind ranks, in DOM order. */
-async function kindRanks(page: import('@playwright/test').Page): Promise<number[]> {
+/**
+ * MOTIR-8015: the ranks of the rows that are NOT subtasks, in DOM order. To do now
+ * groups by runnable container, so the fixture's 11 subtasks sit under their story,
+ * whose group ranks by its BEST member (a subtask, rank 0). Excluding the subtasks IN
+ * THE LOCATOR keeps this true whether the page draws the members flat (this card's
+ * interim rows) or collapses them under a group row (MOTIR-8016).
+ */
+async function nonSubtaskRanks(page: import('@playwright/test').Page): Promise<number[]> {
   const classes = await page
-    .locator('[data-testid^="workbench-row-"]')
+    .locator('[data-testid^="workbench-row-"], [data-testid^="workbench-group-"]')
+    .filter({ hasNot: page.locator('svg.lucide-list-checks') })
     .evaluateAll((rows) =>
       rows.map((row) => row.querySelector('svg[class*="lucide-"]')?.getAttribute('class') ?? ''),
     );
@@ -553,29 +560,39 @@ test.describe('the pager and the kind order', () => {
     await page.goto('/workbench?tab=todo');
 
     // 1 ── the footer reads the range and the REAL total, and the run is there.
+    //      MOTIR-8015: the pager counts GROUPS. The first story heads its 11
+    //      subtasks, so To do's 61 items are 50 groups — two pages, no third.
     const footer = page.getByRole('navigation', { name: 'Pagination' });
-    await expect(page.getByText(/Showing 1–25 of 61/)).toBeVisible();
+    await expect(page.getByText(/Showing 1–25 of 50/)).toBeVisible();
     await expect(footer).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Page 3' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Page 2' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Page 3' })).toHaveCount(0); // MOTIR-8015
 
     // 6a ── the order, WITHIN page one, before the boundary is crossed.
-    const pageOne = await kindRanks(page);
-    expect(pageOne).toHaveLength(25);
-    expect(pageOne, 'page 1 is not in kind order').toEqual([...pageOne].sort((a, b) => a - b));
+    //      MOTIR-8015: groups rank by their best member, so the subtask-holding
+    //      story leads (its best member is rank 0); every other non-subtask row
+    //      follows in kind order.
+    const pageOne = await nonSubtaskRanks(page);
+    expect(pageOne[0], 'the subtask-holding story heads page 1').toBe(
+      GLYPH_RANK['lucide-book-open'],
+    );
+    expect(pageOne.slice(1), 'page 1 is not in kind order').toEqual(
+      [...pageOne.slice(1)].sort((a, b) => a - b),
+    );
 
-    // 2 ── click page 3. The authoritative signal is the RENDERED range line,
-    //      which only the server can produce for the third window.
-    await page.getByRole('button', { name: 'Page 3' }).click();
-    await expect(page.getByText(/Showing 51–61 of 61/)).toBeVisible();
-    await expect(page).toHaveURL(/\?tab=todo&page=3$/);
-    const pageThree = await kindRanks(page);
-    expect(pageThree).toHaveLength(11);
+    // 2 ── click page 2. The authoritative signal is the RENDERED range line,
+    //      which only the server can produce for the second window.
+    await page.getByRole('button', { name: 'Page 2' }).click();
+    await expect(page.getByText(/Showing 26–50 of 50/)).toBeVisible(); // MOTIR-8015
+    await expect(page).toHaveURL(/\?tab=todo&page=2$/);
+    const pageTwo = await nonSubtaskRanks(page);
+    expect(pageTwo).toHaveLength(25); // MOTIR-8015: 25 standalone rows
 
     // 6b ── THE ORDER ACROSS A BOUNDARY, which a per-page assertion cannot see:
-    //      the last rank on page 1 is ≤ the first rank on page 3, and the
-    //      concatenation is non-decreasing.
-    expect(Math.max(...pageOne)).toBeLessThanOrEqual(Math.min(...pageThree));
-    const concatenated = [...pageOne, ...pageThree];
+    //      the last rank on page 1 is ≤ the first rank on page 2, and the
+    //      concatenation (after the leading story) is non-decreasing.
+    expect(Math.max(...pageOne.slice(1))).toBeLessThanOrEqual(Math.min(...pageTwo));
+    const concatenated = [...pageOne.slice(1), ...pageTwo];
     expect(concatenated, 'the pages are individually sorted and jointly not').toEqual(
       [...concatenated].sort((a, b) => a - b),
     );
@@ -583,15 +600,10 @@ test.describe('the pager and the kind order', () => {
     // not vacuously true of a single-kind run.
     expect(new Set(concatenated).size).toBeGreaterThan(1);
 
-    // 3 ── the back chevron returns page two.
+    // 3 + 4 ── the back chevron returns page one, which carries NO page param —
+    //      the tab's own address — and prev is inert there.
     await page.getByRole('button', { name: 'Previous page' }).click();
-    await expect(page.getByText(/Showing 26–50 of 61/)).toBeVisible();
-    await expect(page).toHaveURL(/\?tab=todo&page=2$/);
-
-    // 4 ── page one carries NO page param — the tab's own address — and prev is
-    //      inert there.
-    await page.getByRole('button', { name: 'Page 1' }).click();
-    await expect(page.getByText(/Showing 1–25 of 61/)).toBeVisible();
+    await expect(page.getByText(/Showing 1–25 of 50/)).toBeVisible(); // MOTIR-8015
     await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}\\?tab=todo$`));
     await expect(page.getByRole('button', { name: 'Previous page' })).toBeDisabled();
 
@@ -619,7 +631,7 @@ test.describe('the pager and the kind order', () => {
     //       the Chinese strings, so an untranslated control fails the walk.
     await setReaderLanguage(page, PAGER_OWNER, 'zh');
     await page.goto('/workbench?tab=todo');
-    await expect(page.getByText(/显示第 1–25 项，共 61 项/)).toBeVisible();
+    await expect(page.getByText(/显示第 1–25 项，共 50 项/)).toBeVisible(); // MOTIR-8015: groups
     await expect(page.getByRole('navigation', { name: '分页' })).toBeVisible();
     await expect(page.getByRole('button', { name: '下一页' })).toBeVisible();
     // Asserted NEGATIVELY too: the English literals this story removed must not
