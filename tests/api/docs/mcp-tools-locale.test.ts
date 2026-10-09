@@ -18,8 +18,8 @@ import { permissionSlug } from '@/lib/permissions/catalog';
 import type { McpSummaryTranslations } from '@/lib/apiDocs/mcpSummaryTranslations/types';
 
 // MOTIR-8031 — the per-locale published MCP catalogue. The rule is exercised on
-// injected FIXTURE translations and records; the shipped summary files are empty
-// by design (the translation cards fill them).
+// injected FIXTURE translations and records, never the shipped summary files, so it
+// holds whatever the translation cards put in them.
 
 const ROUTE_URL = 'http://localhost:3000/api/docs/mcp-tools.json';
 const NON_EN = locales.filter((l) => l !== 'en');
@@ -180,10 +180,7 @@ describe('the localized document', () => {
     const doc = mcpToolCatalogueDocument('ko') as McpLocalizedToolCatalogueDocument;
     for (const group of doc.groups) {
       expect(['ko', 'en']).toContain(group.textLocale);
-      for (const tool of group.tools) {
-        // The shipped summary files are empty, so every summary is English.
-        expect(tool.summaryLocale).toBe('en');
-      }
+      for (const tool of group.tools) expect(['ko', 'en']).toContain(tool.summaryLocale);
     }
   });
 
@@ -205,9 +202,8 @@ describe('the localized document', () => {
     expect(mcpToolCatalogueDocument('ko')).not.toBe(mcpToolCatalogueDocument('ja'));
   });
 
-  it('ships every summary file empty, typed over each non-English locale', () => {
+  it('has a translations entry for every non-English locale', () => {
     expect(Object.keys(MCP_SUMMARY_TRANSLATIONS).sort()).toEqual([...NON_EN].sort());
-    for (const l of NON_EN) expect(MCP_SUMMARY_TRANSLATIONS[l]).toEqual({});
   });
 });
 
