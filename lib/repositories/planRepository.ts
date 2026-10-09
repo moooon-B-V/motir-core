@@ -125,6 +125,26 @@ export const planRepository = {
     });
   },
 
+  /** A session's most recent UNDECIDED plan (`generating` / `planned` / `stale`),
+   *  or `null` — the plan a carry moves (Story MOTIR-7928 · MOTIR-7930). Not the
+   *  LATEST plan: a session that ended `failed` can hold a declined attempt on
+   *  top of an earlier plan that still waits. `tx` required: it guards the move. */
+  async findLatestUndecidedBySession(
+    sessionId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Plan | null> {
+    return tx.plan.findFirst({
+      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /** MOVE a plan to another session (MOTIR-7930) — one `update` of
+   *  `Plan.sessionId`, nothing else. */
+  async moveToSession(id: string, sessionId: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.plan.update({ where: { id }, data: { sessionId }, select: { id: true } });
+  },
+
   /** The id of a session's LATEST plan — "is this plan the conversation's current
    *  one?" (AMENDMENT 17 §5), the question `lastJobId` used to answer only for
    *  the latest submit. `tx` required: it guards a following release. */

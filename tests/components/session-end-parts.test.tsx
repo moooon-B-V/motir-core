@@ -17,7 +17,9 @@ import {
   RestartedDivider,
   SessionEndMarker,
   TakenBackNotice,
+  PlanMovedAwayLine,
   TargetRefusal,
+  WaitingPlanStillWaits,
   copiedTurnCount,
   offersCopy,
 } from '@/components/planning/SessionEndParts';
@@ -204,5 +206,61 @@ describe('RestartedDivider', () => {
     expect(link.getAttribute('href')).toContain('planSession=s1');
     fireEvent.click(link);
     expect(shallowPush).toHaveBeenLastCalledWith(expect.stringContaining('planSession=s1'));
+  });
+});
+
+// The CARRY's parts (Story MOTIR-7928 · MOTIR-7932) on the arms the rail's sheets do
+// not reach: a project-scoped moved-away link, a take-back with no scope label, and
+// the slot's decided / not-yours lines.
+describe('the carry', () => {
+  it.each([
+    ['a card session', 'ACME-40'],
+    ['a project session', null],
+  ] as const)('on %s, the moved-away line opens the newer session by id', (_name, anchorKey) => {
+    renderWithIntl(<PlanMovedAwayLine toSessionId="s2" anchorKey={anchorKey} />);
+    const link = screen.getByRole('link', { name: 'Open the newer session' });
+    expect(link.getAttribute('href')).toContain('planSession=s2');
+  });
+
+  it('a take-back with no scope label names the project', () => {
+    renderWithIntl(<WaitingPlanStillWaits planId="p1" label={null} projectName="PayFlow" />);
+    expect(screen.getByTestId('planning-taken-back-waiting').textContent).toContain('PayFlow');
+  });
+
+  const waiting: PlanChangeSessionDto = {
+    ...SESSION,
+    endedAt: ENDED_AT,
+    endReason: 'restarted',
+    pendingPlanId: 'plan-1',
+  };
+
+  it('a carry refused by a decision says nothing is left to continue', () => {
+    renderWithIntl(
+      <EndedComposerSlot
+        session={waiting}
+        readOnly={false}
+        label="ACME-40"
+        projectName="PayFlow"
+        carryDecided
+      />,
+    );
+    expect(screen.getByTestId('planning-read-only').textContent).toContain(
+      'nothing left to continue',
+    );
+  });
+
+  it.each([
+    ['a named starter', { id: 'u2', name: 'Mara' }, 'Only Mara'],
+    ['an unnamed starter', null, 'Only someone'],
+  ] as const)('another member, with %s, is told whose plan it is', (_name, startedBy, text) => {
+    renderWithIntl(
+      <EndedComposerSlot
+        session={{ ...waiting, startedByViewer: false, startedBy }}
+        readOnly={false}
+        label="ACME-40"
+        projectName="PayFlow"
+      />,
+    );
+    expect(screen.getByTestId('planning-read-only').textContent).toContain(text);
   });
 });

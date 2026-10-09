@@ -2918,6 +2918,52 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm coverage:plan-overlay-only
 
+  story-7928-coverage:
+    name: Coverage (a waiting plan keeps its conversation)
+    runs-on: ubuntu-latest
+    # Story MOTIR-7928 (a waiting plan whose session has ended keeps its conversation) —
+    # MOTIR-7933's per-file floor over the files the story added
+    # (`vitest.coverage.waiting-plan-carry.config.ts`), measured by the story gate (the
+    # carry, its races and the next turn's revise against Postgres) and the code cards'
+    # suites. Locally it ran 10 files in under 2 min.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-7928
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-7928
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-7928.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-7928.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:waiting-plan-carry
+
   story-7602-coverage:
     name: Coverage (Enterprise requests)
     runs-on: ubuntu-latest
@@ -3161,6 +3207,7 @@ jobs:
         story-7631-coverage,
         story-7820-coverage,
         story-7883-coverage,
+        story-7928-coverage,
         story-7974-coverage,
         story-7602-coverage,
         story-7797-coverage,

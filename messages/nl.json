@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, one {# voorstel bewerkt} other {# voorstellen bewerkt}}",
     "event_withdrawn": "{n, plural, one {# voorstel ingetrokken} other {# voorstellen ingetrokken}}",
     "event_brief_edited": "Titel en samenvatting van het plan bewerkt",
+    "event_session_carried": "Meegenomen naar een nieuw gesprek",
     "event_removed": "{n, plural, one {# voorstel verwijderd} other {# voorstellen verwijderd}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",
@@ -7797,7 +7798,36 @@
         "placeholder": "{key} wordt vastgehouden door een andere sessie"
       },
       "ended": "Deze sessie is beëindigd, dus hij kan niet worden voortgezet. Als je {label} opnieuw plant, begint er een nieuwe sessie.",
-      "endedProject": "Deze sessie is beëindigd, dus hij kan niet worden voortgezet. Als je {project} opnieuw plant, begint er een nieuwe sessie."
+      "endedProject": "Deze sessie is beëindigd, dus hij kan niet worden voortgezet. Als je {project} opnieuw plant, begint er een nieuwe sessie.",
+      "carry": {
+        "gloss": "Dit plan wacht nog op je. Schrijf hieronder om eraan verder te werken; het gesprek en het plan gaan samen naar een nieuwe sessie.",
+        "moving": "Dit plan en je gesprek worden naar een nieuwe sessie verplaatst…",
+        "moved": "Dit plan is met het gesprek hierheen verplaatst. Het is hetzelfde plan, dus als je het hier goedkeurt, is het goedgekeurd.",
+        "movedAway": "Het plan van deze sessie is naar een nieuwere sessie verplaatst toen je eraan verder werkte.",
+        "movedAwayOpen": "De nieuwere sessie openen",
+        "takenBackUnsent": "Je bericht is niet verzonden. Het staat in het vak hieronder.",
+        "takenBackWaiting": "Je plan voor {label} uit een eerdere sessie wacht nog.",
+        "takenBackWaitingOpen": "Terug naar het wachtende plan",
+        "decided": {
+          "title": "Over dit plan is beslist terwijl je aan het schrijven was.",
+          "next": "Je bericht is niet verzonden en er is niets nieuws gestart.",
+          "unsent": "Niet verzonden",
+          "slot": "Deze sessie is beëindigd en over het plan is beslist, dus er valt hier niets meer voort te zetten."
+        },
+        "notYours": "Alleen {name}, die deze sessie is begonnen, kan verder werken aan het plan."
+      },
+      "stalePlan": {
+        "one": "Dit plan is verouderd: {workItem} is afgerond nadat het plan is gemaakt, dus het kan niet worden gewijzigd of goedgekeurd.",
+        "many": "Dit plan is verouderd: {workItems} zijn afgerond nadat het plan is gemaakt, dus het kan niet worden gewijzigd of goedgekeurd.",
+        "generic": "Dit plan is verouderd: werk dat het wijzigt is afgerond nadat het plan is gemaakt, dus het kan niet worden gewijzigd of goedgekeurd.",
+        "more": "nog {count}",
+        "planAgain": "Opnieuw plannen",
+        "planAgainGloss": "Start hier één nieuw plan vanuit dit gesprek. Dit plan blijft zoals het is.",
+        "planningAgain": "Opnieuw plannen…",
+        "writing": "Er wordt een nieuw plan geschreven vanuit dit gesprek.",
+        "restored": "Werk dat dit plan wijzigt is weer open, dus dit plan is weer actueel. Er is niets nieuws gestart.",
+        "restoredOne": "{workItem} is weer open, dus dit plan is weer actueel. Er is niets nieuws gestart."
+      }
     },
     "arrival": {
       "crumbTargetPrefix": "Planningsdoel:",

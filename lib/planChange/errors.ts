@@ -64,6 +64,72 @@ export class PlanSessionNotCopyableError extends Error {
 }
 
 /**
+ * The plan a carry was asked to move was DECIDED (approved or declined) between
+ * the person reading it and sending their turn (Story MOTIR-7928 · MOTIR-7930).
+ * Read under the plan's row lock, so the decision that won is always seen.
+ * Nothing was created, copied, moved or appended. → 409
+ */
+export class PlanSessionPlanDecidedError extends Error {
+  readonly code = 'PLAN_SESSION_PLAN_DECIDED' as const;
+  constructor(
+    readonly sessionId: string,
+    readonly planId: string,
+    readonly planStatus: string | null,
+  ) {
+    super(
+      `The plan waiting in planning session ${sessionId} has been decided, so there is nothing left to carry or plan again.`,
+    );
+    this.name = 'PlanSessionPlanDecidedError';
+  }
+}
+
+/** One finished card a stale plan names (MOTIR-7945). */
+export interface StalePlanFinishedCard {
+  id: string;
+  key: string;
+  title: string;
+  status: string;
+  statusLabel: string;
+}
+
+/**
+ * A turn on a conversation whose waiting plan is STALE (MOTIR-7945): work it
+ * changes has finished, so the plan cannot be approved and is not revised.
+ * Nothing was submitted and nothing was spent; the overlay words this outcome,
+ * naming `finishedCards`, and offers Plan it again (`planAgainOf`). → 409
+ */
+export class PlanSessionPlanStaleError extends Error {
+  readonly code = 'PLAN_SESSION_PLAN_STALE' as const;
+  constructor(
+    readonly planId: string,
+    readonly finishedCards: StalePlanFinishedCard[],
+  ) {
+    super(
+      `Plan ${planId} is stale: work it changes has finished, so it cannot be revised. ` +
+        'Send the turn again with `planAgainOf` to plan it again in this conversation.',
+    );
+    this.name = 'PlanSessionPlanStaleError';
+  }
+}
+
+/**
+ * Plan it again was accepted for a stale plan that is no longer the one the
+ * conversation waits on (`superseded`: a newer plan exists), or a second accept
+ * lost to the first (`superseded`, `latestPlanId` null while the winner's job
+ * is in flight). Nothing was submitted. → 409
+ */
+export class PlanAgainNotAvailableError extends Error {
+  readonly code = 'PLAN_SESSION_PLAN_AGAIN_NOT_AVAILABLE' as const;
+  constructor(
+    readonly reason: 'superseded',
+    readonly latestPlanId: string | null,
+  ) {
+    super('This plan has already been planned again; the conversation is on a newer plan.');
+    this.name = 'PlanAgainNotAvailableError';
+  }
+}
+
+/**
  * A concurrent append claimed the same position on the thread. Turn order is
  * allocated under the session row's `SELECT … FOR UPDATE` lock with a re-read
  * inside the transaction, so two concurrent appends normally SERIALIZE into two

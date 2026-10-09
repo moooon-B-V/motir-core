@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, one {# proposta editada} other {# propostas editadas}}",
     "event_withdrawn": "{n, plural, one {# proposta retirada} other {# propostas retiradas}}",
     "event_brief_edited": "Título e resumo do plano editados",
+    "event_session_carried": "Levado para uma nova conversa",
     "event_removed": "{n, plural, one {# proposta removida} other {# propostas removidas}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",
@@ -7800,7 +7801,36 @@
         "placeholder": "{key} está reservado por outra sessão"
       },
       "ended": "Esta sessão terminou, então não pode ser continuada. Planejar {label} de novo inicia uma nova sessão.",
-      "endedProject": "Esta sessão terminou, então não pode ser continuada. Planejar {project} de novo inicia uma nova sessão."
+      "endedProject": "Esta sessão terminou, então não pode ser continuada. Planejar {project} de novo inicia uma nova sessão.",
+      "carry": {
+        "gloss": "Este plano ainda está esperando por você. Escreva abaixo para continuar trabalhando nele — a conversa e o plano vão juntos para uma nova sessão.",
+        "moving": "Movendo este plano e sua conversa para uma nova sessão…",
+        "moved": "Este plano foi movido para cá com a conversa. É o mesmo plano, então aprová-lo aqui o aprova.",
+        "movedAway": "O plano desta sessão foi movido para uma sessão mais recente quando você continuou trabalhando nele.",
+        "movedAwayOpen": "Abrir a sessão mais recente",
+        "takenBackUnsent": "Sua mensagem não foi enviada. Ela está na caixa abaixo.",
+        "takenBackWaiting": "Seu plano para {label} de uma sessão anterior ainda está esperando.",
+        "takenBackWaitingOpen": "Voltar ao plano em espera",
+        "decided": {
+          "title": "Este plano foi decidido enquanto você escrevia.",
+          "next": "Sua mensagem não foi enviada, e nada novo foi iniciado.",
+          "unsent": "Não enviada",
+          "slot": "Esta sessão terminou e seu plano foi decidido, então não há mais nada para continuar aqui."
+        },
+        "notYours": "Somente {name}, que iniciou esta sessão, pode continuar trabalhando no plano dela."
+      },
+      "stalePlan": {
+        "one": "Este plano está desatualizado: {workItem} foi concluído depois que o plano foi criado, então ele não pode ser alterado nem aprovado.",
+        "many": "Este plano está desatualizado: {workItems} foram concluídos depois que o plano foi criado, então ele não pode ser alterado nem aprovado.",
+        "generic": "Este plano está desatualizado: um trabalho que ele altera foi concluído depois que o plano foi criado, então ele não pode ser alterado nem aprovado.",
+        "more": "mais {count}",
+        "planAgain": "Planejar de novo",
+        "planAgainGloss": "Inicia aqui um novo plano a partir desta conversa. Este plano continua como está.",
+        "planningAgain": "Planejando de novo…",
+        "writing": "Um novo plano está sendo escrito a partir desta conversa.",
+        "restored": "O trabalho que este plano altera está aberto de novo, então este plano volta a valer. Nada novo foi iniciado.",
+        "restoredOne": "{workItem} está aberto de novo, então este plano volta a valer. Nada novo foi iniciado."
+      }
     },
     "arrival": {
       "crumbTargetPrefix": "Alvo do planejamento:",

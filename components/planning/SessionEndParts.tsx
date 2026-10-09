@@ -1,12 +1,26 @@
 'use client';
 
 import { useFormatter, useTranslations } from 'next-intl';
-import { ArrowLeft, ArrowUp, Lock, Sparkles, Undo2, Users } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  ArrowLeft,
+  ArrowUp,
+  Inbox,
+  Lock,
+  RefreshCw,
+  Sparkles,
+  Undo2,
+  Users,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
+import { useOpenPlanOverlay } from '@/lib/hooks/useOpenPlanOverlay';
 import type { PlanChangeSessionDto, PlanTargetHeldByDto } from '@/lib/dto/planChange';
+import { carriesWaitingPlan } from '@/lib/planning/sessionCarry';
+
+export { carriesWaitingPlan };
 
 // THE SESSION'S END IN THE OVERLAY (Story MOTIR-7630 · MOTIR-7643), built to
 // MOTIR-7633's `planning-workspace--session-end.mock.html`
@@ -245,12 +259,136 @@ function RefusalLink({
 }
 
 /** Whether an ended session OFFERS the copy: a `failed` or `idle` end, to its
- *  starter only, who may plan (AMENDMENT 23 §6). A decided session never does. */
+ *  starter only, who may plan (AMENDMENT 23 §6). A decided session never does, and
+ *  nor does one whose plan still waits — its composer CARRIES the plan instead
+ *  (MOTIR-7932; design state 2), so no face shows both. */
 export function offersCopy(session: PlanChangeSessionDto, readOnly: boolean): boolean {
   return (
     !readOnly &&
     session.startedByViewer !== false &&
-    (session.endReason === 'failed' || session.endReason === 'idle')
+    (session.endReason === 'failed' || session.endReason === 'idle') &&
+    !carriesWaitingPlan(session, readOnly)
+  );
+}
+
+// ── THE CARRY (Story MOTIR-7928 · MOTIR-7932), built to MOTIR-7929's
+// `planning-workspace--waiting-plan-carry.mock.html`. Each line is the reopened
+// line's idiom (`planning-reopened-session`) with its own glyph.
+
+const NOTICE_LINE =
+  'flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)';
+const NOTICE_LINK =
+  'rounded-(--radius-control) font-semibold text-(--el-link) underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
+
+/** The one line above the live composer of an ended session whose plan waits
+ *  (design states 1 and 2): the next message carries this plan and conversation. */
+export function WaitingPlanComposerGloss() {
+  const ts = useTranslations('planningWorkspace.session');
+  return (
+    <p
+      data-testid="planning-carry-gloss"
+      className="px-3 pt-3 text-xs leading-relaxed text-(--el-text-secondary)"
+    >
+      {ts('carry.gloss')}
+    </p>
+  );
+}
+
+/** Under the copied divider of the session a carry made (design state 4): the
+ *  plan on the canvas is the same plan, moved here with the conversation. */
+export function PlanMovedLine() {
+  const ts = useTranslations('planningWorkspace.session');
+  return (
+    <p data-testid="planning-plan-moved" className={NOTICE_LINE}>
+      <ArrowDownToLine className="mt-px size-3.5 flex-none" aria-hidden />
+      <span>{ts('carry.moved')}</span>
+    </p>
+  );
+}
+
+/** Under the end marker of the session a carry LEFT (design state 4, right): its
+ *  plan moved to a newer session, which the link reopens in the same overlay. */
+export function PlanMovedAwayLine({
+  toSessionId,
+  anchorKey,
+}: {
+  toSessionId: string;
+  anchorKey: string | null;
+}) {
+  const ts = useTranslations('planningWorkspace.session');
+  const { href, open } = useOpenPlanningWorkspace(
+    anchorKey
+      ? { kind: 'work-item', itemKey: anchorKey, sessionId: toSessionId }
+      : { kind: 'project', sessionId: toSessionId },
+  );
+  return (
+    <p data-testid="planning-plan-moved-away" className={NOTICE_LINE}>
+      <ArrowDownToLine className="mt-px size-3.5 flex-none" aria-hidden />
+      <span>
+        {ts('carry.movedAway')}{' '}
+        <a href={href} onClick={open} className={NOTICE_LINK}>
+          {ts('carry.movedAwayOpen')}
+        </a>
+      </span>
+    </p>
+  );
+}
+
+/** Beside the take-back notice when a CARRY was taken back (design state 5): the
+ *  plan the person opened still waits, and the link leads back to it through the
+ *  plan-overlay door (MOTIR-7884), which owns the address. */
+export function WaitingPlanStillWaits({
+  planId,
+  label,
+  projectName,
+}: {
+  planId: string;
+  label: string | null;
+  projectName: string;
+}) {
+  const ts = useTranslations('planningWorkspace.session');
+  const { href, open } = useOpenPlanOverlay(planId);
+  return (
+    <p data-testid="planning-taken-back-waiting" className={NOTICE_LINE}>
+      <Inbox className="mt-px size-3.5 flex-none" aria-hidden />
+      <span>
+        {ts('carry.takenBackWaiting', { label: label ?? projectName })}{' '}
+        <a href={href} onClick={open} className={NOTICE_LINK}>
+          {ts('carry.takenBackWaitingOpen')}
+        </a>
+      </span>
+    </p>
+  );
+}
+
+/** The carry REFUSED because the plan was decided while the person wrote (design
+ *  state 6): the stale-read band's idiom, then the words that were not sent, kept
+ *  read-only so they can be copied. */
+export function CarryDecidedNotice({ text }: { text: string }) {
+  const ts = useTranslations('planningWorkspace.session');
+  return (
+    <>
+      <p
+        role="alert"
+        data-testid="planning-carry-decided"
+        className="flex items-start gap-1.5 rounded-(--radius-control) bg-(--el-tint-yellow) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+      >
+        <RefreshCw className="mt-px size-3.5 flex-none" aria-hidden />
+        <span>
+          <span className="font-semibold">{ts('carry.decided.title')}</span>{' '}
+          {ts('carry.decided.next')}
+        </span>
+      </p>
+      <div
+        data-testid="planning-carry-unsent"
+        className="flex flex-col gap-1 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+      >
+        <span className="font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+          {ts('carry.decided.unsent')}
+        </span>
+        <p className="text-sm whitespace-pre-wrap text-(--el-text)">{text}</p>
+      </div>
+    </>
   );
 }
 
@@ -263,6 +401,7 @@ export function EndedComposerSlot({
   projectName,
   onStartNew,
   pending = false,
+  carryDecided = false,
 }: {
   session: PlanChangeSessionDto;
   readOnly: boolean;
@@ -271,9 +410,18 @@ export function EndedComposerSlot({
   projectName: string;
   onStartNew?: () => void;
   pending?: boolean;
+  /** The carry was refused because the plan was decided first (design state 6). */
+  carryDecided?: boolean;
 }) {
   const ts = useTranslations('planningWorkspace.session');
-  if (offersCopy(session, readOnly) && onStartNew) {
+  // ANOTHER MEMBER on an ended session whose plan still waits (design state 7): it
+  // is the starter's to continue, and the line says whose.
+  const notYours =
+    !readOnly &&
+    session.startedByViewer === false &&
+    session.origin === 'conversation' &&
+    Boolean(session.pendingPlanId);
+  if (offersCopy(session, readOnly) && onStartNew && !carryDecided) {
     return (
       <div
         className="flex flex-col items-start gap-2 border-t border-(--el-border) px-3 py-3"
@@ -301,9 +449,13 @@ export function EndedComposerSlot({
         <span>
           {readOnly
             ? ts('readOnly')
-            : label
-              ? ts('ended', { label })
-              : ts('endedProject', { project: projectName })}
+            : carryDecided
+              ? ts('carry.decided.slot')
+              : notYours
+                ? ts('carry.notYours', { name: session.startedBy?.name ?? ts('someone') })
+                : label
+                  ? ts('ended', { label })
+                  : ts('endedProject', { project: projectName })}
         </span>
       </p>
     </div>

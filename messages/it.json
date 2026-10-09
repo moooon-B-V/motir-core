@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, one {# proposta modificata} other {# proposte modificate}}",
     "event_withdrawn": "{n, plural, one {# proposta ritirata} other {# proposte ritirate}}",
     "event_brief_edited": "Titolo e riepilogo del piano modificati",
+    "event_session_carried": "Portato in una nuova conversazione",
     "event_removed": "{n, plural, one {# proposta rimossa} other {# proposte rimosse}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",
@@ -7800,7 +7801,36 @@
         "placeholder": "{key} è occupato da un’altra sessione"
       },
       "ended": "Questa sessione è terminata, quindi non può essere continuata. Pianificare di nuovo {label} avvia una nuova sessione.",
-      "endedProject": "Questa sessione è terminata, quindi non può essere continuata. Pianificare di nuovo {project} avvia una nuova sessione."
+      "endedProject": "Questa sessione è terminata, quindi non può essere continuata. Pianificare di nuovo {project} avvia una nuova sessione.",
+      "carry": {
+        "gloss": "Questo piano ti sta ancora aspettando. Scrivi qui sotto per continuare a lavorarci: la conversazione e il piano passano insieme a una nuova sessione.",
+        "moving": "Spostamento di questo piano e della tua conversazione in una nuova sessione…",
+        "moved": "Questo piano è stato spostato qui con la conversazione. È lo stesso piano, quindi approvarlo qui lo approva.",
+        "movedAway": "Il piano di questa sessione è stato spostato in una sessione più recente quando hai continuato a lavorarci.",
+        "movedAwayOpen": "Apri la sessione più recente",
+        "takenBackUnsent": "Il tuo messaggio non è stato inviato. È nella casella qui sotto.",
+        "takenBackWaiting": "Il tuo piano per {label} di una sessione precedente è ancora in attesa.",
+        "takenBackWaitingOpen": "Torna al piano in attesa",
+        "decided": {
+          "title": "È stata presa una decisione su questo piano mentre scrivevi.",
+          "next": "Il tuo messaggio non è stato inviato e non è stato avviato nulla di nuovo.",
+          "unsent": "Non inviato",
+          "slot": "Questa sessione è terminata ed è stata presa una decisione sul suo piano, quindi qui non c’è più nulla da continuare."
+        },
+        "notYours": "Solo {name}, che ha avviato questa sessione, può continuare a lavorare sul suo piano."
+      },
+      "stalePlan": {
+        "one": "Questo piano non è aggiornato: {workItem} è stato completato dopo la creazione del piano, quindi non può essere modificato né approvato.",
+        "many": "Questo piano non è aggiornato: {workItems} sono stati completati dopo la creazione del piano, quindi non può essere modificato né approvato.",
+        "generic": "Questo piano non è aggiornato: del lavoro che modifica è stato completato dopo la creazione del piano, quindi non può essere modificato né approvato.",
+        "more": "altri {count}",
+        "planAgain": "Pianifica di nuovo",
+        "planAgainGloss": "Avvia qui un nuovo piano da questa conversazione. Questo piano resta com’è.",
+        "planningAgain": "Nuova pianificazione…",
+        "writing": "Un nuovo piano viene scritto da questa conversazione.",
+        "restored": "Il lavoro modificato da questo piano è di nuovo aperto, quindi questo piano è di nuovo attuale. Non è stato avviato nulla di nuovo.",
+        "restoredOne": "{workItem} è di nuovo aperto, quindi questo piano è di nuovo attuale. Non è stato avviato nulla di nuovo."
+      }
     },
     "arrival": {
       "crumbTargetPrefix": "Obiettivo della pianificazione:",

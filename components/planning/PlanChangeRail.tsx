@@ -20,11 +20,13 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
+import { Spinner } from '@/components/ui/Spinner';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
+import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
 import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
 import { PlanningTargetKeyChip } from '@/components/planning/PlanningTargetChip';
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
@@ -57,12 +59,18 @@ import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { BrandMark } from '@/components/brand/BrandMark';
 import {
+  CarryDecidedNotice,
+  carriesWaitingPlan,
   CopiedDivider,
   copiedTurnCount,
   EndedComposerSlot,
   RestartedDivider,
   SessionEndMarker,
+  PlanMovedAwayLine,
+  PlanMovedLine,
   TakenBackNotice,
+  WaitingPlanComposerGloss,
+  WaitingPlanStillWaits,
   TargetRefusal,
 } from '@/components/planning/SessionEndParts';
 import { workbenchTabHref } from '@/lib/workbench/tab';
@@ -259,6 +267,14 @@ export interface PlanChangeRailProps {
    */
   onRequestRestart?: () => void;
   onAnswerRestart?: (answer: 'confirm' | 'keep') => void;
+  /**
+   * THE CARRY (Story MOTIR-7928 · MOTIR-7932): the send of an ENDED session whose
+   * plan still waits, which starts the new session carrying it. Optional: a host
+   * that does not carry draws the ended slot as before.
+   */
+  onCarrySend?: (text: string) => void;
+  /** PLAN IT AGAIN on the stale notice (MOTIR-7945's accept; design state 10). */
+  onPlanAgain?: () => void;
 }
 
 export function PlanChangeRail({
@@ -294,6 +310,8 @@ export function PlanChangeRail({
   onStartNewSession,
   onRequestRestart,
   onAnswerRestart,
+  onCarrySend,
+  onPlanAgain,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tp = useTranslations('approvalGate.planApproval');
@@ -450,6 +468,41 @@ export function PlanChangeRail({
     held !== null &&
     (targets.length === 0 || targets.some((target) => target.identifier === held.target));
   const copied = copiedTurnCount(state.session);
+  // THE CARRY (MOTIR-7932): the owner of an ended session whose plan still waits
+  // gets the LIVE composer, with its gloss, in place of the ended slot (design
+  // states 1–2). A carry refused because the plan was decided gives way to the slot.
+  const carries =
+    ended &&
+    Boolean(onCarrySend) &&
+    !state.carryDecided &&
+    carriesWaitingPlan(state.session, state.readOnly);
+  // The plan on screen moved here with the conversation (design state 4).
+  const planMovedHere =
+    Boolean(state.carriedFrom) && state.session?.copiedFromSessionId === state.carriedFrom;
+  const stale = state.stalePlan ?? null;
+  const staleTurnShown = stale !== null && turns.some((turn) => turn.id === stale.turnId);
+  const staleNotice =
+    stale !== null ? (
+      <div className="flex items-start gap-2">
+        <span
+          aria-hidden="true"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-(--el-accent) text-xs font-semibold text-(--el-accent-text)"
+        >
+          <BrandMark variant="mark" tone="inverted" size={13} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <StalePlanNotice
+            finishedCards={stale.finishedCards}
+            onPlanAgain={() => onPlanAgain?.()}
+            pending={stale.pressing}
+            accepted={stale.outcome === 'accepted' || stale.outcome === 'superseded'}
+            refused={stale.outcome === 'refused'}
+            restored={stale.outcome === 'restored'}
+            writing={state.phase === 'streaming'}
+          />
+        </div>
+      </div>
+    ) : null;
   const composerPlaceholder = heldBlocks
     ? ts('refused.placeholder', { key: held.target })
     : question
@@ -609,6 +662,15 @@ export function PlanChangeRail({
         {state.session?.takenBack ? (
           <TakenBackNotice label={state.session.targetKeys[0] ?? null} projectName={projectName} />
         ) : null}
+        {/* …and when it took back a CARRY (MOTIR-7932; design state 5), the plan
+            the person opened still waits where it was, one link away. */}
+        {state.session?.takenBack && state.takenBackWaitingPlanId ? (
+          <WaitingPlanStillWaits
+            planId={state.takenBackWaitingPlanId}
+            label={state.session.targetKeys[0] ?? null}
+            projectName={projectName}
+          />
+        ) : null}
 
         {/* WHERE THE CONVERSATION WAS (MOTIR-6298; design §23.11 · sheet 10 B): an
             MCP agent planned this in its own harness. The reopened line's idiom,
@@ -703,13 +765,19 @@ export function PlanChangeRail({
             {/* THE COPIED DIVIDER (AMENDMENT 23 §6; MOTIR-7633 sheet 3), under the
               last turn carried over from the ended session. */}
             {copied > 0 && i === copied - 1 && state.session?.copiedFromSessionId ? (
-              <CopiedDivider
-                fromSessionId={state.session.copiedFromSessionId}
-                anchorKey={state.session.targetKeys[0] ?? null}
-              />
+              <>
+                <CopiedDivider
+                  fromSessionId={state.session.copiedFromSessionId}
+                  anchorKey={state.session.targetKeys[0] ?? null}
+                />
+                {planMovedHere ? <PlanMovedLine /> : null}
+              </>
             ) : null}
+            {/* THE STALE ANSWER (design state 10), under the turn it answers. */}
+            {staleTurnShown && turn.id === stale?.turnId ? staleNotice : null}
           </Fragment>
         ))}
+        {stale !== null && !staleTurnShown ? staleNotice : null}
 
         {/* The RUN, narrated: the shipped drafting row + a polite live region fed
             by the job's real progress frames. */}
@@ -953,6 +1021,33 @@ export function PlanChangeRail({
           </p>
         ) : null}
         {ended && state.session ? <SessionEndMarker session={state.session} /> : null}
+        {/* The plan this ended session made was CARRIED to a newer one (design
+            state 4, right) — read from the server's row, so a reload says it too. */}
+        {ended && state.session?.planMovedToSessionId ? (
+          <PlanMovedAwayLine
+            toSessionId={state.session.planMovedToSessionId}
+            anchorKey={state.session.targetKeys[0] ?? null}
+          />
+        ) : null}
+        {/* THE CARRY IN FLIGHT (design state 3): the turn under the end marker, and
+            the one act it is waiting on. */}
+        {state.carrying ? (
+          <>
+            <Bubble role="user">{state.carrying.text}</Bubble>
+            <ol
+              aria-live="polite"
+              data-testid="planning-carry-moving"
+              className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+            >
+              <li className="flex items-start gap-2 text-xs text-(--el-text)">
+                <Spinner size="sm" aria-hidden="true" />
+                <span className="min-w-0 flex-1">{ts('carry.moving')}</span>
+              </li>
+            </ol>
+          </>
+        ) : null}
+        {/* DECIDED WHILE TYPING (design state 6): refused in place, the words kept. */}
+        {ended && state.carryDecided ? <CarryDecidedNotice text={state.carryDecided.text} /> : null}
 
         {state.errorCode &&
         !ended &&
@@ -985,8 +1080,27 @@ export function PlanChangeRail({
       {/* The composer carries the `@` TARGET picker + the tray (MOTIR-1491) — the
           message field and the target set are one control, because the targets
           scope the turn the field sends. */}
-      {ended && state.session ? (
+      {carries ? (
+        <div className="border-t border-(--el-border)" data-testid="planning-carry">
+          <WaitingPlanComposerGloss />
+          <PlanChangeComposer
+            bare
+            draft={draft}
+            onDraftChange={setDraft}
+            targets={targets}
+            onAddTarget={onAddTarget}
+            onRemoveTarget={onRemoveTarget}
+            onSubmit={(text) => {
+              setLastSent(text);
+              onCarrySend?.(text);
+            }}
+            placeholder={composerPlaceholder}
+            disabled={Boolean(state.carrying) || state.phase === 'deciding' || heldBlocks}
+          />
+        </div>
+      ) : ended && state.session ? (
         <EndedComposerSlot
+          {...(state.carryDecided ? { carryDecided: true } : {})}
           session={state.session}
           readOnly={state.readOnly}
           label={state.session.targetKeys[0] ?? null}
@@ -1029,7 +1143,12 @@ export function PlanChangeRail({
           // `deciding` still locks it, and correctly: an approve or a discard is a
           // write against the plan, and a turn sent mid-decision would race it.
           // `loading` too — there is no thread to append to yet.
-          disabled={state.phase === 'loading' || state.phase === 'deciding' || heldBlocks}
+          disabled={
+            state.phase === 'loading' ||
+            state.phase === 'deciding' ||
+            heldBlocks ||
+            Boolean(state.stalePlan?.pressing)
+          }
           // The pending question travels to the composer, not to a header pill:
           // measured at the rail's real 22rem the header row is already full, and
           // the bar belongs beside the control whose behaviour actually changed.
