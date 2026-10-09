@@ -3570,7 +3570,8 @@
       },
       "type": {
         "name": "Typographie",
-        "help": "L’association de polices pour les titres et le corps du texte."
+        "help": "L’association de polices pour les titres et le corps du texte.",
+        "automatic": "Automatique ({font})"
       },
       "showcase": {
         "eyebrow": "Votre apparence, en direct dans Motir",

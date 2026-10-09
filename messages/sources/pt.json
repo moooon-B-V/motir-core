@@ -2808,6 +2808,7 @@
   "settings.appearance.palette.help": "The colour scheme the interface wears.",
   "settings.appearance.type.name": "Typography",
   "settings.appearance.type.help": "The typeface pairing for headings and body.",
+  "settings.appearance.type.automatic": "Automatic ({font})",
   "settings.appearance.showcase.eyebrow": "Your look — live across Motir",
   "settings.appearance.showcase.label": "Live preview of the current theme, style, palette and type",
   "settings.automation.title": "Automation",

@@ -3570,7 +3570,8 @@
       },
       "type": {
         "name": "Typografie",
-        "help": "Die Schriftkombination für Überschriften und Fließtext."
+        "help": "Die Schriftkombination für Überschriften und Fließtext.",
+        "automatic": "Automatisch ({font})"
       },
       "showcase": {
         "eyebrow": "Ihr Look – live in ganz Motir",
