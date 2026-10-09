@@ -11,6 +11,8 @@ import { NotPlatformStaffError } from '@/lib/platform/errors';
 import type { IdeaActor, IdeaTranslationsInput } from '@/lib/ideas/types';
 import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogRepository';
 import { ideasAdminService } from '@/lib/services/ideasAdminService';
+import { toStaffTranslationView } from '@/lib/ideas/staffTranslations';
+import { isPlatformAuditWrite } from '@/lib/platform/auditActions';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { directionInput, ideaAuditRows, motirBuysInput, seedTags, staffActor } from './_helpers';
@@ -469,5 +471,47 @@ describe('races, against genuinely concurrent transactions', () => {
     expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled']);
     const after = await ideasAdminService.getForStaff(actor, 'kit');
     expect(after.translations).toEqual({ ja: { title: '題' }, ko: { title: '제목' } });
+  });
+});
+
+// ── The staff view's edge rows (MOTIR-7778 coverage top-up) ────────────────
+
+describe('toStaffTranslationView', () => {
+  it('omits a locale row with no present field and an empty claim or label text', () => {
+    const view = toStaffTranslationView({
+      title: 'Pet clinics',
+      pitch: 'Booking.',
+      capabilities: ['One', 'Two'],
+      gap: null,
+      whyNow: null,
+      whyMotir: null,
+      whoElse: null,
+      translations: [
+        // Only a stale (wrong-length) list: nothing in it is present.
+        {
+          locale: 'ja',
+          title: null,
+          pitch: null,
+          capabilities: ['一'],
+          gap: null,
+          whyNow: null,
+          whyMotir: null,
+          whoElse: null,
+        },
+      ],
+      evidence: [{ claim: 'A claim.', translations: [{ locale: 'de', claim: '' }] }],
+      tags: [{ tag: { label: 'SMB', translations: [{ locale: 'pl', label: '' }] } }],
+    });
+    expect(view.translations).toEqual({});
+    expect(view.claimTranslations).toEqual([{}]);
+    expect(view.labelTranslations).toEqual([{}]);
+    expect(view.missingLocales).toHaveLength(10);
+  });
+});
+
+describe('the idea.tag_translate audit action', () => {
+  it('is a write, so the trail lists it beside the other tag writes', () => {
+    expect(isPlatformAuditWrite('idea.tag_translate')).toBe(true);
+    expect(isPlatformAuditWrite('idea.tag_add')).toBe(true);
   });
 });
