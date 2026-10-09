@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import { AGENT_PLAN_SEED_PASSWORD } from './_helpers/agent-authored-plan-seed';
 import {
   PROPOSED_STORY,
@@ -199,12 +200,13 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
 test('a remove with no reason draws no reason line', async ({ page, baseURL, acceptanceStory }) => {
   acceptanceStory('MOTIR-6013');
   const seed = await openSeed(page, baseURL);
-  await page.goto(`/plans/${seed.bareRemovePlanId}?view=list`);
+  // Undecided, so it is read in the planning overlay (Story MOTIR-7883).
+  let overlay = await openUndecidedPlan(page, seed.bareRemovePlanId, { view: 'list' });
   await expect(openButton(page, seed.w, seed.w.title)).toBeVisible();
-  await expect(main(page).getByTestId('remove-reason')).toHaveCount(0);
-  await page.goto(`/plans/${seed.bareRemovePlanId}?view=canvas`);
-  await expect(nodeOf(canvasOf(page), seed.w.id)).toBeVisible();
-  await expect(main(page).getByTestId('remove-reason')).toHaveCount(0);
+  await expect(overlay.getByTestId('remove-reason')).toHaveCount(0);
+  overlay = await openUndecidedPlan(page, seed.bareRemovePlanId, { view: 'canvas' });
+  await expect(nodeOf(overlay.getByTestId('roadmap-canvas'), seed.w.id)).toBeVisible();
+  await expect(overlay.getByTestId('remove-reason')).toHaveCount(0);
 });
 
 test('approve refuses a move whose proposed parent became illegal, and creates nothing', async ({
@@ -214,17 +216,24 @@ test('approve refuses a move whose proposed parent became illegal, and creates n
 }) => {
   acceptanceStory('MOTIR-6013');
   const seed = await openSeed(page, baseURL);
-  await page.goto(`/plans/${seed.illegalPlanId}?view=list`);
+  // Undecided, so it is approved — and refused — in the planning overlay (MOTIR-7883).
+  const overlay = await openUndecidedPlan(page, seed.illegalPlanId, { view: 'list' });
   const refused = page.waitForResponse(
     (r) =>
       r.url().includes(`/api/plans/${seed.illegalPlanId}/approve`) &&
       r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: /Approve/ }).click();
+  await overlay
+    .getByTestId('plan-change-confirm-bar')
+    .getByRole('button', { name: 'Approve', exact: true })
+    .click();
   expect((await refused).status()).toBe(400);
-  // The rail's refusal line (the route announcer is also an `alert`, and empty).
+  // The refusal line (the route announcer is also an `alert`, and empty).
   await expect(page.getByRole('alert').filter({ hasText: /\S/ })).toBeVisible();
-  await expect(statusPill(page)).not.toContainText('Approved');
+  // Nothing was approved: the plan's committed status is the authority.
+  expect(
+    (await adminDb.plan.findUniqueOrThrow({ where: { id: seed.illegalPlanId } })).status,
+  ).not.toBe('approved');
   expect(
     await adminDb.workItem.count({ where: { projectId: seed.projectId, title: 'Dunning' } }),
   ).toBe(0);

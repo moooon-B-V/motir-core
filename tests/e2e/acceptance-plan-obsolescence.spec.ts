@@ -4,6 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { test, expect } from './_helpers/acceptance-video';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   agentSession,
   authorPlanOverMcp,
@@ -269,8 +270,8 @@ test('a plan marks a done story outdated, superseded by the story it adds — re
     await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
       'Ready to review',
     );
-    await page.goto(`/plans/${planId}?view=list`);
-    await expect(page.getByRole('main').getByTestId('plan-proposal-list')).toBeVisible();
+    const overlay = await openUndecidedPlan(page, planId, { view: 'list' });
+    await expect(overlay.getByTestId('plan-proposal-list')).toBeVisible();
     await expect(proposalRow(page, OLD_STORY)).toBeVisible();
     await expect(proposalRow(page, NEW_STORY)).toBeVisible();
   });
@@ -341,7 +342,11 @@ test('a plan marks a done story outdated, superseded by the story it adds — re
   });
 
   await chapter('Approve the plan', async () => {
-    const approve = page.getByRole('button', { name: /Approve.*to your backlog/ });
+    // Undecided, so it is approved in the overlay's footer (Story MOTIR-7883).
+    const approve = page
+      .getByRole('dialog', { name: /plan/i })
+      .getByTestId('plan-change-confirm-bar')
+      .getByRole('button', { name: 'Approve', exact: true });
     await expect(approve).toBeVisible();
     const approved = page.waitForResponse(
       (r: Response) =>
@@ -349,6 +354,7 @@ test('a plan marks a done story outdated, superseded by the story it adds — re
     );
     await approve.click();
     expect((await approved).status(), 'the approve').toBe(200);
+    await page.goto(`/plans/${planId}`); // decided: the plan page renders, as a record
     await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText('Approved');
   });
 
@@ -465,8 +471,8 @@ test('a mark with a title beside it is refused and the review is unaffected; a p
   await signIn(page, s.seed.email, AGENT_PLAN_SEED_PASSWORD);
 
   // The first plan's review carries only what the accepted batch said.
-  await page.goto(`/plans/${planId}?view=list`);
-  await expect(page.getByRole('main').getByTestId('plan-proposal-list')).toBeVisible();
+  const firstOverlay = await openUndecidedPlan(page, planId, { view: 'list' });
+  await expect(firstOverlay.getByTestId('plan-proposal-list')).toBeVisible();
   const row = proposalRow(page, OLD_STORY);
   await expect(changeLine(row, 'Mark').locator('dd')).toHaveText(/Current\s*→\s*Outdated/);
   await expect(changeLine(row, 'Title')).toHaveCount(0);
@@ -479,8 +485,8 @@ test('a mark with a title beside it is refused and the review is unaffected; a p
   expect(stored.patch, 'the stored patch stays mark-only').not.toHaveProperty('title');
 
   // The no-mark plan: none of the new rows, anywhere on the review.
-  await page.goto(`/plans/${empty.planId}?view=list`);
-  await expect(page.getByRole('main').getByTestId('plan-proposal-list')).toBeVisible();
+  const emptyOverlay = await openUndecidedPlan(page, empty.planId, { view: 'list' });
+  await expect(emptyOverlay.getByTestId('plan-proposal-list')).toBeVisible();
   for (const title of empty.leafTitles) {
     await expect(proposalRow(page, title)).toBeVisible();
   }
@@ -489,13 +495,12 @@ test('a mark with a title beside it is refused and the review is unaffected; a p
   await expect(page.getByTestId('mark-holds-status')).toHaveCount(0);
   for (const label of ['Mark', 'Note', 'Supersedes', 'Superseded by']) {
     await expect(
-      page
-        .getByRole('main')
+      emptyOverlay
         .getByTestId('plan-proposal-list')
         .locator('dt', { hasText: new RegExp(`^${label}$`) }),
     ).toHaveCount(0);
   }
-  await page.goto(`/plans/${empty.planId}?view=canvas`);
+  await openUndecidedPlan(page, empty.planId, { view: 'canvas' });
   await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
   await expect(page.getByTestId('plan-item-obsolescence')).toHaveCount(0);
   await expect(page.getByTestId('plan-item-supersedes')).toHaveCount(0);

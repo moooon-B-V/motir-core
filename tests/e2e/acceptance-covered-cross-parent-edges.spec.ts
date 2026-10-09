@@ -1,7 +1,8 @@
 import type { Page } from '@playwright/test';
 import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
-import { resetDatabase, db, adminDb } from './_helpers/db-reset';
+import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -89,8 +90,12 @@ async function workItem(
   return { id: dto.id, identifier: dto.identifier, title: dto.title };
 }
 
-/** A `planned` plan with ONE `modify` on story B, and no planning session — so its
- *  row opens the plan page with the page's own verbs. */
+/** A `planned` plan with ONE `modify` on story B, on the session `createPlan` gives it.
+ *
+ *  ⚠️ AMENDED by Story MOTIR-7883 (MOTIR-7886): this seed used to clear the plan's
+ *  session so it opened the plan page with the page's own verbs. A session-less plan is
+ *  a state no shipped path produces, and an undecided plan is now read and decided in
+ *  the planning overlay, so the seed keeps the session it was created with. */
 async function seedPlan(
   seed: Seed,
   title: string,
@@ -100,7 +105,6 @@ async function seedPlan(
   const plan = await plansService.createPlan(seed.projectId, { title }, seed.ctx);
   await plansService.addProposals(plan.id, [{ op: 'modify', workItemId: storyB, patch }], seed.ctx);
   await plansService.markPlanned(plan.id, seed.ctx);
-  await adminDb.plan.update({ where: { id: plan.id }, data: { sessionId: null } });
   return plan.id;
 }
 
@@ -180,7 +184,7 @@ test('a cross-story blocker is flagged until the stories carry the edge — on t
     'A plan wires Checkout flow → Payments API — the review shows X clean',
     async () => {
       const epicLevel = levelLoad(page, epic.id);
-      await page.goto(`/plans/${wirePlan}`);
+      await openUndecidedPlan(page, wirePlan, { timeout: FIRST_PAINT_MS });
       await epicLevel;
       await expect(node(page, storyB.id)).toBeVisible({ timeout: FIRST_PAINT_MS });
       await drillInto(page, storyB);
@@ -194,8 +198,11 @@ test('a cross-story blocker is flagged until the stories carry the edge — on t
   await chapter(
     'Approve it — the roadmap agrees, and draws the arrow between the stories',
     async () => {
-      await page.goto(`/plans/${wirePlan}`);
-      const approve = page.getByRole('button', { name: /^Approve/ });
+      // Undecided, so it is approved in the overlay's footer (Story MOTIR-7883).
+      const overlay = await openUndecidedPlan(page, wirePlan, { timeout: FIRST_PAINT_MS });
+      const approve = overlay
+        .getByTestId('plan-change-confirm-bar')
+        .getByRole('button', { name: en.approvalGate.planApproval.surface.approve, exact: true });
       await expect(approve).toBeVisible({ timeout: FIRST_PAINT_MS });
       const decided = page.waitForResponse(
         (r) =>
@@ -229,7 +236,7 @@ test('a cross-story blocker is flagged until the stories carry the edge — on t
     'A plan removing Checkout flow → Payments API previews X flagged again',
     async () => {
       const epicLevel = levelLoad(page, epic.id);
-      await page.goto(`/plans/${unwirePlan}`);
+      await openUndecidedPlan(page, unwirePlan, { timeout: FIRST_PAINT_MS });
       await epicLevel;
       await expect(node(page, storyB.id)).toBeVisible({ timeout: FIRST_PAINT_MS });
       await drillInto(page, storyB);
