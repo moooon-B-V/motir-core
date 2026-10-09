@@ -315,8 +315,9 @@ function correctionFrom(
       : {}),
     // An `add`'s SUPERSEDES set (Story MOTIR-6577 · MOTIR-6631) — a list, so it
     // REPLACES the set like `blockedByRefs` beside it and `[]` clears it. The refs
-    // are ids or `planItem:` refs (this seam resolves no keys, exactly as for the
-    // blocker set); the service's ref passes and supersedes-cycle walk judge them,
+    // are ids, `planItem:` refs or `<PREFIX>-<n>` keys, which the service resolves
+    // to ids exactly as for the blocker set (MOTIR-7983); the service's ref passes
+    // and supersedes-cycle walk judge them,
     // and refuse it on a `modify`, which spells its edges on `modifyPatch`.
     ...(Array.isArray(b.supersedesRefs)
       ? { supersedesRefs: b.supersedesRefs.filter((r): r is string => typeof r === 'string') }
