@@ -41,6 +41,8 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 //     a continue (`already_resumed`) or work that moved on (nothing at all);
 //   · the run was HOSTED. A local or agent run is the person's to resume with
 //     `motir continue`; that is not a failure, and writes NOTHING;
+//   · the run's target is not on To fix — To fix wins over To resume (MOTIR-8011), and
+//     an approval on a target whose pull requests are red starts and writes NOTHING;
 //   · the dispatcher still exists and may still edit the project;
 //   · then `hostedRunService.start` in `continue` mode — which takes the continue
 //     claim, so a second approval racing the first answers `already_resumed`.
@@ -117,6 +119,9 @@ export const gateResumeService = {
           const target = await workItemRepository.findById(targetId, tx);
           /* v8 ignore next -- the run's own card, read in the same transaction */
           if (!target) continue;
+          // TO FIX WINS OVER TO RESUME (MOTIR-8011): a target on To fix is not there to
+          // resume — its pull requests come first — so the approval starts nothing.
+          if (target.fixReason !== null) return null;
           return { run, target };
         }
         return null;

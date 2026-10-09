@@ -110,6 +110,11 @@ export const resumeRunDetailService = {
         scopeId !== null && scopeId !== item.id
           ? await workItemRepository.findById(scopeId, tx)
           : null;
+      // TO FIX WINS OVER TO RESUME, at the run's target (MOTIR-8011): the run is there to
+      // resume only while the card it was opened on waits on it — the tab's own rule, so
+      // the page never offers a resume the tab no longer lists.
+      const target = parent ?? item;
+      if (target.fixReason !== null || target.resumeRunId !== runId) return null;
       const run = await describeResumeRun(runId, scopeId ?? item.id, tx);
       /* v8 ignore next -- as above */
       if (!run) return null;
