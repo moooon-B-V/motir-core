@@ -445,3 +445,151 @@ command for {key}").
 No new design-system entry. The expand grammar is TreeTable's; the page does not
 become a TreeTable — each lane is a list of dispatch cards, which is what the page
 already is.
+
+## The expansion nudge hands off to the planning overlay (MOTIR-7875, gating MOTIR-7876)
+
+**Mock:** [`ready--nudge-handoff.mock.html`](ready--nudge-handoff.mock.html), a delta.
+It holds only the expansion nudge on `/ready` from **Expand** onwards. It amends the
+page drawn in [`ready.mock.html`](ready.mock.html) and § _Layout (panel 1 — the page)_
+above. The nudge itself was never drawn in this area. It shipped as
+`app/(authed)/ready/_components/ExpansionNudgeBanner.tsx` and
+`ExpansionNudgeReview.tsx`, and the drawing is made against that code as `main` ships
+it.
+
+**The change.** The banner no longer reviews, approves or declines a plan. When the
+plan is ready, it opens the planning overlay, which is the one place a plan is decided.
+`ExpansionNudgeReview` (the inline list with Approve/Decline) is retired.
+`approvePlanRequest` / `declinePlanRequest` are no longer called from `/ready`.
+
+### Q1, decided: a button, not auto-open (panel 2)
+
+When the plan is ready, the banner **offers _Review the plan_** (`Button`
+`variant="primary"` `size="sm"`, `ArrowRight` right icon). It replaces **Expand**, so
+the banner never offers to expand twice. It does **not** open the overlay by itself.
+The mock draws auto-open beside it as the rejected alternative.
+
+Why:
+
+- An expand runs for minutes. By then the person is working the list under the banner,
+  and an overlay that arrives on its own takes the page out from under them in the
+  middle of an action.
+- The planner already promises the plan will wait for them
+  (`design/ai-planning/design-notes.md` §22.6), so nothing is lost by not opening it.
+- The button costs one click, on a path the person already chose.
+
+### Q2, decided: one destination, written with `shallowPush` (panel 2, continued)
+
+The href is `planRowDestination` (`lib/planning/planDestination.ts`), with:
+
+| argument     | value                                                                          |
+| ------------ | ------------------------------------------------------------------------------ |
+| `planStatus` | the polled plan's status                                                       |
+| `planId`     | the plan the expand created                                                    |
+| `sessionId`  | `review.conversation?.sessionId ?? null`                                       |
+| `anchorKey`  | `review.conversation?.targetKeys[0]` (the stub the person expanded)            |
+| `host`       | the current `/ready` address, **path and query**, so the lane survives a Close |
+
+An undecided plan with a session resolves to `{ kind: 'planning-surface' }`, whose
+href is `withPlanningOverlay(host, { kind: 'work-item', itemKey, sessionId })`. The
+path stays `/ready` and only the overlay's parameters are added (`plan`, `planFrom`,
+`planItem`, `planSession`). The press writes it with `shallowPush`, so `/ready` stays
+mounted under the scrim and Close, Esc or Back return to it unchanged.
+
+The banner has **one** destination. It does not read `reason` and draws no second
+door. The overlay is composed as it ships
+(`components/planning/PlanningWorkspaceOverlay.tsx`, the design of record in
+`design/ai-chat/planning-workspace.mock.html` sheet 6, MOTIR-4726), with the decide
+door of `design/ai-planning/design-notes.md` Part XXII. Nothing inside it is changed
+by this card.
+
+### The states, one panel each
+
+| panel | state                        | the banner shows                                                                                                                                     |
+| ----- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | idle (context, unchanged)    | `nudge.body` + **Expand** (secondary) + ✕                                                                                                            |
+| 1     | expanding                    | **Expanding…** (disabled) + NEW `nudge.waitHint`, which links _Waiting on you_. The ✕ stays live.                                                    |
+| 2     | the plan is ready            | NEW `nudge.readyBody` + **Review the plan** (primary)                                                                                                |
+| 3     | closed the overlay undecided | as panel 2, plus NEW `nudge.stillWaiting`. Pressing again re-opens the same session.                                                                 |
+| 4     | decided on the overlay       | **nothing**: the banner renders `null`. The overlay already said what happened, so the shipped `nudge.approved` pill retires with no replacement.    |
+| 5     | nothing proposed             | NEW `nudge.nothingProposed` + **Dismiss** (ghost). The plan ended `declined`/`discarded`, or reached `planned` with no items. The poll stops.        |
+| 6     | dismissed while expanding    | hidden for the session (the shipped `sessionStorage` key). **The plan is not declined.** It finishes and waits in _Waiting on you_.                  |
+| 7     | a failure                    | one sentence in `--el-danger-on-surface`, `role="alert"`, + **Dismiss** (ghost). The retryable ones add **Try again** (secondary), which re-submits. |
+
+Panel 5 fixes a shipped hole: today's poll waits only for proposals, so a plan that
+ends with none shows **Expanding…** for ever. The target poll stops on any terminal
+plan.
+
+Panel 4: after the decision, the card re-reads the plan once the overlay's parameters
+leave the address. The rows do not jump, because the push was shallow.
+
+### Failures: every one a sentence, none a code (panel 7)
+
+No machine code is rendered anywhere. The shipped `nudge.error` ("Something went wrong
+(…)") retires.
+
+| what the expand met                                                           | key                                         | retry |
+| ----------------------------------------------------------------------------- | ------------------------------------------- | ----- |
+| `402` out of credits                                                          | REUSES `aiPlanning.generation.creditsTitle` | no    |
+| `403` (AI planning switched off for the org, or `ai:plan` missing)            | `nudge.errors.unavailable`                  | no    |
+| `422` `INVALID_TARGET` (not an epic, story, task or bug)                      | `nudge.errors.cannotExpand`                 | no    |
+| `502` Motir AI unreachable                                                    | `nudge.errors.unreachable`                  | yes   |
+| `429` the `ai:generate` ceiling                                               | `nudge.errors.rateLimited`                  | yes   |
+| the plan ended `abandoned` while polling (the job died)                       | `nudge.errors.stopped`                      | yes   |
+| `400`, `404`, a response with no plan id, any other status, a network failure | `nudge.errors.generic`                      | yes   |
+
+### Copy — en + zh
+
+Kept as shipped: `body`, `expandLabel`, `expanding`, `dismissAria`, `dismissLabel`,
+`emptyHint`. Reused from the catalogue: `aiPlanning.generation.creditsTitle`,
+`common.retry` ("Try again" / "重试"). The _Waiting on you_ link text is
+`workbench.tabs.toApprove`, and it points at the workbench's approvals tab.
+
+| key (`ready.nudge.*`) | en                                                                                                                               | zh                                                                              |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `waitHint`            | You don’t have to wait here. Close this whenever you like — the plan will be waiting for you in `<link>`Waiting on you`</link>`. | 你不必在这里等待。随时可以关闭——计划完成后会在`<link>`等你处理`</link>`中等你。 |
+| `readyBody`           | Motir proposed {count, plural, one {# change} other {# changes}} for {key}.                                                      | Motir 为 {key} 提议了 {count} 项变更。                                          |
+| `reviewLabel`         | Review the plan                                                                                                                  | 查看计划                                                                        |
+| `stillWaiting`        | You haven’t decided this plan yet — it is waiting for you in `<link>`Waiting on you`</link>`.                                    | 你还没有决定这个计划——它在`<link>`等你处理`</link>`中等你。                     |
+| `nothingProposed`     | Motir didn’t propose any changes for {key}, so there is nothing to review.                                                       | Motir 没有为 {key} 提议任何变更，因此没有需要查看的内容。                       |
+| `errors.unavailable`  | Motir AI planning isn’t available to you in this project.                                                                        | 你在此项目中无法使用 Motir AI 规划。                                            |
+| `errors.cannotExpand` | {key} can’t be expanded — only an epic, story, task or bug can be.                                                               | {key} 无法展开——只有篇章、故事、任务或缺陷可以展开。                            |
+| `errors.unreachable`  | Motir AI couldn’t be reached, so nothing was expanded. Try again in a moment.                                                    | 无法连接 Motir AI，因此没有展开任何内容。请稍后重试。                           |
+| `errors.rateLimited`  | You’re starting plans a little too fast. Try again in a moment.                                                                  | 你发起规划的速度有点快。请稍后重试。                                            |
+| `errors.stopped`      | Motir AI stopped before it finished planning {key}. Nothing was changed.                                                         | Motir AI 在完成 {key} 的规划前停止了。没有任何更改。                            |
+| `errors.generic`      | Something went wrong, so nothing was expanded. Try again in a moment.                                                            | 出了点问题，因此没有展开任何内容。请稍后重试。                                  |
+
+Retired with the inline review: `reviewTitle`, `opChange`, `opRemove`,
+`approveLabel`, `approving`, `declineLabel`, `approved`, `error`.
+
+### Tokens and primitives
+
+| element                   | primitive / token                                                                            |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
+| banner                    | `Card`, `bg-(--el-tint-lavender) border-(--el-border-soft)` (as shipped)                     |
+| sparkles                  | lucide `Sparkles`, `--el-accent-on-surface` (as shipped)                                     |
+| body                      | `--el-text-strong` (as shipped)                                                              |
+| the ✕                     | icon button, `--spacing-icon-btn`, `--radius-control`; ink `--el-text-secondary` (see below) |
+| Review the plan           | `Button` `primary` `sm`                                                                      |
+| Try again                 | `Button` `secondary` `sm`                                                                    |
+| Dismiss                   | `Button` `ghost` `sm`                                                                        |
+| the hint lines            | `text-xs`, `--el-text-secondary`                                                             |
+| the _Waiting on you_ link | `--el-text-strong`, underlined, `font-medium`                                                |
+| a failure                 | `--el-danger-on-surface`, `role="alert"`                                                     |
+
+Three ink corrections against the shipped banner, all on the lavender tint:
+
+- The ✕ moves from `--el-text-muted` to `--el-text-secondary`. Muted is AA on the
+  white page only.
+- The in-sentence link does not take `--el-link`, which is about 3.95:1 on the
+  lavender tint. It keeps the line's strong ink and is told apart by its underline.
+- The shipped Dismiss text link becomes a ghost `Button`, for the same reason.
+
+No new design-system entry and no new token.
+
+### A record that is not edited
+
+`design/ai-planning/design-notes.md` (the row citing `ExpansionNudge{Banner,Review}.tsx`
+as the "shipped in-surface AI proposal grammar", and the Approve / Discard row that
+mirrors it) is a record of when it was drawn. It is not edited here. From MOTIR-7876 on,
+that grammar no longer ships on `/ready`. The pair it describes lives on in the
+overlay's decide door.
