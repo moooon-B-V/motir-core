@@ -91,6 +91,7 @@ import {
   PlanSessionPlanDecidedClientError,
   PlanSessionPlanStaleClientError,
 } from '@/lib/planning/planSessionClientErrors';
+import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 import { planReview, planReviewItem } from '../helpers/planReview';
 
 function session(bodies: string[], id = 's1'): PlanChangeSessionDto {
@@ -383,6 +384,256 @@ describe('a carry that fails', () => {
     expect(result.current.state.carryDecided).toEqual({ text: 'Move PDF.' });
     expect(result.current.state.session?.pendingPlanId).toBeNull();
     expect(result.current.state.errorCode).toBeNull();
+  });
+});
+
+// The remaining arms of the answers above, each a face a person can reach: an
+// answer while a plan is on the canvas, a press that fails for an ordinary reason,
+// a thread with no turn of the person's yet, and the carry's other refusals.
+describe('the answers, with a plan on the canvas or nothing to anchor them', () => {
+  const endedWaiting = (): PlanChangeSessionDto => ({
+    ...session(['Split ACME-40.']),
+    endedAt: '2026-07-27T11:00:00.000Z',
+    endReason: 'restarted',
+    startedByViewer: true,
+    pendingPlanId: 'plan_s',
+  });
+
+  async function onWaiting() {
+    readSession.mockResolvedValue(endedWaiting());
+    fetchReview.mockResolvedValue({ ...FRESH, id: 'plan_s' });
+    const hook = renderHook(() =>
+      usePlanChangeConversation({ sessionId: 's1', onRestarted: vi.fn() }),
+    );
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('review'));
+    return hook;
+  }
+
+  it('a stale answer with a plan on the canvas keeps the canvas', async () => {
+    const { result } = await onWaiting();
+    startCopied.mockResolvedValue(session(['Split ACME-40.', 'Move PDF.'], 's2'));
+    submit.mockRejectedValue(staleRefusal());
+    readSession.mockImplementation(async () => session(['Split ACME-40.', 'Move PDF.'], 's2'));
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    await waitFor(() => expect(result.current.state.stalePlan?.planId).toBe('plan_s'));
+    expect(result.current.state.phase).toBe('review');
+  });
+
+  it('a thread with no turn of the person’s yet anchors the notice nowhere', async () => {
+    submitAsk.mockRejectedValue(staleRefusal());
+    const { result } = await mounted();
+    readSession.mockResolvedValue({ ...session([]), turns: [] });
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    await waitFor(() => expect(result.current.state.stalePlan?.planId).toBe('plan_s'));
+    expect(result.current.state.stalePlan?.turnId).toBeNull();
+  });
+
+  it('a press that fails for an ordinary reason offers the action again', async () => {
+    const { result } = await staleThread();
+    submit.mockRejectedValue(new Error('network'));
+    await act(async () => {
+      await result.current.planAgain();
+    });
+    expect(result.current.state.errorCode).toBe('FAILED');
+    expect(result.current.state.stalePlan?.pressing).toBe(false);
+    expect(result.current.state.stalePlan?.outcome ?? null).toBeNull();
+  });
+
+  it('a carry refused because another planner holds the card says who', async () => {
+    const { result } = await onWaiting();
+    startCopied.mockRejectedValue(
+      new PlanEditsClientError(409, 'PLAN_TARGET_LOCKED', {
+        target: 'ACME-40',
+        holder: 'Mara',
+        freesBy: null,
+        holderSessionId: 's9',
+      }),
+    );
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    expect(result.current.state.targetHeld).toMatchObject({ target: 'ACME-40', holder: 'Mara' });
+    expect(result.current.state.errorCode).toBeNull();
+  });
+
+  it('a carry the person abandoned says nothing', async () => {
+    const { result } = await onWaiting();
+    startCopied.mockRejectedValue(new DOMException('aborted', 'AbortError'));
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.session?.id).toBe('s1');
+  });
+
+  it('a carry refused because the plan was APPROVED meanwhile reads accepted', async () => {
+    const { result } = await onWaiting();
+    startCopied.mockRejectedValue(new PlanSessionPlanDecidedClientError(409, {}, null, 'approved'));
+    fetchReview.mockRejectedValue(new Error('offline'));
+    readSession.mockRejectedValue(new Error('offline'));
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    expect(result.current.state.decided).toBe('accepted');
+    expect(result.current.state.carryDecided).toEqual({ text: 'Move PDF.' });
+  });
+
+  it('Plan it again refused as DECIDED while a plan is on the canvas keeps the canvas', async () => {
+    const { result } = await onWaiting();
+    startCopied.mockResolvedValue(session(['Split ACME-40.', 'Move PDF.'], 's2'));
+    submit.mockRejectedValue(staleRefusal());
+    readSession.mockImplementation(async () => session(['Split ACME-40.', 'Move PDF.'], 's2'));
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    await waitFor(() => expect(result.current.state.stalePlan).toBeTruthy());
+    submit.mockRejectedValue(new PlanSessionPlanDecidedClientError(409, {}, 'plan_s', 'declined'));
+    await act(async () => {
+      await result.current.planAgain();
+    });
+    expect(result.current.state.stalePlan?.outcome).toBe('refused');
+    expect(result.current.state.phase).toBe('review');
+  });
+});
+
+// A person who closes the overlay while an answer is still on its way: every late
+// answer is dropped, never drawn into an unmounted overlay.
+describe('an answer that lands after the overlay closed', () => {
+  const endedWaiting = (): PlanChangeSessionDto => ({
+    ...session(['Split ACME-40.']),
+    endedAt: '2026-07-27T11:00:00.000Z',
+    endReason: 'restarted',
+    startedByViewer: true,
+    pendingPlanId: 'plan_s',
+  });
+
+  async function onWaiting() {
+    readSession.mockResolvedValue(endedWaiting());
+    fetchReview.mockResolvedValue({ ...FRESH, id: 'plan_s' });
+    const hook = renderHook(() =>
+      usePlanChangeConversation({ sessionId: 's1', onRestarted: vi.fn() }),
+    );
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('review'));
+    return hook;
+  }
+
+  it('a carry that lands late is dropped', async () => {
+    const { result, unmount } = await onWaiting();
+    const late = deferred();
+    startCopied.mockReturnValue(late.promise);
+    let sent!: Promise<void>;
+    await act(async () => {
+      sent = result.current.send('Move PDF.');
+    });
+    unmount();
+    late.resolve(session(['Split ACME-40.', 'Move PDF.'], 's2'));
+    await act(async () => {
+      await sent;
+    });
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('a carry that fails late is dropped', async () => {
+    const { result, unmount } = await onWaiting();
+    const late = deferred();
+    startCopied.mockReturnValue(late.promise);
+    let sent!: Promise<void>;
+    await act(async () => {
+      sent = result.current.send('Move PDF.');
+    });
+    unmount();
+    late.reject(new Error('network'));
+    await act(async () => {
+      await sent;
+    });
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('a decided carry whose re-reads land late is dropped', async () => {
+    const { result, unmount } = await onWaiting();
+    startCopied.mockRejectedValue(new PlanSessionPlanDecidedClientError(409, {}, null, 'stale'));
+    const late = deferred();
+    fetchReview.mockReturnValue(late.promise);
+    let sent!: Promise<void>;
+    await act(async () => {
+      sent = result.current.send('Move PDF.');
+    });
+    unmount();
+    late.resolve(null);
+    await act(async () => {
+      await sent;
+    });
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('a decided carry with a status that is neither approved nor declined keeps the face', async () => {
+    const { result } = await onWaiting();
+    startCopied.mockRejectedValue(new PlanSessionPlanDecidedClientError(409, {}, null, 'stale'));
+    fetchReview.mockRejectedValue(new Error('offline'));
+    readSession.mockRejectedValue(new Error('offline'));
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    expect(result.current.state.decided).toBeNull();
+    expect(result.current.state.carryDecided).toEqual({ text: 'Move PDF.' });
+  });
+
+  it('a stale answer whose re-read lands late is dropped', async () => {
+    submitAsk.mockRejectedValue(staleRefusal());
+    const { result, unmount } = await mounted();
+    const late = deferred();
+    readSession.mockReturnValue(late.promise);
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    unmount();
+    await act(async () => {
+      late.resolve(session(['Split ACME-40.', 'Move PDF.']));
+      await late.promise;
+    });
+    expect(readSession).toHaveBeenCalled();
+  });
+
+  it('Plan it again answered after close is dropped', async () => {
+    const { result, unmount } = await staleThread();
+    const late = deferred();
+    submit.mockReturnValue(late.promise);
+    let pressed!: Promise<void>;
+    await act(async () => {
+      pressed = result.current.planAgain();
+    });
+    unmount();
+    late.resolve({ jobId: 'job-new', planId: 'plan_new', session: session(['x']) });
+    await act(async () => {
+      await pressed.catch(() => undefined);
+    });
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['its session read', 'session'],
+    ['its proposal read', 'proposal'],
+  ] as const)('following another press’s plan, %s landing late is dropped', async (_n, which) => {
+    const { result, unmount } = await staleThread();
+    submit.mockRejectedValue(
+      new PlanAgainNotAvailableClientError(409, {}, 'superseded', 'plan_new'),
+    );
+    const late = deferred();
+    if (which === 'session') readSession.mockReturnValue(late.promise);
+    else fetchReview.mockReturnValue(late.promise);
+    await act(async () => {
+      await result.current.planAgain();
+    });
+    unmount();
+    await act(async () => {
+      late.resolve(which === 'session' ? session(['x']) : FRESH);
+      await late.promise;
+    });
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 });
 

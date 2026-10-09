@@ -1012,6 +1012,17 @@ describe('the edges around the carry — what an old tab or a second press meets
     expect(
       await planSessionEndService.releaseRevisionForFailedJob('job-nobody-knows', fx.workspaceId),
     ).toBeNull();
+    // A job the plan points at but whose lease it did NOT start (the held lease
+    // names `turn.jobId`) releases nothing. Test setup: no service re-points a plan
+    // without also stamping its own `revision_started`.
+    await adminDb.plan.update({
+      where: { id: planId },
+      data: { sourceJobId: 'job-not-the-lease' },
+    });
+    expect(
+      await planSessionEndService.releaseRevisionForFailedJob('job-not-the-lease', fx.workspaceId),
+    ).toEqual({ planId, released: false });
+    await adminDb.plan.update({ where: { id: planId }, data: { sourceJobId: turn.jobId } });
     expect(
       await planSessionEndService.releaseRevisionForFailedJob(turn.jobId, fx.workspaceId),
     ).toEqual({ planId, released: true });
@@ -1022,5 +1033,21 @@ describe('the edges around the carry — what an old tab or a second press meets
     const ended = (await trailOf(planId)).filter((r) => r.changeKind === 'revision_ended');
     expect(ended).toHaveLength(1);
     expect(ended[0]!.diff).toMatchObject({ jobId: turn.jobId, failed: true });
+  });
+
+  it('a waiting plan whose starter is gone still ends, signed by a manager', T, async () => {
+    const { sourceId } = await conversationWithPlannedPlan('Starter gone', null);
+    // Test setup: the starter's account was removed (`createdById` is SetNull).
+    await adminDb.planChangeSession.update({
+      where: { id: sourceId },
+      data: { createdById: null },
+    });
+    const out = await planSessionEndService.endSession(sourceId, 'idle', {
+      workspaceId: fx.workspaceId,
+    });
+    expect(out.ended).toBe(true);
+    expect(
+      (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sourceId } })).endReason,
+    ).toBe('idle');
   });
 });
