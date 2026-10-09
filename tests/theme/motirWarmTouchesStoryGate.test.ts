@@ -16,6 +16,8 @@ import { declaredIn, loadTokenLayer, resolveValue, type ThemeContext } from './p
 // The fixture has since gained the `--el-showcase-*` family (motir.co's
 // illustration fields) at its resolved values — merged in additively when those
 // tokens were born, so this gate keeps measuring the warm-touch change alone.
+// Likewise the `--el-live-*` family (motir.co's live header link), merged in
+// additively at its resolved values.
 
 const REPO = process.cwd();
 const THEMES = ['light', 'dark'] as const;

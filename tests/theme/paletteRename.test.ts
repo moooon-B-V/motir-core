@@ -64,6 +64,8 @@ describe('no colour moves — resolved --el-* tokens against the pre-rename shee
   // And once more, additively: the `--el-showcase-*` family (motir.co's
   // illustration fields) was merged in at its resolved values — new tokens only,
   // no existing value moved.
+  // And again for the `--el-live-*` family (motir.co's live header link), the
+  // same way: new tokens only.
   const before = JSON.parse(
     readFileSync(join(process.cwd(), 'tests/fixtures/paletteRename6471.before.json'), 'utf8'),
   ) as Record<string, Record<string, string>>;
