@@ -518,7 +518,8 @@ export const aiAskService = {
         turnId,
         'plan_change',
         ctx,
-        { corrected: opts.flip === true },
+        // Only a RETRY reaches here: a flip never produces a plan change.
+        { corrected: false },
         address,
       );
       const submitted = await planChangeSessionsService.submit(ctx, address);

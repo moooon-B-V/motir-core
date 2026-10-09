@@ -552,6 +552,33 @@ describe('the CORRECTION — re-running one turn the other way', () => {
       jobId: 'job-ask-2',
     });
   });
+
+  it('a RETRY of a turn the PLANNER read as a plan change re-runs the plan-change submit', async () => {
+    // The one way left for a re-run to start a planning run (AMENDMENT 3): the
+    // intent it repeats is the planner's own reading, never a person's flip.
+    const asked = (await (await ask(askReq({ body: 'split the billing epic' }))).json()) as {
+      jobId: string;
+      turnId: string;
+    };
+    getJobMock.mockResolvedValue(redirected);
+    submitJobMock.mockResolvedValue({ jobId: 'job-augment-9' });
+    await settle(settleReq({ jobId: asked.jobId }));
+
+    submitJobMock.mockClear();
+    submitJobMock.mockResolvedValue({ jobId: 'job-augment-10' });
+    const body = (await (await ask(askReq({ turnId: asked.turnId }))).json()) as {
+      outcome: string;
+    };
+    expect(body.outcome).toBe('redirected');
+    expect((submitJobMock.mock.calls[0] as unknown as [string])[0]).toBe('plan');
+
+    const thread = await openTestSession(activeCtx.current!);
+    expect(thread.turns.filter((t) => t.role === 'user')).toHaveLength(1);
+    expect(thread.turns.find((t) => t.id === asked.turnId)).toMatchObject({
+      intent: 'plan_change',
+      intentCorrected: false,
+    });
+  });
 });
 
 describe('an ask WRITES NO WORK ITEM', () => {
