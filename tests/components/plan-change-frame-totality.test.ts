@@ -233,7 +233,14 @@ describe('the enumeration is a SNAPSHOT, and says so', () => {
     // header of `planChangeFrames.ts` and diff; it does NOT read `motir-ai`, so
     // it cannot fail when that repo adds a frame tomorrow. The mechanism that
     // covers the future is the LOUD default above — this only pins provenance.
-    expect(PLAN_CHANGE_FRAME_KINDS).toHaveLength(51);
+    //
+    // 51 swept, plus TWO added AHEAD of their producer rather than found by a
+    // sweep (MOTIR-7974 · MOTIR-7976): `tool_call` and `tool_call_failed`, the
+    // per-call contract the rail accepts before motir-ai emits it.
+    expect(PLAN_CHANGE_FRAME_KINDS).toHaveLength(53);
+    for (const ahead of ['tool_call', 'tool_call_failed']) {
+      expect(isKnownFrameKind(ahead), ahead).toBe(true);
+    }
     for (const emitted of ['retrieval', 'search', 'drill', 'lay', 'author', 'note', 'planned']) {
       expect(isKnownFrameKind(emitted), emitted).toBe(true);
     }
@@ -256,6 +263,7 @@ describe('the enumeration is a SNAPSHOT, and says so', () => {
         'level_complete',
         'validated',
         'validation_skipped',
+        'tool_call',
       ]),
     );
     // …and it is a SMALL set out of 51. A line for every kind would make the

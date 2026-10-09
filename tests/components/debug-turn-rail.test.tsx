@@ -226,8 +226,12 @@ describe('the debug turn, RUNNING (panel 1)', () => {
     expect(match.className).toContain('text-(--el-text)');
     expect(handoff.className).toContain('text-(--el-text-secondary)');
 
-    // The running bar repeats the live line beside Stop, and the composer stays live.
-    expect(screen.getAllByText('Checking whether a work item already covers it')).toHaveLength(2);
+    // The running bar repeats the live line beside Stop, and the composer stays
+    // live. The third copy is the polite region's announcer (MOTIR-7979).
+    expect(screen.getAllByText('Checking whether a work item already covers it')).toHaveLength(3);
+    expect(screen.getByTestId('plan-change-announcer').textContent).toBe(
+      'Checking whether a work item already covers it',
+    );
     expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
   });
 

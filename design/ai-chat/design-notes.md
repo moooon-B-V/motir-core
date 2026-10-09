@@ -4713,3 +4713,418 @@ mock: the change draws nothing new. It takes one element away.
   the remaining direction.
 - **Retired copy:** `planningWorkspace.conversation.correctToPlan` and the
   short-lived `correctConfirm.*` confirm, removed from every locale.
+
+---
+
+## ⭐ The per-call line on the planning rail — calls nest under their step, and the record stays whole (MOTIR-7975, 2026-10-09)
+
+**Amendment to `design/ai-chat/plan-change-run-live.mock.html` sheet 3 and to the
+MOTIR-4066 section above, _"The run surface while it is RUNNING"_.** Story
+**MOTIR-7974** makes every tool call the planner takes produce its own line as the
+call **starts**: _Reading `lib/auth/passwords.ts`_, _Searching work items for
+"billing"_, _Looking up MOTIR-1234_. One planning run makes dozens of calls, and
+one author session alone makes a dozen. This section decides where those lines go.
+**MOTIR-7979** builds the rendering to it, and **MOTIR-7976** (the frame parsing,
+shipped) does not wait on it, because every grouping here is derived at render
+time from the flat act record.
+
+**Asset:** `plan-change-run-live--per-call.mock.html`, a **delta** mock holding only
+the panels that change. `plan-change-run-live.mock.html` is a record and is not
+edited.
+
+| Panel | What it shows                                                                                   |
+| ----- | ----------------------------------------------------------------------------------------------- |
+| **1** | A live step with its calls: en, zh and dark, with the pinned bar                                |
+| **2** | A finished step, folded and expanded, plus a step that made zero calls                          |
+| **3** | Three parallel author sessions, grouped (decided) beside chronological (rejected)               |
+| **4** | The pinned running bar: no call yet, one live step, parallel sessions, stopping                 |
+| **5** | The marks (failed, refused, a matched `blocked`), light and dark, and the shipped `blocked` row |
+| **6** | Generic and unknown lines, with the frame that produces each                                    |
+| **7** | Truncation: before and after per object kind, the focused object with its tooltip, zh and dark  |
+| **8** | The `retrieval` row beside a call line                                                          |
+| **9** | Measured in chromium at 1366 × 768 and 1440 × 900, and the floor rail drawn at its real height  |
+
+### Rendered before drawn
+
+Every shipped fragment on the board is the emitted markup of `PlanChangeRail` at
+motir-core f6b31b4, captured with `tests/helpers/renderWithIntl` →
+`container.innerHTML` in the `streaming` phase, in en and zh. The stylesheet is
+Tailwind's own output for the page's classes, compiled by the repo's
+`@tailwindcss/postcss` over `@motir/design-system/theme.css`. The render showed
+three things that reading the `.tsx` alone would not:
+
+- **The whole act `<ol>` sits inside the one `aria-live="polite"` region**
+  (`plan-change-progress`), so every appended row is announced. One row per call
+  would have a screen reader read the log aloud. That is why the live region
+  changes below.
+- **The interim `call` arm prints _"Read the code_read"_** for a `read_file` call.
+  `RETRIEVAL_FAMILY_KEY` has no `code_read` entry, so the raw family name lands in
+  the line. MOTIR-7979 replaces that arm with the lines in this section.
+- **The interim arm gives every call outside `lay` and `author` the mono label
+  `retrieval`.** Here a call line has **no** label column: the mono column stays
+  the axis a reader skims, and it names steps only.
+
+### ⚠️ Sheet 3's rule, amended on the record (2026-10-09)
+
+The MOTIR-4066 section says act lines are _"never re-ordered, never collapsed and
+never de-duplicated … a rail that folds them into '2 lookups' has turned a record
+into a summary"_. Its own measurement says about nine rows fit at the floor. One
+row per call, appended flat, is the log sheet 3 forbids. Folding calls risks the
+summary it also forbids. **The sentence now reads:**
+
+> Act lines append. They are never re-ordered, never merged, never
+> de-duplicated, and none is dropped. A step's call lines are drawn nested under
+> that step's row. A finished step folds them behind a disclosure that carries
+> their count, and an open step shows its newest two with the rest behind an
+> _earlier calls_ row. Folding is presentation only: expanding shows every call,
+> in arrival order, one row each.
+
+**What is kept, unchanged:**
+
+- the act record is still an append-only flat list (the hook's `acts`);
+- step rows, `retrieval` rows without a call id, and the loud `frame: <kind>` row
+  still append and never collapse;
+- two identical calls are still two lines;
+- the mono label column is still the skim axis, and it names steps.
+
+**What changed:** a call line may be **out of view behind a disclosure**, and the
+disclosure always says how many lines it holds and how many of them failed.
+"2 lookups" was forbidden because it **replaced** two lines. "2 calls" opens onto
+both.
+
+### How a call finds its step (derived at render time)
+
+**Step rows** are the acts `reading`, `redirected`, `searching`, `drilling`,
+`laying`, `authoring` and `validating`. The other act rows (`submitted`,
+`retrieval`, `note`, `proposed`, `unknown`) never take calls.
+
+1. A call **with an `itemRef`** joins the most recent `authoring` step whose title
+   or key equals that ref. motir-ai sends the author session's own ref, which is
+   the title the `authoring` frame names until the card has a key.
+2. Any other call joins the **most recent step row before it**.
+3. A call with **no step before it** renders as its own top-level row in the
+   call-line markup. It is never dropped.
+
+**Open and finished.** The open steps are:
+
+- the most recent step;
+- when that step is `authoring`, every `authoring` step back to the previous
+  step of another kind (the parallel level, per MOTIR-7782).
+
+Every other step is **finished** and folds. When the run ends (done, stopped or
+failed), every step folds. **A step a reader expanded stays expanded.** Nothing
+auto-folds a group the reader opened.
+
+**What is live, and how it is inked.**
+
+- An open step's row is at `--el-text` with its own glyph.
+- The newest call in each open step carries the shipped spinner, at `--el-text`.
+- Earlier calls are at `--el-text-secondary`.
+- An open step with **no calls yet** carries the spinner on its own row, which is
+  exactly the shipped row.
+- A finished step's row is at `--el-text-secondary`.
+
+So when a step and its call are both "current", the step row says **what** is
+being worked on, and the spinner sits on **the call doing it**.
+
+**The open window: the newest two.** An open step shows its newest **two** call
+lines. Older ones sit behind an _N earlier calls_ row at the top of the group,
+which is a real disclosure. The number decided it (panel 9 and the table below):
+
+- With every call open, at 1366 × 768 and eight calls per session, the rail
+  auto-scrolled to the newest act names **1 of 3** live sessions.
+- With a window of three it named 2 of 3.
+- With a window of two it names all three at every run length measured.
+
+### Parallel author sessions: grouped, not interleaved
+
+Each call joins its own step's group, keyed by the session's item ref (rule 1
+above). **A reader tells which item a call belongs to by text alone:** every group
+sits under a row that names its item (_Writing Drop the legacy cookie reader_),
+and the indent and hairline only repeat what the nesting already says.
+
+**Rejected: chronological interleave with the item named on each line** (panel 3,
+right).
+
+- Every line grows by a title, so most lines wrap. The same rail shows four calls
+  where the grouped one shows three sessions.
+- The reader has to re-assemble each session's sequence from scattered lines.
+- The item name becomes the longest thing on every line, so truncation eats it
+  first.
+
+### The pinned running bar
+
+The bar still holds one line and truncates from its end, as shipped. It shows:
+
+| when                               | the bar reads                                                       |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| an open step with no call yet      | the step's own line (shipped)                                       |
+| one open step with calls           | its newest call line                                                |
+| two or more open `authoring` steps | the most recently started call, then its item: `{line} · {title}`   |
+| stopping                           | the shipped _Stopping — finishing this work item first._, unchanged |
+
+In the parallel case **the line comes first** because the bar truncates from the
+end. The part that changes on every call survives, and the item, which the record
+names anyway, is what gets cut.
+
+### The marks: a call that did not succeed
+
+| mark        | when                                                                                   | drawn                                                    |
+| ----------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **failed**  | the matched `retrieval` carries `ok: false`, or `tool_call_failed` with reason `error` | the line, then `· failed`; glyph `x`                     |
+| **refused** | `tool_call_failed` with reason `refused` (a walk write the walk refused)               | the line, then `· refused`; glyph `x`                    |
+| **skipped** | an inbound `blocked: true` `retrieval` whose call id matches a call                    | the line, then `· skipped — out of lookups`; glyph `ban` |
+
+- **The spinner gives way to the mark.** A marked call is never live, even when it
+  is the newest in its step.
+- **The word is `--el-text-strong`, the line keeps its ink, and that is all.** No
+  `--el-tint-rose`, no `role="alert"`, no `--el-danger*` / `--el-destructive`.
+  A failed lookup is not a failed run, which is the same reasoning sheet 4
+  applies to _stopped_. The planner reads the refusal and carries on.
+- **Folding never hides a failure.** A finished step's count reads
+  _5 calls · 1 failed_.
+- **An inbound `blocked` frame with no matching call keeps sheet 3's shipped row**
+  (`ban` + _Out of lookups — carrying on with what it has._), unchanged. motir-ai
+  `main` no longer emits it. MOTIR-7719 removed the retrieval budget, and
+  `assembleRetrievalTools` sends `{ tool, family, ok, args }` with no `blocked`
+  variant. So no new budget mark is drawn. The row stays so that nothing a
+  producer still sends goes unrendered.
+- **For MOTIR-7979:** f6b31b4's `call` act carries `outcome: 'failed'` for both
+  an error and a refusal. Telling **refused** apart needs `tool_call_failed`'s
+  `reason` kept on the act. That is a field on the render card's side, not a
+  frame change.
+
+### Generic and unknown lines
+
+| input                                                                                 | line                                          |
+| ------------------------------------------------------------------------------------- | --------------------------------------------- |
+| a known tool whose template needs an object, with the object `none`, missing or blank | its **family's** generic line                 |
+| a known tool whose template takes no object (`get_code_health`, `raise_gap`, …)       | its own line                                  |
+| a tool core has no wording for, in a known family                                     | the family's generic line                     |
+| a family missing or outside the closed set                                            | _Working on the plan_                         |
+| an unknown frame **kind**                                                             | sheet 3's loud `frame: <kind>` row, unchanged |
+
+A line is never blank, never `undefined`, and never shows a raw message key.
+
+### Truncation
+
+**The cap is 32 columns of the object.** A CJK character counts as two. Only the
+object is shortened: the verb words never are, and a line may wrap to a second
+row. The rule per object kind:
+
+| object                                  | rule                                                                                                                                                                                                |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`                                  | keep the first segment and the file name, elide the middle (`packages/…/StyleVignette.tsx`). If that is still over the cap, use `…/` + the file name. If the file name alone is over, keep its end. |
+| `query` (`{query}`)                     | keep the start, elide the end (`“sessions that outlive a passwor…”`)                                                                                                                                |
+| `query` (`{symbol}`, a code-graph node) | keep the end, elide the start (`…okenIfExpiringWithinGraceWindow`), because the member name is the end                                                                                              |
+| a key (`MOTIR-12345`)                   | **never shortened**                                                                                                                                                                                 |
+| a title (`item` · `parent` · `{title}`) | keep the start, elide the end                                                                                                                                                                       |
+
+**How the full value is reached.** A shortened object is the only part that
+changes behaviour. An object short enough to show in full adds nothing.
+
+- **Pointer:** a dotted underline says there is more, and hovering opens the
+  shipped `Tooltip` (design system, hover **and** focus) with the full value in
+  mono.
+- **Keyboard:** the shortened object is a tab stop (`tabIndex=0`) with the shipped
+  focus ring, and the same `Tooltip` opens on focus. A hover-only `title` is not
+  used.
+- **Screen reader:** the shortened text is `aria-hidden`, and an `sr-only` span
+  carries the accessible name _Full path: `<value>`_ (or _Full query_,
+  _Full name_, _Full title_). That is the `FolderPlacement` precedent, so the
+  full value is read in reading order with no interaction at all.
+
+### The `retrieval` row beside a call line: no
+
+A `retrieval` frame whose call id matches a call is **that call's outcome** and
+draws no row. A success changes nothing; `ok: false` marks the call failed. f6b31b4
+already applies it that way, and this board draws the decision. A `retrieval`
+frame **with no call id** keeps the shipped per-family row, unchanged. That covers
+an older producer, and an ask or debug job, whose handlers emit no `tool_call`.
+
+### A11y: what the one live region announces
+
+**Today the whole record is the live region.** Decided:
+
+- The one `aria-live="polite"` region keeps `data-testid="plan-change-progress"`
+  and now holds **only** an `sr-only` announcer line.
+- The record `<ol>` becomes its next sibling: ordinary content in the transcript's
+  `role="log"`, read by browsing.
+- **The announcer is replaced when a step row is appended** (its own line, e.g.
+  _Writing Expire idle sessions server-side_) **and when a call is marked**
+  (_Updating MOTIR-418 — refused_).
+- **Calls are not announced.** Parallel steps that start together are announced
+  one by one through the polite queue.
+- **No live region is added.** The rail's other polite line (MOTIR-7650's _swapped_
+  line) is pre-existing and unrelated.
+- The disclosures are real `<button>`s with `aria-expanded` and `aria-controls`, so
+  their state is announced on activation. Decorative glyphs are `aria-hidden`, and
+  the spinner keeps its shipped `role="status"`.
+
+### Primitives composed
+
+| element               | built from                                                                                                                                                                                                                                                            | colour                                                         | shape                                                                                                |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| step row              | the shipped act row, now the first child of its `<li>`                                                                                                                                                                                                                | as shipped (`--el-text` open · `--el-text-secondary` finished) | as shipped                                                                                           |
+| **call list**         | NEW `<ol data-testid="plan-change-calls">` inside the step's `<li>`, indented under the label column (`ml-5.5`), left hairline                                                                                                                                        | `--el-border-strong` hairline                                  | layout only                                                                                          |
+| **call line**         | NEW `<li data-testid="plan-change-call">`: glyph by verb + the line, **no label column**                                                                                                                                                                              | `--el-text-secondary`; newest open call `--el-text`            | `text-xs`                                                                                            |
+| call glyph            | lucide by verb: `file-text` read · `search` search · `waypoints` explore · `scan-eye` look_up · `list-tree` lay · `pen-line` write · `plus` add · `pencil` update · `minus` remove · `shield-check` validate · `message-square` settle; unknown verb `book-open-text` | `--el-text-secondary`                                          | `size-3.5`                                                                                           |
+| object                | `path` / `{symbol}` / a key in `font-mono text-[11px]`; a query and a new title in quotes                                                                                                                                                                             | inherits the line                                              | —                                                                                                    |
+| **step disclosure**   | NEW `<button aria-expanded aria-controls>` at the end of a finished step's row: `chevron-right` / `chevron-down` + the count                                                                                                                                          | `--el-text-secondary`; hover `--el-surface` / `--el-text`      | `--radius-control`, `--spacing-chip-x/y`, `text-[11px]`                                              |
+| **earlier-calls row** | NEW, the same button as the first row of an open step's call list                                                                                                                                                                                                     | as the disclosure                                              | as the disclosure                                                                                    |
+| **mark**              | NEW `<span data-testid="plan-change-call-mark">` after the line: `· failed` / `· refused` / `· skipped — out of lookups`; glyph `x` or `ban` in the glyph slot                                                                                                        | `--el-text-strong`                                             | `font-medium`                                                                                        |
+| **shortened object**  | NEW focusable span: dotted underline, the `aria-hidden` short form + an `sr-only` full name, wrapped in the shipped `Tooltip`                                                                                                                                         | inherits; tooltip `--el-tooltip-bg` / `--el-tooltip-text`      | focus `--focus-ring-color`; tooltip `--radius-control`, `--spacing-tooltip-x/y`, `--shadow-elevated` |
+| **announcer**         | NEW `<p class="sr-only">` inside the existing `plan-change-progress` region                                                                                                                                                                                           | —                                                              | —                                                                                                    |
+| running bar           | shipped, its line chosen as above                                                                                                                                                                                                                                     | as shipped                                                     | as shipped                                                                                           |
+
+**Colour** is `--el-*` only, and no token was added. **Shape** is element-semantic
+tokens only, with no `data-style` exception. Every new state pairs a word with a
+glyph or structure, so no state rests on colour. No dashed or dotted **border**
+carries a state. The dotted underline is a text decoration on a shortened value,
+not a state.
+
+### Copy, en and zh, keyed on what each tool DOES
+
+**Enumerated at motir-ai `97e73fb` (`main`)**, with these reads:
+
+```sh
+for f in planTreeTools codeGraphTools codeReadTools conventionTools lessonTools treeGeneration conversationSession; do
+  git -C motir-ai show 97e73fb:src/llm/$f.ts | grep -oE "name: '[a-z_]+'" | sort -u
+done
+git -C motir-ai grep -n "name: 'web_search'" 97e73fb -- src     # src/llm/gatewayClient.ts:1258
+git -C motir-ai grep -n "deepen_node: deepenExecutor" 97e73fb -- src  # treeGeneration.ts:13458, executor-only
+```
+
+`assembleRetrievalTools`' `byFamily` (`src/llm/retrievalTools.ts:355`) gathers 18
+retrieval tools over the six families. The walk's session tools are the 20 names
+`treeGeneration.ts` defines, plus the executor-only `deepen_node` and
+`conversationSession.ts`'s `settle_conversation`. `src/llm/walkDriver.ts`, which
+the card names, defines **no** tool at that ref: it drives the sessions
+`treeGeneration.ts` builds. The same 40 names are motir-ai's narration map
+(`RETRIEVAL_CALL_NARRATION` + `SESSION_CALL_NARRATION`, MOTIR-7977/7978).
+
+The wording is a template over the frame's object:
+
+- `{path}`, `{query}` and `{symbol}` take `object.value` for `path` and `query`.
+- `{item}`, `{parent}` and `{title}` take the value for `item` and `parent`: a key
+  when the card has one, else its title.
+
+A template whose placeholder has no object falls back to the family line.
+motir-ai sends structure only; **these strings are motir-core's**
+(`planningWorkspace.conversation.act.call.*`, built by MOTIR-7979). `(session)`
+means the tool takes the family of the session it runs in.
+
+| family        | tool                         | object                | en                                                   | zh                               |
+| ------------- | ---------------------------- | --------------------- | ---------------------------------------------------- | -------------------------------- |
+| `plan_tree`   | `skeleton`                   | `none`                | Reading the plan's outline                           | 正在读取计划大纲                 |
+| `plan_tree`   | `search_work_items`          | `query` → `{query}`   | Searching work items for “{query}”                   | 正在搜索工作项：“{query}”        |
+| `plan_tree`   | `search_work_items_semantic` | `query` → `{query}`   | Searching work items for “{query}”                   | 正在搜索工作项：“{query}”        |
+| `plan_tree`   | `get_item`                   | `item` → `{item}`     | Looking up {item}                                    | 正在查看 {item}                  |
+| `plan_tree`   | `get_subtree`                | `item` → `{item}`     | Reading the cards under {item}                       | 正在读取 {item} 下的卡片         |
+| `plan_tree`   | `walk_blocking`              | `item` → `{item}`     | Tracing what blocks {item}                           | 正在追溯阻塞 {item} 的卡片       |
+| `code_graph`  | `code_search`                | `query` → `{query}`   | Searching the code for “{query}”                     | 正在代码中搜索：“{query}”        |
+| `code_graph`  | `code_explore`               | `query` → `{query}`   | Exploring the code around “{query}”                  | 正在探索与“{query}”相关的代码    |
+| `code_graph`  | `code_callers`               | `query` → `{symbol}`  | Finding what calls {symbol}                          | 正在查找调用 {symbol} 的代码     |
+| `code_graph`  | `code_callees`               | `query` → `{symbol}`  | Finding what {symbol} calls                          | 正在查找 {symbol} 调用的代码     |
+| `code_graph`  | `code_impact`                | `query` → `{symbol}`  | Checking what changing {symbol} affects              | 正在评估修改 {symbol} 的影响     |
+| `code_graph`  | `code_node`                  | `query` → `{symbol}`  | Reading {symbol} in the code graph                   | 正在代码图谱中读取 {symbol}      |
+| `code_health` | `get_coding_convention`      | `none`                | Reading the coding conventions                       | 正在读取编码规范                 |
+| `code_health` | `get_code_health`            | `none`                | Reading the code-health report                       | 正在读取代码健康报告             |
+| `code_read`   | `read_file`                  | `path` → `{path}`     | Reading {path}                                       | 正在读取 {path}                  |
+| `code_read`   | `list_changed_files`         | `none`                | Listing the files changed on the branch              | 正在列出分支上改动的文件         |
+| `web`         | `web_search`                 | `query` → `{query}`   | Searching the web for “{query}”                      | 正在网上搜索：“{query}”          |
+| `lessons`     | `search_lessons`             | `query` → `{query}`   | Searching lessons for “{query}”                      | 正在检索经验教训：“{query}”      |
+| `lay`         | `lay`                        | `parent` → `{parent}` | Laying out the level under {parent}                  | 正在铺开 {parent} 的下一层       |
+| `lay`         | `drill_into`                 | `parent` → `{parent}` | Opening {parent} to lay its children                 | 正在打开 {parent} 以铺开其子项   |
+| `lay`         | `propose_node`               | `item` → `{title}`    | Proposing “{title}”                                  | 正在提议“{title}”                |
+| `lay`         | `complete_level`             | `none`                | Finishing this level                                 | 正在完成这一层                   |
+| `lay`         | `target_already_covered`     | `none`                | Noting the target is already covered                 | 正在标记目标已被覆盖             |
+| `author`      | `author`                     | `item` → `{item}`     | Starting to write {item}                             | 开始撰写 {item}                  |
+| `author`      | `deepen_node`                | `item` → `{item}`     | Writing {item}'s description and acceptance criteria | 正在撰写 {item} 的描述与验收标准 |
+| `author`      | `raise_gap`                  | `none`                | Flagging a gap in the plan                           | 正在标记计划中的缺口             |
+| `item`        | `add_item`                   | `item` → `{title}`    | Adding “{title}”                                     | 正在添加“{title}”                |
+| `item`        | `update_item`                | `item` → `{item}`     | Updating {item}                                      | 正在更新 {item}                  |
+| `item`        | `remove_item`                | `item` → `{item}`     | Removing {item}                                      | 正在移除 {item}                  |
+| `item`        | `log_bug`                    | `item` → `{title}`    | Filing a bug: “{title}”                              | 正在登记缺陷：“{title}”          |
+| `validate`    | `validate_plan`              | `none`                | Checking the plan                                    | 正在校验计划                     |
+| `settle`      | `settle_conversation`        | `parent` → `{parent}` | Settling what to change under {parent}               | 正在确定 {parent} 下要改什么     |
+| `settle`      | `ask_user`                   | `none`                | Writing you a question                               | 正在拟写给你的问题               |
+| `settle`      | `clear_plan`                 | `none`                | Clearing the draft plan                              | 正在清空草拟的计划               |
+| `(session)`   | `search_planning_rules`      | `query` → `{query}`   | Checking the planning rules for “{query}”            | 正在查阅规划规则：“{query}”      |
+| `(session)`   | `report_findings`            | `none`                | Writing up its findings                              | 正在整理发现                     |
+| `(session)`   | `log_planning_mistake`       | `none`                | Noting a planning mistake                            | 正在记录一次规划失误             |
+| `(session)`   | `log_planning_bug`           | `none`                | Filing a planning bug                                | 正在登记规划缺陷                 |
+| `(session)`   | `classify_revision`          | `none`                | Classifying the revision                             | 正在归类本次修订                 |
+| `(session)`   | `return_to_conversation`     | `none`                | Returning to the conversation                        | 正在返回对话                     |
+
+| family                           | en (generic line)         | zh                 |
+| -------------------------------- | ------------------------- | ------------------ |
+| `plan_tree`                      | Reading the plan          | 正在读取计划       |
+| `code_graph`                     | Reading the code graph    | 正在读取代码图谱   |
+| `code_health`                    | Reading code health       | 正在读取代码健康度 |
+| `code_read`                      | Reading the repository    | 正在读取代码仓库   |
+| `web`                            | Searching the web         | 正在网上搜索       |
+| `lessons`                        | Reading lessons           | 正在读取经验教训   |
+| `lay`                            | Laying out a level        | 正在铺开一层       |
+| `author`                         | Writing a card            | 正在撰写卡片       |
+| `item`                           | Changing a card           | 正在修改卡片       |
+| `validate`                       | Checking the plan         | 正在校验计划       |
+| `settle`                         | Settling the conversation | 正在收束对话       |
+| missing / outside the closed set | Working on the plan       | 正在处理计划       |
+
+| element                                                           | en                                                                | zh                                 |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------- |
+| failed mark (`ok: false`, or `tool_call_failed` reason `error`)   | · failed                                                          | · 失败                             |
+| refused mark (`tool_call_failed` reason `refused`)                | · refused                                                         | · 被拒绝                           |
+| skipped mark (an inbound `blocked` matched to a call)             | · skipped — out of lookups                                        | · 已跳过 —— 检索额度已用尽         |
+| disclosure on a finished step                                     | `{count, plural, one {# call} other {# calls}}`                   | `{count} 次调用`                   |
+| … when any of its calls failed or was refused                     | `{count, plural, one {# call} other {# calls}} · {failed} failed` | `{count} 次调用 · {failed} 次失败` |
+| the earlier-calls row in an open step                             | `{count, plural, one {# earlier call} other {# earlier calls}}`   | `更早的 {count} 次调用`            |
+| running bar, two or more author steps open                        | `{line} · {title}`                                                | `{line} · {title}`                 |
+| announcer, a failed call                                          | `{line} — failed`                                                 | `{line} —— 失败`                   |
+| announcer, a refused call                                         | `{line} — refused`                                                | `{line} —— 被拒绝`                 |
+| shortened `path` — accessible name                                | `Full path: {value}`                                              | `完整路径：{value}`                |
+| shortened `query` — accessible name                               | `Full query: {value}`                                             | `完整查询：{value}`                |
+| shortened `{symbol}` — accessible name                            | `Full name: {value}`                                              | `完整名称：{value}`                |
+| shortened title (`item` · `parent` · `{title}`) — accessible name | `Full title: {value}`                                             | `完整标题：{value}`                |
+
+### ⭐ Measured, and what the number decided
+
+Measured in Chromium, driven by Playwright, against the mock's
+own rail markup at `22rem`. The rail height is the viewport minus the ~120 px of
+shell chrome that sheet 5 used, with the ordinary opening above the record (the
+opener, one user turn, _Sent to Motir AI_). The scenario is an author-heavy level:
+_submit_, a folded _reading_ step, a folded _lay_ step, then three author sessions
+live at once. A row is a step's own row, a call line, or an _earlier calls_ row,
+counted fully visible before the transcript scrolls. Sessions named are the open
+`authoring` rows fully on screen once the rail has auto-scrolled to the newest act.
+
+| viewport   | calls per live session | rows that fit, chosen nesting | live sessions named on screen at the newest act | rows, every call open | sessions named, every call open |
+| ---------- | ---------------------- | ----------------------------- | ----------------------------------------------- | --------------------- | ------------------------------- |
+| 1366 × 768 | 4 × 3                  | **7**                         | **3 of 3**                                      | 8                     | 3 of 3                          |
+| 1366 × 768 | 8 × 3                  | **6**                         | **3 of 3**                                      | 8                     | 1 of 3                          |
+| 1366 × 768 | 12 × 3                 | **7**                         | **3 of 3**                                      | 8                     | 1 of 3                          |
+| 1440 × 900 | 4 × 3                  | **12**                        | **3 of 3**                                      | 13                    | 3 of 3                          |
+| 1440 × 900 | 8 × 3                  | **10**                        | **3 of 3**                                      | 12                    | 2 of 3                          |
+| 1440 × 900 | 12 × 3                 | **12**                        | **3 of 3**                                      | 12                    | 1 of 3                          |
+
+**The finding is that the rail fits only six or seven rows at the floor, so it
+was always going to scroll.** The number decided two things:
+
+- Calls nest instead of appending.
+- An open step shows its newest two.
+
+That keeps every live session named at the moment a reader looks, at both
+viewports and every run length measured, while the full record stays one press
+away. Sheet 5's invariant is unchanged. The transcript scrolls and the footer does
+not. The rail auto-scrolls to the newest act while the reader has not scrolled
+away.
+
+### Deliverable
+
+`design/ai-chat/plan-change-run-live--per-call.mock.html` (the delta mock; panels
+1–8 plus the measured panel) and this section. `prettier --check` is clean, and
+`tests/design-ink-contrast.test.ts` and `tests/design-state-ink-contrast.test.ts`
+pass on it. It amends `plan-change-run-live.mock.html` sheet 3 and the MOTIR-4066
+section, which stay as records. It gates **MOTIR-7979** (the rendering and the en
+and zh catalogues).
