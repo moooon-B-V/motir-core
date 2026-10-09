@@ -1396,6 +1396,13 @@ export interface AwaitingRoutingScope {
   projectIds: string[];
   /** The reader — §2's single recipient. */
   userId: string;
+  /**
+   * The plans a REVISION holds right now (Bug MOTIR-7988), whose `plan_approval`
+   * gates leave the queue while the planner rewrites them — resolved by the
+   * service from the revision lease, which no column says. Omitted or empty, no
+   * plan gate is excluded.
+   */
+  heldPlanIds?: readonly string[];
 }
 
 /**
@@ -1431,6 +1438,14 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
     // is excluded here — the list, its count, the home count and the marker all read this.
     kind: { not: 'agent_review' },
     ...CARRIED_MERGE_GATE_EXCLUDED,
+    // ⚠️ A PLAN BEING REWRITTEN IS NOT WAITING ON ANYBODY (Bug MOTIR-7988;
+    // `approval-gates.md` §11.5c's 2026-10-09 amendment). Its gate stays `awaiting`
+    // and HELD — the decide door refuses it — but the person has nothing to decide
+    // until the revision lands, so it is off the list, its count and the watermark,
+    // and listed under Planning instead. It returns when the lease ends.
+    ...(scope.heldPlanIds && scope.heldPlanIds.length > 0
+      ? { AND: [{ NOT: { kind: 'plan_approval', subjectId: { in: [...scope.heldPlanIds] } } }] }
+      : {}),
   };
 }
 

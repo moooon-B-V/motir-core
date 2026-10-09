@@ -247,7 +247,7 @@ describe('HELD — the planner is writing a new version (Panel 4, §11.5c)', () 
     });
     renderHost();
     const reason =
-      'Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in Waiting on you meanwhile.';
+      'Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — until then it is under Planning, and it returns to Waiting on you.';
     for (const place of [bar(), block()]) {
       const scope = within(place);
       const approve = scope.getByRole('button', { name: 'Approve' }) as HTMLButtonElement;

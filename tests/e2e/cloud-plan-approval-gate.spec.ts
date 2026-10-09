@@ -8,7 +8,10 @@
 // the surface's "Reopened from Waiting on you" line (design
 // `design/workbench/design-notes.md` § 33). Cloud, not main: the planning surface
 // mounts only where Motir AI is configured, and the motir-ai JOBS mock is this
-// lane's. The header below is the receipt's, kept as it was written.
+// lane's. Bug MOTIR-7988 then restated the hold chapter: a plan being rewritten is
+// being PLANNED again, so it LEAVES Waiting on you (it is under Planning) rather than
+// staying listed with *Being rewritten*; the held surface is opened from the row's
+// own door link. The header below is the receipt's, kept as it was written.
 //
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
@@ -154,12 +157,21 @@ async function openToApprove(page: Page): Promise<void> {
 }
 
 /** The row opens the PLANNING SURFACE at the plan's conversation — and only it:
- *  the one dialog on the page is the planning workspace, never the approval overlay. */
-async function landOnSurface(page: Page, sessionId: string): Promise<void> {
+ *  the one dialog on the page is the planning workspace, never the approval overlay.
+ *
+ *  `via` is the entrance the address names. A PLAIN CLICK on the row writes
+ *  `planVia=approvals`; the door's own `href` is the plan page, which forwards to the
+ *  surface WITHOUT an entrance (a new tab, or `goto(href)`), so that arrival passes
+ *  `null` and asserts the conversation alone. */
+async function landOnSurface(
+  page: Page,
+  sessionId: string,
+  via: 'approvals' | null = 'approvals',
+): Promise<void> {
   await page.waitForURL(
     (url) =>
       url.searchParams.get('planSession') === sessionId &&
-      url.searchParams.get('planVia') === 'approvals',
+      (via === null || url.searchParams.get('planVia') === via),
   );
   await expect(workspace(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
   await expect(page.getByRole('dialog')).toHaveCount(1);
@@ -242,7 +254,7 @@ test.afterAll(async () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('a finished plan waits in To approve, is held while it is rewritten, and Approve lands its cards', async ({
+test('a finished plan waits in To approve, leaves it while it is rewritten, and Approve lands its cards', async ({
   page,
   chapter,
   beat,
@@ -261,8 +273,11 @@ test('a finished plan waits in To approve, is held while it is rewritten, and Ap
   let sessionId = '';
   let planId = '';
   let ctx: Ctx = { userId: '', workspaceId: '' };
-  /** The gate's row — the SAME row must be held and then decide (§11.5c). */
+  /** The gate's row — the SAME row must come back and decide (§11.5c). */
   let rowTestId = '';
+  /** Where the row's door goes — the held surface is opened from it while the row
+   *  is away from Waiting on you (MOTIR-7988). */
+  let doorHref = '';
 
   await chapter('Ask for a plan from a card, then leave while it is written', async () => {
     await openFromCard(page, seed.storyKey);
@@ -280,6 +295,7 @@ test('a finished plan waits in To approve, is held while it is rewritten, and Ap
     const row = planRow(page, seed.storyKey);
     await expect(row).toBeVisible();
     rowTestId = (await row.getAttribute('data-testid'))!;
+    doorHref = (await rowDoor(row).getAttribute('href'))!;
     await expect(row).toContainText(new RegExp(`Plan for\\s*${seed.storyTitle}`));
     await expect(row).toContainText('1 proposed item · written by Motir AI');
     await expect(page.getByRole('link', { name: /Waiting on you/ })).toContainText('1');
@@ -302,21 +318,19 @@ test('a finished plan waits in To approve, is held while it is rewritten, and Ap
     await beat();
   });
 
-  await chapter('While the planner rewrites it, it is held — and still listed', async () => {
+  await chapter('While the planner rewrites it, it leaves Waiting on you and is held', async () => {
     await startRewrite(planId, ctx);
+    // Being planned again: nothing waits on the member, so the row is not in the
+    // queue and the tab does not count it (MOTIR-7988, amending §11.5c).
     await openToApprove(page);
-    const row = planRow(page, seed.storyKey);
-    await expect(row).toHaveAttribute('data-testid', rowTestId);
-    await expect(row).toContainText(gate.row.rewriting);
-    await expect(reviewButton(row)).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /Waiting on you/ })).toContainText('1');
+    await expect(planRow(page, seed.storyKey)).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Waiting on you/ })).not.toContainText('1');
     await beat();
 
-    // The row still opens the surface — to watch, not to decide.
-    // Pressed at its leading edge: the details and the title sit ABOVE the stretched
-    // door (`z-10`, the title being the target's quick view), so its centre is covered.
-    await rowDoor(row).click({ position: { x: 6, y: 6 } });
-    await landOnSurface(page, sessionId);
+    // The surface still opens — to watch, not to decide — and says where the plan is.
+    // The door's href is the plan page, which forwards to the surface with no entrance.
+    await page.goto(doorHref);
+    await landOnSurface(page, sessionId, null);
     await planRendered(page, 1);
     await expect(bar(page)).toContainText(surface.held);
     await expect(verb(bar(page), surface.approve)).toBeDisabled();

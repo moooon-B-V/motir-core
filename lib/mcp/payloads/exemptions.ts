@@ -50,6 +50,11 @@ export const EXEMPT_TOOLS = {
     'stored step is read back only on the cookie-authed plan review (`inFlightSteps`); no ' +
     '`/api/v1` operation returns a plan step, so there is no component to derive from ' +
     '(MOTIR-7824).',
+  hold_plan_revision:
+    'Returns the state of a plan’s REVISION HOLD after the call — `{ planId, action, held, ' +
+    'expiresAt }` — a lease on the plan’s own trail, not a resource. No `/api/v1` operation ' +
+    'returns a revision lease (the hosted revision takes it inside the cookie-authed revise ' +
+    'route), so there is no component to derive from (MOTIR-7988).',
   validate_work_item:
     'Returns a subtree FINISHABILITY verdict (valid / blockers / advisories) — a planning ' +
     'judgement computed over a tree, not a representation of a resource. No v1 operation ' +

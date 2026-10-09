@@ -3806,3 +3806,28 @@ faint, so the rows clear AA on the page and on the `:hover` `--el-surface` fill 
 | **MOTIR-7707** (the column)  | PREMISE: the tab id `to-resume` sits after `to-fix` in `WORKBENCH_TABS`; the cascade rung (§ 35.3); the count is entries                                       | nothing new                                                                                   |
 | **MOTIR-7710** (auto-resume) | PREMISE: each `skipReason` has words and a repair (§ 35.6); `already_resumed` reads as Resuming; `not_a_candidate` is Ready to resume                          | nothing new                                                                                   |
 | **§ 21 / MOTIR-5216**        | Nothing                                                                                                                                                        | The strip gains a seventh tab, and the cascade a rung between To fix and In progress.         |
+
+## 36 · A PLAN BEING REWRITTEN IS UNDER PLANNING — it leaves Waiting on you while its revision holds it, and comes back when the rewrite ends — MOTIR-7988
+
+**Amends § 33.1's copy table** (`approvalGate.planApproval.surface.held`, `.surface.heldBy`,
+`.handoff.rewriting`) and `docs/decisions/approval-gates.md` § 11.5c. **No panel changes, so there is no
+delta mock:** the held surface (overlay mock Panel 4 of the plan-approval design) draws the same bar,
+the same two disabled verbs and the same reason line; only the reason's last clause moves, and the
+Planning tab's row is the one it already draws for a plan being written.
+
+- **The rule.** A `planned` plan whose revision lease is held is being planned again — nothing waits on
+  its requester while the planner rewrites it. So its row leaves **Waiting on you** (list, count chip and
+  watermark alike) and is listed under **Planning**, with the plan's progress, until the rewrite ends or
+  the lease runs out. Its gate stays `awaiting`; Approve and Decline are refused while held. This is a
+  LISTING rule over the lease, not a status.
+- **The copy says where the plan is now**, because "it stays in Waiting on you meanwhile" became false.
+
+| key                                           | en                                                                                                                                                                   | zh                                                                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `approvalGate.planApproval.surface.held`      | Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — until then it is under Planning, and it returns to Waiting on you.  | Motir AI 正在编写此计划的新版本。完成后即可批准或拒绝——在此之前它在“规划”中，完成后回到“等你处理”。  |
+| `approvalGate.planApproval.surface.heldBy`    | {harness} is writing a new version of this plan. Approve and Decline come back when it finishes — until then it is under Planning, and it returns to Waiting on you. | {harness} 正在编写此计划的新版本。完成后即可批准或拒绝——在此之前它在“规划”中，完成后回到“等你处理”。 |
+| `approvalGate.planApproval.handoff.rewriting` | … it is under Planning while I work, and it comes back to `<link>`Waiting on you`</link>` for you to decide once I'm done.                                           | ……我编写期间它在“规划”中，等我完成后它会回到`<link>`等你处理`</link>`，由你决定。                    |
+
+- **`approvalGate.planApproval.row.rewriting` (_Being rewritten_) is kept, and is no longer reached from
+  the queue.** The queue does not list a held plan, so no row there carries `held`; `ApprovalRow` keeps
+  the pill for any row whose DTO still does, rather than this change removing a state from the row.

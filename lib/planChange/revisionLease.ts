@@ -48,6 +48,22 @@ export const PLAN_REVISION_LEASE_MS = 10 * 60 * 1000;
 export const REVISION_STARTED_KIND = 'revision_started';
 export const REVISION_ENDED_KIND = 'revision_ended';
 
+/**
+ * The lease's HEARTBEAT (Bug MOTIR-7988) — a row the holder writes for no reason
+ * but to say it is still working, so a revision whose next real write is more
+ * than {@link PLAN_REVISION_LEASE_MS} away keeps the plan. A hosted revision is
+ * one motir-ai job and never needs it; an MCP-driven one (`prompts/plan.py
+ * --revise`) runs agent sessions that can think for longer than the window
+ * between two writes, and without it the plan would fall back into Waiting on
+ * you with a live Approve mid-rewrite — the exact race the lease exists to stop.
+ *
+ * It is not an EVENT: the timeline drops it (`TRAIL_ONLY_KINDS` in
+ * `lib/plans/timeline.ts`), and it brackets nothing — {@link revisionLeaseOf}
+ * needs no case for it, because the window is already measured from the latest
+ * row, whatever its verb.
+ */
+export const REVISION_RENEWED_KIND = 'revision_renewed';
+
 /** The shape this module needs of a trail row: nothing but the verb, when it
  *  happened, and who did it. Declared structurally rather than importing the
  *  Prisma model, so the predicate stays pure and unit-testable. */

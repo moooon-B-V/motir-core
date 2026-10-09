@@ -9,6 +9,7 @@ import {
   type HomeListOptions,
 } from '@/lib/services/homeService';
 import { planProgressService } from '@/lib/services/planProgressService';
+import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
 import { toWorkbenchPlanningRowDto } from '@/lib/mappers/workbenchPlanningMappers';
 import type { WorkbenchPlanningPageDto, WorkbenchPlanningRowDto } from '@/lib/dto/home';
 
@@ -43,7 +44,7 @@ export const PLANNING_TAB_CEILING = 50;
 export const workbenchPlanningService = {
   /**
    * One offset window of the reader's own `generating` plans in the active
-   * project, newest first, each with its progress. An out-of-range page clamps
+   * project — and their `planned` ones a revision holds (MOTIR-7988) — newest first, each with its progress. An out-of-range page clamps
    * to the last page, exactly as `homeService`'s tabs do; a reader who may not
    * browse the active project gets an empty page, never an error.
    *
@@ -66,10 +67,17 @@ export const workbenchPlanningService = {
     const pageSize = clampLimit(options.limit ?? PLANNING_TAB_CEILING);
     const { rows, total, page, titles } = await withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await resolveActiveProjectScope(ctx, tx);
+      const projectIds = projectScopes.map((s) => s.projectId);
       const scope = {
         workspaceId: ctx.workspaceId,
-        projectIds: projectScopes.map((s) => s.projectId),
+        projectIds,
         userId: ctx.userId,
+        // The reader's `planned` plans a revision holds right now (MOTIR-7988):
+        // being written again, so listed here and not in Waiting on you.
+        revisingPlanIds: await planRevisionHoldService.heldPlanIds(
+          { workspaceId: ctx.workspaceId, projectIds, createdById: ctx.userId },
+          tx,
+        ),
       };
       // COUNT FIRST — the clamp needs the total before the window is read.
       const found = await planRepository.countGeneratingRequestedBy(scope, tx);
@@ -91,7 +99,16 @@ export const workbenchPlanningService = {
       };
     });
 
-    const snapshots = await planProgressService.snapshotsForPlans(rows, ctx);
+    // ⚠️ A REVISED plan is read as one being WRITTEN (MOTIR-7988). The progress
+    // derivation only builds a snapshot for a `generating` plan, and a plan a
+    // revision holds stays `planned` by design — but its row in this list is the
+    // same claim (a planner is at work on it), and its steps and `add` flags are
+    // the same rows. Dropping it here for want of a snapshot would empty the very
+    // row the listing rule put in.
+    const snapshots = await planProgressService.snapshotsForPlans(
+      rows.map((row) => (row.status === 'planned' ? { ...row, status: 'generating' } : row)),
+      ctx,
+    );
     const items: WorkbenchPlanningRowDto[] = [];
     for (const row of rows) {
       const progress = snapshots.get(row.id);

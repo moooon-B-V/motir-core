@@ -168,10 +168,13 @@ three things:
 **There is no _Request changes_.** A plan is changed by talking to the planner,
 so a request to change it would only wait for a conversation.
 
-**While the planner is rewriting the plan, the question waits.** The row stays in
-Waiting on you, but **Approve** and **Decline** are refused until the planner
-finishes, and the page says so. When it finishes, the same question can be
-answered, about the new version. If you read the plan before the rewrite and
+**While the planner is rewriting the plan, the question waits.** The plan leaves
+Waiting on you and is listed under **Planning**, with the plans being written:
+there is nothing for you to decide until the new version is ready. **Approve** and
+**Decline** are refused until the planner finishes, and the page says so. When it
+finishes, the plan is back in Waiting on you and the same question can be
+answered, about the new version. This holds whether the plan is rewritten in Motir
+or by your own planner over MCP. If you read the plan before the rewrite and
 press Approve afterwards, Motir refuses and asks you to look at the new version
 first.
 
