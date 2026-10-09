@@ -28,6 +28,7 @@ it changes carry a pointer to it. It is the layout source of truth for
 | **The `/workbench` landing page**     | **`workbench.mock.html`** (HTML mockup)        | The whole surface, multi-panel: the door · To do · In progress · Recently finished · Watching grouped · the all-empty page · every tab's empty state · narrow · **the pager, in five states**. Exports to `workbench.png`.                                                                                                                                        |
 | **The `To approve` tab's ROW** (§ 20) | **`approvals-row.mock.html`** (HTML mockup)    | The row and every state it can be in. **Its disclosure is superseded by the overlay below** (§ 20's dated amendment). Exports to `approvals-row.png`.                                                                                                                                                                                                             |
 | **The approval OVERLAY** (§ 22)       | **`approval-overlay.mock.html`** (HTML mockup) | An approval decided full screen over the tab, the frame edge to edge under the exit row: anatomy · a taller-than-the-screen subject and a short screen · see-but-not-decide · unregistered kind / subject gone · not available / loading · refused in place · narrow in `zh` · every `ApprovalGateState` · the row's new door. Exports to `approval-overlay.png`. |
+| **The work tabs GROUPED** (§ 36)      | **`workbench--grouped.mock.html`** (delta)     | To do, In progress and Recently finished drawn under their runnable container: the group row with its count and chevron, member head vs context head, standalone rows, the pager over rows, live holds, narrow, dark, zh. No export (AMENDMENT 4).                                                                                                                |
 
 **Panels:** A the door · **B the landing cascade** · 1 To do · 2 In progress · 3 Recently finished ·
 4 Watching, grouped · 5 the all-empty page · 6 every tab's empty state ·
@@ -3806,3 +3807,134 @@ faint, so the rows clear AA on the page and on the `:hover` `--el-surface` fill 
 | **MOTIR-7707** (the column)  | PREMISE: the tab id `to-resume` sits after `to-fix` in `WORKBENCH_TABS`; the cascade rung (§ 35.3); the count is entries                                       | nothing new                                                                                   |
 | **MOTIR-7710** (auto-resume) | PREMISE: each `skipReason` has words and a repair (§ 35.6); `already_resumed` reads as Resuming; `not_a_candidate` is Ready to resume                          | nothing new                                                                                   |
 | **§ 21 / MOTIR-5216**        | Nothing                                                                                                                                                        | The strip gains a seventh tab, and the cascade a rung between To fix and In progress.         |
+
+## 36 · GROUPED BY RUNNABLE CONTAINER — To do, In progress and Recently finished draw work under its story, task or bug — MOTIR-8013
+
+**The asset:** [`workbench--grouped.mock.html`](./workbench--grouped.mock.html), a new delta mock, Panels **0–10**.
+**It edits no existing mock.** Card **MOTIR-8013** (Story **MOTIR-8012**), the design gate of **MOTIR-8016**
+(the page). Rendered against motir-core `origin/main` @ `8fd441b`.
+
+It amends § _Layout_, § _The ORDER_, § _The pager_, § _Narrow_ and § _26_ for **these three tabs only**. Watching,
+Waiting on you, To fix, Planning and To resume are untouched; To fix and To resume keep grouping by RUN (§ 34,
+§ 35), which is a different key.
+
+It **composes** shipped pieces and redraws none of them:
+
+| piece                                       | from                                                                                  |
+| ------------------------------------------- | ------------------------------------------------------------------------------------- |
+| the row, every cell, the CI glyph           | `WorkbenchList` (§ _Layout_, § _The CI badge_)                                        |
+| the chevron, the reserved 16px slot, indent | `/ready`'s `ReadyContainerRow` (`design/ready/design-notes.md` § _Rows_, `ml-[22px]`) |
+| the count                                   | the strip's count chip (`--el-count-bg` / `--el-count-text`, `--radius-badge`)        |
+| the pager                                   | `IssueListPager`, unchanged, as To fix pages entries since § 34                       |
+| the empty states                            | § _Empty states_, unchanged                                                           |
+| the runnable-container rule                 | `isRunnableContainer` in `lib/workItems/readyFilter.ts`; NOT re-declared              |
+
+### 36.1 What heads a group
+
+A work item on the tab whose **parent is a runnable container** (a `story`, `task` or `bug` none of whose children
+has children) is drawn under that parent's **group row**. Everything else is a **standalone row**: a task under an
+epic, an item filed into a folder with no parent, a childless bug, and a child of a container that is NOT runnable.
+Grouping is **one level**: a subtask groups under its own direct parent when that parent is runnable, never under a
+grandparent (Panel 3, `ACME-81`).
+
+A group row is drawn only when **at least one member is on the tab**. A container on the tab with no members on the
+tab is a plain standalone row.
+
+### 36.2 The member head and the context head (Panels 1–2)
+
+- **Member head** — the container is itself on this tab (the reader holds it and it is in this category). It IS the
+  group row, with every cell of an ordinary row, and it is **never drawn a second time** as a separate row.
+- **Context head** — the container is in another category, or belongs to someone else. It still heads the group so
+  the members have a name. It is drawn as context: its title in `--el-text-secondary`, the Your-role cell replaced by
+  the marker **Not on this tab**, the Assignee cell empty, no CI glyph, no Finished value. It **keeps its Status
+  pill**, which tells the reader where the container is. It opens the peek like any row.
+
+### 36.3 The group row
+
+`[chevron] [kind icon] KEY  Title  [count]  …cells`. The chevron is `/ready`'s: a 16px button, a 12px
+`ChevronRight` turned 90° when open, `aria-expanded`, named **Expand {key}** / **Collapse {key}**. Every row on the
+tab reserves the 16px slot, so all titles start on one edge. Members are indented one tree level, **22px**. The
+group is a `rowgroup` named **Work items under {key}**.
+
+**The count** is the number of the group's members **on this tab**, excluding the head. It is not a readiness ratio
+and no total of children is shown — "3 of 7" reads as progress, and the total is one click away in the peek. A count
+of **0 is not drawn** (the strip's own zero rule).
+
+### 36.4 The order
+
+- **To do and In progress** — members by `compareReadyPosition` (kind in `READY_KIND_RANK` order, then priority
+  highest first, then key ascending); groups by `groupRank` over their best member, a standalone row ranking as a
+  group of one. **This amends § _The ORDER_**, which was `(kind, id DESC)`: groups ranked one way and members another
+  would contradict each other.
+- **Recently finished** — members by `completedAt DESC`; groups by their newest member's `completedAt`, the head key
+  as the tie-break (Panel 4).
+
+### 36.5 Expand state
+
+Collapsed by default, **except a tab holding exactly one group, which renders it open** (Panel 5) — `/ready`'s
+rule. The state is client-local, keyed by the container id, and **not in the URL**. It survives a live update and
+resets on the next LOAD (a pager move, a tab switch, a reload).
+
+### 36.6 The pager (Panel 6)
+
+`HOME_PAGE_SIZE` = 25 **top-level rows** a page — a group row or a standalone row. A group is **never split**
+across pages, and every item on the tab appears exactly once across pages. The range line therefore counts rows
+while the strip counts work items; the difference is intended and gets no caption. `IssueListPager` and its copy
+are unchanged.
+
+### 36.7 Live (Panel 7) — § 26 unchanged
+
+A nudge adds and updates, it never removes. A member that leaves is **held in place, unmarked** on these three tabs
+(as today). The count is the server's and moves at once. An arrival into a collapsed group raises the count and puts
+the shipped **New** pill on the group row; an arrival that makes a new group lands where a reload would put it. When
+the last member leaves, the group is held whole until the next load, with no count drawn.
+
+### 36.8 Narrow (Panel 8), dark (Panel 9), zh (Panel 10)
+
+Narrow is § _Narrow_'s two-line row; the chevron leads line 1 and the 22px indent is kept on both lines. Dark is the
+same tokens on `data-theme="dark"`. Status labels are the project's workflow names and are not translated here.
+
+### 36.9 Copy — `workbench.group.*`
+
+| key                        | en                                                                              | zh                            |
+| -------------------------- | ------------------------------------------------------------------------------- | ----------------------------- |
+| `workbench.group.expand`   | Expand {key}                                                                    | 展开 {key}                    |
+| `workbench.group.collapse` | Collapse {key}                                                                  | 收起 {key}                    |
+| `workbench.group.count`    | {count, plural, one {# work item on this tab} other {# work items on this tab}} | 此标签页中有 {count} 个工作项 |
+| `workbench.group.context`  | Not on this tab                                                                 | 不在此标签页                  |
+| `workbench.group.members`  | Work items under {key}                                                          | {key} 下的工作项              |
+
+The count chip shows the bare number; `workbench.group.count` is its accessible name and title.
+
+### 36.10 Token map
+
+| element                        | colour                                                       | shape                                  |
+| ------------------------------ | ------------------------------------------------------------ | -------------------------------------- |
+| row / group row                | `--el-text`; key `--el-text-secondary`; hover `--el-surface` | height 44px as `WorkbenchList`         |
+| context head title, held title | `--el-text-secondary`                                        | —                                      |
+| context marker                 | `--el-text-secondary`, italic                                | —                                      |
+| chevron                        | `--el-text-secondary`; hover `--el-muted` / `--el-text`      | `--radius-control`                     |
+| count chip                     | `--el-count-bg` / `--el-count-text`                          | `--radius-badge`, `--spacing-chip-x`   |
+| kind icon                      | `--el-type-{story,task,bug,subtask}`                         | —                                      |
+| status pill                    | tint fill, `--el-text-strong`                                | `--radius-badge`, `--spacing-chip-x/y` |
+| New pill                       | `--el-chip-bg` / `--el-chip-border`, `--el-text-secondary`   | `--radius-badge`                       |
+| row divider in a group         | `--el-border-soft`; between groups `--el-border`             | —                                      |
+
+Every text ink is `--el-text`, `--el-text-strong` or `--el-text-secondary`; none is muted or faint, so the rows clear
+AA on the page and on the `:hover` `--el-surface` fill alike.
+
+### What this asset does NOT decide
+
+- **A run control on a group row** — the Workbench offers none; `/ready`'s refinement is MOTIR-7837.
+- **Grouping on Watching, Waiting on you, To fix, Planning or To resume** — unchanged.
+- **The strip counts, the landing cascade, the membership predicate and the finished window** — unchanged.
+
+### GIVES / TAKES
+
+| card                           | GIVES                                                                                                                                                                                                                                                | TAKES                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **MOTIR-8016** (the page)      | ELEMENT: the group row, chevron, count, context head and marker, indent, expand state, the pager over rows, the live behaviour, narrow, every string in § 36.9. Fits its estimate: it composes shipped pieces.                                       | the group shape from MOTIR-8015                                                           |
+| **MOTIR-8015** (the service)   | PREMISE: a page item is a group `{ head, headOnTab, members[], memberCountOnTab }` or a standalone row; the context head carries its status label (the `HOME_WORK_ITEM_SELECT` row); the pager `total` counts top-level rows; § 36.4's orders. Fits. | the light projection and reads by id from MOTIR-8014                                      |
+| **MOTIR-8014** (the reads)     | PREMISE: context heads are read by id (`findHomeRowsByIds`) as full rows, so they can show their status. Fits.                                                                                                                                       | nothing new                                                                               |
+| **MOTIR-8018** (E2E)           | ELEMENT: the panels to assert — S (3) and T (1), member vs context head, the epic-parented task standalone, Recently finished newest group first, the pager keeping groups whole, zh.                                                                | nothing new                                                                               |
+| **§ _The ORDER_ / MOTIR-4851** | Nothing                                                                                                                                                                                                                                              | To do and In progress members now order by `compareReadyPosition`, not `(kind, id DESC)`. |
