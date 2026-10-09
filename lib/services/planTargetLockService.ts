@@ -15,7 +15,8 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { PlanTargetLockedError } from '@/lib/planChange/errors';
+import { PlanTargetLockedError, type PlanTargetWaitingCause } from '@/lib/planChange/errors';
+import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
 import { holdsWhile, planHoldFor, sessionHoldFor } from '@/lib/plans/planHold';
 import { planHoldKey, type PlanHoldDTO } from '@/lib/dto/plans';
@@ -141,10 +142,15 @@ export interface PlanTargetHandOff {
  *  and a plan that reached `planned` is waiting for a PERSON rather than for a
  *  crashed author — so its lock is left standing however old the lease is
  *  (AMENDMENT 16 D9). Reported rather than silently skipped, so the sweep's own
- *  output says why it walked past a row its read had selected. */
+ *  output says why it walked past a row its read had selected.
+ *
+ *  `session_waiting` is MOTIR-7912's: the lease's holder session (or the session of
+ *  the plan holding it) is failed-waiting or awaiting its person, so the hold is
+ *  spared however old the lease is — the same dead-author argument, since a person
+ *  is coming back. */
 export interface PlanTargetLockSweepEntry {
   workItemId: string;
-  outcome: PlanTargetReleaseOutcome | 'unattributable' | 'plan_awaiting_review';
+  outcome: PlanTargetReleaseOutcome | 'unattributable' | 'plan_awaiting_review' | 'session_waiting';
 }
 
 /**
@@ -219,6 +225,35 @@ function expiryFor(holder: PlanTargetHolder, now: Date): Date {
 }
 
 /**
+ * WHY the holder of this lease is waiting, or null when it is not (MOTIR-7912).
+ * The session is the lease's own `sessionId`, or — for a plan-held lease — the
+ * session its plan belongs to. A session is waiting while it is OPEN and either
+ * failed (`failed`) or awaiting its person (`question` / `reply`); the shared
+ * predicate in `sessionWaitingState` decides, never a re-spelling of its columns.
+ */
+async function waitingCauseOf(
+  lock: { sessionId: string | null; planId: string | null; workspaceId: string },
+  tx: Prisma.TransactionClient,
+): Promise<{ cause: PlanTargetWaitingCause | null; sessionId: string | null }> {
+  let sessionId = lock.sessionId;
+  if (!sessionId && lock.planId) {
+    sessionId =
+      (await planRepository.findById(lock.planId, lock.workspaceId, tx))?.sessionId ?? null;
+  }
+  if (!sessionId) return { cause: null, sessionId: null };
+  const state = await planChangeSessionRepository.findWaitingState(sessionId, lock.workspaceId, tx);
+  if (!state) return { cause: null, sessionId };
+  switch (sessionWaitingState(state)) {
+    case 'failed':
+      return { cause: 'failed', sessionId };
+    case 'awaiting_person':
+      return { cause: state.awaitingPersonCause ?? 'reply', sessionId };
+    default:
+      return { cause: null, sessionId };
+  }
+}
+
+/**
  * Acquire ONE target inside the caller's transaction. The work item's row lock is
  * already held by the caller, so what this reads cannot move underneath it.
  */
@@ -249,12 +284,24 @@ async function acquireOne(
       existing.sessionId !== null &&
       takeOverFrom.has(existing.sessionId) &&
       !isExpired(existing.expiresAt, now);
-    if (!heldBy(existing, holder) && !handedOver && !isExpired(existing.expiresAt, now)) {
+    // A hold whose session is WAITING is live whatever its lease says (MOTIR-7912):
+    // a person is coming back to it, so another member is REFUSED, never handed a
+    // reclaim of an expired lease.
+    const waiting = heldBy(existing, holder) ? null : await waitingCauseOf(existing, tx);
+    if (
+      !heldBy(existing, holder) &&
+      !handedOver &&
+      (!isExpired(existing.expiresAt, now) || waiting?.cause)
+    ) {
       throw new PlanTargetLockedError(
         item.identifier,
         await holderName(existing.heldById, tx),
         existing.expiresAt,
-        { sessionId: existing.sessionId, planId: existing.planId },
+        {
+          sessionId: waiting?.cause ? waiting.sessionId : existing.sessionId,
+          planId: existing.planId,
+          waitingCause: waiting?.cause ?? null,
+        },
       );
     }
     // Ours (refresh) or expired (reclaim). EITHER WAY `priorStatus` and
@@ -756,12 +803,20 @@ export const planTargetLockService = {
       async (tx) => {
         for (const item of await resolveTargets(identifiers, pctx.projectId, tx)) {
           const lock = await planTargetLockRepository.findByWorkItemId(item.id, tx);
-          if (!lock || isExpired(lock.expiresAt, now)) continue;
+          if (!lock) continue;
+          // The same liveness `acquireOne` applies: a waiting hold is live however
+          // old its lease, so the preflight refusal and the acquire agree (MOTIR-7912).
+          const waiting = await waitingCauseOf(lock, tx);
+          if (isExpired(lock.expiresAt, now) && !waiting.cause) continue;
           return new PlanTargetLockedError(
             item.identifier,
             await holderName(lock.heldById, tx),
             lock.expiresAt,
-            { sessionId: lock.sessionId, planId: lock.planId },
+            {
+              sessionId: waiting.cause ? waiting.sessionId : lock.sessionId,
+              planId: lock.planId,
+              waitingCause: waiting.cause,
+            },
           );
         }
         return null;
@@ -1102,6 +1157,18 @@ export const planTargetLockService = {
 
     const entries: PlanTargetLockSweepEntry[] = [];
     for (const lock of expired) {
+      // ⚠️ A WAITING SESSION'S LOCK NEVER EXPIRES (MOTIR-7912). A session that is
+      // failed-waiting or awaiting its person is not a dead author — a person is
+      // coming back — so its leases, and those of the plan it is writing, are spared
+      // however old they are. Without this the cards of a session waiting to resume
+      // would be reclaimable within the lease window and the resume would lose them.
+      const waiting = await withWorkspaceServiceContext(lock.workspaceId, (tx) =>
+        waitingCauseOf(lock, tx),
+      );
+      if (waiting.cause) {
+        entries.push({ workItemId: lock.workItemId, outcome: 'session_waiting' });
+        continue;
+      }
       // ⚠️ A `planned` PLAN'S LOCK NEVER EXPIRES (MOTIR-5647; AMENDMENT 16 D9).
       //
       // The lease is a DEAD-AUTHOR detector: it exists because a planner that
@@ -1172,6 +1239,9 @@ export const planTargetLockService = {
       );
       entries.push({ workItemId: lock.workItemId, outcome });
     }
-    return { released: entries.length, entries };
+    return {
+      released: entries.filter((e) => e.outcome !== 'session_waiting').length,
+      entries,
+    };
   },
 };

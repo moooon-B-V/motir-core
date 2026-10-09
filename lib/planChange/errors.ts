@@ -152,27 +152,47 @@ export class PlanTargetLockedError extends Error {
   readonly freesBy: Date | null;
   /** The holding session, for a session hold — what the refusal links to. */
   readonly holderSessionId: string | null;
+  /** Whether the holder's session is WAITING — on its person, or to resume — rather
+   *  than merely holding (MOTIR-7912). A waiting hold has no free-by time: it frees
+   *  when a person ends the session. */
+  readonly sessionWaiting: boolean;
+  /** WHY it waits: a planner's `question`, a conversation awaiting a `reply`, or a
+   *  `failed` attempt waiting to resume; `null` when it is not waiting. */
+  readonly waitingCause: PlanTargetWaitingCause | null;
   constructor(
     readonly targetIdentifier: string,
     readonly holderName: string | null,
     readonly expiresAt: Date,
-    holder: { sessionId?: string | null; planId?: string | null } = {},
+    holder: {
+      sessionId?: string | null;
+      planId?: string | null;
+      waitingCause?: PlanTargetWaitingCause | null;
+    } = {},
   ) {
     const heldByPlan = !!holder.planId;
-    const freesBy = heldByPlan
-      ? null
-      : new Date(expiresAt.getTime() + PLAN_TARGET_SWEEP_INTERVAL_MS);
+    const waitingCause = holder.waitingCause ?? null;
+    const freesBy =
+      heldByPlan || waitingCause
+        ? null
+        : new Date(expiresAt.getTime() + PLAN_TARGET_SWEEP_INTERVAL_MS);
     super(
-      `${targetIdentifier} is being planned by ${holderName ?? 'another session'} right now. ` +
-        (freesBy
-          ? `The hold releases when that session ends, or by ${freesBy.toISOString()} at the latest.`
-          : 'The hold releases when that plan is approved or declined.'),
+      waitingCause
+        ? `${targetIdentifier} is held by ${holderName ?? 'another member'}'s planning session, which is waiting on ${holderName ?? 'them'}.`
+        : `${targetIdentifier} is being planned by ${holderName ?? 'another session'} right now. ` +
+            (freesBy
+              ? `The hold releases when that session ends, or by ${freesBy.toISOString()} at the latest.`
+              : 'The hold releases when that plan is approved or declined.'),
     );
     this.name = 'PlanTargetLockedError';
     this.freesBy = freesBy;
-    this.holderSessionId = heldByPlan ? null : (holder.sessionId ?? null);
+    this.sessionWaiting = waitingCause !== null;
+    this.waitingCause = waitingCause;
+    this.holderSessionId = heldByPlan && !waitingCause ? null : (holder.sessionId ?? null);
   }
 }
+
+/** Why a holder's planning session waits (MOTIR-7912). */
+export type PlanTargetWaitingCause = 'question' | 'reply' | 'failed';
 
 /** One lock-sweep interval (`planTargetLockSweep`, every 5 minutes) — the slack
  *  between a session lease running out and the idle close ending the session. */

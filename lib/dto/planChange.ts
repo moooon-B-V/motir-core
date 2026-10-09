@@ -275,6 +275,11 @@ export interface PlanTargetHeldByDto {
   holder: string | null;
   freesBy: string | null;
   holderSessionId: string | null;
+  /** The holder's session is waiting (on its person, or to resume); absent ⇒ false.
+   *  The refusal says "waiting on <holder>" in place of a free-by time. */
+  sessionWaiting?: boolean;
+  /** Why it waits; absent ⇒ null. */
+  waitingCause?: 'question' | 'reply' | 'failed' | null;
 }
 
 /**

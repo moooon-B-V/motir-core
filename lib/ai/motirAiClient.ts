@@ -71,6 +71,7 @@ import type {
   Tenant,
   UsageQuery,
 } from './types';
+import { parseJobWalkStop } from '@/lib/planChange/failureRecord';
 import { PLANNER_MODEL_LIST_REASONS, type PlannerModelListReason } from './types';
 import type { CategoryFigures, SpendCategory } from '@/lib/platform/spend';
 
@@ -378,6 +379,7 @@ export async function getJob(jobId: string, coreProjectId: string): Promise<JobV
     status: body.status,
     result: body.result ?? null,
     error: body.error ? errorFromProblem(body.error) : null,
+    walkStop: parseJobWalkStop(body.error?.walkStop),
   };
 }
 

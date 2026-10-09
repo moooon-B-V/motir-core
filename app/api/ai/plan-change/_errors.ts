@@ -159,6 +159,9 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
         // for a decision), and the session holding it.
         freesBy: err.freesBy?.toISOString() ?? null,
         holderSessionId: err.holderSessionId,
+        // MOTIR-7912: the holder's session is waiting, and why.
+        sessionWaiting: err.sessionWaiting,
+        waitingCause: err.waitingCause,
       },
       { status: 409 },
     );

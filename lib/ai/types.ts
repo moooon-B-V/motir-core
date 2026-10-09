@@ -580,6 +580,8 @@ export interface Problem {
   code: string;
   detail?: string;
   jobId?: string;
+  /** Where a failed planning walk stopped (MOTIR-7909). Untrusted until parsed. */
+  walkStop?: unknown;
 }
 
 // The raw GET /v1/jobs/:id wire body (contract §2.4). The client maps this into

@@ -370,7 +370,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   'reconcile-abandoned-plans': {
     file: 'lib/jobs/definitions/abandonedPlanSweep.ts',
     shape:
-      '{ declined: number; outcomes: Array<{ outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "no_producer_recent" | "row_moved" }>; scanned: number }',
+      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "no_producer_recent" | "row_moved" | "session_waiting" }>; scanned: number }',
   },
   'reconcile-established-runs': {
     file: 'lib/jobs/definitions/migrateOnboardingSweep.ts',
@@ -433,6 +433,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // lease never expires it (AMENDMENT 16 D9). The sweep reports the skip rather
     // than walking past a selected row silently.
     //
+    // `session_waiting` added by MOTIR-7912 (and `awaiting_resume` / `session_waiting`
+    // on `reconcile-abandoned-plans`): a lease held by a failed-waiting or
+    // awaiting-person session is spared. The ids are KEPT for the reason below — the
+    // change only ADDS members, so every memo written under the old shape is still a
+    // valid value of the new one.
+    //
     // `rested` added by MOTIR-6066: a target the plan ADOPTED from a hand-park
     // has no prior status to restore, so the sweep rests it at `todo` /
     // `blocked` instead (AMENDMENT 16 D8 as amended). The id is KEPT, not
@@ -442,7 +448,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // only ADDS a member, so every memo written under the old shape is a valid
     // value of the new one, and the handler returns it without reading it.
     shape:
-      '{ entries: Array<{ outcome: "left_as_is" | "plan_awaiting_review" | "rested" | "restored" | "unattributable"; workItemId: string }>; released: number }',
+      '{ entries: Array<{ outcome: "left_as_is" | "plan_awaiting_review" | "rested" | "restored" | "session_waiting" | "unattributable"; workItemId: string }>; released: number }',
   },
   'resolve-target-v2': {
     file: 'lib/jobs/indexFleetSteps.ts',
