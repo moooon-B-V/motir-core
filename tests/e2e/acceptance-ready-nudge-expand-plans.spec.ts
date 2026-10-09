@@ -97,6 +97,15 @@ const anchoredSend = (page: Page, stub: ReadyStub): Promise<Response> =>
     { timeout: FIRST_PAINT_MS },
   );
 
+/** The overlay recorded the planner's turn for the run it watched — the run is over. */
+const runSettled = (page: Page): Promise<Response> =>
+  page.waitForResponse(
+    (r) =>
+      new URL(r.url()).pathname === '/api/ai/plan-change/session/planner-turn' &&
+      r.request().method() === 'POST',
+    { timeout: FIRST_PAINT_MS },
+  );
+
 // ── The database, as the proof ───────────────────────────────────────────────
 
 /** The conversations anchored on `stub`, and how many PERSON turns they hold. */
@@ -300,12 +309,14 @@ test('Expand on the /ready nudge starts a planning conversation on the stub', as
 
   await chapter('A clear stub: the plan is proposed, and waits in To approve', async () => {
     await openReady(page, seed.clear);
+    // The overlay SETTLES the run it started once its stream ends (the planner's
+    // turn is recorded). Let that finish before closing: a run cut off mid-stream
+    // leaves its plan read hanging on the next open.
+    const settled = runSettled(page);
     await expandAndSend(page, seed.clear);
+    expect((await settled).status()).toBe(200);
     await expect.poll(() => onStub(seed.clear)).toEqual({ sessions: 1, userTurns: 1 });
     clearSession = await sessionOn(seed.clear);
-    // Close BEFORE the run proposes, as the overlay-only receipt does: the open
-    // overlay settles its own run when the stream ends, and that settle must not
-    // land on top of the proposal the planner's run files below.
     await closeOverlay(page);
     // The planner's run proposes three children under the stub.
     planId = await finishSessionPlanWithCards(clearSession, seed.clear.id, CHILDREN);
