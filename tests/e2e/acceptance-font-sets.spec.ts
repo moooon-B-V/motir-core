@@ -294,7 +294,7 @@ test.describe('every pairing on a ja page', () => {
     acceptanceStory,
   }) => {
     acceptanceStory('MOTIR-7733');
-    test.setTimeout(240_000);
+    test.setTimeout(480_000);
     const cdp = await cdpFor(page);
 
     await chapter('Signed in, in Japanese, on Appearance', async () => {
@@ -304,8 +304,11 @@ test.describe('every pairing on a ja page', () => {
       await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
     });
 
+    // Since MOTIR-7736 a ja page's Typography lists the Japanese fonts, so a
+    // pairing is chosen where the pairings are listed, on a Latin page, and the
+    // page is then read in Japanese. What is asserted is unchanged.
     const picker = page.getByRole('radiogroup', {
-      name: msg('ja', 'settings.appearance.type.name'),
+      name: msg('en', 'settings.appearance.type.name'),
       exact: true,
     });
     // Two pairings are paced for the camera; the other four run at speed.
@@ -313,7 +316,21 @@ test.describe('every pairing on a ja page', () => {
 
     for (const typeId of Object.keys(PAIRING_FACES)) {
       const body = async () => {
-        await picker.getByRole('radio', { name: PAIRING_NAMES[typeId], exact: true }).click();
+        await setAccountLanguage(page, 'en');
+        await page.goto('/settings/account/appearance');
+        const radio = picker.getByRole('radio', { name: PAIRING_NAMES[typeId], exact: true });
+        if ((await radio.getAttribute('aria-checked')) !== 'true') {
+          const saved = page.waitForResponse(
+            (r) =>
+              r.url().endsWith('/api/appearance-preference') && r.request().method() === 'PATCH',
+          );
+          await radio.click();
+          expect((await saved).status()).toBe(200);
+        }
+        await expect(page.locator('html')).toHaveAttribute('data-type', typeId);
+        await setAccountLanguage(page, 'ja');
+        await page.goto('/settings/account/appearance');
+        await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
         await expect(page.locator('html')).toHaveAttribute('data-type', typeId);
         const probe = await inject(
           page,
