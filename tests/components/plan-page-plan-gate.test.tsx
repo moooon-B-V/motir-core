@@ -8,9 +8,8 @@ import type { PlanReviewDto, PlanReviewGateDto } from '@/lib/dto/planReview';
 // THE PLAN PAGE DECIDES AN ASKED PLAN TOO (Story MOTIR-6012 · MOTIR-6037; design Part XXII
 // §22.4–§22.5, `plan-review--decide.mock.html` Panel 8). Its existing CTA IS the gate's
 // Approve and its ghost Decline IS the gate's Decline; what an asked plan adds is the
-// decline's confirm band with an OPTIONAL reason, the stale refusal in the design's
-// words, and — for a plan with no conversation to return to — the notice saying why it
-// opened here.
+// decline's confirm band with an OPTIONAL reason and the stale refusal in the design's
+// words. (The no-conversation notice it once added was retired by Story MOTIR-7883.)
 
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -153,57 +152,28 @@ describe('REFUSED AS STALE — in the design’s words (§22.5)', () => {
   });
 });
 
-// ⚠️ AMENDED by Story MOTIR-6043 · MOTIR-6045 (design Part XXI §21.6), and this is a
-// BEHAVIOUR CHANGE rather than a rewrite. The notice had THREE causes, keyed on the
-// plan's author and origin — an agent's plan, a cadence plan, an earlier plan — and all
-// three of those populations HAVE sessions (`agent-authored-plans.md` AMENDMENT 17
-// §4–§5) and now open the planning surface instead. So they can no longer reach this
-// page for want of a conversation, the three keys are retired, and what remains is one
-// population — a plan whose `sessionId` is null — with one sentence.
+// HISTORY. Story MOTIR-6043 · MOTIR-6045 (design Part XXI §21.6) narrowed this block's
+// notice from three causes (an agent's plan, a cadence plan, an earlier plan — all of
+// which HAVE sessions and open the planning surface) to one: a plan whose `sessionId` is
+// null, with the sentence *"There is no conversation on record for this plan."*
 //
-// The detector that block carried is kept rather than deleted: the harness case is now
-// asserted to open the SURFACE, in `approval-row-plan.test.tsx` and
-// `plan-row-destination-agreement.test.tsx`.
-describe('NO SESSION — the page says why it opened here (Panel 8, narrowed by §21.6)', () => {
-  const next = 'Approve or decline it here — or ask Motir to change it below.';
-
-  it('a plan with NO session carries the one cause, whatever wrote it', () => {
+// ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7885). Every plan has a session now
+// (`createPlan` attaches one; MOTIR-6020 backfilled the rest), so the null is an
+// invariant breach, and the notice — a sanctioned second road to deciding a plan outside
+// the overlay — is gone. What stays is its DETECTOR: nothing renders for that state.
+describe('NO SESSION — the page renders no reason (retired by Story MOTIR-7883)', () => {
+  it('an asked plan with NO session renders no notice and no old copy, whatever wrote it', () => {
     for (const over of [
       { conversation: null },
       { conversation: null, authorSource: 'mcp' as const, authorHarness: 'Claude Code' },
       { conversation: null, origin: 'cadence' as const },
     ]) {
-      const { unmount } = renderWithIntl(
+      const { container, unmount } = renderWithIntl(
         <PlanDetail initialReview={asked(over)} projectKey="ACME" />,
       );
-      expect(screen.getByTestId('plan-no-conversation').textContent).toBe(
-        `There is no conversation on record for this plan. ${next}`,
-      );
+      expect(screen.queryByTestId('plan-no-conversation')).toBeNull();
+      expect(container.textContent).not.toContain('no conversation on record');
       unmount();
     }
-  });
-
-  it('a session with NO TURNS is NOT this case — it opens the surface, so the page never says it', () => {
-    renderWithIntl(
-      <PlanDetail
-        initialReview={asked({
-          conversation: { sessionId: 's_1', hasTurns: false, targetKeys: [] },
-          authorSource: 'mcp',
-          authorHarness: 'Claude Code',
-        })}
-        projectKey="ACME"
-      />,
-    );
-    expect(screen.queryByTestId('plan-no-conversation')).toBeNull();
-  });
-
-  it('is absent when there IS a conversation, and when nobody has been asked', () => {
-    const { unmount } = renderWithIntl(<PlanDetail initialReview={asked()} projectKey="ACME" />);
-    expect(screen.queryByTestId('plan-no-conversation')).toBeNull();
-    unmount();
-    renderWithIntl(
-      <PlanDetail initialReview={asked({ gate: null, conversation: null })} projectKey="ACME" />,
-    );
-    expect(screen.queryByTestId('plan-no-conversation')).toBeNull();
   });
 });

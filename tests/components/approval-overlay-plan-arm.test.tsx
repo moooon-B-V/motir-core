@@ -87,7 +87,9 @@ describe('handing the approval overlay a PLAN gate', () => {
     expect(href.searchParams.get('planVia')).toBe('approvals');
   });
 
-  it('NO SESSION → the plan’s own page', async () => {
+  // The invariant breach (Story MOTIR-7883 · MOTIR-7885): every plan has a session, so a
+  // review with none degrades exactly as a failed read — silently, to the plan's page.
+  it('NO SESSION (invariant breach) → degrades to the plan’s own page, like a failed read', async () => {
     fetchPlanReview.mockResolvedValue(reviewWith(null));
     await openPlanGate();
     expect(replace).toHaveBeenCalledWith('/plans/plan-9');

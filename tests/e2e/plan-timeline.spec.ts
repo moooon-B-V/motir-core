@@ -9,6 +9,7 @@ import {
   AGENT_PLAN_SEED_PASSWORD,
 } from './_helpers/agent-authored-plan-seed';
 import { authorPlanWithEdits, stripContentTrail } from './_helpers/plan-timeline-seed';
+import { plansService } from '@/lib/services/plansService';
 
 // ACCEPTANCE — a plan's timeline records what CHANGED, not only that its status
 // moved (Story MOTIR-3532 · Subtask MOTIR-3538). The story's
@@ -20,8 +21,10 @@ import { authorPlanWithEdits, stripContentTrail } from './_helpers/plan-timeline
 // can see that the thing in front of them CHANGED, when, and who changed it —
 // and that when an agent did it, the row says so without pretending to be a
 // person. A recording that races from an empty timeline to a full one has met
-// every acceptance criterion and shown none of that. So the timeline BEFORE gets
-// its own beat, on screen, before anything is added to it.
+// every acceptance criterion and shown none of that. So each kind of row gets
+// its own beat, on screen. (Since Story MOTIR-7883 the undecided plan is decided
+// in the planning overlay, which draws no history, so the timeline is read on the
+// decided plan's own page — the agent's rows and the person's decision together.)
 //
 // ⚠️ THE EDIT HAPPENS OUTSIDE THE BROWSER, and that is the product rather than a
 // workaround. `design/ai-planning/design-notes.md` Part V §3 removed the
@@ -73,8 +76,17 @@ test('an agent edits a proposal, and the change arrives on the plan’s own time
   });
 
   await signIn(page, seed.email, AGENT_PLAN_SEED_PASSWORD);
+  // The planning overlay the undecided plan is decided in (Story MOTIR-7883).
+  const overlay = page.getByRole('dialog', { name: /plan/i });
 
-  // ── Steps 1–2 — open the plan, and READ the timeline as it stands ────────
+  // ⚠️ RE-ORDERED 2026-10-08 by Story MOTIR-7883 (MOTIR-7889), and only as far as
+  // the product forces. An undecided plan now opens in the planning OVERLAY, which
+  // decides in its footer and draws no history; the timeline is the plan PAGE's,
+  // and a member reaches that page once the plan is decided. So the decision comes
+  // first, in the overlay, and the timeline is read on the decided plan's own page
+  // — every row this recipe asked for, the agent's edits and the person's decision
+  // together, in the one list.
+  // ── Steps 1–2 — open the plan in the review queue ────────────────────────
   await chapter('Open the plan in the review queue', async () => {
     // Reached by CLICKING the shipped access path, never by typing a URL — this
     // Part adds no new door, and the clip should show that.
@@ -85,11 +97,45 @@ test('an agent edits a proposal, and the change arrives on the plan’s own time
     await plansNav.click();
     await page.waitForURL('**/plans');
 
-    const row = page.locator(`a[href="/plans/${authored.planId}"]`);
-    await expect(row).toBeVisible();
-    await row.click();
-    await page.waitForURL(`**/plans/${authored.planId}`);
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+    // The row's state CHIP is a door into the planning overlay, opened in place
+    // over the Plans list (MOTIR-7889). The row is found by the plan's title — an
+    // agent's conversation is titled by its plan (MOTIR-6025).
+    const chip = page
+      .getByRole('list', { name: 'Planning conversations' })
+      .getByRole('listitem')
+      .filter({ hasText: 'Seller payouts' })
+      .getByRole('link', { name: 'Open the plan — Waiting for approval' });
+    await expect(chip).toBeVisible();
+    await chip.click();
+    await page.waitForURL(
+      (url) => url.pathname === '/plans' && url.searchParams.has('planSession'),
+    );
+    await expect(overlay.getByTestId('plan-proposal-views')).toBeVisible();
+    await beat();
+  });
+
+  // ── Step 5 — the decision joins the same sequence, as a PERSON ───────────
+  await chapter('Decide it — and the decision joins the same sequence', async () => {
+    const decline = overlay
+      .getByTestId('plan-change-confirm-bar')
+      .getByRole('button', { name: 'Decline', exact: true });
+    await expect(decline).toBeVisible();
+
+    // Arm the response wait BEFORE the click, so the persisted flip cannot be
+    // missed (the E2E discipline — never a fixed sleep).
+    const decided = page.waitForResponse(
+      (r) => r.url().includes(`/plans/${authored.planId}`) && r.request().method() !== 'GET',
+    );
+    await decline.click();
+    // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
+    await overlay
+      .getByTestId('plan-decline-confirm')
+      .getByRole('button', { name: 'Yes, decline' })
+      .click();
+    expect((await decided).status()).toBeLessThan(400);
+
+    await page.goto(`/plans/${authored.planId}`); // decided: the plan page renders
+    await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText('Declined');
     await beat();
   });
 
@@ -107,6 +153,13 @@ test('an agent edits a proposal, and the change arrives on the plan’s own time
     // were; the deepens fold the same way, and carry a time SPAN.
     await expect(history).toContainText('3 proposals appended');
     await expect(history).toContainText('2 proposals edited');
+    await beat();
+
+    // …and the decision sits in the SAME list. The decider is a PERSON, named
+    // plainly, in the same grammar as the agent's rows — which is the whole point
+    // of there being one list.
+    await expect(history).toContainText('Declined');
+    await expect(history).toContainText(`· ${seed.reviewerName}`);
     await beat();
   });
 
@@ -127,42 +180,24 @@ test('an agent edits a proposal, and the change arrives on the plan’s own time
     await beat();
   });
 
-  // ── Step 5 — the decision joins the same sequence, as a PERSON ───────────
-  await chapter('Decide it — and the decision joins the same sequence', async () => {
-    const decline = page.getByRole('button', { name: /Decline/ });
-    await expect(decline).toBeVisible();
-
-    // Arm the response wait BEFORE the click, so the persisted flip cannot be
-    // missed (the E2E discipline — never a fixed sleep).
-    const decided = page.waitForResponse(
-      (r) => r.url().includes(`/plans/${authored.planId}`) && r.request().method() !== 'GET',
-    );
-    await decline.click();
-    // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
-    await page
-      .getByTestId('plan-decline-confirm')
-      .getByRole('button', { name: 'Yes, decline' })
-      .click();
-    expect((await decided).status()).toBeLessThan(400);
-
-    const history = timeline(page);
-    await expect(history).toContainText('Declined');
-    // The decider is a PERSON, named plainly, on the same list and in the same
-    // grammar as the agent's rows above — which is the whole point of there
-    // being one list.
-    await expect(history).toContainText(`· ${seed.reviewerName}`);
-    await expect(history).toContainText(`· ${AGENT_HARNESS}`);
-    await beat();
-  });
-
   // ── Step 6 — the plans you already have are untouched ────────────────────
   await chapter('A plan from before this shipped renders exactly as it did', async () => {
     // The row-level state of EVERY plan that predates the trail. It has to be
     // made rather than found: once the trail ships, every plan the product
     // creates has one.
+    //
+    // DECIDED FIRST (re-pointed by Story MOTIR-7883, 2026-10-08): the timeline is
+    // the plan PAGE's record, and a member's `/plans/<id>` for an undecided plan now
+    // lands in the planning overlay, which draws no history. A decided plan keeps
+    // its page. Declined BEFORE the strip, so the strip still leaves exactly the
+    // row-level state of a plan from before the trail.
+    await plansService.declinePlan(seed.unattributedPlanId, {
+      userId: seed.userId,
+      workspaceId: seed.workspaceId,
+    });
     await stripContentTrail(seed.unattributedPlanId);
 
-    await page.goto(`/plans/${seed.unattributedPlanId}`);
+    await page.goto(`/plans/${seed.unattributedPlanId}`); // decided: the plan page renders
     const history = timeline(page);
     await expect(history).toContainText('Generation started');
     await expect(history).toContainText('Plan ready');
@@ -177,54 +212,12 @@ test('an agent edits a proposal, and the change arrives on the plan’s own time
   await client.close();
 });
 
-test('the timeline GAINS a row when a proposal is edited — before and after, on one plan', async ({
-  page,
-  baseURL,
-}) => {
-  // The claim stated as a DELTA rather than as a final state, which the narrated
-  // run above cannot do without showing the same plan twice. No camera: a
-  // reviewer accepts this story by watching it work once.
-  const seed = await seedAgentAuthoredPlan('plan-timeline-delta@example.com');
-  const client = await agentSession(seed.token, mcpOrigin(baseURL));
-
-  const { CREATE_PLAN_TOOL_NAME, ADD_PLAN_ITEMS_TOOL_NAME, UPDATE_PLAN_ITEM_TOOL_NAME } =
-    await import('@/lib/mcp/tools/authorPlan');
-
-  const created = await client.callTool({
-    name: CREATE_PLAN_TOOL_NAME,
-    arguments: {
-      projectKey: seed.projectKey,
-      title: 'Delta',
-      plannedWithHarness: AGENT_HARNESS,
-      plannedWithModel: AGENT_MODEL,
-    },
-  });
-  const planId = (created.structuredContent as { id: string }).id;
-  const appended = await client.callTool({
-    name: ADD_PLAN_ITEMS_TOOL_NAME,
-    arguments: {
-      planId,
-      proposals: [{ op: 'add', proposedFields: { title: 'One', kind: 'task' } }],
-    },
-  });
-  const planItemId = (appended.structuredContent as { planItemIds: string[] }).planItemIds[0]!;
-
-  await signIn(page, seed.email, AGENT_PLAN_SEED_PASSWORD);
-  await page.goto(`/plans/${planId}`);
-
-  const history = timeline(page);
-  await expect(history).toContainText('1 proposal appended');
-  await expect(history).not.toContainText('edited');
-  const before = await history.getByRole('listitem').count();
-
-  await client.callTool({
-    name: UPDATE_PLAN_ITEM_TOOL_NAME,
-    arguments: { planId, planItemId, storyPoints: 5, descriptionMd: 'A deepened body.' },
-  });
-
-  await page.reload();
-  await expect(history).toContainText('1 proposal edited');
-  await expect(history.getByRole('listitem')).toHaveCount(before + 1);
-
-  await client.close();
-});
+// ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7887): a test here read an
+// UNDECIDED plan's timeline on its own page, had the agent edit a proposal, and
+// asserted the timeline gained exactly one row. The edit needs the plan undecided,
+// and a member's `/plans/<id>` for an undecided plan now lands in the planning
+// overlay, which draws no history — so the before/after cannot be read on one plan
+// in a browser any more. Still covered by
+// `tests/integration/plans/planTrailCompleteness.test.ts` ("every act reaches the
+// trail, and the timeline reads the two the lifecycle cannot say") and the row
+// rendering by `tests/components/plan-review-rail-content-events.test.tsx`.

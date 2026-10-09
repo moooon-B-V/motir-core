@@ -54,6 +54,7 @@ import { test, expect } from './_helpers/acceptance-video';
 import type { Page } from '@playwright/test';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import { E2E_PROVISIONING_ORG } from './_helpers/github-const';
 import {
   collaboratorInvites,
@@ -80,24 +81,23 @@ const accessReport = (page: Page) => page.getByTestId('repo-access-report');
  * write lands would race the round trip.
  */
 async function approvePlan(page: Page, seed: RepositorySetSeed): Promise<void> {
-  await page.goto(`/plans/${seed.planId}`);
-  const approve = page.getByRole('button', { name: /^Approve — add/ });
+  // Undecided, so it is approved where it is decided — the planning overlay's footer
+  // (Story MOTIR-7883 · MOTIR-7886).
+  const overlay = await openUndecidedPlan(page, seed.planId);
+  const approve = overlay
+    .getByTestId('plan-change-confirm-bar')
+    .getByRole('button', { name: 'Approve', exact: true });
   await expect(approve).toBeVisible();
   const approved = page.waitForResponse(
     (r) => /\/api\/plans\/[^/]+\/approve/.test(r.url()) && r.request().method() === 'POST',
   );
   await approve.click();
   expect((await approved).status(), 'the approve write succeeded').toBe(200);
-  await expect(page.getByText(/^Added \d+ items? to your backlog$/)).toBeVisible();
 
-  // ⚠️ TEMPORARY — MOTIR-1947. The step is rendered from a SERVER read, and the
-  // approve handler refetches only the plan REVIEW into client state, so the read
-  // that produces `repositorySet` never re-runs. The re-navigation is what makes
-  // the rest of the journey reachable today, and it reads on camera as "the user
-  // comes back to the plan" rather than as a page blinking. **Delete these two
-  // lines when MOTIR-1947 lands** — every assertion after this point is unchanged
-  // either way.
-  await page.goto(`/plans/${seed.planId}`);
+  // The step is rendered from a SERVER read of the approved plan, on the plan's own
+  // page — which is where a DECIDED plan lives. (Until Story MOTIR-7883 the approve
+  // happened on this page and the re-navigation was MOTIR-1947's temporary refetch.)
+  await page.goto(`/plans/${seed.planId}`); // decided: the plan page renders
   await expect(page.getByText(/^Added \d+ items? to your backlog$/)).toBeVisible();
 }
 
@@ -191,7 +191,7 @@ test('approve a plan, and Motir tells you your code is ready and who can open it
     // The set is durable (ADR §4.4). This is the case a report can silently fail:
     // a panel that knew the account only from the establish RESPONSE would go
     // quiet on a reload, and the user would meet the old question again.
-    await page.goto(`/plans/${seed.planId}`);
+    await page.goto(`/plans/${seed.planId}`); // decided: the plan page renders
     await expect(setupStatus(page)).toHaveText('Your code is ready');
     await expect(accessReport(page).getByText(REPO_SET_LOGIN)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Connect GitHub' })).toHaveCount(0);

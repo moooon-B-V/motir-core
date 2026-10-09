@@ -4,8 +4,13 @@
 // The story's `verification_recipe`, driven the way a person drives it and
 // recorded as the receipt Yue watches to accept it: three lines with Shift+Enter,
 // Enter sending them as three, a ten-line paste stopping at the cap and
-// scrolling, an Enter that confirms a Chinese word sending nothing — then the
-// plan page's revise box the same way.
+// scrolling, an Enter that confirms a Chinese word sending nothing.
+//
+// ⚠️ AMENDED 2026-10-08 by Story MOTIR-7883: the clip also walked the plan page's
+// revise box. That box is unreachable for an undecided plan now (its `/plans/<id>`
+// opens the planning overlay), so those chapters are retired; the six chapters on
+// the planning surface's composer — one line, Shift+Enter, Enter sending three lines,
+// the ten-line cap, the IME Enter, the blank message — still cover the behaviour.
 //
 // Runs under `playwright.acceptance.config.ts` (MOTIR_CLOUD + `video: 'on'`),
 // the lane where the planning overlay mounts at all (`isMotirAiConfigured()`)
@@ -43,14 +48,6 @@ import type { Page, Locator } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanningAnchorTree, PLANNING_ANCHOR_PASSWORD } from './_helpers/planning-anchor-seed';
-import {
-  agentSession,
-  seedAgentAuthoredPlan,
-  authorPlanOverMcp,
-  AGENT_HARNESS,
-  AGENT_MODEL,
-  AGENT_PLAN_SEED_PASSWORD,
-} from './_helpers/agent-authored-plan-seed';
 
 test.describe.configure({ timeout: 240_000 });
 
@@ -75,10 +72,6 @@ const entrance = (page: Page) => page.getByRole('main').getByTestId('work-item-p
  */
 const canvasPane = (page: Page) =>
   workspace(page).getByTestId('planning-resizable-frame').locator('> div').first();
-
-const reviewRail = (page: Page) => page.getByRole('complementary', { name: 'Plan review' });
-const reviseBox = (page: Page) => reviewRail(page).getByRole('textbox');
-const viewSwitch = (page: Page) => page.getByRole('group', { name: 'Plan view' });
 
 const overlayOpen = (url: URL) => url.searchParams.has('plan');
 
@@ -190,9 +183,8 @@ test.afterAll(async () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('a request to Motir AI can be a paragraph — on the planning surface and on a plan’s page', async ({
+test('a request to Motir AI can be a paragraph — on the planning surface', async ({
   page,
-  baseURL,
   chapter,
   beat,
   acceptanceStory,
@@ -321,74 +313,10 @@ test('a request to Motir AI can be a paragraph — on the planning surface and o
     await beat();
   });
 
-  // ── The SECOND host: the plan page's revise box ────────────────────────────
-
-  if (!baseURL) throw new Error('no Playwright baseURL — the MCP transport has nowhere to go');
-  const planSeed = await seedAgentAuthoredPlan(`multiline-revise-${Date.now()}@example.com`);
-  const client = await agentSession(planSeed.token, baseURL);
-  const authored = await authorPlanOverMcp(client, planSeed.projectKey, {
-    title: 'Seller payouts',
-    harness: AGENT_HARNESS,
-    model: AGENT_MODEL,
-  });
-  await signIn(page, planSeed.email, AGENT_PLAN_SEED_PASSWORD);
-
-  const REVISION = [
-    'Split the second story in two:',
-    '- monthly payouts',
-    '- yearly payouts',
-  ] as const;
-
-  await chapter('On a plan’s page, the revise box grows the same way', async () => {
-    await page.goto(`/plans/${authored.planId}`);
-    await expect(reviewRail(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
-    await expect(reviseBox(page)).toBeVisible();
-
-    const approve = reviewRail(page).getByRole('button', { name: /Approve/ });
-    // The PINNED decision footer, before: the control a reviewer aims at must
-    // not move as the box above it grows.
-    const approveBefore = await approve.boundingBox();
-    const atRest = await measure(reviseBox(page));
-
-    await typeLines(page, reviseBox(page), REVISION);
-
-    const grown = await measure(reviseBox(page));
-    expect(grown.height).toBeGreaterThan(atRest.height + grown.lineHeight);
-    expect(await approve.boundingBox()).toEqual(approveBefore);
-    await beat();
-  });
-
-  await chapter('The draft survives a List → Canvas → List switch', async () => {
-    await viewSwitch(page).getByRole('button', { name: 'Canvas' }).click();
-    await expect(reviseBox(page)).toHaveValue(REVISION.join('\n'));
-    await viewSwitch(page).getByRole('button', { name: 'List' }).click();
-    // Still there, and still at its grown height — the draft and its size are
-    // one state, not two.
-    await expect(reviseBox(page)).toHaveValue(REVISION.join('\n'));
-    expect((await measure(reviseBox(page))).height).toBeGreaterThan(
-      (await measure(reviseBox(page))).lineHeight,
-    );
-    await beat();
-  });
-
-  await chapter(
-    'Enter sends the instruction with its line breaks, and holds the plan',
-    async () => {
-      const revised = page.waitForRequest(
-        (r) => new URL(r.url()).pathname === '/api/ai/revise' && r.method() === 'POST',
-      );
-      await reviseBox(page).press('Enter');
-
-      // Read off the request the PAGE issued — the line breaks reach the planner,
-      // which is the whole point of the box growing at all.
-      const body = (await revised).postDataJSON() as { prompt?: string };
-      expect(body.prompt).toBe(REVISION.join('\n'));
-
-      // While the revision is held, the box is disabled and carries nothing stale.
-      await expect(reviewRail(page).getByTestId('plan-revision-running')).toBeVisible();
-      await expect(reviseBox(page)).toBeDisabled();
-      await expect(reviseBox(page)).toHaveValue('');
-      await beat();
-    },
-  );
+  // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7886): three chapters walked the
+  // SECOND host, the plan page's revise box in `PlanReviewRail`. Only the plan page
+  // renders that rail, and a member's `/plans/<id>` for an undecided plan now lands in
+  // the planning overlay, so an undecided plan's revise box is unreachable; a decided
+  // plan has none. The multiline behaviour stays covered by the six overlay-composer
+  // chapters above, which drive the same shared composer field.
 });

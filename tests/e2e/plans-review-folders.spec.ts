@@ -1,7 +1,8 @@
 // FOLDERS ON THE PLAN-REVIEW CANVAS — the assembled journey (Bug MOTIR-5782 ·
 // MOTIR-5796; design `design/ai-planning/design-notes.md` Part XVIII). The code is
 // MOTIR-5795's (`PlanReviewCanvas`), and its component tests prove the logic; this
-// spec walks it in a real browser against a real server, on `/plans/[id]`:
+// spec walks it in a real browser against a real server, on the plan's review
+// canvas — in the planning overlay since Story MOTIR-7883 (the plan is undecided):
 //
 //   • ARRIVAL (§18.2): a plan with one add filed into "Archive" and one unfiled
 //     root add ties 1–1, and the tie goes to the DEEPER level — so it opens ON
@@ -21,6 +22,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import { seedFolderPlan, seedFolderRoadmap } from './_helpers/roadmap-seed';
 
 test.describe.configure({ timeout: 120_000 });
@@ -53,17 +55,17 @@ const folderLoad = (page: Page, folderId: string) =>
       r.ok(),
   );
 
-const canvasOf = (page: Page) => page.getByRole('main').getByTestId('roadmap-canvas');
+const canvasOf = (root: Locator) => root.getByTestId('roadmap-canvas');
 const folderCard = (canvas: Locator, folderId: string) =>
   canvas.locator(`[data-node-id="folder:${folderId}"]`);
 const crumbs = (canvas: Locator) => canvas.getByRole('navigation', { name: 'Breadcrumb' });
 
 /** Select a folder card and press its door. The review canvas keeps no level
  *  cache, so every drill is a real read, awaited by its response. */
-async function drill(page: Page, card: Locator, folderId: string) {
+async function drill(page: Page, canvas: Locator, card: Locator, folderId: string) {
   const level = folderLoad(page, folderId);
   await card.click();
-  await canvasOf(page).getByTestId('drill-button').click();
+  await canvas.getByTestId('drill-button').click();
   await level;
 }
 
@@ -78,10 +80,14 @@ test('plan review draws folders: arrival on the folder, the root, a folder, and 
   await signIn(page, seed.email, seed.password);
 
   // ── 1. ARRIVAL: the tie goes to the deeper level — Archive (§18.2) ──────────
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is
+  // undecided, so its review canvas is the planning overlay's, asked for through
+  // the helper's switch (the overlay never reads `?view=`). The arrival read is
+  // armed before the overlay opens, so it cannot be missed.
   const arrived = folderLoad(page, seed.archiveId);
-  await page.goto(`/plans/${plan.planId}?view=canvas`);
+  const overlay = await openUndecidedPlan(page, plan.planId, { view: 'canvas' });
   await arrived;
-  const canvas = canvasOf(page);
+  const canvas = canvasOf(overlay);
   await expect(canvas).toBeVisible();
   await expect(crumbs(canvas).getByRole('button', { name: 'Folder: Archive' })).toBeVisible();
   await expect(canvas.getByText(plan.filedTitle, { exact: true })).toBeVisible();
@@ -105,7 +111,7 @@ test('plan review draws folders: arrival on the folder, the root, a folder, and 
   }
 
   // ── 3. DRILL A FOLDER: its child folder, its filed items, the filed proposal ──
-  await drill(page, archive, seed.archiveId);
+  await drill(page, canvas, archive, seed.archiveId);
   await expect(folderCard(canvas, seed.importsId)).toBeVisible();
   for (const title of seed.archivedTitles) {
     await expect(canvas.getByText(title, { exact: true })).toBeVisible();
@@ -114,7 +120,7 @@ test('plan review draws folders: arrival on the folder, the root, a folder, and 
   await expect(canvas.getByText(plan.rootTitle, { exact: true })).toHaveCount(0);
 
   // ── 4. ONE DEEPER, then the FOLDER CRUMB navigates back (decision 5) ─────────
-  await drill(page, folderCard(canvas, seed.importsId), seed.importsId);
+  await drill(page, canvas, folderCard(canvas, seed.importsId), seed.importsId);
   await expect(canvas.getByText(seed.deepBugTitle, { exact: true })).toBeVisible();
   const backToArchive = folderLoad(page, seed.archiveId);
   // Pointer activation is the regression: before MOTIR-5816 the search input

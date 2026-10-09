@@ -12785,10 +12785,6 @@
         "helper": "选填。会与这项决定一起保存。",
         "proceed": "确认拒绝"
       },
-      "noConversation": {
-        "none": "此计划没有对话记录。",
-        "next": "可以在这里批准或拒绝它——也可以在下方请 Motir 修改它。"
-      },
       "handoff": {
         "writing": "信息已经足够——我现在开始编写计划。你不必在这里等待：随时可以关闭，计划完成后会在<link>等你处理</link>中等你。",
         "rewriting": "我正在编写此计划的新版本。你可以关闭这里——它会一直留在<link>等你处理</link>中，等我完成后你就可以决定。"
@@ -13274,9 +13270,7 @@
   },
   "planDestination": {
     "conversation": "打开对话",
-    "plan": "打开计划",
-    "noConversation": "无对话",
-    "noConversationWhy": "此计划没有对话记录。"
+    "plan": "打开计划"
   },
   "orgClosing": {
     "banner": {

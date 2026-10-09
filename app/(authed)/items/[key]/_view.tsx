@@ -655,11 +655,7 @@ export default async function ItemView({
               this card, which is nearly every card, or when the actor lacks
               `plan:view_any` (then `pendingPlans` is null: the read was skipped). */}
                     {pendingPlans && pendingPlans.length > 0 ? (
-                      <PendingPlanNotice
-                        identifier={item.identifier}
-                        proposals={pendingPlans}
-                        routes={routes}
-                      />
+                      <PendingPlanNotice identifier={item.identifier} proposals={pendingPlans} />
                     ) : null}
                     <ContentSectionCard
                       title={t('description')}

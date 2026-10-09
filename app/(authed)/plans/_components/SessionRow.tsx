@@ -17,6 +17,7 @@ import {
 
 import { Pill } from '@/components/ui/Pill';
 import { PlanDestinationTag } from '@/components/planning/PlanDestinationTag';
+import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
 import { cn } from '@/lib/utils/cn';
 import {
   isPlainPrimaryClick,
@@ -331,31 +332,38 @@ export function SessionRow({
   const qs = searchParams.toString();
   const isVisitor = routes.identifier !== null;
   // A CLOSED row opens its CONVERSATION, as a read (MOTIR-7634 § _Where a Closed
-  // row goes_): its latest plan is an abandoned `declined` nobody decided, so the
-  // plan rule would send it to an empty plan page. The session's end is read
-  // FIRST; Declined and Approved rows keep the shipped rule.
-  const destination: PlanRowDestination | null =
-    view.state === 'closed' && !isVisitor
-      ? { kind: 'planning-surface', href: conversationHref }
-      : view.latestPlan
-        ? planRowDestination({
-            planStatus: view.latestPlan.status,
-            planId: view.latestPlan.id,
-            // A Plans row IS a session, so this is never null (§ 21.3).
-            sessionId: view.id,
-            host: `${pathname}${qs ? `?${qs}` : ''}`,
-            anchorKey: view.targetKeys[0] ?? null,
-            routes,
-          })
-        : null;
+  // row goes_) — but ONLY when its latest plan is absent or decided. An ended
+  // session whose plan is still undecided is decided in the overlay like any other
+  // (Story MOTIR-7883 · MOTIR-7889), so it takes the plan rule below.
+  const latestUndecided =
+    view.latestPlan !== null &&
+    (view.latestPlan.status === 'generating' ||
+      view.latestPlan.status === 'planned' ||
+      view.latestPlan.status === 'stale');
+  const closedRead = view.state === 'closed' && !isVisitor && !latestUndecided;
+  const destination: PlanRowDestination | null = closedRead
+    ? { kind: 'planning-surface', href: conversationHref }
+    : view.latestPlan
+      ? planRowDestination({
+          planStatus: view.latestPlan.status,
+          planId: view.latestPlan.id,
+          // A Plans row IS a session, so this is never null (§ 21.3).
+          sessionId: view.id,
+          host: `${pathname}${qs ? `?${qs}` : ''}`,
+          anchorKey: view.targetKeys[0] ?? null,
+          routes,
+        })
+      : null;
   const doorHref = destination?.href ?? conversationHref;
   const Icon = ORIGIN_ICON[view.origin];
   const state: PlanSessionStateDto = view.state;
   const stateLabel = t(`planState.${state}`);
-  // THE CHIP RULE (§ 21.5): a second door only where it goes somewhere else — and
-  // never on an ENDED row, where there is nothing left to decide (MOTIR-7634).
+  // THE CHIP RULE (§ 21.5): a door to the plan in the overlay while there is
+  // something to decide — and never on an ENDED row whose plan is decided (the
+  // Closed read, MOTIR-7634). An ended row with an UNDECIDED plan keeps its door
+  // (Story MOTIR-7883 · MOTIR-7889).
   const chipIsDoor =
-    view.end === null && view.latestPlan !== null && destination?.kind === 'planning-surface';
+    !closedRead && view.latestPlan !== null && destination?.kind === 'planning-surface';
   // `Waiting for approval` keeps the accent border — the retired row's
   // `awaitingReview` rule, same meaning: this one needs a decision.
   const awaitingReview = state === 'planned';
@@ -424,8 +432,15 @@ export function SessionRow({
           </span>
         ) : null}
         {chipIsDoor && view.latestPlan ? (
-          <Link
-            href={routes.plan(view.latestPlan.id)}
+          // The chip opens the PLAN in the overlay (Story MOTIR-7883 · MOTIR-7889),
+          // never the plan page: the row already knows every fact, so no read.
+          <PlanOverlayDoor
+            planId={view.latestPlan.id}
+            known={{
+              planStatus: view.latestPlan.status,
+              sessionId: view.id,
+              anchorKey: view.targetKeys[0] ?? null,
+            }}
             aria-label={t('openPlanAria', { state: stateLabel })}
             className="relative z-10 rounded-(--radius-badge) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
           >
@@ -438,7 +453,7 @@ export function SessionRow({
                 </>
               }
             />
-          </Link>
+          </PlanOverlayDoor>
         ) : (
           <StateChip state={state} label={stateLabel} />
         )}

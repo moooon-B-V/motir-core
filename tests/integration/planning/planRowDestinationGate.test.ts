@@ -259,7 +259,9 @@ describe('SEAM: the APPROVAL QUEUE read carries the same three facts', () => {
   });
 });
 
-describe('GUARD: the no-conversation case, and what it is NOT', () => {
+describe('GUARD: the no-session case, and what it is NOT', () => {
+  // ⚠️ AMENDED 2026-10-08 by Story MOTIR-7883 (MOTIR-7885): the null-session reason is
+  // `no-session`, an invariant breach no surface explains; it was `no-conversation`.
   // ⚠️ AMENDED on the record by this run (Story MOTIR-6043's settlement). The card
   // asked for *"an agent-authored plan (no session) seeded through the shipped path"*,
   // and that premise is false twice over: `plansService.createPlan` attaches a session
@@ -310,7 +312,7 @@ describe('GUARD: the no-conversation case, and what it is NOT', () => {
     expect(destination).toEqual({
       kind: 'plan-page',
       href: `/plans/${planId}`,
-      reason: 'no-conversation',
+      reason: 'no-session',
     });
 
     // ⚠️ AND IT IS UNREACHABLE FROM THE PLANS PAGE (design § 21.3) — the structural

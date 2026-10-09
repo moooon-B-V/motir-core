@@ -2,6 +2,7 @@ import { describe, expect, it, expectTypeOf } from 'vitest';
 
 import {
   planRowDestination,
+  planSessionLaunchContext,
   type PlanRowDestination,
   type PlanRowDestinationInput,
 } from '@/lib/planning/planDestination';
@@ -89,12 +90,15 @@ describe('DECIDED → the plan page, reason `decided`', () => {
   });
 });
 
-describe('UNDECIDED with NO session → the plan page, reason `no-conversation`', () => {
-  it.each(UNDECIDED)('%s with a null session lands on the page, and says why', (planStatus) => {
+// ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7885): this arm answered
+// `no-conversation`, and two renderers explained it. Every plan has a session now,
+// so a null one is an invariant breach that degrades to the page with no copy.
+describe('UNDECIDED with NO session → the plan page, reason `no-session` (invariant breach, no copy)', () => {
+  it.each(UNDECIDED)('%s with a null session degrades to the page', (planStatus) => {
     expect(call({ planStatus, sessionId: null })).toEqual({
       kind: 'plan-page',
       href: '/plans/p_31',
-      reason: 'no-conversation',
+      reason: 'no-session',
     });
   });
 
@@ -142,5 +146,30 @@ describe('a Visitor’s row lands on the plan’s Visitor page (MOTIR-6888)', ()
         );
       }
     }
+  });
+});
+
+describe('planSessionLaunchContext — the one session→context mapping (MOTIR-7884)', () => {
+  it('anchors at the first key, else opens project-wide; `via` rides only when given', () => {
+    expect(planSessionLaunchContext('s_1', 'MOTIR-812', undefined)).toEqual({
+      kind: 'work-item',
+      itemKey: 'MOTIR-812',
+      sessionId: 's_1',
+    });
+    expect(planSessionLaunchContext('s_1', null, undefined)).toEqual({
+      kind: 'project',
+      sessionId: 's_1',
+    });
+    expect(planSessionLaunchContext('s_1', undefined, 'approvals')).toEqual({
+      kind: 'project',
+      sessionId: 's_1',
+      via: 'approvals',
+    });
+    expect(planSessionLaunchContext('s_1', 'MOTIR-812', 'approvals')).toEqual({
+      kind: 'work-item',
+      itemKey: 'MOTIR-812',
+      sessionId: 's_1',
+      via: 'approvals',
+    });
   });
 });
