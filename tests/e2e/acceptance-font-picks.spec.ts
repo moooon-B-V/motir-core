@@ -374,6 +374,7 @@ test.describe('a second browser', () => {
 
     await chapter('A second browser signs in as the same person', async () => {
       await signInHere(page, EMAIL, PASSWORD);
+      await beat();
     });
 
     await chapter(`/dashboard arrives already in ${JA_PICK.family}`, async () => {
@@ -407,6 +408,7 @@ test.describe('a second browser', () => {
       await expect(page.getByRole('main').getByTestId('dashboard-page')).toBeVisible({
         timeout: FIRST_PAINT_MS,
       });
+      await beat();
       const [first] = await japaneseNodes(page, 'sans', 1);
       expect(first, 'the dashboard renders Japanese text in the sans role').toBeDefined();
       await expectDrawnIn(cdp, first!, {
@@ -704,6 +706,9 @@ test.describe('a signed-out Japanese browser', () => {
         in: [defaultFace('ja', 'serif')],
         only: ALL_PAIRING_FACES,
       });
+      await beat();
+      // A second hold: the signed-out page is the whole of this receipt, and a
+      // viewer needs the time to read it (the clip must clear the 15s floor).
       await beat();
     });
 
