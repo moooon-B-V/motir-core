@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { type ReactNode } from 'react';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { AuthLanguageControl } from './_components/AuthLanguageControl';
+import { AuthWaves } from './_components/AuthWaves';
 
 /**
  * Shared frame for the auth pages (sign-in, sign-up, reset-password,
@@ -89,16 +90,24 @@ import { AuthLanguageControl } from './_components/AuthLanguageControl';
  * would otherwise sit under the corner, so below `lg` the wide screen keeps
  * `py-12`. That costs `/device` 32px of PAGE height below `lg`, where no fold
  * budget was measured, and no card height anywhere.
+ *
+ * THE WAVE LINES behind the card are motir.co's hero background (`AuthWaves`),
+ * so arriving from the marketing site does not feel like changing products. The
+ * canvas is `absolute inset-0 -z-10` inside this `relative isolate` frame: out of
+ * flow (no fold cost), above the wash and under everything else. It comes after
+ * the `<header>`, which stays the first child. The card carries `id="auth-card"`
+ * because that is what the lines gather around.
  */
 export default async function AuthLayout({ children }: { children: ReactNode }) {
   const t = await getTranslations('auth');
   return (
-    <div className="relative flex min-h-dvh w-full items-center justify-center overflow-x-clip bg-(--el-auth-wash) px-6 py-12 sm:px-10 lg:has-[[data-auth-wide]]:py-8">
+    <div className="relative isolate flex min-h-dvh w-full items-center justify-center overflow-x-clip bg-(--el-auth-wash) px-6 py-12 sm:px-10 lg:has-[[data-auth-wide]]:py-8">
       {/* A `<header>` (the banner landmark) rather than a bare `div`, so the
           control is inside a landmark like everything else on the page. */}
       <header className="absolute top-2 right-6 z-10">
         <AuthLanguageControl />
       </header>
+      <AuthWaves />
       <main className="w-full max-w-[28rem] has-[[data-auth-wide]]:max-w-[40rem] lg:has-[[data-auth-wide=consent]]:max-w-[64rem]">
         {/* The card is the brand row's column: `gap-8` matches the rhythm
             `AuthShell` already sets inside itself, so the lockup reads as the
@@ -107,7 +116,10 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
             wide screen is byte-identical to what it measured at. The variant is
             written as ONE arbitrary selector rather than a stacked
             `has-…:[&_…]` pair so what it compiles to is not in doubt. */}
-        <div className="flex flex-col gap-8 rounded-(--radius-card) bg-(--el-page-bg) px-6 py-10 shadow-(--shadow-elevated) [&:has([data-auth-wide])_[data-brand-lockup]]:hidden sm:px-10 has-[[data-auth-wide]]:py-5 sm:has-[[data-auth-wide]]:px-8 has-[[data-auth-wide=consent]]:px-4 has-[[data-auth-wide=consent]]:pb-0!">
+        <div
+          id="auth-card"
+          className="flex flex-col gap-8 rounded-(--radius-card) bg-(--el-page-bg) px-6 py-10 shadow-(--shadow-elevated) [&:has([data-auth-wide])_[data-brand-lockup]]:hidden sm:px-10 has-[[data-auth-wide]]:py-5 sm:has-[[data-auth-wide]]:px-8 has-[[data-auth-wide=consent]]:px-4 has-[[data-auth-wide=consent]]:pb-0!"
+        >
           {/* Decorative glyph + visible wordmark, so the link takes its name
               from the text and carries NO `aria-label` — §8's "never both". */}
           <Link href="/" data-brand-lockup className="self-start">

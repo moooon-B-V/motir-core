@@ -109,6 +109,12 @@ describe('swap-layer lint — no component reaches past the --el-* layer', () =>
       // it per palette would misrepresent the brand (and breach its guidelines).
       'app/(auth)/_components/GoogleButton.tsx',
       'app/(authed)/settings/account/_components/PasswordSecurityCard.tsx',
+      // The sign-in waves' colour NORMALISER (MOTIR-7820 follow-up to #3469).
+      // Its one hex is a reset written to the canvas's `fillStyle` before the
+      // resolved `--el-*` token is, so an unparseable token reads back as a
+      // known value instead of the previous call's colour. Nothing is painted
+      // with it; every stroke the canvas draws comes from a token.
+      'app/(auth)/_components/AuthWaves.tsx',
       // The brand mark's BAKED-COLOUR literals (MOTIR-1150). The glyph itself
       // paints `currentColor` and follows the theme everywhere it is inline —
       // but `currentColor` resolves to BLACK through an <img src>, as a favicon,
