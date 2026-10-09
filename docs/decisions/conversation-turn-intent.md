@@ -8,7 +8,9 @@
   _AMENDMENT 1_ at the end). **Amended 2026-10-03** by MOTIR-7461 — a
   fourth intent, `guide` (see _AMENDMENT 2_ at the end). **Amended
   2026-10-09** by MOTIR-7924 — §3's flip INTO a plan change is retired (see
-  _AMENDMENT 3_ at the end).
+  _AMENDMENT 3_ at the end). **Amended 2026-10-09** by MOTIR-7991 — while a
+  planning run is in progress a turn goes to an answering session, and only a
+  change reaches the running planner (see _AMENDMENT 4_ at the end).
 - **Story / Subtask:** MOTIR-1343 (The AI assistant — Ask about this project) ·
   Subtask MOTIR-1816.
 - **Consumed by:** MOTIR-1815 (design: the cited-answer turn and the correction
@@ -747,3 +749,137 @@ that intent was the planner's own reading.
 A turn corrected into a plan change before this amendment keeps its
 `intentCorrected` record and its passive _"Re-read as a plan change"_ marker:
 the thread is a record of what happened, and nothing rewrites it.
+
+---
+
+## AMENDMENT 4 (2026-10-09) — talking to the planner while it plans
+
+- **Decided by:** Yue, in the planning conversation for Story MOTIR-7990,
+  written down and approved as decision MOTIR-7991 (version 1).
+- **Amends:** §1's routing for a turn typed while a planning run is in
+  progress. Everything else stands, AMENDMENT 1 to 3 included, byte for byte.
+  A turn typed when no run is in progress takes the submit path it always took.
+- **Supersedes, for CHANGE input only:** MOTIR-4060 ("a boundary, not an
+  interrupt"), MOTIR-4067's stated read contract (a turn that arrives during an
+  `author` sits until that author finishes) and MOTIR-4274 (every mid-run turn
+  reaches the mailbox). It narrows MOTIR-4059 for a mid-run step-out only
+  (A4.6).
+
+### A4.1 — Every mid-run turn goes to an answering session, not to the mailbox.
+
+While a planning run is in progress (the WHAT settled, PART 1 over), the turn
+goes to a separate answering session. It reads the run: the plan and its
+proposals, the step signal, the activity line where there is one, and the tree.
+It never judges what KIND of change a turn is (A4.4); it judges only whether the
+turn is one.
+
+On the hosted planner the answering session is the existing `ask_project` path
+given run context, not a new job kind. Its `plan_change` verdict changes meaning
+only while a run is in progress: it forwards to the running job through
+`planChangeMailboxService.attachTurn` instead of opening a new planning run.
+
+### A4.2 — Three verdicts, one per turn.
+
+- **Question** (how far along is it, explain this card, why is X there): it is
+  answered in the thread, and nothing reaches the walk.
+- **Change** (add, remove, re-scope, re-word, move, a different approach): it is
+  forwarded through the shipped mailbox. The thread shows it forwarded, then
+  queued, then read.
+- **Ambiguous**: it is treated as a question. The answer offers to forward it,
+  and the person confirms by typing their NEXT turn ("yes, forward it"); the
+  answering session reads that turn against the offer it just made. There is no
+  button. A misread question must never re-shape the plan.
+
+A later amendment may move the confirmation to a one-click control. It would
+need its own design state and its own door.
+
+### A4.3 — A change is delivered between tool calls.
+
+A forwarded change reaches the running planner only between tool calls: after a
+tool result returns and before the next model turn. Never mid-generation, never
+mid-tool-call. Every walk session running at that moment receives it at its next
+gap, because the answering session cannot know which session owns it. Every
+session opened later is handed it in its task. The person never stops or
+relaunches the run to deliver a change.
+
+### A4.4 — The planner rules each change: correction, re-plan, or unclear about WHAT.
+
+The walk session that receives a forwarded change gives it a second verdict,
+the planner's own.
+
+- **Correction.** The change fits the plan being written. The session applies it
+  at once with the doors it already holds and continues, and carries the change
+  and what was done about it into every later session.
+- **Re-plan.** The change means the person changed their mind about the ask in a
+  way that moves much of the plan or reverses its approach. The walk pauses:
+  running sessions finish the work item they hold, and no new session opens. The
+  planner offers START OVER in the thread. Yes is the shipped `restart`
+  disposition, unchanged. No resumes the walk, and the planner applies the change
+  to the work items already written however big it is; `remove_item`, with its
+  reason, is the legitimate tool for a big change. A declined offer never leaves
+  the change unapplied.
+- **Unclear about WHAT.** The message does not say clearly enough what to
+  change. The walk opens no new session, running sessions finish the work item
+  they hold, and the session that judged it returns to the conversation with its
+  question through the shipped `return_to_conversation`. The person answers by
+  typing, and the answer re-enters the run as a change, ruled again. The walk
+  keeps its plan and nothing is withdrawn.
+- **Not its own.** A session that finds a change is not about its own work item
+  applies nothing to it and still carries the change forward.
+
+**Ambiguous and unclear are different verdicts.** Ambiguous is the answering
+session's, on whether a turn is a change at all, before anything reaches the
+walk. Unclear about WHAT is the planner's, on a turn already forwarded as a
+change.
+
+### A4.5 — A button the planner offers is not a button that decides intent.
+
+AMENDMENT 3 retired "Propose changes instead" because a wrong `plan_change`
+spends the plan engine, which a button must not be able to do on the person's
+behalf. The START OVER offer is compatible with A3.1: it classifies nothing. The
+planner has already read the turn and ruled it a re-plan, and the control only
+lets the person accept or decline the remedy the planner offers on that verdict.
+It appears only when the planner offers it.
+
+**Clarification of A3.1: a button the planner OFFERS on its own verdict is not a
+button that decides intent.** Whether a turn becomes a planning run, or re-shapes
+one, is still the planner's reading alone. The unclear verdict adds no button:
+the planner's question is an ordinary turn.
+
+### A4.6 — An unclear step-out files NO planning bug.
+
+This narrows MOTIR-4059's "a WHAT stop files a planning bug", for a step-out on
+a forwarded mid-run change only. That rule was written for a WHAT gap in the
+settled requirement, where the planner's own judgement at the gate turned out
+wrong. Here the gap is in a message the person sent after the gate. It is not a
+planner defect, and a bug filed for it would be a false record. MOTIR-4059's
+planning bug for a WHAT gap in the settled requirement is unchanged.
+
+### A4.7 — The edges of a run.
+
+- A change forwarded after the walk finished but before the plan closed is
+  applied as a revision of that plan (REVISE_PLAN hosted, `--revise` in
+  `plan.py`) and shown on its timeline. It is not dropped.
+- A forward refused because the run has already ended keeps the person's text
+  in the composer and says why.
+- When the answering session cannot read the plan or its steps, it says so in
+  the thread rather than guessing at progress.
+
+### A4.8 — What does not change.
+
+STOP, its shipped arm and its let-the-session-finish rule. The START OVER arm
+itself; the only new thing is that the planner can offer it. PART 1, the
+conversation before the WHAT is settled. The `debug`, `guide` and `new_session`
+routes. The step signal and the activity line, which the answering session reads
+and builds none of. Approved plans: a change to one is a new planning
+conversation. The pipe: no new channel is added, and the shipped mailbox and the
+`plan.py` inbox on the existing hook seam carry everything.
+
+### Consequences
+
+- Hosted delivery and the `plan.py` inbox: MOTIR-7994, MOTIR-7999.
+- Answering and routing: MOTIR-7993, MOTIR-7996, MOTIR-8000.
+- The rule text in both homes: MOTIR-7995, MOTIR-8001.
+- The late revision: MOTIR-7997. The pauses and the START OVER offer:
+  MOTIR-8007, MOTIR-8008, MOTIR-8009.
+- How the states look: the design, MOTIR-7992.

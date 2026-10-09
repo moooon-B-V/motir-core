@@ -35,14 +35,23 @@ import {
 // THE BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) — the pipe between a user
 // who is still typing and a planning job that has already read its envelope.
 //
-// WHAT THIS IS NOT: a way to interrupt a run. A planning job reads `requestJson`
-// once, at dispatch, and the obvious repair — deliver input as a signal — is the
-// wrong one, settled next door by MOTIR-3942 / MOTIR-4060 and not re-opened
-// here. A planning session is a COHERENT ACT: a card authored half under one set
-// of instructions and half under another is written from two minds, and nothing
-// downstream can tell which half came from where. So this is STORAGE THE JOB
-// CHECKS, at a phase boundary it already has, never a mechanism that preempts
-// it. A turn that arrives during an `author` sits until that author finishes.
+// WHAT THIS IS NOT: a way to interrupt a run mid-generation. A planning job reads
+// `requestJson` once, at dispatch, and the obvious repair — deliver input as a
+// signal — is the wrong one. This is STORAGE THE JOB CHECKS, never a mechanism
+// that preempts it.
+//
+// ⚠️ WHAT IS DELIVERED AND WHEN CHANGED (MOTIR-7991, AMENDMENT 4 of
+// `docs/decisions/conversation-turn-intent.md`). Not every mid-run turn lands
+// here any more: an answering session reads each one first, a QUESTION is answered
+// in the thread, and only a CHANGE (or a confirmed ambiguous turn) is forwarded
+// through `attachTurn`. A forwarded change is read at a TOOL-CALL GAP, after a
+// tool result and before the next model turn, by every running walk session, and
+// handed to every session opened later; it is no longer held until a phase
+// boundary. The planner rules it (a correction, a re-plan, or unclear about WHAT)
+// and, on a re-plan, OFFERS the person START OVER; the `restart` disposition
+// itself is unchanged. The phase-boundary read stays the carrier for STOP and for
+// START OVER. The answer to a planner's question comes back as an ordinary turn and
+// is ruled again.
 //
 // ⚠️ THE READ SHAPE IS A TWO-REPO CONTRACT AND THE CONSUMER LANDED FIRST.
 // `motir-ai` `src/llm/mailbox.ts` (MOTIR-4060, merged) already accepts
