@@ -34,30 +34,47 @@ import {
 // The planner's own LLM run is not in this lane (motir-ai is not reachable from
 // here); its half is the motir-ai integration gate, MOTIR-6063.
 
-const planRow = (page: Page, planId: string) => page.locator(`a[href="/plans/${planId}"]`);
+const PLAN_TITLE = 'Move delivery retries to webhooks';
+
+/** The plan's state chip on the Plans list, found by its row's title link (an
+ *  agent's conversation has no first turn, so its row is titled by its plan).
+ *
+ *  ⚠️ NOT an `a[href="/plans/<id>"]` (Story MOTIR-7883 · MOTIR-7889, 2026-10-08): an
+ *  undecided plan's chip is an overlay door, whose href is the overlay address. */
+const planChip = (page: Page) =>
+  page
+    .getByRole('list', { name: 'Planning conversations' })
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('link', { name: PLAN_TITLE, exact: true }) })
+    .getByRole('link', { name: /^Open the plan — / });
 /** The live page body — every locator is scoped, never page-rooted (MOTIR-5037). */
 const main = (page: Page) => page.getByRole('main');
-const canvasOf = (page: Page) => main(page).getByTestId('roadmap-canvas');
+/** The planning overlay an undecided plan is reviewed in (Story MOTIR-7883). */
+const overlayOf = (page: Page) => page.getByRole('dialog', { name: /plan/i });
+const canvasOf = (root: Locator) => root.getByTestId('roadmap-canvas');
 const statusPill = (page: Page) => main(page).getByTestId('plan-status-pill');
 /** The proposal peek is a modal, portalled outside `main`. */
 const peekOf = (page: Page) => page.getByRole('dialog').getByTestId('proposal-peek');
 const nodeOf = (canvas: Locator, nodeId: string) => canvas.locator(`[data-node-id="${nodeId}"]`);
 
+// Every review helper below reads under a ROOT: the planning overlay while the plan
+// is undecided, the decided plan page's `main` once it is not.
+
 /** A proposal's door in the list body — named `Open <KEY> · <title>`. */
-const openButton = (page: Page, card: { identifier: string }, title: string) =>
-  page.getByRole('button', { name: `Open ${card.identifier} · ${title}`, exact: true });
+const openButton = (root: Locator, card: { identifier: string }, title: string) =>
+  root.getByRole('button', { name: `Open ${card.identifier} · ${title}`, exact: true });
 
 /** The plan's list body — one row per proposal, found by its door. */
-const listRow = (page: Page, card: { identifier: string }, title: string) =>
-  openButton(page, card, title).locator('xpath=ancestor::li[1]');
+const listRow = (root: Locator, card: { identifier: string }, title: string) =>
+  openButton(root, card, title).locator('xpath=ancestor::li[1]');
 
 /** The shipped List / Canvas switch — a labelled group of pressed buttons. */
-const viewButton = (page: Page, name: 'List' | 'Canvas') =>
-  page.getByRole('main').getByRole('button', { name, exact: true });
+const viewButton = (root: Locator, name: 'List' | 'Canvas') =>
+  root.getByRole('group', { name: 'Plan view' }).getByRole('button', { name, exact: true });
 
-async function toList(page: Page) {
-  await viewButton(page, 'List').click();
-  await expect(main(page).getByTestId('plan-proposal-list')).toBeVisible();
+async function toList(root: Locator) {
+  await viewButton(root, 'List').click();
+  await expect(root.getByTestId('plan-proposal-list')).toBeVisible();
 }
 
 async function openSeed(page: Page, baseURL: string | undefined): Promise<SurgicalPlanSeed> {
@@ -77,6 +94,7 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
 }) => {
   acceptanceStory('MOTIR-6013');
   const seed = await openSeed(page, baseURL);
+  const overlay = overlayOf(page);
 
   await chapter('The plan the agent wrote is waiting in Plans', async () => {
     const plansNav = page
@@ -84,11 +102,17 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
       .getByRole('link', { name: 'Plans' });
     await plansNav.click();
     await page.waitForURL('**/plans');
-    await expect(planRow(page, seed.planId)).toBeVisible();
+    await expect(planChip(page)).toHaveAccessibleName('Open the plan — Waiting for approval');
     await beat();
-    await planRow(page, seed.planId).click();
-    await page.waitForURL(`**/plans/${seed.planId}**`);
-    await expect(statusPill(page)).toContainText('Ready to review');
+    // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7889), 2026-10-08: the chip opens the
+    // undecided plan in the planning overlay IN PLACE, over the Plans list. The
+    // overlay has no review rail, so the undecided `Ready to review` pill is not read
+    // (the decided page's pill is, after the approve).
+    await planChip(page).click();
+    await page.waitForURL(
+      (url) => url.pathname === '/plans' && url.searchParams.has('planSession'),
+    );
+    await expect(overlay.getByTestId('plan-proposal-views')).toBeVisible();
     // No internal temp-ref reaches the page — anywhere.
     await expect(page.getByText(/planItem:/)).toHaveCount(0);
     await beat();
@@ -97,21 +121,21 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
   await chapter(
     'Show changes — the move names the proposed story, the update is ONE change',
     async () => {
-      await toList(page);
-      const moved = listRow(page, seed.x, seed.x.title);
+      await toList(overlay);
+      const moved = listRow(overlay, seed.x, seed.x.title);
       await expect(moved).toContainText('Parent');
       await expect(moved).toContainText(seed.fStory.identifier);
       await expect(moved).toContainText(`New · ${PROPOSED_STORY}`);
       await beat();
 
       // Z was updated twice; the plan holds ONE proposal carrying both edits.
-      await expect(openButton(page, seed.z, Z_RENAMED)).toHaveCount(1);
-      const updated = listRow(page, seed.z, Z_RENAMED);
+      await expect(openButton(overlay, seed.z, Z_RENAMED)).toHaveCount(1);
+      const updated = listRow(overlay, seed.z, Z_RENAMED);
       await expect(updated).toContainText('Title');
       await expect(updated).toContainText('Description');
       await beat();
 
-      const removed = listRow(page, seed.y, seed.y.title);
+      const removed = listRow(overlay, seed.y, seed.y.title);
       await expect(removed.getByTestId('remove-reason')).toContainText('Reason');
       await expect(removed.getByTestId('remove-reason')).toContainText(REMOVE_REASON);
       await expect(page.getByText(/planItem:/)).toHaveCount(0);
@@ -120,8 +144,8 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
   );
 
   await chapter('On the canvas, the removal carries its reason', async () => {
-    await viewButton(page, 'Canvas').click();
-    const canvas = canvasOf(page);
+    await viewButton(overlay, 'Canvas').click();
+    const canvas = canvasOf(overlay);
     // The plan fills the Invoices level most (the update and the removal).
     const removedNode = nodeOf(canvas, seed.y.id);
     await expect(removedNode).toBeVisible();
@@ -136,8 +160,8 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
   });
 
   await chapter('The peeks: why the card goes, and both edits marked', async () => {
-    await toList(page);
-    await openButton(page, seed.y, seed.y.title).click();
+    await toList(overlay);
+    await openButton(overlay, seed.y, seed.y.title).click();
     const peek = peekOf(page);
     await expect(peek).toBeVisible();
     await expect(peek.getByTestId('remove-reason')).toContainText(REMOVE_REASON);
@@ -145,7 +169,7 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
     await page.keyboard.press('Escape');
     await expect(peek).toHaveCount(0);
 
-    await openButton(page, seed.z, Z_RENAMED).click();
+    await openButton(overlay, seed.z, Z_RENAMED).click();
     await expect(peekOf(page)).toBeVisible();
     await expect(peekOf(page)).toContainText(Z_RENAMED);
     await expect(peekOf(page)).toContainText('A retry waits twice as long');
@@ -158,16 +182,21 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
       (r) =>
         r.url().includes(`/api/plans/${seed.planId}/approve`) && r.request().method() === 'POST',
     );
-    await page.getByRole('button', { name: /Approve/ }).click();
+    // Undecided, so it is approved in the overlay's footer (Story MOTIR-7883).
+    await overlay
+      .getByTestId('plan-change-confirm-bar')
+      .getByRole('button', { name: 'Approve', exact: true })
+      .click();
     expect((await approved).status()).toBe(200);
+    await page.goto(`/plans/${seed.planId}`); // decided: the plan page renders
     await expect(statusPill(page)).toContainText('Approved');
 
     // The decided list names the CREATED story by its key now.
     const story = await adminDb.workItem.findFirstOrThrow({
       where: { projectId: seed.projectId, title: PROPOSED_STORY },
     });
-    await toList(page);
-    await expect(listRow(page, seed.x, seed.x.title)).toContainText(story.identifier);
+    await toList(main(page));
+    await expect(listRow(main(page), seed.x, seed.x.title)).toContainText(story.identifier);
     await beat();
   });
 
@@ -202,7 +231,7 @@ test('a remove with no reason draws no reason line', async ({ page, baseURL, acc
   const seed = await openSeed(page, baseURL);
   // Undecided, so it is read in the planning overlay (Story MOTIR-7883).
   let overlay = await openUndecidedPlan(page, seed.bareRemovePlanId, { view: 'list' });
-  await expect(openButton(page, seed.w, seed.w.title)).toBeVisible();
+  await expect(openButton(overlay, seed.w, seed.w.title)).toBeVisible();
   await expect(overlay.getByTestId('remove-reason')).toHaveCount(0);
   overlay = await openUndecidedPlan(page, seed.bareRemovePlanId, { view: 'canvas' });
   await expect(nodeOf(overlay.getByTestId('roadmap-canvas'), seed.w.id)).toBeVisible();

@@ -68,17 +68,23 @@ function mcpOrigin(baseURL: string | undefined): string {
   return baseURL;
 }
 
-/** A plan's chip on the Plans list — its link target is the plan. */
-const planRow = (page: Parameters<typeof signIn>[0], planId: string) =>
-  page.locator(`a[href="/plans/${planId}"]`);
-
-/** The whole conversation ROW that plan's chip sits in (`/plans` lists
- *  conversations since MOTIR-6025; an MCP plan opens its own). */
-const conversationRow = (page: Parameters<typeof signIn>[0], planId: string) =>
+/** The whole conversation ROW a plan sits in (`/plans` lists conversations since
+ *  MOTIR-6025; an MCP plan opens its own). An agent's conversation has no first
+ *  turn, so the row's title link is named by the plan's title.
+ *
+ *  ⚠️ FOUND BY ITS TITLE LINK, not by an `a[href="/plans/<id>"]` (Story MOTIR-7883 ·
+ *  MOTIR-7889, 2026-10-08): an UNDECIDED plan's row and chip are overlay doors, whose
+ *  href is the overlay address, so no link on the row names the plan's id. */
+const conversationRow = (page: Parameters<typeof signIn>[0], planTitle: string) =>
   page
     .getByRole('list', { name: 'Planning conversations' })
     .getByRole('listitem')
-    .filter({ has: planRow(page, planId) });
+    .filter({ has: page.getByRole('link', { name: planTitle, exact: true }) });
+
+/** A row's state chip — the plan's door, named for the plan's state. */
+const planChip = (row: Locator) => row.getByRole('link', { name: /^Open the plan — / });
+
+const PLAN_TITLE = 'Marketplace payouts for sellers';
 
 async function signInAsReviewer(page: Parameters<typeof signIn>[0], seed: AgentPlanSeed) {
   await signIn(page, seed.email, AGENT_PLAN_SEED_PASSWORD);
@@ -98,7 +104,7 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
   // ── Step 1 — the agent authors, over the real MCP ────────────────────────
   const client = await agentSession(seed.token, mcpOrigin(baseURL));
   const authored = await authorPlanOverMcp(client, seed.projectKey, {
-    title: 'Marketplace payouts for sellers',
+    title: PLAN_TITLE,
     harness: AGENT_HARNESS,
     model: AGENT_MODEL,
   });
@@ -119,7 +125,7 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     await plansNav.click();
     await page.waitForURL('**/plans');
 
-    await expect(planRow(page, authored.planId)).toHaveAccessibleName(
+    await expect(planChip(conversationRow(page, PLAN_TITLE))).toHaveAccessibleName(
       'Open the plan — Waiting for approval',
     );
     await beat();
@@ -128,15 +134,22 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     // row where a reviewer decides which plan to open. The row is the agent's
     // conversation (MOTIR-6025): its starter is the token's owner, its origin
     // reads `Agent plan`, and the harness by name is the plan page's to show.
-    const row = conversationRow(page, authored.planId);
+    const row = conversationRow(page, PLAN_TITLE);
     await expect(row).toContainText(seed.reviewerName);
     await expect(row).toContainText('Agent plan');
     await beat();
   });
 
   await chapter('Open it — the proposed tree', async () => {
-    await planRow(page, authored.planId).click();
-    await page.waitForURL(`**/plans/${authored.planId}`);
+    // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7889), 2026-10-08: the chip of an
+    // undecided plan opens it in the planning overlay IN PLACE, over the Plans list —
+    // the URL gains the overlay's session and the overlay's plan pane renders.
+    await planChip(conversationRow(page, PLAN_TITLE)).click();
+    await page.waitForURL(
+      (url) => url.pathname === '/plans' && url.searchParams.has('planSession'),
+    );
+    overlay = page.getByRole('dialog', { name: /plan/i });
+    await expect(overlay.getByTestId('plan-proposal-views')).toBeVisible();
 
     // ⚠️ THE CANVAS IS NOW ASKED FOR (MOTIR-3262, Story MOTIR-3232). The plan
     // detail's default body is DERIVED from the plan's shape: the LIST when its
@@ -157,11 +170,15 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     //
     // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is
     // undecided, so it is reviewed in the planning overlay, which renders the same
-    // proposal views; the canvas is asked for through the helper's switch (the
-    // overlay never reads `?view=`). The plan page's header attribution — the
-    // rail's, which the overlay does not draw — is asserted on the DECIDED page in
-    // the Approve chapter below.
-    overlay = await openUndecidedPlan(page, authored.planId, { view: 'canvas' });
+    // proposal views; the canvas is asked for through its own switch (the overlay
+    // never reads `?view=`). The plan page's header attribution — the rail's, which
+    // the overlay does not draw — is asserted on the DECIDED page in the Approve
+    // chapter below.
+    await overlay
+      .getByRole('group', { name: 'Plan view' })
+      .getByRole('button', { name: 'Canvas', exact: true })
+      .click();
+    await expect(overlay.getByTestId('planning-canvas')).toBeVisible();
 
     // The tree the agent proposed, rendered from the PlanItems. The canvas shows
     // ONE LEVEL AT A TIME (`ProjectRoadmapCanvas` — never a whole-tree dump), and
@@ -292,7 +309,7 @@ test('the list renders the states the happy path skips — a long title, and no 
   const seed = await seedAgentAuthoredPlan('agent-plan-states@example.com');
 
   const client = await agentSession(seed.token, mcpOrigin(baseURL));
-  const long = await authorPlanOverMcp(client, seed.projectKey, {
+  await authorPlanOverMcp(client, seed.projectKey, {
     title: 'Invoicing pipeline migration',
     harness: LONG_HARNESS,
   });
@@ -304,7 +321,7 @@ test('the list renders the states the happy path skips — a long title, and no 
   // An agent's conversation has no first turn, so its row is titled by its
   // plan (MOTIR-6025 AC 1) and names the door that opened it. The long
   // self-reported harness is the plan page's attribution now, not the row's.
-  const longRow = conversationRow(page, long.planId);
+  const longRow = conversationRow(page, 'Invoicing pipeline migration');
   await expect(longRow).toBeVisible();
   await expect(longRow).toContainText('Invoicing pipeline migration');
   await expect(longRow).toContainText('Agent plan');
@@ -312,11 +329,9 @@ test('the list renders the states the happy path skips — a long title, and no 
 
   // A plan nobody is recorded as asking for: the starter entry is ABSENT — no
   // placeholder, no dash, nothing that reads as a value.
-  const legacyRow = conversationRow(page, seed.unattributedPlanId);
+  const legacyRow = conversationRow(page, 'Crypto wallet checkout');
   await expect(legacyRow).toBeVisible();
-  await expect(planRow(page, seed.unattributedPlanId)).toHaveAccessibleName(
-    'Open the plan — Waiting for approval',
-  );
+  await expect(planChip(legacyRow)).toHaveAccessibleName('Open the plan — Waiting for approval');
   await expect(legacyRow).toContainText('Generated plan');
   await expect(legacyRow).not.toContainText(seed.reviewerName);
 });

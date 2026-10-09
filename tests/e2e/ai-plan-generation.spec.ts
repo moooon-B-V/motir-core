@@ -23,7 +23,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
-import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   seedAiPlanGeneration,
   AI_GEN_JOB_ID,
@@ -230,23 +229,33 @@ test('generation streams proposed PlanItems live into a planned Plan; the propos
   await expect(progress).toContainText('4 items', { timeout: POLL_REVEAL });
   await expect(page.getByTestId('drill-affordance').first()).toBeVisible({ timeout: POLL_REVEAL });
 
-  // ── Complete generation → a `planned` Plan; the entry hands off to /plans/:id ──
-  await plansService.markPlanned(seed.planId, seed.ctx);
-  await page.waitForURL(`**/plans/${seed.planId}`);
-  // ⚠️ THE CANVAS IS ASKED FOR (MOTIR-3262, Story MOTIR-3232). The plan detail's
-  // default body is DERIVED from the plan's shape now — the LIST when its
-  // proposals sit under more than one distinct container, because no single
-  // canvas level can show such a plan — and this generated forest is exactly
-  // that. `plan-item-node` is a CANVAS node, so the spec names the body it came
-  // to see rather than leaning on a default that depends on the fixture's shape.
-  // The claim below is unchanged: the review surface renders the bundled,
-  // planned proposal forest.
+  // ── Complete generation → a `planned` Plan; the entry hands off to its review ──
   //
-  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: a `planned` plan is
-  // undecided, so its review surface is the planning overlay, which renders the
-  // same proposal views; the canvas is asked for through the helper's switch (the
-  // overlay never reads `?view=`).
-  const overlay = await openUndecidedPlan(page, seed.planId, { view: 'canvas' });
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7890), 2026-10-08: the hand-off no
+  // longer pushes `/plans/<id>`. A `planned` plan is undecided, so the entry
+  // `router.push`es the Plans list with the planning overlay open on the plan's
+  // conversation — the address the in-app doors compose. Waited on as that address
+  // (the Plans list, carrying the overlay's session) and then as the overlay's plan
+  // pane, which renders only once the named session's plan has been read.
+  await plansService.markPlanned(seed.planId, seed.ctx);
+  await page.waitForURL((url) => url.pathname === '/plans' && url.searchParams.has('planSession'));
+  const overlay = page.getByRole('dialog', { name: /plan/i });
+  await expect(overlay.getByTestId('plan-proposal-views')).toBeVisible({ timeout: 30_000 });
+
+  // ⚠️ THE CANVAS IS ASKED FOR (MOTIR-3262, Story MOTIR-3232). The review's
+  // default body is DERIVED from the plan's shape — the LIST when its proposals
+  // sit under more than one distinct container, because no single canvas level
+  // can show such a plan — and this generated forest is exactly that.
+  // `plan-item-node` is a CANVAS node, so the spec names the body it came to see
+  // rather than leaning on a default that depends on the fixture's shape. The
+  // overlay's view is local (it never reads `?view=`), so it is asked for through
+  // the overlay's own switch. The claim below is unchanged: the review surface
+  // renders the bundled, planned proposal forest.
+  await overlay
+    .getByRole('group', { name: 'Plan view' })
+    .getByRole('button', { name: 'Canvas', exact: true })
+    .click();
+  await expect(overlay.getByTestId('planning-canvas')).toBeVisible();
   await expect(overlay.getByTestId('plan-item-node').first()).toBeVisible({
     timeout: POLL_REVEAL,
   });

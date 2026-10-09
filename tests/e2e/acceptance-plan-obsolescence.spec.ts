@@ -78,6 +78,10 @@ const ids = (r: CallToolResult) =>
 const toolText = (r: CallToolResult) =>
   (r.content as { type: string; text?: string }[]).map((c) => c.text ?? '').join('\n');
 
+/** The receipt plan's title — its conversation row is titled by it (an agent's
+ *  conversation has no first turn). */
+const PLAN_TITLE = 'Checkout, v2 replaces the saved-cards flow';
+
 /** One proposal's row on the review's list, found by its one control. */
 const proposalRow = (page: Page, title: string): Locator =>
   page
@@ -174,7 +178,7 @@ async function authorMarkPlan(
     name: CREATE_PLAN_TOOL_NAME,
     arguments: {
       projectKey: s.seed.projectKey,
-      title: 'Checkout, v2 replaces the saved-cards flow',
+      title: PLAN_TITLE,
       summary: 'Checkout, v2 replaces the saved-cards flow',
       plannedWithHarness: AGENT_HARNESS,
       plannedWithModel: AGENT_MODEL,
@@ -263,14 +267,29 @@ test('a plan marks a done story outdated, superseded by the story it adds — re
 
   await chapter('The agent’s plan is waiting — open its list of changes', async () => {
     await page.goto('/plans');
-    const row = page.locator(`a[href="/plans/${planId}"]`);
-    await expect(row).toHaveAccessibleName('Open the plan — Waiting for approval');
-    await row.click();
-    await page.waitForURL(`**/plans/${planId}**`);
-    await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
-      'Ready to review',
+    // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7889), 2026-10-08: an undecided plan's
+    // chip is an overlay door — its href is the overlay address, not `/plans/<id>` —
+    // so it is found by its row's title link and its own name, and a click opens the
+    // plan in the planning overlay IN PLACE over the Plans list. The overlay has no
+    // review rail, so the undecided `Ready to review` pill is not read here (the
+    // decided page's pill is, after the approve).
+    const chip = page
+      .getByRole('list', { name: 'Planning conversations' })
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('link', { name: PLAN_TITLE, exact: true }) })
+      .getByRole('link', { name: /^Open the plan — / });
+    await expect(chip).toHaveAccessibleName('Open the plan — Waiting for approval');
+    await chip.click();
+    await page.waitForURL(
+      (url) => url.pathname === '/plans' && url.searchParams.has('planSession'),
     );
-    const overlay = await openUndecidedPlan(page, planId, { view: 'list' });
+    const overlay = page.getByRole('dialog', { name: /plan/i });
+    await expect(overlay.getByTestId('plan-proposal-views')).toBeVisible();
+    // The list of changes is asked for — the overlay's view is local, never `?view=`.
+    await overlay
+      .getByRole('group', { name: 'Plan view' })
+      .getByRole('button', { name: 'List', exact: true })
+      .click();
     await expect(overlay.getByTestId('plan-proposal-list')).toBeVisible();
     await expect(proposalRow(page, OLD_STORY)).toBeVisible();
     await expect(proposalRow(page, NEW_STORY)).toBeVisible();

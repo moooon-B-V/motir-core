@@ -73,8 +73,16 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   // ⚠️ The row no longer carries the "N may be out of date" advisory — the
   // session row names the conversation, not the plan's drift. The count is
   // asserted where it lives, on the rail's summary below (MOTIR-3777's TWO).
-  const staleRow = page.locator(`a[href="/plans/${seed.stalePlan.id}"]`);
-  await expect(staleRow).toHaveAccessibleName('Open the plan — Waiting for approval');
+  //
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7889), 2026-10-08: an UNDECIDED plan's
+  // chip is an overlay door now — its href is the overlay address, never
+  // `/plans/<id>` — so it is found by its row (titled by the plan, since its
+  // conversation has no turns) and its accessible name, not by an `a[href]`.
+  const staleRow = list
+    .getByRole('listitem')
+    .filter({ hasText: 'Q3 onboarding & settings' })
+    .getByRole('link', { name: 'Open the plan — Waiting for approval' });
+  await expect(staleRow).toBeVisible();
 
   // …and the approved plan's conversation sits in the same list, with its own
   // state. The `Approved` filter holds it too.
@@ -91,31 +99,37 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await page.goto('/plans?planState=approved');
   await expect(page.locator(`a[href="/plans/${seed.approvedPlan.id}"]`)).toBeVisible();
 
-  // ── 2. Enter the stale plan → the detail ──────────────────────────────────
+  // ── 2. Enter the stale plan → the planning overlay ────────────────────────
+  //
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7889), 2026-10-08: the chip opens the
+  // undecided plan in the planning overlay IN PLACE, over the Plans list — the URL
+  // gains the overlay's session and the overlay's plan pane renders.
   await page.goto('/plans');
   await staleRow.click();
-  await page.waitForURL(`**/plans/${seed.stalePlan.id}`);
+  await page.waitForURL((url) => url.pathname === '/plans' && url.searchParams.has('planSession'));
+  const overlay = page.getByRole('dialog', { name: /plan/i });
+  await expect(overlay.getByTestId('plan-proposal-views')).toBeVisible();
 
-  // Status + history timeline.
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
-  await expect(page.getByText('Generation started')).toBeVisible();
-  await expect(page.getByText('Plan ready')).toBeVisible();
-  await expect(page.getByText('Awaiting your review')).toBeVisible();
+  // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7889): the undecided rail's
+  // `Ready to review` pill and its `Awaiting your review` row — the review rail is
+  // drawn only on the plan PAGE, and an undecided plan opens in the overlay. The
+  // decided rail's own timeline rows are read after the approve below; the undecided
+  // pill and pending row are still covered by
+  // tests/components/plan-review-rail-status-overline.test.tsx and
+  // plan-review-rail-content-events.test.tsx.
 
   // ⚠️ THE CANVAS IS ASKED FOR, NOT ASSUMED (MOTIR-3262). The detail's default
   // body is DERIVED from the plan's shape: the LIST when its proposals sit under
   // more than one distinct container, because no single canvas level can show
   // such a plan. THIS plan is exactly that — its two adds hang under two
-  // different committed parents — so it now opens on the list, and every canvas
-  // assertion below is about the canvas, so the spec navigates to it. The URL is
-  // the single source of truth for which body is showing, which is what makes
-  // that a one-parameter change rather than a click.
-  //
-  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is still
-  // undecided, so it is reviewed in the planning overlay, which renders the same
-  // proposal views. The overlay's view is local and never read off `?view=`, so
-  // the canvas is asked for through the helper's switch instead.
-  const overlay = await openUndecidedPlan(page, seed.stalePlan.id, { view: 'canvas' });
+  // different committed parents — so it opens on the list, and every canvas
+  // assertion below is about the canvas, so the spec switches to it. (The
+  // overlay's view is local and never read off `?view=`.)
+  await overlay
+    .getByRole('group', { name: 'Plan view' })
+    .getByRole('button', { name: 'Canvas', exact: true })
+    .click();
+  await expect(overlay.getByTestId('planning-canvas')).toBeVisible();
 
   // The proposed items render on the canvas (with a stale badge on the drifted
   // ones) — the canvas MOUNTS the proposed PlanItems, it doesn't redraw a tree.
@@ -157,6 +171,11 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   // The plan flips to approved (status pill + the materialize outcome).
   await expect(main.getByTestId('plan-status-pill')).toContainText('Approved');
   await expect(main.getByText(/Added .* to your backlog/)).toBeVisible();
+
+  // The history timeline — read on the decided page since MOTIR-7883, where the
+  // plan's record keeps every row it gathered while it waited.
+  await expect(main.getByText('Generation started')).toBeVisible();
+  await expect(main.getByText('Plan ready')).toBeVisible();
 
   // ⚠️ THE RAIL DOES NOT SCROLL SIDEWAYS (MOTIR-4578), and this is the ONLY lane
   // that can say so. The transcript's scroller stated one overflow axis, which

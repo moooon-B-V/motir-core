@@ -236,7 +236,9 @@ test('the same row opens the conversation while a plan waits, and the plan once 
     // THE AFFORDANCE, before anything is clicked.
     await expect(tag(row)).toContainText(destination.conversation);
     await expect(tag(row)).toHaveAttribute('data-destination', 'planning-surface');
-    // …and the plan's own page is still one step away, on the chip.
+    // …and the chip is a second door to the plan. Since Story MOTIR-7883 (MOTIR-7889)
+    // it opens the plan in the same overlay rather than its page, which an undecided
+    // plan no longer has for a member.
     await expect(row.getByRole('link', { name: `Open the plan — ${state.planned}` })).toBeVisible();
     await beat();
   });

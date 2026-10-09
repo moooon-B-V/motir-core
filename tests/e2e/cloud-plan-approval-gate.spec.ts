@@ -482,6 +482,8 @@ test('a reader who may not decide sees the plan and no verbs; a plan with no con
   const looseRow = planRow(page, 'Telemetry baseline');
   await expect(looseRow).toBeVisible();
   await reviewButton(looseRow).click();
+  // Still the plan PAGE after Story MOTIR-7883: its redirect into the overlay
+  // needs a session to open, and this plan has none — the case under test.
   await page.waitForURL(`**/plans/${loose.id}`);
   // The plan page's own verbs: *Approve — add 1 item to your backlog* and *Decline*.
   const pageApprove = page.getByRole('button', { name: /^Approve — add 1 item/ });
