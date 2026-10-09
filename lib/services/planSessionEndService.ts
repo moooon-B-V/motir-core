@@ -2,6 +2,10 @@ import type { Prisma, PlanChangeSession, PlanSessionEndReason } from '@/generate
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
+  CLEARED_AWAITING_COLUMNS,
+  CLEARED_FAILURE_COLUMNS,
+} from '@/lib/planChange/sessionWaitingState';
+import {
   withSystemContext,
   withWorkspaceContext,
   withWorkspaceServiceContext,
@@ -108,7 +112,18 @@ export async function endSessionWithin(
 
   const session = await planChangeSessionRepository.update(
     sessionId,
-    { endedAt: now, endReason: reason, endedById: by.endedById },
+    {
+      endedAt: now,
+      endReason: reason,
+      endedById: by.endedById,
+      // AN ENDED SESSION WAITS ON NOTHING (MOTIR-7908). The `plan_change_session_one_wait`
+      // CHECK requires it, so the one end write clears BOTH waits — a failed attempt
+      // waiting to resume, and a conversation awaiting its person — in the same
+      // statement. Anything that ends a session through this operation gets that for
+      // free; nothing else may write `endedAt`.
+      ...CLEARED_FAILURE_COLUMNS,
+      ...CLEARED_AWAITING_COLUMNS,
+    },
     tx,
   );
   if (!ownsRelease) return { ended: true, session };

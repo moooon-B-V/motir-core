@@ -216,6 +216,23 @@ export interface PlanChangeSessionDto {
   endReason?: 'failed' | 'idle' | 'restarted' | 'declined' | 'approved' | null;
   /** Who ended it — filled by the by-id read; null when Motir ended it. */
   endedBy?: { id: string; name: string } | null;
+  /**
+   * A FAILED attempt waiting to resume (Story MOTIR-7905 · MOTIR-7908). Set only
+   * while the session is OPEN and its latest hosted attempt failed. `reason` is
+   * motir-ai's closed code — the client translates it (en / zh); no English
+   * crosses the boundary. `stopPhase` / `stopRef` / `stopTitle` say where the walk
+   * stopped (all null when it failed before reaching a level).
+   *
+   * ⚠️ NOT HERE, on purpose: the failed job's id (what the resume submits as
+   * `fromJobId`) and motir-ai's `detail` (support and logs only). Both are server-side.
+   *
+   * Optional, and null on an open session that is not waiting, so every hand-built
+   * thread is unchanged (the `endedAt?` precedent).
+   */
+  failure?: PlanSessionFailureDto | null;
+  /** The conversation is waiting on its OWNER's next turn (MOTIR-7908); never set
+   *  together with {@link failure}. */
+  awaitingPerson?: PlanSessionAwaitingPersonDto | null;
   /** The ENDED session this one carries over (AMENDMENT 23 §6), or null. Its
    *  copied turns keep their own `createdAt`, so they are the turns written
    *  before this session's own `createdAt`. */
@@ -223,6 +240,29 @@ export interface PlanChangeSessionDto {
   /** The resume answered with the caller's OWN open session of ANOTHER scope that
    *  holds this card — the take-back (AMENDMENT 23 §3). Set by the resume read only. */
   takenBack?: boolean;
+}
+
+/** motir-ai's closed failure vocabulary (`walkStop.reasonCode`), as the client sees it. */
+export type PlanSessionFailureReasonDto =
+  | 'rate_limited'
+  | 'out_of_credits'
+  | 'model_unavailable'
+  | 'token_expired'
+  | 'internal';
+
+/** A failed attempt waiting to resume — see {@link PlanChangeSessionDto.failure}. */
+export interface PlanSessionFailureDto {
+  failedAt: string;
+  reason: PlanSessionFailureReasonDto;
+  stopPhase: 'lay' | 'author' | null;
+  stopRef: string | null;
+  stopTitle: string | null;
+}
+
+/** A conversation waiting on its owner — see {@link PlanChangeSessionDto.awaitingPerson}. */
+export interface PlanSessionAwaitingPersonDto {
+  since: string;
+  cause: 'question' | 'reply';
 }
 
 /**

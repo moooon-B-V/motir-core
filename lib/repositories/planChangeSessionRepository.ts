@@ -1,5 +1,15 @@
 import { Prisma, type PlanChangeSession, type PlanStatus } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
+import {
+  CLEARED_AWAITING_COLUMNS,
+  CLEARED_FAILURE_COLUMNS,
+  FAILED_WAITING_WHERE,
+  NOT_WAITING_WHERE,
+  parsePlanSessionAwaiting,
+  parsePlanSessionFailureRecord,
+  type PlanSessionAwaiting,
+  type PlanSessionFailureRecord,
+} from '@/lib/planChange/sessionWaitingState';
 
 /**
  * The `PlanChangeSession` update shape, NAMED BY THE OWNING REPOSITORY
@@ -7,6 +17,25 @@ import { dbRead } from '@/lib/db';
  * alias; `Prisma.PlanChangeSessionUncheckedUpdateInput` itself is named only here.
  */
 export type PlanChangeSessionUpdateInput = Prisma.PlanChangeSessionUncheckedUpdateInput;
+
+/**
+ * ONE definition of "the owner's failed-waiting sessions" for the list and the count
+ * (MOTIR-7908), so the number a header shows and the rows beneath it cannot be read
+ * off two predicates.
+ */
+function failedOpenForOwnerWhere(args: {
+  userId: string;
+  workspaceId: string;
+  projectIds: readonly string[];
+}): Prisma.PlanChangeSessionWhereInput {
+  return {
+    workspaceId: args.workspaceId,
+    createdById: args.userId,
+    projectId: { in: [...args.projectIds] },
+    origin: 'conversation',
+    ...FAILED_WAITING_WHERE,
+  };
+}
 
 // Single Prisma operations on the `plan_change_session` table (Story 7.30 ·
 // MOTIR-1728). Writes require `tx` (a compile-time guarantee they run in a
@@ -351,12 +380,154 @@ export const planChangeSessionRepository = {
         endedAt: null,
         origin: { not: 'guide' },
         lastActivityAt: { lt: olderThan },
+        // A session waiting on its person — a failed attempt to resume, or a
+        // conversation they have not answered — is NOT idle (MOTIR-7908). Without
+        // this a failure that came before the first proposal, and a reply nobody has
+        // read yet, are indistinguishable from a thread nobody is coming back to.
+        ...NOT_WAITING_WHERE,
         plans: { none: { status: { in: ['generating', 'planned', 'stale'] } } },
       },
       select: { id: true, workspaceId: true },
       orderBy: [{ lastActivityAt: 'asc' }, { id: 'asc' }],
       take: limit,
     });
+  },
+
+  // ── THE WAITING STATE (Story MOTIR-7905 · MOTIR-7908) ────────────────────────
+  // Definitions: `lib/planChange/sessionWaitingState.ts`. Each write below is ONE
+  // conditional `UPDATE … WHERE` — it reads and writes the row in a single
+  // statement, so it serialises on the row lock Postgres takes for it. Against a
+  // concurrent `endSessionWithin` the loser either sees `ended_at` set and matches
+  // nothing, or runs first and has its columns nulled by the end write; the CHECK
+  // constraints are the backstop if a caller ever skips the condition. Callers that
+  // combine a write with OTHER rows (the failure path, the gate, the resume) still
+  // take {@link lockById} first and re-read with {@link findWaitingState}.
+
+  /**
+   * Record a FAILED attempt on an OPEN session: the whole failure record, with the
+   * two awaiting columns cleared in the same statement (the two waits exclude each
+   * other). Returns whether a row moved — `false` on an ended session, which is
+   * never marked.
+   */
+  async markFailed(
+    id: string,
+    record: PlanSessionFailureRecord,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const parsed = parsePlanSessionFailureRecord(record);
+    const result = await tx.planChangeSession.updateMany({
+      where: { id, endedAt: null },
+      data: { ...parsed, ...CLEARED_AWAITING_COLUMNS },
+    });
+    return result.count > 0;
+  },
+
+  /** Null the seven failure columns — a resume's new attempt has bound. */
+  async clearFailure(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const result = await tx.planChangeSession.updateMany({
+      where: { id },
+      data: CLEARED_FAILURE_COLUMNS,
+    });
+    return result.count > 0;
+  },
+
+  /**
+   * Mark an OPEN session as waiting on its person. Also conditioned on
+   * `failedAt: null`: a failed-waiting session is already waiting, for a stronger
+   * reason, and this is then a no-op returning `false` — never an overwrite.
+   */
+  async markAwaitingPerson(
+    id: string,
+    awaiting: PlanSessionAwaiting,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { cause, since } = parsePlanSessionAwaiting(awaiting);
+    const result = await tx.planChangeSession.updateMany({
+      where: { id, endedAt: null, failedAt: null },
+      data: { awaitingPersonCause: cause, awaitingPersonSince: since },
+    });
+    return result.count > 0;
+  },
+
+  /** Null the two awaiting columns — the person's next turn, or the end. */
+  async clearAwaitingPerson(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const result = await tx.planChangeSession.updateMany({
+      where: { id },
+      data: CLEARED_AWAITING_COLUMNS,
+    });
+    return result.count > 0;
+  },
+
+  /**
+   * The waiting state of one session: its end, its failure record and its
+   * awaiting record. A sweep, the gate or the resume runs this re-check UNDER the
+   * session's {@link lockById}, so what it reads cannot move before it acts.
+   */
+  async findWaitingState(id: string, workspaceId: string, tx: Prisma.TransactionClient) {
+    return tx.planChangeSession.findFirst({
+      where: { id, workspaceId },
+      select: {
+        id: true,
+        endedAt: true,
+        endReason: true,
+        failedAt: true,
+        failedJobId: true,
+        failureReason: true,
+        failureDetail: true,
+        failureStopPhase: true,
+        failureStopRef: true,
+        failureStopTitle: true,
+        awaitingPersonSince: true,
+        awaitingPersonCause: true,
+      },
+    });
+  },
+
+  /**
+   * The owner's OWN failed-waiting `conversation` sessions in the given projects,
+   * newest failure first (`id` breaks a tie), each with its failure record, its
+   * anchor set and its LATEST plan id. Runs under the OWNER's workspace context —
+   * the `createdById` predicate is the app-level belt for the policy's braces.
+   * A `guide` conversation submits no plan and is never listed.
+   */
+  async listFailedOpenForOwner(
+    args: {
+      userId: string;
+      workspaceId: string;
+      projectIds: readonly string[];
+      skip: number;
+      take: number;
+    },
+    tx: Prisma.TransactionClient,
+  ) {
+    const rows = await tx.planChangeSession.findMany({
+      where: failedOpenForOwnerWhere(args),
+      select: {
+        id: true,
+        projectId: true,
+        targetKeys: true,
+        failedAt: true,
+        failedJobId: true,
+        failureReason: true,
+        failureDetail: true,
+        failureStopPhase: true,
+        failureStopRef: true,
+        failureStopTitle: true,
+        plans: { select: { id: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1 },
+      },
+      orderBy: [{ failedAt: 'desc' }, { id: 'desc' }],
+      skip: args.skip,
+      take: args.take,
+    });
+    return rows.map(({ plans, ...row }) => ({ ...row, latestPlanId: plans[0]?.id ?? null }));
+  },
+
+  /** A count over the same predicate as {@link listFailedOpenForOwner}. */
+  async countFailedOpenForOwner(
+    args: { userId: string; workspaceId: string; projectIds: readonly string[] },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.planChangeSession.count({ where: failedOpenForOwnerWhere(args) });
   },
 
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
