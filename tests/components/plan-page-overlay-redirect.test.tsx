@@ -57,14 +57,18 @@ const VISITOR = {
 
 function review(
   status: PlanReviewDto['status'],
-  conversation: { sessionId: string; targetKeys: string[] } | null,
+  conversation: { sessionId: string; targetKeys: readonly string[] } | null,
 ): PlanReviewDto {
   return {
     id: 'plan_1',
     projectId: 'p1',
     status,
     title: 'A plan',
-    conversation: conversation && { ...conversation, hasTurns: true },
+    conversation: conversation && {
+      ...conversation,
+      targetKeys: [...conversation.targetKeys],
+      hasTurns: true,
+    },
   } as unknown as PlanReviewDto;
 }
 

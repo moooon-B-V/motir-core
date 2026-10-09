@@ -248,12 +248,17 @@ describe('the TAG says the same thing on both rows', () => {
 });
 
 describe('THE CHIP RULE — the arrow means somewhere the row does not go (§21.5)', () => {
-  it('UNDECIDED: the chip is a second link to the plan page', () => {
+  // Story MOTIR-7883 · MOTIR-7889: the plan page no longer decides anything.
+  it('UNDECIDED: the chip opens the same overlay as the row', () => {
     renderWithIntl(<SessionRow view={sessionView(FACTS, { id: 'p_31', status: 'planned' })} />);
     const chip = screen.getByRole('link', {
       name: `Open the plan — ${en.aiPlanning.sessions.planState.planned}`,
     });
-    expect(chip.getAttribute('href')).toBe('/plans/p_31');
+    const title = screen.getAllByRole('link')[0]!;
+    expect(chip.getAttribute('href')).toBe(title.getAttribute('href'));
+    expect(new URL(chip.getAttribute('href')!, 'http://x').searchParams.get('planSession')).toBe(
+      's_1',
+    );
   });
 
   it('DECIDED: the chip is a plain label — no link, no second tab stop', () => {

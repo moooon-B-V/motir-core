@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 
 const { shallowPush } = vi.hoisted(() => ({ shallowPush: vi.fn() }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush }));
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
   usePathname: () => '/plans',
   useSearchParams: () => new URLSearchParams('planState=none'),
 }));
@@ -13,12 +15,20 @@ import zhMessages from '@/messages/zh.json';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { SessionRow } from '@/app/(authed)/plans/_components/SessionRow';
 import type { SessionRowView } from '@/app/(authed)/plans/_components/types';
+import { planRowDestination } from '@/lib/planning/planDestination';
 
 // MOTIR-6025 — one Plans-list row, ONE CONVERSATION (design Part XIX §19.2–§19.3a).
 
+const fetchMock = vi.fn();
+beforeEach(() => {
+  fetchMock.mockReset();
+  vi.stubGlobal('fetch', fetchMock);
+});
 afterEach(() => {
   cleanup();
   shallowPush.mockReset();
+  push.mockReset();
+  vi.unstubAllGlobals();
 });
 
 function view(over: Partial<SessionRowView> = {}): SessionRowView {
@@ -67,11 +77,19 @@ describe('the two destinations (§19.2 change 2–3)', () => {
     expect(href.searchParams.get('planItem')).toBeNull();
   });
 
-  it('the CHIP is a separate link to the plan, named for its state', () => {
+  // Story MOTIR-7883 · MOTIR-7889: the chip opens the PLAN in the overlay — the
+  // title's own address — and the row already holds every fact, so no read.
+  it('the CHIP is a separate link to the plan in the overlay, named for its state', () => {
     renderWithIntl(<SessionRow view={view()} />);
+    const title = screen.getByRole('link', { name: 'Split invoicing out of billing' });
     const chip = screen.getByRole('link', { name: 'Open the plan — Waiting for approval' });
-    expect(chip.getAttribute('href')).toBe('/plans/p_31');
+    expect(chip.getAttribute('href')).toBe(title.getAttribute('href'));
     expect(chip.className).toContain('z-10');
+
+    expect(fireEvent.click(chip, { button: 0 })).toBe(false);
+    expect(shallowPush).toHaveBeenCalledExactlyOnceWith(title.getAttribute('href'));
+    expect(push).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('`No plan yet` is a plain chip — no plan link, no fresh-start control (§19.3a)', () => {
@@ -312,6 +330,54 @@ describe('an ENDED session (MOTIR-7642)', () => {
     expect(document.querySelector('[data-destination]')?.getAttribute('data-destination')).toBe(
       'planning-surface',
     );
+  });
+
+  // Story MOTIR-7883 · MOTIR-7889: an ended session whose latest plan is still
+  // UNDECIDED is not closed — that plan is decided in the overlay, row and chip.
+  it.each(['planned', 'stale', 'generating'] as const)(
+    'a Closed row whose latest plan is %s opens THAT PLAN in the overlay, chip too',
+    (status) => {
+      renderWithIntl(
+        <SessionRow
+          view={closed({ latestPlan: { id: 'p_31', status }, end: end({ reason: 'restarted' }) })}
+        />,
+      );
+      const title = screen.getByRole('link', { name: 'Split invoicing out of billing' });
+      const expected = planRowDestination({
+        planStatus: status,
+        planId: 'p_31',
+        sessionId: 's_1',
+        host: '/plans?planState=none',
+        anchorKey: 'MOTIR-812',
+      });
+      expect(expected.kind).toBe('planning-surface');
+      expect(title.getAttribute('href')).toBe(expected.href);
+      expect(document.querySelector('[data-destination]')?.getAttribute('data-destination')).toBe(
+        'planning-surface',
+      );
+      const chip = screen.getByRole('link', { name: /Open the plan/ });
+      expect(chip.getAttribute('href')).toBe(expected.href);
+
+      fireEvent.click(title, { button: 0 });
+      fireEvent.click(chip, { button: 0 });
+      expect(shallowPush.mock.calls).toEqual([[expected.href], [expected.href]]);
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['declined', { id: 'p_31', status: 'declined' }],
+    ['approved', { id: 'p_31', status: 'approved' }],
+    ['no plan', null],
+  ] as const)('a Closed row with %s keeps the conversation read and a plain chip', (_, plan) => {
+    renderWithIntl(<SessionRow view={closed({ latestPlan: plan })} />);
+    const href = new URL(
+      screen.getByRole('link', { name: 'Split invoicing out of billing' }).getAttribute('href')!,
+      'http://x',
+    );
+    expect(href.pathname).toBe('/plans');
+    expect(href.searchParams.get('planSession')).toBe('s_1');
+    expect(screen.queryByRole('link', { name: /Open the plan/ })).toBeNull();
   });
 
   it.each([
