@@ -343,12 +343,6 @@
         }
       }
       @layer utilities {
-        .collapse {
-          visibility: collapse;
-        }
-        .visible {
-          visibility: visible;
-        }
         .sr-only {
           position: absolute;
           width: 1px;
@@ -2962,115 +2956,6 @@
           }
         }
       }
-      .style-vignette[data-style='glassmorphism'] > .sv-canvas {
-        background-image:
-          radial-gradient(62% 70% at 12% -5%, var(--el-accent), transparent 70%),
-          radial-gradient(58% 65% at 105% 6%, var(--el-highlight), transparent 68%),
-          radial-gradient(72% 78% at 50% 112%, var(--el-link), transparent 72%);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            radial-gradient(
-              62% 70% at 12% -5%,
-              color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
-              transparent 70%
-            ),
-            radial-gradient(
-              58% 65% at 105% 6%,
-              color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
-              transparent 68%
-            ),
-            radial-gradient(
-              72% 78% at 50% 112%,
-              color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
-              transparent 72%
-            );
-        }
-      }
-      .style-vignette[data-style='cybercore-y2k'] > .sv-canvas {
-        background-color: var(--el-page-bg);
-        background-image:
-          linear-gradient(currentColor 1px, transparent 1px),
-          linear-gradient(90deg, currentColor 1px, transparent 1px);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
-            linear-gradient(
-              90deg,
-              color-mix(in srgb, currentColor 6%, transparent) 1px,
-              transparent 1px
-            );
-        }
-        background-size: 26px 26px;
-      }
-      .style-vignette[data-style='aurora'] > .sv-canvas {
-        background-color: var(--el-page-bg);
-        background-image:
-          radial-gradient(58% 75% at 12% 0%, var(--el-accent), transparent 60%),
-          radial-gradient(54% 70% at 92% 8%, var(--el-highlight), transparent 58%),
-          radial-gradient(68% 82% at 62% 104%, var(--el-link), transparent 62%),
-          radial-gradient(48% 64% at 34% 58%, var(--el-info), transparent 55%);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            radial-gradient(
-              58% 75% at 12% 0%,
-              color-mix(in srgb, var(--el-accent) var(--aurora-wash), transparent),
-              transparent 60%
-            ),
-            radial-gradient(
-              54% 70% at 92% 8%,
-              color-mix(in srgb, var(--el-highlight) var(--aurora-wash), transparent),
-              transparent 58%
-            ),
-            radial-gradient(
-              68% 82% at 62% 104%,
-              color-mix(in srgb, var(--el-link) var(--aurora-wash), transparent),
-              transparent 62%
-            ),
-            radial-gradient(
-              48% 64% at 34% 58%,
-              color-mix(in srgb, var(--el-info) var(--aurora-wash-soft), transparent),
-              transparent 55%
-            );
-        }
-      }
-      .style-vignette[data-style='retrofuturism'] > .sv-canvas {
-        background-color: var(--el-page-bg);
-        background-image:
-          repeating-linear-gradient(90deg, var(--el-accent) 0 1px, transparent 1px 18px),
-          linear-gradient(180deg, transparent 56%, var(--el-highlight) 64%, transparent 72%),
-          linear-gradient(180deg, var(--el-link), transparent 50%),
-          linear-gradient(0deg, var(--el-accent), transparent 46%);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            repeating-linear-gradient(
-              90deg,
-              color-mix(in srgb, var(--el-accent) var(--retro-grid), transparent) 0 1px,
-              transparent 1px 18px
-            ),
-            linear-gradient(
-              180deg,
-              transparent 56%,
-              color-mix(in srgb, var(--el-highlight) var(--retro-horizon), transparent) 64%,
-              transparent 72%
-            ),
-            linear-gradient(
-              180deg,
-              color-mix(in srgb, var(--el-link) var(--retro-sky), transparent),
-              transparent 50%
-            ),
-            linear-gradient(
-              0deg,
-              color-mix(in srgb, var(--el-accent) var(--retro-ground), transparent),
-              transparent 46%
-            );
-        }
-        background-size:
-          18px 100%,
-          100% 100%,
-          100% 100%,
-          100% 100%;
-        background-position: center bottom;
-      }
       :root,
       [data-appearance-scope] {
         --el-page-bg: var(--color-background);
@@ -4954,6 +4839,10 @@
         font-size: 10.5px;
         color: var(--el-text-secondary);
       }
+      .clip [role='log'] {
+        justify-content: flex-end;
+        overflow: hidden;
+      }
     </style>
   </head>
   <body>
@@ -5208,7 +5097,7 @@
                                   <path d="M16 17H8"></path></svg></span
                               ><span class="min-w-0 flex-1 wrap-anywhere"
                                 >Reading
-                                <span class="font-mono text-[11px]">lib/auth/session.ts</span></span
+                                <span class="font-mono text-[11px]">lib/auth/index.ts</span></span
                               >
                             </li>
                           </ol>
@@ -5393,7 +5282,7 @@
                                   <path d="M16 17H8"></path></svg></span
                               ><span class="min-w-0 flex-1 wrap-anywhere"
                                 >Reading
-                                <span class="font-mono text-[11px]">lib/auth/refresh.ts</span></span
+                                <span class="font-mono text-[11px]">lib/auth/client.ts</span></span
                               >
                             </li>
                             <li
@@ -11620,7 +11509,7 @@
                         <div
                           class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                         >
-                          <div class="wmde-markdown motir-prose">
+                          <div class="wmde-markdown">
                             <p>I wrote the plan: 1 story and 4 tasks under Session handling.</p>
                           </div>
                         </div>
@@ -11684,7 +11573,7 @@
                               <path d="M12 17h.01"></path></svg
                             >asking</span
                           >
-                          <div class="wmde-markdown motir-prose">
+                          <div class="wmde-markdown">
                             <p>I found two places sessions are refreshed.</p>
                           </div>
                         </div>
@@ -12143,7 +12032,7 @@
                                 class="leading-relaxed wrap-anywhere text-(--el-text)"
                               >
                                 Reading
-                                packages/server/src/modules/authentication/session/storage/adapters/postgres/SessionStoreRefreshTokenRepository.ts
+                                tests/integration/migrations/file-planner-bugs-into-folder-by-identifier.test.ts
                               </li>
                             </ol>
                           </li>
