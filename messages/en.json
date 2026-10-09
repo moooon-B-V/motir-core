@@ -8710,6 +8710,13 @@
       "reconnecting": "Reconnecting…",
       "cleared": "Cleared"
     },
+    "group": {
+      "expand": "Expand {key}",
+      "collapse": "Collapse {key}",
+      "count": "{count, plural, one {# work item on this tab} other {# work items on this tab}}",
+      "context": "Not on this tab",
+      "members": "Work items under {key}"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "Failed in the merge queue · <d>{detail}</d>",

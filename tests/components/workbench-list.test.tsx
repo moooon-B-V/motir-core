@@ -302,8 +302,8 @@ describe('toWorkbenchRowViews — the role fallback', () => {
   });
 });
 
-describe('toWorkbenchRowViews — the grouped tabs, flattened until the page draws groups (MOTIR-8015)', () => {
-  it('emits a context head first, with no role, then its members in the order sent', () => {
+describe('toWorkbenchRowViews — the grouped tabs (MOTIR-8015 · MOTIR-8016)', () => {
+  it('keeps a context head with no role, its members nested under it in the order sent', () => {
     const members = ['S-2', 'S-3', 'S-4'].map((identifier) => dto({ identifier, kind: 'subtask' }));
     const rows = toWorkbenchRowViews(
       [
@@ -320,8 +320,14 @@ describe('toWorkbenchRowViews — the grouped tabs, flattened until the page dra
       MEMBERS,
       false,
     );
-    expect(rows.map((r) => r.identifier)).toEqual(['S-1', 'S-2', 'S-3', 'S-4']);
-    expect(rows.map((r) => r.role)).toEqual(['none', 'both', 'both', 'both']);
+    expect(rows.map((r) => [r.identifier, r.role, r.groupHead])).toEqual([
+      ['S-1', 'none', 'context'],
+    ]);
+    expect(rows[0]!.groupMembers.map((r) => [r.identifier, r.role, r.groupHead])).toEqual([
+      ['S-2', 'both', null],
+      ['S-3', 'both', null],
+      ['S-4', 'both', null],
+    ]);
   });
 });
 

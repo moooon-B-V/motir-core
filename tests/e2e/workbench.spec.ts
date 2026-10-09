@@ -467,10 +467,20 @@ const PAGER_EMPTY = 'pager-empty@example.com';
  */
 async function nonSubtaskRanks(page: import('@playwright/test').Page): Promise<number[]> {
   const classes = await page
-    .locator('[data-testid^="workbench-row-"], [data-testid^="workbench-group-"]')
+    // MOTIR-8016: ROWS only — a group's chevron, count and rowgroup carry
+    // `workbench-group-*` testids too — and the KIND glyph, not the chevron that
+    // leads a group row.
+    .locator(
+      '[role="row"][data-testid^="workbench-row-"], [role="row"][data-testid^="workbench-group-"]',
+    )
     .filter({ hasNot: page.locator('svg.lucide-list-checks') })
     .evaluateAll((rows) =>
-      rows.map((row) => row.querySelector('svg[class*="lucide-"]')?.getAttribute('class') ?? ''),
+      rows.map(
+        (row) =>
+          row
+            .querySelector('svg[class*="lucide-"]:not(.lucide-chevron-right)')
+            ?.getAttribute('class') ?? '',
+      ),
     );
   return classes.map((cls) => {
     const hit = Object.keys(GLYPH_RANK).find((g) => cls.split(/\s+/).includes(g));

@@ -8713,6 +8713,13 @@
       "reconnecting": "Opnieuw verbinden…",
       "cleared": "Afgehandeld"
     },
+    "group": {
+      "expand": "{key} uitklappen",
+      "collapse": "{key} inklappen",
+      "count": "{count, plural, one {# werkitem op dit tabblad} other {# werkitems op dit tabblad}}",
+      "context": "Niet op dit tabblad",
+      "members": "Werkitems onder {key}"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "Mislukt in de merge-wachtrij · <d>{detail}</d>",

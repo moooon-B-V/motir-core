@@ -8710,6 +8710,13 @@
       "reconnecting": "다시 연결하는 중…",
       "cleared": "해결됨"
     },
+    "group": {
+      "expand": "{key} 펼치기",
+      "collapse": "{key} 접기",
+      "count": "{count, plural, other {이 탭의 작업 항목 #개}}",
+      "context": "이 탭에 없음",
+      "members": "{key} 아래의 작업 항목"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "병합 대기열에서 실패 · <d>{detail}</d>",

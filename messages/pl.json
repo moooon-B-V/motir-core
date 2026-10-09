@@ -8713,6 +8713,13 @@
       "reconnecting": "Ponowne łączenie…",
       "cleared": "Rozwiązane"
     },
+    "group": {
+      "expand": "Rozwiń {key}",
+      "collapse": "Zwiń {key}",
+      "count": "{count, plural, one {# element roboczy na tej karcie} few {# elementy robocze na tej karcie} many {# elementów roboczych na tej karcie} other {# elementu roboczego na tej karcie}}",
+      "context": "Nie na tej karcie",
+      "members": "Elementy robocze w {key}"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "Niepowodzenie w kolejce scalania · <d>{detail}</d>",

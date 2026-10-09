@@ -8716,6 +8716,13 @@
       "reconnecting": "Riconnessione…",
       "cleared": "Risolto"
     },
+    "group": {
+      "expand": "Espandi {key}",
+      "collapse": "Comprimi {key}",
+      "count": "{count, plural, one {# elemento di lavoro in questa scheda} other {# elementi di lavoro in questa scheda}}",
+      "context": "Non in questa scheda",
+      "members": "Elementi di lavoro sotto {key}"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "Non riuscita nella coda di merge · <d>{detail}</d>",

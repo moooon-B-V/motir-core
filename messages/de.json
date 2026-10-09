@@ -8716,6 +8716,13 @@
       "reconnecting": "Verbindung wird wiederhergestellt…",
       "cleared": "Erledigt"
     },
+    "group": {
+      "expand": "{key} ausklappen",
+      "collapse": "{key} einklappen",
+      "count": "{count, plural, one {# Arbeitselement in diesem Tab} other {# Arbeitselemente in diesem Tab}}",
+      "context": "Nicht in diesem Tab",
+      "members": "Arbeitselemente unter {key}"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "In der Merge-Queue fehlgeschlagen · <d>{detail}</d>",

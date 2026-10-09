@@ -8716,6 +8716,13 @@
       "reconnecting": "Reconectando…",
       "cleared": "Resolvido"
     },
+    "group": {
+      "expand": "Expandir {key}",
+      "collapse": "Recolher {key}",
+      "count": "{count, plural, one {# item de trabalho nesta aba} other {# itens de trabalho nesta aba}}",
+      "context": "Não está nesta aba",
+      "members": "Itens de trabalho em {key}"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "Falhou na fila de merge · <d>{detail}</d>",
