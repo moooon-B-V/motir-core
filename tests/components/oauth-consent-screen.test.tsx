@@ -461,6 +461,9 @@ describe('ConsentScreen — the pinned action bar (MOTIR-7380)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
     await waitFor(() => expect(navigate).toHaveBeenCalled());
     expect(document.querySelector('[data-consent-bar]')).toBeNull();
-    expect(document.documentElement.style.scrollPaddingBottom).toBe('');
+    // `navigate` fires in the same tick as the terminal `setPhase`, and the bar
+    // gives the padding back in a passive-effect cleanup — wait on that write,
+    // not on the navigate (a loaded runner can read between the two).
+    await waitFor(() => expect(document.documentElement.style.scrollPaddingBottom).toBe(''));
   });
 });
