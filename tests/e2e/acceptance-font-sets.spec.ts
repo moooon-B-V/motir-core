@@ -33,15 +33,13 @@
 // and is then polled through CDP. The holds in `chapter()` / `beat()` are
 // pacing for the viewer, never a wait.
 
-import type { Browser, BrowserContext, CDPSession, Locator, Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
-  FONT_SET_IDS,
   FONT_SET_REGISTRY,
   FONT_SET_ROLES,
   LOCALE_FONT_SET,
   type FontSetId,
   type FontSetMember,
-  type FontSetRole,
 } from '../../packages/design-system/src/theme/fontSets';
 // ↑ The module's source, not the package: the package's `exports` offer only
 // an ESM `import` condition, which Playwright's CommonJS loader cannot resolve.
@@ -57,228 +55,26 @@ import {
   type Locale,
 } from './_helpers/i18n-walk';
 import { backlogService } from '@/lib/services/backlogService';
+import {
+  ALL_PAIRING_FACES,
+  DEFAULT_PAIRING,
+  PAIRING_FACES,
+  PAIRING_NAMES,
+  attribute,
+  cdpFor,
+  expectDrawnIn,
+  familiesFetched,
+  inject,
+  registryFaces,
+} from './_helpers/font-probe';
+
+const { defaultFace, setFamilies, CJK_SETS, ALL_CJK_FAMILIES } = registryFaces(
+  FONT_SET_REGISTRY,
+  FONT_SET_ROLES,
+);
 
 const EMAIL = 'e2e-font-sets@example.com';
 const PASSWORD = 'font-sets-e2e-9';
-
-// ── The faces ───────────────────────────────────────────────────────────────
-
-/**
- * Each Type pairing's Latin face per role, as `packages/design-system/theme.css`
- * composes them (`[data-type]` blocks). The family name is the one in the font
- * file, which is what CDP reports.
- */
-const PAIRING_FACES: Record<string, Record<FontSetRole, string>> = {
-  motir: { sans: 'Inter', serif: 'Source Serif 4', mono: 'JetBrains Mono' },
-  'motir-sans': { sans: 'Inter', serif: 'Inter', mono: 'JetBrains Mono' },
-  'motir-mono': { sans: 'JetBrains Mono', serif: 'JetBrains Mono', mono: 'JetBrains Mono' },
-  grotesk: { sans: 'Space Grotesk', serif: 'Space Grotesk', mono: 'JetBrains Mono' },
-  editorial: { sans: 'Inter', serif: 'Fraunces', mono: 'JetBrains Mono' },
-  'mono-technical': { sans: 'IBM Plex Mono', serif: 'IBM Plex Mono', mono: 'IBM Plex Mono' },
-};
-const PAIRING_NAMES: Record<string, string> = {
-  motir: 'Motir',
-  'motir-sans': 'Motir Sans',
-  'motir-mono': 'Motir Mono',
-  grotesk: 'Grotesk',
-  editorial: 'Editorial',
-  'mono-technical': 'Mono-Technical',
-};
-const DEFAULT_PAIRING = PAIRING_FACES.motir!;
-/** Every Latin face any pairing loads (every page preloads them all). */
-const ALL_PAIRING_FACES = [...new Set(Object.values(PAIRING_FACES).flatMap(Object.values))];
-
-/** A set's default face for one role, from the registry. */
-function defaultFace(setId: FontSetId, role: FontSetRole): string {
-  const r = FONT_SET_REGISTRY[setId].roles[role];
-  const m = (r.members as readonly FontSetMember[]).find((x) => x.id === r.default);
-  return m?.family ?? '';
-}
-
-/** Every face a set can load, over all its roles and members. */
-function setFamilies(setId: FontSetId): string[] {
-  return [
-    ...new Set(
-      FONT_SET_ROLES.flatMap((role) =>
-        (FONT_SET_REGISTRY[setId].roles[role].members as readonly FontSetMember[])
-          .map((m) => m.family)
-          .filter((f): f is string => !!f),
-      ),
-    ),
-  ];
-}
-
-const CJK_SETS = FONT_SET_IDS.filter((id) => FONT_SET_REGISTRY[id].cjk);
-const ALL_CJK_FAMILIES = [...new Set(CJK_SETS.flatMap(setFamilies))];
-
-/**
- * Does a platform font name (what CDP reports, from the font file) name this
- * family? A variable face reports its default instance (`Noto Sans JP Thin`),
- * and M PLUS Rounded 1c's file calls itself `Rounded Mplus 1c`.
- */
-function isFace(platformName: string, family: string): boolean {
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const alias: Record<string, string> = { mplusrounded1c: 'roundedmplus1c' };
-  const want = norm(family);
-  return norm(platformName).startsWith(alias[want] ?? want);
-}
-
-// ── Reading what the browser drew ───────────────────────────────────────────
-
-interface PlatformFont {
-  familyName: string;
-  glyphCount: number;
-}
-
-let probeSeq = 0;
-
-/** The faces that rendered `node`'s glyphs, per CDP, once its face has loaded. */
-async function platformFonts(cdp: CDPSession, node: Locator): Promise<PlatformFont[]> {
-  const id = `fp-${++probeSeq}`;
-  await node.evaluate(async (el, probeId) => {
-    el.setAttribute('data-font-probe', probeId);
-    // Ask the browser to load the face for exactly this text; the measurement
-    // below is CDP's, not this string's.
-    // A face that fails to load rejects here; that is not this probe's verdict
-    // (CDP's list below shows the fallback that drew instead), so it is swallowed.
-    await document.fonts.load(getComputedStyle(el).font, el.textContent ?? '').catch(() => []);
-    await document.fonts.ready;
-  }, id);
-  const { root } = await cdp.send('DOM.getDocument', { depth: 0 });
-  const { nodeId } = await cdp.send('DOM.querySelector', {
-    nodeId: root.nodeId,
-    selector: `[data-font-probe="${id}"]`,
-  });
-  const { fonts } = await cdp.send('CSS.getPlatformFontsForNode', { nodeId });
-  return fonts.map((f) => ({ familyName: f.familyName, glyphCount: f.glyphCount }));
-}
-
-interface Drawn {
-  /** Each of these faces drew at least one glyph. */
-  in: string[];
-  /** Nothing else drew any (no system fallback). Defaults to `in`; `'any'` skips it. */
-  only?: string[] | 'any';
-  /** None of these drew a glyph. */
-  never?: string[];
-}
-
-/**
- * Assert the faces that rendered `node`. Polled, because a face that finished
- * loading re-renders the node on the next frame.
- */
-async function expectDrawnIn(cdp: CDPSession, node: Locator, want: Drawn): Promise<void> {
-  const only = want.only === 'any' ? null : [...(want.only ?? []), ...want.in];
-  const never = want.never ?? [];
-  let last: PlatformFont[] = [];
-  await expect
-    .poll(
-      async () => {
-        last = await platformFonts(cdp, node);
-        const names = last.map((f) => f.familyName);
-        const ok =
-          want.in.every((fam) => names.some((n) => isFace(n, fam))) &&
-          (!only || names.every((n) => only.some((fam) => isFace(n, fam)))) &&
-          !names.some((n) => never.some((fam) => isFace(n, fam)));
-        // On a miss, the faces the browser used ARE the received value, so the
-        // failure prints them.
-        return ok ? 'as expected' : `drawn in: ${names.join(', ') || '(nothing)'}`;
-      },
-      {
-        message: `drawn in ${want.in.join(' + ')}${only ? ` (allowed: ${only.join(', ')})` : ''}${never.length ? `, never ${never.join(', ')}` : ''}`,
-        timeout: 20_000,
-      },
-    )
-    .toBe('as expected');
-  // Say what was drawn on the report, so a reviewer can read the faces too.
-  test.info().annotations.push({
-    type: 'drawn',
-    description: last.map((f) => `${f.familyName} ×${f.glyphCount}`).join(', '),
-  });
-}
-
-async function cdpFor(page: Page): Promise<CDPSession> {
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send('DOM.enable');
-  await cdp.send('CSS.enable');
-  return cdp;
-}
-
-/** Add a node to `<main>` (inheriting the page's `lang`) and return it. */
-async function inject(page: Page, html: string): Promise<Locator> {
-  const id = `inj-${++probeSeq}`;
-  await page.getByRole('main').evaluate(
-    (main, { markup, probeId }) => {
-      const box = document.createElement('div');
-      box.setAttribute('data-injected', probeId);
-      box.style.cssText =
-        'padding:16px;margin:16px 0;border:1px dashed var(--el-border);color:var(--el-text)';
-      box.innerHTML = markup;
-      main.prepend(box);
-    },
-    { markup: html, probeId: id },
-  );
-  const box = page.locator(`[data-injected="${id}"]`);
-  await box.scrollIntoViewIfNeeded();
-  return box;
-}
-
-// ── Reading what the network fetched ────────────────────────────────────────
-
-/**
- * Open `path` in a FRESH context (no font cache) carrying only `cookies`, and
- * return the family of every font file it fetched, each attributed to the
- * `@font-face` rule that names it. An unattributable file fails.
- */
-async function familiesFetched(
-  browser: Browser,
-  cookies: Awaited<ReturnType<BrowserContext['cookies']>>,
-  path: string,
-  ready: (page: Page) => Promise<void>,
-): Promise<string[]> {
-  const context = await browser.newContext({ storageState: { cookies, origins: [] } });
-  try {
-    const page = await context.newPage();
-    const files: string[] = [];
-    page.on('request', (r) => {
-      if (r.resourceType() === 'font') files.push(r.url());
-    });
-    await page.goto(path);
-    await ready(page);
-    await page.evaluate(() => document.fonts.ready);
-    return attribute(page, files);
-  } finally {
-    await context.close();
-  }
-}
-
-/** Map each fetched font file to the family of the `@font-face` rule naming it. */
-async function attribute(page: Page, files: string[]): Promise<string[]> {
-  const names = files.map((u) => new URL(u).pathname.split('/').pop() ?? u);
-  const families = await page.evaluate((wanted) => {
-    const out: Record<string, string> = {};
-    for (const sheet of [...document.styleSheets]) {
-      let rules: CSSRuleList;
-      try {
-        rules = sheet.cssRules;
-      } catch {
-        continue;
-      }
-      for (const rule of [...rules]) {
-        if (!(rule instanceof CSSFontFaceRule)) continue;
-        const src = rule.style.getPropertyValue('src');
-        for (const f of wanted) {
-          if (src.includes(f)) {
-            out[f] = rule.style.getPropertyValue('font-family').replace(/^["']|["']$/g, '');
-          }
-        }
-      }
-    }
-    return out;
-  }, names);
-  const unknown = names.filter((n) => !families[n]);
-  expect(unknown, 'every fetched font file is named by an @font-face rule').toEqual([]);
-  return [...new Set(names.map((n) => families[n]!))];
-}
 
 /** A locale page fetched only its own set's faces (and at least one of them). */
 function expectOwnFacesOnly(fetched: string[], locale: Locale): void {
