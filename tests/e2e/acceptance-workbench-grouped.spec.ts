@@ -367,7 +367,8 @@ test('a person reads their Workbench grouped under the story each piece of work 
     await page.goto('/workbench?tab=todo');
     const showing = (from: number, to: number) =>
       en.common.pager.showing
-        .replace(/<\/?[a-z]+>/g, '')
+        .split(/<\/?[a-z]+>/)
+        .join('')
         .replace('{from}', String(from))
         .replace('{to}', String(to))
         .replace('{total}', String(totalGroups));
