@@ -161,8 +161,13 @@ describe('startCopied carries the waiting plan', () => {
         planRepository.findLatestBySession(out.id, tx),
       );
       expect(latest?.id).toBe(plan.id);
-      expect((await planChangeSessionsService.getById(me(), sourceId)).pendingPlanId).toBeNull();
-      expect((await planChangeSessionsService.getById(me(), out.id)).pendingPlanId).toBe(plan.id);
+      const left = await planChangeSessionsService.getById(me(), sourceId);
+      expect(left.pendingPlanId).toBeNull();
+      // …and says where the plan went (MOTIR-7932; design state 4, right).
+      expect(left.planMovedToSessionId).toBe(out.id);
+      const landed = await planChangeSessionsService.getById(me(), out.id);
+      expect(landed.pendingPlanId).toBe(plan.id);
+      expect(landed.planMovedToSessionId).toBeNull();
 
       // The source stayed ended, unchanged.
       const after = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sourceId } });

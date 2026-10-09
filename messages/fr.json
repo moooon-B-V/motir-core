@@ -7729,7 +7729,36 @@
         "placeholder": "{key} est réservé par une autre session"
       },
       "ended": "Cette session est terminée et ne peut donc pas être poursuivie. Planifier de nouveau {label} démarre une nouvelle session.",
-      "endedProject": "Cette session est terminée et ne peut donc pas être poursuivie. Planifier de nouveau {project} démarre une nouvelle session."
+      "endedProject": "Cette session est terminée et ne peut donc pas être poursuivie. Planifier de nouveau {project} démarre une nouvelle session.",
+      "carry": {
+        "gloss": "Ce plan vous attend toujours. Écrivez ci-dessous pour continuer à y travailler : la conversation et le plan passent ensemble dans une nouvelle session.",
+        "moving": "Déplacement de ce plan et de votre conversation vers une nouvelle session…",
+        "moved": "Ce plan a été déplacé ici avec la conversation. C’est le même plan : l’approuver ici l’approuve.",
+        "movedAway": "Le plan de cette session a été déplacé vers une session plus récente lorsque vous avez continué à y travailler.",
+        "movedAwayOpen": "Ouvrir la session plus récente",
+        "takenBackUnsent": "Votre message n’a pas été envoyé. Il se trouve dans le champ ci-dessous.",
+        "takenBackWaiting": "Votre plan pour {label} d’une session précédente est toujours en attente.",
+        "takenBackWaitingOpen": "Revenir au plan en attente",
+        "decided": {
+          "title": "Ce plan a été décidé pendant que vous écriviez.",
+          "next": "Votre message n’a pas été envoyé et rien de nouveau n’a été démarré.",
+          "unsent": "Non envoyé",
+          "slot": "Cette session est terminée et son plan a été décidé : il n’y a plus rien à poursuivre ici."
+        },
+        "notYours": "Seul·e {name}, qui a démarré cette session, peut continuer à travailler sur son plan."
+      },
+      "stalePlan": {
+        "one": "Ce plan n’est plus à jour : {workItem} a été terminé après la création du plan, il ne peut donc être ni modifié ni approuvé.",
+        "many": "Ce plan n’est plus à jour : {workItems} ont été terminés après la création du plan, il ne peut donc être ni modifié ni approuvé.",
+        "generic": "Ce plan n’est plus à jour : du travail qu’il modifie a été terminé après la création du plan, il ne peut donc être ni modifié ni approuvé.",
+        "more": "{count} de plus",
+        "planAgain": "Planifier de nouveau",
+        "planAgainGloss": "Démarre ici un nouveau plan à partir de cette conversation. Ce plan reste tel quel.",
+        "planningAgain": "Nouvelle planification…",
+        "writing": "Un nouveau plan est en cours de rédaction à partir de cette conversation.",
+        "restored": "Le travail modifié par ce plan est de nouveau ouvert, ce plan est donc de nouveau à jour. Rien de nouveau n’a été démarré.",
+        "restoredOne": "{workItem} est de nouveau ouvert, ce plan est donc de nouveau à jour. Rien de nouveau n’a été démarré."
+      }
     },
     "arrival": {
       "crumbTargetPrefix": "Cible de planification :",

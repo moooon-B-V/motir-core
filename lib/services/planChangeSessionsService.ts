@@ -48,6 +48,7 @@ import type {
   ResumableSessionDto,
 } from '@/lib/dto/planChange';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { planRevisionsService } from '@/lib/services/planRevisionsService';
 import { plansService } from '@/lib/services/plansService';
 import { planDriftService } from '@/lib/services/planDriftService';
@@ -1005,6 +1006,18 @@ export const planChangeSessionsService = {
     ]);
     const undecided =
       pending && pending.status !== 'approved' && pending.status !== 'declined' ? pending.id : null;
+    // An ENDED session whose plan a carry took away (MOTIR-7932; design state 4):
+    // where that plan went, so the old session can say so and link to it.
+    const movedTo =
+      row.endedAt && !undecided
+        ? await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+            planRevisionRepository.findLatestCarriedFromSession(row.id, tx),
+          )
+        : null;
+    const movedToSessionId =
+      movedTo && typeof movedTo.diff === 'object' && movedTo.diff && !Array.isArray(movedTo.diff)
+        ? ((movedTo.diff as { toSessionId?: unknown }).toSessionId ?? null)
+        : null;
     return {
       ...(await toDto(row, pctx)),
       startedBy,
@@ -1012,6 +1025,7 @@ export const planChangeSessionsService = {
       startedByViewer: row.createdById === pctx.userId,
       viewerCanPlan,
       pendingPlanId: undecided,
+      planMovedToSessionId: typeof movedToSessionId === 'string' ? movedToSessionId : null,
     };
   },
 

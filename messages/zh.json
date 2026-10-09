@@ -7719,7 +7719,36 @@
         "placeholder": "{key} 被另一个会话占用"
       },
       "ended": "此会话已结束，无法继续。再次规划 {label} 将开始一个新会话。",
-      "endedProject": "此会话已结束，无法继续。再次规划 {project} 将开始一个新会话。"
+      "endedProject": "此会话已结束，无法继续。再次规划 {project} 将开始一个新会话。",
+      "carry": {
+        "gloss": "此计划仍在等你处理。在下方输入即可继续完善它——对话和计划会一起移到新会话中。",
+        "moving": "正在把此计划和对话移到新会话中…",
+        "moved": "此计划已随对话移到这里。它是同一个计划，在这里批准即是批准它。",
+        "movedAway": "你继续完善此会话的计划时，它已移到一个更新的会话中。",
+        "movedAwayOpen": "打开更新的会话",
+        "takenBackUnsent": "你的消息没有发送，它还在下方的输入框中。",
+        "takenBackWaiting": "你之前会话中为 {label} 制定的计划仍在等待。",
+        "takenBackWaitingOpen": "回到等待中的计划",
+        "decided": {
+          "title": "你输入期间，此计划已被决定。",
+          "next": "你的消息没有发送，也没有开始任何新内容。",
+          "unsent": "未发送",
+          "slot": "此会话已结束，其计划也已被决定，这里没有可继续的内容。"
+        },
+        "notYours": "只有发起此会话的 {name} 可以继续完善它的计划。"
+      },
+      "stalePlan": {
+        "one": "此计划已过期：{workItem} 在计划生成后已完成，因此无法再修改或批准。",
+        "many": "此计划已过期：{workItems} 在计划生成后已完成，因此无法再修改或批准。",
+        "generic": "此计划已过期：它涉及的工作在计划生成后已完成，因此无法再修改或批准。",
+        "more": "另外 {count} 项",
+        "planAgain": "重新规划",
+        "planAgainGloss": "在此基于本对话开始一个新计划。原计划保持不变。",
+        "planningAgain": "正在重新规划…",
+        "writing": "正在基于本对话撰写新计划。",
+        "restored": "此计划涉及的工作已重新打开，此计划重新生效。没有开始新计划。",
+        "restoredOne": "{workItem} 已重新打开，此计划重新生效。没有开始新计划。"
+      }
     },
     "arrival": {
       "crumbTargetPrefix": "规划目标：",

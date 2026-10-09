@@ -206,6 +206,9 @@ export interface PlanChangeSessionDto {
   startedByViewer?: boolean;
   viewerCanPlan?: boolean;
   pendingPlanId?: string | null;
+  /** The session the plan this ENDED session made was carried into, when a carry
+   *  moved it (Story MOTIR-7928 · MOTIR-7932) — filled by the by-id read only. */
+  planMovedToSessionId?: string | null;
   /**
    * The session's END (AMENDMENT 23 §1; MOTIR-7643) — when, why, and (on the by-id
    * read) who ended it. All null while it is OPEN. Optional so a hand-built thread

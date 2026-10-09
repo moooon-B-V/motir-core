@@ -7723,7 +7723,36 @@
         "placeholder": "{key} is held by another session"
       },
       "ended": "This session has ended, so it can't be continued. Planning {label} again starts a new session.",
-      "endedProject": "This session has ended, so it can't be continued. Planning {project} again starts a new session."
+      "endedProject": "This session has ended, so it can't be continued. Planning {project} again starts a new session.",
+      "carry": {
+        "gloss": "This plan is still waiting for you. Write below to keep working on it — the conversation and the plan move to a new session together.",
+        "moving": "Moving this plan and your conversation into a new session…",
+        "moved": "This plan moved here with the conversation. It is the same plan, so approving it here approves it.",
+        "movedAway": "The plan this session made moved to a newer session when you kept working on it.",
+        "movedAwayOpen": "Open the newer session",
+        "takenBackUnsent": "Your message wasn't sent. It is in the box below.",
+        "takenBackWaiting": "Your plan for {label} from an earlier session is still waiting.",
+        "takenBackWaitingOpen": "Back to the waiting plan",
+        "decided": {
+          "title": "This plan was decided while you were writing.",
+          "next": "Your message wasn't sent, and nothing new was started.",
+          "unsent": "Not sent",
+          "slot": "This session has ended and its plan has been decided, so there is nothing left to continue here."
+        },
+        "notYours": "Only {name}, who started this session, can keep working on its plan."
+      },
+      "stalePlan": {
+        "one": "This plan is out of date: {workItem} was finished after the plan was made, so it can’t be changed or approved.",
+        "many": "This plan is out of date: {workItems} were finished after the plan was made, so it can’t be changed or approved.",
+        "generic": "This plan is out of date: work it changes was finished after the plan was made, so it can’t be changed or approved.",
+        "more": "{count} more",
+        "planAgain": "Plan it again",
+        "planAgainGloss": "Starts one new plan here from this conversation. This plan stays as it is.",
+        "planningAgain": "Planning again…",
+        "writing": "A new plan is being written from this conversation.",
+        "restored": "Work this plan changes is open again, so this plan is current again. Nothing new was started.",
+        "restoredOne": "{workItem} is open again, so this plan is current again. Nothing new was started."
+      }
     },
     "arrival": {
       "crumbTargetPrefix": "Planning target:",

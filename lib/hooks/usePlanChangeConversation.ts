@@ -35,6 +35,13 @@ import {
   type AskSubmitResponse,
 } from '@/lib/planning/planChangeClient';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
+import { carriesWaitingPlan } from '@/lib/planning/sessionCarry';
+import {
+  PlanAgainNotAvailableClientError,
+  PlanSessionPlanDecidedClientError,
+  PlanSessionPlanStaleClientError,
+  type StalePlanFinishedCard,
+} from '@/lib/planning/planSessionClientErrors';
 import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
 import {
   streamAskJob,
@@ -362,6 +369,44 @@ export interface PlanChangeConversationState {
   /** A confirm or keep answer is IN FLIGHT — the confirm's two buttons and the
    *  control hold still until it lands. Optional for the same reason. */
   restarting?: boolean;
+  /**
+   * THE CARRY IS IN FLIGHT (Story MOTIR-7928 · MOTIR-7932; design state 3): the
+   * owner wrote in an ENDED session whose plan still waits, and the turn that starts
+   * the new session has not come back yet. The text is drawn pending under the end
+   * marker and the composer is locked, so a second send cannot fire. Optional for
+   * the same reason as the fields above.
+   */
+  carrying?: { text: string } | null;
+  /** The ended session the plan on screen was just CARRIED out of (design state 4):
+   *  the rail says "this plan moved here" under the copied divider. Null otherwise. */
+  carriedFrom?: string | null;
+  /** The carry was TAKEN BACK onto the person's open session (design state 5):
+   *  the plan that still waits elsewhere, for the line that leads back to it. */
+  takenBackWaitingPlanId?: string | null;
+  /** The plan was DECIDED before the carry reached it (design state 6): the words
+   *  that were not sent, kept so they can be copied. */
+  carryDecided?: { text: string } | null;
+  /**
+   * A turn landed on a STALE plan (MOTIR-7945; design state 10): nothing was revised
+   * or spent, and the answer is drawn under the turn as the stale notice — never as
+   * an error. Drawn from the submit's answer, not from the session row: nothing is
+   * written on the server, so a reload's next send gets the same answer again.
+   */
+  stalePlan?: StalePlanState | null;
+}
+
+/** What the stale notice draws (design state 10 and its variants). */
+export interface StalePlanState {
+  planId: string;
+  finishedCards: StalePlanFinishedCard[];
+  /** The user turn this answers, when the thread holds it. */
+  turnId: string | null;
+  /** Plan it again is in flight — the action and the composer hold still. */
+  pressing: boolean;
+  /** How the press ended: a fresh plan (`accepted`), the plan was current again
+   *  (`restored`), refused because it was decided (`refused`), or another press won
+   *  (`superseded`). Every outcome withdraws the action; null keeps it offered. */
+  outcome: 'accepted' | 'restored' | 'refused' | 'superseded' | null;
 }
 
 const INITIAL: PlanChangeConversationState = {
@@ -732,6 +777,9 @@ export function usePlanChangeConversation({
   const adoptedSessionRef = useRef<string | null>(null);
   /** A restart answer is in flight — set before the await, as `stoppingRef` is. */
   const restartingRef = useRef(false);
+  /** Plan it again is in flight (MOTIR-7932) — set before the await, so a double
+   *  press finds it set and a refusal knows it answers the press. */
+  const planAgainRef = useRef(false);
   const restartedCbRef = useRef(onRestarted);
   // A read-only mirror of the latest state, so a callback can read `jobId`/`planId`
   // without listing them as dependencies (which would re-create the callback — and
@@ -1104,8 +1152,118 @@ export function usePlanChangeConversation({
   /** What a refused SUBMIT means for the rail: another holder's card (refused in
    *  place, AMENDMENT 23 §4), a session that has ended under it (re-read it), or a
    *  recoverable failure. */
+  /**
+   * FOLLOW the plan the server says is current (MOTIR-7932): Plan it again lost to
+   * another press, or a newer plan already exists. Re-read the thread, then put that
+   * plan on the canvas — its proposal when one is readable, else watch it being
+   * written. Best-effort: a failed read leaves the screen as it is.
+   */
+  const followPlan = useCallback(async (latestPlanId: string | null, signal: AbortSignal) => {
+    const id = stateRef.current.session?.id;
+    if (!id) return;
+    let read: PlanChangeSessionDto | null = null;
+    try {
+      read = await getPlanChangeSession(id, signal);
+    } catch {
+      /* keep the thread in hand */
+    }
+    if (!mountedRef.current) return;
+    const planId = latestPlanId ?? read?.pendingPlanId ?? null;
+    setState((s) => ({ ...s, ...(read ? { session: read } : {}), ...(planId ? { planId } : {}) }));
+    if (!planId) return;
+    let pending: PlanReviewDto | null = null;
+    try {
+      pending = await readPendingProposal(planId, signal);
+    } catch {
+      /* nothing proposed we can show */
+    }
+    if (!mountedRef.current) return;
+    if (pending) {
+      setState((s) => ({ ...s, review: pending, decided: null, phase: 'review' }));
+    } else {
+      setLivePlanId(planId);
+    }
+  }, []);
+
+  /**
+   * The answer to a turn over a STALE plan (MOTIR-7945; design state 10): the turn
+   * is KEPT — the server appended it before the submit refused — so the thread is
+   * re-read to show it, and the notice is drawn under it. No error, no code.
+   */
+  const adoptStalePlan = useCallback(
+    async (err: PlanSessionPlanStaleClientError, signal: AbortSignal) => {
+      const id = stateRef.current.session?.id;
+      let read: PlanChangeSessionDto | null = null;
+      if (id) {
+        try {
+          read = await getPlanChangeSession(id, signal);
+        } catch {
+          /* the thread in hand still answers */
+        }
+      }
+      if (!mountedRef.current) return;
+      setState((s) => {
+        const session = read ?? s.session;
+        const lastUser = [...(session?.turns ?? [])].reverse().find((t) => t.role === 'user');
+        return {
+          ...s,
+          ...(read ? { session: read } : {}),
+          stalePlan: {
+            planId: err.planId,
+            finishedCards: err.finishedCards,
+            turnId: lastUser?.id ?? null,
+            pressing: false,
+            outcome: null,
+          },
+        };
+      });
+    },
+    [],
+  );
+
   const refuseRun = useCallback(
     (err: unknown, controller: AbortController) => {
+      // THE STALE OUTCOME and Plan it again's two refusals (MOTIR-7932) are answers
+      // to FOLLOW, never errors: none of them shows a code or a retry.
+      if (err instanceof PlanSessionPlanStaleClientError) {
+        setState((s) => ({
+          ...s,
+          phase: s.review ? 'review' : 'idle',
+          progress: null,
+          acts: [],
+          errorCode: null,
+          outOfCredits: false,
+        }));
+        void adoptStalePlan(err, controller.signal);
+        return;
+      }
+      const pressing = planAgainRef.current;
+      if (pressing && err instanceof PlanAgainNotAvailableClientError) {
+        setState((s) => ({
+          ...s,
+          phase: s.review ? 'review' : 'idle',
+          progress: null,
+          acts: [],
+          errorCode: null,
+          stalePlan: s.stalePlan
+            ? { ...s.stalePlan, pressing: false, outcome: 'superseded' }
+            : null,
+        }));
+        void followPlan(err.latestPlanId, controller.signal);
+        return;
+      }
+      if (pressing && err instanceof PlanSessionPlanDecidedClientError) {
+        setState((s) => ({
+          ...s,
+          phase: s.review ? 'review' : 'idle',
+          progress: null,
+          acts: [],
+          errorCode: null,
+          stalePlan: s.stalePlan ? { ...s.stalePlan, pressing: false, outcome: 'refused' } : null,
+        }));
+        void followPlan(null, controller.signal);
+        return;
+      }
       const gated = err instanceof PlanEditsClientError && err.isOutOfCredits;
       const held = targetHeldFrom(err);
       setState((s) => ({
@@ -1121,8 +1279,12 @@ export function usePlanChangeConversation({
       if (err instanceof PlanEditsClientError && err.code === 'PLAN_SESSION_ENDED') {
         void settleEnd(controller.signal);
       }
+      // A refused press keeps the action offered, so the person can press again.
+      setState((s) =>
+        s.stalePlan?.pressing ? { ...s, stalePlan: { ...s.stalePlan, pressing: false } } : s,
+      );
     },
-    [settleEnd],
+    [settleEnd, adoptStalePlan, followPlan],
   );
 
   const finishPlanRun = useCallback(
@@ -1705,6 +1867,160 @@ export function usePlanChangeConversation({
     ],
   );
 
+  /** A carry is IN FLIGHT — set before the await, as `restartingRef` is, so a
+   *  second Enter in the same tick finds it set. */
+  const carryingRef = useRef(false);
+
+  /**
+   * THE FIRST SEND ON AN ENDED SESSION WHOSE PLAN STILL WAITS (Story MOTIR-7928 ·
+   * MOTIR-7932; AMENDMENT 23 §6 as amended by MOTIR-7931). One call carries the
+   * conversation, the plan and this turn into a new session; the server decides
+   * which of three answers comes back, and the overlay follows it:
+   *
+   *  · a NEW session — swap to it through the restart's path (the host re-keys the
+   *    address), say the plan moved, and stream the planner's answer to the turn
+   *    already appended (the session's submit revises the same plan in place);
+   *  · `takenBack` — the person's OPEN session of the scope took the turn: swap to
+   *    it and point back at the plan that still waits here;
+   *  · `PLAN_SESSION_PLAN_DECIDED` — refused in place: the session does not change,
+   *    the words are kept, and the plan is re-read showing its decision.
+   */
+  const carrySend = useCallback(
+    async (text: string, anchorKey: string | null) => {
+      const from = stateRef.current.session;
+      if (!from || abortRef.current || carryingRef.current) return;
+      carryingRef.current = true;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const isAnswer = pendingQuestion(from.turns) !== null;
+      setState((s) => ({
+        ...s,
+        carrying: { text },
+        errorCode: null,
+        outOfCredits: false,
+        targetHeld: null,
+        carryDecided: null,
+      }));
+      let landed: PlanChangeSessionDto;
+      try {
+        landed = await startCopiedSession(
+          from.id,
+          { body: text, isAnswer, anchorKey },
+          controller.signal,
+        );
+      } catch (err) {
+        carryingRef.current = false;
+        if (abortRef.current === controller) abortRef.current = null;
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (!mountedRef.current) return;
+        if (err instanceof PlanSessionPlanDecidedClientError) {
+          const planId = err.planId ?? from.pendingPlanId ?? stateRef.current.planId;
+          const [review, read] = await Promise.all([
+            planId ? fetchPlanReview(planId).catch(() => null) : Promise.resolve(null),
+            getPlanChangeSession(from.id).catch(() => null),
+          ]);
+          if (!mountedRef.current) return;
+          const status = review?.status ?? err.planStatus;
+          setState((s) => ({
+            ...s,
+            carrying: null,
+            carryDecided: { text },
+            // The plan is no longer waiting, whatever the re-read could say: the
+            // slot gives way to the decided session's read-only line.
+            session: read ?? (s.session ? { ...s.session, pendingPlanId: null } : s.session),
+            review: review ?? s.review,
+            decided:
+              status === 'approved' ? 'accepted' : status === 'declined' ? 'declined' : s.decided,
+            planId: null,
+            phase: 'idle',
+          }));
+          return;
+        }
+        const held = targetHeldFrom(err);
+        setState((s) => ({
+          ...s,
+          carrying: null,
+          ...(held ? { targetHeld: held } : { errorCode: 'FAILED' }),
+        }));
+        return;
+      }
+      carryingRef.current = false;
+      if (abortRef.current === controller) abortRef.current = null;
+      if (!mountedRef.current) return;
+
+      const takenBack = landed.takenBack === true;
+      adoptedSessionRef.current = landed.id;
+      lastAskTurnRef.current = null;
+      lastAskAnchorRef.current = null;
+      setState((s) => ({
+        ...s,
+        carrying: null,
+        session: landed,
+        // The carried session holds THE SAME plan: the review stays on the canvas.
+        // A take-back lands on another session, so the plan in hand is not its own.
+        ...(takenBack
+          ? {
+              review: null,
+              liveReview: null,
+              decided: null,
+              planId: null,
+              phase: 'idle' as const,
+            }
+          : {}),
+        carriedFrom: takenBack ? null : from.id,
+        takenBackWaitingPlanId: takenBack ? (from.pendingPlanId ?? s.planId) : null,
+        reopened: null,
+        restartedFrom: null,
+        readOnly: false,
+        copyable: null,
+        stalePlan: null,
+      }));
+      restartedCbRef.current?.(landed.id);
+      // A take-back's turn waits in that session like any appended turn.
+      if (takenBack) return;
+      await run(null, (signal) => submitPlanChange(landed.id, signal));
+    },
+    [run],
+  );
+
+  /**
+   * PLAN IT AGAIN (MOTIR-7945's accept; design state 10): ONE fresh plan in this
+   * session from this conversation. The ref guards the double press before any
+   * render lands, and the server is idempotent behind it. The run attaches to the
+   * new plan exactly as an ordinary submit does; a plan restored to `planned` meanwhile
+   * comes back as an ordinary revise of it.
+   */
+  const planAgain = useCallback(async () => {
+    const stale = stateRef.current.stalePlan;
+    const session = stateRef.current.session;
+    if (!stale || stale.outcome || !session || planAgainRef.current || abortRef.current) return;
+    planAgainRef.current = true;
+    setState((s) => ({
+      ...s,
+      stalePlan: s.stalePlan ? { ...s.stalePlan, pressing: true } : null,
+    }));
+    try {
+      await run(null, async (signal) => {
+        const result = await submitPlanChange(session.id, signal, { planAgainOf: stale.planId });
+        if (mountedRef.current) {
+          setState((s) => ({
+            ...s,
+            stalePlan: s.stalePlan
+              ? {
+                  ...s.stalePlan,
+                  pressing: false,
+                  outcome: result.planId === stale.planId ? 'restored' : 'accepted',
+                }
+              : null,
+          }));
+        }
+        return result;
+      });
+    } finally {
+      planAgainRef.current = false;
+    }
+  }, [run]);
+
   /**
    * Append what the user typed, then run the ACCUMULATED intent.
    *
@@ -1731,8 +2047,19 @@ export function usePlanChangeConversation({
       const body = text.trim();
       if (!body) return;
       // An ENDED session accepts no turn (AMENDMENT 23 §3): the composer is not
-      // drawn for one, and a stale click must not reach the server either.
-      if (sessionEnded(stateRef.current.session)) return;
+      // drawn for one, and a stale click must not reach the server either — unless
+      // its plan still waits, when the send CARRIES it into a new session (MOTIR-7932).
+      if (sessionEnded(stateRef.current.session)) {
+        if (carriesWaitingPlan(stateRef.current.session, stateRef.current.readOnly)) {
+          await carrySend(body, options.anchorKey ?? null);
+        }
+        return;
+      }
+      // A stale notice still offering Plan it again is answered by this turn; one
+      // that was acted on stays as the thread's record.
+      if (stateRef.current.stalePlan && !stateRef.current.stalePlan.outcome) {
+        setState((s) => ({ ...s, stalePlan: null }));
+      }
 
       // ⚠️ THE RUN IS STILL WORKING → THE MAILBOX, NOT THE SUBMIT (MOTIR-4274).
       //
@@ -1913,7 +2240,7 @@ export function usePlanChangeConversation({
         askAnchor,
       );
     },
-    [run, runAsk],
+    [run, runAsk, carrySend],
   );
 
   /** Re-send the accumulated intent after a failure — no new turn, so the
@@ -2445,5 +2772,6 @@ export function usePlanChangeConversation({
     startCopied,
     requestRestart,
     answerRestartConfirm,
+    planAgain,
   };
 }

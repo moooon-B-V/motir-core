@@ -79,6 +79,9 @@ export interface PlanChangeConfirmBarProps {
    *  become the progress, inside this same element at its own height. `timedOut`: the
    *  band stacks above the bar, as the stale band does, with the verbs back. */
   approveProgress?: PlanApproveProgressView | null;
+  /** The plan is OUT OF DATE (MOTIR-7932; design state 10): the bar keeps its
+   *  place, loses its verbs, and says why on the warning role. */
+  stale?: boolean;
 }
 
 export function PlanChangeConfirmBar({
@@ -93,9 +96,24 @@ export function PlanChangeConfirmBar({
   onConfirmDecline,
   staleRefused = false,
   approveProgress = null,
+  stale = false,
 }: PlanChangeConfirmBarProps) {
   const t = useTranslations('planningWorkspace.conversation');
   const tp = useTranslations('approvalGate.planApproval.surface');
+  const tReview = useTranslations('planReview');
+  if (stale) {
+    return (
+      <div
+        data-testid="plan-change-confirm-bar"
+        data-plan-state="stale"
+        className="flex shrink-0 items-start gap-2 border-t border-(--el-border) bg-(--el-tint-yellow) px-4 py-2.5 text-xs leading-relaxed text-(--el-text-strong)"
+        style={{ minHeight: PLAN_CONFIRM_BAR_HEIGHT }}
+      >
+        <RefreshCw className="mt-px size-3.5 flex-none" aria-hidden="true" />
+        <span>{tReview('staleStatusOutcome')}</span>
+      </div>
+    );
+  }
   const gated = view.kind !== 'ungated';
   const running = approveProgress?.state === 'running';
   const timedOutBand =
