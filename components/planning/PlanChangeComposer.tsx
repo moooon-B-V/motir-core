@@ -179,6 +179,9 @@ export interface PlanChangeComposerProps {
    * uploads first can fail — and a failed upload keeps the words (A3.1).
    */
   clearOnSubmit?: boolean;
+  /** Drop the composer's own top rule — its slot draws one above a line that
+   *  belongs to the composer (the carry's gloss, MOTIR-7932). */
+  bare?: boolean;
 }
 
 export function PlanChangeComposer({
@@ -201,6 +204,7 @@ export function PlanChangeComposer({
   canSendEmpty = false,
   readOnly = false,
   clearOnSubmit = true,
+  bare = false,
 }: PlanChangeComposerProps) {
   const t = useTranslations('planningWorkspace.targets');
   const tc = useTranslations('planningWorkspace.conversation');
@@ -352,7 +356,10 @@ export function PlanChangeComposer({
     mentions && attach ? 'pl-[60px]' : mentions || attach ? 'pl-8' : 'pl-(--spacing-input-x)';
 
   return (
-    <form onSubmit={submit} className="relative border-t border-(--el-border) px-3 py-3">
+    <form
+      onSubmit={submit}
+      className={bare ? 'relative px-3 py-3' : 'relative border-t border-(--el-border) px-3 py-3'}
+    >
       {/* THE RUNNING BAR — the live line and the STOP, in the pinned footer.
           NOT an alert and NOT a warning tint: nothing has failed, a run is simply
           working. It reuses `--el-surface-soft`, which is the fill the shipped

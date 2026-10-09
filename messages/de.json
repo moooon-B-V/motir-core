@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, one {# Vorschlag bearbeitet} other {# Vorschläge bearbeitet}}",
     "event_withdrawn": "{n, plural, one {# Vorschlag zurückgezogen} other {# Vorschläge zurückgezogen}}",
     "event_brief_edited": "Plantitel und Zusammenfassung bearbeitet",
+    "event_session_carried": "In ein neues Gespräch übernommen",
     "event_removed": "{n, plural, one {# Vorschlag entfernt} other {# Vorschläge entfernt}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",
@@ -7800,7 +7801,36 @@
         "placeholder": "{key} wird von einer anderen Sitzung belegt"
       },
       "ended": "Diese Sitzung ist beendet und kann daher nicht fortgesetzt werden. Wenn Sie {label} erneut planen, wird eine neue Sitzung gestartet.",
-      "endedProject": "Diese Sitzung ist beendet und kann daher nicht fortgesetzt werden. Wenn Sie {project} erneut planen, wird eine neue Sitzung gestartet."
+      "endedProject": "Diese Sitzung ist beendet und kann daher nicht fortgesetzt werden. Wenn Sie {project} erneut planen, wird eine neue Sitzung gestartet.",
+      "carry": {
+        "gloss": "Dieser Plan wartet noch auf Sie. Schreiben Sie unten, um daran weiterzuarbeiten – das Gespräch und der Plan wechseln gemeinsam in eine neue Sitzung.",
+        "moving": "Dieser Plan und Ihr Gespräch werden in eine neue Sitzung verschoben…",
+        "moved": "Dieser Plan wurde mit dem Gespräch hierher verschoben. Es ist derselbe Plan – wenn Sie ihn hier genehmigen, ist er genehmigt.",
+        "movedAway": "Der Plan dieser Sitzung wurde in eine neuere Sitzung verschoben, als Sie daran weitergearbeitet haben.",
+        "movedAwayOpen": "Neuere Sitzung öffnen",
+        "takenBackUnsent": "Ihre Nachricht wurde nicht gesendet. Sie steht im Feld unten.",
+        "takenBackWaiting": "Ihr Plan für {label} aus einer früheren Sitzung wartet noch.",
+        "takenBackWaitingOpen": "Zurück zum wartenden Plan",
+        "decided": {
+          "title": "Über diesen Plan wurde entschieden, während Sie geschrieben haben.",
+          "next": "Ihre Nachricht wurde nicht gesendet, und es wurde nichts Neues gestartet.",
+          "unsent": "Nicht gesendet",
+          "slot": "Diese Sitzung ist beendet und über ihren Plan wurde entschieden, daher gibt es hier nichts mehr fortzusetzen."
+        },
+        "notYours": "Nur {name}, der diese Sitzung gestartet hat, kann an ihrem Plan weiterarbeiten."
+      },
+      "stalePlan": {
+        "one": "Dieser Plan ist veraltet: {workItem} wurde abgeschlossen, nachdem der Plan erstellt wurde, daher kann er weder geändert noch genehmigt werden.",
+        "many": "Dieser Plan ist veraltet: {workItems} wurden abgeschlossen, nachdem der Plan erstellt wurde, daher kann er weder geändert noch genehmigt werden.",
+        "generic": "Dieser Plan ist veraltet: Arbeit, die er ändert, wurde abgeschlossen, nachdem der Plan erstellt wurde, daher kann er weder geändert noch genehmigt werden.",
+        "more": "{count} weitere",
+        "planAgain": "Erneut planen",
+        "planAgainGloss": "Startet hier einen neuen Plan aus diesem Gespräch. Dieser Plan bleibt, wie er ist.",
+        "planningAgain": "Wird erneut geplant…",
+        "writing": "Aus diesem Gespräch wird ein neuer Plan erstellt.",
+        "restored": "Arbeit, die dieser Plan ändert, ist wieder offen, daher ist dieser Plan wieder aktuell. Es wurde nichts Neues gestartet.",
+        "restoredOne": "{workItem} ist wieder offen, daher ist dieser Plan wieder aktuell. Es wurde nichts Neues gestartet."
+      }
     },
     "arrival": {
       "crumbTargetPrefix": "Planungsziel:",

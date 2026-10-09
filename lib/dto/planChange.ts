@@ -206,6 +206,9 @@ export interface PlanChangeSessionDto {
   startedByViewer?: boolean;
   viewerCanPlan?: boolean;
   pendingPlanId?: string | null;
+  /** The session the plan this ENDED session made was carried into, when a carry
+   *  moved it (Story MOTIR-7928 · MOTIR-7932) — filled by the by-id read only. */
+  planMovedToSessionId?: string | null;
   /**
    * The session's END (AMENDMENT 23 §1; MOTIR-7643) — when, why, and (on the by-id
    * read) who ended it. All null while it is OPEN. Optional so a hand-built thread
@@ -320,12 +323,17 @@ export interface ResumableSessionDto {
   copyable?: CopyableSessionDto | null;
 }
 
-/** A session whose conversation a new session may carry over (AMENDMENT 23 §6). */
+/** A session whose conversation a new session may carry over (AMENDMENT 23 §6).
+ *  A session that ended while a plan still waits is copyable whatever its end
+ *  reason, and the carry takes that plan with it (Story MOTIR-7928 · MOTIR-7930). */
 export interface CopyableSessionDto {
   id: string;
-  endReason: 'failed' | 'idle';
+  endReason: 'failed' | 'idle' | 'restarted';
   endedAt: string;
   turnCount: number;
+  /** The undecided plan the carry would MOVE into the new session, or `null` when
+   *  only the conversation is carried. */
+  waitingPlanId: string | null;
 }
 
 /**

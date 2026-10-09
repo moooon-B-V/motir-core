@@ -1,3 +1,4 @@
+import type { WorkItem } from '@/generated/prisma/client';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -65,6 +66,33 @@ function terminalResolver(workspaceId: string): (projectId: string) => Promise<S
 }
 
 export const planDriftService = {
+  /**
+   * The `modify` / `remove` targets of a plan that sit in a TERMINAL status of
+   * the plan's project — what makes a plan `stale`, and what a turn over a stale
+   * plan names (MOTIR-7945). A target that has been DELETED is absent, not
+   * terminal: there is nothing left for approve to refuse over. `terminal` is
+   * the project's terminal keys when the caller already holds them.
+   */
+  async readTerminalTargets(
+    planId: string,
+    projectId: string,
+    workspaceId: string,
+    terminal?: Set<string>,
+  ): Promise<WorkItem[]> {
+    const terminalKeys =
+      terminal ?? (await workflowsService.getTerminalStatusKeys(projectId, workspaceId));
+    const targets = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      planItemRepository.findByPlan(planId, tx),
+    );
+    const targetIds = targets
+      .filter((i) => i.op !== 'add' && i.workItemId)
+      .map((i) => i.workItemId!);
+    const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace(targetIds, workspaceId, tx),
+    );
+    return rows.filter((row) => terminalKeys.has(row.status));
+  },
+
   /**
    * A work item ENTERED a terminal status: every `planned` plan proposing to
    * `modify` or `remove` it can no longer be approved, so it becomes `stale`.
@@ -182,18 +210,9 @@ export const planDriftService = {
       }
 
       // EVERY `modify`/`remove` target of THIS plan must now be non-terminal.
-      const targets = await withWorkspaceServiceContext(workspaceId, (tx) =>
-        planItemRepository.findByPlan(planId, tx),
-      );
-      const targetIds = targets
-        .filter((i) => i.op !== 'add' && i.workItemId)
-        .map((i) => i.workItemId!);
-      const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
-        workItemRepository.findByIdsInWorkspace(targetIds, workspaceId, tx),
-      );
-      // A target that has been DELETED cannot hold the plan back — there is
-      // nothing left for approve to refuse over. An absent row is not terminal.
-      const stillTerminal = rows.some((row) => terminal.has(row.status));
+      const stillTerminal =
+        (await planDriftService.readTerminalTargets(planId, plan.projectId, workspaceId, terminal))
+          .length > 0;
       if (stillTerminal) {
         skipped.push(planId);
         continue;

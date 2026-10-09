@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, one {Edytowano # propozycję} few {Edytowano # propozycje} many {Edytowano # propozycji} other {Edytowano # propozycji}}",
     "event_withdrawn": "{n, plural, one {Wycofano # propozycję} few {Wycofano # propozycje} many {Wycofano # propozycji} other {Wycofano # propozycji}}",
     "event_brief_edited": "Edytowano tytuł i podsumowanie planu",
+    "event_session_carried": "Przeniesiono do nowej rozmowy",
     "event_removed": "{n, plural, one {Usunięto # propozycję} few {Usunięto # propozycje} many {Usunięto # propozycji} other {Usunięto # propozycji}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",
@@ -7797,7 +7798,36 @@
         "placeholder": "{key} jest zajęty przez inną sesję"
       },
       "ended": "Ta sesja się zakończyła, więc nie można jej kontynuować. Ponowne planowanie {label} rozpocznie nową sesję.",
-      "endedProject": "Ta sesja się zakończyła, więc nie można jej kontynuować. Ponowne planowanie projektu {project} rozpocznie nową sesję."
+      "endedProject": "Ta sesja się zakończyła, więc nie można jej kontynuować. Ponowne planowanie projektu {project} rozpocznie nową sesję.",
+      "carry": {
+        "gloss": "Ten plan nadal czeka na decyzję. Napisz poniżej, aby dalej nad nim pracować — rozmowa i plan przejdą razem do nowej sesji.",
+        "moving": "Przenoszenie tego planu i rozmowy do nowej sesji…",
+        "moved": "Ten plan został przeniesiony tutaj razem z rozmową. To ten sam plan, więc zatwierdzenie go tutaj go zatwierdza.",
+        "movedAway": "Plan tej sesji został przeniesiony do nowszej sesji, gdy kontynuowano nad nim pracę.",
+        "movedAwayOpen": "Otwórz nowszą sesję",
+        "takenBackUnsent": "Wiadomość nie została wysłana. Jest w polu poniżej.",
+        "takenBackWaiting": "Plan dla {label} z wcześniejszej sesji nadal czeka.",
+        "takenBackWaitingOpen": "Wróć do oczekującego planu",
+        "decided": {
+          "title": "O tym planie zdecydowano w trakcie pisania.",
+          "next": "Wiadomość nie została wysłana i nic nowego nie zostało rozpoczęte.",
+          "unsent": "Nie wysłano",
+          "slot": "Ta sesja się zakończyła, a o jej planie zdecydowano, więc nie ma tu już nic do kontynuowania."
+        },
+        "notYours": "Tylko {name}, kto rozpoczął tę sesję, może dalej pracować nad jej planem."
+      },
+      "stalePlan": {
+        "one": "Ten plan jest nieaktualny: {workItem} ukończono po utworzeniu planu, więc nie można go zmienić ani zatwierdzić.",
+        "many": "Ten plan jest nieaktualny: {workItems} ukończono po utworzeniu planu, więc nie można go zmienić ani zatwierdzić.",
+        "generic": "Ten plan jest nieaktualny: pracę, którą zmienia, ukończono po utworzeniu planu, więc nie można go zmienić ani zatwierdzić.",
+        "more": "jeszcze {count}",
+        "planAgain": "Zaplanuj ponownie",
+        "planAgainGloss": "Rozpoczyna tutaj jeden nowy plan na podstawie tej rozmowy. Ten plan pozostaje bez zmian.",
+        "planningAgain": "Ponowne planowanie…",
+        "writing": "Na podstawie tej rozmowy powstaje nowy plan.",
+        "restored": "Praca, którą zmienia ten plan, jest znowu otwarta, więc ten plan znowu jest aktualny. Nic nowego nie rozpoczęto.",
+        "restoredOne": "{workItem} jest znowu otwarty, więc ten plan znowu jest aktualny. Nic nowego nie rozpoczęto."
+      }
     },
     "arrival": {
       "crumbTargetPrefix": "Cel planowania:",
