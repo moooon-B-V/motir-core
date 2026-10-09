@@ -4394,18 +4394,10 @@
     "nudge": {
       "body": "Nur {count} Arbeitselement bereit – {key} ({title}) erweitern?",
       "expandLabel": "Erweitern",
-      "expanding": "Wird erweitert…",
+      "expandHint": "Öffnet die Motir-AI-Planung für {key}. Sie fragt eventuell zuerst, was Sie planen möchten.",
       "dismissAria": "Erweiterungshinweis schließen",
       "dismissLabel": "Schließen",
-      "emptyHint": "Es ist nichts bereit – das Erweitern eines Platzhalters fügt neue Arbeit hinzu.",
-      "reviewTitle": "Vorgeschlagene untergeordnete Elemente",
-      "opChange": "ändern",
-      "opRemove": "entfernen",
-      "approveLabel": "Genehmigen",
-      "approving": "Wird genehmigt…",
-      "declineLabel": "Ablehnen",
-      "approved": "{count, plural, one {# untergeordnetes Element erstellt} other {# untergeordnete Elemente erstellt}}",
-      "error": "Ein Fehler ist aufgetreten ({code})."
+      "emptyHint": "Es ist nichts bereit – das Erweitern eines Platzhalters fügt neue Arbeit hinzu."
     },
     "lanes": {
       "switchAria": "Bereite Spuren",
@@ -7432,6 +7424,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "{key} planen"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {

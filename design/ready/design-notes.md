@@ -445,3 +445,125 @@ command for {key}").
 No new design-system entry. The expand grammar is TreeTable's; the page does not
 become a TreeTable — each lane is a list of dispatch cards, which is what the page
 already is.
+
+## Expand starts a planning conversation (MOTIR-7875, gating MOTIR-7973 / MOTIR-7876)
+
+**Mock:** [`ready--nudge-expand-plans.mock.html`](ready--nudge-expand-plans.mock.html) — a
+delta on [`ready.mock.html`](ready.mock.html) and the lanes delta
+[`ready--lanes.mock.html`](ready--lanes.mock.html) (§ _Lanes_ above). It holds only the
+expansion nudge's **Expand** and what that press opens.
+
+**What changes.** Today the nudge
+(`app/(authed)/ready/_components/ExpansionNudgeBanner.tsx`) submits a background expand
+job, polls it, and reviews, approves and declines the plan inside the banner. That
+whole machine goes. **Expand now opens the planning overlay over `/ready` at once**, on
+a session anchored on the stub, with **"Plan <KEY>" already sent as the person's first
+turn**. The planner starts in its conversation phase, so a thin stub is asked what to
+plan. Approve and decline happen on the overlay only, through its shipped decide door
+and approve progress, which this design does not draw or change.
+
+This replaces the hand-off design that was sent back on 2026-10-09 (evidence
+`cmv0dxxjq00jdhvoi327iduxr`). Its mock and section are deleted from this area.
+
+### Rail framing — decided: no new chip, lead or card
+
+The launch reuses the **shipped contextual work-item framing** unchanged: the
+`in context` mode chip (`planningWorkspace.mode.contextual`), the lead _Opened in the
+context of MOT-9._ (`planningWorkspace.lead.contextualItem`) and the opener bubble
+(`planningWorkspace.conversation.opener`). Nothing new is added on the rail.
+
+The reason: the pick launch needs its _Follow-up to a choice_ card because its first
+turn quotes a choice the person made somewhere else, and the rail has to say where that
+came from. Here the first turn is **"Plan MOT-9"** and the item is the one the overlay
+already names in its bar, chip and lead. A further line would only repeat it.
+
+### The canvas — the existing one, arriving inside the stub
+
+The overlay's left pane is **the shipped planning canvas, unchanged**. This design adds
+nothing to it.
+
+- **What it is.** With no plan yet, the pane is `PlanChangeCanvas`, the shipped
+  `ProjectRoadmapCanvas` consumer that `PlanningWorkspaceHost` mounts.
+- **Where it stands.** It follows the arrival rule of
+  [`design/ai-chat/planning-workspace--arrival.mock.html`](../ai-chat/planning-workspace--arrival.mock.html)
+  (`design/ai-chat/design-notes.md` § _The canvas ARRIVES INSIDE the node being planned_,
+  MOTIR-6159). A stub is an epic, story, task or bug, so its arrival trail is
+  `ancestors ++ [stub]`, and the canvas opens **inside MOT-9**.
+- **How the target shows.** The breadcrumb is
+  _Roadmap › MOT-2 · … › ◎ MOT-9 · …_. Its last crumb is the shipped **target crumb**:
+  the `target` glyph in `--el-accent-on-surface`, the 2px `--el-accent` underline and the
+  `planningWorkspace.arrival.crumbTargetPrefix` screen-reader prefix.
+- **What fills the level.** A stub has no children, so the level shows the canvas's own
+  `roadmap.canvas.emptyDrilled` statement, _No items at this level_. That is where the
+  planner's proposed cards land.
+- **After a proposal.** Once the planner proposes, the host swaps the pane to the
+  shipped proposed-plan views (`PlanProposalViews`), exactly as for any other planning
+  session.
+
+So the connection to the existing canvas is the `planItem` anchor. The Expand launch
+passes the stub as that anchor, which every work-item launch already does, and the canvas
+arrives where it always arrives for one. The exit bar is drawn as sheet 6 and the arrival
+mock draw it: **Close** with its `Esc` key hint, then the project name.
+
+### States
+
+| #   | state                | what it shows                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | banner, idle         | The shipped nudge (lavender `Card`, `Sparkles` in `--el-accent-on-surface`, ✕ icon button, `Button` secondary sm **Expand**). Body unchanged. NEW: one line under the button, `ready.nudge.expandHint`, in `--el-text-secondary` on the tint. **The banner has no post-Expand state**: no _Expanding…_, no spinner, no error line, no review.                                                                                                                                           |
+| 2   | overlay, just opened | The press `shallowPush`es `withPlanningOverlay`'s `work-item` launch on the stub with the start-turn flag, over the current `/ready` address (path and query, so the lane survives and Close returns to it). The rail shows the framing above, then **"Plan MOT-9"** as a user bubble, the _Sent to Motir AI_ marker, the first act and the running bar with **Stop**. The composer is empty. Drawn the way MOTIR-6432 draws a sent first turn. The canvas stands inside MOT-9 (above). |
+| 3   | thin stub            | The planner's first reply is a question about what to plan. **Its words are illustrative.** The rail is in the shipped answer-awaiting state: no running bar, the _Waiting for your answer_ strip over the composer, placeholder _Answer Motir AI…_.                                                                                                                                                                                                                                    |
+| 4   | resumed              | Expand on a stub that has a recent open session opens **that** session's transcript and **sends nothing new**: no second "Plan MOT-9", no new marker. A reload or Back/forward onto panel 2's address behaves the same. The first turn is sent once per session, keyed on the server's session answer, never on the address.                                                                                                                                                            |
+| 5   | send failed          | Any refusal of the first send. The rail's **ordinary** send error, composed as it ships: the rose `role="alert"` line (`planningWorkspace.conversation.error.body`) and **Try again** (`…conversation.retry`). The unsent **"Plan MOT-9"** stays in the composer with Send live. No new failure copy, nothing logged as sent, and the `/ready` banner is not involved.                                                                                                                  |
+
+The address flag is drawn as `planStart=1` for illustration only. Its real name, and
+how it is cleared once the session answers, belong to MOTIR-7973.
+
+### Copy — en + zh
+
+New keys. `{key}` is the only interpolation in each.
+
+| key                                | en                                                                        | zh                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `ready.nudge.expandHint`           | Opens Motir AI planning on {key}. It may ask what you want planned first. | 将在 {key} 上打开 Motir AI 规划。它可能会先问你想规划什么。 |
+| `planningWorkspace.startTurn.plan` | Plan {key}                                                                | 规划 {key}                                                  |
+
+`planningWorkspace.startTurn.plan` is the first turn MOTIR-7973 composes from the
+catalogue and sends. It is the person's words in the transcript, in the person's locale.
+
+Kept and still rendered: `ready.nudge.body`, `ready.nudge.expandLabel`,
+`ready.nudge.dismissAria`, `ready.nudge.dismissLabel` and `ready.nudge.emptyHint`.
+Everything on the rail reuses shipped `planningWorkspace.*` keys
+(`mode.contextual`, `lead.contextualItem`, `conversation.opener`,
+`conversation.submitted`, `conversation.composerPlaceholder`,
+`conversation.composerPlaceholderAnswer`, `conversation.awaitingAnswer`,
+`conversation.retry`, `conversation.error.body`).
+
+### Retired keys
+
+MOTIR-7876 deletes these from `messages/en.json` and `messages/zh.json`, because nothing
+renders them once the banner stops making a plan:
+
+`ready.nudge.expanding` · `ready.nudge.reviewTitle` · `ready.nudge.opChange` ·
+`ready.nudge.opRemove` · `ready.nudge.approveLabel` · `ready.nudge.approving` ·
+`ready.nudge.declineLabel` · `ready.nudge.approved` · `ready.nudge.error`
+
+### Not changed
+
+- The row at `design/ai-planning/design-notes.md:326` that names
+  `ExpansionNudge{Banner,Review}.tsx` as the shipped in-surface proposal grammar is a
+  record and is not edited. **That grammar no longer ships on `/ready`.**
+- The overlay's decide door, close guard and approve progress; `planRowDestination`;
+  `/ready`'s rows, lanes, facets and nomination.
+- What the planner asks in its conversation phase. Panel 3's words are illustrative.
+
+### Tokens
+
+Banner: `--el-tint-lavender` · `--el-border-soft` · `--el-accent-on-surface` (glyph) ·
+`--el-text-strong` (body) · `--el-text-secondary` (hint, on the tint) · `--radius-card` ·
+`--spacing-card-padding` · `--spacing-icon-btn` / `--radius-control` (✕) ·
+`--height-btn-sm` / `--spacing-btn-x-sm` / `--radius-btn` (Expand). Rail, as shipped:
+`--el-chat-bubble-ai` / `--el-text` · `--el-chat-bubble-user` / `--el-accent-text` ·
+`--el-surface-soft` with `--el-text-secondary` (acts) · `--el-warning-surface` /
+`--el-warning-text` (awaiting) · `--el-tint-rose` / `--el-text-strong` (error) ·
+`--el-chip-bg` / `--el-chip-border` (chip) · `--el-input-border` / `--radius-input` /
+`--height-input` (composer).

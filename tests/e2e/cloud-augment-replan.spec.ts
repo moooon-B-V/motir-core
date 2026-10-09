@@ -8,9 +8,9 @@
 // for what went and why. It used to drive three: expand and replan from the
 // `/items` row's ⋯ menu, plus the nudge smoke. The ⋯ is gone, so the two
 // menu-driven legs had no entrance to drive and were retired with it; the nudge
-// smoke is what remains, and it still covers the EXPAND job end-to-end from
-// `/ready` — the ready set is driven low, the expansion-nudge banner appears,
-// the inline review opens and the approve writes real rows.
+// smoke is what remains: the ready set is driven low, the expansion-nudge banner
+// appears, and — since story MOTIR-5266 — Expand opens the planning overlay over
+// `/ready` on the stub rather than running an expand job and an inline review.
 //
 // The one-shot "Augment from prompt" leg was RETIRED by MOTIR-1731 along with
 // the button it drove — changing a plan is a CONVERSATION, so that flow's
@@ -18,28 +18,14 @@
 // job path itself is untouched; only the per-surface button is gone.
 //
 // motir-ai is absent from CI, so the browser→ai boundary is STUBBED via
-// `page.route` — the same open-core seam `ai-plan-generation.spec.ts` uses. Only
-// the SUBMIT is stubbed: what a run proposes is seeded as a real
-// `Plan` (the shipped `plansService.createPlan → addProposals → markPlanned`,
-// exactly what the handler's callbacks do), the review READS it through the real
-// `GET /api/plans/:id`, and the approve runs the real
-// `POST /api/plans/:id/approve → materialize`. So the spec asserts real DB state,
-// not a stub echo.
-//
-// It used to stub a `planDelta` on `GET /api/ai/jobs/:id` and confirm through
-// `POST /api/ai/plan-delta/approve` — a shape the app no longer has (MOTIR-1747):
-// every planner returns an EMPTY delta, so that path could only ever propose
-// nothing, and it is now deleted.
+// `page.route` — the same open-core seam `ai-plan-generation.spec.ts` uses. The
+// leg stops at the overlay opening, so nothing it asserts depends on a planner.
 
 import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
-import {
-  seedAiAugmentReplan,
-  seedPlanChangeProposal,
-  EXPAND_JOB_ID,
-} from './_helpers/ai-augment-replan-seed';
+import { seedAiAugmentReplan } from './_helpers/ai-augment-replan-seed';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -91,10 +77,10 @@ test.afterAll(async () => {
 // broken app rather than a retired one.
 //
 // WHAT STILL HAS COVERAGE, and what does not:
-//   * EXPAND — covered end-to-end by the nudge leg below, which is a DIFFERENT
-//     entrance to the same job (`/ready`'s ExpansionNudgeBanner calls
-//     `submitExpandJob` directly, MOTIR-904) and asserts real DB state through
-//     the real `POST /api/plans/:id/approve`.
+//   * EXPAND — `/ready`'s ExpansionNudgeBanner no longer submits the expand job
+//     (story MOTIR-5266): it opens a planning conversation on the stub, and the
+//     nudge leg below asserts that door. The job itself survives for the MCP
+//     `expand_item` tool.
 //   * RE-PLAN — RETIRED, not uncovered (MOTIR-4261). The in-place dock replan
 //     had no caller left, and the card chose to retire it rather than give it
 //     a second per-item door: the hook, the dock, `/api/ai/replan` and its
@@ -106,7 +92,7 @@ test.afterAll(async () => {
 // which now carries ONE chapter (the nudge) where it carried three. MOTIR-811's
 // acceptance recipe was amended by MOTIR-4261 to describe that flow.
 
-test('nudge — near-drained project shows expansion-nudge banner and opens inline review', async ({
+test('nudge — near-drained project shows the expansion nudge and Expand opens the planning overlay on its stub', async ({
   page,
   acceptanceStory,
 }) => {
@@ -126,67 +112,25 @@ test('nudge — near-drained project shows expansion-nudge banner and opens inli
       }),
     });
   });
-
-  // The banner's Expand button drives the real expand flow: only the submit is
-  // stubbed, and the proposals it then polls for are a real Plan. (It never
-  // streamed — the expand SSE route this used to stub was only the retired
-  // dock's, and went with it in MOTIR-4261.)
-  // (We do NOT approve — the nudge test stops at the review.)
-  const planId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
-    jobId: EXPAND_JOB_ID,
-    title: 'Expand Notifications',
-    adds: ['In-app notifications', 'Email notifications', 'Push notifications'],
-    addShape: { kind: 'task', type: 'code', parentRef: seed.notifId },
-  });
   await stubAiAccess(page);
-  await page.route('**/api/ai/expand', async (route) => {
-    if (route.request().method() !== 'POST') {
-      await route.continue();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ jobId: EXPAND_JOB_ID, planId }),
-    });
-  });
 
   await signIn(page, seed.email, seed.password);
   await page.goto('/ready');
 
-  // The nudge banner appears — it names the nominated stub. `.first()` for the
-  // same reason as the title below: the key appears BOTH in the banner sentence
-  // ("… expand ARP-4 (Notifications)") and in its own font-mono key chip, so a
-  // bare text= locator is a strict-mode violation as soon as both have rendered.
+  // The nudge banner appears — it names the nominated stub. `.first()`: the key
+  // appears in the banner sentence AND in the Expand hint under the button.
   await expect(page.locator(`text=${seed.notifKey}`).first()).toBeVisible({ timeout: 10_000 });
-  // The nudge body also contains the nominated title — use .first() to avoid
-  // strict-mode collision with the items-list row that also has "Notifications".
-  await expect(page.locator('text=Notifications').first()).toBeVisible();
 
-  // The "Expand" button is present in the banner.
   const expandBtn = page.getByRole('button', { name: 'Expand' });
   await expect(expandBtn).toBeVisible();
 
-  // Click Expand — the banner auto-starts the expand job, polls, and shows
-  // the inline ExpansionNudgeReview with the proposed children.
+  // Expand OPENS THE PLANNING OVERLAY over `/ready` (story MOTIR-5266): no job, no
+  // poll, no inline review. The dialog is asked for BY ROLE, which the
+  // accessibility tree resolves to the one live copy (MOTIR-4822 / MOTIR-3929).
+  // What the planner then does with "Plan <KEY>" is MOTIR-7878's journey.
   await expandBtn.click();
-
-  // The inline review renders "Proposed children" heading + child list. BY ROLE:
-  // `ExpansionNudgeReview` gives every proposal an explicit `role="listitem"`
-  // inside a `role="list"` (`app/(authed)/ready/_components/ExpansionNudgeReview.tsx`),
-  // so the row has a role to ask for — and the accessibility tree excludes the
-  // streamed and outgoing copies a page-rooted `getByText` would resolve
-  // (MOTIR-4822 / MOTIR-3929).
-  //
-  // ⚠️ FILTERED BY TEXT, NOT NAMED — `listitem` is NOT a name-from-content role,
-  // so it computes no accessible name at all and `getByRole('listitem', { name })`
-  // matches NOTHING however exactly the text reads. The failure artifact shows
-  // the rows present as `listitem: In-app notifications task` while the named
-  // locator found zero. `filter({ hasText })` is what reads a roled row's
-  // content, and it keeps the row (not the page) as the thing addressed.
-  const proposal = (title: string) =>
-    page.getByRole('main').getByRole('listitem').filter({ hasText: title });
-  await expect(proposal('In-app notifications')).toBeVisible({ timeout: 15_000 });
-  await expect(proposal('Email notifications')).toBeVisible();
-  await expect(proposal('Push notifications')).toBeVisible();
+  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(
+    new RegExp(`/ready\\?.*planFrom=work-item&planItem=${seed.notifKey}`),
+  );
 });

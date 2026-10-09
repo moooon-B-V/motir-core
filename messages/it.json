@@ -4394,18 +4394,10 @@
     "nudge": {
       "body": "Solo {count} elementi di lavoro pronti: espandere {key} ({title})?",
       "expandLabel": "Espandi",
-      "expanding": "Espansione…",
+      "expandHint": "Apre la pianificazione di Motir AI su {key}. Potrebbe chiederti prima cosa vuoi pianificare.",
       "dismissAria": "Ignora il suggerimento di espansione",
       "dismissLabel": "Ignora",
-      "emptyHint": "L’insieme dei pronti è vuoto: espandendo una bozza verrà aggiunto nuovo lavoro.",
-      "reviewTitle": "Figli proposti",
-      "opChange": "modifica",
-      "opRemove": "rimozione",
-      "approveLabel": "Approva",
-      "approving": "Approvazione…",
-      "declineLabel": "Rifiuta",
-      "approved": "{count, plural, one {# figlio creato} other {# figli creati}}",
-      "error": "Si è verificato un errore ({code})."
+      "emptyHint": "L’insieme dei pronti è vuoto: espandendo una bozza verrà aggiunto nuovo lavoro."
     },
     "lanes": {
       "switchAria": "Corsie dei pronti",
@@ -7432,6 +7424,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "Pianifica {key}"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {

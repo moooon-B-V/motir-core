@@ -121,12 +121,13 @@ describe('THE INVENTORY — while a plan gate is awaiting, only the door writes 
     ]);
   });
 
-  it('every CLIENT press hands back the stamp it rendered — the plan page, the rail (and its close guard), the nudge', () => {
+  it('every CLIENT press hands back the stamp it rendered — the plan page and the rail (and its close guard)', () => {
     const pressers = callersOf(/\b(approvePlanRequest|declinePlanRequest)\(/).filter(
       (f) => f !== 'lib/planning/planReviewClient.ts',
     );
+    // The `/ready` nudge pressed here until story MOTIR-5266 made it open the
+    // overlay instead, whose rail is the press.
     expect(pressers).toEqual([
-      'app/(authed)/ready/_components/ExpansionNudgeBanner.tsx',
       'components/planning/PlanDetail.tsx',
       'lib/hooks/usePlanChangeConversation.ts',
     ]);

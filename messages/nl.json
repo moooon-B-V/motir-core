@@ -4394,18 +4394,10 @@
     "nudge": {
       "body": "Er is maar {count} werkitem gereed — {key} ({title}) uitbreiden?",
       "expandLabel": "Uitbreiden",
-      "expanding": "Uitbreiden…",
+      "expandHint": "Opent Motir AI-planning voor {key}. Het kan eerst vragen wat je gepland wilt hebben.",
       "dismissAria": "Suggestie om uit te breiden sluiten",
       "dismissLabel": "Sluiten",
-      "emptyHint": "Er is niets gereed — door een stub uit te breiden wordt nieuw werk toegevoegd.",
-      "reviewTitle": "Voorgestelde onderliggende items",
-      "opChange": "wijzigen",
-      "opRemove": "verwijderen",
-      "approveLabel": "Goedkeuren",
-      "approving": "Goedkeuren…",
-      "declineLabel": "Afwijzen",
-      "approved": "{count, plural, one {# onderliggend item aangemaakt} other {# onderliggende items aangemaakt}}",
-      "error": "Er ging iets mis ({code})."
+      "emptyHint": "Er is niets gereed — door een stub uit te breiden wordt nieuw werk toegevoegd."
     },
     "lanes": {
       "switchAria": "Rijen met startklaar werk",
@@ -7429,6 +7421,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "{key} plannen"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {

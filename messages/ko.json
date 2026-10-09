@@ -4394,18 +4394,10 @@
     "nudge": {
       "body": "준비된 작업 항목이 {count}개뿐입니다 — {key}({title})을(를) 확장할까요?",
       "expandLabel": "확장",
-      "expanding": "확장 중…",
+      "expandHint": "{key}에서 Motir AI 계획을 엽니다. 먼저 무엇을 계획할지 물어볼 수 있습니다.",
       "dismissAria": "확장 제안 닫기",
       "dismissLabel": "닫기",
-      "emptyHint": "준비된 항목이 없습니다 — 스텁을 확장하면 새 작업이 추가됩니다.",
-      "reviewTitle": "제안된 하위 항목",
-      "opChange": "변경",
-      "opRemove": "제거",
-      "approveLabel": "승인",
-      "approving": "승인 중…",
-      "declineLabel": "거절",
-      "approved": "{count, plural, other {하위 항목 #개 생성됨}}",
-      "error": "문제가 발생했습니다({code})."
+      "emptyHint": "준비된 항목이 없습니다 — 스텁을 확장하면 새 작업이 추가됩니다."
     },
     "lanes": {
       "switchAria": "준비됨 레인",
@@ -7426,6 +7418,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "{key} 계획"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {

@@ -161,11 +161,11 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
     'components/planning/PlanChangeCanvas.tsx',
     'components/planning/PlanChangeConfirmBar.tsx',
     'lib/planning/planChangeDiff.ts',
-    // The OTHER entrance moved off the same dead delta by MOTIR-1747: the
-    // `/ready` expansion nudge. (The item-scoped expand/replan dock was the
-    // second, and was RETIRED whole by MOTIR-4261 — see the guard at the foot.)
+    // The `/ready` expansion nudge moved off the same dead delta by MOTIR-1747,
+    // and since story MOTIR-5266 it reviews nothing at all: it opens the overlay
+    // (guarded below). The item-scoped expand/replan dock was RETIRED whole by
+    // MOTIR-4261 — see the guard at the foot.
     'app/(authed)/ready/_components/ExpansionNudgeBanner.tsx',
-    'app/(authed)/ready/_components/ExpansionNudgeReview.tsx',
   ];
 
   it.each(CONVERSATION_MODULES)('%s reads no planDelta and calls no delta approve', (rel) => {
@@ -180,13 +180,13 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
   });
 
   it('every AI-planning entrance confirms through the SAME client', () => {
-    // THREE entrances (the rail, the `/ready` nudge and `/plans/[id]` — the
-    // item-scoped dock was retired by MOTIR-4261), ONE gate: all go through `planReviewClient` →
-    // `POST /api/plans/[id]/approve` → `materialize`. A second write path is how
-    // the same proposal lands twice.
+    // TWO entrances confirm (the rail and `/plans/[id]`), ONE gate: both go through
+    // `planReviewClient` → `POST /api/plans/[id]/approve` → `materialize`. A second
+    // write path is how the same proposal lands twice. The `/ready` nudge no longer
+    // confirms anything — it opens the overlay, whose rail confirms (story
+    // MOTIR-5266) — and the item-scoped dock was retired by MOTIR-4261.
     for (const rel of [
       'lib/hooks/usePlanChangeConversation.ts',
-      'app/(authed)/ready/_components/ExpansionNudgeBanner.tsx',
       'components/planning/PlanDetail.tsx',
     ]) {
       expect(read(join(ROOT, rel)), rel).toMatch(/from '@\/lib\/planning\/planReviewClient'/);
@@ -194,6 +194,16 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
     const client = read(join(ROOT, 'lib/planning/planReviewClient.ts'));
     expect(client).toContain('/approve');
     expect(client).toContain('/decline');
+  });
+
+  it('the `/ready` nudge runs no job and decides no plan — it opens the overlay (MOTIR-7876)', () => {
+    const banner = read(join(ROOT, 'app/(authed)/ready/_components/ExpansionNudgeBanner.tsx'))
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/[^\n]*$/gm, '');
+    expect(banner).not.toMatch(
+      /submitExpandJob|approvePlanRequest|declinePlanRequest|fetchPlanReview/,
+    );
+    expect(banner).toMatch(/withPlanningOverlay\(/);
   });
 
   it('EXACTLY ONE proposal→tree write path survives, repo-wide (MOTIR-1747)', () => {
@@ -519,8 +529,7 @@ describe('retiring “Augment from prompt” left no dangling key or import', ()
 //
 // MOTIR-4258 removed the dock's only door (the `/items` row ⋯), which left the
 // whole chain behind it reachable from nowhere: the hook, the dock, the replan
-// route and its stream, the expand STREAM (the `/ready` nudge polls its plan,
-// it never streams), and the client + service functions only those reached.
+// route and its stream, the expand STREAM (nothing ever streamed it), and the client + service functions only those reached.
 // MOTIR-4261 RETIRED it rather than re-homing it — re-planning an item is
 // `WorkItemPlanEntrance` → the planning workspace, one door. This guard is what
 // stops the chain coming back one piece at a time as a "helper".
@@ -556,7 +565,7 @@ describe('retiring the in-place plan-edits dock left nothing on the old path', (
     expect(zh).not.toHaveProperty('planEdits');
   });
 
-  it('the EXPAND submit survives — the `/ready` nudge and the MCP `expand_item` still drive it', () => {
+  it('the EXPAND submit survives — the MCP `expand_item` still drives it', () => {
     expect(existsSync(join(ROOT, 'app/api/ai/expand/route.ts'))).toBe(true);
     expect(read(join(ROOT, 'lib/planning/planEditsClient.ts'))).toMatch(
       /export async function submitExpandJob\(/,

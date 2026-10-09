@@ -4394,18 +4394,10 @@
     "nudge": {
       "body": "着手可能な作業項目は {count} 件だけです。{key}（{title}）を展開しますか？",
       "expandLabel": "展開",
-      "expanding": "展開しています…",
+      "expandHint": "{key} で Motir AI の計画を開きます。最初に何を計画したいか尋ねることがあります。",
       "dismissAria": "展開の提案を閉じる",
       "dismissLabel": "閉じる",
-      "emptyHint": "着手可能な作業がありません。スタブを展開すると新しい作業が追加されます。",
-      "reviewTitle": "提案された子項目",
-      "opChange": "変更",
-      "opRemove": "削除",
-      "approveLabel": "承認",
-      "approving": "承認しています…",
-      "declineLabel": "却下",
-      "approved": "{count, plural, other {# 件の子項目を作成しました}}",
-      "error": "問題が発生しました（{code}）。"
+      "emptyHint": "着手可能な作業がありません。スタブを展開すると新しい作業が追加されます。"
     },
     "lanes": {
       "switchAria": "着手可能レーン",
@@ -7429,6 +7421,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "{key} を計画"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {

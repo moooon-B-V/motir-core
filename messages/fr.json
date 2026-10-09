@@ -4394,18 +4394,10 @@
     "nudge": {
       "body": "Seulement {count} élément de travail prêt : développer {key} ({title}) ?",
       "expandLabel": "Développer",
-      "expanding": "Développement…",
+      "expandHint": "Ouvre la planification Motir AI sur {key}. Elle peut d’abord vous demander ce que vous voulez planifier.",
       "dismissAria": "Ignorer la suggestion de développement",
       "dismissLabel": "Ignorer",
-      "emptyHint": "Aucun élément n’est prêt : développer une ébauche ajoutera du nouveau travail.",
-      "reviewTitle": "Enfants proposés",
-      "opChange": "modifier",
-      "opRemove": "supprimer",
-      "approveLabel": "Approuver",
-      "approving": "Approbation…",
-      "declineLabel": "Refuser",
-      "approved": "{count, plural, one {# enfant créé} other {# enfants créés}}",
-      "error": "Une erreur s’est produite ({code})."
+      "emptyHint": "Aucun élément n’est prêt : développer une ébauche ajoutera du nouveau travail."
     },
     "lanes": {
       "switchAria": "Couloirs des éléments prêts",
@@ -7432,6 +7424,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "Planifier {key}"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {

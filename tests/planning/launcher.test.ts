@@ -191,7 +191,8 @@ describe('the overlay address — the parameter NAMES are the design contract', 
   // design records them rather than whichever file was written first.
   // `planSession` joined with MOTIR-6024 (MOTIR-6019's design, §19.8), and `planVia`
   // with MOTIR-6037 (MOTIR-6033's design, Part XXII §22.2), and `planGate` with
-  // MOTIR-6210 (MOTIR-6206's design, § *The SEEDED re-plan* → *The ADDRESS*).
+  // MOTIR-6210 (MOTIR-6206's design, § *The SEEDED re-plan* → *The ADDRESS*), and
+  // `planStart` with MOTIR-7973 (MOTIR-7875's design).
   const DESIGN_NAMES = [
     'plan',
     'planFrom',
@@ -200,6 +201,7 @@ describe('the overlay address — the parameter NAMES are the design contract', 
     'planSession',
     'planVia',
     'planGate',
+    'planStart',
   ];
 
   it('emits exactly the names the design records, and no others', () => {
@@ -530,5 +532,50 @@ describe('the GUIDE address (MOTIR-7466)', () => {
       itemKey: null,
       repoKey: null,
     });
+  });
+});
+
+describe('planStart — Expand STARTS a conversation on its stub (MOTIR-7973)', () => {
+  const start = { kind: 'work-item', itemKey: 'ACME-14', startTurn: true } as const;
+
+  it('writes planStart=1 beside the anchor and keeps the host query byte-identical', () => {
+    expect(withPlanningOverlay('/ready?lane=x', start)).toBe(
+      '/ready?lane=x&plan=contextual&planFrom=work-item&planItem=ACME-14&planStart=1',
+    );
+  });
+
+  it('round-trips through the parse', () => {
+    expect(parsePlanningOverlay(planningOverlaySearch(start))).toEqual({
+      mode: 'contextual',
+      from: 'work-item',
+      itemKey: 'ACME-14',
+      repoKey: null,
+      startTurn: true,
+    });
+  });
+
+  it('is not written beside a named session, nor without startTurn', () => {
+    expect(planningOverlaySearch({ ...start, sessionId: 's-1' }).has('planStart')).toBe(false);
+    expect(planningOverlaySearch({ kind: 'work-item', itemKey: 'ACME-14' }).has('planStart')).toBe(
+      false,
+    );
+  });
+
+  it('is read only for a work-item origin with an anchor and no planSession', () => {
+    for (const qs of [
+      'plan=project&planFrom=project&planStart=1',
+      'plan=roadmap&planFrom=roadmap&planItem=ACME-14&planStart=1',
+      'plan=replan&planFrom=refused-gate&planGate=g&planStart=1',
+      'plan=contextual&planFrom=work-item&planStart=1',
+      'plan=contextual&planFrom=work-item&planItem=ACME-14&planSession=s-1&planStart=1',
+    ]) {
+      expect(parsePlanningOverlay(new URLSearchParams(qs))).not.toHaveProperty('startTurn');
+    }
+  });
+
+  it('is stripped by Close with the rest of the overlay', () => {
+    expect(withoutPlanningOverlay(withPlanningOverlay('/ready?lane=x', start))).toBe(
+      '/ready?lane=x',
+    );
   });
 });

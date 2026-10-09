@@ -67,6 +67,11 @@ export type PlanningLaunchContext =
       hasPlan?: boolean;
       sessionId?: string;
       via?: PlanningEntrance;
+      /** START THE CONVERSATION (MOTIR-7973; design MOTIR-7875): the door asks the
+       *  overlay to send `Plan <KEY>` once, for the person, as the thread's first
+       *  turn — `/ready`'s *Expand* is the one that does. Written as `planStart=1`
+       *  and only when no `sessionId` names a conversation to reopen. */
+      startTurn?: boolean;
     }
   | { kind: 'roadmap' }
   | { kind: 'convention-refine'; repoKey: string }
@@ -209,6 +214,9 @@ export interface PlanningLaunch {
    *  a refusal or, since MOTIR-6435, a pick. Present only for that origin, and only
    *  when the address carries one. */
   gateId?: string;
+  /** Send the start turn (`planStart`, MOTIR-7973) — present only for a `work-item`
+   *  origin with an anchor and no named session. */
+  startTurn?: boolean;
 }
 
 /** The default a missing / unknown `?mode=` falls back to (never an error). */
@@ -319,6 +327,16 @@ export const OVERLAY_PARAM_NAMES = {
    * is read from the server, never carried in the URL (§10f).
    */
   gate: 'planGate',
+  /**
+   * START THE CONVERSATION (MOTIR-7973; design MOTIR-7875 § *Expand starts a
+   * planning conversation*) — `planStart=1` asks the overlay to SEND the anchor's
+   * start turn (`Plan <KEY>`) once, for the person, as the thread's first message.
+   * Written ONLY for a `work-item` origin with no `planSession`, and read only
+   * there: a named conversation is a reopen, never a start. The host replaces it
+   * with `planSession=<id>` after the first turn, so a reload resumes rather than
+   * asking again.
+   */
+  start: 'planStart',
 } as const;
 
 /**
@@ -369,6 +387,11 @@ export function planningOverlaySearch(context: PlanningLaunchContext): URLSearch
     // The entrance rides ONLY with a named session: it says where THAT session was
     // reopened from, and means nothing without one (MOTIR-6037).
     if (context.via) params.set(OVERLAY_PARAM_NAMES.via, context.via);
+  }
+  // A START rides only a fresh item conversation: beside a named session it would
+  // ask to start a thread that already exists.
+  if (context.kind === 'work-item' && context.startTurn && !context.sessionId) {
+    params.set(OVERLAY_PARAM_NAMES.start, '1');
   }
   return params;
 }
@@ -519,10 +542,17 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
   // The gate rides ONLY its own origin, like `planItem` and `planRepo` do.
   const gateId =
     from === 'refused-gate' ? first(readParam(params, OVERLAY_PARAM_NAMES.gate)) : null;
+  const itemKey = from === 'work-item' ? first(readParam(params, OVERLAY_PARAM_NAMES.item)) : null;
+  // The start rides ONLY an item origin with its anchor and no named session —
+  // the same rule the write side keeps (MOTIR-7973).
+  const startTurn =
+    itemKey !== null &&
+    sessionId === null &&
+    first(readParam(params, OVERLAY_PARAM_NAMES.start)) !== null;
   return {
     mode: parsePlanningMode(readParam(params, OVERLAY_PARAM_NAMES.mode)),
     from,
-    itemKey: from === 'work-item' ? first(readParam(params, OVERLAY_PARAM_NAMES.item)) : null,
+    itemKey,
     repoKey:
       from === 'convention-refine' ? first(readParam(params, OVERLAY_PARAM_NAMES.repo)) : null,
     // Only the two origins a Plans row writes may carry a named session, and the
@@ -530,5 +560,6 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
     ...(sessionId ? { sessionId } : {}),
     ...(via ? { via } : {}),
     ...(gateId ? { gateId } : {}),
+    ...(startTurn ? { startTurn: true } : {}),
   };
 }

@@ -917,6 +917,10 @@ export function usePlanChangeConversation({
     // The address now names the session a restart already swapped in (MOTIR-7650):
     // it is on screen, so there is nothing to open.
     if (sessionId && sessionId === adoptedSessionRef.current) return;
+    // …or names the session a START turn just created (MOTIR-7973): the host
+    // rewrites `planStart` to `planSession=<id>` once the first turn lands, and the
+    // thread it names is the one already on screen, mid-run.
+    if (sessionId && sessionId === stateRef.current.session?.id) return;
     // Any other address opens as it always did, and the adoption is spent: coming
     // BACK to the restarted session's address later must open it again.
     adoptedSessionRef.current = null;

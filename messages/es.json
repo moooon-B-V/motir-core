@@ -4394,18 +4394,10 @@
     "nudge": {
       "body": "Solo hay {count} elemento de trabajo listo. ¿Ampliar {key} ({title})?",
       "expandLabel": "Ampliar",
-      "expanding": "Ampliando…",
+      "expandHint": "Abre la planificación de Motir AI en {key}. Puede preguntarte primero qué quieres planificar.",
       "dismissAria": "Descartar la sugerencia de ampliación",
       "dismissLabel": "Descartar",
-      "emptyHint": "No hay nada listo: ampliar un esbozo añadirá trabajo nuevo.",
-      "reviewTitle": "Elementos secundarios propuestos",
-      "opChange": "cambiar",
-      "opRemove": "eliminar",
-      "approveLabel": "Aprobar",
-      "approving": "Aprobando…",
-      "declineLabel": "Rechazar",
-      "approved": "{count, plural, one {# elemento secundario creado} other {# elementos secundarios creados}}",
-      "error": "Algo ha fallado ({code})."
+      "emptyHint": "No hay nada listo: ampliar un esbozo añadirá trabajo nuevo."
     },
     "lanes": {
       "switchAria": "Carriles de trabajo listo",
@@ -7432,6 +7424,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "Planificar {key}"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {

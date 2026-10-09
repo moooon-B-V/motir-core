@@ -4394,18 +4394,10 @@
     "nudge": {
       "body": "Gotowe elementy robocze: tylko {count} — rozwinąć {key} ({title})?",
       "expandLabel": "Rozwiń",
-      "expanding": "Rozwijanie…",
+      "expandHint": "Otwiera planowanie Motir AI dla {key}. Może najpierw zapytać, co chcesz zaplanować.",
       "dismissAria": "Odrzuć sugestię rozwinięcia",
       "dismissLabel": "Odrzuć",
-      "emptyHint": "Zbiór gotowych elementów jest pusty — rozwinięcie szkicu doda nową pracę.",
-      "reviewTitle": "Proponowane elementy podrzędne",
-      "opChange": "zmień",
-      "opRemove": "usuń",
-      "approveLabel": "Zatwierdź",
-      "approving": "Zatwierdzanie…",
-      "declineLabel": "Odrzuć",
-      "approved": "{count, plural, one {Utworzono # element podrzędny} few {Utworzono # elementy podrzędne} many {Utworzono # elementów podrzędnych} other {Utworzono # elementu podrzędnego}}",
-      "error": "Coś poszło nie tak ({code})."
+      "emptyHint": "Zbiór gotowych elementów jest pusty — rozwinięcie szkicu doda nową pracę."
     },
     "lanes": {
       "switchAria": "Tory gotowych elementów",
@@ -7429,6 +7421,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "Zaplanuj {key}"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {
