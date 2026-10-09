@@ -22,6 +22,12 @@ import {
 import { DEFAULT_STYLE_ID, isStyleId, resolveStyle, type StyleId } from '../theme/styles';
 import { DEFAULT_PALETTE_ID, isPaletteId, type PaletteId } from '../theme/palettes';
 import { isTypeId, type TypeId } from '../theme/typography';
+import {
+  FONT_SET_ROLES,
+  fontSetPickAttributes,
+  isFontSetLocale,
+  type FontSetLocale,
+} from '../theme/fontSets';
 import type { AppearancePreferenceDto, AppliedAppearanceDto } from '../appearance';
 
 /**
@@ -43,6 +49,16 @@ import type { AppearancePreferenceDto, AppliedAppearanceDto } from '../appearanc
  * React 19 / react-hooks/set-state-in-effect rule. Setting state inside
  * effects causes cascading renders; subscribing to external systems
  * (localStorage, matchMedia) via the right primitives avoids that.
+ *
+ * The per-language font pick (Story MOTIR-7736 · MOTIR-7897) is a fifth,
+ * signed-in-only axis with a different shape. `setFontPick(locale, member)`
+ * rewrites `<html>`'s `data-font-set-*` attributes in the event handler, and
+ * only when `locale` is the page's own language, so a pick for another language
+ * touches no DOM. It keeps no localStorage copy and runs no state effect: the
+ * server renders the stored pick on the first byte, and an effect seeded from
+ * state would duplicate or clear that on mount. `fontPicks` holds only this
+ * session's picks; the stored baseline is the pane's to read. The pick rides
+ * the same debounced, seq-guarded PATCH and quiet `syncState` as the other axes.
  */
 interface ThemeContextValue {
   pattern: ThemePattern;
@@ -63,6 +79,18 @@ interface ThemeContextValue {
   /** Pin an explicit type pairing (overrides the style's default until cleared). */
   setType: (type: TypeId) => void;
   /**
+   * The per-language font picks made in THIS session (MOTIR-7897): a member id,
+   * or `null` for a pick cleared back to Automatic. A locale absent from it is
+   * unchanged from what the server rendered.
+   */
+  fontPicks: Partial<Record<FontSetLocale, string | null>>;
+  /**
+   * Pick a font-set member for one language, or `null` for Automatic. A no-op
+   * for an anonymous visitor. Re-types the page at once only when `locale` is
+   * the page's own language.
+   */
+  setFontPick: (locale: FontSetLocale, memberId: string | null) => void;
+  /**
    * Cross-device sync status (Subtask 7.3.62). `'idle'` while nothing has
    * failed; `'error'` when the LAST attempt to persist a change to the account
    * failed (a 401 / write failure) — the local switch still applied (it's in
@@ -77,7 +105,28 @@ interface ThemeContextValue {
 export type AppearanceSyncState = 'idle' | 'error';
 
 /** The axes a single PATCH carries — the setters only ever send valid ids. */
-type AppearanceSyncPatch = Partial<Record<'pattern' | 'styleId' | 'paletteId' | 'typeId', string>>;
+type AppearanceSyncPatch = Partial<
+  Record<'pattern' | 'styleId' | 'paletteId' | 'typeId', string>
+> & {
+  /** Per-locale font picks; `null` clears one. Merged per locale, never replaced. */
+  fontPicks?: Partial<Record<FontSetLocale, string | null>>;
+};
+
+/** The page's language as a font-set locale, parsed as `resolveFontSet` does. */
+function pageFontSetLocale(): FontSetLocale | null {
+  if (typeof document === 'undefined') return null;
+  const primary = document.documentElement.lang.trim().split(/[-_]/)[0]?.toLowerCase() ?? '';
+  return isFontSetLocale(primary) ? primary : null;
+}
+
+/** Rewrite `<html>`'s `data-font-set-*` attributes for a pick on the page's language. */
+function applyPageFontPick(locale: FontSetLocale, memberId: string | null): void {
+  const root = document.documentElement;
+  for (const role of FONT_SET_ROLES) root.removeAttribute(`data-font-set-${role}`);
+  for (const [attr, value] of Object.entries(fontSetPickAttributes(locale, memberId))) {
+    root.setAttribute(attr, value);
+  }
+}
 
 /** How long rapid toggles of the SAME axis coalesce before one write fires. */
 const SYNC_DEBOUNCE_MS = 250;
@@ -239,6 +288,13 @@ export function ThemeProvider({
   // Axes changed since the last flush, coalesced so rapid toggles send one write.
   const pendingPatchRef = useRef<AppearanceSyncPatch>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The per-language picks made this session (MOTIR-7897), and the page-locale
+  // member this provider last wrote onto <html> (`undefined` = never wrote), so
+  // a reconcile re-applies only a value the server actually changed.
+  const [fontPicks, setFontPicksState] = useState<Partial<Record<FontSetLocale, string | null>>>(
+    {},
+  );
+  const appliedPageFontPickRef = useRef<string | null | undefined>(undefined);
 
   // Reconcile ONLY the axes this flush actually sent, from the resolved 200 body
   // — never the untouched axes (the per-axis DTO resolves an unpinned `typeId` to
@@ -251,6 +307,19 @@ export function ThemeProvider({
     if ('styleId' in sent && isStyleId(resolved.styleId)) setStyleIdState(resolved.styleId);
     if ('paletteId' in sent && isPaletteId(resolved.paletteId)) setPaletteState(resolved.paletteId);
     if ('typeId' in sent && isTypeId(resolved.typeId)) setTypeChoiceState(resolved.typeId);
+    if (sent.fontPicks) {
+      const pageLocale = pageFontSetLocale();
+      const adopted: Partial<Record<FontSetLocale, string | null>> = {};
+      for (const locale of Object.keys(sent.fontPicks) as FontSetLocale[]) {
+        const value = resolved.fontPicks?.[locale] ?? null;
+        adopted[locale] = value;
+        if (locale === pageLocale && value !== appliedPageFontPickRef.current) {
+          applyPageFontPick(locale, value);
+          appliedPageFontPickRef.current = value;
+        }
+      }
+      setFontPicksState((prev) => ({ ...prev, ...adopted }));
+    }
   }, []);
 
   const flushSync = useCallback(() => {
@@ -287,7 +356,14 @@ export function ThemeProvider({
   const queueSync = useCallback(
     (patch: AppearanceSyncPatch) => {
       if (!signedIn) return;
-      pendingPatchRef.current = { ...pendingPatchRef.current, ...patch };
+      const prev = pendingPatchRef.current;
+      const next: AppearanceSyncPatch = { ...prev, ...patch };
+      // Font picks merge PER LOCALE: a ja pick and a ko pick inside one window
+      // must both reach the one PATCH, where a shallow spread keeps only the last.
+      if (prev.fontPicks || patch.fontPicks) {
+        next.fontPicks = { ...prev.fontPicks, ...patch.fontPicks };
+      }
+      pendingPatchRef.current = next;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(flushSync, SYNC_DEBOUNCE_MS);
     },
@@ -359,6 +435,20 @@ export function ThemeProvider({
     [queueSync],
   );
 
+  const setFontPick = useCallback(
+    (locale: FontSetLocale, memberId: string | null) => {
+      // Signed-out pages keep the defaults: no device-local copy, no write.
+      if (!signedIn) return;
+      setFontPicksState((prev) => ({ ...prev, [locale]: memberId }));
+      if (locale === pageFontSetLocale()) {
+        applyPageFontPick(locale, memberId);
+        appliedPageFontPickRef.current = memberId;
+      }
+      queueSync({ fontPicks: { [locale]: memberId } });
+    },
+    [signedIn, queueSync],
+  );
+
   const value = useMemo<ThemeContextValue>(
     () => ({
       pattern,
@@ -370,6 +460,8 @@ export function ThemeProvider({
       setStyleId,
       setPalette,
       setType,
+      fontPicks,
+      setFontPick,
       syncState,
     }),
     [
@@ -382,6 +474,8 @@ export function ThemeProvider({
       setStyleId,
       setPalette,
       setType,
+      fontPicks,
+      setFontPick,
       syncState,
     ],
   );

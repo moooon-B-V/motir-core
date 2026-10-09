@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import {
   FONT_SET_LOCALES,
@@ -6,6 +9,7 @@ import {
   FONT_SET_IDS,
   LOCALE_FONT_SET,
   fontSetMemberVar,
+  fontSetPickAttributes,
   isFontSetLocale,
   resolveFontSet,
   resolveFontSetMember,
@@ -228,5 +232,59 @@ describe('resolveFontSetMember', () => {
     // A ko member named on the ja set is not borrowed across sets.
     expect(resolveFontSetMember('ja', 'sans', 'nanum-gothic').id).toBe('noto-sans-jp');
     expect(resolveFontSetMember('latin', 'mono', 'noto-sans-jp').id).toBe('type-pairing');
+  });
+});
+
+// MOTIR-7897 — the attributes a pick puts on <html>, derived from the registry.
+describe('fontSetPickAttributes', () => {
+  it('names the role a non-default member replaces, and only that role', () => {
+    expect(fontSetPickAttributes('ja', 'm-plus-rounded-1c')).toEqual({
+      'data-font-set-sans': 'm-plus-rounded-1c',
+    });
+    expect(fontSetPickAttributes('zh', 'lxgw-wenkai-tc')).toEqual({
+      'data-font-set-serif': 'lxgw-wenkai-tc',
+    });
+    expect(fontSetPickAttributes('ko', 'nanum-gothic')).toEqual({
+      'data-font-set-sans': 'nanum-gothic',
+    });
+  });
+
+  it('returns nothing for a default, null, an unknown id or another set’s member', () => {
+    expect(fontSetPickAttributes('ja', 'noto-sans-jp')).toEqual({});
+    expect(fontSetPickAttributes('ja', null)).toEqual({});
+    expect(fontSetPickAttributes('ja', 'comic-sans')).toEqual({});
+    expect(fontSetPickAttributes('ja', 'nanum-gothic')).toEqual({});
+  });
+
+  it('returns nothing for every Latin locale, the type-pairing placeholder included', () => {
+    for (const locale of FONT_SET_LOCALES) {
+      if (LOCALE_FONT_SET[locale] !== 'latin') continue;
+      expect(fontSetPickAttributes(locale, 'type-pairing'), locale).toEqual({});
+    }
+  });
+
+  it('only ever returns an attribute theme.css has a :lang() rule for', () => {
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '..', 'theme.css'),
+      'utf8',
+    ).replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = new Set(
+      [...css.matchAll(/:lang\(([\w-]+)\)\[data-font-set-(sans|serif|mono)='([\w-]+)'\]/g)].map(
+        (m) => `${m[1]}|data-font-set-${m[2]}|${m[3]}`,
+      ),
+    );
+    let seen = 0;
+    for (const locale of FONT_SET_LOCALES) {
+      const set = FONT_SET_REGISTRY[LOCALE_FONT_SET[locale]];
+      for (const role of FONT_SET_ROLES) {
+        for (const m of set.roles[role].members as readonly FontSetMember[]) {
+          for (const [attr, id] of Object.entries(fontSetPickAttributes(locale, m.id))) {
+            expect(rules.has(`${set.lang}|${attr}|${id}`), `${locale} ${attr}=${id}`).toBe(true);
+            seen++;
+          }
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
   });
 });
