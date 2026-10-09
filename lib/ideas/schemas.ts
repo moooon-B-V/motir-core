@@ -29,6 +29,33 @@ const isoDate = z
 /** At most 2000 characters, the same ceiling the platform audit log allows a reason. */
 const REASON_MAX = 2000;
 
+/**
+ * Text keyed by locale (Story MOTIR-7772 · MOTIR-7774). The KEY is any string
+ * here on purpose: the service refuses a key outside the ten locales with the
+ * stable `UNSUPPORTED_LOCALE` code, which a zod failure here could not carry.
+ */
+function localeText(max: number) {
+  return z.record(z.string(), z.string().min(1).max(max));
+}
+
+/** One locale's text for an idea — each field at its English field's limit. */
+const ideaTranslationFieldsSchema = z
+  .object({
+    title: z.string().min(1).max(IDEA_LIMITS.title),
+    pitch: z.string().min(1).max(IDEA_LIMITS.pitch),
+    capabilities: z
+      .array(z.string().min(1).max(IDEA_LIMITS.capability))
+      .max(IDEA_LIMITS.capabilities),
+    gap: z.string().min(1).max(IDEA_LIMITS.longText),
+    whyNow: z.string().min(1).max(IDEA_LIMITS.longText),
+    whyMotir: z.string().min(1).max(IDEA_LIMITS.longText),
+    whoElse: z.string().min(1).max(IDEA_LIMITS.longText),
+  })
+  .partial()
+  .strict();
+
+export const ideaTranslationsSchema = z.record(z.string(), ideaTranslationFieldsSchema);
+
 export const ideaEvidenceSchema = z
   .object({
     claim: z.string().min(1).max(IDEA_LIMITS.claim),
@@ -39,6 +66,7 @@ export const ideaEvidenceSchema = z
       .url()
       .refine((u) => u.startsWith('https://'), 'must be an https URL'),
     sourceDate: isoDate,
+    claimTranslations: localeText(IDEA_LIMITS.claim).optional(),
   })
   .strict();
 
@@ -59,6 +87,7 @@ export const ideaInputSchema = z
     whyNow: longText,
     whyMotir: longText,
     whoElse: longText,
+    translations: ideaTranslationsSchema.optional(),
   })
   .strict();
 
@@ -70,15 +99,23 @@ export const addIdeasBodySchema = z
   })
   .strict();
 
-/** `PATCH /api/platform/ideas/[slug]` — every field optional; lists replace wholesale. */
+/**
+ * `PATCH /api/platform/ideas/[slug]` — every field optional; lists replace
+ * wholesale. `translations` needs `expectedUpdatedAt` beside it.
+ */
 export const ideaPatchBodySchema = ideaInputSchema
   .omit({ slug: true })
   .partial()
   .extend({
     reviewed: z.boolean().optional(),
     reason: z.string().max(REASON_MAX).nullable().optional(),
+    expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
   })
-  .strict();
+  .strict()
+  .refine((p) => p.translations === undefined || p.expectedUpdatedAt !== undefined, {
+    message: 'is required with translations',
+    path: ['expectedUpdatedAt'],
+  });
 
 /** `POST …/retire` and `DELETE /api/platform/ideas/[slug]` — a stated reason. */
 export const reasonBodySchema = z
@@ -91,7 +128,13 @@ export const ideaTagBodySchema = z
     slug,
     label: z.string().min(1).max(IDEA_LIMITS.tagLabel),
     description: z.string().trim().min(1, 'is required').max(IDEA_LIMITS.tagDescription),
+    labelTranslations: localeText(IDEA_LIMITS.tagLabel).optional(),
   })
+  .strict();
+
+/** `PATCH /api/platform/ideas/tags/[slug]` — merge label translations into a tag. */
+export const ideaTagTranslationsBodySchema = z
+  .object({ labelTranslations: localeText(IDEA_LIMITS.tagLabel) })
   .strict();
 
 /** `POST /api/platform/ideas/runs`. */

@@ -9202,6 +9202,7 @@
             "retire": "Retired an idea",
             "delete": "Deleted an idea",
             "tag_add": "Added an idea tag",
+            "tag_translate": "Translated an idea tag",
             "research_run": "Recorded an idea research run"
           }
         }

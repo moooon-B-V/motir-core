@@ -85,14 +85,15 @@ describe('GET /api/public/ideas', () => {
 describe('GET /api/public/ideas/tags', () => {
   it('counts active ideas only', async () => {
     await seed();
-    const res = await tagsGET();
+    const res = await tagsGET(get('/tags'));
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(CACHE);
     expect(await res.json()).toEqual({
       tags: [
-        { slug: 'consumer', label: 'CONSUMER', count: 1 },
-        { slug: 'smb', label: 'SMB', count: 3 },
+        { slug: 'consumer', label: 'CONSUMER', labelFallback: false, count: 1 },
+        { slug: 'smb', label: 'SMB', labelFallback: false, count: 3 },
       ],
+      locale: 'en',
     });
   });
 });
@@ -141,7 +142,7 @@ describe('posture', () => {
     try {
       for (const res of [
         await listGET(get('')),
-        await tagsGET(),
+        await tagsGET(get('/tags')),
         await detailGET(get('/x'), slugCtx('x')),
       ]) {
         expect(res.status).toBe(404);
@@ -157,6 +158,76 @@ describe('posture', () => {
         readFileSync(join(process.cwd(), 'app/api/public/ideas', file), 'utf8'),
       );
       expect(source, file).not.toMatch(/getSession|requireCompliantSession/);
+    }
+  });
+});
+
+// ── ?locale= (Story MOTIR-7772 · MOTIR-7775) ────────────────────────────────
+
+describe('?locale=', () => {
+  async function seedJa() {
+    const actor = await staffActor('operator');
+    await ideasAdminService.addTag(actor, {
+      slug: 'pets',
+      label: 'Pets',
+      description: 'Pet businesses.',
+      labelTranslations: { ja: 'ペット' },
+    });
+    await ideasAdminService.addIdeas(actor, [
+      directionInput('clinic', {
+        category: 'pets',
+        tags: ['pets'],
+        translations: { ja: { title: '動物病院' } },
+      }),
+    ]);
+  }
+
+  it('forwards the locale on each route', async () => {
+    await seedJa();
+    const list = await (await listGET(get('?locale=ja'))).json();
+    expect(list.locale).toBe('ja');
+    expect(list.items[0]).toMatchObject({ title: '動物病院', locale: 'ja' });
+    expect(list.items[0].fallbackFields).toContain('pitch');
+
+    const one = await (await detailGET(get('/clinic?locale=ja'), slugCtx('clinic'))).json();
+    expect(one).toMatchObject({ title: '動物病院', locale: 'ja' });
+
+    const tags = await (await tagsGET(get('/tags?locale=ja'))).json();
+    expect(tags).toEqual({
+      tags: [{ slug: 'pets', label: 'ペット', labelFallback: false, count: 1 }],
+      locale: 'ja',
+    });
+  });
+
+  it('answers an unsupported or differently-cased locale in English, 200', async () => {
+    await seedJa();
+    for (const qs of ['?locale=xx', '?locale=JA', '?locale=en', '?locale=']) {
+      const res = await listGET(get(qs));
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.locale).toBe('en');
+      expect(body.items[0]).toMatchObject({ title: 'Direction clinic', fallbackFields: [] });
+    }
+  });
+
+  it('ignores Accept-Language: identical bodies, the same cache header, no Vary on it', async () => {
+    await seedJa();
+    const withHeader = (path: string, lang: string) =>
+      new Request(`https://app.motir.co/api/public/ideas${path}`, {
+        headers: { 'accept-language': lang },
+      });
+    for (const [path, call] of [
+      ['?locale=ja', (r: Request) => listGET(r)],
+      ['/clinic', (r: Request) => detailGET(r, slugCtx('clinic'))],
+      ['/tags', (r: Request) => tagsGET(r)],
+    ] as const) {
+      const a = await call(withHeader(path, 'ja'));
+      const b = await call(withHeader(path, 'de-DE,de;q=0.9'));
+      expect(await a.text()).toBe(await b.text());
+      for (const res of [a, b]) {
+        expect(res.headers.get('cache-control')).toBe(CACHE);
+        expect(res.headers.get('vary') ?? '').not.toMatch(/accept-language/i);
+      }
     }
   });
 });

@@ -9208,6 +9208,7 @@
             "retire": "Retiró una idea",
             "delete": "Eliminó una idea",
             "tag_add": "Añadió una etiqueta de idea",
+            "tag_translate": "Tradujo una etiqueta de idea",
             "research_run": "Registró una ejecución de investigación de ideas"
           }
         }

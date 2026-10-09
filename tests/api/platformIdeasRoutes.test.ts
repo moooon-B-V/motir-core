@@ -375,3 +375,169 @@ describe('who is admitted', () => {
     expect((row!.metadata as { credential: unknown }).credential).toEqual({ kind: 'session' });
   });
 });
+
+// ── Translations (Story MOTIR-7772 · MOTIR-7774) ────────────────────────────
+
+describe('translations over the staff routes', () => {
+  async function tagRoute() {
+    return import('@/app/api/platform/ideas/tags/[slug]/route');
+  }
+
+  it('stores translations on a batch add and a PATCH, and GET returns them', async () => {
+    const token = await tokenFor('operator');
+    const r = await routes();
+    const input = directionInput('kit', {
+      translations: { ja: { title: '題', capabilities: ['一', '二'] } },
+      evidence: [
+        {
+          claim: 'A claim.',
+          sourceName: 'A source',
+          url: 'https://example.com',
+          claimTranslations: { ja: '主張' },
+        },
+      ],
+    });
+    const added = await r.collection.POST(
+      call('', token, { method: 'POST', body: { ideas: [input] } }),
+    );
+    expect(added.status).toBe(201);
+
+    const read = await json(await r.one.GET(call('/kit', token), slugCtx('kit')));
+    expect(read.body.translations).toEqual({ ja: { title: '題', capabilities: ['一', '二'] } });
+    expect(read.body.evidence[0].claimTranslations).toEqual({ ja: '主張' });
+    expect(read.body.missingLocales).toContain('ja');
+
+    const patched = await json(
+      await r.one.PATCH(
+        call('/kit', token, {
+          method: 'PATCH',
+          body: {
+            expectedUpdatedAt: read.body.updatedAt,
+            translations: { ko: { title: '제목' } },
+          },
+        }),
+        slugCtx('kit'),
+      ),
+    );
+    expect(patched.status).toBe(200);
+    expect(patched.body.translations.ko).toEqual({ title: '제목' });
+    expect(patched.body.updatedAt).toBe(read.body.updatedAt);
+  });
+
+  it('maps every new refusal to its code', async () => {
+    const token = await tokenFor('operator');
+    const r = await routes();
+    await r.collection.POST(
+      call('', token, { method: 'POST', body: { ideas: [directionInput('kit')] } }),
+    );
+    const { body: idea } = await json(await r.one.GET(call('/kit', token), slugCtx('kit')));
+    const patch = (body: unknown) =>
+      r.one.PATCH(call('/kit', token, { method: 'PATCH', body }), slugCtx('kit')).then(json);
+
+    expect(
+      await patch({ expectedUpdatedAt: idea.updatedAt, translations: { en: { title: 'x' } } }),
+    ).toMatchObject({ status: 400, body: { code: 'UNSUPPORTED_LOCALE', locales: ['en'] } });
+    expect(
+      await patch({
+        expectedUpdatedAt: idea.updatedAt,
+        translations: { ja: { capabilities: ['一'] } },
+      }),
+    ).toMatchObject({
+      status: 400,
+      body: { code: 'TRANSLATION_SHAPE_MISMATCH', fields: ['ja.capabilities'] },
+    });
+    expect(
+      await patch({ expectedUpdatedAt: idea.updatedAt, translations: { ja: { whyMotir: 'x' } } }),
+    ).toMatchObject({
+      status: 400,
+      body: { code: 'TRANSLATION_WITHOUT_ENGLISH', fields: ['ja.whyMotir'] },
+    });
+    const missingStamp = await patch({ translations: { ja: { title: 'x' } } });
+    expect(missingStamp).toMatchObject({ status: 400, body: { code: 'INVALID_REQUEST' } });
+    expect(missingStamp.body.issues[0].path).toBe('expectedUpdatedAt');
+
+    await patch({ pitch: 'Moved on.' });
+    const changed = await patch({
+      expectedUpdatedAt: idea.updatedAt,
+      translations: { ja: { title: 'x' } },
+    });
+    expect(changed.status).toBe(409);
+    expect(changed.body.code).toBe('IDEA_CHANGED');
+    expect(changed.body.updatedAt).not.toBe(idea.updatedAt);
+
+    const batch = await json(
+      await r.collection.POST(
+        call('', token, {
+          method: 'POST',
+          body: { ideas: [{ ...directionInput('fresh'), translations: { xx: { title: 'x' } } }] },
+        }),
+      ),
+    );
+    expect(batch).toMatchObject({ status: 400, body: { code: 'UNSUPPORTED_LOCALE' } });
+  });
+
+  it('adds a tag with label translations and merges more through PATCH /tags/{slug}', async () => {
+    const token = await tokenFor('operator');
+    const r = await routes();
+    const t = await tagRoute();
+    const added = await json(
+      await r.tags.POST(
+        call('/tags', token, {
+          method: 'POST',
+          body: {
+            slug: 'pets',
+            label: 'Pets',
+            description: 'Pet businesses.',
+            labelTranslations: { ja: 'ペット' },
+          },
+        }),
+      ),
+    );
+    expect(added).toMatchObject({ status: 201, body: { labelTranslations: { ja: 'ペット' } } });
+
+    const merged = await json(
+      await t.PATCH(
+        call('/tags/pets', token, {
+          method: 'PATCH',
+          body: { labelTranslations: { de: 'Haustiere' } },
+        }),
+        slugCtx('pets'),
+      ),
+    );
+    expect(merged).toMatchObject({
+      status: 200,
+      body: { slug: 'pets', labelTranslations: { ja: 'ペット', de: 'Haustiere' } },
+      cache: 'no-store',
+    });
+
+    const unknown = await json(
+      await t.PATCH(
+        call('/tags/nope', token, { method: 'PATCH', body: { labelTranslations: { de: 'x' } } }),
+        slugCtx('nope'),
+      ),
+    );
+    expect(unknown).toMatchObject({ status: 404, body: { code: 'IDEA_TAG_NOT_FOUND' } });
+
+    const badLocale = await json(
+      await t.PATCH(
+        call('/tags/pets', token, { method: 'PATCH', body: { labelTranslations: { en: 'x' } } }),
+        slugCtx('pets'),
+      ),
+    );
+    expect(badLocale).toMatchObject({ status: 400, body: { code: 'UNSUPPORTED_LOCALE' } });
+
+    const malformed = await json(
+      await t.PATCH(call('/tags/pets', token, { method: 'PATCH', body: {} }), slugCtx('pets')),
+    );
+    expect(malformed).toMatchObject({ status: 400, body: { code: 'INVALID_REQUEST' } });
+
+    const support = await tokenFor('support');
+    const refused = await json(
+      await t.PATCH(
+        call('/tags/pets', support, { method: 'PATCH', body: { labelTranslations: { de: 'x' } } }),
+        slugCtx('pets'),
+      ),
+    );
+    expect(refused).toMatchObject({ status: 404, body: { code: 'NOT_FOUND' } });
+  });
+});
