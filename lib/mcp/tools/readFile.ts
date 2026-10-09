@@ -166,6 +166,19 @@ export function renderReadFile(
         },
       };
     }
+    case 'binary':
+      // The provider classifies the blob itself since MOTIR-7873, so a binary
+      // file arrives here as its own outcome rather than as `found` text.
+      return {
+        summary: `"${result.path}" in ${repoRef} at ${result.ref} is a BINARY file (${result.bytes} bytes), so no text is returned. The file EXISTS; use the code graph to ask a structural question instead.`,
+        structured: {
+          outcome: result.outcome,
+          repoRef,
+          path: result.path,
+          ref: result.ref,
+          bytes: result.bytes,
+        },
+      };
     case 'not_found':
       return {
         summary: `There is no file at "${result.path}" in ${repoRef} at ${result.ref}. The REF resolved, so this is a statement about the path: the file is not there. It is NOT a statement about the repository or the project.`,
