@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
@@ -697,6 +697,106 @@ describe('defensive error routing — the job must never fail behind a user tran
     });
     vi.restoreAllMocks();
     expect(await statusOf(children[0]!.id)).toBe('todo');
+  });
+});
+
+describe('one child per transaction — a failure or a long child set rolls back no sibling (MOTIR-7989)', () => {
+  // ⚠️ REPRODUCE-BEFORE-FIX. MOTIR-7730 went `done` on its merge and its 29
+  // `implemented` children were never moved: the cascade completed every child
+  // inside ONE `withWorkspaceContext`, on Prisma's default 5 s budget, so one
+  // child's throw — or the batch outrunning the budget — rolled back all 29, and
+  // every idempotent retry re-ran the same all-or-nothing batch. On `main` before
+  // MOTIR-7989 the first two cases below fail: the siblings are rolled back, and
+  // every child shares one transaction client.
+
+  // Captured before any spy is installed, so a spy left by a failed case can
+  // never become the next case's "real" write.
+  const realApply = workItemsService.applyStatusTransition.bind(workItemsService);
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Let every child through the real write except `failId`, which throws. */
+  function failOne(failId: string, err: Error) {
+    return vi
+      .spyOn(workItemsService, 'applyStatusTransition')
+      .mockImplementation(async (...args) => {
+        if (args[0] === failId) throw err;
+        return realApply(...args);
+      });
+  }
+
+  it('a child whose write throws leaves it open, and its siblings still reach done', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWithChildren(fx, [
+      'implemented',
+      'implemented',
+      'implemented',
+    ]);
+    const [first, failing, last] = children;
+    failOne(failing!.id, new Error('connection reset'));
+
+    // A real fault still fails the job — the retry is what recovers a transient
+    // one — and the error names the child it left open.
+    await expect(cascade(story.id, fx.workspaceId)).rejects.toThrow(
+      new RegExp(`${failing!.id}.*connection reset`),
+    );
+    vi.restoreAllMocks();
+
+    expect(await statusOf(first!.id)).toBe('done');
+    expect(await statusOf(last!.id)).toBe('done');
+    expect(await statusOf(failing!.id)).toBe('implemented');
+    // The siblings' events still went out: each one carries the cascade to that
+    // child's own children, and its commit is not undone by the failure.
+    expect(sent.map((e) => e.data['workItemId']).sort()).toEqual([first!.id, last!.id].sort());
+  });
+
+  it('a retry after a partial pass completes only the child still open', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWithChildren(fx, [
+      'implemented',
+      'implemented',
+      'implemented',
+    ]);
+    const failing = children[1]!;
+    failOne(failing.id, new Error('connection reset'));
+    await expect(cascade(story.id, fx.workspaceId)).rejects.toThrow('connection reset');
+    vi.restoreAllMocks();
+
+    sent.length = 0;
+    const res = await cascade(story.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'cascaded', childIds: [failing.id] });
+    expect(await statusOf(failing.id)).toBe('done');
+    // No second `work-item/transitioned` for a child the first pass already moved.
+    expect(sent.map((e) => e.data['workItemId'])).toEqual([failing.id]);
+  });
+
+  it('every child commits in a transaction of its own, so N children cost N small ones', async () => {
+    // The budget is per transaction, so the claim "the child count no longer
+    // matters" is exactly the claim that no transaction holds more than one
+    // child. Asserted structurally — distinct transaction clients — rather than
+    // by racing a shrunken wall-clock budget, which would be a timing test.
+    const fx = await makeWorkItemFixture();
+    const N = 40;
+    const { story, children } = await doneStoryWithChildren(
+      fx,
+      Array.from({ length: N }, () => 'implemented'),
+    );
+    const clients = new Set<unknown>();
+    vi.spyOn(workItemsService, 'applyStatusTransition').mockImplementation(async (...args) => {
+      clients.add(args[3]);
+      return realApply(...args);
+    });
+
+    const res = await cascade(story.id, fx.workspaceId);
+    vi.restoreAllMocks();
+
+    expect(res).toMatchObject({ outcome: 'cascaded' });
+    expect((res as { childIds: string[] }).childIds).toHaveLength(N);
+    expect(clients.size).toBe(N);
+    for (const c of children) expect(await statusOf(c.id)).toBe('done');
+    expect(sent).toHaveLength(N);
   });
 });
 
