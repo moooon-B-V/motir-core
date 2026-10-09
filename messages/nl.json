@@ -12793,10 +12793,6 @@
         "helper": "Optioneel. Het wordt bij de beslissing bewaard.",
         "proceed": "Ja, afwijzen"
       },
-      "noConversation": {
-        "none": "Er is geen gesprek vastgelegd voor dit plan.",
-        "next": "Keur het hier goed of wijs het af — of vraag Motir hieronder om het te wijzigen."
-      },
       "handoff": {
         "writing": "Ik heb wat ik nodig heb — ik schrijf het plan nu. Je hoeft hier niet te wachten: sluit dit wanneer je wilt, en het plan staat voor je klaar in <link>Wacht op jou</link>.",
         "rewriting": "Ik schrijf een nieuwe versie van dit plan. Je kunt dit sluiten — het blijft in <link>Wacht op jou</link>, en je kunt beslissen zodra ik klaar ben."
@@ -13282,9 +13278,7 @@
   },
   "planDestination": {
     "conversation": "Opent het gesprek",
-    "plan": "Opent het plan",
-    "noConversation": "geen gesprek",
-    "noConversationWhy": "Er is geen gesprek vastgelegd voor dit plan."
+    "plan": "Opent het plan"
   },
   "orgClosing": {
     "banner": {

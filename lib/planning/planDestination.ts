@@ -17,8 +17,8 @@ import type { PlanStatusDto } from '@/lib/dto/plans';
 // ── THE RULE, and the ONE thing it keys on ──────────────────────────────────
 // An UNDECIDED plan is a live thing: it is read beside the conversation that can
 // change it, so its row opens the PLANNING SURFACE. A DECIDED plan is a record,
-// so its row opens the plan's own page. And a plan with NO SESSION has no
-// conversation to return to, so it opens the page and the row says why.
+// so its row opens the plan's own page. A plan with NO SESSION cannot happen any
+// more (below), and if one does it degrades to the page with no copy at all.
 //
 // ⚠️ THE PREDICATE IS THE SESSION'S EXISTENCE — never its ORIGIN, and never
 // whether it holds TURNS. Both of those readings were tried and both are wrong:
@@ -36,11 +36,15 @@ import type { PlanStatusDto } from '@/lib/dto/plans';
 //     cadence plan is the case where a person most wants to argue with the
 //     planner, because nobody asked for it.
 //
-// So the group that opens the page for want of a conversation is exactly
-// `Plan.sessionId IS NULL` — the rollout residue `prisma/schema.prisma` names:
-// *"NULLABLE AT THE DATABASE only so a build predating this column can still
-// write a plan during a rollout."* It is deliberately near-empty, and the branch
-// exists because nothing at the database enforces the non-null.
+// ⚠️ A NULL SESSION IS AN INVARIANT BREACH, NOT A POPULATION (Story MOTIR-7883 ·
+// MOTIR-7885, 2026-10-08). `createPlan` attaches a session in the same transaction
+// (MOTIR-6022) and MOTIR-6020 backfilled every older plan, so `Plan.sessionId IS
+// NULL` is only the rollout residue `prisma/schema.prisma` names: *"NULLABLE AT THE
+// DATABASE only so a build predating this column can still write a plan during a
+// rollout."* The branch stays because nothing at the database enforces the
+// non-null; it answers `'no-session'`, and no surface renders a reason for it.
+// (Until this story the arm carried a reason two renderers explained to a reader,
+// which made it a sanctioned second road to deciding a plan outside the overlay.)
 //
 // ── TOTAL over `PlanStatus`, with NO default arm ────────────────────────────
 // The switch below answers every member and falls through to nothing. A sixth
@@ -52,8 +56,12 @@ import type { PlanStatusDto } from '@/lib/dto/plans';
 export type PlanPageReason =
   /** The plan is `approved` or `declined`: there is nothing left to decide. */
   | 'decided'
-  /** The plan has no session, so there is no conversation to return to. */
-  | 'no-conversation'
+  /**
+   * THE INVARIANT BREACH (MOTIR-7885, Story MOTIR-7883). `Plan.sessionId` is nullable
+   * at the database only for rollout; a plan reaching this arm degrades to its page
+   * and NOTHING renders a reason for it.
+   */
+  | 'no-session'
   /** The reader is a Visitor (MOTIR-6888): the planning workspace is not served to one. */
   | 'visitor';
 
@@ -68,7 +76,8 @@ export interface PlanRowDestinationInput {
   /** The plan's id — `/plans/<id>` is the page href. */
   planId: string;
   /**
-   * The plan's SESSION, or `null` when it has none.
+   * The plan's SESSION. `null` is the invariant breach above — nullable at the
+   * database for rollout only — and lands on the plan page with no copy.
    *
    * ⚠️ Neither the session's ORIGIN nor its TURN COUNT is an input, and that is
    * asserted by this signature rather than left to a comment: a caller cannot
@@ -137,7 +146,7 @@ export function planRowDestination({
     case 'stale':
       // UNDECIDED. The session is the whole test.
       return sessionId === null
-        ? { kind: 'plan-page', href: planPage, reason: 'no-conversation' }
+        ? { kind: 'plan-page', href: planPage, reason: 'no-session' }
         : {
             kind: 'planning-surface',
             href: withPlanningOverlay(host, planSessionLaunchContext(sessionId, anchorKey, via)),

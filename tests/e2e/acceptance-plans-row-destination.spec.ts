@@ -315,9 +315,10 @@ test('a DECLINED plan behaves the same way: the row says the plan, and opens it'
   await landedOnPlanPage(page, asked.planId);
 });
 
-test('a plan with NO SESSION says so on its To-approve row, and opens the plan page', async ({
-  page,
-}) => {
+// ⚠️ AMENDED 2026-10-08 by Story MOTIR-7883 (MOTIR-7885): this case said WHY a
+// no-session plan opened its page. Every plan has a session now, so the null is an
+// invariant breach, and it degrades SILENTLY — the story retires the explanation.
+test('a plan with NO SESSION degrades silently to the plan page', async ({ page }) => {
   const email = `row-destination-none-${Date.now()}@example.com`;
   const seed = await seedPlanningAnchorTree(email);
   await stubAiAccess(page);
@@ -356,15 +357,14 @@ test('a plan with NO SESSION says so on its To-approve row, and opens the plan p
   const row = approvalRow(page, 'Telemetry baseline');
   await expect(row).toBeVisible({ timeout: FIRST_PAINT_MS });
   await expect(tag(row)).toContainText(destination.plan);
-  await expect(tag(row)).toContainText(destination.noConversation);
+  // The retired copy, inlined because its key is gone.
+  await expect(tag(row)).not.toContainText('no conversation');
   await expect(tag(row)).toHaveAttribute('data-destination', 'plan-page');
 
   await reviewButton(row).click();
   await landedOnPlanPage(page, loose.id);
-  // The page says WHY it opened here — one cause, where there used to be three.
-  await expect(page.getByRole('main').getByTestId('plan-no-conversation')).toContainText(
-    en.approvalGate.planApproval.noConversation.none,
-  );
+  // …and nothing on the page says why it opened here.
+  await expect(page.getByTestId('plan-no-conversation')).toHaveCount(0);
 
   // …and the row this plan is NOT: the asked plan still opens its conversation.
   await page.goto('/workbench?tab=approvals');

@@ -90,12 +90,15 @@ describe('DECIDED → the plan page, reason `decided`', () => {
   });
 });
 
-describe('UNDECIDED with NO session → the plan page, reason `no-conversation`', () => {
-  it.each(UNDECIDED)('%s with a null session lands on the page, and says why', (planStatus) => {
+// ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7885): this arm answered
+// `no-conversation`, and two renderers explained it. Every plan has a session now,
+// so a null one is an invariant breach that degrades to the page with no copy.
+describe('UNDECIDED with NO session → the plan page, reason `no-session` (invariant breach, no copy)', () => {
+  it.each(UNDECIDED)('%s with a null session degrades to the page', (planStatus) => {
     expect(call({ planStatus, sessionId: null })).toEqual({
       kind: 'plan-page',
       href: '/plans/p_31',
-      reason: 'no-conversation',
+      reason: 'no-session',
     });
   });
 

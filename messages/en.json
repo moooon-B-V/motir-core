@@ -12790,10 +12790,6 @@
         "helper": "Optional. It is kept with the decision.",
         "proceed": "Yes, decline"
       },
-      "noConversation": {
-        "none": "There is no conversation on record for this plan.",
-        "next": "Approve or decline it here — or ask Motir to change it below."
-      },
       "handoff": {
         "writing": "I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in <link>Waiting on you</link>.",
         "rewriting": "I’m writing a new version of this plan. You can close this — it stays in <link>Waiting on you</link>, and you can decide once I’m done."
@@ -13279,9 +13275,7 @@
   },
   "planDestination": {
     "conversation": "Opens the conversation",
-    "plan": "Opens the plan",
-    "noConversation": "no conversation",
-    "noConversationWhy": "There is no conversation on record for this plan."
+    "plan": "Opens the plan"
   },
   "orgClosing": {
     "banner": {

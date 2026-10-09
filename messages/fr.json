@@ -12796,10 +12796,6 @@
         "helper": "Facultatif. Il est conservé avec la décision.",
         "proceed": "Oui, refuser"
       },
-      "noConversation": {
-        "none": "Aucune conversation n'est enregistrée pour ce plan.",
-        "next": "Approuvez-le ou refusez-le ici — ou demandez à Motir de le modifier ci-dessous."
-      },
       "handoff": {
         "writing": "J'ai ce qu'il me faut — je rédige le plan maintenant. Inutile d'attendre ici : fermez quand vous le souhaitez, le plan vous attendra dans <link>En attente de votre part</link>.",
         "rewriting": "Je rédige une nouvelle version de ce plan. Vous pouvez fermer — il reste dans <link>En attente de votre part</link>, et vous pourrez décider une fois que j'aurai terminé."
@@ -13285,9 +13281,7 @@
   },
   "planDestination": {
     "conversation": "Ouvre la conversation",
-    "plan": "Ouvre le plan",
-    "noConversation": "aucune conversation",
-    "noConversationWhy": "Aucune conversation n'est enregistrée pour ce plan."
+    "plan": "Ouvre le plan"
   },
   "orgClosing": {
     "banner": {

@@ -17,9 +17,10 @@ import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 // itself. An address that hands the overlay one anyway is a stale or hand-typed link,
 // and the overlay must not answer it with an empty frame. So it FORWARDS: the `approval`
 // value is read as the PLAN's id, and the reader lands on the planning surface at the
-// plan's conversation (`planSession` + `planVia=approvals`, the row's own address) — or
-// on the plan's own page when it has no SESSION to return to (Story MOTIR-6043's
-// settlement: the session's existence, never its turn count), or the read fails.
+// plan's conversation (`planSession` + `planVia=approvals`, the row's own address). A
+// Visitor, and a read that fails, land on the plan's own page. Every plan has a session
+// (Story MOTIR-7883 · MOTIR-7885), so a review with none is an invariant breach and takes
+// the failed read's path, silently.
 //
 // ⚠️ A FORWARD, NOT A CLOSE — which is why it lives here rather than in the overlay. The
 // overlay has exactly one close seam (`requestClose`, guarded by
@@ -41,17 +42,16 @@ export function usePlanGateForward(planId: string | null): void {
       try {
         const review = await fetchPlanReview(planId, controller.signal);
         if (controller.signal.aborted) return;
-        const conversation = review.conversation ?? null;
-        // ⚠️ THE SESSION, NOT ITS TURNS (Story MOTIR-6043 · MOTIR-6045). This read
-        // `!conversation?.hasTurns` until the settlement: an empty transcript is not
-        // an absent conversation, so an agent's plan, a cadence plan and a backfilled
-        // one all have somewhere to return to. Only a plan with NO session lands on
-        // the page — the same predicate `planRowDestination` answers for both rows.
         // A Visitor (MOTIR-6888) is not served the planning workspace: the page.
-        if (!conversation || routes.identifier !== null) {
+        if (routes.identifier !== null) {
           router.replace(planPage);
           return;
         }
+        // ⚠️ THE SESSION, NOT ITS TURNS (Story MOTIR-6043 · MOTIR-6045): an empty
+        // transcript is still a conversation to return to. A review with NO session
+        // is the invariant breach (MOTIR-7885) and degrades exactly as a failed read.
+        const conversation = review.conversation;
+        if (!conversation) throw new Error('plan without a session');
         const host = withoutApprovalOverlay(`${pathname}?${searchParams.toString()}`);
         shallowReplace(
           withPlanningOverlay(

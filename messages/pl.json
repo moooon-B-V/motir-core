@@ -12793,10 +12793,6 @@
         "helper": "Opcjonalne. Zostanie zachowane wraz z decyzją.",
         "proceed": "Tak, odrzuć"
       },
-      "noConversation": {
-        "none": "Dla tego planu nie zapisano żadnej rozmowy.",
-        "next": "Zatwierdź go lub odrzuć tutaj — albo poproś Motir o zmianę poniżej."
-      },
       "handoff": {
         "writing": "Mam wszystko, czego potrzebuję — piszę teraz plan. Nie trzeba tu czekać: zamknij to okno w dowolnej chwili, a plan będzie czekać w sekcji <link>Czeka na Ciebie</link>.",
         "rewriting": "Piszę nową wersję tego planu. Możesz to zamknąć — plan pozostanie w sekcji <link>Czeka na Ciebie</link>, a decyzję podejmiesz, gdy skończę."
@@ -13282,9 +13278,7 @@
   },
   "planDestination": {
     "conversation": "Otwiera rozmowę",
-    "plan": "Otwiera plan",
-    "noConversation": "brak rozmowy",
-    "noConversationWhy": "Dla tego planu nie zapisano żadnej rozmowy."
+    "plan": "Otwiera plan"
   },
   "orgClosing": {
     "banner": {
