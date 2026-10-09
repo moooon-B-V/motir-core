@@ -44,14 +44,8 @@ export const planNarrationRepository = {
     rows: readonly PlanNarrationCreateRow[],
     tx: Prisma.TransactionClient,
   ): Promise<PlanNarration[]> {
-    if (rows.length === 0) return [];
     const created = await tx.planNarration.createManyAndReturn({ data: [...rows] });
     return created.sort((a, b) => a.seq - b.seq);
-  },
-
-  /** One plan's sentences, in `seq` order. */
-  async listByPlan(planId: string, tx: Prisma.TransactionClient): Promise<PlanNarration[]> {
-    return tx.planNarration.findMany({ where: { planId }, orderBy: { seq: 'asc' } });
   },
 
   /** The newest `limit` sentences of a plan, returned in ASCENDING `seq` (MOTIR-8063). */
@@ -86,18 +80,6 @@ export const planNarrationRepository = {
     return rows.reverse();
   },
 
-  /** Many plans' sentences in ONE query, by plan then `seq`. */
-  async listByPlanIds(
-    planIds: readonly string[],
-    tx: Prisma.TransactionClient,
-  ): Promise<PlanNarration[]> {
-    if (planIds.length === 0) return [];
-    return tx.planNarration.findMany({
-      where: { planId: { in: [...planIds] } },
-      orderBy: [{ planId: 'asc' }, { seq: 'asc' }],
-    });
-  },
-
   /**
    * Record a session's step words: create sets `firstReportedAt`; an update
    * REPLACES kind, ref and title and leaves `firstReportedAt` as it was.
@@ -122,18 +104,6 @@ export const planNarrationRepository = {
   ): Promise<PlanNarrationSession[]> {
     return tx.planNarrationSession.findMany({
       where: { planId },
-      orderBy: [{ firstReportedAt: 'asc' }, { id: 'asc' }],
-    });
-  },
-
-  /** Many plans' sessions in ONE query, in first-report order. */
-  async listSessionsByPlanIds(
-    planIds: readonly string[],
-    tx: Prisma.TransactionClient,
-  ): Promise<PlanNarrationSession[]> {
-    if (planIds.length === 0) return [];
-    return tx.planNarrationSession.findMany({
-      where: { planId: { in: [...planIds] } },
       orderBy: [{ firstReportedAt: 'asc' }, { id: 'asc' }],
     });
   },

@@ -2823,6 +2823,53 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm test:coverage:plan-progress
 
+  story-8060-coverage:
+    name: Coverage (planner narration)
+    runs-on: ubuntu-latest
+    # Story MOTIR-8060 (the planner's narration) — MOTIR-8066's per-file floor
+    # over the files the story wrote (`vitest.coverage.plan-narration.config.ts`):
+    # the narration store, both widened step doors, the chat-panel read and its
+    # paged route, and the panel that draws them, measured by the story gate and
+    # the per-card suites against Postgres. Locally it ran 10 files in about a
+    # minute and a half.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-8060
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-8060
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-8060.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-8060.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm test:coverage:plan-narration
+
   story-7974-coverage:
     name: Coverage (tool-call narration)
     runs-on: ubuntu-latest
@@ -3209,6 +3256,7 @@ jobs:
         story-7883-coverage,
         story-7928-coverage,
         story-7974-coverage,
+        story-8060-coverage,
         story-7602-coverage,
         story-7797-coverage,
         e2e,
