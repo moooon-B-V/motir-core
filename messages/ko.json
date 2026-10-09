@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, other {제안 #개 수정됨}}",
     "event_withdrawn": "{n, plural, other {제안 #개 철회됨}}",
     "event_brief_edited": "계획 제목과 요약 수정됨",
+    "event_session_carried": "새 대화로 이어짐",
     "event_removed": "{n, plural, other {제안 #개 제거됨}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",

@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, one {# voorstel bewerkt} other {# voorstellen bewerkt}}",
     "event_withdrawn": "{n, plural, one {# voorstel ingetrokken} other {# voorstellen ingetrokken}}",
     "event_brief_edited": "Titel en samenvatting van het plan bewerkt",
+    "event_session_carried": "Meegenomen naar een nieuw gesprek",
     "event_removed": "{n, plural, one {# voorstel verwijderd} other {# voorstellen verwijderd}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",

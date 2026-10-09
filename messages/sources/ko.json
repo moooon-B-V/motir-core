@@ -146,6 +146,7 @@
   "planReview.event_edited": "{n, plural, one {# proposal edited} other {# proposals edited}}",
   "planReview.event_withdrawn": "{n, plural, one {# proposal withdrawn} other {# proposals withdrawn}}",
   "planReview.event_brief_edited": "Plan title and summary edited",
+  "planReview.event_session_carried": "Carried into a new conversation",
   "planReview.event_removed": "{n, plural, one {# proposal removed} other {# proposals removed}}",
   "planReview.eventActor": "{label} · {actor}",
   "planReview.eventSpan": "{from} – {to}",

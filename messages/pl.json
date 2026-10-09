@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, one {Edytowano # propozycję} few {Edytowano # propozycje} many {Edytowano # propozycji} other {Edytowano # propozycji}}",
     "event_withdrawn": "{n, plural, one {Wycofano # propozycję} few {Wycofano # propozycje} many {Wycofano # propozycji} other {Wycofano # propozycji}}",
     "event_brief_edited": "Edytowano tytuł i podsumowanie planu",
+    "event_session_carried": "Przeniesiono do nowej rozmowy",
     "event_removed": "{n, plural, one {Usunięto # propozycję} few {Usunięto # propozycje} many {Usunięto # propozycji} other {Usunięto # propozycji}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",

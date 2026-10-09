@@ -64,6 +64,26 @@ export class PlanSessionNotCopyableError extends Error {
 }
 
 /**
+ * The plan a carry was asked to move was DECIDED (approved or declined) between
+ * the person reading it and sending their turn (Story MOTIR-7928 · MOTIR-7930).
+ * Read under the plan's row lock, so the decision that won is always seen.
+ * Nothing was created, copied, moved or appended. → 409
+ */
+export class PlanSessionPlanDecidedError extends Error {
+  readonly code = 'PLAN_SESSION_PLAN_DECIDED' as const;
+  constructor(
+    readonly sessionId: string,
+    readonly planId: string,
+    readonly planStatus: string | null,
+  ) {
+    super(
+      `The plan waiting in planning session ${sessionId} has been decided, so there is nothing left to carry.`,
+    );
+    this.name = 'PlanSessionPlanDecidedError';
+  }
+}
+
+/**
  * A concurrent append claimed the same position on the thread. Turn order is
  * allocated under the session row's `SELECT … FOR UPDATE` lock with a re-read
  * inside the transaction, so two concurrent appends normally SERIALIZE into two

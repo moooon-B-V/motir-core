@@ -320,12 +320,17 @@ export interface ResumableSessionDto {
   copyable?: CopyableSessionDto | null;
 }
 
-/** A session whose conversation a new session may carry over (AMENDMENT 23 §6). */
+/** A session whose conversation a new session may carry over (AMENDMENT 23 §6).
+ *  A session that ended while a plan still waits is copyable whatever its end
+ *  reason, and the carry takes that plan with it (Story MOTIR-7928 · MOTIR-7930). */
 export interface CopyableSessionDto {
   id: string;
-  endReason: 'failed' | 'idle';
+  endReason: 'failed' | 'idle' | 'restarted';
   endedAt: string;
   turnCount: number;
+  /** The undecided plan the carry would MOVE into the new session, or `null` when
+   *  only the conversation is carried. */
+  waitingPlanId: string | null;
 }
 
 /**

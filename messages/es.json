@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, one {# propuesta editada} other {# propuestas editadas}}",
     "event_withdrawn": "{n, plural, one {# propuesta retirada} other {# propuestas retiradas}}",
     "event_brief_edited": "Título y resumen del plan editados",
+    "event_session_carried": "Trasladado a una nueva conversación",
     "event_removed": "{n, plural, one {# propuesta eliminada} other {# propuestas eliminadas}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",

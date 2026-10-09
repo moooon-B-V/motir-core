@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, other {提案を # 件編集}}",
     "event_withdrawn": "{n, plural, other {提案を # 件取り下げ}}",
     "event_brief_edited": "計画のタイトルと概要を編集",
+    "event_session_carried": "新しい会話に引き継ぎ",
     "event_removed": "{n, plural, other {提案を # 件削除}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",

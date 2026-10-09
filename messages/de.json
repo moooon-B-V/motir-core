@@ -199,6 +199,7 @@
     "event_edited": "{n, plural, one {# Vorschlag bearbeitet} other {# Vorschläge bearbeitet}}",
     "event_withdrawn": "{n, plural, one {# Vorschlag zurückgezogen} other {# Vorschläge zurückgezogen}}",
     "event_brief_edited": "Plantitel und Zusammenfassung bearbeitet",
+    "event_session_carried": "In ein neues Gespräch übernommen",
     "event_removed": "{n, plural, one {# Vorschlag entfernt} other {# Vorschläge entfernt}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",

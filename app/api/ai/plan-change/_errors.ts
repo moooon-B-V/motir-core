@@ -21,6 +21,7 @@ import {
   PlanSessionEndedError,
   PlanSessionNotCopyableError,
   PlanSessionNotFoundError,
+  PlanSessionPlanDecidedError,
   PlanTargetLockedError,
   TurnFilesGuideOnlyError,
 } from '@/lib/planChange/errors';
@@ -93,6 +94,19 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   if (err instanceof PlanSessionNotCopyableError) {
     return NextResponse.json(
       { code: err.code, error: err.message, sessionId: err.sessionId, endReason: err.endReason },
+      { status: 409 },
+    );
+  }
+  // A carry whose waiting plan was decided while the person typed (MOTIR-7930).
+  if (err instanceof PlanSessionPlanDecidedError) {
+    return NextResponse.json(
+      {
+        code: err.code,
+        error: err.message,
+        sessionId: err.sessionId,
+        planId: err.planId,
+        planStatus: err.planStatus,
+      },
       { status: 409 },
     );
   }

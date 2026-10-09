@@ -1,5 +1,6 @@
 import {
   Prisma,
+  type Plan,
   type PlanChangeSession,
   type PlanChangeTurn,
   type PlanChangeTurnConfirm,
@@ -47,6 +48,7 @@ import type {
   ResumableSessionDto,
 } from '@/lib/dto/planChange';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planRevisionsService } from '@/lib/services/planRevisionsService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import {
   EmptyPlanChangeIntentError,
@@ -59,6 +61,7 @@ import {
   PlanSessionEndedError,
   PlanSessionNotCopyableError,
   PlanSessionNotFoundError,
+  PlanSessionPlanDecidedError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
 import { attachmentsService } from '@/lib/services/attachmentsService';
@@ -633,10 +636,21 @@ async function resumeSeededOrStartWithin(
   return created.id;
 }
 
-/** The end reasons whose conversation a new session may carry over (AMENDMENT 23
- *  §6): Motir ended them. Never `restarted` (the person asked for something
- *  new), never `approved` / `declined` (those were decisions). */
+/** The end reasons whose CONVERSATION ALONE a new session may carry over
+ *  (AMENDMENT 23 §6): Motir ended them. `restarted` (the person asked for
+ *  something new) is not here, and neither are `approved` / `declined` (those
+ *  were decisions) — but a session of ANY end reason that still holds an
+ *  undecided plan is copyable too, and the carry takes the plan with it
+ *  (Story MOTIR-7928 · MOTIR-7930; {@link isCopyable}). */
 const COPYABLE_END_REASONS: ReadonlySet<string> = new Set(['failed', 'idle']);
+
+/** Whether an ENDED session can be carried into a new one: Motir ended it
+ *  ({@link COPYABLE_END_REASONS}), or it still holds an undecided plan. An
+ *  `approved` / `declined` end decided its plan, so it holds none. */
+function isCopyable(row: PlanChangeSession, waitingPlan: Plan | null): boolean {
+  if (!row.endedAt || !row.endReason) return false;
+  return COPYABLE_END_REASONS.has(row.endReason) || waitingPlan !== null;
+}
 
 /** The copyable read's answer for the caller's latest own conversation. */
 /** Whether the Plan something new confirm is PENDING on this thread
@@ -667,14 +681,50 @@ function assertRestartable(session: PlanChangeSession, pctx: ProjectContext): vo
   }
 }
 
-function toCopyable(row: PlanChangeSession | null): CopyableSessionDto | null {
-  if (!row?.endedAt || !row.endReason || !COPYABLE_END_REASONS.has(row.endReason)) return null;
+function toCopyable(
+  row: PlanChangeSession | null,
+  waitingPlan: Plan | null,
+): CopyableSessionDto | null {
+  if (!row?.endedAt || !row.endReason || !isCopyable(row, waitingPlan)) return null;
   return {
     id: row.id,
     endReason: row.endReason as CopyableSessionDto['endReason'],
     endedAt: row.endedAt.toISOString(),
     turnCount: row.turnCount,
+    waitingPlanId: waitingPlan?.id ?? null,
   };
+}
+
+/**
+ * The plan a carry MOVES (MOTIR-7930), locked and re-read under its row lock —
+ * "is it still undecided?" guards the move (the read-derived-write rule). With
+ * `planId`, the plan the person was looking at: it must still sit under the
+ * source and be undecided. Without it, the source's most recent UNDECIDED plan,
+ * which is not always its LATEST (a `failed` end can hold a declined attempt over
+ * an earlier plan that still waits). Decided under the lock →
+ * {@link PlanSessionPlanDecidedError}; moved to another session →
+ * `PLAN_SESSION_NOT_COPYABLE`; nothing waiting → `null`.
+ */
+async function lockWaitingPlanWithin(
+  source: PlanChangeSession,
+  planId: string | null,
+  pctx: ProjectContext,
+  tx: Prisma.TransactionClient,
+): Promise<Plan | null> {
+  const candidateId =
+    planId ?? (await planRepository.findLatestUndecidedBySession(source.id, tx))?.id ?? null;
+  if (!candidateId) return null;
+  await planRepository.lockById(candidateId, tx);
+  const plan = await planRepository.findById(candidateId, pctx.workspaceId, tx);
+  if (!plan) throw new PlanSessionNotFoundError(source.id);
+  if (plan.status === 'approved' || plan.status === 'declined') {
+    throw new PlanSessionPlanDecidedError(source.id, plan.id, plan.status);
+  }
+  // Undecided but no longer the source's: an earlier carry moved it, and that
+  // session has ended too. Carrying the conversation alone would strand the plan.
+  if (plan.sessionId !== source.id)
+    throw new PlanSessionNotCopyableError(source.id, source.endReason);
+  return plan;
 }
 
 export const planChangeSessionsService = {
@@ -806,25 +856,36 @@ export const planChangeSessionsService = {
   ): Promise<ResumableSessionDto> {
     const session = await planChangeSessionsService.findResumable(pctx, scopeKey);
     if (session) return { session, earlier: null, copyable: null };
-    const [row, own] = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => [
-      await planChangeSessionRepository.findLatestConversationInScope(
-        pctx.projectId,
-        scopeKey,
-        pctx.workspaceId,
-        null,
-        tx,
-      ),
-      await planChangeSessionRepository.findLatestConversationForUser(
-        pctx.projectId,
-        scopeKey,
-        pctx.userId,
-        pctx.workspaceId,
-        tx,
-      ),
-    ]);
+    const [row, own, waitingPlan] = await withWorkspaceServiceContext(
+      pctx.workspaceId,
+      async (tx) => {
+        const latestOwn = await planChangeSessionRepository.findLatestConversationForUser(
+          pctx.projectId,
+          scopeKey,
+          pctx.userId,
+          pctx.workspaceId,
+          tx,
+        );
+        return [
+          await planChangeSessionRepository.findLatestConversationInScope(
+            pctx.projectId,
+            scopeKey,
+            pctx.workspaceId,
+            null,
+            tx,
+          ),
+          latestOwn,
+          // The plan a carry would MOVE (MOTIR-7930): read only for an ended
+          // session, since an open one is resumed rather than copied.
+          latestOwn?.endedAt
+            ? await planRepository.findLatestUndecidedBySession(latestOwn.id, tx)
+            : null,
+        ] as const;
+      },
+    );
     return {
       session: null,
-      copyable: toCopyable(own),
+      copyable: toCopyable(own, waitingPlan),
       earlier: row
         ? {
             id: row.id,
@@ -891,29 +952,60 @@ export const planChangeSessionsService = {
   },
 
   /**
-   * CARRY AN ENDED CONVERSATION INTO A NEW SESSION (AMENDMENT 23 §6; MOTIR-7641).
-   * In ONE transaction, under the member's scope lock (so two racing copies
-   * create one session):
+   * CARRY AN ENDED CONVERSATION INTO A NEW SESSION (AMENDMENT 23 §6; MOTIR-7641),
+   * TAKING ITS WAITING PLAN WITH IT (Story MOTIR-7928 · MOTIR-7930). In ONE
+   * transaction, under the member's scope lock (so two racing carries create one
+   * session):
    *
-   *  * the caller's own OPEN session for the source's scope wins — it is
-   *    returned and nothing is copied (a second copy, or a copy after a turn
-   *    already started one, lands there);
-   *  * a source that is not the caller's is `PLAN_SESSION_NOT_FOUND`, so an id
-   *    confirms nothing; one that is open, or ended `restarted` / `approved` /
-   *    `declined`, is `PLAN_SESSION_NOT_COPYABLE`;
+   *  * a source that is not the caller's own `conversation` is
+   *    `PLAN_SESSION_NOT_FOUND`, so an id confirms nothing;
+   *  * the caller's own OPEN session for the source's scope wins — or, with none,
+   *    their open session that already holds one of its cards (the take-back,
+   *    AMENDMENT 23 §3). `opts.body` lands THERE, the result says `takenBack`,
+   *    and nothing is copied or moved: the waiting plan stays where it was;
+   *  * the plan that waits is the source's most recent UNDECIDED plan — or
+   *    `opts.planId`, the plan the person was looking at. It is locked and
+   *    re-read; one decided meanwhile is `PLAN_SESSION_PLAN_DECIDED`;
+   *  * a source still open, or ended with no waiting plan by a restart or a
+   *    decision, is `PLAN_SESSION_NOT_COPYABLE`;
    *  * otherwise a new `conversation` session of the same scope is created with
-   *    `copiedFromSessionId`, holding the source's `user` and `assistant` turns
-   *    in `seq` order — not its `system` turns, not a pending question, not a
-   *    turn's `jobId` (an idempotency key of the old job).
+   *    `copiedFromSessionId`, holding the source's `user` and `assistant` turns in
+   *    `seq` order (not its `system` turns, not a pending question, not a turn's
+   *    `jobId`). The waiting plan MOVES to it (`Plan.sessionId`, with a
+   *    `session_carried` row on its trail), the session takes the scope's cards,
+   *    and `opts.body` is appended as its next turn. That is the first turn doing
+   *    the carry.
    *
-   * It takes NO lock: like the `open` doors it is an explicit start, and its
-   * first new turn takes the scope as any first turn does. The source is left
-   * ended and unchanged. `ai:plan`-gated: it writes.
+   * Lock order: scope lock, then plan row, then work items (inside
+   * `acquireForScopeWithin`). Another member's live hold on a scope card refuses
+   * the acquire and rolls the whole carry back. The source stays ended and
+   * unchanged. `ai:plan`-gated: it writes.
    */
-  async startCopied(pctx: ProjectContext, fromSessionId: string): Promise<PlanChangeSessionDto> {
+  async startCopied(
+    pctx: ProjectContext,
+    fromSessionId: string,
+    opts: {
+      body?: string;
+      isAnswer?: boolean;
+      anchorKey?: string | null;
+      planId?: string | null;
+    } = {},
+  ): Promise<PlanChangeSessionDto> {
+    const body = opts.body?.trim() || null;
+    if (opts.body !== undefined && !body) throw new EmptyPlanChangeTurnError();
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     await assertCanPlan(pctx.projectId, ctx);
     const now = new Date();
+    const firstTurn = (): AppendTurn | null =>
+      body
+        ? {
+            role: 'user',
+            body,
+            authorId: pctx.userId,
+            isAnswer: opts.isAnswer === true,
+            anchorKey: opts.anchorKey ?? null,
+          }
+        : null;
 
     return withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
@@ -933,15 +1025,29 @@ export const planChangeSessionsService = {
           pctx.userId,
           tx,
         );
-        const open = await planChangeSessionRepository.findResumableForUser(
-          pctx.projectId,
-          source.scopeKey,
-          pctx.userId,
-          pctx.workspaceId,
-          tx,
-        );
-        if (open) return toDto(open, pctx, tx);
-        if (!source.endedAt || !source.endReason || !COPYABLE_END_REASONS.has(source.endReason)) {
+        const open =
+          (await planChangeSessionRepository.findResumableForUser(
+            pctx.projectId,
+            source.scopeKey,
+            pctx.userId,
+            pctx.workspaceId,
+            tx,
+          )) ??
+          (await planChangeSessionRepository.findOpenHoldingForUser(
+            pctx.projectId,
+            source.targetKeys,
+            pctx.userId,
+            pctx.workspaceId,
+            tx,
+          ));
+        if (open) {
+          const turn = firstTurn();
+          const landed = turn ? await appendWithin(open.id, pctx, turn, {}, tx) : open;
+          return { ...(await toDto(landed, pctx, tx)), takenBack: true };
+        }
+
+        const waitingPlan = await lockWaitingPlanWithin(source, opts.planId ?? null, pctx, tx);
+        if (!isCopyable(source, waitingPlan)) {
           throw new PlanSessionNotCopyableError(source.id, source.endReason);
         }
 
@@ -981,7 +1087,56 @@ export const planChangeSessionsService = {
             tx,
           );
         }
-        return toDto(created, pctx, tx);
+
+        if (waitingPlan) {
+          // The plan MOVES (never attaches: `Plan.sessionId` is one key), so every
+          // read of "the session's plan" now finds it under the new session.
+          await planRepository.moveToSession(waitingPlan.id, created.id, tx);
+          await planRevisionsService.recordRevision(
+            {
+              planId: waitingPlan.id,
+              changedById: pctx.userId,
+              changeKind: 'session_carried',
+              diff: { fromSessionId: source.id, toSessionId: created.id },
+            },
+            tx,
+          );
+          // The SESSION holds a conversation plan's cards (MOTIR-5648), and the
+          // end gave them back — so the new session takes the scope again, taking
+          // over a lease the caller's own older sessions of this scope still hold.
+          // Another member's hold refuses, and the whole carry rolls back.
+          const predecessors = await planChangeSessionRepository.listIdsForUserInScope(
+            pctx.projectId,
+            source.scopeKey,
+            pctx.userId,
+            pctx.workspaceId,
+            created.id,
+            tx,
+          );
+          await planTargetLockService.acquireForScopeWithin(
+            created.id,
+            source.targetKeys,
+            pctx,
+            now,
+            tx,
+            { takeOverFrom: predecessors },
+          );
+        }
+
+        const turn = firstTurn();
+        if (turn && !waitingPlan) {
+          // A conversation-only carry's first turn takes the scope the way any
+          // first turn does.
+          await planTargetLockService.acquireForScopeWithin(
+            created.id,
+            source.targetKeys,
+            pctx,
+            now,
+            tx,
+          );
+        }
+        const landed = turn ? await appendWithin(created.id, pctx, turn, {}, tx) : created;
+        return toDto(landed, pctx, tx);
       },
     );
   },
