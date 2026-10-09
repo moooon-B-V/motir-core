@@ -378,17 +378,21 @@ test.describe('a second browser', () => {
 
     await chapter(`/dashboard arrives already in ${JA_PICK.family}`, async () => {
       // Record every change to <html data-font-set-sans>, from the first script on.
+      // The client re-applies the same pick on mount; a write that leaves the
+      // value as it was is not a change, so only old !== new is recorded.
       await page.addInitScript(() => {
         const w = window as unknown as { __fontSetChanges: (string | null)[] };
         w.__fontSetChanges = [];
         // `document`, not `<html>`: an init script runs before `<html>` exists.
         new MutationObserver((records) => {
           for (const r of records) {
-            if (r.target === document.documentElement)
-              w.__fontSetChanges.push(document.documentElement.getAttribute('data-font-set-sans'));
+            if (r.target !== document.documentElement) continue;
+            const now = document.documentElement.getAttribute('data-font-set-sans');
+            if (r.oldValue !== now) w.__fontSetChanges.push(now);
           }
         }).observe(document, {
           attributes: true,
+          attributeOldValue: true,
           subtree: true,
           attributeFilter: ['data-font-set-sans'],
         });
