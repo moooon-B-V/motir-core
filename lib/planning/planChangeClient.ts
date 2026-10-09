@@ -420,6 +420,15 @@ export type AskSettleResponse =
       text: string;
       session: PlanChangeSessionDto;
     }
+  // …or the walk was over and the plan not yet decided (MOTIR-7997): the change
+  // became ONE revision of the run's plan. `text` is the forwarded body.
+  | {
+      outcome: 'revised_late';
+      planId: string;
+      revisionJobId: string;
+      text: string;
+      session: PlanChangeSessionDto;
+    }
   | { outcome: 'silent'; session: PlanChangeSessionDto };
 
 /**
@@ -485,6 +494,30 @@ export async function submitAskTurn(
       ...(seedGateId && !sessionId ? { seedGateId } : {}),
       ...(anchorKey ? { anchorKey } : {}),
     },
+    signal,
+  );
+}
+
+/** What {@link submitLateChanges} answers (MOTIR-7997). */
+export type LateChangesResponse =
+  | { outcome: 'none' }
+  | { outcome: 'revised'; planId: string; revisionJobId: string; texts: string[] }
+  | { outcome: 'refused'; code: string; texts: string[]; planStatus?: string };
+
+/**
+ * Turn the changes STRANDED in a finished run's mailbox into ONE revision of its
+ * plan (MOTIR-7997). Called once when a planning run's stream ends and the rail
+ * still lists a forwarded turn it never saw read. A `refused` answer carries every
+ * claimed text, to hand back to the person.
+ */
+export async function submitLateChanges(
+  sessionId: string,
+  runJobId: string,
+  signal?: AbortSignal,
+): Promise<LateChangesResponse> {
+  return post<LateChangesResponse>(
+    '/api/ai/plan-change/session/late-changes',
+    { sessionId, runJobId },
     signal,
   );
 }

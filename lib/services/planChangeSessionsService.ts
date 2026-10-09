@@ -1781,7 +1781,12 @@ export const planChangeSessionsService = {
     turnId: string,
     intent: PlanChangeTurnIntent,
     pctx: ProjectContext,
-    opts: { corrected?: boolean; jobId?: string; forwardedEntryId?: string } = {},
+    opts: {
+      corrected?: boolean;
+      jobId?: string;
+      forwardedEntryId?: string;
+      revisedLateJobId?: string;
+    } = {},
     address: PlanChangeSessionAddress,
   ): Promise<PlanChangeSessionDto> {
     const session = await requireSession(pctx, address);
@@ -1805,6 +1810,8 @@ export const planChangeSessionsService = {
             // The mailbox entry a mid-run turn was FORWARDED as (MOTIR-7996),
             // written in the SAME locked write that records `plan_change`.
             ...(opts.forwardedEntryId ? { forwardedEntryId: opts.forwardedEntryId } : {}),
+            // The REVISE_PLAN job a late change became (MOTIR-7997), same locked write.
+            ...(opts.revisedLateJobId ? { revisedLateJobId: opts.revisedLateJobId } : {}),
             // `corrected` LATCHES: a turn re-read a second time stays corrected,
             // because what the flag records is that Motir once got it wrong, and
             // that does not stop being true.

@@ -49,11 +49,11 @@ export const planChangeTurnRepository = {
     return tx.planChangeTurn.findFirst({ where: { id, sessionId, workspaceId } });
   },
 
-  /** Patch ONE turn in place. Exactly four fields are ever updated — its INTENT,
-   *  the flag recording a correction, the JOB that ran for it, and the mailbox
-   *  entry it was forwarded as (MOTIR-7996) — and a turn's
+  /** Patch ONE turn in place. Exactly five fields are ever updated — its INTENT,
+   *  the flag recording a correction, the JOB that ran for it, the mailbox
+   *  entry it was forwarded as (MOTIR-7996), and the revision job it became (MOTIR-7997) — and a turn's
    *  `body`, `seq` and `role` are immutable by design, because the thread is a
-   *  record of who said what. Typed to those four rather than to the full update
+   *  record of who said what. Typed to those five rather than to the full update
    *  input so that immutability is a compile-time fact, not a convention.
    *  Requires `tx` (the write rule) — and it is called under the session's row
    *  lock, so a concurrent correction cannot interleave with an append.
@@ -73,6 +73,8 @@ export const planChangeTurnRepository = {
       jobId?: string;
       /** The mailbox entry a mid-run turn was forwarded as (MOTIR-7996). */
       forwardedEntryId?: string;
+      /** The REVISE_PLAN job a mid-run turn became (MOTIR-7997). */
+      revisedLateJobId?: string;
     },
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeTurn> {

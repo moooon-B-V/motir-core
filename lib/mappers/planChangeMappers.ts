@@ -58,6 +58,7 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     runJobId: row.runJobId,
     forwardOffer: row.forwardOffer,
     forwarded: row.forwardedEntryId ? { mailboxEntryId: row.forwardedEntryId } : null,
+    revisedLate: row.revisedLateJobId ? { revisionJobId: row.revisedLateJobId } : null,
     authorId: row.authorId,
     createdAt: row.createdAt.toISOString(),
   };

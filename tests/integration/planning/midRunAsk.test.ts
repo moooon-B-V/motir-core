@@ -421,7 +421,9 @@ describe('settle — the mid-run arm', () => {
 
     expect(settled).toMatchObject({
       outcome: 'forward_refused',
-      code: 'PLAN_CHANGE_JOB_NOT_RUNNING',
+      // No plan exists for this run, so the late-change revision (MOTIR-7997) cannot
+      // apply and the refusal carries ITS code; the run-ended status is unchanged.
+      code: 'PLAN_CHANGE_NO_PLAN',
       jobStatus: 'succeeded',
       text: 'add a reporting epic',
     });

@@ -6,6 +6,8 @@ import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { MotirAiConfigError } from '@/lib/ai/errors';
 import { planRunContextService, type RunContext } from '@/lib/services/planRunContextService';
 import { planChangeMailboxService } from '@/lib/services/planChangeMailboxService';
+import { planChangeLateChangeService } from '@/lib/services/planChangeLateChangeService';
+import { plansService } from '@/lib/services/plansService';
 import type { MailboxDeliveryDto } from '@/lib/dto/planChangeMailbox';
 import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -160,12 +162,23 @@ export type AskSettleResult =
   | { outcome: 'forwarded'; delivery: MailboxDeliveryDto; session: PlanChangeSessionDto }
   // …or would have, but the run is over. The person's turn stays on the thread as
   // an `ask`; `text` is the words to hand back to the composer. `jobStatus` names
-  // how the run ended, so the late-revision work can intercept the not-yet-closed
-  // plan before it reaches the person.
+  // how the run ended. `code` is why the words were not revised into the plan
+  // (MOTIR-7997): a late-change refusal code, or the mailbox's own mismatch code.
   | {
       outcome: 'forward_refused';
       code: string;
       jobStatus: string;
+      text: string;
+      session: PlanChangeSessionDto;
+    }
+  // …or the run's WALK was over but its plan not yet decided (MOTIR-7997): the
+  // change became ONE REVISE_PLAN revision of that same plan, and the user turn is
+  // recorded `plan_change` with the revision job. Not `forward_refused`: nothing
+  // went back to the person.
+  | {
+      outcome: 'revised_late';
+      planId: string;
+      revisionJobId: string;
       text: string;
       session: PlanChangeSessionDto;
     }
@@ -374,6 +387,21 @@ async function settleMidRun(args: {
       const delivery = await planChangeMailboxService.peekForJob(runJobId, ctx, session.id);
       return { outcome: 'forwarded', delivery, session };
     }
+    // Already revised in by an earlier settle of this same job (MOTIR-7997): the
+    // revision exists, so answer it again and submit nothing. The revision job
+    // is the plan's `sourceJobId` now, which is how the plan is found again.
+    if (turn.revisedLate) {
+      const planId = await plansService.findPlanIdForJob(turn.revisedLate.revisionJobId, ctx);
+      if (planId) {
+        return {
+          outcome: 'revised_late',
+          planId,
+          revisionJobId: turn.revisedLate.revisionJobId,
+          text: turn.body,
+          session,
+        };
+      }
+    }
     const offered = pendingOfferOf(session.turns.filter((t) => t.seq < turn.seq))?.turnText;
     const echoed = outcome.forward?.text ?? null;
     const chosen =
@@ -402,9 +430,33 @@ async function settleMidRun(args: {
       // The run is over: nothing was written. The person's turn stays on the
       // thread as an `ask` and nothing is retried; the words go back to them.
       if (err instanceof PlanChangeJobNotRunningError) {
+        // THE WALK IS OVER BUT THE PLAN MAY NOT BE CLOSED (MOTIR-7997): a change
+        // that arrives now is applied as a revision of the run's own plan, not lost.
+        // `reviseLate` refuses with a reason (a decided plan, a stopped or failed
+        // run, another revision holding the plan) and the text goes back.
+        const late = await planChangeLateChangeService.reviseLate(
+          { sessionId: session.id, runJobId, texts: [chosen] },
+          ctx,
+        );
+        if (late.outcome === 'revised') {
+          const updated = await planChangeSessionsService.recordTurnIntent(
+            turn.id,
+            'plan_change',
+            ctx,
+            { revisedLateJobId: late.revisionJobId },
+            address,
+          );
+          return {
+            outcome: 'revised_late',
+            planId: late.planId,
+            revisionJobId: late.revisionJobId,
+            text: chosen,
+            session: updated,
+          };
+        }
         return {
           outcome: 'forward_refused',
-          code: err.code,
+          code: late.code,
           jobStatus: err.status,
           text: chosen,
           session,

@@ -149,6 +149,13 @@ export interface PlanChangeTurnDto {
    * it. Null on every other turn. Optional for the reason {@link anchorKey} is.
    */
   forwarded?: { mailboxEntryId: string } | null;
+  /**
+   * Set on a mid-run `user` turn that was forwarded after the walk finished but
+   * before the plan was decided, and so became a REVISE_PLAN revision of the run's
+   * own plan (MOTIR-7997): the revision job. Null on every other turn. Optional for
+   * the reason {@link anchorKey} is.
+   */
+  revisedLate?: { revisionJobId: string } | null;
   authorId: string | null;
   createdAt: string;
 }

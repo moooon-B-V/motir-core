@@ -9085,6 +9085,13 @@ model PlanChangeTurn {
   /// FK, for the reason `citations` gives: the mailbox is the pipe, this is the
   /// thread's record of what went down it. Null on a turn that was not forwarded.
   forwardedEntryId      String?                @map("forwarded_entry_id")
+  /// The REVISION job a mid-run `user` turn became (Story MOTIR-7990 · MOTIR-7997):
+  /// the change was forwarded after the walk finished but before the plan was
+  /// decided, so it was submitted as a REVISE_PLAN revision of the run's own plan
+  /// instead of being dropped. An opaque job id (no FK, the `jobId` precedent). The
+  /// rail draws "applied as a revision of the plan" from it. Null on every turn that
+  /// was not revised late.
+  revisedLateJobId      String?                @map("revised_late_job_id")
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).

@@ -21,6 +21,7 @@ import {
   resumeContextualSession,
   settleAskJob,
   submitMidRunAskTurn,
+  submitLateChanges,
   startCopiedSession,
   requestRestartConfirm,
   answerRestart,
@@ -342,6 +343,16 @@ export interface PlanChangeConversationState {
    */
   refusedForward?: { text: string; code: string } | null;
   /**
+   * A change the person forwarded after the walk finished but before the plan was
+   * decided, now applied as ONE revision of the plan (MOTIR-7997): `planId` is the
+   * plan, `revisionJobId` the REVISE_PLAN job (on the plan's timeline), `count` the
+   * forwarded changes it carries. Set by the late-changes call at the end of a run
+   * and by the settle's `revised_late` outcome. The rail draws it (the rail-rendering
+   * work item); this state only carries it. Null otherwise. OPTIONAL (absent reads as
+   * null) so a state built by hand — every rail test — needs no change.
+   */
+  lateRevision?: { planId: string; revisionJobId: string; count: number } | null;
+  /**
    * The run ENDED because the user ended it.
    *
    * ⚠️ THIS IS NOT AN ERROR, and the code below goes out of its way not to record
@@ -472,6 +483,7 @@ const INITIAL: PlanChangeConversationState = {
   stopped: false,
   queued: [],
   refusedForward: null,
+  lateRevision: null,
   earlier: null,
   reopened: null,
   readOnly: false,
@@ -1491,6 +1503,51 @@ export function usePlanChangeConversation({
     [settleEnd, adoptStalePlan, followPlan],
   );
 
+  /**
+   * The late-change claim (MOTIR-7997), made ONCE when a planning run's stream
+   * ends. It fires only when the mailbox state this hook already holds still lists
+   * a forwarded turn the run was never seen to read; otherwise nothing is sent.
+   *
+   *  * `revised` → the stranded changes are now ONE revision: `queued` clears and
+   *    `lateRevision` is set.
+   *  * `refused` → nothing was revised: `refusedForward` carries the joined texts
+   *    and the reason, for the composer to take back.
+   *  * `none` → nothing was stranded (the run read them after the last poll): the
+   *    queued turns are marked read.
+   *
+   * A failed call is not a finding: the turns stay queued and the thread keeps
+   * them — the person's words are never removed from the record.
+   */
+  const claimLateChanges = useCallback(async (runJobId: string, signal: AbortSignal) => {
+    const sessionId = stateRef.current.session?.id;
+    if (!sessionId || !stateRef.current.queued.some((t) => !t.read)) return;
+    try {
+      const answer = await submitLateChanges(sessionId, runJobId, signal);
+      if (!mountedRef.current) return;
+      if (answer.outcome === 'revised') {
+        setState((s) => ({
+          ...s,
+          queued: [],
+          lateRevision: {
+            planId: answer.planId,
+            revisionJobId: answer.revisionJobId,
+            count: answer.texts.length,
+          },
+        }));
+      } else if (answer.outcome === 'refused') {
+        setState((s) => ({
+          ...s,
+          queued: [],
+          refusedForward: { text: answer.texts.join('\n\n'), code: answer.code },
+        }));
+      } else {
+        setState((s) => ({ ...s, queued: s.queued.map((t) => ({ ...t, read: true })) }));
+      }
+    } catch {
+      /* the turns stay queued; the next end-of-run (or a reload) asks again. */
+    }
+  }, []);
+
   const finishPlanRun = useCallback(
     async (
       jobId: string,
@@ -1579,6 +1636,20 @@ export function usePlanChangeConversation({
         if (jobStatus === null || TERMINAL_JOB_STATUSES.has(jobStatus)) break;
         await pauseBeforeResubscribe(attempt, controller.signal);
         if (controller.signal.aborted || !mountedRef.current) break;
+      }
+      // ⚠️ THE WALK IS OVER (MOTIR-7997): a change the person forwarded that the run
+      // never read — it was accepted while the job was still validating and closing
+      // the plan — is stranded in the mailbox. Ask the server once to claim it and
+      // submit it as ONE revision of this plan, or hand it back with the reason.
+      // Only an unread forwarded turn triggers it, so an ordinary run (nobody typed
+      // anything) makes no request, and only a run whose end the stream actually
+      // reported (never an aborted or unmounted one).
+      if (
+        (failed || (jobStatus !== null && TERMINAL_JOB_STATUSES.has(jobStatus))) &&
+        mountedRef.current &&
+        !controller.signal.aborted
+      ) {
+        await claimLateChanges(jobId, controller.signal);
       }
       if (!failed && jobStatus === 'failed') {
         // The job FAILED and no reason arrived with it (the relay sends one when
@@ -1675,7 +1746,7 @@ export function usePlanChangeConversation({
         stoppingRef.current = false;
       }
     },
-    [readProposalOnce, settleEnd],
+    [readProposalOnce, settleEnd, claimLateChanges],
   );
 
   /** Submit the thread's ACCUMULATED intent, then stream + settle the job. Shared
@@ -2370,7 +2441,7 @@ export function usePlanChangeConversation({
             s.session && s.session.id === incoming.id && s.session.turnCount > incoming.turnCount
               ? s.session
               : incoming;
-          setState((s) => ({ ...s, refusedForward: null }));
+          setState((s) => ({ ...s, refusedForward: null, lateRevision: null }));
           try {
             const submitted = await submitMidRunAskTurn(
               midRunSessionId,
@@ -2409,6 +2480,16 @@ export function usePlanChangeConversation({
                 // The whole pending set, as the mailbox door answered it; the shipped
                 // poll reports each one read.
                 queued: delivery.turns.map((t) => ({ id: t.id, text: t.text, read: false })),
+              }));
+            } else if (settled.outcome === 'revised_late') {
+              setState((s) => ({
+                ...s,
+                session: adopt(s, settled.session),
+                lateRevision: {
+                  planId: settled.planId,
+                  revisionJobId: settled.revisionJobId,
+                  count: 1,
+                },
               }));
             } else if (settled.outcome === 'forward_refused') {
               setState((s) => ({

@@ -5463,6 +5463,27 @@ export const plansService = {
   },
 
   /**
+   * A SESSION's latest plan id, REGARDLESS of decision state (MOTIR-7997) — the
+   * outcome-read sibling of {@link plansService.findPendingPlanIdForSession}, which
+   * hides a decided plan because its caller offers a confirm. A late change asks
+   * "which plan did this conversation produce, and what became of it?", and a
+   * decided plan is a perfectly good answer. Browse-gated; a session of another
+   * project answers `null`.
+   */
+  async findLatestPlanIdForSession(
+    projectId: string,
+    sessionId: string,
+    ctx: ServiceContext,
+  ): Promise<string | null> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findLatestBySession(sessionId, tx),
+    );
+    if (!plan || plan.projectId !== projectId) return null;
+    return plan.id;
+  },
+
+  /**
    * The plan a job produced, by job id — REGARDLESS of decision state
    * (MOTIR-1825). The OUTCOME-read sibling of
    * {@link plansService.findPendingPlanIdForJob}, which deliberately hides an
