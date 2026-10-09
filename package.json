@@ -60,6 +60,7 @@
     "coverage:enterprise-requests": "vitest run --config vitest.coverage.enterprise-requests.config.ts --coverage",
     "coverage:plan-overlay-only": "vitest run --config vitest.coverage.plan-overlay-only.config.ts --coverage",
     "test:coverage:plan-progress": "vitest run --config vitest.coverage.plan-progress.config.ts --coverage",
+    "test:coverage:tool-call-narration": "vitest run --config vitest.coverage.tool-call-narration.config.ts --coverage",
     "test:guards": "vitest run --config vitest.guards.config.ts",
     "test:docs-guards": "vitest run --config vitest.docs.config.ts",
     "test:watch": "vitest",
