@@ -3570,7 +3570,8 @@
       },
       "type": {
         "name": "Tipografia",
-        "help": "L’abbinamento di caratteri per titoli e testo."
+        "help": "L’abbinamento di caratteri per titoli e testo.",
+        "automatic": "Automatico ({font})"
       },
       "showcase": {
         "eyebrow": "Il tuo stile, in tempo reale in tutto Motir",

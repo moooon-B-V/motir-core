@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
+import { appearancePreferenceService } from '@/lib/services/appearancePreferenceService';
 import { AppearanceCard } from '../_components/AppearanceCard';
 
 // The Appearance pane of the account-settings area (Story 7.3 · Subtask 7.3.58) —
@@ -10,7 +11,8 @@ import { AppearanceCard } from '../_components/AppearanceCard';
 // totality test green by construction (the entry has an on-disk route now). The
 // reservation mechanism itself is retired — MOTIR-4324.
 //
-// A server component (session gate only); the AppearanceCard is the client island
+// A server component: the session gate, then the stored per-language font picks
+// (MOTIR-7899), which seed the Typography axis on a ja, ko or zh page. The AppearanceCard is the client island
 // that reads/writes the ThemeProvider — picking re-skins instantly via
 // localStorage → <html>, with no server write (the inline-edit-no-refresh
 // preference contract). The page-head frames the pane like the Language pane.
@@ -18,7 +20,10 @@ export default async function AccountAppearancePage() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
-  const t = await getTranslations('settings.appearance');
+  const [t, preference] = await Promise.all([
+    getTranslations('settings.appearance'),
+    appearancePreferenceService.getResolved(session.user.id),
+  ]);
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -27,7 +32,7 @@ export default async function AccountAppearancePage() {
         <p className="max-w-[34rem] font-sans text-sm text-(--el-text-muted)">{t('subtitle')}</p>
       </header>
 
-      <AppearanceCard />
+      <AppearanceCard initialFontPicks={preference.fontPicks} />
     </div>
   );
 }

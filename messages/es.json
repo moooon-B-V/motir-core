@@ -3570,7 +3570,8 @@
       },
       "type": {
         "name": "Tipografía",
-        "help": "La combinación de tipos de letra para títulos y texto."
+        "help": "La combinación de tipos de letra para títulos y texto.",
+        "automatic": "Automático ({font})"
       },
       "showcase": {
         "eyebrow": "Tu aspecto, en directo en todo Motir",

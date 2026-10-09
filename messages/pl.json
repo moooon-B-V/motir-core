@@ -3570,7 +3570,8 @@
       },
       "type": {
         "name": "Typografia",
-        "help": "Zestaw czcionek dla nagłówków i tekstu."
+        "help": "Zestaw czcionek dla nagłówków i tekstu.",
+        "automatic": "Automatycznie ({font})"
       },
       "showcase": {
         "eyebrow": "Twój wygląd — na żywo w całym Motir",

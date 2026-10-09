@@ -3570,7 +3570,8 @@
       },
       "type": {
         "name": "字体",
-        "help": "标题与正文的字体搭配。"
+        "help": "标题与正文的字体搭配。",
+        "automatic": "自动（{font}）"
       },
       "showcase": {
         "eyebrow": "你的外观——实时呈现于整个 Motir",

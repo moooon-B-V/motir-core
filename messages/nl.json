@@ -3570,7 +3570,8 @@
       },
       "type": {
         "name": "Typografie",
-        "help": "De lettertypecombinatie voor koppen en tekst."
+        "help": "De lettertypecombinatie voor koppen en tekst.",
+        "automatic": "Automatisch ({font})"
       },
       "showcase": {
         "eyebrow": "Jouw uiterlijk — live in heel Motir",
