@@ -21,7 +21,9 @@ import {
   PlanSessionEndedError,
   PlanSessionNotCopyableError,
   PlanSessionNotFoundError,
+  PlanAgainNotAvailableError,
   PlanSessionPlanDecidedError,
+  PlanSessionPlanStaleError,
   PlanTargetLockedError,
   TurnFilesGuideOnlyError,
 } from '@/lib/planChange/errors';
@@ -31,6 +33,7 @@ import {
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
+import { PlanNotEditableError, PlanRevisionInFlightError } from '@/lib/plans/errors';
 import { InvalidAuthoredBugError } from '@/lib/ai/authoredBug';
 import { InvalidGuideTurnError } from '@/lib/ai/guideWorkItem';
 
@@ -107,6 +110,38 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
         planId: err.planId,
         planStatus: err.planStatus,
       },
+      { status: 409 },
+    );
+  }
+  // A turn over a waiting plan (MOTIR-7945). The stale outcome is a RESULT the
+  // overlay words — never shown raw — naming the finished cards.
+  if (err instanceof PlanSessionPlanStaleError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, planId: err.planId, finishedCards: err.finishedCards },
+      { status: 409 },
+    );
+  }
+  if (err instanceof PlanAgainNotAvailableError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, reason: err.reason, latestPlanId: err.latestPlanId },
+      { status: 409 },
+    );
+  }
+  // A revise that lost its plan to another revision, or to a decision.
+  if (err instanceof PlanRevisionInFlightError) {
+    return NextResponse.json(
+      {
+        code: err.code,
+        error: err.message,
+        heldBy: err.heldBy,
+        expiresAt: err.expiresAt.toISOString(),
+      },
+      { status: 409 },
+    );
+  }
+  if (err instanceof PlanNotEditableError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, status: err.status },
       { status: 409 },
     );
   }

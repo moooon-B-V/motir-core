@@ -49,6 +49,13 @@ import type {
 } from '@/lib/dto/planChange';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planRevisionsService } from '@/lib/services/planRevisionsService';
+import { plansService } from '@/lib/services/plansService';
+import { planDriftService } from '@/lib/services/planDriftService';
+import { PlanNotFoundError } from '@/lib/plans/errors';
+import {
+  classifySessionTurn,
+  type SessionTurnPlanStatus,
+} from '@/lib/planChange/classifySessionTurn';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import {
   EmptyPlanChangeIntentError,
@@ -62,6 +69,9 @@ import {
   PlanSessionNotCopyableError,
   PlanSessionNotFoundError,
   PlanSessionPlanDecidedError,
+  PlanSessionPlanStaleError,
+  PlanAgainNotAvailableError,
+  type StalePlanFinishedCard,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
 import { attachmentsService } from '@/lib/services/attachmentsService';
@@ -725,6 +735,186 @@ async function lockWaitingPlanWithin(
   if (plan.sessionId !== source.id)
     throw new PlanSessionNotCopyableError(source.id, source.endReason);
   return plan;
+}
+
+// ── THE TURN ON A WAITING PLAN (MOTIR-7945) ──────────────────────────────────
+
+function undecidedStatus(status: string): SessionTurnPlanStatus {
+  return status === 'planned' || status === 'stale' ? status : 'generating';
+}
+
+/** The revision actor a conversation's revise records — Motir's own planner. */
+const SESSION_REVISION_ACTOR = { source: 'native', harness: 'Motir', model: null } as const;
+
+/**
+ * REVISE the plan the conversation waits on, then BIND the turn to the session:
+ * the `system` marker turn, `lastJobId` / `lastSubmittedAt` and the lease
+ * heartbeat, exactly as an ordinary submit records them. The revision lease is
+ * taken by `submitSessionRevision` under the PLAN lock; the bind takes the
+ * SESSION lock; the two are never held together.
+ */
+async function reviseWithinSession(
+  session: PlanChangeSession,
+  pctx: ProjectContext,
+  planId: string,
+  intent: string,
+): Promise<PlanChangeSubmitResultDto> {
+  const { jobId } = await aiPlanEditsService.submitSessionRevision(planId, intent, pctx);
+  return bindRevisionTurn(session, pctx, { jobId, planId }, intent);
+}
+
+/**
+ * Record a revision job on its session, in ONE transaction under the session row
+ * lock. A session that ENDED between the submit and this bind takes no turn, and
+ * the lease the job just took is released — a refused bind never leaves a plan
+ * leased to a turn nobody recorded.
+ */
+async function bindRevisionTurn(
+  session: PlanChangeSession,
+  pctx: ProjectContext,
+  submitted: { jobId: string; planId: string },
+  intent: string,
+): Promise<PlanChangeSubmitResultDto> {
+  const { jobId, planId } = submitted;
+  const bound = await withWorkspaceContext(
+    { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+    async (tx) => {
+      const locked = await planChangeSessionRepository.lockById(session.id, tx);
+      const fresh = locked
+        ? await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx)
+        : null;
+      if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+      if (fresh.endedAt) return null;
+      const row = await appendWithin(
+        session.id,
+        pctx,
+        { role: 'system', body: intent, jobId },
+        { lastJobId: jobId, lastSubmittedAt: new Date() },
+        tx,
+      );
+      return toDto(row, pctx, tx);
+    },
+  );
+  if (!bound) {
+    await plansService.releaseRevisionLease(planId, pctx, SESSION_REVISION_ACTOR, {
+      jobId,
+      reason: 'session_ended',
+    });
+    throw new PlanSessionEndedError(session.id);
+  }
+  await planTargetLockService.refreshForSession(session.id, pctx);
+  return { jobId, planId, session: bound };
+}
+
+/** The stale outcome: the finished card(s) the plan changes, in key order. */
+async function staleOutcome(
+  planId: string,
+  pctx: ProjectContext,
+): Promise<PlanSessionPlanStaleError> {
+  const [finished, statuses] = await Promise.all([
+    planDriftService.readTerminalTargets(planId, pctx.projectId, pctx.workspaceId),
+    workflowsService.listStatusesByProject(pctx.projectId, pctx.workspaceId),
+  ]);
+  const labelOf = new Map(statuses.map((s) => [s.key, s.label]));
+  const finishedCards: StalePlanFinishedCard[] = [...finished]
+    .sort((a, b) => a.key - b.key)
+    .map((w) => ({
+      id: w.id,
+      key: w.identifier,
+      title: w.title,
+      status: w.status,
+      statusLabel: labelOf.get(w.status) ?? w.status,
+    }));
+  return new PlanSessionPlanStaleError(planId, finishedCards);
+}
+
+async function planAgainRefusal(
+  sessionId: string,
+  stalePlanId: string,
+  reason: 'decided' | 'superseded',
+  latestPlanId: string | null,
+  pctx: ProjectContext,
+): Promise<Error> {
+  if (reason === 'superseded') return new PlanAgainNotAvailableError('superseded', latestPlanId);
+  const plan = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+    planRepository.findById(stalePlanId, pctx.workspaceId, tx),
+  );
+  if (!plan || plan.sessionId !== sessionId) throw new PlanNotFoundError(stalePlanId);
+  return new PlanSessionPlanDecidedError(sessionId, stalePlanId, plan.status);
+}
+
+type PlanAgainClaim = { kind: 'claimed'; claimedAt: Date; previous: Date | null };
+
+/**
+ * THE DOUBLE-ACCEPT GUARD for Plan it again, BEFORE any job is dispatched: under
+ * the session row lock, the stale plan must still be the plan the conversation
+ * waits on and the accumulated intent must still be UNSUBMITTED (the stale
+ * outcome writes nothing, so after it the intent reads unsubmitted). Setting
+ * `lastSubmittedAt` is the claim — a second accept that takes the lock after
+ * this one commits reads the intent as submitted and is refused. A plan restored
+ * to `planned` in the meantime is revised instead of planned beside.
+ */
+async function claimPlanAgain(
+  session: PlanChangeSession,
+  pctx: ProjectContext,
+  stalePlanId: string,
+): Promise<PlanAgainClaim | { kind: 'revise'; planId: string }> {
+  const out = await withWorkspaceContext(
+    { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+    async (tx) => {
+      const locked = await planChangeSessionRepository.lockById(session.id, tx);
+      const fresh = locked
+        ? await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx)
+        : null;
+      if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+      if (fresh.endedAt) throw new PlanSessionEndedError(fresh.id);
+      const latest = await planRepository.findLatestUndecidedBySession(fresh.id, tx);
+      const turn = classifySessionTurn({
+        origin: fresh.origin,
+        endedAt: fresh.endedAt,
+        latestUndecided: latest ? { id: latest.id, status: undecidedStatus(latest.status) } : null,
+        planAgainOf: stalePlanId,
+      });
+      if (turn.kind === 'revise') return turn;
+      if (turn.kind === 'plan_again_refused') {
+        return { kind: 'refused' as const, reason: turn.reason, latestPlanId: latest?.id ?? null };
+      }
+      const turns = await planChangeTurnRepository.listBySessionId(fresh.id, pctx.workspaceId, tx);
+      const newestUser = [...turns].reverse().find((t) => t.role === 'user');
+      const submittedSince =
+        fresh.lastSubmittedAt !== null &&
+        (!newestUser || fresh.lastSubmittedAt.getTime() >= newestUser.createdAt.getTime());
+      if (submittedSince) {
+        // The winner's job is in flight: its plan does not exist yet.
+        return { kind: 'refused' as const, reason: 'superseded' as const, latestPlanId: null };
+      }
+      const claimedAt = new Date();
+      await planChangeSessionRepository.update(fresh.id, { lastSubmittedAt: claimedAt }, tx);
+      return { kind: 'claimed' as const, claimedAt, previous: fresh.lastSubmittedAt };
+    },
+  );
+  if (out.kind === 'refused') {
+    throw await planAgainRefusal(session.id, stalePlanId, out.reason, out.latestPlanId, pctx);
+  }
+  return out;
+}
+
+/** Give a Plan it again claim back when its job never started — only if no
+ *  later write has moved `lastSubmittedAt` since the claim. */
+async function releasePlanAgainClaim(
+  session: PlanChangeSession,
+  pctx: ProjectContext,
+  claim: PlanAgainClaim,
+): Promise<void> {
+  await withWorkspaceContext(
+    { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+    async (tx) => {
+      await planChangeSessionRepository.lockById(session.id, tx);
+      const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
+      if (fresh?.lastSubmittedAt?.getTime() !== claim.claimedAt.getTime()) return;
+      await planChangeSessionRepository.update(session.id, { lastSubmittedAt: claim.previous }, tx);
+    },
+  );
 }
 
 export const planChangeSessionsService = {
@@ -2093,6 +2283,7 @@ export const planChangeSessionsService = {
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
     requirement?: SubmittedRequirement,
+    opts: { planAgainOf?: string | null } = {},
   ): Promise<PlanChangeSubmitResultDto> {
     const session = await requireSession(pctx, address);
     // A guide conversation never plans (AMENDMENT 2, A2.2): refused before its
@@ -2104,6 +2295,56 @@ export const planChangeSessionsService = {
     const intent = buildAccumulatedIntent(turns);
     if (!intent) throw new EmptyPlanChangeIntentError(session.id);
 
+    // An ENDED conversation plans nothing more (AMENDMENT 23 §3): its waiting
+    // plan is carried into a new session instead (MOTIR-7930). An accept of a
+    // stale outcome whose plan was decided meanwhile (deciding the latest plan
+    // ends its session) says so rather than just "ended".
+    if (session.endedAt) {
+      if (opts.planAgainOf) {
+        const refusal = await planAgainRefusal(session.id, opts.planAgainOf, 'decided', null, pctx);
+        if (
+          refusal instanceof PlanSessionPlanDecidedError &&
+          (refusal.planStatus === 'approved' || refusal.planStatus === 'declined')
+        ) {
+          throw refusal;
+        }
+      }
+      throw new PlanSessionEndedError(session.id);
+    }
+
+    // ROUTED BY THE PLAN THE CONVERSATION WAITS ON (MOTIR-7945): a `planned`
+    // plan is revised in place, a `stale` one is answered in words, and an
+    // accept of that answer plans it again. Read outside any lock — every
+    // branch that writes re-checks under its own lock.
+    const latest = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planRepository.findLatestUndecidedBySession(session.id, tx),
+    );
+    const turn = classifySessionTurn({
+      origin: session.origin,
+      endedAt: session.endedAt,
+      latestUndecided: latest ? { id: latest.id, status: undecidedStatus(latest.status) } : null,
+      planAgainOf: opts.planAgainOf,
+    });
+    if (turn.kind === 'revise') return reviseWithinSession(session, pctx, turn.planId, intent);
+    if (turn.kind === 'stale') throw await staleOutcome(turn.planId, pctx);
+    if (turn.kind === 'plan_again_refused') {
+      throw await planAgainRefusal(
+        session.id,
+        opts.planAgainOf!,
+        turn.reason,
+        latest?.id ?? null,
+        pctx,
+      );
+    }
+    let claim: PlanAgainClaim | null = null;
+    if (turn.kind === 'plan_again') {
+      const claimed = await claimPlanAgain(session, pctx, turn.stalePlanId);
+      if (claimed.kind === 'revise') {
+        return reviseWithinSession(session, pctx, claimed.planId, intent);
+      }
+      claim = claimed;
+    }
+
     // Side effect OUTSIDE the tx: the shipped submit path (tenant/org resolution,
     // code context, the metered motir-ai job). Its typed errors (out-of-credits /
     // transport) propagate for the route to map — a failed submit leaves the
@@ -2111,14 +2352,27 @@ export const planChangeSessionsService = {
     // failure therefore also yields NO plan: `submitPlanEditJob` opens the Plan
     // only AFTER the job is accepted, so there is no `planId` to report and no
     // orphan row to clean up.
-    const { jobId, planId } =
-      session.targetKeys.length > 0
-        ? await aiPlanEditsService.submitContextual(intent, session.targetKeys, pctx, requirement, {
-            sessionId: session.id,
-          })
-        : await aiPlanEditsService.submitAugment(intent, pctx, requirement, {
-            sessionId: session.id,
-          });
+    let submitted: { jobId: string; planId: string };
+    try {
+      submitted =
+        session.targetKeys.length > 0
+          ? await aiPlanEditsService.submitContextual(
+              intent,
+              session.targetKeys,
+              pctx,
+              requirement,
+              { sessionId: session.id },
+            )
+          : await aiPlanEditsService.submitAugment(intent, pctx, requirement, {
+              sessionId: session.id,
+            });
+    } catch (err) {
+      // A Plan it again whose job never started gives its claim back, so the
+      // owner can accept again (MOTIR-7945).
+      if (claim) await releasePlanAgainClaim(session, pctx, claim);
+      throw err;
+    }
+    const { jobId, planId } = submitted;
 
     const updated = await appendLocked(
       session,
