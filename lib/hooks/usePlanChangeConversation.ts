@@ -1508,6 +1508,16 @@ export function usePlanChangeConversation({
             }));
           },
           () => {},
+          // The ask job reports every LOOKUP as a `retrieval` frame (MOTIR-7923):
+          // narrated exactly as a plan run's are, one act per lookup, so a long
+          // answer never reads as a rail stuck on "Reading your request…". Its
+          // phase frames (`status`, `retrieval_ready`) are quiet by the shared
+          // disposition map — a redirect's hand-off is drawn by the settle below.
+          (event, data) => {
+            if (!mountedRef.current) return;
+            const progress = narrateFrame(event, data);
+            if (progress) setState((s) => ({ ...s, progress, acts: [...s.acts, progress] }));
+          },
         );
         if (failed) {
           // Released before the end re-read, as a plan run's failure is.

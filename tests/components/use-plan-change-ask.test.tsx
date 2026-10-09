@@ -185,6 +185,67 @@ describe('an ANSWER', () => {
     expect(seen).toBe('checked');
     expect(result.current.state.progress).toBeNull();
   });
+
+  // MOTIR-7923: the ask job reports every lookup as a `retrieval` frame, and the
+  // rail stayed on "Reading your request…" for the whole answer because the
+  // stream was consumed with no frame handler.
+  it('narrates one act per LOOKUP while it answers, then settles as before', async () => {
+    const held = deferred<void>();
+    let emit!: (event: string, data: unknown) => void;
+    streamAsk.mockImplementation(
+      async (
+        _jobId: string,
+        _signal: AbortSignal,
+        _onError: (code: string | null) => void,
+        _onDone: () => void,
+        onFrame?: (event: string, data: unknown) => void,
+      ) => {
+        if (!onFrame) throw new Error('the ask stream was opened without a frame handler');
+        emit = onFrame;
+        await held.promise;
+      },
+    );
+    const { result } = await mounted();
+
+    let sending!: Promise<void>;
+    act(() => {
+      sending = result.current.send('which service owns the code-graph fan-out?');
+    });
+    await waitFor(() => expect(streamAsk).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      // Phase bookkeeping stays quiet — only the lookups draw a line.
+      emit('status', { phase: 'classifying' });
+      emit('retrieval_ready', { tools: 4 });
+      emit('status', { phase: 'answering' });
+      emit('retrieval', { tool: 'search_code_graph', family: 'code_graph', ok: true });
+      emit('retrieval', { tool: 'get_work_item', family: 'plan_tree', ok: true });
+    });
+
+    expect(result.current.state.phase).toBe('streaming');
+    expect(result.current.state.acts).toEqual([
+      { kind: 'reading' },
+      { kind: 'retrieval', family: 'code_graph', blocked: false },
+      { kind: 'retrieval', family: 'plan_tree', blocked: false },
+    ]);
+    expect(result.current.state.progress).toEqual({
+      kind: 'retrieval',
+      family: 'plan_tree',
+      blocked: false,
+    });
+
+    await act(async () => {
+      held.resolve();
+      await sending;
+    });
+
+    // The answer lands exactly as it did before the lookups were narrated.
+    expect(settleAsk).toHaveBeenCalledWith('ask-1', expect.anything(), 's1');
+    expect(result.current.state.phase).toBe('idle');
+    expect(result.current.state.progress).toBeNull();
+    expect(result.current.state.session).toEqual(ANSWERED);
+    expect(result.current.state.errorCode).toBeNull();
+  });
 });
 
 describe('a SILENT job — it ran and said nothing at all', () => {
