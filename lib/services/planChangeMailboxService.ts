@@ -36,13 +36,24 @@ import {
 // who is still typing and a planning job that has already read its envelope.
 //
 // WHAT THIS IS NOT: a way to interrupt a run. A planning job reads `requestJson`
-// once, at dispatch, and the obvious repair — deliver input as a signal — is the
-// wrong one, settled next door by MOTIR-3942 / MOTIR-4060 and not re-opened
-// here. A planning session is a COHERENT ACT: a card authored half under one set
-// of instructions and half under another is written from two minds, and nothing
-// downstream can tell which half came from where. So this is STORAGE THE JOB
-// CHECKS, at a phase boundary it already has, never a mechanism that preempts
-// it. A turn that arrives during an `author` sits until that author finishes.
+// once, at dispatch, and nothing here preempts a model turn or a tool call. This
+// is STORAGE THE JOB CHECKS.
+//
+// ⚠️ WHEN IT IS CHECKED is `docs/decisions/conversation-turn-intent.md`
+// AMENDMENT 4 (MOTIR-7991), which supersedes the phase-boundary read MOTIR-4060
+// set for CHANGE input:
+//   - Only a CHANGE reaches this mailbox. A turn typed mid-run goes to the
+//     answering session (`ask_project` with run context) first; a question is
+//     answered on the side and never lands here (A4.1 / A4.2).
+//   - A forwarded change is read at the running session's next TOOL-CALL GAP —
+//     after a tool result, before the next model turn — by every running walk
+//     session, and handed to every later session in its task (A4.3).
+//   - The `restart` disposition is still the person's START OVER; it may now
+//     also be written because the person accepted a START OVER the PLANNER
+//     offered on a re-plan verdict (A4.5).
+//   - The person's answer to the planner's unclear-about-WHAT question arrives
+//     as an ordinary forwarded `fold` turn, ruled again like any change (A4.4).
+// STOP keeps its boundary read and its let-the-session-finish rule (A4.7).
 //
 // ⚠️ THE READ SHAPE IS A TWO-REPO CONTRACT AND THE CONSUMER LANDED FIRST.
 // `motir-ai` `src/llm/mailbox.ts` (MOTIR-4060, merged) already accepts
