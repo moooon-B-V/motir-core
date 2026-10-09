@@ -326,6 +326,31 @@ export const planChangeMailboxService = {
   },
 
   /**
+   * The id of the entry a delivery was written as, by the caller's own idempotency
+   * key (MOTIR-7996) — or null. {@link attachTurn} answers with the mailbox as it
+   * stands, which does not say WHICH entry was this call's, so a caller that must
+   * record "this turn went down the pipe as entry X" (the ask settle's forwarded
+   * marker) reads it back by the key it supplied. A read; it writes nothing.
+   */
+  async entryIdForKey(
+    jobId: string,
+    sessionId: string,
+    idempotencyKey: string,
+    pctx: MailboxContext,
+  ): Promise<string | null> {
+    return withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+      const entry = await planChangeMailboxRepository.findByIdempotencyKey(
+        sessionId,
+        jobId,
+        idempotencyKey,
+        pctx.workspaceId,
+        tx,
+      );
+      return entry?.id ?? null;
+    });
+  },
+
+  /**
    * RAISE THE STOP — the same pipe, taking the other kind.
    *
    * ⚠️ SCOPE. This is the pipe's write, and it is all of it: what a stop does to

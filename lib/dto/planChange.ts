@@ -130,6 +130,25 @@ export interface PlanChangeTurnDto {
    * other turn. Optional for the reason {@link anchorKey} is.
    */
   confirm?: PlanChangeTurnConfirmDto | null;
+  /**
+   * The planning job that was RUNNING when this `user` turn was typed (MOTIR-7996).
+   * Present on a MID-RUN turn, which was answered by an `ask_project` job carrying
+   * the run's snapshot rather than queued for the planner. Null on every other
+   * turn. Optional for the reason {@link anchorKey} is.
+   */
+  runJobId?: string | null;
+  /**
+   * The exact text an `assistant` answer OFFERED to forward to the running planner
+   * (MOTIR-7996) — the offered `user` turn's own body. Null on every other turn.
+   * Optional for the reason {@link anchorKey} is.
+   */
+  forwardOffer?: string | null;
+  /**
+   * Set on a mid-run `user` turn that was FORWARDED to the running planner: the
+   * mailbox entry it went down as. The rail draws forwarded → queued → read from
+   * it. Null on every other turn. Optional for the reason {@link anchorKey} is.
+   */
+  forwarded?: { mailboxEntryId: string } | null;
   authorId: string | null;
   createdAt: string;
 }

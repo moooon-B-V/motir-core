@@ -55,6 +55,9 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     guide: readGuideTurnRecord(row.guideTurn),
     attachmentIds: row.attachmentIds,
     confirm: (row.confirm as PlanChangeTurnConfirmDto | null) ?? null,
+    runJobId: row.runJobId,
+    forwardOffer: row.forwardOffer,
+    forwarded: row.forwardedEntryId ? { mailboxEntryId: row.forwardedEntryId } : null,
     authorId: row.authorId,
     createdAt: row.createdAt.toISOString(),
   };

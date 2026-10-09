@@ -316,6 +316,10 @@ interface AppendTurn {
   attachmentIds?: readonly string[];
   /** The fixed confirm core writes on an `assistant` turn (MOTIR-7649). */
   confirm?: PlanChangeTurnConfirm | null;
+  /** The planning job running when a `user` turn was typed (MOTIR-7996). */
+  runJobId?: string | null;
+  /** The text an `assistant` answer offered to forward (MOTIR-7996). */
+  forwardOffer?: string | null;
 }
 
 async function appendLocked(
@@ -383,6 +387,8 @@ async function appendWithin(
         anchorKey: turn.anchorKey ?? null,
         attachmentIds: turn.attachmentIds ? [...turn.attachmentIds] : [],
         confirm: turn.confirm ?? null,
+        runJobId: turn.runJobId ?? null,
+        forwardOffer: turn.forwardOffer ?? null,
         // An explicit literal, not the DTO itself: Prisma's JSON input wants an
         // indexable object, and spelling the four fields keeps the column's
         // shape exactly the DTO's.
@@ -1656,6 +1662,12 @@ export const planChangeSessionsService = {
       jobId?: string;
       anchorKey?: string | null;
       /**
+       * The planning job that was RUNNING when this turn was typed (MOTIR-7996).
+       * Marks the turn as a mid-run turn, which is what keeps its settle from ever
+       * opening a new planning run for it.
+       */
+      runJobId?: string;
+      /**
        * The files a GUIDE turn carries (MOTIR-7484; `guide-turn-files.md` A3.2),
        * already validated by `aiGuideService` against the guided card. A turn
        * with files may carry no words, so the empty-body refusal narrows to a
@@ -1683,6 +1695,7 @@ export const planChangeSessionsService = {
       // The anchor the ASK SERVICE resolved (MOTIR-7064) — an identifier this
       // caller can see, never the raw posted string.
       anchorKey: opts.anchorKey ?? null,
+      ...(opts.runJobId ? { runJobId: opts.runJobId } : {}),
       ...(files.length > 0 ? { attachmentIds: files } : {}),
     });
   },
@@ -1716,6 +1729,9 @@ export const planChangeSessionsService = {
       body: string;
       citations?: readonly string[];
       debugLanding?: DebugLandingDto | null;
+      /** The exact text this answer OFFERS to forward to the running planner
+       *  (MOTIR-7996) — the offered `user` turn's body. */
+      forwardOffer?: string | null;
     },
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
@@ -1733,6 +1749,7 @@ export const planChangeSessionsService = {
         jobId: input.jobId,
         citations,
         debugLanding: input.debugLanding ?? null,
+        forwardOffer: input.forwardOffer ?? null,
       },
       {},
       async (tx) =>
@@ -1764,7 +1781,7 @@ export const planChangeSessionsService = {
     turnId: string,
     intent: PlanChangeTurnIntent,
     pctx: ProjectContext,
-    opts: { corrected?: boolean; jobId?: string } = {},
+    opts: { corrected?: boolean; jobId?: string; forwardedEntryId?: string } = {},
     address: PlanChangeSessionAddress,
   ): Promise<PlanChangeSessionDto> {
     const session = await requireSession(pctx, address);
@@ -1785,6 +1802,9 @@ export const planChangeSessionsService = {
           {
             intent,
             ...(opts.jobId ? { jobId: opts.jobId } : {}),
+            // The mailbox entry a mid-run turn was FORWARDED as (MOTIR-7996),
+            // written in the SAME locked write that records `plan_change`.
+            ...(opts.forwardedEntryId ? { forwardedEntryId: opts.forwardedEntryId } : {}),
             // `corrected` LATCHES: a turn re-read a second time stays corrected,
             // because what the flag records is that Motir once got it wrong, and
             // that does not stop being true.

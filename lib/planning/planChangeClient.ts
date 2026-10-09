@@ -410,6 +410,16 @@ export type AskSettleResponse =
   | { outcome: 'debugged'; landing: DebugLandingDto; session: PlanChangeSessionDto }
   // A `new_session` turn (MOTIR-7649): the confirm is on the thread, no job ran.
   | { outcome: 'confirming'; session: PlanChangeSessionDto }
+  // A MID-RUN turn (MOTIR-7996) read as a change: forwarded to the running job.
+  | { outcome: 'forwarded'; delivery: MailboxDeliveryResponse; session: PlanChangeSessionDto }
+  // …but the run had ended. Nothing was written; `text` goes back to the composer.
+  | {
+      outcome: 'forward_refused';
+      code: string;
+      jobStatus: string;
+      text: string;
+      session: PlanChangeSessionDto;
+    }
   | { outcome: 'silent'; session: PlanChangeSessionDto };
 
 /**
@@ -477,6 +487,22 @@ export async function submitAskTurn(
     },
     signal,
   );
+}
+
+/**
+ * Send a turn typed WHILE a planning run is in progress (MOTIR-7996). It is NOT
+ * the mailbox: it goes to the answering session with a run snapshot, and only a
+ * change verdict is forwarded to the run (at settle). The response is an ordinary
+ * ask submit — stream and settle its `jobId` like any ask, on its own controller.
+ */
+export async function submitMidRunAskTurn(
+  sessionId: string,
+  runJobId: string,
+  planId: string,
+  body: string,
+  signal?: AbortSignal,
+): Promise<AskSubmitResponse> {
+  return post<AskSubmitResponse>('/api/ai/ask', { body, sessionId, runJobId, planId }, signal);
 }
 
 /**

@@ -20,6 +20,7 @@ import {
   resubmitContextualPlan,
   resumeContextualSession,
   settleAskJob,
+  submitMidRunAskTurn,
   startCopiedSession,
   requestRestartConfirm,
   answerRestart,
@@ -331,6 +332,16 @@ export interface PlanChangeConversationState {
    */
   queued: QueuedTurn[];
   /**
+   * A change the person typed mid-run that the answering session read as a CHANGE
+   * but could not forward, because the run had ENDED (MOTIR-7996). The turn is
+   * still on the thread; `text` is the words to hand back to the composer and
+   * `code` is why (`PLAN_CHANGE_JOB_NOT_RUNNING`). The rail draws it and puts the
+   * text back (the rail-rendering work item); this state only carries it. Null
+   * otherwise, and cleared by the next mid-run send. OPTIONAL (absent reads as null)
+   * so a state built by hand — every rail test — needs no change.
+   */
+  refusedForward?: { text: string; code: string } | null;
+  /**
    * The run ENDED because the user ended it.
    *
    * ⚠️ THIS IS NOT AN ERROR, and the code below goes out of its way not to record
@@ -460,6 +471,7 @@ const INITIAL: PlanChangeConversationState = {
   stopping: false,
   stopped: false,
   queued: [],
+  refusedForward: null,
   earlier: null,
   reopened: null,
   readOnly: false,
@@ -981,15 +993,22 @@ export function usePlanChangeConversation({
     anchorRef.current = anchorId;
   });
 
+  // The side ASKS a mid-run turn opens (MOTIR-7996), each on its OWN controller so
+  // the planning run's `abortRef` — and its Stop — are never touched by one.
+  const midRunAbortsRef = useRef<Set<AbortController>>(new Set());
+
   useEffect(() => {
     mountedRef.current = true;
     const live = new AbortController();
     liveAbortRef.current = live;
+    const midRunAborts = midRunAbortsRef.current;
     return () => {
       mountedRef.current = false;
       abortRef.current?.abort();
       abortRef.current = null;
       live.abort();
+      for (const c of midRunAborts) c.abort();
+      midRunAborts.clear();
     };
   }, []);
 
@@ -2327,6 +2346,89 @@ export function usePlanChangeConversation({
       if (stateRef.current.phase === 'streaming') {
         const jobId = stateRef.current.jobId;
         if (!jobId) return;
+        // ⚠️ A PLANNING RUN IS WORKING (MOTIR-7996; ADR AMENDMENT 4) → THE ANSWERING
+        // SESSION, NOT THE MAILBOX. The turn is read before it can reach the walk:
+        // a question is answered on the thread, an unsure turn is answered with an
+        // offer to forward, and only a change is forwarded (by the settle).
+        //
+        // It applies only when the running job IS a planning run (`planId` set); an
+        // ask streaming on its own keeps the path below. And it NEVER touches
+        // `jobId`, `phase`, `stopping` or the run's `abortRef`: the planning run and
+        // its Stop are unaffected, the ask streams and settles on its own controller.
+        const midRunPlanId = stateRef.current.planId;
+        const midRunSessionId = stateRef.current.session?.id;
+        if (midRunPlanId && midRunSessionId) {
+          const controller = new AbortController();
+          midRunAbortsRef.current.add(controller);
+          // A session copy from the server is adopted only if it is not OLDER than
+          // what the rail holds (turns only grow), so a slow settle cannot roll the
+          // thread back over a newer write.
+          const adopt = (
+            s: PlanChangeConversationState,
+            incoming: PlanChangeSessionDto,
+          ): PlanChangeSessionDto =>
+            s.session && s.session.id === incoming.id && s.session.turnCount > incoming.turnCount
+              ? s.session
+              : incoming;
+          setState((s) => ({ ...s, refusedForward: null }));
+          try {
+            const submitted = await submitMidRunAskTurn(
+              midRunSessionId,
+              jobId,
+              midRunPlanId,
+              body,
+              controller.signal,
+            );
+            if (!mountedRef.current) return;
+            setState((s) => ({ ...s, session: adopt(s, submitted.session) }));
+            let failed = false;
+            await streamAskJob(
+              submitted.jobId,
+              controller.signal,
+              (code) => {
+                failed = true;
+                if (!mountedRef.current) return;
+                const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
+                // The RUN's phase is not this ask's to change; only the error shows.
+                setState((s) => ({
+                  ...s,
+                  errorCode: gated ? s.errorCode : (code ?? 'FAILED'),
+                  outOfCredits: gated || s.outOfCredits,
+                }));
+              },
+              () => {},
+            );
+            if (failed || !mountedRef.current) return;
+            const settled = await settleAskJob(submitted.jobId, controller.signal, midRunSessionId);
+            if (!mountedRef.current) return;
+            if (settled.outcome === 'forwarded') {
+              const delivery = settled.delivery;
+              setState((s) => ({
+                ...s,
+                session: adopt(s, settled.session),
+                // The whole pending set, as the mailbox door answered it; the shipped
+                // poll reports each one read.
+                queued: delivery.turns.map((t) => ({ id: t.id, text: t.text, read: false })),
+              }));
+            } else if (settled.outcome === 'forward_refused') {
+              setState((s) => ({
+                ...s,
+                session: adopt(s, settled.session),
+                refusedForward: { text: settled.text, code: settled.code },
+              }));
+            } else {
+              setState((s) => ({ ...s, session: adopt(s, settled.session) }));
+            }
+          } catch (err) {
+            if (err instanceof DOMException && err.name === 'AbortError') return;
+            if (!mountedRef.current) return;
+            const code = err instanceof PlanEditsClientError ? err.code : null;
+            setState((s) => ({ ...s, errorCode: code ?? 'MAILBOX_FAILED' }));
+          } finally {
+            midRunAbortsRef.current.delete(controller);
+          }
+          return;
+        }
         // Per SEND, never per render: a retry of this click must deliver once,
         // and the next sentence must not be swallowed as a replay of this one.
         const idempotencyKey = `turn:${jobId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;

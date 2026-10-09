@@ -120,3 +120,87 @@ describe('readAskOutcome — the citations', () => {
     );
   });
 });
+
+// RUN MODE (MOTIR-7996) — the three fields `ask_project` adds when a turn's
+// `context.run` is present: `forward`, `offerForward` and `run`.
+describe('readAskOutcome — run mode', () => {
+  it('reads a forward on a plan_change, bounded', () => {
+    const out = readAskOutcome({
+      ask: { intent: 'plan_change', forward: { text: '  move checkout  ' } },
+    });
+    expect(out).toMatchObject({ intent: 'plan_change', forward: { text: 'move checkout' } });
+
+    const long = readAskOutcome({
+      ask: { intent: 'plan_change', forward: { text: 'x'.repeat(ASK_ANSWER_MAX_CHARS + 50) } },
+    });
+    expect(long!.forward!.text.length).toBeLessThanOrEqual(ASK_ANSWER_MAX_CHARS);
+  });
+
+  it.each([
+    ['a string', 'move checkout'],
+    ['an array', ['move checkout']],
+    ['a blank text', { text: '   ' }],
+    ['a non-string text', { text: 7 }],
+    ['null', null],
+  ])('reads a malformed forward (%s) as null without changing the intent', (_name, forward) => {
+    const out = readAskOutcome({ ask: { intent: 'plan_change', forward } });
+    expect(out).toMatchObject({
+      intent: 'plan_change',
+      answer: null,
+      citations: [],
+      forward: null,
+    });
+  });
+
+  it('keeps a legacy plan_change (no forward key) in its exact old shape', () => {
+    expect(readAskOutcome({ ask: { intent: 'plan_change' } })).toEqual({
+      intent: 'plan_change',
+      answer: null,
+      citations: [],
+    });
+  });
+
+  it('reads an offerForward on an ask, bounded, and null when malformed', () => {
+    expect(
+      readAskOutcome({
+        ask: { intent: 'ask', answer: 'Forward it?', offerForward: { text: 'x' } },
+      }),
+    ).toMatchObject({ intent: 'ask', offerForward: { text: 'x' } });
+    expect(
+      readAskOutcome({ ask: { intent: 'ask', answer: 'a', offerForward: 'x' } })!.offerForward,
+    ).toBeNull();
+    expect(
+      readAskOutcome({
+        ask: {
+          intent: 'ask',
+          answer: 'a',
+          offerForward: { text: 'y'.repeat(ASK_ANSWER_MAX_CHARS * 2) },
+        },
+      })!.offerForward!.text.length,
+    ).toBeLessThanOrEqual(ASK_ANSWER_MAX_CHARS);
+  });
+
+  it('reads the run echo, and null for a malformed one', () => {
+    expect(
+      readAskOutcome({
+        ask: { intent: 'ask', answer: 'a', run: { readable: false, reason: 'PLAN_NOT_FOUND' } },
+      })!.run,
+    ).toEqual({ readable: false, reason: 'PLAN_NOT_FOUND' });
+    expect(
+      readAskOutcome({ ask: { intent: 'ask', answer: 'a', run: { readable: true } } })!.run,
+    ).toEqual({ readable: true, reason: null });
+    const malformed = readAskOutcome({
+      ask: { intent: 'ask', answer: 'a', run: { readable: 'yes' } },
+    });
+    expect(malformed!.run ?? null).toBeNull();
+    expect(malformed!.intent).toBe('ask');
+  });
+
+  it('never reads a malformed run-mode result as a plan change', () => {
+    expect(
+      readAskOutcome({ ask: { forward: { text: 'x' }, offerForward: { text: 'y' } } }),
+    ).toMatchObject({
+      intent: 'ask',
+    });
+  });
+});

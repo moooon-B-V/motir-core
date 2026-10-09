@@ -43,6 +43,14 @@ import { PlanSeedNotApplicableError } from '@/lib/planChange/errors';
 //   A3.2): DATA like `anchorKey`, legal only on a GUIDE conversation named by
 //   `sessionId` — anywhere else the whole turn is a 400 before anything is
 //   written. With files, `body` may be empty.
+//   { body, sessionId, runJobId, planId } — a MID-RUN turn (MOTIR-7996; ADR
+//                                  AMENDMENT 4): typed while a planning run is in
+//                                  progress. It is answered by an `ask_project` job
+//                                  carrying a run snapshot, and only a change
+//                                  verdict reaches the running job's mailbox (at
+//                                  settle). `sessionId` is required with them, and
+//                                  must be the session that is on `runJobId` — a
+//                                  mismatch is the mailbox's no-existence-leak 404.
 //   { turnId, flip? }            — RE-RUN a turn already on the thread: the retry
 //                                  after a failed submit (`flip` absent) and the
 //                                  correction affordance (`flip: true`). The
@@ -81,6 +89,8 @@ export async function POST(req: Request): Promise<Response> {
     seedGateId?: unknown;
     anchorKey?: unknown;
     attachmentIds?: unknown;
+    runJobId?: unknown;
+    planId?: unknown;
   };
   // The conversation the client holds (MOTIR-6023; AMENDMENT 17 §2). Optional
   // here: with none, the caller's resumable project-wide session is used, and a
@@ -117,6 +127,22 @@ export async function POST(req: Request): Promise<Response> {
         { code: 'BAD_REQUEST', error: '`body` or `turnId` is required.' },
         { status: 400 },
       );
+    }
+    const runJobId = typeof body.runJobId === 'string' ? body.runJobId.trim() : '';
+    const planId = typeof body.planId === 'string' ? body.planId.trim() : '';
+    if (runJobId && planId) {
+      if (!sessionId) {
+        return NextResponse.json(
+          { code: 'BAD_REQUEST', error: '`sessionId` is required with `runJobId`.' },
+          { status: 400 },
+        );
+      }
+      const result = await aiAskService.submitMidRunTurn(body.body, ctx, {
+        sessionId,
+        runJobId,
+        planId,
+      });
+      return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
     }
     const seedGateId =
       typeof body.seedGateId === 'string' && body.seedGateId.trim().length > 0

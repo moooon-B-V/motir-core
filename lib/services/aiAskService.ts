@@ -4,6 +4,9 @@ import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { MotirAiConfigError } from '@/lib/ai/errors';
+import { planRunContextService, type RunContext } from '@/lib/services/planRunContextService';
+import { planChangeMailboxService } from '@/lib/services/planChangeMailboxService';
+import type { MailboxDeliveryDto } from '@/lib/dto/planChangeMailbox';
 import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
@@ -17,6 +20,8 @@ import {
   EmptyPlanChangeTurnError,
   PlanChangeSessionNotFoundError,
   PlanChangeFlipNotOfferedError,
+  PlanChangeJobNotRunningError,
+  PlanChangeMailboxJobMismatchError,
   PlanChangeTurnNotFoundError,
   TurnFilesGuideOnlyError,
 } from '@/lib/planChange/errors';
@@ -150,6 +155,20 @@ export type AskSettleResult =
   // A `new_session` turn (MOTIR-7649; AMENDMENT 3, A3.1/A3.2): the confirm is on
   // the thread and NO job ran. The rail renders the confirm from `session`.
   | { outcome: 'confirming'; session: PlanChangeSessionDto }
+  // A MID-RUN turn (MOTIR-7996) the answering session read as a CHANGE: its words
+  // went down the running job's mailbox, `delivery` being the mailbox as it stands.
+  | { outcome: 'forwarded'; delivery: MailboxDeliveryDto; session: PlanChangeSessionDto }
+  // …or would have, but the run is over. The person's turn stays on the thread as
+  // an `ask`; `text` is the words to hand back to the composer. `jobStatus` names
+  // how the run ended, so the late-revision work can intercept the not-yet-closed
+  // plan before it reaches the person.
+  | {
+      outcome: 'forward_refused';
+      code: string;
+      jobStatus: string;
+      text: string;
+      session: PlanChangeSessionDto;
+    }
   // A guide conversation's settle (MOTIR-7470), handed to the guide landing.
   | GuideSettleResult;
 
@@ -179,6 +198,8 @@ async function submitConversationJob(
   prompt: string,
   anchorKey: string | null,
   ctx: ProjectContext,
+  /** MID-RUN (MOTIR-7996): the run snapshot, `ask_project` only. */
+  run?: RunContext,
 ): Promise<{ jobId: string }> {
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
@@ -198,6 +219,7 @@ async function submitConversationJob(
   const context: JobContextBag = {
     prompt,
     ...(anchorKey ? { anchorKey } : {}),
+    ...(run ? { run } : {}),
     ...(code ? { code } : {}),
   };
   return submitJob(kind, tenantFor(ctx, organizationId, isMeta, internalBilling), context, {
@@ -209,8 +231,34 @@ function submitAsk(
   prompt: string,
   anchorKey: string | null,
   ctx: ProjectContext,
+  run?: RunContext,
 ): Promise<{ jobId: string }> {
-  return submitConversationJob('ask_project', prompt, anchorKey, ctx);
+  return submitConversationJob('ask_project', prompt, anchorKey, ctx, run);
+}
+
+/**
+ * The turn the answering session last OFFERED to forward, still unconfirmed
+ * (MOTIR-7996): the thread's latest `assistant` turn, when it carries a
+ * `forwardOffer` and no user turn after it was forwarded. ANY newer answer
+ * supersedes an older offer (it is no longer the latest assistant turn), and a
+ * forward that already happened retires it. Read from CORE's own thread, never
+ * from anything a client or the model sent.
+ */
+function pendingOfferOf(turns: readonly PlanChangeTurnDto[]): { turnText: string } | null {
+  let latest = -1;
+  for (let i = turns.length - 1; i >= 0; i--) {
+    if (turns[i]!.role === 'assistant') {
+      latest = i;
+      break;
+    }
+  }
+  if (latest < 0) return null;
+  const offer = turns[latest]!.forwardOffer;
+  if (!offer) return null;
+  for (let i = latest + 1; i < turns.length; i++) {
+    if (turns[i]!.role === 'user' && turns[i]!.forwarded) return null;
+  }
+  return { turnText: offer };
 }
 
 /**
@@ -293,6 +341,116 @@ async function requireAskSession(
     : await planChangeSessionsService.findResumable(ctx, PROJECT_SCOPE_KEY);
   if (!session) throw new PlanChangeSessionNotFoundError(ctx.projectId);
   return session;
+}
+
+/**
+ * The settle of a MID-RUN turn (MOTIR-7996). Entered only for a turn carrying
+ * `runJobId`; `debug` and `new_session` verdicts keep today's arms.
+ *
+ *  * `plan_change` → a FORWARD. The body is chosen from CORE's own record and never
+ *    from the echo: `forward.text` only selects WHICH of two texts core already
+ *    holds — this turn's body, or the pending offer's (the confirmation case).
+ *    Anything else is ignored and settles `silent`: model output never crosses
+ *    into the planner's input.
+ *  * `ask` with `offerForward` → the answer, recording the offer.
+ *  * `ask` otherwise → an ordinary answer.
+ */
+async function settleMidRun(args: {
+  jobId: string;
+  turn: PlanChangeTurnDto;
+  outcome: NonNullable<ReturnType<typeof readAskOutcome>>;
+  session: PlanChangeSessionDto;
+  ctx: ProjectContext;
+  address: { sessionId: string };
+}): Promise<AskSettleResult> {
+  const { jobId, turn, outcome, session, ctx, address } = args;
+  const runJobId = turn.runJobId!;
+
+  if (outcome.intent === 'plan_change') {
+    // Already forwarded by an earlier settle of this same job: the answer is the
+    // mailbox as it stands, and nothing is written (the idempotency key would
+    // make a second attach a no-op anyway, but the run may have ended since).
+    if (turn.forwarded) {
+      const delivery = await planChangeMailboxService.peekForJob(runJobId, ctx, session.id);
+      return { outcome: 'forwarded', delivery, session };
+    }
+    const offered = pendingOfferOf(session.turns.filter((t) => t.seq < turn.seq))?.turnText;
+    const echoed = outcome.forward?.text ?? null;
+    const chosen =
+      echoed === null
+        ? null
+        : echoed === turn.body
+          ? turn.body
+          : echoed === offered
+            ? offered
+            : null;
+    if (!chosen) return { outcome: 'silent', session };
+
+    let delivery: MailboxDeliveryDto;
+    try {
+      delivery = await planChangeMailboxService.attachTurn(
+        {
+          jobId: runJobId,
+          sessionId: session.id,
+          body: chosen,
+          idempotencyKey: `forward:${jobId}`,
+          disposition: 'fold',
+        },
+        ctx,
+      );
+    } catch (err) {
+      // The run is over: nothing was written. The person's turn stays on the
+      // thread as an `ask` and nothing is retried; the words go back to them.
+      if (err instanceof PlanChangeJobNotRunningError) {
+        return {
+          outcome: 'forward_refused',
+          code: err.code,
+          jobStatus: err.status,
+          text: chosen,
+          session,
+        };
+      }
+      // The session has moved on to another job since the turn was typed — the
+      // run this turn was addressed at is no longer the thread's. Same fact, same
+      // answer: keep the words.
+      if (err instanceof PlanChangeMailboxJobMismatchError) {
+        return {
+          outcome: 'forward_refused',
+          code: err.code,
+          jobStatus: 'superseded',
+          text: chosen,
+          session,
+        };
+      }
+      throw err;
+    }
+    const entryId = await planChangeMailboxService.entryIdForKey(
+      runJobId,
+      session.id,
+      `forward:${jobId}`,
+      ctx,
+    );
+    const updated = await planChangeSessionsService.recordTurnIntent(
+      turn.id,
+      'plan_change',
+      ctx,
+      entryId ? { forwardedEntryId: entryId } : {},
+      address,
+    );
+    return { outcome: 'forwarded', delivery, session: updated };
+  }
+
+  // `ask`: an answer, with the offer recorded when the handler was unsure.
+  if (!outcome.answer) return { outcome: 'silent', session };
+  // The offer is the OFFERED turn's own body (core's record); an echo that says
+  // anything else is not an offer core can honour, and is dropped.
+  const forwardOffer = outcome.offerForward?.text === turn.body ? turn.body : null;
+  const updated = await planChangeSessionsService.appendAnswerTurn(
+    { jobId, body: outcome.answer, citations: outcome.citations, forwardOffer },
+    ctx,
+    address,
+  );
+  return { outcome: 'answered', session: updated };
 }
 
 export const aiAskService = {
@@ -446,6 +604,69 @@ export const aiAskService = {
     if (!turn) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
 
     const { jobId } = await submitAsk(trimmed, anchor, ctx);
+    const session = await planChangeSessionsService.recordTurnIntent(
+      turn.id,
+      'ask',
+      ctx,
+      { jobId },
+      address,
+    );
+    return { jobId, turnId: turn.id, session };
+  },
+
+  /**
+   * A turn typed WHILE a planning run is in progress (Story MOTIR-7990 ·
+   * MOTIR-7996; `conversation-turn-intent.md` AMENDMENT 4). It is not queued for
+   * the planner: it goes to an ANSWERING session — `ask_project` with a run
+   * snapshot on its context — and only a change verdict (or a confirmed ambiguous
+   * turn) is forwarded, by {@link aiAskService.settle}.
+   *
+   * ⚠️ IT MUST NOT MOVE `session.lastJobId` off the planning job:
+   * `requireThreadForJob` addresses the mailbox through it, and the forward at
+   * settle goes through the mailbox. Only the TURN is bound to the ask job
+   * (`recordTurnIntent(..., { jobId })`), never the session.
+   *
+   * Refused BEFORE any write when the addressed session is not on `runJobId`: the
+   * mailbox's own no-existence-leak mismatch error (a 404).
+   */
+  async submitMidRunTurn(
+    body: string,
+    ctx: ProjectContext,
+    opts: { sessionId: string; runJobId: string; planId: string },
+  ): Promise<AskSubmitResult> {
+    const trimmed = body.trim();
+    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
+    const current = await planChangeSessionsService.getById(ctx, opts.sessionId);
+    // The session must BE on this run. A guide conversation never runs a plan.
+    if (current.origin === 'guide' || current.lastJobId !== opts.runJobId) {
+      throw new PlanChangeMailboxJobMismatchError(opts.runJobId);
+    }
+    const address = { sessionId: current.id };
+    // Read BEFORE the append, so it is the offer standing when the person spoke.
+    const pendingOffer = pendingOfferOf(current.turns);
+
+    const appended = await planChangeSessionsService.appendTurn(trimmed, ctx, address, {
+      intent: 'ask',
+      runJobId: opts.runJobId,
+    });
+    const turn = appended.turns.at(-1);
+    if (!turn) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
+
+    // The snapshot and the submit are network/DB reads OUTSIDE any lock. The
+    // snapshot never throws: an unreadable plan is `readable: false`, and the job
+    // still runs so the person gets an honest "I could not read the run".
+    const run = await planRunContextService.buildRunContext(
+      opts.runJobId,
+      opts.planId,
+      ctx,
+      pendingOffer,
+    );
+    const { jobId } = await submitAsk(trimmed, null, ctx, run);
     const session = await planChangeSessionsService.recordTurnIntent(
       turn.id,
       'ask',
@@ -613,6 +834,13 @@ export const aiAskService = {
 
     const outcome = readAskOutcome(job.result);
     if (!outcome) return { outcome: 'silent', session };
+
+    // ⚠️ THE MID-RUN ARM (MOTIR-7996) — BEFORE the `plan_change` arm below, so a
+    // turn typed during a run can never reach `planChangeSessionsService.submit`
+    // and open a SECOND planning job on a thread that already has one.
+    if (turn.runJobId && (outcome.intent === 'plan_change' || outcome.intent === 'ask')) {
+      return settleMidRun({ jobId, turn, outcome, session, ctx, address });
+    }
 
     if (outcome.intent === 'plan_change') {
       // Already redirected by an earlier settle of this same job — do not submit

@@ -18,6 +18,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 //      whole authoring session away, so a turn that looks delivered and changes
 //      nothing for thirty seconds reads as a bug.
 //
+// ⚠️ RE-POINTED BY MOTIR-7996 (ADR AMENDMENT 4). A mid-run turn no longer goes
+// to the mailbox: it is posted to `ask_project` WITH A RUN SNAPSHOT
+// (`submitMidRunAskTurn`), streamed and settled on its OWN controller, and the
+// mailbox is written only when the settle says `forwarded`. The mailbox still
+// carries what is forwarded, so the queued → read poll below is unchanged; what
+// changed is the DOOR the turn takes to get there, and that the run's own
+// `jobId` / `phase` / `stopping` are untouched while it does.
+//
 // Driven through the ANCHORED door for the same reason the stop suite is: the
 // project thread's `send` goes through the ONE DOOR (`submitAskTurn`), a second
 // settle path this card does not touch.
@@ -27,7 +35,11 @@ const resumeContextual = vi.fn();
 const recordPlannerTurn = vi.fn();
 const submitContextualPlan = vi.fn();
 const attachMidRunTurn = vi.fn();
+const submitMidRunAskTurn = vi.fn();
+const settleAskJob = vi.fn();
+const streamAskJob = vi.fn();
 const peekMailbox = vi.fn();
+const stopRun = vi.fn();
 const streamContextual = vi.fn();
 const readPending = vi.fn();
 
@@ -43,18 +55,19 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   submitContextualPlan: (...a: unknown[]) => submitContextualPlan(...a),
   attachMidRunTurn: (...a: unknown[]) => attachMidRunTurn(...a),
   peekMailbox: (...a: unknown[]) => peekMailbox(...a),
-  stopPlanChangeRun: vi.fn(),
+  stopPlanChangeRun: (...a: unknown[]) => stopRun(...a),
   submitPlanChange: vi.fn(),
   resubmitContextualPlan: vi.fn(),
   submitAskTurn: vi.fn(),
   rerunAskTurn: vi.fn(),
-  settleAskJob: vi.fn(),
+  submitMidRunAskTurn: (...a: unknown[]) => submitMidRunAskTurn(...a),
+  settleAskJob: (...a: unknown[]) => settleAskJob(...a),
 }));
 
 vi.mock('@/lib/planning/planEditsClient', () => ({
   streamContextualPlanJob: (...a: unknown[]) => streamContextual(...a),
   streamAugmentJob: vi.fn(),
-  streamAskJob: vi.fn(),
+  streamAskJob: (...a: unknown[]) => streamAskJob(...a),
   PlanEditsClientError: class extends Error {
     constructor(
       readonly status: number,
@@ -96,6 +109,24 @@ const SESSION = {
 const TARGETS = [
   { id: 'wi-1', identifier: 'MOTIR-1', title: 'A card', kind: 'story' },
 ] as unknown as Parameters<ReturnType<typeof usePlanChangeConversation>['send']>[1];
+
+/** A settle that FORWARDED: the mailbox as it stands, one [id, text] per entry. */
+function forwarded(...pairs: Array<[string, string]>) {
+  return {
+    outcome: 'forwarded' as const,
+    delivery: {
+      turns: pairs.map(([id, text]) => ({
+        id,
+        text,
+        receivedAt: 'x',
+        disposition: 'fold',
+        target: null,
+      })),
+      stopped: false,
+    },
+    session: SESSION,
+  };
+}
 
 function heldStream() {
   let release!: () => void;
@@ -139,23 +170,14 @@ beforeEach(() => {
   submitContextualPlan.mockResolvedValue({ jobId: 'job-1', planId: 'plan-1', session: SESSION });
   readPending.mockResolvedValue(null);
   streamContextual.mockResolvedValue(undefined);
-  attachMidRunTurn.mockResolvedValue({
-    turns: [
-      {
-        id: 'm1',
-        text: 'Also drop the narration card.',
-        receivedAt: 'x',
-        disposition: 'fold',
-        target: null,
-      },
-    ],
-    stopped: false,
-  });
+  submitMidRunAskTurn.mockResolvedValue({ jobId: 'ask-1', turnId: 't1', session: SESSION });
+  streamAskJob.mockResolvedValue(undefined);
+  settleAskJob.mockResolvedValue(forwarded(['m1', 'Also drop the narration card.']));
   peekMailbox.mockResolvedValue({ turns: [], stopped: false });
 });
 
 describe('THE BRANCH — one control, two destinations, chosen by the phase', () => {
-  it('a turn typed DURING a run reaches the MAILBOX, and starts no second job', async () => {
+  it('a turn typed DURING a run goes to the ANSWERING session, not the mailbox, and starts no second job', async () => {
     const hook = await mounted();
     const { release, promise } = await running(hook);
     submitContextualPlan.mockClear();
@@ -164,17 +186,122 @@ describe('THE BRANCH — one control, two destinations, chosen by the phase', ()
       await hook.result.current.send('Also drop the narration card.', TARGETS);
     });
 
-    expect(attachMidRunTurn).toHaveBeenCalledTimes(1);
-    expect(attachMidRunTurn).toHaveBeenCalledWith(
+    expect(submitMidRunAskTurn).toHaveBeenCalledTimes(1);
+    expect(submitMidRunAskTurn).toHaveBeenCalledWith(
       's1',
       'job-1',
+      'plan-1',
       'Also drop the narration card.',
-      expect.any(String),
+      expect.anything(),
     );
+    // The mailbox is written by the SERVER at settle, when the verdict is a
+    // change; the browser no longer posts to it.
+    expect(attachMidRunTurn).not.toHaveBeenCalled();
     // ⚠️ THE HALF THAT WOULD BE SILENT. A mid-run turn down the submit path opens
     // a SECOND planning job on a thread that already has one — nothing throws,
     // and two runs then race for the same plan.
     expect(submitContextualPlan).not.toHaveBeenCalled();
+    // The ask is streamed and settled as ITS OWN job.
+    expect(streamAskJob).toHaveBeenCalledWith(
+      'ask-1',
+      expect.anything(),
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(settleAskJob).toHaveBeenCalledWith('ask-1', expect.anything(), 's1');
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('keeps the planning run’s jobId, phase and stopping across a mid-run ask', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    // Hold the ask's settle open so the assertions run WHILE it is in flight.
+    let finish!: () => void;
+    settleAskJob.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ outcome: 'answered', session: SESSION });
+        }),
+    );
+
+    let sent!: Promise<void>;
+    await act(async () => {
+      sent = hook.result.current.send('How far along are you?', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(settleAskJob).toHaveBeenCalled());
+
+    expect(hook.result.current.state.jobId).toBe('job-1');
+    expect(hook.result.current.state.phase).toBe('streaming');
+    expect(hook.result.current.state.stopping).toBe(false);
+
+    // And Stop still raises the stop on the PLANNING job, not on the ask.
+    await act(async () => {
+      await hook.result.current.stop();
+    });
+    expect(stopRun).toHaveBeenCalledWith('s1', 'job-1', expect.any(String));
+
+    await act(async () => {
+      finish();
+      await sent;
+    });
+    expect(hook.result.current.state.jobId).toBe('job-1');
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('an answered question writes nothing into the queue', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    settleAskJob.mockResolvedValue({ outcome: 'answered', session: SESSION });
+
+    await act(async () => {
+      await hook.result.current.send('How far along are you?', TARGETS);
+    });
+
+    expect(hook.result.current.state.queued).toEqual([]);
+    expect(hook.result.current.state.refusedForward).toBeNull();
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('⚠️ a forward refused because the run ended sets refusedForward — the words come back', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    settleAskJob.mockResolvedValue({
+      outcome: 'forward_refused',
+      code: 'PLAN_CHANGE_JOB_NOT_RUNNING',
+      jobStatus: 'succeeded',
+      text: 'Also drop the narration card.',
+      session: SESSION,
+    });
+
+    await act(async () => {
+      await hook.result.current.send('Also drop the narration card.', TARGETS);
+    });
+
+    expect(hook.result.current.state.refusedForward).toEqual({
+      text: 'Also drop the narration card.',
+      code: 'PLAN_CHANGE_JOB_NOT_RUNNING',
+    });
+    expect(hook.result.current.state.queued).toEqual([]);
+
+    // The next mid-run send clears it.
+    settleAskJob.mockResolvedValue({ outcome: 'answered', session: SESSION });
+    await act(async () => {
+      await hook.result.current.send('Never mind, how far along?', TARGETS);
+    });
+    expect(hook.result.current.state.refusedForward).toBeNull();
 
     await act(async () => {
       release();
@@ -196,9 +323,12 @@ describe('THE BRANCH — one control, two destinations, chosen by the phase', ()
     expect(attachMidRunTurn).not.toHaveBeenCalled();
   });
 
-  it('carries a DISTINCT idempotency key per send — a new sentence is not a replay', async () => {
+  it('submits each mid-run send as its own ask — a new sentence is never a replay', async () => {
     const hook = await mounted();
     const { release, promise } = await running(hook);
+    submitMidRunAskTurn
+      .mockResolvedValueOnce({ jobId: 'ask-1', turnId: 't1', session: SESSION })
+      .mockResolvedValueOnce({ jobId: 'ask-2', turnId: 't2', session: SESSION });
 
     await act(async () => {
       await hook.result.current.send('First thing.', TARGETS);
@@ -207,11 +337,9 @@ describe('THE BRANCH — one control, two destinations, chosen by the phase', ()
       await hook.result.current.send('Second thing.', TARGETS);
     });
 
-    const keys = attachMidRunTurn.mock.calls.map((c) => c[2] as string);
-    expect(keys).toHaveLength(2);
-    // The door de-duplicates on this key. Re-using it across two different
-    // sentences would swallow the second as a replay of the first.
-    expect(new Set(keys).size).toBe(2);
+    // The forward's idempotency is the SERVER's (`forward:<ask job id>`), keyed on
+    // the ask job each send produced — so two sentences are two jobs.
+    expect(settleAskJob.mock.calls.map((c) => c[0])).toEqual(['ask-1', 'ask-2']);
 
     await act(async () => {
       release();
@@ -228,6 +356,7 @@ describe('THE BRANCH — one control, two destinations, chosen by the phase', ()
     });
 
     expect(attachMidRunTurn).not.toHaveBeenCalled();
+    expect(submitMidRunAskTurn).not.toHaveBeenCalled();
     await act(async () => {
       release();
       await promise;
@@ -261,13 +390,7 @@ describe('QUEUED is not DELIVERED', () => {
     const hook = await mounted();
     const { release, promise } = await running(hook);
 
-    attachMidRunTurn.mockResolvedValue({
-      turns: [
-        { id: 'm1', text: 'one', receivedAt: 'x', disposition: 'fold', target: null },
-        { id: 'm2', text: 'two', receivedAt: 'y', disposition: 'fold', target: null },
-      ],
-      stopped: false,
-    });
+    settleAskJob.mockResolvedValue(forwarded(['m1', 'one'], ['m2', 'two']));
     await act(async () => {
       await hook.result.current.send('two', TARGETS);
     });
@@ -428,7 +551,7 @@ describe('A REFUSAL IS LEGIBLE', () => {
   it('an UNTYPED failure still says something — `MAILBOX_FAILED`, not silence', async () => {
     const hook = await mounted();
     const { release, promise } = await running(hook);
-    attachMidRunTurn.mockRejectedValue(new Error('network'));
+    submitMidRunAskTurn.mockRejectedValue(new Error('network'));
 
     await act(async () => {
       await hook.result.current.send('Also drop it.', TARGETS);
@@ -447,7 +570,7 @@ describe('A REFUSAL IS LEGIBLE', () => {
   it('an ABORTED send is not an error — nothing is written', async () => {
     const hook = await mounted();
     const { release, promise } = await running(hook);
-    attachMidRunTurn.mockRejectedValue(new DOMException('gone', 'AbortError'));
+    submitMidRunAskTurn.mockRejectedValue(new DOMException('gone', 'AbortError'));
 
     await act(async () => {
       await hook.result.current.send('Also drop it.', TARGETS);
@@ -465,7 +588,7 @@ describe('A REFUSAL IS LEGIBLE', () => {
   it('surfaces the door’s typed code when the run settled between render and send', async () => {
     const hook = await mounted();
     const { release, promise } = await running(hook);
-    attachMidRunTurn.mockRejectedValue(
+    submitMidRunAskTurn.mockRejectedValue(
       new PlanEditsClientError(409, 'PLAN_CHANGE_JOB_NOT_RUNNING'),
     );
 

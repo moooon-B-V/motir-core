@@ -33,6 +33,24 @@ export interface AskOutcome {
    * this read only guarantees its shape.
    */
   anchorKey?: string | null;
+  /**
+   * RUN MODE only (MOTIR-7996; `ask_project` with `context.run`): on a
+   * `plan_change`, the person's words to forward to the RUNNING planner. Core
+   * never forwards THIS string — it only selects, by exact equality, which of two
+   * texts core already holds (the turn's own body, or the pending offer's) is
+   * forwarded. A `plan_change` whose `forward` is missing or malformed reads
+   * `null`. Absent on every non-`plan_change` outcome.
+   */
+  forward?: { text: string } | null;
+  /**
+   * RUN MODE only: on an `ask`, the turn the handler was UNSURE was a change. The
+   * answer carries an offer to forward it, and nothing is forwarded until the
+   * person's next turn confirms. Null / absent when there is no offer.
+   */
+  offerForward?: { text: string } | null;
+  /** RUN MODE only: whether the answering session could READ the run snapshot core
+   *  sent, and why not when it could not. Null / absent on a turn with no run. */
+  run?: { readable: boolean; reason: string | null } | null;
 }
 
 // Bounds applied on READ, not merely trusted from the producer — this text
@@ -63,6 +81,19 @@ function boundedString(value: unknown, max: number): string | null {
  *  dropped rather than failing the read: the answer is still worth showing with
  *  the citations that ARE readable, and the service re-validates every survivor
  *  against the project's own work items before persisting one. */
+/** `{ text }` with a bounded, non-blank string, else null. */
+function readTextField(value: unknown): { text: string } | null {
+  if (!isRecord(value)) return null;
+  const text = boundedString(value['text'], ASK_ANSWER_MAX_CHARS);
+  return text ? { text } : null;
+}
+
+/** The run-mode echo `{ readable, reason? }`, or null when it is not that shape. */
+function readRunField(value: unknown): { readable: boolean; reason: string | null } | null {
+  if (!isRecord(value) || typeof value['readable'] !== 'boolean') return null;
+  return { readable: value['readable'], reason: boundedString(value['reason'], 200) };
+}
+
 function readCitations(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const out: string[] = [];
@@ -93,8 +124,20 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
   if (!isRecord(ask)) return null;
 
   // The redirect: no answer and no citations, whatever else the field carried.
+  const run = readRunField(ask['run']);
   if (ask['intent'] === 'plan_change') {
-    return { intent: 'plan_change', answer: null, citations: [] };
+    // `forward` is read only here: it is the run-mode form of the redirect. A
+    // malformed one reads `null` — the intent is unchanged, and the caller treats
+    // a forward-less mid-run `plan_change` as nothing to forward.
+    return {
+      intent: 'plan_change',
+      answer: null,
+      citations: [],
+      // Present only when the result CARRIED a `forward` key (a run-mode result);
+      // a legacy redirect has none, and keeps its exact old shape.
+      ...('forward' in ask ? { forward: readTextField(ask['forward']) } : {}),
+      ...(run ? { run } : {}),
+    };
   }
   // The second redirect (MOTIR-7047): the turn reported broken behaviour. Same
   // shape — nothing answered, nothing cited — plus the echoed anchor, which is
@@ -119,5 +162,7 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
     intent: 'ask',
     answer: boundedString(ask['answer'], ASK_ANSWER_MAX_CHARS),
     citations: readCitations(ask['citations']),
+    ...('offerForward' in ask ? { offerForward: readTextField(ask['offerForward']) } : {}),
+    ...(run ? { run } : {}),
   };
 }

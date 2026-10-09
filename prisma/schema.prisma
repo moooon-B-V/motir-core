@@ -9066,6 +9066,25 @@ model PlanChangeTurn {
   /// rail then draws that id as a removed chip. Validated at WRITE time (the card,
   /// the workspace, the caller's view) by `aiGuideService`, never trusted as sent.
   attachmentIds         String[]               @default([]) @map("attachment_ids")
+  /// The planning job that was RUNNING when this `user` turn was typed (Story
+  /// MOTIR-7990 · MOTIR-7996; `conversation-turn-intent.md` AMENDMENT 4). It marks
+  /// the turn as a MID-RUN turn, which is what tells the ask settle never to open
+  /// a new planning run for it: it was answered by an `ask_project` job carrying
+  /// the run's snapshot, and only a change verdict reaches the running job's
+  /// mailbox. Null on every other turn, and on every turn written before the
+  /// column existed — a null reads exactly as it always did (no back-fill).
+  runJobId              String?                @map("run_job_id")
+  /// The exact text an `assistant` ANSWER offered to FORWARD to the running
+  /// planner (MOTIR-7996) — the offered `user` turn's own body, in the person's
+  /// words. Set only by a mid-run ask settle whose result carried `offerForward`;
+  /// the NEXT mid-run turn reads it as `pendingOffer`, and a confirmation forwards
+  /// THIS text, never the confirming turn's. Null on every other turn.
+  forwardOffer          String?                @map("forward_offer") @db.Text
+  /// The mailbox entry a mid-run `user` turn was FORWARDED as (MOTIR-7996), written
+  /// in the same locked write that records the turn `plan_change`. An id, not an
+  /// FK, for the reason `citations` gives: the mailbox is the pipe, this is the
+  /// thread's record of what went down it. Null on a turn that was not forwarded.
+  forwardedEntryId      String?                @map("forwarded_entry_id")
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).
