@@ -71,12 +71,15 @@ export default async function PlanDetailView({
   // planning workspace is not served), falls through to render. It sits before the
   // member-only reads below, so a redirected request spends nothing on them.
   if (!isVisitorContext(ctx) && review.conversation) {
+    // A member's addresses, built for the reader like every shared body's (MOTIR-6888).
+    const memberRoutes = readerRoutes(null);
     const destination = planRowDestination({
       planStatus: review.status,
       planId: id,
       sessionId: review.conversation.sessionId,
-      host: '/plans',
+      host: memberRoutes.view('/plans'),
       anchorKey: review.conversation.targetKeys[0] ?? null,
+      routes: memberRoutes,
     });
     if (destination.kind === 'planning-surface') redirect(destination.href, RedirectType.replace);
   }

@@ -49,7 +49,7 @@
 
 import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
@@ -172,7 +172,7 @@ const pausedLink = (page: Page) => page.getByRole('link', { name: 'Review the pl
  * which is what "it points at THIS plan" means for an overlay address.
  */
 async function expectPausedLinkOpens(page: Page, planId: string): Promise<void> {
-  const { sessionId } = await db.plan.findUniqueOrThrow({
+  const { sessionId } = await adminDb.plan.findUniqueOrThrow({
     where: { id: planId },
     select: { sessionId: true },
   });

@@ -151,7 +151,10 @@ const isOverlayAddress = (url: URL) =>
   url.pathname === '/plans' && url.searchParams.has('planSession');
 /** A plan's title, read back from the row the seed wrote rather than restated. */
 async function planTitle(planId: string): Promise<string> {
-  const row = await db.plan.findUniqueOrThrow({ where: { id: planId }, select: { title: true } });
+  const row = await adminDb.plan.findUniqueOrThrow({
+    where: { id: planId },
+    select: { title: true },
+  });
   if (!row.title) throw new Error(`plan ${planId} was seeded without a title`);
   return row.title;
 }
