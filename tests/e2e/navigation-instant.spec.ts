@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './_helpers/promoted-regression';
-import { resetDatabase } from './_helpers/db-reset';
+import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
   seedChildPanelGraph,
@@ -8,6 +8,7 @@ import {
   type ChildPanelGraphSeed,
 } from './_helpers/child-panel-graph-seed';
 import { seedPlanShapes, PLANS_SHAPES_PASSWORD } from './_helpers/plans-shapes-seed';
+import { plansService } from '@/lib/services/plansService';
 
 // ACCEPTANCE — navigation is instant (Story MOTIR-3430 · Subtask MOTIR-3438).
 //
@@ -247,8 +248,21 @@ test('a work item opens on the click, streams its sections in, and a client-only
   // ── 5 — the plan detail's Canvas ↔ List, the switch that was reported ─────
   await chapter('The plan’s Canvas and List switch under the cursor', async () => {
     const plans = await seedPlanShapes(PLAN_EMAIL);
+    // ⚠️ DECIDED FIRST (Story MOTIR-7883 · MOTIR-7887, 2026-10-08): an undecided
+    // plan's bare `/plans/<id>` now redirects into the planning overlay, whose view
+    // is local and never in the URL — a different switch from the one measured here.
+    // A decided plan keeps its page and its URL-bound switch, so the plan is
+    // declined through the shipped service first.
+    const planOwner = await adminDb.user.findFirstOrThrow({
+      where: { email: PLAN_EMAIL },
+      select: { id: true },
+    });
+    await plansService.declinePlan(plans.one.planId, {
+      userId: planOwner.id,
+      workspaceId: plans.workspaceId,
+    });
     await signIn(page, PLAN_EMAIL, PLANS_SHAPES_PASSWORD);
-    await page.goto(`/plans/${plans.one.planId}`);
+    await page.goto(`/plans/${plans.one.planId}`); // decided: the plan page renders
 
     const list = page.getByRole('button', { name: 'List' });
     const canvas = page.getByRole('button', { name: 'Canvas' });

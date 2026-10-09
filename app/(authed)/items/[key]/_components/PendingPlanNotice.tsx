@@ -1,9 +1,8 @@
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/Button';
 import type { WorkItemPendingProposalDto } from '@/lib/dto/plans';
-import { readerRoutes, type ReaderRoutes } from '@/lib/visitor/routes';
+import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
 
 // The PENDING-PLAN indicator on the work-item detail page (bug MOTIR-4197),
 // per design/work-items/pending-plan-indicator.mock.html + design-notes
@@ -11,9 +10,13 @@ import { readerRoutes, type ReaderRoutes } from '@/lib/visitor/routes';
 //
 // WHAT IT SAYS: that one or more UNDECIDED plans — `planned` or `stale` — name
 // THIS card, and where to read them. It POINTS; it never renders the proposed
-// values. The peek and `/plans/<id>` are where a proposal is read, and a third
-// surface rendering proposed values is the defect this card exists to remove
-// (the reviewer's two tabs disagreeing), not the fix.
+// values. The planning overlay is where an undecided plan is read and decided —
+// the owner's rule of 2026-10-08 (Story MOTIR-7883 · MOTIR-7889) — so every link
+// here is a `PlanOverlayDoor`, which opens the overlay IN PLACE over this page at
+// the plan's own conversation, and Close returns here. A third surface rendering
+// proposed values is the defect this card exists to remove (the reviewer's two
+// tabs disagreeing), not the fix. The doors are client islands; this file stays a
+// server component, and a Visitor's door still lands on the Visitor plan page.
 //
 // ⚠️ A PLAN NAMES A CARD IN THREE WAYS, AND THE THIRD ARRIVED LAST (bug
 // MOTIR-4365 · design MOTIR-4364 AMENDMENT A). A `modify` proposes CHANGES to
@@ -83,8 +86,6 @@ export interface PendingPlanNoticeProps {
   proposals: readonly WorkItemPendingProposalDto[];
   /** Test hook — mirrors `ArchivedNotice`'s. */
   testId?: string;
-  /** The reader's addresses (MOTIR-6888); absent means a member's. */
-  routes?: ReaderRoutes;
 }
 
 const FRAME =
@@ -97,7 +98,6 @@ export function PendingPlanNotice({
   identifier,
   proposals,
   testId = 'pending-plan-notice',
-  routes = readerRoutes(null),
 }: PendingPlanNoticeProps) {
   const t = useTranslations('issueViews');
   // `Plan.title` is nullable; the item page and the review surface say ONE
@@ -169,8 +169,8 @@ export function PendingPlanNotice({
             {t('pendingPlanMeta')}
           </span>
         </div>
-        <Link
-          href={routes.plan(only.planId)}
+        <PlanOverlayDoor
+          planId={only.planId}
           className={`${buttonVariants({ variant: 'secondary', size: 'sm' })} shrink-0`}
           aria-label={t('pendingPlanReviewAria', { key: identifier })}
         >
@@ -178,7 +178,7 @@ export function PendingPlanNotice({
           <span aria-hidden className="inline-flex">
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </span>
-        </Link>
+        </PlanOverlayDoor>
       </div>
     );
   }
@@ -196,9 +196,9 @@ export function PendingPlanNotice({
         <ul className="m-0 flex list-none flex-col gap-1 p-0">
           {proposals.map((proposal) => (
             <li key={proposal.planId} className="flex min-w-0 items-baseline gap-1.5">
-              <Link href={routes.plan(proposal.planId)} className={ROW_LINK}>
+              <PlanOverlayDoor planId={proposal.planId} className={ROW_LINK}>
                 {planName(proposal.planTitle)}
-              </Link>
+              </PlanOverlayDoor>
               <span className="shrink-0 font-sans text-[13px] text-(--el-text-secondary)">
                 {rowClaim(proposal)}
               </span>

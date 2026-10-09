@@ -2,6 +2,7 @@ import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanShapes, PLANS_SHAPES_PASSWORD } from './_helpers/plans-shapes-seed';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 
 // ONE PEEK FOR A PROPOSAL — THE ACCEPTANCE RECEIPT (Story MOTIR-4181 · Subtask
 // MOTIR-4187). The story's `verification_recipe`, performed in a real browser.
@@ -48,7 +49,7 @@ test('a proposal is read with the shipped quick view, from either door', async (
   const peek = page.getByTestId('proposal-peek');
 
   await chapter('A plan proposes three changes, and the list names them', async () => {
-    await page.goto(`/plans/${seed.five.planId}?view=list`);
+    await openUndecidedPlan(page, seed.five.planId, { view: 'list' });
     const list = page.getByTestId('plan-proposal-list');
     await expect(list).toBeVisible();
     // All three sections, which is what makes the walk about the OP AXIS rather
@@ -107,7 +108,7 @@ test('a proposal is read with the shipped quick view, from either door', async (
   });
 
   await chapter('The CANVAS door shows the very same peek', async () => {
-    await page.goto(`/plans/${seed.five.planId}?view=canvas`);
+    await openUndecidedPlan(page, seed.five.planId, { view: 'canvas' });
     const node = page.locator(`[data-node-id="${seed.five.modified.id}"]`);
     await expect(node).toBeVisible();
     await node.press('Enter');
@@ -122,7 +123,7 @@ test('a proposal is read with the shipped quick view, from either door', async (
   });
 
   await chapter('An addition says it does not exist yet', async () => {
-    await page.goto(`/plans/${seed.five.planId}?view=list`);
+    await openUndecidedPlan(page, seed.five.planId, { view: 'list' });
     await page.getByRole('button', { name: new RegExp(seed.five.addedTitle) }).click();
     await expect(peek).toBeVisible();
     await expect(page.getByTestId('quick-view-proposal-new')).toHaveText('New');
@@ -149,7 +150,7 @@ test('a proposal is read with the shipped quick view, from either door', async (
     // telling a reviewer a work item is being changed when it is not is the same
     // class of false statement as the defect being fixed, pointed the other way.
     await page.keyboard.press('Escape');
-    await page.goto(`/plans/${seed.five.planId}?view=canvas`);
+    await openUndecidedPlan(page, seed.five.planId, { view: 'canvas' });
     const neighbour = page.locator(`[data-node-id="${seed.five.removed.id}"]`);
     await expect(neighbour).toBeVisible();
     await beat();

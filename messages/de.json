@@ -7532,7 +7532,6 @@
         "failedClosed": "Dieser Versuch hat nicht geklappt, daher wurde diese Sitzung geschlossen. Die Arbeitselemente, die sie enthielt, sind wieder an ihrem ursprünglichen Platz."
       },
       "answeredFrom": "{count, plural, =0 {Ohne Quellenangabe beantwortet} one {Anhand von # Arbeitselement beantwortet} other {Anhand von # Arbeitselementen beantwortet}}",
-      "correctToPlan": "Stattdessen Änderungen vorschlagen",
       "correctToAsk": "Stattdessen beantworten",
       "correcting": "Wird neu gelesen…",
       "correctedToPlan": "Als Planänderung neu gelesen",
@@ -12797,10 +12796,6 @@
         "helper": "Optional. Die Angabe wird mit der Entscheidung aufbewahrt.",
         "proceed": "Ja, ablehnen"
       },
-      "noConversation": {
-        "none": "Für diesen Plan ist keine Unterhaltung erfasst.",
-        "next": "Genehmigen oder lehnen Sie ihn hier ab — oder bitten Sie Motir unten, ihn zu ändern."
-      },
       "handoff": {
         "writing": "Ich habe, was ich brauche — ich schreibe jetzt den Plan. Sie müssen hier nicht warten: Schließen Sie dies jederzeit, und der Plan wartet in <link>Wartet auf Sie</link> auf Sie.",
         "rewriting": "Ich schreibe eine neue Version dieses Plans. Sie können dies schließen — er bleibt in <link>Wartet auf Sie</link>, und Sie können entscheiden, sobald ich fertig bin."
@@ -13286,9 +13281,7 @@
   },
   "planDestination": {
     "conversation": "Öffnet die Unterhaltung",
-    "plan": "Öffnet den Plan",
-    "noConversation": "keine Unterhaltung",
-    "noConversationWhy": "Für diesen Plan ist keine Unterhaltung erfasst."
+    "plan": "Öffnet den Plan"
   },
   "orgClosing": {
     "banner": {

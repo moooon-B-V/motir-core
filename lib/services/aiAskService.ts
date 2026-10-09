@@ -15,6 +15,7 @@ import {
   AskAnchorNotAvailableError,
   EmptyPlanChangeTurnError,
   PlanChangeSessionNotFoundError,
+  PlanChangeFlipNotOfferedError,
   PlanChangeTurnNotFoundError,
   TurnFilesGuideOnlyError,
 } from '@/lib/planChange/errors';
@@ -473,13 +474,16 @@ export const aiAskService = {
     const turn = turnById(current, turnId);
     if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);
 
-    // The flip stays a TWO-WAY switch between the pair §3 drew: an `ask` flips to
-    // `plan_change`, and anything else — `plan_change` or `debug` — flips to
-    // `ask` (A1.5: a debug mis-read is corrected by answering instead; its write,
-    // if any, stays). A flip INTO `debug` is not offered here: the classifier is
-    // the only thing that reads a turn as a report.
+    // The flip runs ONE WAY: a `plan_change` or `debug` turn flips to `ask`
+    // (A1.5: a debug mis-read is corrected by answering instead; its write, if
+    // any, stays). An ANSWERED turn does not flip at all — AMENDMENT 3 retired
+    // §3's "Propose changes instead", because whether a turn becomes a planning
+    // run is the planner's call, never a person's button. It is refused before
+    // anything is recorded or submitted. A flip INTO `debug` is not offered
+    // either: the classifier is the only thing that reads a turn as a report.
     const ran = turn.intent ?? 'ask';
-    const next = opts.flip ? (ran === 'ask' ? 'plan_change' : 'ask') : ran;
+    if (opts.flip && ran === 'ask') throw new PlanChangeFlipNotOfferedError(turnId);
+    const next = opts.flip ? 'ask' : ran;
     const anchor = opts.anchorKey ? await resolveAnchor(opts.anchorKey, ctx) : null;
 
     if (next === 'debug') {
@@ -514,7 +518,8 @@ export const aiAskService = {
         turnId,
         'plan_change',
         ctx,
-        { corrected: opts.flip === true },
+        // Only a RETRY reaches here: a flip never produces a plan change.
+        { corrected: false },
         address,
       );
       const submitted = await planChangeSessionsService.submit(ctx, address);

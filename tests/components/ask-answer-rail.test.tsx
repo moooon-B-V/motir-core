@@ -188,22 +188,19 @@ describe('the cited answer turn', () => {
 });
 
 describe('the correction marker', () => {
-  it('offers "Propose changes instead" under an ANSWER, and re-runs the USER turn', () => {
-    const turns = exchange('the payments epic should come first', 'It currently sits second.');
-    renderRail({ session: session(turns) });
+  it('⭐ offers NOTHING under an ANSWER — no button turns a question into a planning run', () => {
+    // MOTIR-7924 (`conversation-turn-intent.md` AMENDMENT 3): whether a turn
+    // becomes a planning run is the planner's call alone. "Propose changes
+    // instead" is retired; a person who wants changes says so in the composer.
+    renderRail({
+      session: session(exchange('which stories are blocked?', 'Two stories are blocked.')),
+    });
 
-    const marker = screen.getByTestId('plan-change-correct');
-    expect(marker.textContent).toBe('Propose changes instead');
-    expect(marker.getAttribute('data-direction')).toBe('plan_change');
-
-    fireEvent.click(marker);
-
-    // ⭐ The USER turn, not the assistant one: the re-run replays what the
-    // person said, and appends no second user turn.
-    expect(handlers.onCorrectTurn).toHaveBeenCalledWith(turns[0]!.id);
+    expect(screen.queryByTestId('plan-change-correct')).toBeNull();
+    expect(screen.queryByText('Propose changes instead')).toBeNull();
   });
 
-  it('offers "Answer this instead" under a PROPOSAL', () => {
+  it('is only as wide as its label — not a full-width target over the act record', () => {
     renderRail({
       session: session(
         exchange('split the blocked story', 'Proposed 3 subtasks.', { intent: 'plan_change' }),
@@ -211,15 +208,32 @@ describe('the correction marker', () => {
     });
 
     const marker = screen.getByTestId('plan-change-correct');
+    // The log is a flex column: without these the button stretches across it.
+    expect(marker.className).toContain('w-fit');
+    expect(marker.className).toContain('self-center');
+  });
+
+  it('offers "Answer this instead" under a PROPOSAL, and re-runs the USER turn', () => {
+    const turns = exchange('split the blocked story', 'Proposed 3 subtasks.', {
+      intent: 'plan_change',
+    });
+    renderRail({ session: session(turns) });
+
+    const marker = screen.getByTestId('plan-change-correct');
     expect(marker.textContent).toBe('Answer this instead');
     expect(marker.getAttribute('data-direction')).toBe('ask');
+
+    fireEvent.click(marker);
+    // ⭐ The USER turn, not the assistant one: the re-run replays what the
+    // person said, and appends no second user turn.
+    expect(handlers.onCorrectTurn).toHaveBeenCalledWith(turns[0]!.id);
   });
 
   it('appears on the LATEST assistant turn only — never two ways to re-run one turn', () => {
     renderRail({
       session: session([
-        ...exchange('first question', 'first answer', { jobId: 'job-1' }),
-        ...exchange('second question', 'second answer', { jobId: 'job-2' }),
+        ...exchange('first change', 'first proposal', { jobId: 'job-1', intent: 'plan_change' }),
+        ...exchange('second change', 'second proposal', { jobId: 'job-2', intent: 'plan_change' }),
       ]),
     });
 
@@ -245,7 +259,7 @@ describe('the correction marker', () => {
       phase: 'streaming',
       progress: { kind: 'reading' },
       session: session(
-        exchange('the payments epic should come first', 'It currently sits second.'),
+        exchange('split the blocked story', 'Proposed 3 subtasks.', { intent: 'plan_change' }),
       ),
     });
 

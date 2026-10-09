@@ -5407,6 +5407,15 @@ behind `ai:decide_plan` and are pressed from the plan page, the planning rail,
 --auto-approve-replan` caller). No list collects a waiting plan, and no gate row
 records who approved which version of it.
 
+> **⚠️ AMENDED 2026-10-08 by Story MOTIR-7883 (MOTIR-7891).** The sentence above
+> — _"`plansService.approvePlan` / `declinePlan` sit behind `ai:decide_plan` and
+> are pressed from the plan page, the planning rail, `ExpansionNudgeBanner` and
+> the v1 route"_ — is kept as the record of what was missing on 2026-09-23. It is
+> no longer true of the plan page for a member: a member decides an undecided plan
+> in the planning overlay, whether its session is open or has ended, and a
+> `/plans/<id>` for one replace-redirects there (11.5b, as amended). The page's
+> verbs remain only for the null-session breach, which no surface explains.
+
 **Read at base `983af7117`.** This section is the contract Story MOTIR-6012's
 children build to. Each of them cites the numbered point it implements rather
 than re-reading the story. **No behaviour ships in this section.**
@@ -5634,6 +5643,54 @@ kind for which that is true.
   (`/plans/<id>`), where the same two verbs sit, and the row says why before it
   is clicked.
 
+  **⚠️ AMENDED 2026-10-08 by Story MOTIR-7883 (MOTIR-7891) — an UNDECIDED plan
+  is reached ONLY in the planning overlay, whether its session is open or has
+  ended.**
+  - **What this supersedes**, quoted verbatim from the bullet above: _"opens its
+    own plan page (`/plans/<id>`), where the same two verbs sit, and the row says
+    why before it is clicked."_ Nothing says why any more. The reason that copy
+    rendered, `'no-conversation'`, is retired: the null arm of
+    `planRowDestination` now answers `'no-session'`
+    (`lib/planning/planDestination.ts`, MOTIR-7885), and no renderer reads it. A
+    null `Plan.sessionId` is an invariant breach — `createPlan` attaches a
+    session in the same transaction (MOTIR-6022) and MOTIR-6020 backfilled every
+    older plan — so it degrades to the page silently. It is no longer a
+    population, and it is no longer a sanctioned road to deciding a plan outside
+    the overlay.
+  - **The owner's rule (Yue, 2026-10-08), quoted:** _"the plan approval should
+    always be on the overlay, the user needs to see the plan before approve"_;
+    for `/plans/[id]`, _"open the overlay there if the plan is to approve or
+    writing -- not approved, not declined, not closed"_; and of plans whose
+    session has ended, _"open them in the overlay too"_.
+  - **What replaces it.** A member reaches an UNDECIDED plan — `generating` ·
+    `planned` · `stale` — **only in the planning overlay at that plan's
+    session, whether the session is open or has ended** (`PlanChangeSession.endedAt`
+    set; **Closed** on the Plans list). **A plan is _closed_ when it is decided,
+    not when its session ends.** Every in-app door opens it in place, over the
+    page the reader is on (MOTIR-4730). A typed, shared or followed `/plans/<id>`
+    for such a plan **replace-redirects** to `/plans` with the overlay open on
+    the plan's session (`app/(authed)/plans/[id]/_view.tsx`; MOTIR-7888), so Back
+    does not return to an address that only bounces again. The redirect asks
+    `planRowDestination` alone and reads no session end at all.
+  - **MOTIR-7634's Closed-row read, NARROWED here.** That clause — a Closed row on
+    the Plans list opens its CONVERSATION, as a read, because there is nothing
+    left to decide — is not stated in any decision record under `docs/decisions/`
+    (it lives in MOTIR-7634's published design section and in
+    `app/(authed)/plans/_components/SessionRow.tsx`), so its narrowing is recorded
+    in this amendment: **a Closed row whose latest plan is still undecided opens
+    that plan in the overlay**, row and state chip alike (the chip is a
+    `PlanOverlayDoor`; MOTIR-7889). A Closed row whose latest plan is decided —
+    or which has no plan — keeps the read.
+  - **What this does NOT drop.** The plan page itself, for an `approved` or
+    `declined` plan (a record), for the null-session breach (with no copy) and
+    for every Visitor (MOTIR-6888, to whom the planning workspace is not served).
+    **A session-ended undecided plan is NOT among them.** The ONE decide door
+    (11.6), the record (§6a) and the stamp (11.3) are untouched, and
+    `Plan.sessionId` stays nullable at the database. So does MOTIR-7629's rule
+    that an ended session is never resumed: the overlay SHOWS an ended session's
+    plan; it does not reopen the session. Continuing that conversation — a new
+    session carrying the plan — is a sibling story's to record, not this one's.
+
   **⚠️ AMENDED 2026-09-24 by Story MOTIR-6043 (MOTIR-6045), and the earlier
   wording is quoted here because it names three populations this now excludes.**
   It read: _"A plan with NO conversation (a backfilled plan, an agent-authored
@@ -5668,6 +5725,31 @@ kind for which that is true.
   `approvalGate.planApproval.noConversation.agent` / `.cadence` / `.earlier`,
   and the single `.none` cause this notice now carries are
   `design/ai-planning/design-notes.md` **Part XXI**.
+
+  **⚠️ AMENDED 2026-10-08 by Story MOTIR-7883 (MOTIR-7891) — the single `.none`
+  cause is retired too.** The paragraph above is kept word for word as the record
+  of 2026-09-24; what it names as current is not. `approvalGate.planApproval.noConversation`
+  and `planDestination.noConversation` / `.noConversationWhy` are deleted from
+  the catalogue, and `PlanPageReason`'s `'no-conversation'` is renamed
+  `'no-session'`, which no surface renders (MOTIR-7885). **What this does NOT
+  drop:** the predicate — the session's EXISTENCE, never its origin and never its
+  turns — and the one-function rule: `planRowDestination` is still the single
+  rule both lists call, total over `PlanStatus` with no default arm.
+  `design/ai-planning/design-notes.md` Part XXI stays as drawn, a record of the
+  moment it was drawn.
+
+  **⚠️ AMENDED 2026-10-08 by Story MOTIR-7883 (MOTIR-7891) — MOTIR-6043's
+  reachability clause is REVERSED, on purpose.** Story MOTIR-6043 promised:
+  _"Nothing becomes unreachable: a pending plan's own page keeps a way in,
+  through a secondary link on the row"_, and _"a pending plan's own page is still
+  reachable from the list or the surface in one step"_. Both sentences are
+  superseded deliberately: a member is no longer meant to reach a pending plan's
+  page at all (the amendment under this bullet's opening paragraph). The Plans
+  row's state chip that was that secondary link now opens the plan in the
+  overlay (`PlanOverlayDoor` in `app/(authed)/plans/_components/SessionRow.tsx`;
+  MOTIR-7889). **What this does NOT drop:** the chip itself, drawn only while the
+  row's plan has something to decide, and the decided plan's page, which its row
+  still opens.
 
 - The row's words, the two verbs' placement and copy, and the hand-off message
   before generation are MOTIR-6033's to draw.
@@ -5793,6 +5875,15 @@ decision, and they are not routed through the door:
    MOTIR-6038). That reading is recorded here so a later pass does not route
    these two through a door that has no gate to lock.
 
+   **⚠️ AMENDED 2026-10-08 by Story MOTIR-7883 (MOTIR-7891).** The entrance list
+   above — _"the four ENTRANCES that decide a `planned` plan (the plan page, the
+   planning rail, the nudge and the v1 route, MOTIR-6038)"_ — no longer holds for
+   the plan page and a member: a member decides an undecided plan in the planning
+   overlay, open session or ended (11.5b, as amended). The plan page's verbs
+   remain only for the null-session breach. **What this does NOT drop:** the
+   reading itself — the criterion is still read over the entrances that decide a
+   `planned` plan, and the two ends above still need no door.
+
 **And the converse, which MOTIR-6038 makes true:** while an `awaiting` plan gate
 exists, **no path but the door** writes `approved` or `declined` onto that plan.
 `plansService.approvePlan` / `declinePlan` stop being public deciding doors and
@@ -5855,9 +5946,17 @@ decided here.
 
 **The KIND table's row:**
 
-| kind            | the port shows                                                                                           | fires when                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `plan_approval` | **no port** — the planning surface at the plan's conversation, or the plan page when it has none (11.5b) | a plan reaches `planned` with at least one proposal (11.7) — **never** a work item's review |
+| kind            | the port shows                                                                                                                   | fires when                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `plan_approval` | **no port** — the planning OVERLAY at the plan's session, open or ended (11.5b); a member reaches an undecided plan nowhere else | a plan reaches `planned` with at least one proposal (11.7) — **never** a work item's review |
+
+**⚠️ AMENDED 2026-10-08 by Story MOTIR-7883 (MOTIR-7891).** The port cell above
+read: _"**no port** — the planning surface at the plan's conversation, or the plan
+page when it has none (11.5b)"_. The plan-page fallback is retired: an undecided
+plan is reached only in the planning overlay, whether its session is open or has
+ended, and a typed `/plans/<id>` for one replace-redirects there (11.5b, as
+amended). **What this does NOT drop:** _fires when_, unchanged, and the kind's
+having no port.
 
 #### 11.11 What this section does NOT decide
 
@@ -5865,7 +5964,10 @@ The row's and the surface's words and layout (MOTIR-6033). The hand-off message
 before generation (MOTIR-6033 draws it; MOTIR-6037 builds it). Refusing a manual
 move of a plan's cards out of Planning, which is Story MOTIR-6017, the consumer of
 this gate. Notifications. Where a plans row opens (Story MOTIR-6043, which
-consumes 11.5b's fallback). ~~Running the backfill on production (11.9).~~ The backfill now runs with the deploy (11.9, amended).
+consumes 11.5b's fallback). _(⚠️ AMENDED 2026-10-08 by Story MOTIR-7883
+(MOTIR-7891): that fallback is retired by Story MOTIR-7883, which now owns where
+every link to an undecided plan lands — the planning overlay at the plan's
+session, open or ended (11.5b, as amended).)_ ~~Running the backfill on production (11.9).~~ The backfill now runs with the deploy (11.9, amended).
 
 ---
 

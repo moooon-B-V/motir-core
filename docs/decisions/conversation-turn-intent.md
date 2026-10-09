@@ -6,7 +6,9 @@
   **No application behaviour ships in this subtask** (the ADR only).
   **Amended 2026-09-30** by MOTIR-7044 — a third intent, `debug` (see
   _AMENDMENT 1_ at the end). **Amended 2026-10-03** by MOTIR-7461 — a
-  fourth intent, `guide` (see _AMENDMENT 2_ at the end).
+  fourth intent, `guide` (see _AMENDMENT 2_ at the end). **Amended
+  2026-10-09** by MOTIR-7924 — §3's flip INTO a plan change is retired (see
+  _AMENDMENT 3_ at the end).
 - **Story / Subtask:** MOTIR-1343 (The AI assistant — Ask about this project) ·
   Subtask MOTIR-1816.
 - **Consumed by:** MOTIR-1815 (design: the cited-answer turn and the correction
@@ -707,3 +709,41 @@ of credits is the shipped paywall state, and the turn writes nothing (A2.4).
   store.
 - **The CLI `motir guide` protocol**, which is unchanged.
 - **A door in the quick view.** The item page is the only place a guide starts.
+
+## AMENDMENT 3 (2026-10-09) — no person's button starts a planning run
+
+- **Decided by:** Yue, on bug MOTIR-7924: _"in the conversation phase, the user
+  should never have a button to let the planner do 'plan now', the planner
+  always decides by itself if it can enter the planning phase."_
+- **Amends:** §3 (the correction's two directions) and §4's "one click on the
+  marker" remedy for a wrong `ask`. Everything else stands, AMENDMENT 1 and 2
+  included.
+
+### A3.1 — The correction runs ONE way: from a plan change (or a debug) to an answer.
+
+§3 drew two labels. **"Propose changes instead" under an answer is retired**;
+**"Answer this instead"** under a proposal (and under a debug result, A1.5) stays
+exactly as §3 and A1.5 describe it. Whether a turn becomes a planning run is the
+planner's reading alone: at the door (§2), or when the ask job settles as a
+redirect. A person who wants changes after an answer says so in a new turn, and
+the planner reads that turn from scratch (§5).
+
+The asymmetry §4 rests on is why the retired direction was the one to go: a
+wrong `ask` is cheap and a person can simply say what they meant; a wrong
+`plan_change` spends the plan engine, which is what a button must not be able to
+do on the person's behalf.
+
+### A3.2 — The door refuses the retired flip. Nothing is written.
+
+`POST /api/ai/ask { turnId, flip: true }` on a turn that ran as `ask` answers
+**422 `PLAN_CHANGE_FLIP_NOT_OFFERED`** before anything is recorded or submitted:
+no intent moves, `intentCorrected` does not latch, no job is dispatched. A flip
+of a `plan_change` or `debug` turn re-runs it as `ask`, unchanged. A RETRY (no
+`flip`) re-runs a turn under the intent it already ran as, as before, because
+that intent was the planner's own reading.
+
+### A3.3 — What stays on the thread.
+
+A turn corrected into a plan change before this amendment keeps its
+`intentCorrected` record and its passive _"Re-read as a plan change"_ marker:
+the thread is a record of what happened, and nothing rewrites it.

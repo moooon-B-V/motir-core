@@ -46,9 +46,9 @@ export function PlanDestinationTag({
 }) {
   const t = useTranslations('planDestination');
   const conversation = destination.kind === 'planning-surface';
-  // A page reached for want of a conversation says so; a DECIDED one does not,
-  // because "no conversation" would be false of it and beside the point anyway.
-  const why = destination.kind === 'plan-page' && destination.reason === 'no-conversation';
+  // ⚠️ The tag reads no REASON (MOTIR-7885, Story MOTIR-7883). It used to suffix
+  // `· no conversation` to a page reached for want of a session; every plan has a
+  // session now, so that state is an invariant breach and degrades silently.
   const Glyph = conversation ? MessagesSquare : FileText;
 
   return (
@@ -56,19 +56,9 @@ export function PlanDestinationTag({
       data-testid="plan-destination"
       data-destination={destination.kind}
       className={cn('inline-flex min-w-0 items-center gap-1', className)}
-      title={why ? t('noConversationWhy') : undefined}
     >
       <Glyph className="h-3.5 w-3.5 shrink-0" aria-hidden />
       <span className="truncate">{conversation ? t('conversation') : t('plan')}</span>
-      {why ? (
-        <>
-          {/* The shipped `·` idiom, copied from the session row's own starter line. */}
-          <span className="shrink-0 text-(--el-text-faint)" aria-hidden>
-            ·
-          </span>
-          <span className="truncate">{t('noConversation')}</span>
-        </>
-      ) : null}
     </span>
   );
 }

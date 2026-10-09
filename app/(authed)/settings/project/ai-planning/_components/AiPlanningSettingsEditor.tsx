@@ -19,6 +19,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
 import { SettingsCard } from '@/components/settings/SettingsCard';
 import { SwitchRow } from '@/components/settings/SwitchRow';
 import { useToast } from '@/components/ui/Toast';
@@ -865,14 +866,17 @@ function PausedBanner({ pause }: { pause: AutoPlanPauseView }) {
             </>
           ) : null}
           <span>{tp('itemCount', { count: pause.itemCount })}</span>
-          <Link
-            href={`/plans/${pause.planId}`}
+          {/* The pause view carries no status or session, so the door resolves
+              them; an undecided plan opens in the overlay over this page (Story
+              MOTIR-7883 · MOTIR-7890). */}
+          <PlanOverlayDoor
+            planId={pause.planId}
             data-testid="ai-planning-paused-link"
             className="inline-flex items-center gap-1.5 font-semibold text-(--el-text-strong) underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
           >
             {t('aiPlanning.paused.reviewCta')}
             <ArrowRight className="size-[13px] shrink-0" aria-hidden />
-          </Link>
+          </PlanOverlayDoor>
         </span>
       </span>
     </Callout>
