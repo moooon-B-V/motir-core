@@ -4393,18 +4393,10 @@
     "nudge": {
       "body": "Only {count} work item ready — expand {key} ({title})?",
       "expandLabel": "Expand",
-      "expanding": "Expanding…",
+      "expandHint": "Opens Motir AI planning on {key}. It may ask what you want planned first.",
       "dismissAria": "Dismiss expansion nudge",
       "dismissLabel": "Dismiss",
-      "emptyHint": "The ready set is empty — expanding a stub will add new work.",
-      "reviewTitle": "Proposed children",
-      "opChange": "change",
-      "opRemove": "remove",
-      "approveLabel": "Approve",
-      "approving": "Approving…",
-      "declineLabel": "Decline",
-      "approved": "{count, plural, one {# child created} other {# children created}}",
-      "error": "Something went wrong ({code})."
+      "emptyHint": "The ready set is empty — expanding a stub will add new work."
     },
     "lanes": {
       "switchAria": "Ready lanes",

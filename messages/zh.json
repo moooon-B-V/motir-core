@@ -4393,18 +4393,10 @@
     "nudge": {
       "body": "只有 {count} 项工作就绪——展开 {key}（{title}）？",
       "expandLabel": "展开",
-      "expanding": "正在展开…",
+      "expandHint": "将在 {key} 上打开 Motir AI 规划。它可能会先问你想规划什么。",
       "dismissAria": "关闭展开提示",
       "dismissLabel": "关闭",
-      "emptyHint": "就绪列为空——展开一个占位工作项将添加新的工作。",
-      "reviewTitle": "提议的子项",
-      "opChange": "修改",
-      "opRemove": "移除",
-      "approveLabel": "批准",
-      "approving": "正在批准…",
-      "declineLabel": "拒绝",
-      "approved": "已创建 {count, plural, other {#}} 个子项",
-      "error": "出了点问题（{code}）。"
+      "emptyHint": "就绪列为空——展开一个占位工作项将添加新的工作。"
     },
     "lanes": {
       "switchAria": "就绪通道",
