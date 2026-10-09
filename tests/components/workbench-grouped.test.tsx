@@ -300,6 +300,15 @@ describe('live (§ 36.7, § 26 unchanged)', () => {
     expect(within(group('S-1')).queryByText('New')).toBeNull();
   });
 
+  it('holds a group WHOLE, with no count, once its last member leaves', () => {
+    const view = render(list([S(), T()]));
+    view.rerender(list([S()]));
+    // T left the server's page: held in place until the next load, its count gone.
+    expect(group('T-1')).toBeTruthy();
+    expect(within(group('T-1')).queryByTestId('workbench-group-count')).toBeNull();
+    expect(within(group('S-1')).getByTestId('workbench-group-count').textContent).toBe('3');
+  });
+
   it('resets the expand state on a pager move', () => {
     const view = render(list([S(), T()], 'in-progress', { total: 30, page: 1, pageSize: 25 }));
     fireEvent.click(toggle('S-1'));

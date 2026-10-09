@@ -6237,6 +6237,24 @@ export default defineConfig({
           lines: 90,
         },
         'app/**/workbench/_components/workbenchRows.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-8012 · Subtask MOTIR-8017 — the grouped work tabs, MEASURED on
+        // this branch before being pinned, with `tests/components/workbench-grouped.test.tsx`,
+        // `tests/components/workbench-list.test.tsx`, `tests/workbench/` and
+        // `tests/integration/workbench/`:
+        //
+        //   WorkbenchGroupRow.tsx   100 stmts · 100 branch · 100 fn · 100 lines
+        //   WorkbenchList.tsx       98.41 stmts · 98.5 branch · 100 fn · 100 lines
+        //   workbenchRows.ts        97.77 stmts · 98 branch · 100 fn · 100 lines
+        //   homeService.ts          99.47 stmts · 90.29 branch · 100 fn · 100 lines
+        //
+        // homeService's branch figure sits on the floor because of arms that predate
+        // the grouping (the To fix / To resume reads) plus the grouping's defensive
+        // race arms; the floor holds, so it is not loosened.
+        'app/**/workbench/_components/WorkbenchGroupRow.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Story MOTIR-2982 · Subtask MOTIR-2992 — the agent-authored plan
         // surface, MEASURED on this branch before being pinned (the sequence
         // this block prescribes throughout), with `tests/mcp/author-plan.test.ts`,
