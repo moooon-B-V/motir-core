@@ -339,8 +339,6 @@ test('a person reads their Workbench grouped under the story each piece of work 
   await chapter('To do: a task under an epic stands alone, and no epic heads', async () => {
     await page.goto('/workbench?tab=todo');
     await expect(table(page, en.workbench.tabs.toDo)).toBeVisible();
-    await expect(itemRow(page, Et)).toBeVisible();
-    await expect(itemRow(page, Et).getByRole('button')).toHaveCount(0);
     await expect(groupRow(page, E)).toHaveCount(0);
     await expect(groupRow(page, G)).toHaveCount(0);
     // G's grandchild groups under G's task, the runnable container.
@@ -350,6 +348,13 @@ test('a person reads their Workbench grouped under the story each piece of work 
     // S's To do subtask sits under S's group.
     await expect(groupRow(page, S)).toBeVisible();
     await expect(countOf(page, S)).toHaveText('1');
+    // The epic's task is a group of one that ranks by its own kind (task), after every
+    // subtask-led group — so it is the last of the 30 and sits on page two.
+    await page.goto('/workbench?tab=todo&page=2');
+    await expect(table(page, en.workbench.tabs.toDo)).toBeVisible();
+    await expect(itemRow(page, Et)).toBeVisible();
+    await expect(itemRow(page, Et).getByRole('button')).toHaveCount(0);
+    await expect(groupRow(page, E)).toHaveCount(0);
     await beat();
   });
 
