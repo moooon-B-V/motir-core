@@ -439,6 +439,34 @@ function withoutReading(acts: PlanChangeProgress[]): PlanChangeProgress[] {
 }
 
 /** Map one raw SSE frame to the narration the rail shows, or null to ignore it. */
+/** The statuses a planning job ENDS on — motir-ai's terminal set (MOTIR-7985). */
+const TERMINAL_JOB_STATUSES: ReadonlySet<string> = new Set(['succeeded', 'failed', 'canceled']);
+
+function frameField(data: unknown, key: string): unknown {
+  return typeof data === 'object' && data !== null
+    ? (data as Record<string, unknown>)[key]
+    : undefined;
+}
+
+/** Wait before subscribing again to a job whose stream closed while it still ran:
+ *  1s, doubling, at most 15s — a connection that keeps dropping is not hammered.
+ *  Resolves early on abort. */
+function pauseBeforeResubscribe(attempt: number, signal: AbortSignal): Promise<void> {
+  const ms = Math.min(1000 * 2 ** attempt, 15_000);
+  return new Promise((resolve) => {
+    if (signal.aborted) return resolve();
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 export function narrateFrame(event: string, data: unknown): PlanChangeProgress | null {
   const d = (data ?? {}) as Record<string, unknown>;
 
@@ -1154,31 +1182,78 @@ export function usePlanChangeConversation({
             onDone: () => void,
             onFrame: (event: string, data: unknown) => void,
           ) => streamAugmentJob(jobId, controller.signal, onError, onDone, onFrame);
-      await stream(
-        (code) => {
-          failed = true;
-          if (!mountedRef.current) return;
-          const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
-          // The thread and any PRIOR proposal survive — recoverable in place.
+      // The JOB's own status, as its `status` frames report it (MOTIR-7985). The
+      // stream ending says only that a connection closed; this says whether the
+      // run did, and how. `null` when no status frame arrived at all.
+      let jobStatus: string | null = null;
+      let lastSeq = 0;
+      for (let attempt = 0; ; attempt++) {
+        await stream(
+          (code) => {
+            failed = true;
+            if (!mountedRef.current) return;
+            const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
+            // The thread and any PRIOR proposal survive — recoverable in place.
+            setState((s) => ({
+              ...s,
+              phase: s.review ? 'review' : 'idle',
+              progress: null,
+              liveReview: null,
+              errorCode: gated ? null : (code ?? 'FAILED'),
+              outOfCredits: gated,
+            }));
+          },
+          () => {},
+          (event, data) => {
+            if (event === 'status') {
+              const status = frameField(data, 'status');
+              if (typeof status === 'string') {
+                // A re-subscribe opens on the status it left off at: not news.
+                if (status === jobStatus) return;
+                jobStatus = status;
+              }
+            } else {
+              // A re-subscribe replays the job from its first frame; the rail
+              // has narrated those already.
+              const seq = frameField(data, 'seq');
+              if (typeof seq === 'number') {
+                if (seq <= lastSeq) return;
+                lastSeq = seq;
+              }
+            }
+            if (!mountedRef.current) return;
+            const progress = narrateFrame(event, data);
+            // APPEND to the rail and REPLACE the live line, in one update. A quiet
+            // frame yields null and does neither, which is the decision the
+            // disposition map recorded rather than a frame falling through.
+            if (progress) setState((s) => ({ ...s, progress, acts: [...s.acts, progress] }));
+          },
+        );
+        if (failed || controller.signal.aborted || !mountedRef.current) break;
+        // ⚠️ THE STREAM ENDED, THE JOB DID NOT (MOTIR-7985). The relay follows the
+        // job past motir-ai's stream window itself, so this is a connection that
+        // closed under a run still going — a dropped network, a restarted
+        // server. Settling here would tell the person "Nothing came back" about a
+        // run that is still working, so the rail subscribes again instead.
+        if (jobStatus === null || TERMINAL_JOB_STATUSES.has(jobStatus)) break;
+        await pauseBeforeResubscribe(attempt, controller.signal);
+        if (controller.signal.aborted || !mountedRef.current) break;
+      }
+      if (!failed && jobStatus === 'failed') {
+        // The job FAILED and no reason arrived with it (the relay sends one when
+        // motir-ai has it). Still a failure, never "nothing came back".
+        failed = true;
+        if (mountedRef.current) {
           setState((s) => ({
             ...s,
             phase: s.review ? 'review' : 'idle',
             progress: null,
             liveReview: null,
-            errorCode: gated ? null : (code ?? 'FAILED'),
-            outOfCredits: gated,
+            errorCode: 'FAILED',
+            outOfCredits: false,
           }));
-        },
-        () => {},
-        (event, data) => {
-          if (!mountedRef.current) return;
-          const progress = narrateFrame(event, data);
-          // APPEND to the rail and REPLACE the live line, in one update. A quiet
-          // frame yields null and does neither, which is the decision the
-          // disposition map recorded rather than a frame falling through.
-          if (progress) setState((s) => ({ ...s, progress, acts: [...s.acts, progress] }));
-        },
-      );
+        }
+      }
       if (failed) {
         // The run is OVER at the failure: release it before the end re-read, or
         // a Try again pressed while the re-read waits would find a run still in
@@ -1188,6 +1263,7 @@ export function usePlanChangeConversation({
         return;
       }
       if (!mountedRef.current) return;
+      const canceled = jobStatus === 'canceled';
 
       // SETTLED → first, let the PLANNER SPEAK (MOTIR-2226). The run's result
       // carries the findings report it owes on every turn, and the one question
@@ -1225,7 +1301,7 @@ export function usePlanChangeConversation({
           // the stop — so the review block is live and Approve / Discard are both
           // reachable from the stopped state. That is the card's whole point: if
           // stopping threw the work away, nobody would stop a run.
-          ...(s.stopping ? { stopping: false, stopped: true } : {}),
+          ...(s.stopping || canceled ? { stopping: false, stopped: true } : {}),
         }));
         stoppingRef.current = false;
       } else {
@@ -1246,11 +1322,14 @@ export function usePlanChangeConversation({
           // the planner ASKED and is waiting (`asked`); the user STOPPED it
           // (`s.stopping`); or the run genuinely proposed nothing, which is the
           // only one that is an error.
-          errorCode: asked || s.stopping ? null : 'EMPTY',
+          // A job CANCELED under the rail — a Stop pressed elsewhere, the
+          // abandoned-plan sweep — is the same outcome as a stop pressed here
+          // (MOTIR-7985): `EMPTY` is only ever a run that SUCCEEDED with nothing.
+          errorCode: asked || s.stopping || canceled ? null : 'EMPTY',
           // The interval closes HERE and only here: the stream has ended, so the
           // walk reached its boundary and read the flag. Until this moment the
           // bar says "stopping", which is the honest thing to say.
-          ...(s.stopping ? { stopping: false, stopped: true } : {}),
+          ...(s.stopping || canceled ? { stopping: false, stopped: true } : {}),
         }));
         stoppingRef.current = false;
       }
