@@ -12882,8 +12882,8 @@
         "consequence": "Zatwierdzenie doda te elementy do Twojego backlogu. Odrzucenie zakończy plan i niczego nie zmieni.",
         "reopened": "Ponownie otwarte z sekcji „Czeka na Ciebie” · rozpoczęte przez: {name} · ostatnia aktywność {when}",
         "reopenedYours": "Ponownie otwarte z sekcji „Czeka na Ciebie” · rozpoczęte przez Ciebie · ostatnia aktywność {when}",
-        "held": "Motir AI pisze nową wersję tego planu. Przyciski Zatwierdź i Odrzuć wrócą, gdy skończy — w tym czasie plan pozostaje w sekcji „Czeka na Ciebie”.",
-        "heldBy": "{harness} pisze nową wersję tego planu. Przyciski Zatwierdź i Odrzuć wrócą, gdy skończy — w tym czasie plan pozostaje w sekcji „Czeka na Ciebie”.",
+        "held": "Motir AI pisze nową wersję tego planu. Przyciski Zatwierdź i Odrzuć wrócą, gdy skończy — do tego czasu plan jest w sekcji „Planowanie”, a potem wraca do sekcji „Czeka na Ciebie”.",
+        "heldBy": "{harness} pisze nową wersję tego planu. Przyciski Zatwierdź i Odrzuć wrócą, gdy skończy — do tego czasu plan jest w sekcji „Planowanie”, a potem wraca do sekcji „Czeka na Ciebie”.",
         "stale": {
           "title": "Ten plan zmienił się podczas czytania.",
           "next": "Nic nie zostało zatwierdzone ani odrzucone. Kanwa pokazuje teraz nową wersję — przejrzyj ją, a potem zdecyduj ponownie."
@@ -12903,7 +12903,7 @@
       },
       "handoff": {
         "writing": "Mam wszystko, czego potrzebuję — piszę teraz plan. Nie trzeba tu czekać: zamknij to okno w dowolnej chwili, a plan będzie czekać w sekcji <link>Czeka na Ciebie</link>.",
-        "rewriting": "Piszę nową wersję tego planu. Możesz to zamknąć — plan pozostanie w sekcji <link>Czeka na Ciebie</link>, a decyzję podejmiesz, gdy skończę."
+        "rewriting": "Piszę nową wersję tego planu. Możesz to zamknąć — w trakcie pracy plan jest w sekcji „Planowanie”, a gdy skończę, wróci do sekcji <link>Czeka na Ciebie</link>, gdzie podejmiesz decyzję."
       }
     },
     "planAsk": {

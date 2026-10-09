@@ -1323,10 +1323,12 @@ function PlanApprovalRow({
               </Pill>
             )
           ) : subject.held ? (
-            /* BEING REWRITTEN (§11.5c): the gate is still `awaiting` and the row stays
-               listed — ⚠️ NOT § 26's `held` section, which is a row that LEFT the set.
-               A word in the sky tint the plan rail's in-flight band spends; no verb. The
-               row door still opens (you can go and watch). */
+            /* BEING REWRITTEN (§11.5c): the gate is still `awaiting` — ⚠️ NOT § 26's
+               `held` section, which is a row that LEFT the set. A word in the sky tint the
+               plan rail's in-flight band spends; no verb. The row door still opens (you
+               can go and watch). Since §11.5c's MOTIR-7988 amendment the Waiting on you
+               queue no longer LISTS a held plan (it is under Planning), so this draws only
+               where a held gate's row is rendered from another read. */
             <Pill severity="info" className={DECIDE_PILL} title={tPlan('rewritingTitle')}>
               {tPlan('rewriting')}
             </Pill>

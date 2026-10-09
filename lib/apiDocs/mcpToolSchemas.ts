@@ -1537,6 +1537,34 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  hold_plan_revision: {
+    type: 'object',
+    properties: {
+      planId: { type: 'string', minLength: 1, description: 'The id of the plan you are revising.' },
+      action: {
+        type: 'string',
+        enum: ['start', 'renew', 'end'],
+        description:
+          "`start` before the revision's first write, `renew` every few minutes while it runs, and `end` when it finishes, however it finishes.",
+      },
+      harness: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 100,
+        description:
+          'The agent harness you are running in, as its makers name it (e.g. "Claude Code") — what a refused Approve names as holding the plan.',
+      },
+      model: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+        description: 'The model you are running on, by its id. Omit it when you do not know it.',
+      },
+    },
+    required: ['planId', 'action'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   link_pull_request: {
     type: 'object',
     properties: {
@@ -3725,6 +3753,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_project_state: 'Get project state',
   get_work_item: 'Get work item',
   get_work_item_activity: 'Get work item activity',
+  hold_plan_revision: 'Hold a plan while you revise it',
   link_pull_request: 'Link pull request',
   link_work_items: 'Link work items',
   list_designs: 'List designs',
@@ -4009,6 +4038,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   get_work_item_activity: {
     title: 'Get work item activity',
     readOnlyHint: true,
+    openWorldHint: false,
+  },
+  hold_plan_revision: {
+    title: 'Hold a plan while you revise it',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
     openWorldHint: false,
   },
   link_pull_request: {

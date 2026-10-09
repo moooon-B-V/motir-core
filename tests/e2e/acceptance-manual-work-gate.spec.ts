@@ -11,7 +11,6 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { apiTokensService } from '@/lib/services/apiTokensService';
-import { plansService } from '@/lib/services/plansService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { GuideJobOutcome } from '@/lib/test-ai-jobs-mock';
 import en from '@/messages/en.json';
@@ -29,8 +28,12 @@ import zh from '@/messages/zh.json';
 //   yes — and the row is gone. A second story's manual card is cleared the other way,
 //   with the row's **Mark done**.
 //
-//   THE REST (cases 5–6, unrecorded). The tab reads 等你处理 in zh, and a plan held
-//   while it is rewritten says it stays in Waiting on you.
+//   THE REST (case 5, unrecorded). The tab reads 等你处理 in zh. Case 6 — a plan held
+//   while it is rewritten says it stays in Waiting on you — was RETIRED by Bug
+//   MOTIR-7988, which reversed that claim: a plan being rewritten is being planned
+//   again, so it LEAVES Waiting on you for Planning. The hold stays covered by
+//   `cloud-plan-approval-gate.spec.ts` (its hold chapter) and by
+//   `tests/integration/workbench/revision-hold-listing.test.ts`.
 //
 // ── THE BOUNDARY ────────────────────────────────────────────────────────────
 // The RUN is driven through the lane's run fixture (`agent-run-seed.ts`): the same
@@ -448,10 +451,7 @@ test('a run hands manual work to you — guided through and closed, or marked do
   });
 });
 
-test('in zh the tab reads 等你处理, and a held plan says it stays in Waiting on you', async ({
-  page,
-  baseURL,
-}) => {
+test('in zh the tab reads 等你处理', async ({ page, baseURL }) => {
   const t = await seedTenant(`manual-work-rest-${Date.now()}@example.com`, 'REST');
   const api = await ingestContext(t.token, baseURL!);
   const s = await seedStory(t, {
@@ -477,52 +477,4 @@ test('in zh the tab reads 等你处理, and a held plan says it stays in Waiting
   await expect(zhRow.getByRole('button', { name: zh.workbench.approvals.markDone })).toBeVisible();
   await expect(tabLink(page, new RegExp(tabs.toApprove), zh.workbench.tabs.label)).toHaveCount(0);
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: baseURL! }]);
-
-  // ── 6. A plan awaiting approval, held while it is rewritten ──────────────────
-  const target = await workItemsService.createWorkItem(
-    { projectId: t.projectId, kind: 'task', title: 'Refunds to the original card' },
-    t.ctx,
-  );
-  const plan = await plansService.createPlan(
-    t.projectId,
-    {
-      title: `Re-plan ${target.identifier}`,
-      summary: `Re-plan ${target.identifier}`,
-      createdById: t.userId,
-      authorSource: 'mcp',
-      authorHarness: 'Claude Code',
-      session: { origin: 'mcp', targetKeys: [target.identifier] },
-    },
-    t.ctx,
-  );
-  await plansService.addProposals(
-    plan.id,
-    [{ op: 'modify', workItemId: target.id, patch: { title: 'Refunds, partial ones too' } }],
-    t.ctx,
-  );
-  await plansService.markPlanned(plan.id, t.ctx);
-  // The planner takes the revision lease — the plan is being rewritten.
-  await plansService.acquireRevisionLease(plan.id, t.ctx, {
-    source: 'native',
-    harness: null,
-    model: null,
-  });
-
-  await page.goto('/workbench?tab=approvals');
-  await expectOnWaitingOnYou(page);
-  const planRow = queue(page)
-    .getByTestId(/^approval-row-/)
-    .filter({ hasText: en.approvalGate.planApproval.row.rewriting });
-  await expect(planRow).toBeVisible();
-  // Pressed at its leading edge: the details and title sit ABOVE the stretched door.
-  await planRow.getByRole('link', { name: /^Review plan — / }).click({ position: { x: 6, y: 6 } });
-  await page.waitForURL(
-    (url) =>
-      url.searchParams.get('planSession') === plan.sessionId &&
-      url.searchParams.get('planVia') === 'approvals',
-  );
-  const bar = page.getByRole('dialog', { name: /plan/i }).getByTestId('plan-change-confirm-bar');
-  await expect(bar).toBeVisible({ timeout: FIRST_PAINT_MS });
-  await expect(bar).toContainText(en.approvalGate.planApproval.surface.held);
-  await expect(bar).toContainText('it stays in Waiting on you meanwhile');
 });
