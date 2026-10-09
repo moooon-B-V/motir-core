@@ -119,6 +119,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // code-read tools resolve the project, its repository set and every
       // permission decision against a real database.
       'ci.yml:story-7858-coverage',
+      // MOTIR-7892's plan-overlay-only coverage lane (Story MOTIR-7883): the story gate
+      // reads real plans and sessions through the real review route.
+      'ci.yml:story-7883-coverage',
       'ci.yml:test',
     ]);
   });
