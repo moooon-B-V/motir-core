@@ -81,3 +81,35 @@ describe('userAppearancePreferenceRepository.upsert', () => {
     expect(await userAppearancePreferenceRepository.findByUserId(user.id)).toBeNull();
   });
 });
+
+describe('userAppearancePreferenceRepository.deleteByUserId', () => {
+  it('removes the row, font picks included, and leaves another user’s row (MOTIR-7898)', async () => {
+    const user = await createTestUser();
+    const other = await createTestUser();
+    await db.$transaction(async (tx) => {
+      await userAppearancePreferenceRepository.upsert(
+        user.id,
+        { pattern: 'dark', fontPickJa: 'm-plus-rounded-1c' },
+        tx,
+      );
+      await userAppearancePreferenceRepository.upsert(other.id, { pattern: 'light' }, tx);
+    });
+
+    const removed = await db.$transaction((tx) =>
+      userAppearancePreferenceRepository.deleteByUserId(user.id, tx),
+    );
+
+    expect(removed).toBe(1);
+    expect(await userAppearancePreferenceRepository.findByUserId(user.id)).toBeNull();
+    expect((await userAppearancePreferenceRepository.findByUserId(other.id))?.pattern).toBe(
+      'light',
+    );
+  });
+
+  it('answers 0 for a user who never pinned anything', async () => {
+    const user = await createTestUser();
+    expect(
+      await db.$transaction((tx) => userAppearancePreferenceRepository.deleteByUserId(user.id, tx)),
+    ).toBe(0);
+  });
+});

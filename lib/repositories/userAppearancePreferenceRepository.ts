@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 // authority for transactions, validation, axis defaults, and DTO mapping; this
 // leaf holds none of that.
 //
-// Layer rules (CLAUDE.md): the write (`upsert`) REQUIRES `tx`; the pure read
+// Layer rules (CLAUDE.md): the writes (`upsert`, `deleteByUserId`) REQUIRE `tx`; the pure read
 // (`findByUserId`) uses the `db` singleton. No business logic, no transactions,
 // no DTO mapping.
 //
@@ -64,5 +64,15 @@ export const userAppearancePreferenceRepository = {
       create: { userId, ...patch },
       update: patch,
     });
+  },
+
+  /**
+   * Remove the user's row, if any (account erasure, MOTIR-7898). Required `tx`
+   * (rides the erasure transaction). Returns the number of rows removed: 0 for a
+   * user who never pinned anything.
+   */
+  async deleteByUserId(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.userAppearancePreference.deleteMany({ where: { userId } });
+    return result.count;
   },
 };
