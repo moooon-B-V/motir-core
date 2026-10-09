@@ -521,6 +521,152 @@ describe('usePlanChangeConversation — failure is recoverable in place', () => 
   });
 });
 
+describe('usePlanChangeConversation — the stream is not the run (MOTIR-7985)', () => {
+  // A stream that delivers `frames` and then simply ENDS, the way a connection
+  // closing under a run does: no `error`, no `done` the rail can tell apart.
+  function streamOf(frames: Array<[string, unknown]>) {
+    return async (
+      _jobId: string,
+      _signal: AbortSignal,
+      _onError: (code: string | null) => void,
+      onDone: () => void,
+      onFrame?: (event: string, data: unknown) => void,
+    ) => {
+      for (const [event, data] of frames) onFrame?.(event, data);
+      onDone();
+    };
+  }
+  const status = (s: string): [string, unknown] => ['status', { jobId: 'job-1', status: s }];
+  const searched = (seq: number): [string, unknown] => [
+    'search',
+    { jobId: 'job-1', seq, relatedCount: seq },
+  ];
+
+  it('subscribes AGAIN when the stream ends while the job still runs, narrating each frame once', async () => {
+    stream
+      .mockImplementationOnce(streamOf([status('running'), searched(1)]))
+      .mockImplementationOnce(
+        streamOf([status('running'), searched(1), searched(2), status('succeeded')]),
+      );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.phase).toBe('review');
+    // seq 1 arrived twice across the two subscriptions; the rail tells it once.
+    expect(result.current.state.acts.filter((a) => a.kind === 'searching')).toHaveLength(2);
+  });
+
+  it('a job that FAILED shows the failure, never "nothing came back"', async () => {
+    fetchReview.mockResolvedValue(planReview([]));
+    stream.mockImplementation(streamOf([status('running'), searched(1), status('failed')]));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(result.current.state.errorCode).toBe('FAILED');
+  });
+
+  it('a job that FAILS on a follow-up keeps the earlier review in hand', async () => {
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    expect(result.current.state.phase).toBe('review');
+
+    stream.mockImplementationOnce(streamOf([status('running'), status('failed')]));
+    await act(async () => {
+      await result.current.send('Split it in two.');
+    });
+
+    expect(result.current.state.errorCode).toBe('FAILED');
+    expect(result.current.state.phase).toBe('review');
+  });
+
+  it('a job CANCELED under the rail reads as stopped, not as EMPTY', async () => {
+    fetchReview.mockResolvedValue(planReview([]));
+    stream.mockImplementation(streamOf([status('running'), status('canceled')]));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.stopped).toBe(true);
+  });
+
+  it('EMPTY is a job that SUCCEEDED with nothing proposed and nothing asked', async () => {
+    fetchReview.mockResolvedValue(planReview([]));
+    stream.mockImplementation(streamOf([status('running'), status('succeeded')]));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(result.current.state.errorCode).toBe('EMPTY');
+  });
+
+  it('a job CANCELED after it proposed keeps the review, marked stopped', async () => {
+    stream.mockImplementation(streamOf([status('running'), searched(1), status('canceled')]));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.stopped).toBe(true);
+    expect(result.current.state.errorCode).toBeNull();
+  });
+
+  it('frames with no readable status or seq are narrated, not deduped', async () => {
+    stream.mockImplementation(
+      streamOf([
+        ['status', null],
+        ['status', { jobId: 'job-1' }],
+        ['search', { jobId: 'job-1', relatedCount: 1 }],
+        ['search', { jobId: 'job-1', relatedCount: 2 }],
+      ]),
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    // No status ever arrived, so the end is the run's end: subscribed once.
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(result.current.state.acts.filter((a) => a.kind === 'searching')).toHaveLength(2);
+  });
+
+  it('an unmount during the wait before re-subscribing ends the loop', async () => {
+    stream.mockImplementation(streamOf([status('running')]));
+    const hook = await mounted();
+
+    let sending!: Promise<void>;
+    act(() => {
+      sending = hook.result.current.send('Add recurring invoices.');
+    });
+    await waitFor(() => expect(stream).toHaveBeenCalledTimes(1));
+    hook.unmount();
+    await act(async () => {
+      await sending;
+    });
+
+    expect(stream).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('usePlanChangeConversation — approve / discard', () => {
   it('persists through the shipped approve route and KEEPS the conversation open', async () => {
     const onApproved = vi.fn();
