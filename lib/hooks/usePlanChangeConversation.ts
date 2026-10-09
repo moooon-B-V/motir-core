@@ -174,7 +174,10 @@ export type PlanChangeProgress =
       verb: ToolCallVerb | null;
       object: { kind: 'path' | 'query' | 'item' | 'parent'; value: string } | null;
       itemRef: string | null;
-      outcome: 'running' | 'failed' | 'skipped';
+      /** `refused` is a walk write the walk refused (`tool_call_failed` with
+       *  reason `refused`); `failed` an error or an `ok: false` lookup. The
+       *  design (MOTIR-7975) marks the two with different words. */
+      outcome: 'running' | 'failed' | 'refused' | 'skipped';
     }
   /**
    * ⚠️ A frame NOBODY HAS DECIDED ABOUT — the LOUD default (MOTIR-4069).
@@ -601,8 +604,9 @@ export type PlanFrameState = Pick<PlanChangeConversationState, 'progress' | 'act
  *     `ok: false` — and appends NOTHING. A matched success changes nothing: the
  *     call's line already says it, and a second line per lookup is the log sheet
  *     3 of `plan-change-run-live.mock.html` forbids;
- *  2. a `tool_call_failed` with a matching `callId` marks it `failed`; with no
- *     match it does nothing — a mark has no line of its own;
+ *  2. a `tool_call_failed` with a matching `callId` marks it — `refused` for
+ *     reason `refused`, else `failed`; with no match it does nothing — a mark has
+ *     no line of its own;
  *  3. anything else — a `retrieval` with no `callId` or none that matches (an
  *     older producer, a job that emits no `tool_call`) included — narrates and
  *     appends exactly as before, replacing the live line.
@@ -621,9 +625,11 @@ export function applyPlanFrame(
     const callId = nonBlank(d['callId']);
     const index = callId === null ? -1 : findCallAct(state.acts, callId);
     if (index >= 0) {
-      const outcome: 'failed' | 'skipped' | null =
+      const outcome: 'failed' | 'refused' | 'skipped' | null =
         event === 'tool_call_failed'
-          ? 'failed'
+          ? d['reason'] === 'refused'
+            ? 'refused'
+            : 'failed'
           : d['blocked'] === true
             ? 'skipped'
             : d['ok'] === false

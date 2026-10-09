@@ -214,13 +214,15 @@ describe('applyPlanFrame — a later frame MARKS its call', () => {
     expect(callAct(failed, 'c1')?.outcome).toBe('failed');
   });
 
-  it('tool_call_failed marks its call FAILED; with no matching call it changes nothing', () => {
+  it('tool_call_failed marks its call REFUSED or FAILED by reason; with no matching call it changes nothing', () => {
     const started = run([
       ['tool_call', call('w1', { family: 'item', verb: 'add', tool: 'add_item' })],
     ]);
     const marked = applyPlanFrame(started, 'tool_call_failed', { callId: 'w1', reason: 'refused' });
     expect(marked.acts).toHaveLength(1);
-    expect(callAct(marked, 'w1')?.outcome).toBe('failed');
+    expect(callAct(marked, 'w1')?.outcome).toBe('refused');
+    const errored = applyPlanFrame(started, 'tool_call_failed', { callId: 'w1', reason: 'error' });
+    expect(callAct(errored, 'w1')?.outcome).toBe('failed');
 
     expect(applyPlanFrame(started, 'tool_call_failed', { callId: 'nope', reason: 'error' })).toBe(
       started,

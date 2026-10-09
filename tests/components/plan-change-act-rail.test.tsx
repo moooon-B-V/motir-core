@@ -148,11 +148,16 @@ describe('PlanChangeRail — the act rail is a RECORD, not a replacing line', ()
     expect(list[1]!.querySelector('.font-mono')?.textContent).toBe('retrieval');
   });
 
-  it('keeps the shipped polite live region, so the newest act is announced', () => {
+  // ⚠️ AMENDED BY MOTIR-7979, to MOTIR-7975's a11y decision: the record used to
+  // sit INSIDE the polite region, so every appended row was read aloud. With one
+  // line per tool call that is a log read aloud, so the region (same test id,
+  // same politeness) now holds an announcer and the record is its sibling.
+  it('keeps the shipped polite live region, and the newest act is announced from it', () => {
     renderRail(stateWith([RETRIEVAL]));
     const region = screen.getByTestId('plan-change-progress');
     expect(region.getAttribute('aria-live')).toBe('polite');
-    expect(region.contains(screen.getByTestId('plan-change-acts'))).toBe(true);
+    expect(region.contains(screen.getByTestId('plan-change-acts'))).toBe(false);
+    expect(region.textContent).toContain('Read the plan tree');
   });
 
   it('the LIVE line is the last one while streaming — full ink and the spinner; the rest are past', () => {
@@ -342,74 +347,6 @@ describe('PlanChangeRail — the record sits ABOVE the surviving proposal (sheet
   });
 });
 
-describe('PlanChangeRail — the INTERIM per-call line (MOTIR-7976)', () => {
-  // The designed lines are MOTIR-7979's, built to MOTIR-7975's design. Until
-  // then a `call` act reads through SHIPPED catalogue lines only, so a producer
-  // deployed early never shows a raw message key — `progress.call` above all,
-  // which is what the default arm would have looked up.
-  function callAct(
-    extra: Partial<Extract<PlanChangeProgress, { kind: 'call' }>>,
-  ): PlanChangeProgress {
-    return {
-      kind: 'call',
-      callId: 'c1',
-      tool: 'read_file',
-      family: 'code_read',
-      verb: 'read',
-      object: { kind: 'path', value: 'lib/auth/session.ts' },
-      itemRef: null,
-      outcome: 'running',
-      ...extra,
-    };
-  }
-
-  it('skipped, code-graph, code-read, lay and unknown-family calls each draw a non-empty shipped line', () => {
-    renderRail(
-      stateWith(
-        [
-          callAct({ outcome: 'skipped' }),
-          callAct({ family: 'code_graph', tool: 'find_symbol', verb: 'search' }),
-          callAct({}),
-          callAct({
-            family: 'lay',
-            tool: 'lay',
-            verb: 'lay',
-            object: { kind: 'parent', value: 'MOTIR-42' },
-          }),
-          callAct({ family: null, tool: 'mystery', verb: null, object: null }),
-          callAct({ family: 'author', object: null, itemRef: 'MOTIR-43' }),
-        ],
-        { phase: 'idle' },
-      ),
-    );
-    const lines = rows().map((row) => row.textContent ?? '');
-    expect(lines).toHaveLength(6);
-    expect(lines[0]).toContain('Out of lookups — carrying on with what it has.');
-    expect(lines[1]).toContain('Read the code graph');
-    // `code_read` has no family label yet, so it shows its raw name — exactly as
-    // the shipped `retrieval` line already shows a family it does not know.
-    expect(lines[2]).toContain('Read the code_read');
-    expect(lines[3]).toContain('Laying out MOTIR-42');
-    expect(lines[4]).toContain("Read from the plan's sources");
-    expect(lines[5]).toContain('Writing MOTIR-43');
-    for (const line of lines) {
-      expect(line.trim().length).toBeGreaterThan(0);
-      expect(line).not.toContain('progress.call');
-      expect(line).not.toContain('act.call');
-      expect(line).not.toContain('undefined');
-    }
-  });
-
-  it('a skipped call takes the ban glyph, as the shipped blocked lookup does', () => {
-    renderRail(
-      stateWith(
-        [callAct({ outcome: 'skipped' }), { kind: 'retrieval', family: null, blocked: true }],
-        {
-          phase: 'idle',
-        },
-      ),
-    );
-    const [skipped, blocked] = rows();
-    expect(skipped!.querySelector('svg')?.innerHTML).toBe(blocked!.querySelector('svg')?.innerHTML);
-  });
-});
+// The per-call lines (MOTIR-7979, built to MOTIR-7975's design) replaced the
+// interim `call` arm this file used to pin; they are
+// `plan-change-call-lines.test.tsx`.
