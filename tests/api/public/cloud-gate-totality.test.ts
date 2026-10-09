@@ -143,7 +143,11 @@ describe('every route on the public surface carries the gate', () => {
       // product decision, not a path the filesystem walk happened not to see.
       const source = stripSourceComments(readFileSync(join(REPO_ROOT, route), 'utf8'));
 
-      expect(source).toContain("export const dynamic = 'force-static'");
+      // MOTIR-8031: the MCP catalogue answers `?locale=<code>`, so it is rendered
+      // per request; a `force-static` route would freeze one body for every query.
+      const expected =
+        route === 'app/api/docs/mcp-tools.json/route.ts' ? 'force-dynamic' : 'force-static';
+      expect(source).toContain(`export const dynamic = '${expected}'`);
       expect(source).not.toContain("from '@/lib/publicProjects/cloudGate'");
       expect(source).not.toContain(GATE_CALL);
     },

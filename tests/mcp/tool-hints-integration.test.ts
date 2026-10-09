@@ -344,7 +344,9 @@ describe('tools/list through the real /api/mcp route meets the connector criteri
     const fx = await makeWorkItemFixture();
     const tools = await listOverRoute(fx);
     const { GET } = await import('@/app/api/docs/mcp-tools.json/route');
-    const document = (await (await GET()).json()) as McpToolCatalogueDocument;
+    const document = (await (
+      await GET(new Request('http://localhost:3000/api/docs/mcp-tools.json'))
+    ).json()) as McpToolCatalogueDocument;
     const published = new Map(
       document.groups.flatMap((group) => group.tools).map((tool) => [tool.name as string, tool]),
     );

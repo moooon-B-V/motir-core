@@ -44,7 +44,7 @@ const source = stripComments(readFileSync(join(REPO_ROOT, ROUTE), 'utf8'));
 
 async function fetchDocument(): Promise<{ res: Response; document: McpToolCatalogueDocument }> {
   const { GET } = await import('@/app/api/docs/mcp-tools.json/route');
-  const res = await GET();
+  const res = await GET(new Request(ROUTE_URL));
   return { res, document: (await res.json()) as McpToolCatalogueDocument };
 }
 
@@ -106,9 +106,18 @@ describe('the catalogue route is safe to serve unauthenticated', () => {
     expect(source).not.toMatch(/@\/lib\/db|\bdb\s*\.|\$transaction|Repository|Service\b/);
   });
 
-  it('takes NO user input — the handler has no request parameter at all', () => {
-    expect(source).toMatch(/export async function GET\(\)/);
-    expect(source).not.toMatch(/searchParams|req\.|request\./);
+  // MOTIR-8031 amends the former "no user input at all" assertion: the handler
+  // now takes exactly ONE closed-set input, `searchParams.get('locale')`, and
+  // reads nothing else from the request.
+  it("takes ONE input — `searchParams.get('locale')` — and nothing else from the request", () => {
+    expect(source).toMatch(/export async function GET\(request: Request\)/);
+    expect([...source.matchAll(/searchParams\.get\(([^)]*)\)/g)].map((m) => m[1])).toEqual([
+      "'locale'",
+    ]);
+    expect(source).not.toMatch(/request\.headers|req\.headers|cookies\(|headers\(/);
+    expect(source).not.toMatch(
+      /request\.(json|text|formData|arrayBuffer|body)\b|req\.(json|text|body)\b/,
+    );
   });
 
   it('spends no rate-limit budget', () => {
@@ -146,9 +155,14 @@ describe('GET /api/docs/mcp-tools.json', () => {
     expect(res.headers.get('cache-control')).toMatch(/must-revalidate/);
   });
 
-  it('serves the same bytes on every request — a consumer can cache it', async () => {
+  // MOTIR-8031 restates "same bytes" per URL: the route is per-request now, so
+  // each address (query included) is stable rather than the route as a whole.
+  it('serves the same bytes on every request to one URL — a consumer can cache it', async () => {
     const { GET } = await import('@/app/api/docs/mcp-tools.json/route');
-    const [first, second] = await Promise.all([GET(), GET()]);
+    const [first, second] = await Promise.all([
+      GET(new Request(ROUTE_URL)),
+      GET(new Request(ROUTE_URL)),
+    ]);
     expect(await first.text()).toBe(await second.text());
   });
 

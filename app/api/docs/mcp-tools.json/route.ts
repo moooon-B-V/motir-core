@@ -80,26 +80,47 @@ import { mcpToolCatalogueDocument } from '@/lib/apiDocs/mcp';
 // `/api/openapi/public.json` (MOTIR-4042), and for the same reason: `MOTIR_CLOUD`
 // makes the public-projects CAPABILITY absent, and this document is not that
 // capability. It describes the MCP server every build ships, just as `/docs`
-// does; serving it publishes nothing and makes no tool callable. It is
-// `force-static`, so a gate in this handler would capture the BUILDER's flag
-// rather than the deployment's, and making it dynamic would discard the cache
-// for no exposure. `tests/api/public/cloud-gate-totality.test.ts` pins this
+// does; serving it publishes nothing and makes no tool callable. It was
+// `force-static` until MOTIR-8031 (a gate would then have captured the BUILDER's
+// flag); it is per-request now, and still takes no gate, because a gate would
+// buy no exposure. `tests/api/public/cloud-gate-totality.test.ts` pins this
 // exclusion beside the public contract's, so a route outside `app/api/public`
 // cannot be mistaken for an omission.
 //
-// ── The four properties that make an unauthenticated handler safe here ──────
-// It authenticates nothing, reads no database, takes no user input (the handler
-// has no request parameter at all) and spends no rate-limit budget — it
-// serializes a value assembled from compile-time declarations.
-// `tests/api/docs/mcp-tools-route.test.ts` asserts each against this file's
-// source rather than trusting this comment, and asserts TOTALITY: every key of
-// `TOOL_PERMISSIONS` reaches the served document, which typecheck cannot see.
+// ── The four properties that make an unauthenticated handler safe ──────────
+// It authenticates nothing, reads no database, takes ONE closed-set input and
+// spends no rate-limit budget — it serializes a value assembled from
+// compile-time declarations.
+//
+// ── ONE input: `?locale=<code>` (MOTIR-8031) ────────────────────────────────
+// The same address answers in a reader's language. The only thing the handler
+// reads from the request is `new URL(request.url).searchParams.get('locale')`:
+// no header, no cookie, no body. The value is a closed-set code that SELECTS
+// among compile-time values — it is never echoed, stored or used to read
+// anything else. `en`, an absent or empty value, a wrong-case value (`JA`) and
+// any unknown code all return the unlocalized document byte for byte, with no new
+// field. For `?locale=ja&locale=ko` only the FIRST value is read.
+//
+// A localized response keeps every tool, group, name, permission, schema, title,
+// annotation, order and the count exactly as the English document has them, and
+// changes only the human text — per tool and per group, and only where the
+// translation was made from today's English (see `lib/apiDocs/mcpCatalogueLocale.ts`).
+// It also adds three fields a renderer can put in a `lang` attribute: top-level
+// `locale`, per-group `textLocale` and per-tool `summaryLocale`, each the served
+// locale or `'en'`. A consumer may rely on those three as well.
+//
+// `tests/api/docs/mcp-tools-route.test.ts` asserts each property against this
+// file's source rather than trusting this comment, and asserts TOTALITY: every
+// key of `TOOL_PERMISSIONS` reaches the served document, which typecheck cannot
+// see.
 
-/** Assembled from compile-time declarations; nothing per-request. */
-export const dynamic = 'force-static';
+// Per request, because a static route would capture ONE body for every query
+// string. The work is a memo lookup; a CDN keys on the full URL, query included.
+export const dynamic = 'force-dynamic';
 
-export async function GET(): Promise<Response> {
-  return NextResponse.json(mcpToolCatalogueDocument(), {
+export async function GET(request: Request): Promise<Response> {
+  const locale = new URL(request.url).searchParams.get('locale');
+  return NextResponse.json(mcpToolCatalogueDocument(locale), {
     headers: {
       'content-type': 'application/json; charset=utf-8',
       // Cacheable because it changes only when the code does; `must-revalidate`
