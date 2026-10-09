@@ -21,6 +21,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { plansService } from '@/lib/services/plansService';
 import { NoPlanForJobError } from '@/lib/plans/errors';
+import { resolveCorrectionKeyRefs, resolveKeyRefs } from '@/lib/plans/keyRefs';
 import { NATIVE_PLANNER_HARNESS } from '@/lib/ai/plannerTenantBug';
 import type { RevisionReasonBranch } from '@/lib/plans/revisionReason';
 import type {
@@ -474,7 +475,13 @@ export const aiGenerationService = {
 
     let createdIds: string[] = [];
     if (proposals.length > 0) {
-      const result = await plansService.addProposals(plan.id, proposals, ctx, {
+      // A ref written as a `<PREFIX>-<n>` KEY becomes the work item's id HERE, at
+      // the append, or the append is refused `dangling` naming the key
+      // (MOTIR-7983 — MOTIR-3576's decision, which only the MCP door applied).
+      // Stored verbatim, a key reached the close as a string no id matches and
+      // threw away the whole planning run that wrote it.
+      const resolved = await resolveKeyRefs(proposals, ctx);
+      const result = await plansService.addProposals(plan.id, resolved, ctx, {
         revision: opts.revision,
       });
       // One id per proposal, in input order, as the service reports it — a
@@ -589,7 +596,10 @@ export const aiGenerationService = {
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
     );
     if (!plan) throw new NoPlanForJobError(jobId);
-    const result = await plansService.correctProposal(plan.id, planItemId, input, ctx);
+    // The same key resolution the append applies (MOTIR-7983), on every ref a
+    // correction can carry — sparse, so an absent list stays absent.
+    const resolved = await resolveCorrectionKeyRefs(input, ctx);
+    const result = await plansService.correctProposal(plan.id, planItemId, resolved, ctx);
     // `correctProposal` throws `PlanItemNotFoundError` when the item is not on
     // the plan, so by here it is guaranteed present in the returned set.
     const item = result.items.find((i) => i.id === planItemId)!;

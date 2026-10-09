@@ -10,6 +10,53 @@ import {
 import type { AppliedAppearanceDto } from '../appearance';
 
 /**
+ * How the init script handles the per-language font picks (MOTIR-7896):
+ *
+ * - `server` — a signed-in render: cache `byLocale` on this device and set the
+ *   page language's `data-font-set-*` attributes.
+ * - `clear` — a signed-out render: drop the cache and every such attribute, so
+ *   a signed-out page never draws a pick.
+ * - `cached` — the error page, which cannot read the database: re-apply the
+ *   page language's entry from this device's cache.
+ */
+export type ThemeInitFontSets =
+  | { mode: 'server'; byLocale: Partial<Record<string, Partial<Record<string, string>>>> }
+  | { mode: 'clear' }
+  | { mode: 'cached' };
+
+/**
+ * The font-set half of the script. Only the three `data-font-set-*` names and
+ * values in `[a-z0-9-]` ever reach `setAttribute`, whatever the cache holds: a
+ * device's localStorage is not trusted to be what this script wrote.
+ */
+function fontSetsScript(fontSets: ThemeInitFontSets): string {
+  const apply = `var fsNames=['data-font-set-sans','data-font-set-serif','data-font-set-mono'];
+  var fsApply=function(m){
+    var p=((d.getAttribute('lang')||'').split(/[-_]/)[0]||'').toLowerCase();
+    var a=m&&typeof m==='object'&&Object.prototype.hasOwnProperty.call(m,p)?m[p]:null;
+    if(!a||typeof a!=='object'){return;}
+    for(var i=0;i<fsNames.length;i++){var v=a[fsNames[i]];if(typeof v==='string'&&/^[a-z0-9-]+$/.test(v)){d.setAttribute(fsNames[i],v);}}
+  };`;
+  if (fontSets.mode === 'server') {
+    return `  ${apply}
+  var fsServer=${safeJson(fontSets.byLocale)};
+  try{ls.setItem(K.fontPicks,JSON.stringify(fsServer));}catch(e){}
+  fsApply(fsServer);
+`;
+  }
+  if (fontSets.mode === 'clear') {
+    return `  try{ls.removeItem(K.fontPicks);}catch(e){}
+  d.removeAttribute('data-font-set-sans');d.removeAttribute('data-font-set-serif');d.removeAttribute('data-font-set-mono');
+`;
+  }
+  return `  ${apply}
+  var fsCached=null;
+  try{fsCached=JSON.parse(ls.getItem(K.fontPicks)||'null');}catch(e){}
+  fsApply(fsCached);
+`;
+}
+
+/**
  * Build the inline `<script>` content that runs BEFORE React hydrates, applying
  * the user's appearance to `<html>` (`data-theme` + `data-style` + `data-palette`
  * + `data-type`). Without this the page briefly flashes the SSR default before
@@ -46,8 +93,16 @@ import type { AppliedAppearanceDto } from '../appearance';
  * it cannot break out of the `<script>` element. The rest is a static,
  * compile-time string. This is the standard theme-init pattern (next-themes,
  * shadcn/ui, dooooWeb).
+ *
+ * `fontSets` (MOTIR-7896) adds the per-language font picks; see
+ * {@link ThemeInitFontSets}. Omitted, the script is exactly what it was before.
+ * Its per-request data is `byLocale`, whose keys are locales and whose values
+ * are registry member ids — closed vocabulary, embedded with the same escape.
  */
-export function buildThemeInitScript(serverPref: AppliedAppearanceDto | null): string {
+export function buildThemeInitScript(
+  serverPref: AppliedAppearanceDto | null,
+  fontSets?: ThemeInitFontSets,
+): string {
   const server = serverPref === null ? 'null' : safeJson(serverPref);
   return `(function(){try{
   var d=document.documentElement;
@@ -92,7 +147,7 @@ export function buildThemeInitScript(serverPref: AppliedAppearanceDto | null): s
   d.setAttribute('data-style',style);
   d.setAttribute('data-palette',palette);
   d.setAttribute('data-type',type);
-}catch(e){}})();`;
+${fontSets ? fontSetsScript(fontSets) : ''}}catch(e){}})();`;
 }
 
 /** JSON for inline-script embedding — `<` escaped so it can't end the element. */
@@ -106,3 +161,10 @@ function safeJson(value: unknown): string {
  * uses {@link buildThemeInitScript} with the signed-in user's applied pref.
  */
 export const themeInitScript = buildThemeInitScript(null);
+
+/**
+ * The error page's script (MOTIR-7896): the anonymous baseline plus the font
+ * picks this device last cached, since `app/global-error.tsx` cannot read the
+ * database whose read may be what failed.
+ */
+export const globalErrorInitScript = buildThemeInitScript(null, { mode: 'cached' });

@@ -11,6 +11,7 @@ import { organizationMembershipRepository } from '@/lib/repositories/organizatio
 import { passkeyRepository } from '@/lib/repositories/passkeyRepository';
 import { sessionRepository } from '@/lib/repositories/sessionRepository';
 import { twoFactorRepository } from '@/lib/repositories/twoFactorRepository';
+import { userAppearancePreferenceRepository } from '@/lib/repositories/userAppearancePreferenceRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { accountErasureService } from '@/lib/services/accountErasureService';
@@ -34,6 +35,8 @@ import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 // **DELETED — what is theirs alone.** Every credential and every piece of
 // personal auth substrate (`account` · `session` · `passkey` · `two_factor` ·
 // `api_token` · `github_identity` · `device_code` · `email_change_request`),
+// their cross-device appearance preference (`user_appearance_preference`, which
+// carries the font picked for each language, MOTIR-7898),
 // **every personal-data export they ever asked for** (`data_export_request`,
 // and the archive each one built), their memberships, and every workspace they
 // are the ONLY member of.
@@ -279,6 +282,8 @@ async function eraseOneAccount(
           await githubIdentityRepository.deleteByUserId(userId, tx);
           await deviceCodeRepository.deleteAllForUser(userId, tx);
           await emailChangeRequestRepository.deleteAllForUser(userId, tx);
+          // Their appearance row, font picks included (MOTIR-7898): theirs alone.
+          await userAppearancePreferenceRepository.deleteByUserId(userId, tx);
 
           // ── DELETED: every personal-data export (Bug MOTIR-3732) ──────────
           // The ROW goes here, in the transaction, so it is gone the instant

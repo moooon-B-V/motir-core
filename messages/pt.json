@@ -3570,7 +3570,8 @@
       },
       "type": {
         "name": "Tipografia",
-        "help": "A combinação de fontes para títulos e corpo de texto."
+        "help": "A combinação de fontes para títulos e corpo de texto.",
+        "automatic": "Automático ({font})"
       },
       "showcase": {
         "eyebrow": "Seu visual — em tempo real em todo o Motir",

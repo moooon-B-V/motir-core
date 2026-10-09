@@ -57,6 +57,7 @@
     "coverage:plan-something-new": "vitest run --config vitest.coverage.plan-something-new.config.ts --coverage",
     "coverage:to-resume": "vitest run --config vitest.coverage.to-resume.config.ts --coverage",
     "coverage:bug-filing": "vitest run --config vitest.coverage.bug-filing.config.ts --coverage",
+    "coverage:font-picks": "vitest run --config vitest.coverage.font-picks.config.ts --coverage",
     "coverage:enterprise-requests": "vitest run --config vitest.coverage.enterprise-requests.config.ts --coverage",
     "coverage:plan-overlay-only": "vitest run --config vitest.coverage.plan-overlay-only.config.ts --coverage",
     "test:coverage:plan-progress": "vitest run --config vitest.coverage.plan-progress.config.ts --coverage",

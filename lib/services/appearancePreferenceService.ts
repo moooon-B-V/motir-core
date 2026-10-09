@@ -5,13 +5,21 @@ import type { UpsertUserAppearancePreferenceInput } from '@/lib/repositories/use
 import {
   toAppearancePreferenceDto,
   toAppliedAppearanceDto,
+  toAppliedFontSetAttrs,
 } from '@/lib/mappers/appearancePreferenceMappers';
 import type { AppearancePreferenceDto, AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
-import { InvalidAppearanceValueError } from '@/lib/appearance/errors';
+import { InvalidAppearanceValueError, type AppearanceAxis } from '@/lib/appearance/errors';
 import { isThemePattern } from '@/lib/theme/types';
 import { isStyleId } from '@/lib/theme/styles';
 import { isPaletteId } from '@/lib/theme/palettes';
 import { isTypeId } from '@/lib/theme/typography';
+import { isFontSetLocale } from '@motir/design-system';
+import {
+  FONT_PICK_COLUMN,
+  isFontSetMemberOfLocale,
+  type AppliedFontSetAttrs,
+  type FontPicksPatch,
+} from '@/lib/appearance/fontPicks';
 
 // Cross-device appearance preferences (Story 7.3 · Subtask 7.3.60) — the
 // business logic behind the account-settings Appearance pane (7.3.62) and the
@@ -30,12 +38,16 @@ import { isTypeId } from '@/lib/theme/typography';
 // mapping; the repository is the single-op leaf. `null` clears an axis back to
 // its default; `undefined` leaves it untouched (the partial-patch contract).
 
-/** The partial patch the Appearance pane sends — any subset of the four axes. */
+/**
+ * The partial patch the Appearance pane sends — any subset of the four axes,
+ * plus any subset of the per-locale font picks (Story MOTIR-7736).
+ */
 export interface AppearancePreferencePatch {
   pattern?: string | null;
   styleId?: string | null;
   paletteId?: string | null;
   typeId?: string | null;
+  fontPicks?: FontPicksPatch;
 }
 
 /**
@@ -57,6 +69,12 @@ function validateAxis(
  * AND at least one axis is non-null — a row with every axis cleared (the user
  * reset everything) carries no real choice, so it is treated as "no preference"
  * and the localStorage path applies (see `getApplied`).
+ *
+ * Font picks (MOTIR-7896) deliberately do NOT count. A non-null `getApplied`
+ * tells the init script the server's four axes are authoritative and overwrites
+ * this device's cache with them, so a person who had picked only a font would
+ * lose their device-local Theme, Style, Palette and Type to the defaults. The
+ * picks travel beside the applied axes instead (`getAppliedForRequest`).
  */
 function hasStoredPreference(row: UserAppearancePreference | null): boolean {
   if (!row) return false;
@@ -93,9 +111,25 @@ export const appearancePreferenceService = {
    * axis (`update`), so a freshly-seeded user resolves to `null` here.
    */
   async getApplied(userId: string): Promise<AppliedAppearanceDto | null> {
+    return (await this.getAppliedForRequest(userId)).appearance;
+  },
+
+  /**
+   * Everything the root layout applies to `<html>` for one request, from ONE
+   * read (MOTIR-7896): the applied appearance exactly as {@link getApplied}
+   * returns it, and beside it the per-locale `data-font-set-*` attributes the
+   * person's stored font picks resolve to. The picks are kept out of
+   * `appearance` on purpose — see `hasStoredPreference`. Read-only (no `tx`).
+   */
+  async getAppliedForRequest(userId: string): Promise<{
+    appearance: AppliedAppearanceDto | null;
+    fontSetAttrs: AppliedFontSetAttrs;
+  }> {
     const row = await userAppearancePreferenceRepository.findByUserId(userId);
-    if (!hasStoredPreference(row)) return null;
-    return toAppliedAppearanceDto(row);
+    return {
+      appearance: hasStoredPreference(row) ? toAppliedAppearanceDto(row) : null,
+      fontSetAttrs: toAppliedFontSetAttrs(row),
+    };
   },
 
   /**
@@ -110,6 +144,15 @@ export const appearancePreferenceService = {
     validateAxis('styleId', patch.styleId, isStyleId);
     validateAxis('paletteId', patch.paletteId, isPaletteId);
     validateAxis('typeId', patch.typeId, isTypeId);
+    // Every provided font pick is checked against ITS locale's set before
+    // anything is written, so one refused pick refuses the whole patch.
+    const fontPickEntries = Object.entries(patch.fontPicks ?? {});
+    for (const [locale, value] of fontPickEntries) {
+      if (value === undefined || value === null) continue;
+      if (!isFontSetLocale(locale) || !isFontSetMemberOfLocale(locale, value)) {
+        throw new InvalidAppearanceValueError(`fontPicks.${locale}` as AppearanceAxis, value);
+      }
+    }
 
     // Only carry the axes the caller actually provided — `undefined` keys must
     // not reach the upsert (they'd clobber a stored value with "no change" vs.
@@ -120,6 +163,12 @@ export const appearancePreferenceService = {
     if (patch.styleId !== undefined) repoPatch.styleId = patch.styleId;
     if (patch.paletteId !== undefined) repoPatch.paletteId = patch.paletteId;
     if (patch.typeId !== undefined) repoPatch.typeId = patch.typeId;
+    // One column per locale: `null` clears that locale alone, an omitted
+    // locale is untouched — so a save for `ko` never rewrites `ja`.
+    for (const [locale, value] of fontPickEntries) {
+      if (value === undefined || !isFontSetLocale(locale)) continue;
+      repoPatch[FONT_PICK_COLUMN[locale]] = value;
+    }
 
     const row = await db.$transaction((tx) =>
       userAppearancePreferenceRepository.upsert(userId, repoPatch, tx),

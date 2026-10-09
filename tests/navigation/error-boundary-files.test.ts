@@ -54,7 +54,8 @@ describe('the three error boundaries exist and do their two jobs', () => {
     expect(source).toMatch(/<body>/);
     expect(source).toMatch(/import '\.\/globals\.css'/);
     expect(source).toMatch(/fontVariables/);
-    expect(source).toMatch(/themeInitScript/);
+    // The device-cache script, font picks included (MOTIR-7896).
+    expect(source).toMatch(/globalErrorInitScript/);
     // One authority for ink and ground: never a colour keyed on the OS scheme.
     expect(source).not.toMatch(/prefers-color-scheme/);
   });

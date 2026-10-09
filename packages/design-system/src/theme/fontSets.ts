@@ -294,3 +294,34 @@ export function fontSetMemberVar(
   const faceRole = member.sameFaceAs ?? role;
   return `--font-set-${setId}-${faceRole}-${member.id}`;
 }
+
+/** The `<html>` attribute that names a picked member for one role. */
+export type FontSetPickAttribute = `data-font-set-${FontSetRole}`;
+
+/**
+ * The `data-font-set-<role>` attributes a person's pick for `locale` puts on
+ * `<html>` (Story MOTIR-7736 · MOTIR-7897). One attribute per role of the
+ * locale's set that has a member with this id, unless that member is the
+ * `type-pairing` placeholder or the role's default: `theme.css` carries a rule
+ * only for a non-default member, so a default needs no attribute.
+ *
+ * `null`, an unknown id, a default id and every Latin locale return `{}`. This
+ * is the ONE derivation the client (`setFontPick`) and the server-rendered
+ * first byte share, so a pick sets identical attributes on both sides — which
+ * is why it lives here, free of any `'use client'` boundary.
+ */
+export function fontSetPickAttributes(
+  locale: FontSetLocale,
+  memberId: string | null,
+): Partial<Record<FontSetPickAttribute, string>> {
+  if (memberId === null) return {};
+  const set: FontSet = FONT_SET_REGISTRY[LOCALE_FONT_SET[locale]];
+  const attrs: Partial<Record<FontSetPickAttribute, string>> = {};
+  for (const role of FONT_SET_ROLES) {
+    const r: FontSetRoleMembers = set.roles[role];
+    if (memberId === r.default) continue;
+    const member = r.members.find((m: FontSetMember) => m.id === memberId);
+    if (member && member.source.kind !== 'type-pairing') attrs[`data-font-set-${role}`] = memberId;
+  }
+  return attrs;
+}

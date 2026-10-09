@@ -3570,7 +3570,8 @@
       },
       "type": {
         "name": "타이포그래피",
-        "help": "제목과 본문의 글꼴 조합."
+        "help": "제목과 본문의 글꼴 조합.",
+        "automatic": "자동 ({font})"
       },
       "showcase": {
         "eyebrow": "내 모습 — Motir 전체에 실시간 적용",

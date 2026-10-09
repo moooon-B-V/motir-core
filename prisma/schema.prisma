@@ -6310,16 +6310,34 @@ model NotificationPreference {
 model UserAppearancePreference {
   // The user this preference belongs to — 1:1 (`@unique`), so a user has at
   // most one row.
-  userId    String   @unique @map("user_id")
+  userId     String   @unique @map("user_id")
   // The four appearance axes (the theme context's `pattern` / `styleId` /
   // `paletteId` / `typeId`). All NULLABLE: a null column means "use the
   // documented default for that axis" (resolved in the service — 7.3.60).
-  pattern   String?
-  styleId   String?  @map("style_id")
-  paletteId String?  @map("palette_id")
-  typeId    String?  @map("type_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  pattern    String?
+  styleId    String?  @map("style_id")
+  paletteId  String?  @map("palette_id")
+  typeId     String?  @map("type_id")
+  // The fifth axis (Story MOTIR-7736 · Subtask MOTIR-7894): one optional
+  // font-set member id PER LOCALE, the person's pick for that language. A
+  // column per locale, not one JSON map, so two tabs saving different locales
+  // each write one column and both land with no read-merge-write. NULL means
+  // "automatic" — the locale's set default (the registry in
+  // `@motir/design-system`'s `theme/fontSets.ts` is the source of truth; the
+  // service validates against it and the mapper drops a stale member).
+  fontPickEn String?  @map("font_pick_en")
+  fontPickZh String?  @map("font_pick_zh")
+  fontPickJa String?  @map("font_pick_ja")
+  fontPickKo String?  @map("font_pick_ko")
+  fontPickDe String?  @map("font_pick_de")
+  fontPickFr String?  @map("font_pick_fr")
+  fontPickEs String?  @map("font_pick_es")
+  fontPickIt String?  @map("font_pick_it")
+  fontPickNl String?  @map("font_pick_nl")
+  fontPickPl String?  @map("font_pick_pl")
+  fontPickPt String?  @map("font_pick_pt")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   user User @relation("UserAppearancePreference", fields: [userId], references: [id], onDelete: Cascade)
 

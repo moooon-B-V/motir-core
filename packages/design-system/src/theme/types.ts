@@ -60,6 +60,13 @@ export const THEME_STORAGE_KEYS = {
    * {@link PALETTE_ID_MIGRATION} once and the marker is then written.
    */
   paletteIds: 'motir.theme.paletteIds',
+  /**
+   * The signed-in person's per-language font picks as `<html>` attributes,
+   * `{ [locale]: { 'data-font-set-<role>': member } }` (MOTIR-7896). Written by
+   * every signed-in layout render and cleared by every signed-out one, so only
+   * the error page — which cannot read the database — ever reads it back.
+   */
+  fontPicks: 'motir.theme.fontPicks',
 } as const;
 
 /** The current meaning of a stored palette id — see `THEME_STORAGE_KEYS.paletteIds`. */
