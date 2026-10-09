@@ -1295,7 +1295,7 @@ appeared until the widget also bumped a tick the inbox refetches on.)
   `…@anthropic.com` / Claude co-author. This repo runs a **`license/cla`** check
   (cla-assistant) that **fails the PR if any commit author OR co-author is not a
   CLA signatory**; the Claude co-author and any non-Yue author identity
-  (`zhuyue@motir.co`, `Motir Planner`, `info@moooon.net`) are not signatories, so
+  (`zhuyue@motir.co`, `Motir`, `info@moooon.net`) are not signatories, so
   they block the PR (hit on PR #978). Commit with
   `git -c user.name="Zhu Yue" -c user.email="zhuyue11@gmail.com" commit --author="Zhu Yue <zhuyue11@gmail.com>" -m "…"`.
   If a CLA check is already red on a pushed branch, `reset --soft origin/main`,

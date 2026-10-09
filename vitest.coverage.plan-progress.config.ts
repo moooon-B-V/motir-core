@@ -112,6 +112,9 @@ export default defineConfig({
       // MOTIR-8066 — the narration story gate, so the floor on the widened
       // `plan-step` route keeps measuring its narration branch.
       'tests/integration/plans/planNarrationStoryGate.test.ts',
+      // MOTIR-7988 — a plan a revision holds is listed under Planning, its row read
+      // as one being written.
+      'tests/integration/workbench/revision-hold-listing.test.ts',
     ],
     coverage: {
       provider: 'v8',

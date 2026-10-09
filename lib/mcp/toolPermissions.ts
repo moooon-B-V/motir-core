@@ -451,6 +451,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // on a plan, and `tests/mcp/report-plan-step.test.ts` asserts that refusal off
   // the constant.
   report_plan_step: 'ai:view_plan',
+  // A plan's REVISION HOLD (MOTIR-7988). The same key by the same rule: the
+  // three lease methods assert `ai:view_plan` on the plan's project first, and
+  // `CLI_TOKEN_GRANT` stays narrow — a run executing one work item revises no plan.
+  hold_plan_revision: 'ai:view_plan',
   // The APPROVED-SHAPE verdict read (MOTIR-6227). A READ, and still NOT
   // `project:browse` like `get_plan` above: it hands back what a plan proposed
   // and a judgement about it, and BOTH services it calls

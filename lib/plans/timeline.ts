@@ -25,6 +25,18 @@ import type { PlanHistoryEventDto } from '@/lib/dto/planReview';
  */
 export const DERIVED_EVENT_KINDS = new Set(['created', 'planned', 'approved', 'declined']);
 
+/**
+ * The stored `changeKind`s that are NOT EVENTS at all (Bug MOTIR-7988), dropped
+ * from the timeline for the opposite reason from {@link DERIVED_EVENT_KINDS}:
+ * those are said elsewhere, these say nothing a reader acts on.
+ *
+ * `revision_renewed` is the revision lease's heartbeat — a holder still working
+ * writes one every few minutes so the plan stays held. The trail keeps it because
+ * the lease is READ off the trail; a rail of *still revising* rows would bury
+ * the revision it belongs to.
+ */
+export const TRAIL_ONLY_KINDS = new Set(['revision_renewed']);
+
 /** How many proposals a content event covered — its own count, else one act. */
 export function revisionCount(diff: unknown): number {
   const n = (diff as { proposalCount?: unknown } | null)?.proposalCount;

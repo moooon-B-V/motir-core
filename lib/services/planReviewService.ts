@@ -16,7 +16,12 @@ import {
 } from '@/lib/mappers/planMappers';
 import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
 import { PLAN_NARRATION_READ_WINDOW } from '@/lib/plans/planNarration';
-import { DERIVED_EVENT_KINDS, mergeTimeline, revisionCount } from '@/lib/plans/timeline';
+import {
+  DERIVED_EVENT_KINDS,
+  TRAIL_ONLY_KINDS,
+  mergeTimeline,
+  revisionCount,
+} from '@/lib/plans/timeline';
 import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
 import {
   revisionLeaseOf,
@@ -1893,8 +1898,12 @@ export const planReviewService = {
     const stored: PlanHistoryEventDto[] = revisions
       // The four the derived events already say, dropped HERE rather than at the
       // write: the trail is the audit record and must be complete; the timeline
-      // is a reading of it and must not say the same thing twice.
-      .filter((r: PlanRevision) => !DERIVED_EVENT_KINDS.has(r.changeKind))
+      // is a reading of it and must not say the same thing twice. The lease's
+      // heartbeat (MOTIR-7988) is dropped for the other reason: it is no event.
+      .filter(
+        (r: PlanRevision) =>
+          !DERIVED_EVENT_KINDS.has(r.changeKind) && !TRAIL_ONLY_KINDS.has(r.changeKind),
+      )
       .map((r: PlanRevision) => ({
         id: r.id,
         kind: r.changeKind,

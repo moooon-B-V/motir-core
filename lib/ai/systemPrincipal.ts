@@ -9,13 +9,18 @@
 // bearer (`verifyServiceBearer`), never an interactive session.
 //
 // Provisioned by `scripts/plan-seed/systemPrincipal.ts` (a member of the meta
-// workspace) and resolved at request time by `lib/ai/serviceAuth.ts`. Both
-// import these constants so the email is defined in exactly one place. The
+// workspace) in dev and test, by the migration
+// `20261009210000_provision_motir_system_principal` in production (MOTIR-8058),
+// and resolved at request time by `lib/ai/serviceAuth.ts`. The seed and the
+// resolver import these constants so the email is defined in exactly one place;
+// the migration is SQL and repeats both literals, and
+// `tests/integration/migrations/provision-motir-system-principal.test.ts`
+// asserts they still match. The
 // `.internal` TLD is reserved/non-routable, so the reserved address can never
 // collide with — or receive mail as — a real user.
 
 export const MOTIR_SYSTEM_USER_EMAIL = 'system@motir.internal';
-export const MOTIR_SYSTEM_USER_NAME = 'Motir Planner';
+export const MOTIR_SYSTEM_USER_NAME = 'Motir';
 
 /**
  * The KEY of the Motir META project — the project the system principal files

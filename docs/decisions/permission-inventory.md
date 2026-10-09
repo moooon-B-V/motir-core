@@ -987,6 +987,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/platform/ideas/[slug]/retire`       | POST      | `requirePlatformStaffForIdeas('operator')` — staff session or the staff owner's PAT                    | —          | platform-scoped | R91 |
 | `/api/platform/ideas/runs`                | GET/POST  | `requirePlatformStaffForIdeas('operator')` — staff session or the staff owner's PAT                    | —          | platform-scoped | R91 |
 | `/api/platform/ideas/tags`                | GET/POST  | `requirePlatformStaffForIdeas('operator')` — staff session or the staff owner's PAT                    | —          | platform-scoped | R91 |
+| `/api/platform/ideas/tags/[slug]`         | PATCH     | `requirePlatformStaffForIdeas('operator')` — staff session or the staff owner's PAT                    | —          | platform-scoped | R91 |
 
 ### `watcher`
 

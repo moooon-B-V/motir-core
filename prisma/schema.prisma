@@ -13635,8 +13635,9 @@ model Idea {
   lastReviewedAt DateTime?    @map("last_reviewed_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  evidence IdeaEvidence[]
-  tags     IdeaTagAssignment[]
+  evidence     IdeaEvidence[]
+  tags         IdeaTagAssignment[]
+  translations IdeaTranslation[]
 
   @@index([status, category])
   @@index([status, kind])
@@ -13654,7 +13655,8 @@ model IdeaEvidence {
   url        String
   sourceDate DateTime? @map("source_date") @db.Date
 
-  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  idea         Idea                      @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  translations IdeaEvidenceTranslation[]
 
   @@unique([ideaId, position])
   @@map("idea_evidence")
@@ -13668,7 +13670,8 @@ model IdeaTag {
   description String?
   createdAt   DateTime @default(now()) @map("created_at")
 
-  assignments IdeaTagAssignment[]
+  assignments  IdeaTagAssignment[]
+  translations IdeaTagTranslation[]
 
   @@map("idea_tag")
 }
@@ -13685,6 +13688,76 @@ model IdeaTagAssignment {
   @@id([ideaId, tagId])
   @@index([tagId])
   @@map("idea_tag_assignment")
+}
+
+/// The ten locales an idea can be TRANSLATED into (Story MOTIR-7772 · MOTIR-7773)
+/// — the eleven UI locales (`lib/i18n/locales.ts`) minus `en`, because English
+/// lives on the base rows and is required there. Deliberately not `Locale`: that
+/// name is the UI's type, and this one means "the non-English ones".
+enum IdeaTranslationLocale {
+  zh
+  ja
+  ko
+  de
+  fr
+  es
+  it
+  nl
+  pl
+  pt
+
+  @@map("idea_translation_locale")
+}
+
+/// One idea's text in one non-English locale. Every text column is nullable and
+/// NULL means "missing in this locale"; `capabilities` counts as present only
+/// when its length equals the English list's, so a list that no longer matches
+/// its English is stale by construction (a `String[]` cannot be null). Written
+/// by a merge-only `INSERT … ON CONFLICT` that never touches the `idea` row, so a
+/// translation write does not move `Idea.updatedAt`.
+model IdeaTranslation {
+  ideaId       String                @map("idea_id")
+  locale       IdeaTranslationLocale
+  title        String?
+  pitch        String?
+  capabilities String[]              @default([])
+  gap          String?
+  whyNow       String?               @map("why_now")
+  whyMotir     String?               @map("why_motir")
+  whoElse      String?               @map("who_else")
+  updatedAt    DateTime              @default(now()) @updatedAt @map("updated_at")
+
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@id([ideaId, locale])
+  @@map("idea_translation")
+}
+
+/// One evidence claim in one non-English locale. Only the claim is translated —
+/// the source name, URL and date never are. Cascades with its evidence row, so a
+/// replaced evidence list can never keep a stale claim translation.
+model IdeaEvidenceTranslation {
+  evidenceId String                @map("evidence_id")
+  locale     IdeaTranslationLocale
+  claim      String
+
+  evidence IdeaEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@id([evidenceId, locale])
+  @@map("idea_evidence_translation")
+}
+
+/// One vocabulary tag's label in one non-English locale. The tag's `description`
+/// is staff-facing and never translated.
+model IdeaTagTranslation {
+  tagId  String                @map("tag_id")
+  locale IdeaTranslationLocale
+  label  String
+
+  tag IdeaTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([tagId, locale])
+  @@map("idea_tag_translation")
 }
 
 /// The research-run log the `motir-ideas` skill writes, so its coverage map

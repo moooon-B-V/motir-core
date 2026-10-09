@@ -154,7 +154,7 @@ const CASES: Case[] = [
   {
     file: 'ideas/tags/route.ts',
     method: 'GET',
-    call: () => (ideaTags.GET as unknown as () => Promise<Response>)(),
+    call: () => (ideaTags.GET as Handler)(get('/api/public/ideas/tags?locale=ja')),
   },
   {
     file: 'ideas/[slug]/route.ts',

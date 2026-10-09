@@ -9145,6 +9145,7 @@
             "retire": "Retiró una idea",
             "delete": "Eliminó una idea",
             "tag_add": "Añadió una etiqueta de idea",
+            "tag_translate": "Tradujo una etiqueta de idea",
             "research_run": "Registró una ejecución de investigación de ideas"
           }
         }
@@ -12815,8 +12816,8 @@
         "consequence": "Aprobar añade esto a tu Backlog. Rechazar termina el plan y no cambia nada.",
         "reopened": "Reabierto desde Esperando tu acción · iniciado por {name} · última actividad {when}",
         "reopenedYours": "Reabierto desde Esperando tu acción · iniciado por ti · última actividad {when}",
-        "held": "Motir AI está escribiendo una nueva versión de este plan. Aprobar y Rechazar vuelven cuando termine; mientras tanto sigue en Esperando tu acción.",
-        "heldBy": "{harness} está escribiendo una nueva versión de este plan. Aprobar y Rechazar vuelven cuando termine; mientras tanto sigue en Esperando tu acción.",
+        "held": "Motir AI está escribiendo una nueva versión de este plan. Aprobar y Rechazar vuelven cuando termine; mientras tanto está en En planificación y luego vuelve a Esperando tu acción.",
+        "heldBy": "{harness} está escribiendo una nueva versión de este plan. Aprobar y Rechazar vuelven cuando termine; mientras tanto está en En planificación y luego vuelve a Esperando tu acción.",
         "stale": {
           "title": "Este plan cambió mientras lo leías.",
           "next": "No se aprobó ni se rechazó nada. El lienzo muestra ahora la nueva versión: revísala y vuelve a decidir."
@@ -12836,7 +12837,7 @@
       },
       "handoff": {
         "writing": "Tengo lo que necesito: estoy escribiendo el plan. No tienes que esperar aquí: cierra esto cuando quieras y el plan te estará esperando en <link>Esperando tu acción</link>.",
-        "rewriting": "Estoy escribiendo una nueva versión de este plan. Puedes cerrar esto: sigue en <link>Esperando tu acción</link> y podrás decidir cuando termine."
+        "rewriting": "Estoy escribiendo una nueva versión de este plan. Puedes cerrar esto: mientras trabajo está en En planificación y, cuando termine, vuelve a <link>Esperando tu acción</link> para que decidas."
       }
     },
     "planAsk": {

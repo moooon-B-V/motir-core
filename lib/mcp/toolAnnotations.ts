@@ -255,6 +255,13 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // W: authorPlan.ts → plansService.acquireRevisionLease / renewRevisionLease / releaseRevisionLease — appends one trail row per call (`end` on no hold, and `renew` on a lapsed one, write nothing)
+  hold_plan_revision: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   // W: planSession.ts → planChangeSessionsService.openPublic — may create a session; re-acquires target locks (parks cards, extends the lease)
   open_plan_session: {
     readOnlyHint: false,

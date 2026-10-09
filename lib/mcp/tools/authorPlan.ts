@@ -168,6 +168,7 @@ export const WITHDRAW_PLAN_PROPOSAL_TOOL_NAME = 'withdraw_plan_proposal';
 export const UPDATE_PLAN_TOOL_NAME = 'update_plan';
 export const RECORD_PLAN_REVISION_REASON_TOOL_NAME = 'record_plan_revision_reason';
 export const REPORT_PLAN_STEP_TOOL_NAME = 'report_plan_step';
+export const HOLD_PLAN_REVISION_TOOL_NAME = 'hold_plan_revision';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arguments
@@ -1996,6 +1997,124 @@ export async function runReportPlanStep(
   );
 }
 
+// `hold_plan_revision` (Bug MOTIR-7988) — the MCP planner's door onto the plan's
+// REVISION LEASE, the hold the hosted revision has always taken through the in-app
+// route (`aiPlanEditsService`) and an MCP-driven one could not take at all.
+//
+// Without it a `planned` plan revised over MCP (`prompts/plan.py --revise`) was a
+// plain decidable question for the whole rewrite: listed in Waiting on you with a
+// live Approve, so a press mid-revision materialized a proposal set that was
+// neither the plan the reviewer read nor the one they asked for. Held, it leaves
+// Waiting on you for Planning, and Approve / Decline are refused with
+// `PLAN_REVISION_IN_FLIGHT` until the revision ends.
+//
+// ONE tool with three actions, the shape `report_plan_step` chose and for the same
+// reason: one emitter, one call shape. `start` takes the lease (refused while
+// another revision holds it, or once the plan is decided), `renew` is the heartbeat
+// that keeps it while the planner thinks between writes (`renewed: false`, writing
+// nothing, when it has already lapsed — take it again with `start`), and `end`
+// releases it however the revision ended (idempotent).
+//
+// Same grant as the other authoring doors, `ai:view_plan`, which the service
+// asserts on the plan's project first.
+const HOLD_PLAN_REVISION_ACTIONS = ['start', 'renew', 'end'] as const;
+type HoldPlanRevisionAction = (typeof HOLD_PLAN_REVISION_ACTIONS)[number];
+
+const holdPlanRevisionInputSchema = {
+  planId: z.string().trim().min(1).describe('The id of the plan you are revising.'),
+  action: z
+    .enum(HOLD_PLAN_REVISION_ACTIONS)
+    .describe(
+      "`start` before the revision's first write, `renew` every few minutes while it runs, " +
+        'and `end` when it finishes, however it finishes.',
+    ),
+  harness: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe(
+      'The agent harness you are running in, as its makers name it (e.g. "Claude Code") — ' +
+        'what a refused Approve names as holding the plan.',
+    ),
+  model: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe('The model you are running on, by its id. Omit it when you do not know it.'),
+};
+
+interface HoldPlanRevisionArgs {
+  planId: string;
+  action: HoldPlanRevisionAction;
+  harness?: string;
+  model?: string;
+}
+
+/**
+ * `hold_plan_revision` → ONE service call per action: `acquireRevisionLease` for
+ * `start`, `renewRevisionLease` for `renew`, `releaseRevisionLease` for `end`.
+ * The actor is the MCP agent itself, so the trail and a refused decision name it.
+ */
+export async function runHoldPlanRevision(
+  args: HoldPlanRevisionArgs,
+  ctx: ServiceContext,
+): Promise<CallToolResult> {
+  const actor = {
+    source: 'mcp' as const,
+    harness: args.harness ?? null,
+    model: args.model ?? null,
+  };
+  if (args.action === 'start') {
+    const lease = await plansService.acquireRevisionLease(args.planId, ctx, actor);
+    return toolOk(
+      `Plan ${args.planId} is held for your revision until ${lease.expiresAt.toISOString()}: it ` +
+        'is listed under Planning, and Approve / Decline are refused until you end it. Every ' +
+        "write you make extends the hold; send `action: 'renew'` if you will go longer than a " +
+        "few minutes without one, and `action: 'end'` when the revision finishes, however it " +
+        'finishes.',
+      exempt(HOLD_PLAN_REVISION_TOOL_NAME, {
+        planId: args.planId,
+        action: args.action,
+        held: true,
+        expiresAt: lease.expiresAt.toISOString(),
+      }),
+    );
+  }
+  if (args.action === 'renew') {
+    const renewed = await plansService.renewRevisionLease(args.planId, ctx, actor);
+    return toolOk(
+      renewed.renewed
+        ? `Renewed the hold on plan ${args.planId} until ${renewed.expiresAt!.toISOString()}.`
+        : `Plan ${args.planId} is NOT held — the hold lapsed or was ended, and nothing was ` +
+            "written. Take it again with `action: 'start'` before your next write.",
+      exempt(HOLD_PLAN_REVISION_TOOL_NAME, {
+        planId: args.planId,
+        action: args.action,
+        held: renewed.renewed,
+        expiresAt: renewed.expiresAt?.toISOString() ?? null,
+      }),
+    );
+  }
+  const released = await plansService.releaseRevisionLease(args.planId, ctx, actor, {
+    via: HOLD_PLAN_REVISION_TOOL_NAME,
+  });
+  return toolOk(
+    released.released
+      ? `Released plan ${args.planId}: it is back in Waiting on you and can be decided.`
+      : `Plan ${args.planId} was not held; nothing was written.`,
+    exempt(HOLD_PLAN_REVISION_TOOL_NAME, {
+      planId: args.planId,
+      action: args.action,
+      held: false,
+      expiresAt: null,
+    }),
+  );
+}
+
 export function registerAuthorPlan(server: McpServer, resolveContext: McpContextResolver): void {
   server.registerTool(
     CREATE_PLAN_TOOL_NAME,
@@ -2296,6 +2415,37 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
     async (args, extra) => {
       try {
         return await runReportPlanStep(args, resolveContext(extra));
+      } catch (err) {
+        return toToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    HOLD_PLAN_REVISION_TOOL_NAME,
+    {
+      title: 'Hold a plan while you revise it',
+      description:
+        'Hold a plan that is already up for review (`planned`) while you REVISE it, so nobody ' +
+        "approves a half-rewritten plan. Call it with `action: 'start'` BEFORE the first " +
+        `\`revision: true\` write (\`${ADD_PLAN_ITEMS_TOOL_NAME}\`, \`${UPDATE_PLAN_ITEM_TOOL_NAME}\`), ` +
+        `\`${UPDATE_PLAN_PROPOSAL_TOOL_NAME}\` or \`${WITHDRAW_PLAN_PROPOSAL_TOOL_NAME}\`, and with ` +
+        "`action: 'end'` when the revision finishes — however it finishes, including on a " +
+        'failure. While held the plan is listed under Planning instead of Waiting on you, and ' +
+        'Approve and Decline are refused with PLAN_REVISION_IN_FLIGHT. The hold lasts ten ' +
+        'minutes from your latest write to the plan; if you may go longer than that without ' +
+        "one, send `action: 'renew'` every few minutes. A renew on a hold that already lapsed " +
+        "writes nothing and says so (`held: false`) — take it again with `action: 'start'`. " +
+        '`start` is REFUSED with PLAN_REVISION_IN_FLIGHT while another revision holds the plan, ' +
+        'and with PLAN_NOT_EDITABLE once it is approved or declined. `end` on a plan nobody ' +
+        'holds is a no-op success. A revision that dies without `end` releases itself when the ' +
+        'hold runs out. It changes nothing about the plan’s proposals or status. Same grant as ' +
+        `\`${ADD_PLAN_ITEMS_TOOL_NAME}\`. Costs nothing and starts no job.`,
+      inputSchema: holdPlanRevisionInputSchema,
+    },
+    async (args, extra) => {
+      try {
+        return await runHoldPlanRevision(args, resolveContext(extra));
       } catch (err) {
         return toToolError(err);
       }

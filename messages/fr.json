@@ -9145,6 +9145,7 @@
             "retire": "A retiré une idée",
             "delete": "A supprimé une idée",
             "tag_add": "A ajouté une étiquette d'idée",
+            "tag_translate": "A traduit une étiquette d'idée",
             "research_run": "A enregistré une exécution de recherche d'idées"
           }
         }
@@ -12815,8 +12816,8 @@
         "consequence": "Approuver les ajoute à votre backlog. Refuser met fin au plan et ne modifie rien.",
         "reopened": "Rouvert depuis En attente de votre part · lancé par {name} · dernière activité {when}",
         "reopenedYours": "Rouvert depuis En attente de votre part · lancé par vous · dernière activité {when}",
-        "held": "Motir AI rédige une nouvelle version de ce plan. Approuver et Refuser reviendront une fois terminée — il reste dans En attente de votre part en attendant.",
-        "heldBy": "{harness} rédige une nouvelle version de ce plan. Approuver et Refuser reviendront une fois terminée — il reste dans En attente de votre part en attendant.",
+        "held": "Motir AI rédige une nouvelle version de ce plan. Approuver et Refuser reviendront une fois terminée — en attendant, il est dans En planification, puis il revient dans En attente de votre part.",
+        "heldBy": "{harness} rédige une nouvelle version de ce plan. Approuver et Refuser reviendront une fois terminée — en attendant, il est dans En planification, puis il revient dans En attente de votre part.",
         "stale": {
           "title": "Ce plan a changé pendant votre lecture.",
           "next": "Rien n'a été approuvé ni refusé. Le canevas affiche désormais la nouvelle version — examinez-la, puis décidez de nouveau."
@@ -12836,7 +12837,7 @@
       },
       "handoff": {
         "writing": "J'ai ce qu'il me faut — je rédige le plan maintenant. Inutile d'attendre ici : fermez quand vous le souhaitez, le plan vous attendra dans <link>En attente de votre part</link>.",
-        "rewriting": "Je rédige une nouvelle version de ce plan. Vous pouvez fermer — il reste dans <link>En attente de votre part</link>, et vous pourrez décider une fois que j'aurai terminé."
+        "rewriting": "Je rédige une nouvelle version de ce plan. Vous pouvez fermer — pendant que je travaille, il est dans En planification, et il revient dans <link>En attente de votre part</link> pour que vous décidiez une fois que j'aurai terminé."
       }
     },
     "planAsk": {

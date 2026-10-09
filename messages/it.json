@@ -9145,6 +9145,7 @@
             "retire": "Ritirata un’idea",
             "delete": "Eliminata un’idea",
             "tag_add": "Aggiunto un tag a un’idea",
+            "tag_translate": "Tradotto un tag di un’idea",
             "research_run": "Registrata una ricerca di idee"
           }
         }
@@ -12815,8 +12816,8 @@
         "consequence": "Approvando, questi vengono aggiunti al tuo Backlog. Rifiutando, il piano si chiude e non cambia nulla.",
         "reopened": "Riaperto da In attesa di te · avviato da {name} · ultima attività {when}",
         "reopenedYours": "Riaperto da In attesa di te · avviato da te · ultima attività {when}",
-        "held": "Motir AI sta scrivendo una nuova versione di questo piano. Approva e Rifiuta tornano quando avrà finito — nel frattempo resta in In attesa di te.",
-        "heldBy": "{harness} sta scrivendo una nuova versione di questo piano. Approva e Rifiuta tornano quando avrà finito — nel frattempo resta in In attesa di te.",
+        "held": "Motir AI sta scrivendo una nuova versione di questo piano. Approva e Rifiuta tornano quando avrà finito — nel frattempo è in In pianificazione, poi torna in In attesa di te.",
+        "heldBy": "{harness} sta scrivendo una nuova versione di questo piano. Approva e Rifiuta tornano quando avrà finito — nel frattempo è in In pianificazione, poi torna in In attesa di te.",
         "stale": {
           "title": "Questo piano è cambiato mentre lo leggevi.",
           "next": "Non è stato approvato né rifiutato nulla. La canvas ora mostra la nuova versione — dacci un’occhiata, poi decidi di nuovo."
@@ -12836,7 +12837,7 @@
       },
       "handoff": {
         "writing": "Ho quello che mi serve — sto scrivendo il piano adesso. Non devi aspettare qui: chiudi pure quando vuoi, e il piano ti aspetterà in <link>In attesa di te</link>.",
-        "rewriting": "Sto scrivendo una nuova versione di questo piano. Puoi chiudere — resta in <link>In attesa di te</link>, e potrai decidere quando avrò finito."
+        "rewriting": "Sto scrivendo una nuova versione di questo piano. Puoi chiudere — mentre lavoro è in In pianificazione, e quando avrò finito torna in <link>In attesa di te</link> perché tu possa decidere."
       }
     },
     "planAsk": {

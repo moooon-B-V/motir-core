@@ -1,3 +1,4 @@
+import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
 import type {
   ApprovalGateKind,
   ApprovalGateState,
@@ -632,7 +633,17 @@ async function routingScope(
   ctx: HomeActorContext,
   tx: Prisma.TransactionClient,
 ): Promise<AwaitingRoutingScope> {
-  return { projectIds: await browsableProjectIds(ctx.projectId, ctx, tx), userId: ctx.userId };
+  const projectIds = await browsableProjectIds(ctx.projectId, ctx, tx);
+  return {
+    projectIds,
+    userId: ctx.userId,
+    // A plan a revision holds is being planned again, not waiting on anybody
+    // (MOTIR-7988): its gate leaves the queue and the count until the lease ends.
+    heldPlanIds: await planRevisionHoldService.heldPlanIds(
+      { workspaceId: ctx.workspaceId, projectIds },
+      tx,
+    ),
+  };
 }
 
 /**

@@ -52,6 +52,11 @@ export const EXEMPT_TOOLS = {
     '(MOTIR-7824). A `narration` call returns `{ planId, sessionKey, narration: [{ seq, body }] }` ' +
     '— the sentences it appended, read back only on the same cookie-authed plan review; no ' +
     '`/api/v1` operation returns plan narration either (MOTIR-8062).',
+  hold_plan_revision:
+    'Returns the state of a plan’s REVISION HOLD after the call — `{ planId, action, held, ' +
+    'expiresAt }` — a lease on the plan’s own trail, not a resource. No `/api/v1` operation ' +
+    'returns a revision lease (the hosted revision takes it inside the cookie-authed revise ' +
+    'route), so there is no component to derive from (MOTIR-7988).',
   validate_work_item:
     'Returns a subtree FINISHABILITY verdict (valid / blockers / advisories) — a planning ' +
     'judgement computed over a tree, not a representation of a resource. No v1 operation ' +

@@ -2,10 +2,15 @@ import { NextResponse } from 'next/server';
 import type { ZodError, ZodType, z } from 'zod';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
 import {
+  IdeaChangedError,
   IdeaNotActiveError,
   IdeaNotFoundError,
   IdeaSlugTakenError,
+  IdeaTagNotFoundError,
   IdeaTagTakenError,
+  IdeaTranslationShapeError,
+  IdeaTranslationWithoutEnglishError,
+  IdeaUnsupportedLocaleError,
   InvalidIdeaFilterError,
   InvalidIdeaInputError,
   UnknownIdeaTagError,
@@ -76,6 +81,19 @@ export function ideasErrorResponse(err: unknown): NextResponse {
     return ideasJson({ code: err.code, field: err.field }, 400);
   }
   if (err instanceof UnknownIdeaTagError) return ideasJson({ code: err.code, tags: err.tags }, 400);
+  if (err instanceof IdeaUnsupportedLocaleError) {
+    return ideasJson({ code: err.code, locales: err.locales }, 400);
+  }
+  if (err instanceof IdeaTranslationShapeError) {
+    return ideasJson({ code: err.code, fields: err.fields }, 400);
+  }
+  if (err instanceof IdeaTranslationWithoutEnglishError) {
+    return ideasJson({ code: err.code, fields: err.fields }, 400);
+  }
+  if (err instanceof IdeaChangedError) {
+    return ideasJson({ code: err.code, updatedAt: err.updatedAt }, 409);
+  }
+  if (err instanceof IdeaTagNotFoundError) return ideasJson({ code: err.code }, 404);
   if (err instanceof IdeaNotFoundError) return ideasJson({ code: err.code }, 404);
   if (err instanceof IdeaSlugTakenError)
     return ideasJson({ code: err.code, slugs: err.slugs }, 409);

@@ -512,10 +512,14 @@ describe('HELD while a revision is in flight — derived, never stored (§11.5c)
     const read = await approvalGatesService.getForPlan({ planId }, fx.ctx);
     expect(read.gate?.held).toMatchObject({ reason: 'revision_in_flight', heldBy: 'Claude Code' });
     expect(Date.parse(read.gate!.held!.expiresAt)).toBeGreaterThan(Date.now());
+    // MOTIR-7988 amends §11.5c: a held plan is being PLANNED again, so it leaves
+    // Waiting on you (it is listed under Planning) and comes back on release.
     const queue = await approvalGatesService.listAwaitingMe({ ...fx.ctx, projectId: fx.projectId });
-    expect(queue.items[0]?.subject).toMatchObject({ held: { reason: 'revision_in_flight' } });
+    expect(queue.items.map((r) => r.gateId)).not.toContain(gate.id);
 
     await plansService.releaseRevisionLease(planId, fx.ctx, HARNESS);
+    const back = await approvalGatesService.listAwaitingMe({ ...fx.ctx, projectId: fx.projectId });
+    expect(back.items.map((r) => r.gateId)).toContain(gate.id);
     const after = await approvalGatesService.getForPlan({ planId }, fx.ctx);
     expect(after.gate?.held).toBeNull();
     const decided = await approvalGatesService.decide(

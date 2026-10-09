@@ -1,3 +1,4 @@
+import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
 import { withWorkspaceContext } from '@/lib/workspaces';
 import {
   workItemRepository,
@@ -74,6 +75,13 @@ async function readTabs(
 ): Promise<Record<WorkbenchTabKey, WorkbenchTabWatermarkDto>> {
   return withWorkspaceContext(ctx, async (tx) => {
     const projectScopes = await resolveActiveProjectScope(ctx, tx);
+    const projectIds = projectScopes.map((scope) => scope.projectId);
+    // The approvals tab's own exclusion (MOTIR-7988): a plan a revision holds is
+    // off the list, so it is off the reading too — and its return moves the count.
+    const heldPlanIds = await planRevisionHoldService.heldPlanIds(
+      { workspaceId: ctx.workspaceId, projectIds },
+      tx,
+    );
     const [toDo, inProgress, toFix, toResume, recentlyFinished, approvals, watching] =
       await Promise.all([
         workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
@@ -125,7 +133,7 @@ async function readTabs(
         // for the badge — the browsable project ids, which are `[]` for a reader
         // who may not browse their active project, and the reader.
         approvalGateRepository.watermarkAwaitingRoutedTo(
-          { projectIds: projectScopes.map((scope) => scope.projectId), userId: ctx.userId },
+          { projectIds, userId: ctx.userId, heldPlanIds },
           tx,
         ),
         watcherRepository.watermarkByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
