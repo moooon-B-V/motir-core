@@ -347,7 +347,9 @@ test('a plan marks a done story outdated, superseded by the story it adds — re
       .getByRole('group', { name: 'Plan view' })
       .getByRole('button', { name: 'Canvas' })
       .click();
-    await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
+    await expect(
+      page.getByRole('dialog', { name: /plan/i }).getByRole('application'),
+    ).toBeVisible();
     const oldCard = page.locator('[data-node-id]').filter({ hasText: OLD_STORY });
     await expect(oldCard.getByTestId('plan-item-obsolescence')).toHaveAttribute(
       'data-obsolescence',
@@ -520,7 +522,7 @@ test('a mark with a title beside it is refused and the review is unaffected; a p
     ).toHaveCount(0);
   }
   await openUndecidedPlan(page, empty.planId, { view: 'canvas' });
-  await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: /plan/i }).getByRole('application')).toBeVisible();
   await expect(page.getByTestId('plan-item-obsolescence')).toHaveCount(0);
   await expect(page.getByTestId('plan-item-supersedes')).toHaveCount(0);
 
