@@ -24,8 +24,9 @@ import { seedAiAugmentReplan, markProjectOnboarded } from './_helpers/ai-augment
 // `cloud-plan-change-conversation.spec.ts` stubs motir-core's own `/api/ai/*` in
 // the BROWSER, which is right for what that spec asserts and fatal for this one:
 // a browser-side stub means the service never runs, `submitJob` never fires, and
-// the seam records nothing. `cloud-plan-revision.spec.ts` is the model — the job
-// dispatches for real and the boundary is mocked beneath it.
+// the seam records nothing. The job dispatches for real and the boundary is
+// mocked beneath it (the shape `cloud-plan-revision.spec.ts` set, retired
+// 2026-10-09 with the plan page's revise box by Story MOTIR-7883).
 //
 // ⚠️ WHAT THIS SPEC DOES NOT ASSERT: which GROUNDING motir-ai chose for a given
 // context. The far side is stubbed and does not run, so an assertion about
