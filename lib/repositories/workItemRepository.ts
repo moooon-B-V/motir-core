@@ -1598,6 +1598,34 @@ export const workItemRepository = {
   },
 
   /**
+   * Which of these run TARGETS still wait to resume, and on which run (MOTIR-8011) —
+   * whoever holds them, in the given projects. The same predicate as
+   * `findResumeMembers`, so a target this misses is one no To resume entry can be
+   * headed by: on To fix (`fixReason` set), or with its stored run replaced by a newer
+   * one.
+   */
+  async findWaitingResumeTargets(
+    workspaceId: string,
+    projectIds: readonly string[],
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; resumeRunId: string | null }[]> {
+    if (projectIds.length === 0 || ids.length === 0) return [];
+    return tx.workItem.findMany({
+      where: {
+        id: { in: [...ids] },
+        workspaceId,
+        projectId: { in: [...projectIds] },
+        archivedAt: null,
+        triagedAt: null,
+        fixReason: null,
+        resumeState: { not: null },
+      },
+      select: { id: true, resumeRunId: true },
+    });
+  },
+
+  /**
    * The ids of every STUCK card in these To fix entries (MOTIR-7589; § 34.2) — whoever
    * holds them, in the given projects. An entry's members are the cards one dead run
    * carried, or every card one pull-request set delivers, and the reader holds only some

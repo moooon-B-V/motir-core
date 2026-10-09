@@ -4394,18 +4394,10 @@
     "nudge": {
       "body": "Er is maar {count} werkitem gereed — {key} ({title}) uitbreiden?",
       "expandLabel": "Uitbreiden",
-      "expanding": "Uitbreiden…",
+      "expandHint": "Opent Motir AI-planning voor {key}. Het kan eerst vragen wat je gepland wilt hebben.",
       "dismissAria": "Suggestie om uit te breiden sluiten",
       "dismissLabel": "Sluiten",
-      "emptyHint": "Er is niets gereed — door een stub uit te breiden wordt nieuw werk toegevoegd.",
-      "reviewTitle": "Voorgestelde onderliggende items",
-      "opChange": "wijzigen",
-      "opRemove": "verwijderen",
-      "approveLabel": "Goedkeuren",
-      "approving": "Goedkeuren…",
-      "declineLabel": "Afwijzen",
-      "approved": "{count, plural, one {# onderliggend item aangemaakt} other {# onderliggende items aangemaakt}}",
-      "error": "Er ging iets mis ({code})."
+      "emptyHint": "Er is niets gereed — door een stub uit te breiden wordt nieuw werk toegevoegd."
     },
     "lanes": {
       "switchAria": "Rijen met startklaar werk",
@@ -7429,6 +7421,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "{key} plannen"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {
@@ -7579,7 +7574,83 @@
           "codeGraph": "codegraaf",
           "codeHealth": "codegezondheid",
           "web": "web",
-          "lessons": "lessen"
+          "lessons": "lessen",
+          "codeRead": "repository"
+        },
+        "call": {
+          "tool": {
+            "skeleton": "De opzet van het plan lezen",
+            "search_work_items": "Werkitems doorzoeken op ‘{query}’",
+            "search_work_items_semantic": "Werkitems doorzoeken op ‘{query}’",
+            "get_item": "{item} opzoeken",
+            "get_subtree": "De items onder {item} lezen",
+            "walk_blocking": "Nagaan wat {item} blokkeert",
+            "code_search": "De code doorzoeken op ‘{query}’",
+            "code_explore": "De code rond ‘{query}’ verkennen",
+            "code_callers": "Zoeken waar {symbol} wordt aangeroepen",
+            "code_callees": "Zoeken wat {symbol} aanroept",
+            "code_impact": "Nagaan wat een wijziging aan {symbol} raakt",
+            "code_node": "{symbol} lezen in de codegraaf",
+            "get_coding_convention": "De codeerconventies lezen",
+            "get_code_health": "Het codegezondheidsrapport lezen",
+            "read_file": "{path} lezen",
+            "list_changed_files": "De gewijzigde bestanden op de branch oplijsten",
+            "web_search": "Het web doorzoeken op ‘{query}’",
+            "search_lessons": "Lessen doorzoeken op ‘{query}’",
+            "lay": "Het niveau onder {parent} indelen",
+            "drill_into": "{parent} openen om de onderliggende items in te delen",
+            "propose_node": "‘{title}’ voorstellen",
+            "complete_level": "Dit niveau afronden",
+            "target_already_covered": "Noteren dat het doel al gedekt is",
+            "author": "Beginnen met het schrijven van {item}",
+            "deepen_node": "Beschrijving en acceptatiecriteria van {item} schrijven",
+            "raise_gap": "Een gat in het plan signaleren",
+            "add_item": "‘{title}’ toevoegen",
+            "update_item": "{item} bijwerken",
+            "remove_item": "{item} verwijderen",
+            "log_bug": "Een bug melden: ‘{title}’",
+            "validate_plan": "Het plan controleren",
+            "settle_conversation": "Bepalen wat er onder {parent} verandert",
+            "ask_user": "Een vraag voor je schrijven",
+            "clear_plan": "Het conceptplan leegmaken",
+            "search_planning_rules": "De planningsregels raadplegen over ‘{query}’",
+            "report_findings": "De bevindingen uitschrijven",
+            "log_planning_mistake": "Een planningsfout noteren",
+            "log_planning_bug": "Een planningsbug melden",
+            "classify_revision": "De revisie classificeren",
+            "return_to_conversation": "Terug naar het gesprek"
+          },
+          "family": {
+            "plan_tree": "Het plan lezen",
+            "code_graph": "De codegraaf lezen",
+            "code_health": "Codegezondheid lezen",
+            "code_read": "De repository lezen",
+            "web": "Het web doorzoeken",
+            "lessons": "Lessen lezen",
+            "lay": "Een niveau indelen",
+            "author": "Een item schrijven",
+            "item": "Een item wijzigen",
+            "validate": "Het plan controleren",
+            "settle": "Het gesprek afronden",
+            "none": "Aan het plan werken"
+          },
+          "mark": {
+            "failed": "· mislukt",
+            "refused": "· geweigerd",
+            "skipped": "· overgeslagen — geen opzoekingen meer"
+          },
+          "count": "{count, plural, one {# aanroep} other {# aanroepen}}",
+          "countFailed": "{count, plural, one {# aanroep} other {# aanroepen}} · {failed} mislukt",
+          "earlier": "{count, plural, one {# eerdere aanroep} other {# eerdere aanroepen}}",
+          "barParallel": "{line} · {title}",
+          "announceFailed": "{line} — mislukt",
+          "announceRefused": "{line} — geweigerd",
+          "full": {
+            "path": "Volledig pad: {value}",
+            "query": "Volledige zoekopdracht: {value}",
+            "symbol": "Volledige naam: {value}",
+            "title": "Volledige titel: {value}"
+          }
         }
       },
       "openerFollowUp": "Je hebt net {label} gekozen. Motir AI plant wat daarop wacht.",

@@ -148,11 +148,16 @@ describe('PlanChangeRail — the act rail is a RECORD, not a replacing line', ()
     expect(list[1]!.querySelector('.font-mono')?.textContent).toBe('retrieval');
   });
 
-  it('keeps the shipped polite live region, so the newest act is announced', () => {
+  // ⚠️ AMENDED BY MOTIR-7979, to MOTIR-7975's a11y decision: the record used to
+  // sit INSIDE the polite region, so every appended row was read aloud. With one
+  // line per tool call that is a log read aloud, so the region (same test id,
+  // same politeness) now holds an announcer and the record is its sibling.
+  it('keeps the shipped polite live region, and the newest act is announced from it', () => {
     renderRail(stateWith([RETRIEVAL]));
     const region = screen.getByTestId('plan-change-progress');
     expect(region.getAttribute('aria-live')).toBe('polite');
-    expect(region.contains(screen.getByTestId('plan-change-acts'))).toBe(true);
+    expect(region.contains(screen.getByTestId('plan-change-acts'))).toBe(false);
+    expect(region.textContent).toContain('Read the plan tree');
   });
 
   it('the LIVE line is the last one while streaming — full ink and the spinner; the rest are past', () => {
@@ -341,3 +346,7 @@ describe('PlanChangeRail — the record sits ABOVE the surviving proposal (sheet
     expect(follows(stopped, review)).toBe(true);
   });
 });
+
+// The per-call lines (MOTIR-7979, built to MOTIR-7975's design) replaced the
+// interim `call` arm this file used to pin; they are
+// `plan-change-call-lines.test.tsx`.

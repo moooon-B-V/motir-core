@@ -449,6 +449,16 @@ describe('the handler — at most one resume per decision and per run', () => {
     },
   );
 
+  it('a target on To fix is not a candidate — To fix wins over To resume (MOTIR-8011)', async () => {
+    const { parent, designGate } = await hostedStory();
+    await adminDb.workItem.update({ where: { id: parent.id }, data: { fixReason: 'ci_failed' } });
+    await approve(designGate);
+
+    expect(await attempt(designGate)).toEqual({ outcome: 'not_a_candidate' });
+    expect(startSpy).not.toHaveBeenCalled();
+    expect(await adminDb.gateResume.count()).toBe(0);
+  });
+
   it('a gate not approved (yet, or any more) is not a candidate', async () => {
     const { designGate } = await hostedStory();
     expect(await attempt(designGate)).toEqual({ outcome: 'not_a_candidate' });

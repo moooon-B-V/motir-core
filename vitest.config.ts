@@ -3119,6 +3119,23 @@ export default defineConfig({
         'scripts/i18n/messageShape.ts',
         'scripts/i18n/sourceRecord.ts',
         'app/**/_components/AuthLanguageControl.tsx',
+        // ── Story MOTIR-5266 · /ready's Expand opens the planning overlay (MOTIR-7877) ──
+        // The nudge became a LAUNCHER (MOTIR-7876): it reads the nudge, hides on ✕,
+        // and shallowPushes the overlay's start-turn address. Measured on this branch
+        // over `tests/components/expansion-nudge-banner.test.tsx` and
+        // `tests/ready/expandNudgeGuards.test.tsx`: 100 / 95 / 100 / 100 (statements /
+        // branches / functions / lines). The one arm not taken is `handleDismiss`'s
+        // empty-`dismissKey` guard: ✕ renders only once a nudge with a key is
+        // held, so the key is never empty when it is pressed.
+        //
+        // Written `app/**/…`, never the literal `app/(authed)/…` (MOTIR-2449).
+        //
+        // The story's other changed files keep the floors already pinned for them
+        // (`lib/planning/launcher.ts`, the overlay, the host, the conversation hook);
+        // `PlanChangeRail.tsx` stays deliberately ungated (the MOTIR-6239 note), its
+        // start-turn lines asserted by `tests/components/planning-start-turn.test.tsx`
+        // and `tests/integration/planning/readyExpandStartTurnGate.test.tsx`.
+        'app/**/ready/_components/ExpansionNudgeBanner.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -7111,6 +7128,13 @@ export default defineConfig({
         'scripts/i18n/messageShape.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'scripts/i18n/sourceRecord.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'app/**/_components/AuthLanguageControl.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-5266 · MOTIR-7877 — measured above (`include`), pinned at the floor.
+        'app/**/ready/_components/ExpansionNudgeBanner.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

@@ -4,38 +4,28 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
 import {
-  BookOpenText,
-  Ban,
   Bot,
   Check,
-  CircleQuestionMark,
   Clock,
-  CornerDownRight,
   FilePenLine,
   History,
   Inbox,
-  ListTree,
   Lock,
   MessageCircleQuestionMark,
-  MessageSquareText,
   PenLine,
   RefreshCw,
-  ScanSearch,
-  Search,
   SearchCheck,
-  Send,
-  ShieldCheck,
   Sparkles,
   SquarePen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Tooltip } from '@/components/ui/Tooltip';
-import { Spinner } from '@/components/ui/Spinner';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
+import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
 import { PlanningTargetKeyChip } from '@/components/planning/PlanningTargetChip';
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
@@ -760,9 +750,9 @@ export function PlanChangeRail({
             (assistant, user, the accent review block) and a fourth hue would
             compete with them rather than help.
 
-            It keeps the shipped `aria-live="polite"` region and its test id, so
-            the newest act is still announced and nothing that addressed this
-            surface has to change. */}
+            It keeps the shipped `aria-live="polite"` region and its test id; since
+            the per-call lines (MOTIR-7975) the region holds an announcer and the
+            record is its sibling (`PlanActRecord`). */}
         {/* THE HAND-OFF BEFORE GENERATION (Story MOTIR-6012 · MOTIR-6037; design
             Part XXII §22.6, Panel 9). The moment a PLAN run starts writing, the planner
             says so in its own turn — a KEYED bubble, like `lockedNote`, so the words
@@ -785,39 +775,7 @@ export function PlanChangeRail({
           </Bubble>
         ) : null}
 
-        <div aria-live="polite" data-testid="plan-change-progress">
-          {acts.length > 0 ? (
-            <ol
-              data-testid="plan-change-acts"
-              className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
-            >
-              {acts.map((act, index) => {
-                const live = index === acts.length - 1 && state.phase === 'streaming';
-                return (
-                  <li
-                    key={`${act.kind}-${index}`}
-                    data-testid={`plan-change-act-${act.kind}`}
-                    className={`flex items-start gap-2 text-xs ${
-                      live ? 'text-(--el-text)' : 'text-(--el-text-secondary)'
-                    }`}
-                  >
-                    {live ? (
-                      <Spinner size="sm" aria-hidden="true" />
-                    ) : (
-                      <span className="mt-px shrink-0 text-(--el-text-secondary)">
-                        <ActGlyph act={act} />
-                      </span>
-                    )}
-                    <span className="mt-px w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-                      {tc(`act.${act.kind}`)}
-                    </span>
-                    <span className="min-w-0 flex-1">{actLine(act, tc)}</span>
-                  </li>
-                );
-              })}
-            </ol>
-          ) : null}
-        </div>
+        <PlanActRecord acts={acts} streaming={state.phase === 'streaming'} />
 
         {/* STOPPED — a MARKER, not an alert (MOTIR-4068).
             It uses the shipped `system`-marker line verbatim: centred,
@@ -1085,7 +1043,9 @@ export function PlanChangeRail({
                   // The live act's OWN line, so the bar and the rail's newest row
                   // say the same thing — a note repeats the planner's words, a
                   // lookup names its family (MOTIR-4069).
-                  line: state.progress ? actLine(state.progress, tc) : tc('progress.submitted'),
+                  // With per-call lines (MOTIR-7975) that is the open step's newest
+                  // call, and with parallel author sessions `{line} · {title}`.
+                  line: runningBarLine(acts, true, tc) ?? tc('progress.submitted'),
                   stopping: state.stopping,
                   onStop,
                 }
@@ -1526,81 +1486,6 @@ const BUBBLE_FILL: Record<'default' | 'asking', string> = {
  * wheel is still following; one who scrolled up to re-read is not.
  */
 const ACT_FOLLOW_SLACK_PX = 48;
-
-/** One glyph per act kind — the second, non-textual skim cue (sheet 3).
- *  Keyed on the KIND so the map is exhaustive by type: a new `PlanChangeProgress`
- *  member without a glyph does not compile, which is the same discipline the
- *  frame dispositions use one layer down. */
-const ACT_GLYPH: Record<PlanChangeProgress['kind'], typeof Send> = {
-  submitted: Send,
-  reading: ScanSearch,
-  redirected: CornerDownRight,
-  redirectedDebug: CornerDownRight,
-  matching: SearchCheck,
-  writing: FilePenLine,
-  retrieval: BookOpenText,
-  searching: Search,
-  drilling: ListTree,
-  laying: ListTree,
-  authoring: PenLine,
-  note: MessageSquareText,
-  proposed: Sparkles,
-  validating: ShieldCheck,
-  unknown: CircleQuestionMark,
-};
-
-function ActGlyph({ act }: { act: PlanChangeProgress }) {
-  // The BLOCKED lookup is the one act whose glyph is decided by its payload, not
-  // its kind: sheet 3 gives "out of lookups" the `ban` glyph so the moment the
-  // run stopped being able to read is visible at a skim.
-  const Icon = act.kind === 'retrieval' && act.blocked ? Ban : ACT_GLYPH[act.kind];
-  return <Icon className="size-3.5" aria-hidden="true" />;
-}
-
-/** The five retrieval families the planner reads from (`motir-ai`
- *  `retrievalTools.ts`), each with a catalog label; anything else renders as the
- *  raw family name rather than as a hole. */
-const RETRIEVAL_FAMILY_KEY: Record<string, string> = {
-  plan_tree: 'act.family.planTree',
-  code_graph: 'act.family.codeGraph',
-  code_health: 'act.family.codeHealth',
-  web: 'act.family.web',
-  lessons: 'act.family.lessons',
-};
-
-/** The line one act reads as. Every string is a catalog key; the only values
- *  interpolated are the frame's own data. */
-function actLine(act: PlanChangeProgress, tc: ReturnType<typeof useTranslations>): string {
-  switch (act.kind) {
-    case 'retrieval':
-      // The BLOCKED variant is a different sentence, not a suffix: the run has
-      // stopped being able to look things up, which is worth saying plainly.
-      if (act.blocked) return tc('act.retrievalBlockedLine');
-      if (act.family === null) return tc('act.retrievalLineBare');
-      const familyKey = RETRIEVAL_FAMILY_KEY[act.family];
-      return tc('act.retrievalLine', { family: familyKey ? tc(familyKey) : act.family });
-    case 'laying':
-      return tc('act.layingLine', { target: act.target ?? '' });
-    case 'authoring':
-      return tc('act.authoringLine', { title: act.title ?? '' });
-    // ⚠️ THE PLANNER'S OWN WORDS, rendered verbatim rather than through a
-    // catalog string — it is prose the model wrote about the act it just took,
-    // and there is nothing to translate.
-    case 'note':
-      return act.text;
-    case 'unknown':
-      return tc('act.unknownLine', { frame: act.frame });
-    case 'proposed':
-      return tc('progress.proposed', { count: act.count });
-    // The debug turn's two acts (MOTIR-7050; `debug-turn.mock.html` panel 1).
-    case 'matching':
-      return tc('act.matchingLine');
-    case 'writing':
-      return tc('act.writingLine', { key: act.key });
-    default:
-      return tc(`progress.${act.kind}`, { count: 0 });
-  }
-}
 
 /** A debug turn's landing, as its outcome line reads it. */
 interface DebugOutcome {

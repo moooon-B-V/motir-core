@@ -635,7 +635,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'settings.bugs.pageDescription': "a Sentry issue — the monitor's own noun",
     'boards.errorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
-    'ready.nudge.error': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'backlog.errorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'backlog.sprintsErrorDescription': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'backlog.startSprintFlow.errorDescription':

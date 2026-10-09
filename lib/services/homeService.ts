@@ -235,15 +235,52 @@ function orderedResumeRunIds(rows: readonly { resumeRunId: string | null }[]): s
 }
 
 /**
- * One To resume entry → its row DTO (MOTIR-7707): the run's SCOPE card heads it when it
- * waits too, else the first card in the tab's order, and the rest are its members.
+ * To resume's entries, in order — only the runs that are there to resume (MOTIR-8011).
+ *
+ * ⚠️ TO FIX WINS OVER TO RESUME, AT THE RUN TARGET. A run with a scope is resumable only
+ * while that scope card itself waits on it: one on To fix, or whose latest run is a newer
+ * one (a repair claim's `fix` run), takes the whole entry with it — its legs still read
+ * `resumeState`, but no leg is promoted to head it. A scope-less run (a `batch`) has no
+ * single target, so its cards decide alone. The list and `tabCounts` both read this, so
+ * the badge, the pager's `total` and the rows are one set.
+ */
+async function resumableRunOrder(
+  workspaceId: string,
+  projectIds: readonly string[],
+  keyed: readonly { resumeRunId: string | null }[],
+  tx: Prisma.TransactionClient,
+): Promise<{ order: string[]; scopeOf: Map<string, string | null> }> {
+  const all = orderedResumeRunIds(keyed);
+  const scopes = await dispatchRunRepository.findScopesByIds(all, tx);
+  const scopeOf = new Map(scopes.map((run) => [run.id, run.scopeWorkItemId]));
+  const targetIds = [
+    ...new Set(scopes.flatMap((r) => (r.scopeWorkItemId ? [r.scopeWorkItemId] : []))),
+  ];
+  const waiting = await workItemRepository.findWaitingResumeTargets(
+    workspaceId,
+    projectIds,
+    targetIds,
+    tx,
+  );
+  const waitsOn = new Map(waiting.map((card) => [card.id, card.resumeRunId]));
+  const order = all.filter((runId) => {
+    const scopeId = scopeOf.get(runId) ?? null;
+    return scopeId === null || waitsOn.get(scopeId) === runId;
+  });
+  return { order, scopeOf };
+}
+
+/**
+ * One To resume entry → its row DTO (MOTIR-7707): the run's SCOPE card heads it, and the
+ * rest are its members. Only a scope-less run is headed by the first card in the tab's
+ * order — a scoped run whose scope is not among the members is no entry (MOTIR-8011).
  */
 function toResumeEntryDto(
   members: readonly HomeWorkItemRow[],
   scopeId: string | null,
   viewerId: string,
 ): HomeWorkItemRowDto | null {
-  const head = members.find((m) => m.id === scopeId) ?? members[0];
+  const head = scopeId === null ? members[0] : members.find((m) => m.id === scopeId);
   if (!head) return null;
   return {
     ...toHomeWorkItemRowDto(head, viewerId),
@@ -611,20 +648,14 @@ export const homeService = {
         projectScopes,
         tx,
       );
-      const order = orderedResumeRunIds(keyed);
+      const projectIds = projectScopes.map((scope) => scope.projectId);
+      const { order, scopeOf } = await resumableRunOrder(ctx.workspaceId, projectIds, keyed, tx);
       const window = windowFor(order.length, options.page, pageSize);
       const pageRuns = order.slice(window.skip, window.skip + pageSize);
-      const [members, scopes, attempts] = await Promise.all([
-        workItemRepository.findResumeMembers(
-          ctx.workspaceId,
-          projectScopes.map((scope) => scope.projectId),
-          pageRuns,
-          tx,
-        ),
-        dispatchRunRepository.findScopesByIds(pageRuns, tx),
+      const [members, attempts] = await Promise.all([
+        workItemRepository.findResumeMembers(ctx.workspaceId, projectIds, pageRuns, tx),
         gateResumeRepository.listByRunIds(pageRuns, tx),
       ]);
-      const scopeOf = new Map(scopes.map((run) => [run.id, run.scopeWorkItemId]));
       // Newest first, so the first attempt seen per run is the one the entry reads.
       const attemptOf = new Map<string, GateResumeAttemptDto>();
       for (const a of attempts) {
@@ -823,7 +854,14 @@ export const homeService = {
         ),
       ]);
       const toFix = orderedFixGroupKeys(toFixCards).length;
-      const toResume = orderedResumeRunIds(toResumeCards).length;
+      const toResume = (
+        await resumableRunOrder(
+          ctx.workspaceId,
+          projectScopes.map((scope) => scope.projectId),
+          toResumeCards,
+          tx,
+        )
+      ).order.length;
       return {
         toDo,
         inProgress,

@@ -439,6 +439,113 @@ describe('the Workbench partition', () => {
     });
     const toResume = await homeService.listToResume(hctx());
     expect(toResume.items.map((r) => r.id)).not.toContain(parent.id);
+    // …and its run is no entry at all — no leg heads it (MOTIR-8011).
+    expect(toResume.total).toBe(0);
+  });
+});
+
+// MOTIR-8011 — TO FIX WINS OVER TO RESUME, AT THE RUN TARGET. A scoped run whose scope
+// card is not itself waiting on it is no entry at all: no leg promoted to head it, no
+// count in the badge, and no resume on a leg's page.
+describe('a run whose target is not waiting to resume (MOTIR-8011)', () => {
+  async function openRunOn(cards: WorkItem[], command: 'run' | 'batch'): Promise<string> {
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command,
+        reportedBy: 'cli',
+        cards: cards.map((c) => ({ key: c.identifier, disposition: 'queued' as const })),
+      },
+      fx.ctx,
+    );
+    return run.id;
+  }
+
+  async function expectNoEntry() {
+    const toResume = await homeService.listToResume(hctx());
+    expect(toResume.items).toEqual([]);
+    expect(toResume.total).toBe(0);
+    expect((await homeService.tabCounts(hctx())).toResume).toBe(0);
+  }
+
+  it('the scope card on To fix takes the whole entry with it — no leg heads it', async () => {
+    const { parent, design, code, runId } = await gatedStory();
+    // The legs still wait on the run; only the target moved to To fix.
+    await adminDb.workItem.update({ where: { id: parent.id }, data: { fixReason: 'ci_failed' } });
+    for (const id of [design.id, code.id]) {
+      expect((await stateOf(id)).resumeRunId).toBe(runId);
+    }
+
+    await expectNoEntry();
+    const toFix = await homeService.listToFix(hctx());
+    expect(toFix.items.map((r) => r.id)).toEqual([parent.id]);
+  });
+
+  it('a newer run on the scope card (a repair) takes the entry too, while the legs still read the gated run', async () => {
+    const { parent, design, code, runId } = await gatedStory();
+    await openRunOn([parent], 'run');
+    expect(await stateOf(parent.id)).toEqual({ resumeState: null, resumeRunId: null });
+    for (const id of [design.id, code.id]) {
+      expect(await stateOf(id)).toEqual({ resumeState: 'waiting_on_gate', resumeRunId: runId });
+    }
+
+    await expectNoEntry();
+  });
+
+  it('only the run whose target left is dropped — the page, the total and the badge agree', async () => {
+    const gone = await gatedStory();
+    const kept = await gatedStory();
+    await adminDb.workItem.update({
+      where: { id: gone.parent.id },
+      data: { fixReason: 'ci_failed' },
+    });
+    const toResume = await homeService.listToResume(hctx());
+    expect(toResume.items.map((r) => r.id)).toEqual([kept.parent.id]);
+    expect(toResume.total).toBe(1);
+    expect((await homeService.tabCounts(hctx())).toResume).toBe(1);
+  });
+
+  it('the scope card heads its entry even when the reader holds only a leg', async () => {
+    const { parent, code } = await gatedStory();
+    const other = await createTestUser({ email: `other-${Date.now()}@example.com` });
+    await workspacesService.addMember({ userId: other.id, workspaceId: fx.workspaceId });
+    await adminDb.workItem.update({
+      where: { id: parent.id },
+      data: { assigneeId: other.id, reporterId: other.id },
+    });
+    const [entry] = (await homeService.listToResume(hctx())).items;
+    expect(entry!.id).toBe(parent.id);
+    expect(entry!.resumeMembers.map((m) => m.id)).toContain(code.id);
+  });
+
+  it('a scope-less batch run has no single target: its first card still heads it', async () => {
+    const a = await card('batch card a', { kind: 'task' });
+    const b = await card('batch card b', { kind: 'task' });
+    const runId = await openRunOn([a, b], 'batch');
+    await gate(a);
+    await dispatchRunService.close(runId, { stopReason: 'gated' }, fx.ctx);
+    await adminDb.workItem.update({ where: { id: a.id }, data: { fixReason: 'ci_failed' } });
+
+    const toResume = await homeService.listToResume(hctx());
+    expect(toResume.total).toBe(1);
+    expect(toResume.items.map((r) => r.id)).toEqual([b.id]);
+    expect(toResume.items[0]!.resumeMembers).toEqual([]);
+    expect((await homeService.tabCounts(hctx())).toResume).toBe(1);
+  });
+
+  it('a leg’s item page offers no resume once its target is on To fix', async () => {
+    const { resumeRunDetailService } = await import('@/lib/services/resumeRunDetailService');
+    const { parent, code } = await gatedStory();
+    await adminDb.workItem.update({ where: { id: parent.id }, data: { fixReason: 'ci_failed' } });
+    expect(await resumeRunDetailService.readForWorkItem(code.id, fx.ctx)).toBeNull();
+    expect(await resumeRunDetailService.readForWorkItem(parent.id, fx.ctx)).toBeNull();
+  });
+
+  it('a leg’s item page offers no resume once a newer run holds its target', async () => {
+    const { resumeRunDetailService } = await import('@/lib/services/resumeRunDetailService');
+    const { parent, code } = await gatedStory();
+    await openRunOn([parent], 'run');
+    expect(await resumeRunDetailService.readForWorkItem(code.id, fx.ctx)).toBeNull();
   });
 });
 

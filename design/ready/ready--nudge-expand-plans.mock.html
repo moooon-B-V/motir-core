@@ -1,0 +1,1616 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Ready — Expand starts a planning conversation (MOTIR-7875)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — MOTIR-7875, under story MOTIR-5266. A DELTA on the /ready page
+      (design/ready/ready.mock.html, and the lanes delta design/ready/ready--lanes.mock.html) holding
+      only the expansion nudge's Expand and what it opens. The banner is drawn as origin/main ships it
+      (app/(authed)/ready/_components/ExpansionNudgeBanner.tsx: a Card with the lavender tint and the
+      soft border, Sparkles in the accent-on-surface ink, the ✕ icon button, Button secondary sm). The
+      planning overlay and its rail are COMPOSED as they ship (PlanningWorkspaceOverlay.tsx,
+      PlanChangeRail.tsx, PlanChangeComposer.tsx), never redrawn; the decide door and approve progress
+      are the overlay's and are not drawn here.
+    -->
+    <style>
+      /* ═══ TOKENS — generated from @motir/design-system/theme.css ═══ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* ADDED by MOTIR-4674, verbatim from packages/design-system/theme.css:
+           the ink for danger text ON a page surface. --el-danger-text is legal
+           ONLY on an element carrying bg-(--el-danger), and raw --el-danger is
+           under AA on the dark page in three palettes. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      /* ═══ MOCK BOARD CHROME (not product UI — the panel scaffolding) ═══ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .sprite {
+        display: none;
+      }
+      .review-head {
+        max-width: 1040px;
+        margin: 0 auto 8px;
+      }
+      .review-title {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-sub {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .board-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        max-width: 1040px;
+        margin: 40px auto 10px;
+      }
+      .board {
+        max-width: 1040px;
+        margin: 0 auto;
+      }
+      .board-note {
+        margin: 0 0 12px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .board-pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .board-pair-h {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      /* the address bar — review-only, shows what the shallowPush wrote */
+      .nh-addr {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        overflow-wrap: anywhere;
+      }
+      .nh-addr-path {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .nh-canvas {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 24px 32px 32px;
+      }
+
+      /* ═══ THE /ready HEADER — mirrored from app/(authed)/ready/page.tsx ═══ */
+      .nh-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .nh-h1 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 32px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .nh-count {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-chip-border);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .nh-sub {
+        margin: 0 0 20px;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+
+      /* ═══ THE NUDGE — the shipped ExpansionNudgeBanner Card ═══
+         <Card className="bg-(--el-tint-lavender) border-(--el-border-soft)">:
+         Card = rounded-(--radius-card) border p-(--spacing-card-padding). */
+      .nh-nudge {
+        margin-bottom: 16px;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-tint-lavender);
+      }
+      .nh-nudge-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .nh-nudge-lead {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .nh-spark {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        color: var(--el-accent-on-surface);
+      }
+      .nh-body {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      /* the ✕ — an icon button (`--spacing-icon-btn`, `--radius-control`) */
+      .nh-x {
+        display: inline-flex;
+        flex-shrink: 0;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .nh-ic {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .nh-ic--sm {
+        width: 14px;
+        height: 14px;
+      }
+      .nh-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .nh-line {
+        margin: 10px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+
+      /* ═══ Button — components/ui/Button.tsx, size sm ═══ */
+      .nh-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .nh-btn--primary {
+        border: 1px solid transparent;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .nh-btn--secondary {
+        border: 1px solid var(--el-button-border);
+        background: transparent;
+        color: var(--el-text);
+      }
+
+      /* ═══ A dispatch row, dimmed context only — ReadyList.tsx ReadyRow ═══ */
+      .nh-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: var(--height-control);
+        margin-top: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
+        font-size: 14px;
+      }
+      .nh-kind {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .nh-kind--subtask {
+        color: var(--el-type-subtask);
+      }
+      .nh-key {
+        flex-shrink: 0;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .nh-title {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--el-text);
+      }
+
+      /* ═══ THE PLANNING OVERLAY — composed as shipped, NOT redrawn ═══
+         components/planning/PlanningWorkspaceOverlay.tsx: Modal size="full",
+         edge to edge, the app mounted behind the scrim; Close top-left; the
+         canvas left, the conversation + decide door right. The design of
+         record is design/ai-chat/planning-workspace.mock.html sheet 6
+         (MOTIR-4726) and design/ai-planning/design-notes.md Part XXII. */
+      .ov-stage {
+        position: relative;
+        height: 520px;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .ov-under {
+        padding: 24px 32px;
+      }
+      .ov-scrim {
+        position: absolute;
+        inset: 0;
+        background: var(--el-overlay-scrim);
+      }
+      .ov-modal {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-modal);
+      }
+      .ov-panes {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        min-height: 0;
+        overflow: hidden;
+      }
+      .ov-rail {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-left: 1px solid var(--el-border);
+      }
+      /* a log scrolled to its latest turn (the resumed session) */
+      .rl-log--end {
+        justify-content: flex-end;
+      }
+      .ov-stage--tall {
+        height: 700px;
+      }
+      /* the overlay keeps the top strip of /ready visible so the review can see
+         what is behind the scrim; the shipped Modal is edge to edge */
+      .ov-modal--peek {
+        top: 64px;
+      }
+
+      /* ═══ THE CANVAS PANE — lifted verbatim from
+         design/ai-chat/planning-workspace--arrival.mock.html (MOTIR-6159), which
+         draws the shipped ProjectRoadmapCanvas arriving INSIDE its target ═══ */
+      .exitbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        padding: 6px 16px;
+        height: 49px;
+      }
+      .exitbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: none;
+        border: 0;
+      }
+      .kbd {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        padding: 0 4px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .projname {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .canvas {
+        position: relative;
+        background: var(--el-canvas);
+        background-image: radial-gradient(
+          color-mix(in srgb, var(--el-text) 8%, transparent) 1px,
+          transparent 1px
+        );
+        background-size: 16px 16px;
+        padding: 76px 16px 16px;
+      }
+      .crumbbar {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 44rem;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        padding: 4px 8px;
+        box-shadow: var(--shadow-card);
+      }
+      .backbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        flex: none;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        border: 0;
+        background: none;
+      }
+      .crumbs {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin: 0;
+        padding: 0;
+        font-size: 13px;
+        min-width: 0;
+      }
+      .crumbs li {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+      .crumbs li:first-child {
+        flex: none;
+      }
+      .crumb {
+        border: 0;
+        background: none;
+        max-width: 18rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .crumb.here {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .crumb.target {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .crumb.target .tglyph {
+        flex: none;
+        color: var(--el-accent-on-surface);
+      }
+      .crumb.target .tunder {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        box-shadow: inset 0 -2px 0 0 var(--el-accent);
+      }
+      .chev {
+        flex: none;
+        /* aria-hidden decoration — the shipped value */
+        color: var(--el-text-faint);
+      }
+      .sronly {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      .emptylevel {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 22px;
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        background: color-mix(in srgb, var(--el-card) 60%, transparent);
+      }
+
+      /* ═══ THE RAIL — components/planning/PlanChangeRail.tsx, as it ships ═══ */
+      .rl-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .rl-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: var(--el-success);
+      }
+      .rl-name {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .rl-chip {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--el-chip-border);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .rl-log {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 16px;
+      }
+      .rl-lead {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .rl-ai {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .rl-av {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .rl-bubble-ai {
+        margin: 0;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-chat-bubble-ai);
+        color: var(--el-text);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .rl-user {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .rl-bubble-user {
+        margin: 0;
+        min-width: 0;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-chat-bubble-user);
+        color: var(--el-accent-text);
+        font-size: 13px;
+        overflow-wrap: anywhere;
+      }
+      .rl-marker {
+        margin: 0;
+        text-align: center;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .rl-acts {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 0;
+        padding: 8px 12px;
+        list-style: none;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .rl-act-k {
+        display: inline-block;
+        min-width: 64px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .rl-act-v {
+        color: var(--el-text);
+      }
+      .rl-running {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 16px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .rl-alert {
+        margin: 0;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .rl-await {
+        margin: 0 0 8px;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .rl-await-k {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .rl-await-q {
+        display: block;
+        font-size: 12px;
+      }
+      .rl-composer {
+        padding: 12px 16px;
+        border-top: 1px solid var(--el-border);
+      }
+      .rl-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .rl-input {
+        flex: 1;
+        min-width: 0;
+        height: var(--height-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 13px;
+      }
+      .rl-input::placeholder {
+        color: var(--el-text-secondary);
+      }
+      .nh-btn:disabled {
+        opacity: 0.5;
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sprite" aria-hidden="true">
+      <defs>
+        <symbol id="i-spark" viewBox="0 0 24 24">
+          <path
+            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+          ></path>
+          <path d="M20 3v4"></path>
+          <path d="M22 5h-4"></path>
+          <path d="M4 17v2"></path>
+          <path d="M5 18H3"></path>
+        </symbol>
+        <symbol id="i-x" viewBox="0 0 24 24">
+          <path d="M18 6 6 18"></path>
+          <path d="m6 6 12 12"></path>
+        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24">
+          <path d="M5 12h14"></path>
+          <path d="m12 5 7 7-7 7"></path>
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></symbol>
+        <symbol id="i-story" viewBox="0 0 24 24">
+          <path d="M12 7v14"></path>
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          ></path>
+        </symbol>
+        <symbol id="i-subtask" viewBox="0 0 24 24">
+          <path d="M13 5h8"></path>
+          <path d="M13 12h8"></path>
+          <path d="M13 19h8"></path>
+          <path d="m3 17 2 2 4-4"></path>
+          <path d="m3 7 2 2 4-4"></path>
+        </symbol>
+      </defs>
+    </svg>
+    <header class="review-head">
+      <h1 class="review-title">Ready — Expand starts a planning conversation</h1>
+      <p class="review-sub">
+        MOTIR-7875 · delta on the /ready page · Expand opens the planning overlay on the stub with
+        “Plan MOT-9” already sent
+      </p>
+    </header>
+
+    <div class="board-label">1 · The banner, idle — the new Expand copy</div>
+    <div class="board">
+      <p class="board-note">
+        The shipped nudge: the lavender <b>Card</b>, <b>Sparkles</b> in the accent-on-surface ink,
+        the ✕ icon button, <b>Expand</b> as Button secondary sm. The body is unchanged. NEW: one
+        line under the button (<b>ready.nudge.expandHint</b>, <b>--el-text-secondary</b> on the
+        tint) says what the press does — it opens Motir AI planning on the stub, and the planner may
+        ask first. The press is the go and the consent to spend (picked-option-planning-starts.md),
+        so there is no confirm step. After the press the banner has <b>no state of its own</b>: no
+        Expanding…, no spinner, no error line, no review — the overlay is the next thing the person
+        sees.
+      </p>
+      <div class="board-pair">
+        <div>
+          <p class="board-pair-h">en</p>
+          <div class="nh-addr"><span class="nh-addr-path">/ready</span>?lane=main</div>
+          <div class="nh-canvas">
+            <div class="nh-head">
+              <h2 class="nh-h1">Ready to start</h2>
+              <span class="nh-count">1 ready</span>
+            </div>
+            <p class="nh-sub">Motir · MOT</p>
+            <div class="nh-nudge" data-surface="card">
+              <div class="nh-nudge-top">
+                <div class="nh-nudge-lead">
+                  <svg class="nh-spark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-spark" /></svg
+                  ><span class="nh-body"
+                    >Only 1 work item ready — expand MOT-9 (Run the next story from the
+                    terminal)?</span
+                  >
+                </div>
+                <button type="button" class="nh-x" aria-label="Dismiss expansion nudge">
+                  <svg class="nh-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-x" />
+                  </svg>
+                </button>
+              </div>
+              <div class="nh-actions">
+                <button type="button" class="nh-btn nh-btn--secondary">
+                  Expand<svg class="nh-ic nh-ic--sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-arrow" />
+                  </svg>
+                </button>
+              </div>
+              <p class="nh-line">
+                Opens Motir AI planning on MOT-9. It may ask what you want planned first.
+              </p>
+            </div>
+            <div class="nh-row">
+              <svg class="nh-kind nh-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-subtask" /></svg
+              ><span class="nh-key">MOT-14</span
+              ><span class="nh-title">Print the run's pull request link when it opens</span>
+            </div>
+          </div>
+        </div>
+        <div lang="zh">
+          <p class="board-pair-h">zh</p>
+          <div class="nh-addr"><span class="nh-addr-path">/ready</span>?lane=main</div>
+          <div class="nh-canvas">
+            <div class="nh-head">
+              <h2 class="nh-h1">可开始</h2>
+              <span class="nh-count">1 项就绪</span>
+            </div>
+            <p class="nh-sub">Motir · MOT</p>
+            <div class="nh-nudge" data-surface="card">
+              <div class="nh-nudge-top">
+                <div class="nh-nudge-lead">
+                  <svg class="nh-spark" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-spark" /></svg
+                  ><span class="nh-body"
+                    >只有 1 项工作就绪——展开 MOT-9（Run the next story from the terminal）？</span
+                  >
+                </div>
+                <button type="button" class="nh-x" aria-label="关闭展开提示">
+                  <svg class="nh-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-x" />
+                  </svg>
+                </button>
+              </div>
+              <div class="nh-actions">
+                <button type="button" class="nh-btn nh-btn--secondary">
+                  展开<svg class="nh-ic nh-ic--sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-arrow" />
+                  </svg>
+                </button>
+              </div>
+              <p class="nh-line">将在 MOT-9 上打开 Motir AI 规划。它可能会先问你想规划什么。</p>
+            </div>
+            <div class="nh-row">
+              <svg class="nh-kind nh-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-subtask" /></svg
+              ><span class="nh-key">MOT-14</span
+              ><span class="nh-title">Print the run's pull request link when it opens</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="board-label">2 · The overlay, just opened — “Plan MOT-9” already sent</div>
+    <div class="board">
+      <p class="board-note">
+        The press <b>shallowPush</b>es <b>withPlanningOverlay</b>’s work-item launch on the stub,
+        with the start-turn flag, over the current /ready address (the lane survives; Close returns
+        to it). The overlay is COMPOSED as it ships (MOTIR-4726’s sheet 6) on a session anchored on
+        MOT-9: the shipped contextual framing (the <b>in context</b> chip,
+        <i>Opened in the context of MOT-9.</i>, the opener) and then the person’s first turn,
+        <b>Plan MOT-9</b>, sent once, with the <i>Sent to Motir AI</i> marker, the first act and the
+        running bar with Stop — exactly as the pick precedent (MOTIR-6432) draws a sent first turn.
+        The composer is empty. <b>The canvas is the existing one, unchanged</b>: the shipped
+        <b>PlanChangeCanvas</b> arrives INSIDE the stub by the arrival rule
+        (design/ai-chat/planning-workspace--arrival.mock.html, MOTIR-6159) — the breadcrumb ends in
+        the target crumb for MOT-9, and the empty story shows the canvas’s own
+        <i>No items at this level</i>, which is where the planner’s proposed cards will land. The
+        flag is drawn as <b>planStart=1</b> for illustration; its real name and its removal once the
+        session answers are MOTIR-7973’s.
+      </p>
+      <div class="nh-addr">
+        <span class="nh-addr-path">/ready</span
+        >?lane=main&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOT-9&amp;planStart=1
+      </div>
+      <div class="ov-stage ov-stage--tall" lang="en">
+        <div class="ov-under">
+          <div class="nh-head">
+            <h2 class="nh-h1">Ready to start</h2>
+            <span class="nh-count">1 ready</span>
+          </div>
+        </div>
+        <div class="ov-scrim"></div>
+        <div
+          class="ov-modal ov-modal--peek"
+          role="dialog"
+          aria-label="Planning workspace"
+          data-surface="modal"
+        >
+          <div class="exitbar">
+            <button class="exitbtn" type="button">✕ Close <span class="kbd">Esc</span></button
+            ><span class="projname">Motir</span>
+          </div>
+          <div class="ov-panes">
+            <div class="canvas">
+              <nav class="crumbbar" aria-label="Breadcrumb">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">Roadmap</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span
+                    ><button class="crumb" type="button">
+                      MOT-2 · Run cards from the terminal
+                    </button>
+                  </li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span
+                    ><button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span
+                      ><span class="sronly">Planning target:</span
+                      ><span class="tunder">MOT-9 · Run the next story from the terminal</span>
+                    </button>
+                  </li>
+                </ol>
+              </nav>
+              <div class="emptylevel">No items at this level</div>
+            </div>
+            <div class="ov-rail">
+              <div class="rl-head">
+                <span class="rl-dot" aria-hidden="true"></span><span class="rl-name">Motir AI</span
+                ><span class="rl-chip" data-testid="planning-mode-chip">in context</span>
+              </div>
+              <div class="rl-log" role="log">
+                <p class="rl-lead">Opened in the context of MOT-9.</p>
+                <div class="rl-ai">
+                  <span class="rl-av" aria-hidden="true">AI</span>
+                  <p class="rl-bubble-ai">What should change — or what would you like to know?</p>
+                </div>
+                <div class="rl-user"><p class="rl-bubble-user">Plan MOT-9</p></div>
+                <p class="rl-marker">Sent to Motir AI</p>
+                <ol class="rl-acts">
+                  <li>
+                    <span class="rl-act-k">reading</span
+                    ><span class="rl-act-v">Reading your request</span>
+                  </li>
+                </ol>
+              </div>
+              <div class="rl-running">
+                <span>Reading your request…</span
+                ><button type="button" class="nh-btn nh-btn--secondary">Stop</button>
+              </div>
+              <div class="rl-composer">
+                <div class="rl-row">
+                  <input
+                    class="rl-input"
+                    type="text"
+                    aria-label="Reply, or refine further…"
+                    placeholder="Reply, or refine further…"
+                  /><button type="button" class="nh-btn nh-btn--primary" disabled>Send</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="board-pair-h" style="margin-top: 16px">zh</p>
+      <div class="nh-addr">
+        <span class="nh-addr-path">/ready</span
+        >?lane=main&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOT-9&amp;planStart=1
+      </div>
+      <div class="ov-stage ov-stage--tall" lang="zh">
+        <div class="ov-under">
+          <div class="nh-head">
+            <h2 class="nh-h1">可开始</h2>
+            <span class="nh-count">1 项就绪</span>
+          </div>
+        </div>
+        <div class="ov-scrim"></div>
+        <div
+          class="ov-modal ov-modal--peek"
+          role="dialog"
+          aria-label="Planning workspace"
+          data-surface="modal"
+        >
+          <div class="exitbar">
+            <button class="exitbtn" type="button">✕ 关闭 <span class="kbd">Esc</span></button
+            ><span class="projname">Motir</span>
+          </div>
+          <div class="ov-panes">
+            <div class="canvas">
+              <nav class="crumbbar" aria-label="面包屑导航">
+                <button class="backbtn" type="button" aria-label="返回">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">路线图</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span
+                    ><button class="crumb" type="button">
+                      MOT-2 · Run cards from the terminal
+                    </button>
+                  </li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span
+                    ><button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span
+                      ><span class="sronly">规划目标：</span
+                      ><span class="tunder">MOT-9 · Run the next story from the terminal</span>
+                    </button>
+                  </li>
+                </ol>
+              </nav>
+              <div class="emptylevel">该层级暂无工作项</div>
+            </div>
+            <div class="ov-rail">
+              <div class="rl-head">
+                <span class="rl-dot" aria-hidden="true"></span><span class="rl-name">Motir AI</span
+                ><span class="rl-chip" data-testid="planning-mode-chip">上下文</span>
+              </div>
+              <div class="rl-log" role="log">
+                <p class="rl-lead">已在 MOT-9 的上下文中打开。</p>
+                <div class="rl-ai">
+                  <span class="rl-av" aria-hidden="true">AI</span>
+                  <p class="rl-bubble-ai">想改动什么 —— 或者想了解什么？</p>
+                </div>
+                <div class="rl-user"><p class="rl-bubble-user">规划 MOT-9</p></div>
+                <p class="rl-marker">已发送给 Motir AI</p>
+                <ol class="rl-acts">
+                  <li>
+                    <span class="rl-act-k">reading</span
+                    ><span class="rl-act-v">正在读取你的请求</span>
+                  </li>
+                </ol>
+              </div>
+              <div class="rl-running">
+                <span>正在读取你的请求…</span
+                ><button type="button" class="nh-btn nh-btn--secondary">停止</button>
+              </div>
+              <div class="rl-composer">
+                <div class="rl-row">
+                  <input
+                    class="rl-input"
+                    type="text"
+                    aria-label="回复，或继续细化…"
+                    placeholder="回复，或继续细化…"
+                  /><button type="button" class="nh-btn nh-btn--primary" disabled>发送</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="board-label">3 · A thin stub — the planner asks what to plan</div>
+    <div class="board">
+      <p class="board-note">
+        MOT-9 has a title and no description, so the planner stays in its conversation phase and
+        asks. Its words here are ILLUSTRATIVE — what the planner asks is not this card’s. The rail
+        is the shipped answer-awaiting state: the running bar is gone, the
+        <i>Waiting for your answer</i> strip sits over the composer, and the placeholder reads
+        <i>Answer Motir AI…</i>. The person’s answer continues the same session; nothing on /ready
+        changes.
+      </p>
+      <div class="nh-addr">
+        <span class="nh-addr-path">/ready</span
+        >?lane=main&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOT-9&amp;planSession=cm_session_7
+      </div>
+      <div class="ov-stage ov-stage--tall" lang="en">
+        <div class="ov-under">
+          <div class="nh-head">
+            <h2 class="nh-h1">Ready to start</h2>
+            <span class="nh-count">1 ready</span>
+          </div>
+        </div>
+        <div class="ov-scrim"></div>
+        <div
+          class="ov-modal ov-modal--peek"
+          role="dialog"
+          aria-label="Planning workspace"
+          data-surface="modal"
+        >
+          <div class="exitbar">
+            <button class="exitbtn" type="button">✕ Close <span class="kbd">Esc</span></button
+            ><span class="projname">Motir</span>
+          </div>
+          <div class="ov-panes">
+            <div class="canvas">
+              <nav class="crumbbar" aria-label="Breadcrumb">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">Roadmap</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span
+                    ><button class="crumb" type="button">
+                      MOT-2 · Run cards from the terminal
+                    </button>
+                  </li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span
+                    ><button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span
+                      ><span class="sronly">Planning target:</span
+                      ><span class="tunder">MOT-9 · Run the next story from the terminal</span>
+                    </button>
+                  </li>
+                </ol>
+              </nav>
+              <div class="emptylevel">No items at this level</div>
+            </div>
+            <div class="ov-rail">
+              <div class="rl-head">
+                <span class="rl-dot" aria-hidden="true"></span><span class="rl-name">Motir AI</span
+                ><span class="rl-chip" data-testid="planning-mode-chip">in context</span>
+              </div>
+              <div class="rl-log" role="log">
+                <p class="rl-lead">Opened in the context of MOT-9.</p>
+                <div class="rl-ai">
+                  <span class="rl-av" aria-hidden="true">AI</span>
+                  <p class="rl-bubble-ai">What should change — or what would you like to know?</p>
+                </div>
+                <div class="rl-user"><p class="rl-bubble-user">Plan MOT-9</p></div>
+                <p class="rl-marker">Sent to Motir AI</p>
+                <ol class="rl-acts">
+                  <li>
+                    <span class="rl-act-k">reading</span
+                    ><span class="rl-act-v">Reading your request</span>
+                  </li>
+                  <li>
+                    <span class="rl-act-k">retrieval</span
+                    ><span class="rl-act-v">Read the plan tree</span>
+                  </li>
+                </ol>
+                <div class="rl-ai">
+                  <span class="rl-av" aria-hidden="true">AI</span>
+                  <p class="rl-bubble-ai">
+                    MOT-9 has a title and nothing else yet. What should “run the next story from the
+                    terminal” cover — picking the card, claiming it, opening its branch, or all
+                    three? And is anything out of scope?
+                  </p>
+                </div>
+              </div>
+              <div class="rl-composer">
+                <p class="rl-await">
+                  <span class="rl-await-k">Waiting for your answer</span
+                  ><span class="rl-await-q">What should MOT-9 cover?</span>
+                </p>
+                <div class="rl-row">
+                  <input
+                    class="rl-input"
+                    type="text"
+                    aria-label="Answer Motir AI…"
+                    placeholder="Answer Motir AI…"
+                  /><button type="button" class="nh-btn nh-btn--primary" disabled>Send</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="board-label">4 · Resumed — Expand on a stub with a recent open session</div>
+    <div class="board">
+      <p class="board-note">
+        When MOT-9 already has a recent open planning session, Expand opens THAT session: its
+        transcript as it stands, and <b>nothing new is sent</b> — there is no second
+        <i>Plan MOT-9</i> and no new marker. The same holds for a reload or Back/forward onto the
+        address of panel 2: the first turn is sent once per session, keyed on the server’s answer,
+        never on the address. The composer is idle for a reply.
+      </p>
+      <div class="nh-addr">
+        <span class="nh-addr-path">/ready</span
+        >?lane=main&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOT-9&amp;planSession=cm_session_7
+      </div>
+      <div class="ov-stage ov-stage--tall" lang="en">
+        <div class="ov-under">
+          <div class="nh-head">
+            <h2 class="nh-h1">Ready to start</h2>
+            <span class="nh-count">1 ready</span>
+          </div>
+        </div>
+        <div class="ov-scrim"></div>
+        <div
+          class="ov-modal ov-modal--peek"
+          role="dialog"
+          aria-label="Planning workspace"
+          data-surface="modal"
+        >
+          <div class="exitbar">
+            <button class="exitbtn" type="button">✕ Close <span class="kbd">Esc</span></button
+            ><span class="projname">Motir</span>
+          </div>
+          <div class="ov-panes">
+            <div class="canvas">
+              <nav class="crumbbar" aria-label="Breadcrumb">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">Roadmap</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span
+                    ><button class="crumb" type="button">
+                      MOT-2 · Run cards from the terminal
+                    </button>
+                  </li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span
+                    ><button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span
+                      ><span class="sronly">Planning target:</span
+                      ><span class="tunder">MOT-9 · Run the next story from the terminal</span>
+                    </button>
+                  </li>
+                </ol>
+              </nav>
+              <div class="emptylevel">No items at this level</div>
+            </div>
+            <div class="ov-rail">
+              <div class="rl-head">
+                <span class="rl-dot" aria-hidden="true"></span><span class="rl-name">Motir AI</span
+                ><span class="rl-chip" data-testid="planning-mode-chip">in context</span>
+              </div>
+              <div class="rl-log rl-log--end" role="log">
+                <p class="rl-lead">Opened in the context of MOT-9.</p>
+                <div class="rl-ai">
+                  <span class="rl-av" aria-hidden="true">AI</span>
+                  <p class="rl-bubble-ai">What should change — or what would you like to know?</p>
+                </div>
+                <div class="rl-user"><p class="rl-bubble-user">Plan MOT-9</p></div>
+                <p class="rl-marker">Sent to Motir AI</p>
+                <ol class="rl-acts">
+                  <li>
+                    <span class="rl-act-k">reading</span
+                    ><span class="rl-act-v">Reading your request</span>
+                  </li>
+                  <li>
+                    <span class="rl-act-k">retrieval</span
+                    ><span class="rl-act-v">Read the plan tree</span>
+                  </li>
+                </ol>
+                <div class="rl-ai">
+                  <span class="rl-av" aria-hidden="true">AI</span>
+                  <p class="rl-bubble-ai">
+                    MOT-9 has a title and nothing else yet. What should “run the next story from the
+                    terminal” cover — picking the card, claiming it, opening its branch, or all
+                    three? And is anything out of scope?
+                  </p>
+                </div>
+                <div class="rl-user">
+                  <p class="rl-bubble-user">
+                    Picking the card and claiming it. Opening the branch is MOT-12’s.
+                  </p>
+                </div>
+                <p class="rl-marker">Sent to Motir AI</p>
+                <div class="rl-ai">
+                  <span class="rl-av" aria-hidden="true">AI</span>
+                  <p class="rl-bubble-ai">
+                    Got it — I’ll plan picking the card and claiming it, and leave the branch to
+                    MOT-12.
+                  </p>
+                </div>
+              </div>
+              <div class="rl-composer">
+                <div class="rl-row">
+                  <input
+                    class="rl-input"
+                    type="text"
+                    aria-label="Reply, or refine further…"
+                    placeholder="Reply, or refine further…"
+                  /><button type="button" class="nh-btn nh-btn--primary" disabled>Send</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="board-label">5 · The send failed — “Plan MOT-9” stays in the composer</div>
+    <div class="board">
+      <p class="board-note">
+        The first turn could not be sent (any refusal: credits, permission, Motir AI unreachable, a
+        network error). The rail shows its ORDINARY send error, composed as it ships — the rose
+        <b>role="alert"</b> line (<b>error.body</b>) and <b>Try again</b> — and the unsent
+        <b>Plan MOT-9</b> is left in the composer, Send live, so the person can send it as is or
+        edit it. No new failure copy is written, nothing appears in the log as sent, and the banner
+        on /ready is not involved.
+      </p>
+      <div class="nh-addr">
+        <span class="nh-addr-path">/ready</span
+        >?lane=main&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOT-9&amp;planSession=cm_session_7
+      </div>
+      <div class="ov-stage ov-stage--tall" lang="en">
+        <div class="ov-under">
+          <div class="nh-head">
+            <h2 class="nh-h1">Ready to start</h2>
+            <span class="nh-count">1 ready</span>
+          </div>
+        </div>
+        <div class="ov-scrim"></div>
+        <div
+          class="ov-modal ov-modal--peek"
+          role="dialog"
+          aria-label="Planning workspace"
+          data-surface="modal"
+        >
+          <div class="exitbar">
+            <button class="exitbtn" type="button">✕ Close <span class="kbd">Esc</span></button
+            ><span class="projname">Motir</span>
+          </div>
+          <div class="ov-panes">
+            <div class="canvas">
+              <nav class="crumbbar" aria-label="Breadcrumb">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">Roadmap</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span
+                    ><button class="crumb" type="button">
+                      MOT-2 · Run cards from the terminal
+                    </button>
+                  </li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span
+                    ><button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span
+                      ><span class="sronly">Planning target:</span
+                      ><span class="tunder">MOT-9 · Run the next story from the terminal</span>
+                    </button>
+                  </li>
+                </ol>
+              </nav>
+              <div class="emptylevel">No items at this level</div>
+            </div>
+            <div class="ov-rail">
+              <div class="rl-head">
+                <span class="rl-dot" aria-hidden="true"></span><span class="rl-name">Motir AI</span
+                ><span class="rl-chip" data-testid="planning-mode-chip">in context</span>
+              </div>
+              <div class="rl-log" role="log">
+                <p class="rl-lead">Opened in the context of MOT-9.</p>
+                <div class="rl-ai">
+                  <span class="rl-av" aria-hidden="true">AI</span>
+                  <p class="rl-bubble-ai">What should change — or what would you like to know?</p>
+                </div>
+                <p class="rl-alert" role="alert">
+                  That didn’t go through. Your conversation is saved — try again, or rephrase the
+                  change.
+                </p>
+                <div><button type="button" class="nh-btn nh-btn--secondary">Try again</button></div>
+              </div>
+              <div class="rl-composer">
+                <div class="rl-row">
+                  <input
+                    class="rl-input"
+                    type="text"
+                    aria-label="Reply, or refine further…"
+                    placeholder="Reply, or refine further…"
+                    value="Plan MOT-9"
+                  /><button type="button" class="nh-btn nh-btn--primary">Send</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
