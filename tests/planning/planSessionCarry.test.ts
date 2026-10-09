@@ -269,6 +269,68 @@ describe('startCopied carries the waiting plan', () => {
   );
 
   it(
+    'after Plan something new, ADOPTS the empty session it left instead of taking the turn back (MOTIR-7987)',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // An OPEN conversation with a plan waiting, then the person presses Plan
+      // something new: the session ends `restarted` and an empty one replaces it.
+      const sourceId = await endedSession('restarted');
+      await adminDb.planChangeSession.update({
+        where: { id: sourceId },
+        data: { endedAt: null, endReason: null },
+      });
+      const plan = await planIn(sourceId, 'planned');
+      const restarted = await planChangeSessionsService.restart(me(), { sessionId: sourceId });
+      const empty = restarted.session;
+      expect(empty.turns).toHaveLength(0);
+
+      const out = await planChangeSessionsService.startCopied(me(), sourceId, {
+        body: 'Keep the PDF report in this sprint',
+      });
+
+      expect(out.takenBack).toBeUndefined();
+      expect(out.id).toBe(empty.id);
+      expect(out.turns.map((t) => t.body)).toEqual([
+        'Split the export work',
+        'CSV goes first.',
+        'Keep the PDF report in this sprint',
+      ]);
+      const row = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: out.id } });
+      expect(row).toMatchObject({ copiedFromSessionId: sourceId, endedAt: null, turnCount: 3 });
+      expect((await adminDb.plan.findUniqueOrThrow({ where: { id: plan.id } })).sessionId).toBe(
+        out.id,
+      );
+      // No second session beside the adopted one.
+      expect(await adminDb.planChangeSession.count({ where: { endedAt: null } })).toBe(1);
+      expect(await adminDb.planTargetLock.count({ where: { sessionId: out.id } })).toBe(1);
+    },
+  );
+
+  it(
+    'an empty open session still takes the turn back when nothing waits',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const sourceId = await endedSession('failed');
+      const scope = buildScope([cardKey]);
+      const empty = await adminDb.planChangeSession.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          createdById: fx.ownerId,
+          scopeKey: scope.scopeKey,
+          targetKeys: scope.targetKeys,
+        },
+      });
+
+      const out = await planChangeSessionsService.startCopied(me(), sourceId, { body: 'Again' });
+
+      expect(out.id).toBe(empty.id);
+      expect(out.takenBack).toBe(true);
+      expect(out.turns.map((t) => t.body)).toEqual(['Again']);
+    },
+  );
+
+  it(
     'two racing first turns make ONE session and move the plan once',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {

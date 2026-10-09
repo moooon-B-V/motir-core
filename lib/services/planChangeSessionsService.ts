@@ -1166,7 +1166,10 @@ export const planChangeSessionsService = {
    *  * the caller's own OPEN session for the source's scope wins — or, with none,
    *    their open session that already holds one of its cards (the take-back,
    *    AMENDMENT 23 §3). `opts.body` lands THERE, the result says `takenBack`,
-   *    and nothing is copied or moved: the waiting plan stays where it was;
+   *    and nothing is copied or moved: the waiting plan stays where it was.
+   *    EXCEPT an open session with no turns and no copy source — the empty one
+   *    Plan something new leaves (`restart`): when the source has a waiting plan,
+   *    the carry ADOPTS that session instead of creating one (MOTIR-7987);
    *  * the plan that waits is the source's most recent UNDECIDED plan — or
    *    `opts.planId`, the plan the person was looking at. It is locked and
    *    re-read; one decided meanwhile is `PLAN_SESSION_PLAN_DECIDED`;
@@ -1229,14 +1232,15 @@ export const planChangeSessionsService = {
           pctx.userId,
           tx,
         );
+        const resumable = await planChangeSessionRepository.findResumableForUser(
+          pctx.projectId,
+          source.scopeKey,
+          pctx.userId,
+          pctx.workspaceId,
+          tx,
+        );
         const open =
-          (await planChangeSessionRepository.findResumableForUser(
-            pctx.projectId,
-            source.scopeKey,
-            pctx.userId,
-            pctx.workspaceId,
-            tx,
-          )) ??
+          resumable ??
           (await planChangeSessionRepository.findOpenHoldingForUser(
             pctx.projectId,
             source.targetKeys,
@@ -1244,13 +1248,32 @@ export const planChangeSessionsService = {
             pctx.workspaceId,
             tx,
           ));
-        if (open) {
+        // An EMPTY open session on the scope — the one Plan something new leaves
+        // behind (`restart`) — has nothing to take back to, so it does not win over
+        // a plan that still waits: the carry ADOPTS it instead of creating a second
+        // session beside it (MOTIR-7987). Without a waiting plan it is still the
+        // take-back, as before.
+        const adoptable =
+          resumable && resumable.turnCount === 0 && !resumable.copiedFromSessionId
+            ? resumable
+            : null;
+        const waitingPlanId =
+          adoptable &&
+          (opts.planId ??
+            (await planRepository.findLatestUndecidedBySession(source.id, tx))?.id ??
+            null);
+        if (open && !waitingPlanId) {
           const turn = firstTurn();
           const landed = turn ? await appendWithin(open.id, pctx, turn, {}, tx) : open;
           return { ...(await toDto(landed, pctx, tx)), takenBack: true };
         }
 
-        const waitingPlan = await lockWaitingPlanWithin(source, opts.planId ?? null, pctx, tx);
+        const waitingPlan = await lockWaitingPlanWithin(
+          source,
+          waitingPlanId || opts.planId || null,
+          pctx,
+          tx,
+        );
         if (!isCopyable(source, waitingPlan)) {
           throw new PlanSessionNotCopyableError(source.id, source.endReason);
         }
@@ -1258,20 +1281,26 @@ export const planChangeSessionsService = {
         const turns = (
           await planChangeTurnRepository.listBySessionId(source.id, pctx.workspaceId, tx)
         ).filter((t) => t.role === 'user' || t.role === 'assistant');
-        const created = await planChangeSessionRepository.create(
-          {
-            workspaceId: pctx.workspaceId,
-            projectId: pctx.projectId,
-            createdById: pctx.userId,
-            scopeKey: source.scopeKey,
-            targetKeys: source.targetKeys,
-            origin: 'conversation',
-            copiedFromSessionId: source.id,
-            turnCount: turns.length,
-            lastActivityAt: now,
-          },
-          tx,
-        );
+        const created = adoptable
+          ? await planChangeSessionRepository.update(
+              adoptable.id,
+              { copiedFromSessionId: source.id, turnCount: turns.length, lastActivityAt: now },
+              tx,
+            )
+          : await planChangeSessionRepository.create(
+              {
+                workspaceId: pctx.workspaceId,
+                projectId: pctx.projectId,
+                createdById: pctx.userId,
+                scopeKey: source.scopeKey,
+                targetKeys: source.targetKeys,
+                origin: 'conversation',
+                copiedFromSessionId: source.id,
+                turnCount: turns.length,
+                lastActivityAt: now,
+              },
+              tx,
+            );
         for (const [seq, turn] of turns.entries()) {
           await planChangeTurnRepository.create(
             {

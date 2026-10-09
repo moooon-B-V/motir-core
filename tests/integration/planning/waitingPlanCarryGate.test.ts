@@ -400,15 +400,39 @@ describe('case 3 — two racing first turns make ONE session', () => {
 
 describe('case 4 — an open session on the scope wins', () => {
   it(
-    'Plan something new left an open session: the turn lands there and nothing moves',
+    'Plan something new left an EMPTY session: the carry adopts it instead of taking the turn back (MOTIR-7987)',
     T,
     async () => {
-      // The Plan something new path: `restart` ends the session (`restarted`, by the
-      // owner) and opens the owner's next session on the same scope.
+      // Situation 1 itself: `restart` ends the session (`restarted`, by the owner)
+      // and opens an empty one on the same scope. The owner has typed nothing
+      // there, so the story's take-back rule does not apply — the plan carries.
+      const { sourceId: liveId, planId } = await conversationWithPlannedPlan('Planned again', null);
+      const restarted = await planChangeSessionsService.restart(me(), { sessionId: liveId });
+      const emptyId = restarted.session.id;
+      const sessionsBefore = await adminDb.planChangeSession.count();
+
+      const out = await planChangeSessionsService.startCopied(me(), liveId, { body: 'Back to it' });
+
+      expect(out.takenBack).toBeUndefined();
+      expect(out.id).toBe(emptyId);
+      expect(out.copiedFromSessionId).toBe(liveId);
+      expect(await adminDb.planChangeSession.count()).toBe(sessionsBefore);
+      expect((await planRow(planId)).sessionId).toBe(emptyId);
+      expect(await carriedRows(planId)).toHaveLength(1);
+    },
+  );
+
+  it(
+    'once the owner typed in the session Plan something new left, the turn lands there and nothing moves',
+    T,
+    async () => {
+      // "the one Plan something new opened, once they typed in it" — the story's
+      // take-back rule.
       const { sourceId: liveId, planId } = await conversationWithPlannedPlan('Planned again', null);
       const restarted = await planChangeSessionsService.restart(me(), { sessionId: liveId });
       const openId = restarted.session.id;
       expect(openId).not.toBe(liveId);
+      await planChangeSessionsService.appendTurn('Something new', me(), { sessionId: openId });
       const locksBefore = await adminDb.planTargetLock.findMany({ orderBy: { id: 'asc' } });
       const sessionsBefore = await adminDb.planChangeSession.count();
 
