@@ -809,7 +809,7 @@ export function PlanChangeRail({
                       </span>
                     )}
                     <span className="mt-px w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-                      {tc(`act.${act.kind}`)}
+                      {tc(actLabelKey(act))}
                     </span>
                     <span className="min-w-0 flex-1">{actLine(act, tc)}</span>
                   </li>
@@ -1546,6 +1546,9 @@ const ACT_GLYPH: Record<PlanChangeProgress['kind'], typeof Send> = {
   note: MessageSquareText,
   proposed: Sparkles,
   validating: ShieldCheck,
+  // Interim (MOTIR-7976): the per-call line's own glyph is the design's
+  // (MOTIR-7975) and lands with the render card (MOTIR-7979).
+  call: BookOpenText,
   unknown: CircleQuestionMark,
 };
 
@@ -1553,7 +1556,10 @@ function ActGlyph({ act }: { act: PlanChangeProgress }) {
   // The BLOCKED lookup is the one act whose glyph is decided by its payload, not
   // its kind: sheet 3 gives "out of lookups" the `ban` glyph so the moment the
   // run stopped being able to read is visible at a skim.
-  const Icon = act.kind === 'retrieval' && act.blocked ? Ban : ACT_GLYPH[act.kind];
+  const Icon =
+    (act.kind === 'retrieval' && act.blocked) || (act.kind === 'call' && act.outcome === 'skipped')
+      ? Ban
+      : ACT_GLYPH[act.kind];
   return <Icon className="size-3.5" aria-hidden="true" />;
 }
 
@@ -1567,6 +1573,20 @@ const RETRIEVAL_FAMILY_KEY: Record<string, string> = {
   web: 'act.family.web',
   lessons: 'act.family.lessons',
 };
+
+/** The walk families an interim `call` line cannot name with a shipped string
+ *  of its own (`lay` and `author` have one each). */
+const CALL_WALK_FAMILIES: ReadonlySet<string> = new Set(['item', 'validate', 'settle']);
+
+/** The mono LABEL column's catalog key. Every kind has its own `act.<kind>` key
+ *  except the interim `call` act (MOTIR-7976), which adds no catalog key and so
+ *  borrows the shipped label of the act its family already reads as. */
+function actLabelKey(act: PlanChangeProgress): string {
+  if (act.kind !== 'call') return `act.${act.kind}`;
+  if (act.family === 'lay') return 'act.laying';
+  if (act.family === 'author') return 'act.authoring';
+  return 'act.retrieval';
+}
 
 /** The line one act reads as. Every string is a catalog key; the only values
  *  interpolated are the frame's own data. */
@@ -1597,6 +1617,21 @@ function actLine(act: PlanChangeProgress, tc: ReturnType<typeof useTranslations>
       return tc('act.matchingLine');
     case 'writing':
       return tc('act.writingLine', { key: act.key });
+    // ⚠️ INTERIM (MOTIR-7976) — SHIPPED catalog lines only, so a producer
+    // deployed before the designed lines land (MOTIR-7979, which replaces this
+    // arm) can never show a raw message key. Without it the default arm would
+    // look up `progress.call`, which does not exist.
+    case 'call': {
+      if (act.outcome === 'skipped') return tc('act.retrievalBlockedLine');
+      const family = act.family;
+      if (family === 'lay') return tc('act.layingLine', { target: act.object?.value ?? '' });
+      if (family === 'author') {
+        return tc('act.authoringLine', { title: act.object?.value ?? act.itemRef ?? '' });
+      }
+      if (family === null || CALL_WALK_FAMILIES.has(family)) return tc('act.retrievalLineBare');
+      const callFamilyKey = RETRIEVAL_FAMILY_KEY[family];
+      return tc('act.retrievalLine', { family: callFamilyKey ? tc(callFamilyKey) : family });
+    }
     default:
       return tc(`progress.${act.kind}`, { count: 0 });
   }
