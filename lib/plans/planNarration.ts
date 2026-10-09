@@ -27,3 +27,11 @@ export function cleanNarrationSentence(raw: string): string | null {
   if (points.length <= PLAN_NARRATION_SENTENCE_MAX) return text;
   return `${points.slice(0, PLAN_NARRATION_SENTENCE_MAX - 1).join('')}…`;
 }
+
+/**
+ * The newest-sentences window the plan REVIEW read carries (MOTIR-8063), and
+ * the paged read's largest `limit`. The review read is polled every 2.5 s while
+ * a plan generates, so it never carries a long walk's whole history: earlier
+ * sentences come from `GET /api/plans/[id]/narration`.
+ */
+export const PLAN_NARRATION_READ_WINDOW = 100;

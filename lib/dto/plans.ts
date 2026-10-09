@@ -763,6 +763,28 @@ export interface PlanNarrationSessionDto {
 }
 
 /**
+ * A window of a plan's narration sentences (MOTIR-8063): `entries` in ascending
+ * `seq`, and how many sentences come BEFORE the first of them. `seq` is gapless
+ * from 1, so `earlierCount` is the first entry's `seq − 1`, or `0` when
+ * `entries` is empty.
+ */
+export interface PlanNarrationPageDto {
+  entries: PlanNarrationDto[];
+  earlierCount: number;
+}
+
+/**
+ * The narration block the plan REVIEW read carries (MOTIR-8063): the newest
+ * window of sentences plus EVERY session's step words. Sessions are never
+ * windowed, so a sentence paged back to always has its group head here.
+ */
+export interface PlanNarrationReadDto extends PlanNarrationPageDto {
+  /** Every session that reported a step, by `firstReportedAt` then id — running,
+   *  finished, or with no sentence at all. */
+  sessions: PlanNarrationSessionDto[];
+}
+
+/**
  * A plan as the API returns it (list row). The lifecycle timestamps + decider
  * ARE the history surface (when planned / when decided / by whom). `itemCount`
  * is the number of bundled PlanItems.

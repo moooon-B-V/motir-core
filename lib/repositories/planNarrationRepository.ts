@@ -54,6 +54,38 @@ export const planNarrationRepository = {
     return tx.planNarration.findMany({ where: { planId }, orderBy: { seq: 'asc' } });
   },
 
+  /** The newest `limit` sentences of a plan, returned in ASCENDING `seq` (MOTIR-8063). */
+  async listLatestByPlan(
+    planId: string,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanNarration[]> {
+    const rows = await tx.planNarration.findMany({
+      where: { planId },
+      orderBy: { seq: 'desc' },
+      take: limit,
+    });
+    return rows.reverse();
+  },
+
+  /**
+   * The `limit` sentences immediately BEFORE `beforeSeq`, returned in ASCENDING
+   * `seq` — the paged read's one query (MOTIR-8063).
+   */
+  async listBeforeSeq(
+    planId: string,
+    beforeSeq: number,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanNarration[]> {
+    const rows = await tx.planNarration.findMany({
+      where: { planId, seq: { lt: beforeSeq } },
+      orderBy: { seq: 'desc' },
+      take: limit,
+    });
+    return rows.reverse();
+  },
+
   /** Many plans' sentences in ONE query, by plan then `seq`. */
   async listByPlanIds(
     planIds: readonly string[],

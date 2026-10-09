@@ -9,7 +9,13 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planProgressService } from '@/lib/services/planProgressService';
-import { toPlanStepDto } from '@/lib/mappers/planMappers';
+import {
+  toPlanNarrationDto,
+  toPlanNarrationSessionDto,
+  toPlanStepDto,
+} from '@/lib/mappers/planMappers';
+import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
+import { PLAN_NARRATION_READ_WINDOW } from '@/lib/plans/planNarration';
 import { DERIVED_EVENT_KINDS, mergeTimeline, revisionCount } from '@/lib/plans/timeline';
 import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
 import {
@@ -31,6 +37,8 @@ import type {
   PlanItemDto,
   PlanItemPatch,
   PlanItemProposedFields,
+  PlanNarrationPageDto,
+  PlanNarrationReadDto,
   PlanWithItemsDto,
   StaleReason,
 } from '@/lib/dto/plans';
@@ -672,7 +680,53 @@ async function visitorPlanReader(
   return visitorServiceContext(reader);
 }
 
+/**
+ * THE ONE READER RESOLUTION both plan reads make (MOTIR-8063): the review read
+ * and the narration page. A Visitor passes {@link visitorPlanReader} first; then
+ * the plan is read for the resulting context, which admits by the Plans room's
+ * scope. Shared so the paged narration read can never become a side door into a
+ * plan the review read would refuse — every refusal is the same not-found.
+ */
+async function resolvePlanReader(
+  planId: string,
+  reader: ServiceContext | VisitorReadContext,
+): Promise<{ ctx: ServiceContext; plan: PlanWithItemsDto }> {
+  const ctx = isVisitorContext(reader) ? await visitorPlanReader(planId, reader) : reader;
+  const plan = await plansService.getPlanForReader(planId, ctx);
+  return { ctx, plan };
+}
+
+/** A page's `earlierCount` from its first entry — `seq` is gapless from 1. */
+function earlierCountOf(entries: readonly { seq: number }[]): number {
+  return entries.length === 0 ? 0 : entries[0]!.seq - 1;
+}
+
 export const planReviewService = {
+  /**
+   * An EARLIER page of a plan's narration sentences (MOTIR-8063): up to `limit`
+   * sentences immediately before `beforeSeq`, ascending, with the page's own
+   * `earlierCount`. Gated exactly as {@link getPlanReview} is, through
+   * {@link resolvePlanReader}, before any narration row is read. The session step
+   * words are NOT repeated: the review read already carries all of them.
+   */
+  async listPlanNarration(
+    planId: string,
+    reader: ServiceContext | VisitorReadContext,
+    page: { beforeSeq: number; limit?: number },
+  ): Promise<PlanNarrationPageDto> {
+    const { ctx } = await resolvePlanReader(planId, reader);
+    const limit = Math.min(
+      Math.max(page.limit ?? PLAN_NARRATION_READ_WINDOW, 1),
+      PLAN_NARRATION_READ_WINDOW,
+    );
+    // BOUND, not `db`: the policy joins to `plan`, so an unbound read is empty.
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planNarrationRepository.listBeforeSeq(planId, page.beforeSeq, limit, tx),
+    );
+    const entries = rows.map(toPlanNarrationDto);
+    return { entries, earlierCount: earlierCountOf(entries) };
+  },
+
   /**
    * Assemble the plan-detail review model for `planId`. Reads the plan + its
    * items (`getPlan`), the per-item staleness (`computePlanStaleness`), the live
@@ -758,11 +812,11 @@ export const planReviewService = {
     // epic's descendant (MOTIR-6645); anything else is the same not-found an
     // unknown id is. Past that gate the read runs on the Visitor's narrowed
     // service context, which resolves the Visitor key set and nothing more.
-    const ctx = isVisitorContext(reader) ? await visitorPlanReader(planId, reader) : reader;
     // A READ for an actor (the plan page, `GET /api/plans/[id]`, `get_plan`'s
     // placements), so it admits by the Plans room's scope: a plan outside the
-    // reader's view is the same not-found as an unknown id (MOTIR-6330).
-    const plan = await plansService.getPlanForReader(planId, ctx);
+    // reader's view is the same not-found as an unknown id (MOTIR-6330). The
+    // resolution is shared with the narration page read (MOTIR-8063).
+    const { ctx, plan } = await resolvePlanReader(planId, reader);
     const staleness = await planStalenessService.computePlanStaleness(planId, ctx);
     // The plan's CONTENT trail (MOTIR-3536) — ONE query for the whole history,
     // walking the `(plan_id, changed_at)` index. It rides the plan read rather
@@ -809,6 +863,26 @@ export const planReviewService = {
     // conversation" means.
     const conversation = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       readPlanConversation(planId, tx),
+    );
+    // THE PLANNER'S NARRATION (MOTIR-8063) — every session's step words and the
+    // newest window of sentences, at EVERY status: unlike `inFlightSteps` it is
+    // kept history. Bound for the trail's reason — both policies join to `plan`.
+    const narration: PlanNarrationReadDto = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => {
+        const sessions = await planNarrationRepository.listSessionsByPlan(planId, tx);
+        const rows = await planNarrationRepository.listLatestByPlan(
+          planId,
+          PLAN_NARRATION_READ_WINDOW,
+          tx,
+        );
+        const entries = rows.map(toPlanNarrationDto);
+        return {
+          sessions: sessions.map(toPlanNarrationSessionDto),
+          entries,
+          earlierCount: earlierCountOf(entries),
+        };
+      },
     );
     const revisionStartedAt = lastRevisionStartAt(revisions);
     // WHICH proposals the latest revision touched. Every trail row written at or
@@ -1928,6 +2002,7 @@ export const planReviewService = {
       progress,
       gate,
       conversation,
+      narration,
       history,
       items,
       edgeCoverage,
