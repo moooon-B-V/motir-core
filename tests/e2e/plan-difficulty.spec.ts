@@ -2,6 +2,7 @@ import type { Locator, Page, Response } from '@playwright/test';
 import { test, expect } from './_helpers/promoted-regression';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   agentSession,
   authorPlanOverMcp,
@@ -95,16 +96,18 @@ function mcpOrigin(baseURL: string | undefined): string {
   return baseURL;
 }
 
-/** One proposal's row on the review's list, found by its one control. */
-const proposalRow = (page: Page, title: string): Locator =>
-  page
+/** One proposal's row on the review's list, found by its one control. `root` is
+ *  what the list renders under — the page, or the planning overlay an undecided
+ *  plan is reviewed in (Story MOTIR-7883). */
+const proposalRow = (page: Page, title: string, root: Page | Locator = page): Locator =>
+  root
     .getByTestId('plan-proposal-list')
     .getByRole('listitem')
     .filter({ has: page.getByRole('button', { name: new RegExp(escape(title)) }) });
 
 /** Open a proposal's peek from its list row. */
-async function openPeek(page: Page, title: string): Promise<Locator> {
-  await page
+async function openPeek(page: Page, title: string, root: Page | Locator = page): Promise<Locator> {
+  await root
     .getByTestId('plan-proposal-list')
     .getByRole('button', { name: new RegExp(escape(title)) })
     .click();
@@ -352,24 +355,26 @@ test('a plan whose leaves carry no difficulty renders the review without error, 
   await signIn(page, seed.email, AGENT_PLAN_SEED_PASSWORD);
 
   // One container → the canvas.
-  await page.goto(`/plans/${authored.planId}?view=canvas`);
-  await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
-    'Ready to review',
-  );
+  //
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is
+  // undecided, so its review is the planning overlay, which renders the same
+  // proposal views; each body is asked for through the helper's switch (the
+  // overlay never reads `?view=`).
+  const canvas = await openUndecidedPlan(page, authored.planId, { view: 'canvas' });
   for (const title of authored.leafTitles) {
-    await expect(page.locator('[data-node-id]').filter({ hasText: title })).toHaveCount(1);
+    await expect(canvas.locator('[data-node-id]').filter({ hasText: title })).toHaveCount(1);
   }
-  await expect(page.getByTestId('plan-item-difficulty')).toHaveCount(0);
+  await expect(canvas.getByTestId('plan-item-difficulty')).toHaveCount(0);
 
-  await page.goto(`/plans/${authored.planId}?view=list`);
-  await expect(page.getByRole('main').getByTestId('plan-proposal-list')).toBeVisible();
+  const list = await openUndecidedPlan(page, authored.planId, { view: 'list' });
+  await expect(list.getByTestId('plan-proposal-list')).toBeVisible();
   for (const title of authored.leafTitles) {
-    await expect(proposalRow(page, title)).toBeVisible();
+    await expect(proposalRow(page, title, list)).toBeVisible();
   }
-  await expect(page.getByTestId('plan-list-difficulty')).toHaveCount(0);
+  await expect(list.getByTestId('plan-list-difficulty')).toHaveCount(0);
 
   for (const title of authored.leafTitles) {
-    const peek = await openPeek(page, title);
+    const peek = await openPeek(page, title, list);
     await expect(peekDifficulty(peek)).toContainText('None');
     await closePeek(page);
   }

@@ -51,6 +51,7 @@ import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   aiPlanningPanel,
   clickAiPlanningSave,
@@ -401,16 +402,22 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
   // ── 5 ─────────────────────────────────────────────────────────────────────
   await chapter('Decide, and cadence resumes', async () => {
     const planId = (await plansOf(seed.projectId))[0]!.id;
-    await page.goto(`/plans/${planId}`);
+    // Still `planned`, so it is decided where it is decided — the planning
+    // overlay's footer (Story MOTIR-7883 · MOTIR-7887).
+    const overlay = await openUndecidedPlan(page, planId);
     await beat();
 
     const declined = page.waitForResponse(
       (r) => r.url().includes(`/api/plans/${planId}/decline`) && r.request().method() === 'POST',
     );
-    await page.getByRole('button', { name: 'Decline' }).click();
+    await overlay
+      .getByTestId('plan-change-confirm-bar')
+      .getByRole('button', { name: 'Decline', exact: true })
+      .click();
     // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
-    await page
+    await overlay
       .getByTestId('plan-decline-confirm')
+      .first()
       .getByRole('button', { name: 'Yes, decline' })
       .click();
     expect((await declined).status()).toBe(200);

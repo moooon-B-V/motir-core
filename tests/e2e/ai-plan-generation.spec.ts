@@ -23,6 +23,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   seedAiPlanGeneration,
   AI_GEN_JOB_ID,
@@ -240,8 +241,15 @@ test('generation streams proposed PlanItems live into a planned Plan; the propos
   // to see rather than leaning on a default that depends on the fixture's shape.
   // The claim below is unchanged: the review surface renders the bundled,
   // planned proposal forest.
-  await page.goto(`/plans/${seed.planId}?view=canvas`);
-  await expect(page.getByTestId('plan-item-node').first()).toBeVisible({ timeout: POLL_REVEAL });
+  //
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: a `planned` plan is
+  // undecided, so its review surface is the planning overlay, which renders the
+  // same proposal views; the canvas is asked for through the helper's switch (the
+  // overlay never reads `?view=`).
+  const overlay = await openUndecidedPlan(page, seed.planId, { view: 'canvas' });
+  await expect(overlay.getByTestId('plan-item-node').first()).toBeVisible({
+    timeout: POLL_REVEAL,
+  });
 
   // ── The proposals are REAL PlanItem rows, parented per the grammar with a
   //    blocked_by edge — and NONE is dispatchable (no WorkItem was materialized) ──

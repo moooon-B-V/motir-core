@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   agentSession,
   seedAgentAuthoredPlan,
@@ -133,25 +134,33 @@ test('an agent corrects a plan a reviewer is holding, and the reviewer can see i
   });
 
   // ── 2 · The reviewer opens it, and reads the structure AS IT STANDS ───────
+  //
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is
+  // undecided until step 6, so the reviewer reads it in the planning overlay,
+  // which renders the same proposal views but not the review rail. Two things
+  // follow. The structure is read on the LIST body — asked for explicitly,
+  // because the overlay derives its default view per open, and only the list
+  // shows a proposal nested under another one. And the rail's TIMELINE is read
+  // once the plan is decided (step 6), on the plan's page, where it is a record:
+  // every row this spec makes is still on it.
   await signIn(page, seed.email, AGENT_PLAN_SEED_PASSWORD);
-  await page.goto(`/plans/${planId}`);
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+  let overlay = await openUndecidedPlan(page, planId, { view: 'list' });
 
-  // ⚠️ ASSERTED ON THE RAIL'S OWN COUNT, not on a canvas node testid. The plan
-  // detail has two views — List and Canvas — and `plan-item-node` belongs to the
-  // Canvas one, so a testid assertion silently measures which TAB is open rather
-  // than how many proposals the plan holds. The rail renders the count in both
-  // views, which is also the number the reviewer actually reads.
-  const rail = page.getByRole('complementary', { name: 'Plan review' });
-  await expect(rail).toContainText('3 proposed items');
-  await expect(page.getByText('Payout retries')).toBeVisible();
+  // ⚠️ ASSERTED ON A COUNT, not on a canvas node testid. The plan has two views —
+  // List and Canvas — and `plan-item-node` belongs to the Canvas one, so a testid
+  // assertion silently measures which TAB is open rather than how many proposals
+  // the plan holds. The overlay's decision bar names the plan's adds in both views
+  // (the plan page's rail count, read again in step 6).
+  const bar = () => overlay.getByTestId('plan-change-confirm-bar');
+  await expect(bar()).toContainText('3 added');
+  await expect(overlay.getByText('Payout retries')).toBeVisible();
 
-  // The timeline BEFORE anything is corrected — so the row that arrives later is
-  // demonstrably new rather than something that was always there.
-  await expect(timeline(page)).toContainText('Plan ready');
-  await expect(timeline(page)).not.toContainText('proposal corrected');
+  // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7887): the timeline read
+  // BEFORE the correction (no "proposal corrected" row yet) — the rail draws it
+  // only on an undecided plan's page. The rows that arrive are still asserted on
+  // the decided page in step 6; nothing else shows the timeline without them.
 
-  // ── 3 · The agent CORRECTS it, out of band, while the page is open ────────
+  // ── 3 · The agent CORRECTS it, out of band, while the overlay is open ─────
   const corrected = (await agent.callTool({
     name: UPDATE_PLAN_PROPOSAL_TOOL_NAME,
     arguments: {
@@ -167,59 +176,60 @@ test('an agent corrects a plan a reviewer is holding, and the reviewer can see i
   // The AUTHORITATIVE signal: the tool's own response, never the rendered page.
   expect(corrected.isError).toBeFalsy();
 
-  // ── 4 · Reload — the CORRECTED structure is what renders ──────────────────
-  await page.reload();
-  await expect(page.getByText('Payout schedule (weekly)')).toBeVisible();
-  await expect(page.getByText('Payout schedule', { exact: true })).toHaveCount(0);
+  // ── 4 · Reopened — the CORRECTED structure is what renders ────────────────
+  overlay = await openUndecidedPlan(page, planId, { view: 'list' });
+  await expect(overlay.getByText('Payout schedule (weekly)')).toBeVisible();
+  await expect(overlay.getByText('Payout schedule', { exact: true })).toHaveCount(0);
 
-  // …and the plan's own timeline says it was corrected, by which harness. This
-  // is the two stories meeting: the correction is MOTIR-3540's write, the row is
-  // the sibling story's read.
-  await expect(timeline(page)).toContainText('1 proposal edited');
-  await expect(timeline(page)).toContainText(`· ${AGENT_HARNESS}`);
-
-  // ── 5 · A proposal is WITHDRAWN, and leaves the canvas ────────────────────
+  // ── 5 · A proposal is WITHDRAWN, and leaves the plan ──────────────────────
   const withdrawn = (await agent.callTool({
     name: WITHDRAW_PLAN_PROPOSAL_TOOL_NAME,
     arguments: { planId, planItemId: doomed },
   })) as CallToolResult;
   expect(withdrawn.isError).toBeFalsy();
 
-  await page.reload();
-  await expect(rail).toContainText('2 proposed items');
-  await expect(page.getByText('Payout retries')).toHaveCount(0);
-  await expect(timeline(page)).toContainText('1 proposal withdrawn');
+  overlay = await openUndecidedPlan(page, planId, { view: 'list' });
+  await expect(bar()).toContainText('2 added');
+  await expect(overlay.getByText('Payout retries')).toHaveCount(0);
 
   // A sibling that still REFERENCES a proposal is reported rather than left
-  // dangling — asserted here as the reviewer experiences it: the canvas never
+  // dangling — asserted here as the reviewer experiences it: the plan never
   // renders a broken edge, because the withdraw was refused.
   const refused = (await agent.callTool({
     name: WITHDRAW_PLAN_PROPOSAL_TOOL_NAME,
     arguments: { planId, planItemId: prerequisite },
   })) as CallToolResult;
   expect(refused.isError).toBe(true);
-  await page.reload();
-  await expect(rail).toContainText('2 proposed items');
+  overlay = await openUndecidedPlan(page, planId, { view: 'list' });
+  await expect(bar()).toContainText('2 added');
 
   // ── 6 · APPROVED — and the plan stops being the editable thing ────────────
   // ⚠️ ARMED BEFORE THE CLICK, and asserted on the WRITE'S RESPONSE rather than
   // on the pill (`motir-core/CLAUDE.md`'s E2E discipline). Polling the pill is
   // the optimistic-UI race that rule exists to stop: it reads whatever the page
-  // happens to show while the POST is still in flight.
+  // happens to show while the POST is still in flight. (The overlay's Approve has
+  // no stale-drift confirm, so the press is the POST.)
   const approved = page.waitForResponse(
     (r) => r.url().includes(`/api/plans/${planId}/approve`) && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: /Approve.*to your backlog/ }).click();
-  // The stale-drift confirm appears only when the plan has drifted; this one has
-  // not, so the dialog is optional and the armed wait catches the POST whichever
-  // button ends up firing it.
-  const confirm = page.getByRole('dialog');
-  if (await confirm.isVisible().catch(() => false)) {
-    const anyway = confirm.getByRole('button', { name: 'Approve anyway' });
-    if (await anyway.isVisible().catch(() => false)) await anyway.click();
-  }
+  await bar().getByRole('button', { name: 'Approve', exact: true }).click();
   expect((await approved).status()).toBe(200);
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
+
+  await page.goto(`/plans/${planId}`); // decided: the plan page renders
+  await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText('Approved');
+
+  // The rail's own count — the number the reviewer actually reads — is the plan
+  // as corrected and withdrawn.
+  const rail = page.getByRole('complementary', { name: 'Plan review' });
+  await expect(rail).toContainText('2 proposed items');
+
+  // …and the plan's own timeline says it was corrected, by which harness, and that
+  // a proposal was withdrawn. This is the two stories meeting: the correction is
+  // MOTIR-3540's write, the row is the sibling story's read.
+  await expect(timeline(page)).toContainText('Plan ready');
+  await expect(timeline(page)).toContainText('1 proposal edited');
+  await expect(timeline(page)).toContainText(`· ${AGENT_HARNESS}`);
+  await expect(timeline(page)).toContainText('1 proposal withdrawn');
 
   const tooLate = (await agent.callTool({
     name: UPDATE_PLAN_PROPOSAL_TOOL_NAME,

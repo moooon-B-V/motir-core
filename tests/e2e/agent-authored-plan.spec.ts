@@ -1,6 +1,8 @@
+import type { Locator } from '@playwright/test';
 import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import { plansService } from '@/lib/services/plansService';
 import {
   agentSession,
@@ -103,6 +105,9 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
   await client.close();
 
   await signInAsReviewer(page, seed);
+  // The planning overlay the undecided plan is reviewed in (Story MOTIR-7883),
+  // shared by the two chapters that read its proposed tree.
+  let overlay: Locator | undefined;
 
   // ── Step 2–3 — the person finds it in Plans, and sees WHOSE it is ────────
   await chapter('The plan an agent wrote is waiting in Plans', async () => {
@@ -129,7 +134,7 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     await beat();
   });
 
-  await chapter('Open it — the proposed tree, and the attribution again', async () => {
+  await chapter('Open it — the proposed tree', async () => {
     await planRow(page, authored.planId).click();
     await page.waitForURL(`**/plans/${authored.planId}`);
 
@@ -149,23 +154,25 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     // reading before trusting this comment: MOTIR-3260 changed WHERE the canvas
     // arrives, so one assertion here genuinely moved with the product. It is
     // marked at the line it affects.
-    await page.goto(`/plans/${authored.planId}?view=canvas`);
-
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
-    // The header spells the roles out, and adds the model the row omits.
-    await expect(page.getByText(`Requested by ${seed.reviewerName}`)).toBeVisible();
-    await expect(page.getByText(`written by ${AGENT_HARNESS}`)).toBeVisible();
-    await expect(page.getByText(AGENT_MODEL)).toBeVisible();
-    await beat();
+    //
+    // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is
+    // undecided, so it is reviewed in the planning overlay, which renders the same
+    // proposal views; the canvas is asked for through the helper's switch (the
+    // overlay never reads `?view=`). The plan page's header attribution — the
+    // rail's, which the overlay does not draw — is asserted on the DECIDED page in
+    // the Approve chapter below.
+    overlay = await openUndecidedPlan(page, authored.planId, { view: 'canvas' });
 
     // The tree the agent proposed, rendered from the PlanItems. The canvas shows
     // ONE LEVEL AT A TIME (`ProjectRoadmapCanvas` — never a whole-tree dump), and
     // the level it opens on is the one THE PLAN FILLS (MOTIR-3260, Story
     // MOTIR-3232): for this plan that is INSIDE the proposed story, so the
     // reviewer is greeted by the story's own crumb rather than by its card.
-    await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
     await expect(
-      page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', {
+      overlay.getByRole('application', { name: 'Marketplace payouts plan' }),
+    ).toBeVisible();
+    await expect(
+      overlay.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', {
         name: `New · ${authored.storyTitle}`,
       }),
     ).toHaveAttribute('aria-current', 'page');
@@ -191,8 +198,9 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     // breadcrumb could satisfy), and the crumb asserted above says the level they
     // are on IS the proposed story. Together those state "these leaves hang off
     // that parent" more exactly than a drill gesture did.
+    if (!overlay) throw new Error('the proposed tree was never opened');
     for (const title of authored.leafTitles) {
-      await expect(page.locator('[data-node-id]').filter({ hasText: title })).toHaveCount(1);
+      await expect(overlay.locator('[data-node-id]').filter({ hasText: title })).toHaveCount(1);
     }
     await beat();
   });
@@ -211,8 +219,12 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
 
   // ── Step 4 (second half) — approve, and only now is it work ──────────────
   await chapter('Approve — and the proposals become real work', async () => {
-    await page.goto(`/plans/${authored.planId}`);
-    const approve = page.getByRole('button', { name: /Approve/ });
+    // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: an undecided
+    // plan is approved in the overlay's decision footer.
+    const decide = await openUndecidedPlan(page, authored.planId);
+    const approve = decide
+      .getByTestId('plan-change-confirm-bar')
+      .getByRole('button', { name: 'Approve', exact: true });
     await expect(approve).toBeVisible();
 
     // Arm the response wait BEFORE the click so the persisted flip cannot be
@@ -225,7 +237,14 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     await approve.click();
     expect((await approved).status()).toBe(200);
 
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
+    await page.goto(`/plans/${authored.planId}`); // decided: the plan page renders
+    const main = page.getByRole('main');
+    await expect(main.getByTestId('plan-status-pill')).toContainText('Approved');
+    // The header spells the roles out, and adds the model the row omits — on the
+    // plan's record, which keeps who asked and which agent wrote it.
+    await expect(main.getByText(`Requested by ${seed.reviewerName}`)).toBeVisible();
+    await expect(main.getByText(`written by ${AGENT_HARNESS}`)).toBeVisible();
+    await expect(main.getByText(AGENT_MODEL)).toBeVisible();
     await beat();
   });
 
@@ -316,20 +335,26 @@ test('DECLINE leaves the tree exactly as it was', async ({ page, baseURL }) => {
   const before = await db.workItem.count({ where: { projectId: seed.projectId } });
 
   await signInAsReviewer(page, seed);
-  await page.goto(`/plans/${authored.planId}`);
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: an undecided plan
+  // is declined in the overlay's decision footer.
+  const overlay = await openUndecidedPlan(page, authored.planId);
 
   const declined = page.waitForResponse(
     (r) =>
       r.url().includes(`/api/plans/${authored.planId}/decline`) && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: /Decline/ }).click();
+  await overlay
+    .getByTestId('plan-change-confirm-bar')
+    .getByRole('button', { name: 'Decline', exact: true })
+    .click();
   // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
-  await page
+  await overlay
     .getByTestId('plan-decline-confirm')
     .getByRole('button', { name: 'Yes, decline' })
     .click();
   expect((await declined).status()).toBe(200);
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Declined');
+  await page.goto(`/plans/${authored.planId}`); // decided: the plan page renders
+  await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText('Declined');
 
   // A project-wide COUNT, not the absence of a particular title.
   expect(await db.workItem.count({ where: { projectId: seed.projectId } })).toBe(before);

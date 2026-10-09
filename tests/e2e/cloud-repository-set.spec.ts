@@ -75,6 +75,7 @@ import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import { E2E_PROVISIONING_ORG } from './_helpers/github-const';
 import {
   collaboratorInvites,
@@ -124,33 +125,30 @@ const accessReport = (page: Page) => live(page).getByTestId('repo-access-report'
 // ── Journey helpers ──────────────────────────────────────────────────────────
 
 /**
- * Approve the plan on the plan-detail route and wait for the APPROVE RESPONSE —
- * the authoritative signal. The step is server-rendered from the approved plan,
- * so asserting it before the write lands would race the round trip.
+ * Approve the plan in the planning overlay's footer and wait for the APPROVE
+ * RESPONSE — the authoritative signal. The step is server-rendered from the
+ * approved plan, so asserting it before the write lands would race the round trip.
  */
 async function approvePlan(page: Page, seed: RepositorySetSeed): Promise<void> {
-  await page.goto(`/plans/${seed.planId}`);
-  const approve = page.getByRole('button', { name: /^Approve — add/ });
+  // Undecided, so it is approved where it is decided — the planning overlay's footer
+  // (Story MOTIR-7883 · MOTIR-7887).
+  const overlay = await openUndecidedPlan(page, seed.planId);
+  const approve = overlay
+    .getByTestId('plan-change-confirm-bar')
+    .getByRole('button', { name: 'Approve', exact: true });
   await expect(approve).toBeVisible();
   const approved = page.waitForResponse(
     (r) => /\/api\/plans\/[^/]+\/approve/.test(r.url()) && r.request().method() === 'POST',
   );
   await approve.click();
   expect((await approved).status(), 'the approve write succeeded').toBe(200);
-  // The rail is now read-only and says so — the plan is safe BEFORE anything
-  // about code is asked (ADR §4.3), which is the honesty the step depends on.
-  await expect(live(page).getByText(/^Added \d+ items? to your backlog$/)).toBeVisible();
 
-  // ⚠️ TEMPORARY, AND IT IS COVERING A REAL DEFECT — MOTIR-1947.
-  //
-  // The establish step SHOULD be here already. It is not: the step is rendered
-  // from a SERVER read in `app/(authed)/plans/[id]/page.tsx`, and the approve
-  // handler only refetches the plan REVIEW into client state — it never
-  // `router.refresh()`es, so the server read that produces `repositorySet` never
-  // re-runs and the prop stays `null`. **When MOTIR-1947 lands, DELETE these two
-  // lines** — every assertion after this point is unchanged either way, so their
-  // removal is that fix's own regression test.
-  await page.goto(`/plans/${seed.planId}`);
+  // The step is rendered from a SERVER read of the approved plan, on the plan's own
+  // page — which is where a DECIDED plan lives. The rail there is read-only and says
+  // so: the plan is safe BEFORE anything about code is asked (ADR §4.3), which is
+  // the honesty the step depends on. (Until Story MOTIR-7883 the approve happened
+  // on this page and the re-navigation was MOTIR-1947's temporary refetch.)
+  await page.goto(`/plans/${seed.planId}`); // decided: the plan page renders
   await expect(live(page).getByText(/^Added \d+ items? to your backlog$/)).toBeVisible();
 }
 
@@ -316,7 +314,7 @@ test('approve a plan with two parts, get a repository for each, and be INVITED w
     // the same on a second visit. This is the case a report can silently fail:
     // a panel that only knows the account from the establish RESPONSE would go
     // quiet on a reload, and the user would meet the old question again.
-    await page.goto(`/plans/${seed.planId}`);
+    await page.goto(`/plans/${seed.planId}`); // decided: the plan page renders
     await expect(setupStatus(page)).toHaveText('Your code is ready');
     await expect(accessReport(page).getByText(REPO_SET_LOGIN)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Connect GitHub' })).toHaveCount(0);
@@ -419,7 +417,7 @@ test('the rail flips to “Your code is ready” once the invitation goes out', 
   });
   expect(res.status(), 'the invitations were sent').toBe(200);
 
-  await page.goto(`/plans/${seed.planId}`);
+  await page.goto(`/plans/${seed.planId}`); // decided: the plan page renders
   // Now BOTH the step's status line and the rail's outcome read "Your code is
   // ready" — the one place those two identical strings legitimately co-occur.
   await expect(live(page).getByText('Your code is ready')).toHaveCount(2);

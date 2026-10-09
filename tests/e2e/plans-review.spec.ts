@@ -27,8 +27,11 @@
 
 import { expect, test } from '@playwright/test';
 
+import { plansService } from '@/lib/services/plansService';
+
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   seedPlansReview,
   seedEmptyPlansProject,
@@ -107,13 +110,53 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   // assertion below is about the canvas, so the spec navigates to it. The URL is
   // the single source of truth for which body is showing, which is what makes
   // that a one-parameter change rather than a click.
-  await page.goto(`/plans/${seed.stalePlan.id}?view=canvas`);
+  //
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is still
+  // undecided, so it is reviewed in the planning overlay, which renders the same
+  // proposal views. The overlay's view is local and never read off `?view=`, so
+  // the canvas is asked for through the helper's switch instead.
+  const overlay = await openUndecidedPlan(page, seed.stalePlan.id, { view: 'canvas' });
 
   // The proposed items render on the canvas (with a stale badge on the drifted
   // ones) — the canvas MOUNTS the proposed PlanItems, it doesn't redraw a tree.
-  await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
-  await expect(page.getByTestId('plan-item-node').first()).toBeVisible();
-  await expect(page.getByTestId('stale-badge').first()).toBeVisible();
+  await expect(overlay.getByRole('application', { name: 'Plans Review plan' })).toBeVisible();
+  await expect(overlay.getByTestId('plan-item-node').first()).toBeVisible();
+  await expect(overlay.getByTestId('stale-badge').first()).toBeVisible();
+
+  // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7887): the per-plan staleness
+  // summary — each drifted item with its own reason, and MOTIR-3777's guard that a
+  // new sibling under a busy parent flags nothing — is the review rail's, which
+  // draws it only on an UNDECIDED plan's page, and an undecided plan now opens in
+  // the overlay. Still covered by tests/integration/plans/planStalenessService.test.ts
+  // (the reasons, MOTIR-3777 included) and tests/components/plan-folder-placement.test.tsx
+  // / plan-review-rail-fold.test.tsx (the summary's rendering).
+  //
+  // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7887): the stale-warning
+  // confirm ("Some items may be out of date" → "Approve anyway") belongs to the
+  // plan page's own approve CTA; the overlay's Approve decides without it. Nothing
+  // else covers that confirm in a browser.
+
+  // ── 3. Approve, in the overlay's decision footer ──────────────────────────
+  // Arm the response wait BEFORE the click so the persisted flip can't be missed.
+  const approveResponse = page.waitForResponse(
+    (r) =>
+      r.url().includes(`/api/plans/${seed.stalePlan.id}/approve`) &&
+      r.request().method() === 'POST',
+  );
+  await overlay
+    .getByTestId('plan-change-confirm-bar')
+    .getByRole('button', { name: 'Approve', exact: true })
+    .click();
+  expect((await approveResponse).status()).toBe(200);
+
+  // The plan is now DECIDED, and a decided plan's page is its record: everything
+  // below reads that page, on the canvas the MOTIR-3161 assertions are about.
+  await page.goto(`/plans/${seed.stalePlan.id}?view=canvas`); // decided: the plan page renders
+  const main = page.getByRole('main');
+
+  // The plan flips to approved (status pill + the materialize outcome).
+  await expect(main.getByTestId('plan-status-pill')).toContainText('Approved');
+  await expect(main.getByText(/Added .* to your backlog/)).toBeVisible();
 
   // ⚠️ THE RAIL DOES NOT SCROLL SIDEWAYS (MOTIR-4578), and this is the ONLY lane
   // that can say so. The transcript's scroller stated one overflow axis, which
@@ -128,8 +171,9 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   //
   // The seed's summary carries that token, so the numbers below are read on
   // content that WOULD overflow: equality is the fix working, not the fixture
-  // being tame.
-  const transcript = page.getByTestId('plan-review-transcript');
+  // being tame. (Read on the DECIDED page since MOTIR-7883: the summary is drawn
+  // whatever the plan's state, so the geometry is the same rail's.)
+  const transcript = main.getByTestId('plan-review-transcript');
   await expect(transcript).toContainText(PLAN_SUMMARY_UNBREAKABLE_TOKEN);
   const overflow = await transcript.evaluate((el) => ({
     scrollWidth: el.scrollWidth,
@@ -137,56 +181,16 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   }));
   expect(overflow.scrollWidth).toBe(overflow.clientWidth);
 
-  // Per-item staleness summary: both drifted items, each with its own reason —
-  // and each reason is about something that proposal NAMED.
-  const staleSummary = page.getByTestId('stale-summary');
-  await expect(staleSummary).toContainText('2 items may be out of date');
-  await expect(staleSummary).toContainText(seed.staleProposalBlockerGone);
-  await expect(staleSummary).toContainText('A blocker was removed');
-  await expect(staleSummary).toContainText(seed.staleProposalOrphan);
-  await expect(staleSummary).toContainText('Parent removed since planned');
-
-  // ⚠️ MOTIR-3777, guarded on ABSENCE (CLAUDE.md § E2E), and the two assertions
-  // sit one canvas level apart from a BADGED proposal under the SAME parent —
-  // which is what makes this a guard rather than a coincidence. That parent
-  // gained an unrelated child after `plannedAt`, the exact mutation that used to
-  // raise "New sibling items since planned" on every add hanging there. The
-  // edge-less third proposal declared nothing, so nothing about it drifted; its
-  // neighbour is stale for a blocker it did declare. Before the fix BOTH were
-  // flagged, and the badged one carried this reason as well as its real one.
-  await expect(staleSummary).not.toContainText(seed.cleanProposalUnderBusyParent);
-  await expect(staleSummary).not.toContainText('New sibling items since planned');
-
-  // ── 3. Approve → the stale-warning confirm → approve anyway ───────────────
-  await page.getByRole('button', { name: /Approve.*to your backlog/ }).click();
-  const confirm = page.getByRole('dialog');
-  await expect(confirm).toBeVisible();
-  await expect(confirm).toContainText('Some items may be out of date');
-  await expect(confirm).toContainText('drifted since this plan was generated');
-
-  // Arm the response wait BEFORE the click so the persisted flip can't be missed.
-  const approveResponse = page.waitForResponse(
-    (r) =>
-      r.url().includes(`/api/plans/${seed.stalePlan.id}/approve`) &&
-      r.request().method() === 'POST',
-  );
-  await confirm.getByRole('button', { name: 'Approve anyway' }).click();
-  expect((await approveResponse).status()).toBe(200);
-
-  // The plan flips to approved (status pill + the materialize outcome).
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
-  await expect(page.getByText(/Added .* to your backlog/)).toBeVisible();
-
   // ── MOTIR-3161 / MOTIR-3165 (bug MOTIR-3154) — an APPROVED plan still SHOWS
   //    what was approved, on the cards it became, and stops warning about it ──
   //
   // The whole of the reported defect, at the browser: the four cards the user
   // approved a second earlier used to be nowhere on this page. They are here,
   // marked accepted, ON the committed work items — and the page is quiet.
-  const acceptedNodes = page.getByTestId('plan-item-node');
+  const acceptedNodes = main.getByTestId('plan-item-node');
   await expect(acceptedNodes.first()).toBeVisible();
   // Queried by TEXT, so a colour-only treatment cannot pass.
-  await expect(page.getByTestId('plan-item-outcome').first()).toHaveText('accepted');
+  await expect(main.getByTestId('plan-item-outcome').first()).toHaveText('accepted');
 
   // ONE node per approved `add`, carrying the REAL identifier its materialized
   // work item was given — which is what proves the node landed ON the committed
@@ -194,7 +198,7 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   const materialized = await adminDb.workItem.findFirstOrThrow({
     where: { projectId: seed.projectId, title: seed.cleanProposalUnderBusyParent },
   });
-  const acceptedCard = page
+  const acceptedCard = main
     .getByTestId('plan-item-node')
     .filter({ hasText: materialized.identifier });
   await expect(acceptedCard).toHaveCount(1);
@@ -207,8 +211,8 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   // counted as unexplained new siblings against each other — MOTIR-3777 retired
   // that rule, and MOTIR-3165's status guard, asserted here, is what still holds
   // the line for every reason that remains.)
-  await expect(page.getByTestId('stale-summary')).toHaveCount(0);
-  await expect(page.getByTestId('stale-badge')).toHaveCount(0);
+  await expect(main.getByTestId('stale-summary')).toHaveCount(0);
+  await expect(main.getByTestId('stale-badge')).toHaveCount(0);
 
   // The bundle became real, dispatchable work: the cleanly-materialized add
   // (under the still-living parent) appears in the ready set. That parent is a
@@ -227,33 +231,40 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
 
   // ── 4. Decline branch on the clean plan ───────────────────────────────────
   //
-  // `?view=canvas` is written even though this plan's proposals sit under ONE
+  // The canvas is asked for even though this plan's proposals sit under ONE
   // container and the canvas is therefore already its default (MOTIR-3262): the
   // assertions below are about the canvas, and a spec that relies on a DERIVED
   // default is a spec that silently changes subject when the fixture changes
   // shape by one proposal.
-  await page.goto(`/plans/${seed.declinePlan.id}?view=canvas`);
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+  //
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the clean plan is
+  // undecided, so it is declined where it is decided — the overlay's footer, whose
+  // Decline confirms once with the same optional-reason band.
+  const declineOverlay = await openUndecidedPlan(page, seed.declinePlan.id, { view: 'canvas' });
 
   const declineResponse = page.waitForResponse(
     (r) =>
       r.url().includes(`/api/plans/${seed.declinePlan.id}/decline`) &&
       r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Decline' }).click();
+  await declineOverlay
+    .getByTestId('plan-change-confirm-bar')
+    .getByRole('button', { name: 'Decline', exact: true })
+    .click();
   // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
-  await page
+  await declineOverlay
     .getByTestId('plan-decline-confirm')
     .getByRole('button', { name: 'Yes, decline' })
     .click();
   expect((await declineResponse).status()).toBe(200);
 
   // Decline DROPS every proposed item, but a DECIDED plan still shows its outcome
-  // in the review rail — the detail island refetches into the declined-outcome
-  // rail, NOT the "no proposals" empty state (MOTIR-1377: the empty guard used to
-  // shadow the rail's declined branch for a zero-item declined plan).
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Declined');
-  await expect(page.getByText('Plan declined — your tree was left untouched')).toBeVisible();
+  // in the review rail — the declined-outcome rail, NOT the "no proposals" empty
+  // state (MOTIR-1377: the empty guard used to shadow the rail's declined branch
+  // for a zero-item declined plan).
+  await page.goto(`/plans/${seed.declinePlan.id}?view=canvas`); // decided: the plan page renders
+  await expect(main.getByTestId('plan-status-pill')).toContainText('Declined');
+  await expect(main.getByText('Plan declined — your tree was left untouched')).toBeVisible();
 
   // ── MOTIR-3160 / MOTIR-3161 (bug MOTIR-3154) — …ALONGSIDE the cards ────────
   //
@@ -263,7 +274,7 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   // offered and refused. The MOTIR-1377 outcome assertion above is UNCHANGED in
   // meaning and still passes; what is new is that it now stands beside the cards
   // it decided about.
-  const declinedCard = page.getByTestId('plan-item-node').filter({ hasText: seed.declineProposal });
+  const declinedCard = main.getByTestId('plan-item-node').filter({ hasText: seed.declineProposal });
   await expect(declinedCard).toHaveCount(1);
   // By TEXT, not by a class — a colour-only treatment must not pass here either.
   await expect(declinedCard.getByTestId('plan-item-outcome')).toHaveText('declined');
@@ -330,25 +341,34 @@ test('Plans: approving on a project that already has code shows the items, not t
   });
 
   await signIn(page, seed.email, PLANS_SEED_PASSWORD);
-  await page.goto(`/plans/${seed.declinePlan.id}`);
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is
+  // undecided, so it is approved in the overlay's footer — the same approve route,
+  // and the same server-side `proposeRepositorySet` gate this test is about.
+  const overlay = await openUndecidedPlan(page, seed.declinePlan.id);
 
   const approveResponse = page.waitForResponse(
     (r) =>
       r.url().includes(`/api/plans/${seed.declinePlan.id}/approve`) &&
       r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: /Approve.*to your backlog/ }).click();
+  await overlay
+    .getByTestId('plan-change-confirm-bar')
+    .getByRole('button', { name: 'Approve', exact: true })
+    .click();
   expect((await approveResponse).status()).toBe(200);
 
-  // Approved, WITHOUT re-navigating — the surface the user is left looking at is
-  // the one under test.
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
+  // Approved — and the plan's page, which is where the hosting step's band is
+  // drawn from the server's proposed set, is the surface under test. It no longer
+  // follows the approve WITHOUT a navigation (the approve happens in the overlay),
+  // so the band's absence is read on the decided page's fresh render.
+  await page.goto(`/plans/${seed.declinePlan.id}`); // decided: the plan page renders
+  const main = page.getByRole('main');
+  await expect(main.getByTestId('plan-status-pill')).toContainText('Approved');
 
   // The hosting step is ABSENT …
-  await expect(page.getByText('Motir will host your code')).toHaveCount(0);
+  await expect(main.getByText('Motir will host your code')).toHaveCount(0);
   // … and the canvas is still showing the plan's own items.
-  await expect(page.getByText(seed.declineProposal)).toBeVisible();
+  await expect(main.getByText(seed.declineProposal)).toBeVisible();
 
   // ⚠️ READ against Part VI §4 by MOTIR-3163, and UNCHANGED — deliberately.
   // Part VI re-decides what the pane holds when a set IS proposed: the step now
@@ -358,7 +378,7 @@ test('Plans: approving on a project that already has code shows the items, not t
   // summoned, not about a step that was replaced. Both assertions therefore mean
   // exactly what they meant before, and the count below still pins the durable
   // half. The BAND's own case is pinned by the `PlanDetail` component test.
-  await expect(page.getByTestId('plan-detail-establish-band')).toHaveCount(0);
+  await expect(main.getByTestId('plan-detail-establish-band')).toHaveCount(0);
 
   // And nothing was provisioned: the visible half of this defect was a screen, the
   // durable half was a row that should never have existed.
@@ -394,13 +414,22 @@ test('Plans: a long unbreakable title never overflows the rail, and the status t
     data: { title: LONG_TITLE },
   });
 
+  // ⚠️ DECIDED FIRST (Story MOTIR-7883 · MOTIR-7887, 2026-10-08): an undecided plan
+  // now opens in the planning overlay, which has no review rail. The rail — title,
+  // status tag and all — is the same rail on a decided plan's page, so the geometry
+  // is measured there.
+  await plansService.declinePlan(seed.declinePlan.id, {
+    userId: seed.userId,
+    workspaceId: seed.workspaceId,
+  });
+
   await signIn(page, seed.email, PLANS_SEED_PASSWORD);
-  await page.goto(`/plans/${seed.declinePlan.id}`);
+  await page.goto(`/plans/${seed.declinePlan.id}`); // decided: the plan page renders
 
   const rail = page.getByRole('complementary', { name: 'Plan review' });
   await expect(rail).toBeVisible();
-  const pill = page.getByTestId('plan-status-pill');
-  await expect(pill).toContainText('Ready to review');
+  const pill = rail.getByTestId('plan-status-pill');
+  await expect(pill).toContainText('Declined');
   const heading = page.getByRole('heading', { level: 2, name: LONG_TITLE });
   await expect(heading).toBeVisible();
 

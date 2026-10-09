@@ -1,8 +1,8 @@
 import { PLAN_SESSION_STATE_VALUES } from '@/lib/dto/planSessions';
-import { plansService } from '@/lib/services/plansService';
 
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   seedPlansSurface,
   APPROVED_PLAN_COUNT,
@@ -43,7 +43,7 @@ import type { Page } from '@playwright/test';
 // ── The two tests, and why they are two ──────────────────────────────────────
 //
 // The first is the RECORDING: steps 1–6, paced for a person, chaptered. The
-// second is the pageerror sweep and the empty / concurrent-decision states — it
+// second is the pageerror sweep and the empty states — it
 // runs at a 600px-high viewport and resizes a list mid-flight, which is a thing
 // to ASSERT and not a thing to watch. Recording it would put a jarring
 // window-shrink in the middle of the receipt and teach a reviewer nothing about
@@ -438,9 +438,7 @@ test('Plans: the filter, ten at a time, who started a decided plan, the list vie
   });
 });
 
-test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a plan decided under you', async ({
-  page,
-}) => {
+test('Plans: the empty filter, an empty list view, and a list that SHRINKS', async ({ page }) => {
   await page.setViewportSize(SHORT_VIEWPORT);
   const seed = await seedPlansSurface('plans-surface-states@example.com');
   await signIn(page, seed.email, PLANS_SURFACE_PASSWORD);
@@ -468,11 +466,23 @@ test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a pl
   await expect(page.getByRole('link', { name: 'Plan with AI' })).toHaveCount(1);
 
   // ── EMPTY, one altitude down: the LIST view of a plan with nothing to list ──
-  await page.goto(`/plans/${seed.emptyPlanId}?view=list`);
-  // SCOPED TO `main` — the empty title is a `<p>` in `PlanProposalList`, not the
-  // `EmptyState` heading MOTIR-4822 converted, so there is no role to ask for.
-  await expect(page.getByRole('main').getByText('No proposals')).toBeVisible();
-  await expect(proposalList(page)).toHaveCount(0);
+  //
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887): the plan is still `generating`,
+  // so it is read in the planning overlay, which renders the same
+  // `PlanProposalViews`. The List switch is pressed HERE rather than through the
+  // helper's `view: 'list'`, which waits for `plan-proposal-list` — the very
+  // scroller an empty list never mounts. The overlay draws a generating plan LIVE,
+  // so its empty title is the being-written one, not the plan page's
+  // finished-empty "No proposals".
+  const overlay = await openUndecidedPlan(page, seed.emptyPlanId);
+  await overlay
+    .getByRole('group', { name: 'Plan view' })
+    .getByRole('button', { name: 'List', exact: true })
+    .click();
+  // SCOPED TO THE OVERLAY — the empty title is a `<p>` in `PlanProposalList`, not
+  // the `EmptyState` heading MOTIR-4822 converted, so there is no role to ask for.
+  await expect(overlay.getByText('Nothing proposed yet')).toBeVisible();
+  await expect(overlay.getByTestId('plan-proposal-list')).toHaveCount(0);
 
   // ── THE SHRINK, IN BOTH DIRECTIONS ────────────────────────────────────────
   //
@@ -507,43 +517,18 @@ test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a pl
   // BY ROLE, for the same reason as the first Declined-tab assertion (MOTIR-4822).
   await expect(page.getByRole('heading', { name: 'No conversations in this state' })).toBeVisible();
 
-  // ── ERROR: the plan was decided while the reader was looking at it ─────────
-  //
-  // ⚠️ LAST, AND THAT IS ORDER-DEPENDENT rather than arbitrary: it puts a plan
-  // into `Declined`, which is the tab every leg above needs EMPTY. Run it
-  // earlier and the two empty-state assertions become assertions about a
-  // one-row list, which would still pass a `toBeVisible` on the strip and prove
-  // nothing about the state they name.
-  //
-  // Staged for real rather than stubbed: the decision is taken THROUGH the
-  // shipped service, from outside the browser, exactly as a colleague in another
-  // tab would take it. The click that follows genuinely 409s.
-  await page.goto(`/plans/${seed.concurrentlyDecidedPlanId}`);
-  await expect(rail(page).getByTestId('plan-status-pill')).toContainText('Ready to review');
-
-  await plansService.declinePlan(seed.concurrentlyDecidedPlanId, {
-    userId: seed.userId,
-    workspaceId: seed.workspaceId,
-  });
-
-  await page.getByRole('button', { name: 'Decline' }).click();
-  // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
-  await page
-    .getByTestId('plan-decline-confirm')
-    .getByRole('button', { name: 'Yes, decline' })
-    .click();
-
-  // ⚠️ A 409 IS NOT AN ERROR ON THIS SURFACE (MOTIR-3240). The plan moved between
-  // render and click and the decision was still made, so the rail shows the
-  // plan's REAL state — never "that didn't work" printed above the answer.
-  await expect(rail(page).getByTestId('plan-status-pill')).toContainText('Declined');
-  await expect(rail(page).getByText('Plan declined — your tree was left untouched')).toBeVisible();
-  // ⚠️ SCOPED TO THE RAIL, because a bare `getByRole('alert')` is never zero in an
-  // App Router document: Next mounts `#__next-route-announcer__` with
-  // `role="alert"` after the first client navigation and leaves it there for the
-  // life of the page. The rail is where the error would be, and it is the only
-  // place the assertion means anything.
-  await expect(rail(page).getByRole('alert')).toHaveCount(0);
+  // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7887): the "plan decided
+  // under you" leg. It goto'd an UNDECIDED (`planned`) plan's page, declined it
+  // through the shipped service from outside the browser, then pressed the RAIL's
+  // Decline + "Yes, decline" and asserted the rail's MOTIR-3240 reconcile (pill
+  // `Declined`, "Plan declined — your tree was left untouched", no rail alert).
+  // That rail exists only on the undecided plan page, which a member no longer
+  // reaches; the overlay answers a concurrent decision differently (the
+  // conversation's "Someone decided this a moment ago." alert, the footer left
+  // in place), so the assertions have no overlay equivalent. Still covered:
+  // `tests/components/plan-approval-surface.test.tsx` (the overlay's decided-first
+  // lines) and `tests/components/use-plan-change-conversation.test.tsx` (a 409
+  // decline → `errorCode: 'decided'`); no e2e drives it.
 
   // The verdict is `afterEach`'s: `pageErrors` empty for this whole walk.
 });
