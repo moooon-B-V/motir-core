@@ -303,9 +303,12 @@ test('Expand on the /ready nudge starts a planning conversation on the stub', as
     await expandAndSend(page, seed.clear);
     await expect.poll(() => onStub(seed.clear)).toEqual({ sessions: 1, userTurns: 1 });
     clearSession = await sessionOn(seed.clear);
+    // Close BEFORE the run proposes, as the overlay-only receipt does: the open
+    // overlay settles its own run when the stream ends, and that settle must not
+    // land on top of the proposal the planner's run files below.
+    await closeOverlay(page);
     // The planner's run proposes three children under the stub.
     planId = await finishSessionPlanWithCards(clearSession, seed.clear.id, CHILDREN);
-    await closeOverlay(page);
 
     expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
       'planned',
@@ -318,6 +321,12 @@ test('Expand on the /ready nudge starts a planning conversation on the stub', as
   });
 
   await chapter('Expand again resumes the same conversation — nothing is sent twice', async () => {
+    // The session still holds exactly ONE plan, the proposal it is resumed onto.
+    expect(
+      (
+        await adminDb.plan.findMany({ where: { sessionId: clearSession }, select: { id: true } })
+      ).map((p) => p.id),
+    ).toEqual([planId]);
     await openReady(page, seed.clear);
     await expandButton(page).click();
     await page.waitForURL(overlayOpen, { timeout: FIRST_PAINT_MS });
