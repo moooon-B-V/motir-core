@@ -298,6 +298,94 @@ describe('Plan it again', () => {
   });
 });
 
+// The fallbacks (MOTIR-7933's top-up): a read that fails never turns an answer into
+// an error, and a carry that fails for an ordinary reason says so once.
+describe('when a read under the answer fails', () => {
+  it('the stale answer still lands on the thread in hand', async () => {
+    submitAsk.mockRejectedValue(staleRefusal());
+    const { result } = await mounted();
+    readSession.mockRejectedValue(new Error('offline'));
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    await waitFor(() => expect(result.current.state.stalePlan?.planId).toBe('plan_s'));
+    expect(result.current.state.session?.id).toBe('s1');
+    expect(result.current.state.errorCode).toBeNull();
+  });
+
+  it('another press won and nothing names its plan: the screen stays as it is', async () => {
+    const { result } = await staleThread();
+    submit.mockRejectedValue(new PlanAgainNotAvailableClientError(409, {}, 'superseded', null));
+    readSession.mockRejectedValue(new Error('offline'));
+    fetchReview.mockClear();
+    await act(async () => {
+      await result.current.planAgain();
+    });
+    expect(result.current.state.stalePlan?.outcome).toBe('superseded');
+    expect(fetchReview).not.toHaveBeenCalled();
+    expect(result.current.state.errorCode).toBeNull();
+  });
+
+  it('another press won and its plan has no proposal yet: the plan is followed, not shown as an error', async () => {
+    const { result } = await staleThread();
+    submit.mockRejectedValue(
+      new PlanAgainNotAvailableClientError(409, {}, 'superseded', 'plan_new'),
+    );
+    fetchReview.mockRejectedValue(new Error('not yet'));
+    await act(async () => {
+      await result.current.planAgain();
+    });
+    expect(result.current.state.planId).toBe('plan_new');
+    expect(result.current.state.review?.id ?? null).not.toBe('plan_new');
+    expect(result.current.state.errorCode).toBeNull();
+  });
+});
+
+describe('a carry that fails', () => {
+  const endedWaiting = (): PlanChangeSessionDto => ({
+    ...session(['Split ACME-40.']),
+    endedAt: '2026-07-27T11:00:00.000Z',
+    endReason: 'restarted',
+    startedByViewer: true,
+    pendingPlanId: 'plan_s',
+  });
+
+  async function onWaiting() {
+    readSession.mockResolvedValue(endedWaiting());
+    fetchReview.mockResolvedValue({ ...FRESH, id: 'plan_s' });
+    const hook = renderHook(() =>
+      usePlanChangeConversation({ sessionId: 's1', onRestarted: vi.fn() }),
+    );
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('review'));
+    return hook;
+  }
+
+  it('for an ordinary reason: the pending turn is withdrawn and the failure is said once', async () => {
+    const { result } = await onWaiting();
+    startCopied.mockRejectedValue(new Error('network'));
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    expect(result.current.state.carrying).toBeNull();
+    expect(result.current.state.errorCode).toBe('FAILED');
+    expect(result.current.state.session?.id).toBe('s1');
+  });
+
+  it('decided, with both re-reads failing: the refusal’s own status decides the face', async () => {
+    const { result } = await onWaiting();
+    startCopied.mockRejectedValue(new PlanSessionPlanDecidedClientError(409, {}, null, 'declined'));
+    fetchReview.mockRejectedValue(new Error('offline'));
+    readSession.mockRejectedValue(new Error('offline'));
+    await act(async () => {
+      await result.current.send('Move PDF.');
+    });
+    expect(result.current.state.decided).toBe('declined');
+    expect(result.current.state.carryDecided).toEqual({ text: 'Move PDF.' });
+    expect(result.current.state.session?.pendingPlanId).toBeNull();
+    expect(result.current.state.errorCode).toBeNull();
+  });
+});
+
 interface Deferred {
   promise: Promise<unknown>;
   resolve: (v: unknown) => void;
