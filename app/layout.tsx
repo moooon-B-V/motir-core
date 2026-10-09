@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
 import { buildThemeInitScript } from '@/lib/theme/init-script';
+import { fontSetHtmlAttrs } from '@/lib/appearance/fontPicks';
 // `metadataBase` + the title/description, built per request. Reaches only
 // `lib/baseUrl.ts` (a zero-import environment reader) — see MOTIR-2505 there.
 import { buildRootMetadata } from '@/lib/rootMetadata';
@@ -101,9 +102,17 @@ export default async function RootLayout({
   // with no flash and no client round-trip. Anonymous visitors keep the
   // localStorage-only path (`applied === null`).
   const session = await getSession();
-  const applied: AppliedAppearanceDto | null = session
-    ? await appearancePreferenceService.getApplied(session.user.id)
+  // ONE read gives both the applied axes and, beside them, the per-language font
+  // picks as `data-font-set-*` attributes (MOTIR-7896) — kept apart so a person
+  // who picked only a font does not have the server's defaults treated as their
+  // four axes.
+  const request = session
+    ? await appearancePreferenceService.getAppliedForRequest(session.user.id)
     : null;
+  const applied: AppliedAppearanceDto | null = request?.appearance ?? null;
+  // The page language's pick, stamped on the first byte; theme.css's
+  // `:lang(…)[data-font-set-…]` block then draws that face. Signed out: none.
+  const fontSetAttrs = request ? fontSetHtmlAttrs(request.fontSetAttrs, locale) : {};
 
   // The fully server-resolvable axes render directly on <html> so they paint on
   // the first byte. `data-theme` is the exception: an explicit `light`/`dark` is
@@ -125,6 +134,7 @@ export default async function RootLayout({
       className={`${fontVariables} antialiased`}
       suppressHydrationWarning
       {...serverThemeAttrs}
+      {...fontSetAttrs}
     >
       <head>
         {/*
@@ -141,7 +151,14 @@ export default async function RootLayout({
           string. This is the standard theme-init pattern (next-themes,
           shadcn/ui, dooooWeb).
         */}
-        <script dangerouslySetInnerHTML={{ __html: buildThemeInitScript(applied) }} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: buildThemeInitScript(
+              applied,
+              request ? { mode: 'server', byLocale: request.fontSetAttrs } : { mode: 'clear' },
+            ),
+          }}
+        />
         {/*
           Product analytics (MOTIR-1163 · production-service-stack.md §5).
           Rendered SERVER-side from `PLAUSIBLE_SCRIPT_SRC`, through the single

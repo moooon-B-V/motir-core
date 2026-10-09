@@ -5,10 +5,11 @@ import { resolveStyle } from '@/lib/theme/styles';
 import { resolvePalette } from '@/lib/theme/palettes';
 import { resolveType } from '@/lib/theme/typography';
 import { resolveAxesToApplied } from '@/lib/theme/appearance-resolution';
-import { FONT_SET_LOCALES } from '@motir/design-system';
+import { FONT_SET_LOCALES, fontSetPickAttributes } from '@motir/design-system';
 import {
   FONT_PICK_COLUMN,
   isFontSetMemberOfLocale,
+  type AppliedFontSetAttrs,
   type FontPicks,
 } from '@/lib/appearance/fontPicks';
 
@@ -48,6 +49,25 @@ function toFontPicks(row: UserAppearancePreference | null): FontPicks {
     if (value !== null && isFontSetMemberOfLocale(locale, value)) picks[locale] = value;
   }
   return picks;
+}
+
+/**
+ * The `<html>` attributes each locale's stored pick puts on a page in that
+ * language (MOTIR-7896). A null or stale value, a default member and every
+ * Latin locale contribute no entry, so the `:lang()` block's set default draws;
+ * the roles come from `fontSetPickAttributes`, the derivation the client's
+ * `setFontPick` uses, so both sides stamp identical attributes for one pick.
+ */
+export function toAppliedFontSetAttrs(row: UserAppearancePreference | null): AppliedFontSetAttrs {
+  const attrs: AppliedFontSetAttrs = {};
+  if (!row) return attrs;
+  for (const locale of FONT_SET_LOCALES) {
+    const value = row[FONT_PICK_COLUMN[locale]];
+    if (value === null || !isFontSetMemberOfLocale(locale, value)) continue;
+    const entry = fontSetPickAttributes(locale, value);
+    if (Object.keys(entry).length > 0) attrs[locale] = entry;
+  }
+  return attrs;
 }
 
 /**

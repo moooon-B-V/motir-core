@@ -2,6 +2,8 @@ import {
   FONT_SET_REGISTRY,
   FONT_SET_ROLES,
   LOCALE_FONT_SET,
+  isFontSetLocale,
+  type fontSetPickAttributes,
   type FontSet,
   type FontSetLocale,
   type FontSetMember,
@@ -53,3 +55,22 @@ export const FONT_PICK_COLUMN = {
   pl: 'fontPickPl',
   pt: 'fontPickPt',
 } as const satisfies Record<FontSetLocale, keyof UpsertUserAppearancePreferenceInput>;
+
+/** The `data-font-set-*` attributes one locale's pick puts on `<html>`. */
+export type FontSetHtmlAttrs = ReturnType<typeof fontSetPickAttributes>;
+
+/**
+ * Every locale's attributes for one person (MOTIR-7896), as
+ * `fontSetPickAttributes` derives them; a locale with nothing to stamp is absent.
+ */
+export type AppliedFontSetAttrs = Partial<Record<FontSetLocale, FontSetHtmlAttrs>>;
+
+/**
+ * The entry for the page's language: the lower-cased primary subtag of `lang`
+ * (`ja-JP` → ja), or `{}` when that is no font-set locale or has no entry. It
+ * selects; the roles were derived by `fontSetPickAttributes`.
+ */
+export function fontSetHtmlAttrs(applied: AppliedFontSetAttrs, lang: string): FontSetHtmlAttrs {
+  const primary = lang.trim().split(/[-_]/)[0]?.toLowerCase() ?? '';
+  return isFontSetLocale(primary) ? (applied[primary] ?? {}) : {};
+}

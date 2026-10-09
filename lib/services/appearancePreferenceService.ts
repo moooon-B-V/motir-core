@@ -5,6 +5,7 @@ import type { UpsertUserAppearancePreferenceInput } from '@/lib/repositories/use
 import {
   toAppearancePreferenceDto,
   toAppliedAppearanceDto,
+  toAppliedFontSetAttrs,
 } from '@/lib/mappers/appearancePreferenceMappers';
 import type { AppearancePreferenceDto, AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
 import { InvalidAppearanceValueError, type AppearanceAxis } from '@/lib/appearance/errors';
@@ -16,6 +17,7 @@ import { isFontSetLocale } from '@motir/design-system';
 import {
   FONT_PICK_COLUMN,
   isFontSetMemberOfLocale,
+  type AppliedFontSetAttrs,
   type FontPicksPatch,
 } from '@/lib/appearance/fontPicks';
 
@@ -67,6 +69,12 @@ function validateAxis(
  * AND at least one axis is non-null — a row with every axis cleared (the user
  * reset everything) carries no real choice, so it is treated as "no preference"
  * and the localStorage path applies (see `getApplied`).
+ *
+ * Font picks (MOTIR-7896) deliberately do NOT count. A non-null `getApplied`
+ * tells the init script the server's four axes are authoritative and overwrites
+ * this device's cache with them, so a person who had picked only a font would
+ * lose their device-local Theme, Style, Palette and Type to the defaults. The
+ * picks travel beside the applied axes instead (`getAppliedForRequest`).
  */
 function hasStoredPreference(row: UserAppearancePreference | null): boolean {
   if (!row) return false;
@@ -103,9 +111,25 @@ export const appearancePreferenceService = {
    * axis (`update`), so a freshly-seeded user resolves to `null` here.
    */
   async getApplied(userId: string): Promise<AppliedAppearanceDto | null> {
+    return (await this.getAppliedForRequest(userId)).appearance;
+  },
+
+  /**
+   * Everything the root layout applies to `<html>` for one request, from ONE
+   * read (MOTIR-7896): the applied appearance exactly as {@link getApplied}
+   * returns it, and beside it the per-locale `data-font-set-*` attributes the
+   * person's stored font picks resolve to. The picks are kept out of
+   * `appearance` on purpose — see `hasStoredPreference`. Read-only (no `tx`).
+   */
+  async getAppliedForRequest(userId: string): Promise<{
+    appearance: AppliedAppearanceDto | null;
+    fontSetAttrs: AppliedFontSetAttrs;
+  }> {
     const row = await userAppearancePreferenceRepository.findByUserId(userId);
-    if (!hasStoredPreference(row)) return null;
-    return toAppliedAppearanceDto(row);
+    return {
+      appearance: hasStoredPreference(row) ? toAppliedAppearanceDto(row) : null,
+      fontSetAttrs: toAppliedFontSetAttrs(row),
+    };
   },
 
   /**

@@ -267,3 +267,61 @@ describe('appearancePreferenceService.update — fontPicks', () => {
     expect(await db.userAppearancePreference.count({ where: { userId: user.id } })).toBe(1);
   });
 });
+
+// MOTIR-7896 — the first-byte read: applied axes and font-set attributes from
+// one row, with font picks kept out of `appearance`'s null semantics.
+describe('appearancePreferenceService.getAppliedForRequest', () => {
+  async function setRow(userId: string, data: Record<string, string | null>) {
+    await appearancePreferenceService.update(userId, { pattern: 'dark' });
+    await db.userAppearancePreference.update({
+      where: { userId },
+      data: { pattern: null, ...data },
+    });
+  }
+
+  it('returns no appearance and the ja attributes for a row holding only a font pick', async () => {
+    const user = await createTestUser();
+    await setRow(user.id, { fontPickJa: 'm-plus-rounded-1c' });
+
+    expect(await appearancePreferenceService.getAppliedForRequest(user.id)).toEqual({
+      appearance: null,
+      fontSetAttrs: { ja: { 'data-font-set-sans': 'm-plus-rounded-1c' } },
+    });
+    expect(await appearancePreferenceService.getApplied(user.id)).toBeNull();
+  });
+
+  it('returns both a pinned axis and a ko pick', async () => {
+    const user = await createTestUser();
+    await appearancePreferenceService.update(user.id, {
+      styleId: 'soft-playful',
+      fontPicks: { ko: 'nanum-gothic' },
+    });
+
+    const result = await appearancePreferenceService.getAppliedForRequest(user.id);
+
+    expect(result.appearance?.styleId).toBe('soft-playful');
+    expect(result.fontSetAttrs).toEqual({ ko: { 'data-font-set-sans': 'nanum-gothic' } });
+    expect(await appearancePreferenceService.getApplied(user.id)).toEqual(result.appearance);
+  });
+
+  it.each([
+    ['a stale member', 'retired-face'],
+    ['the default member', 'noto-sans-jp'],
+  ])('gives no ja entry for %s', async (_label, value) => {
+    const user = await createTestUser();
+    await setRow(user.id, { fontPickJa: value });
+
+    expect((await appearancePreferenceService.getAppliedForRequest(user.id)).fontSetAttrs).toEqual(
+      {},
+    );
+  });
+
+  it('returns nothing for a user with no row', async () => {
+    const user = await createTestUser();
+
+    expect(await appearancePreferenceService.getAppliedForRequest(user.id)).toEqual({
+      appearance: null,
+      fontSetAttrs: {},
+    });
+  });
+});

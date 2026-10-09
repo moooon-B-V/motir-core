@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { FONT_SET_LOCALES, FONT_SET_REGISTRY, LOCALE_FONT_SET } from '@motir/design-system';
-import { FONT_PICK_COLUMN, isFontSetMemberOfLocale } from '@/lib/appearance/fontPicks';
+import {
+  FONT_PICK_COLUMN,
+  fontSetHtmlAttrs,
+  isFontSetMemberOfLocale,
+} from '@/lib/appearance/fontPicks';
 
 // Pure tests for the per-locale font-pick helpers (MOTIR-7894): membership is
 // derived from the font-set registry, so these assert the derivation rather
@@ -44,5 +48,22 @@ describe('FONT_PICK_COLUMN', () => {
   it('names one distinct column per locale', () => {
     expect(Object.keys(FONT_PICK_COLUMN).sort()).toEqual([...FONT_SET_LOCALES].sort());
     expect(new Set(Object.values(FONT_PICK_COLUMN)).size).toBe(FONT_SET_LOCALES.length);
+  });
+});
+
+describe('fontSetHtmlAttrs (MOTIR-7896)', () => {
+  const applied = { ja: { 'data-font-set-sans': 'm-plus-rounded-1c' } };
+
+  it('selects the page language’s entry by its primary subtag', () => {
+    expect(fontSetHtmlAttrs(applied, 'ja')).toEqual({ 'data-font-set-sans': 'm-plus-rounded-1c' });
+    expect(fontSetHtmlAttrs(applied, 'ja-JP')).toEqual({
+      'data-font-set-sans': 'm-plus-rounded-1c',
+    });
+  });
+
+  it('returns nothing for an unknown language or one with no entry', () => {
+    expect(fontSetHtmlAttrs(applied, 'xx')).toEqual({});
+    expect(fontSetHtmlAttrs(applied, 'ko')).toEqual({});
+    expect(fontSetHtmlAttrs(applied, '')).toEqual({});
   });
 });
