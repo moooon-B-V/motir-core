@@ -153,7 +153,9 @@ test('an agent corrects a plan a reviewer is holding, and the reviewer can see i
   // (the plan page's rail count, read again in step 6).
   const bar = () => overlay.getByTestId('plan-change-confirm-bar');
   await expect(bar()).toContainText('3 added');
-  await expect(overlay.getByText('Payout retries')).toBeVisible();
+  // The list row, by role: the overlay keeps the canvas mounted behind the List
+  // tab, so the bare title text matches the row AND its canvas node.
+  await expect(overlay.getByRole('button', { name: /· Payout retries$/ })).toBeVisible();
 
   // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7887): the timeline read
   // BEFORE the correction (no "proposal corrected" row yet) — the rail draws it
@@ -178,7 +180,9 @@ test('an agent corrects a plan a reviewer is holding, and the reviewer can see i
 
   // ── 4 · Reopened — the CORRECTED structure is what renders ────────────────
   overlay = await openUndecidedPlan(page, planId, { view: 'list' });
-  await expect(overlay.getByText('Payout schedule (weekly)')).toBeVisible();
+  await expect(
+    overlay.getByRole('button', { name: /· Payout schedule \(weekly\)$/ }),
+  ).toBeVisible();
   await expect(overlay.getByText('Payout schedule', { exact: true })).toHaveCount(0);
 
   // ── 5 · A proposal is WITHDRAWN, and leaves the plan ──────────────────────
