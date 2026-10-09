@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { shallowReplace } from '@/lib/navigation/shallowUrl';
 import { withoutApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { withPlanningOverlay } from '@/lib/planning/launcher';
+import { planSessionLaunchContext } from '@/lib/planning/planDestination';
 import { fetchPlanReview } from '@/lib/planning/planReviewClient';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
@@ -52,18 +53,14 @@ export function usePlanGateForward(planId: string | null): void {
           return;
         }
         const host = withoutApprovalOverlay(`${pathname}?${searchParams.toString()}`);
-        const first = conversation.targetKeys[0];
         shallowReplace(
           withPlanningOverlay(
             host,
-            first
-              ? {
-                  kind: 'work-item',
-                  itemKey: first,
-                  sessionId: conversation.sessionId,
-                  via: 'approvals',
-                }
-              : { kind: 'project', sessionId: conversation.sessionId, via: 'approvals' },
+            planSessionLaunchContext(
+              conversation.sessionId,
+              conversation.targetKeys[0],
+              'approvals',
+            ),
           ),
         );
       } catch {

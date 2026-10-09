@@ -2,6 +2,7 @@ import { describe, expect, it, expectTypeOf } from 'vitest';
 
 import {
   planRowDestination,
+  planSessionLaunchContext,
   type PlanRowDestination,
   type PlanRowDestinationInput,
 } from '@/lib/planning/planDestination';
@@ -142,5 +143,30 @@ describe('a Visitor’s row lands on the plan’s Visitor page (MOTIR-6888)', ()
         );
       }
     }
+  });
+});
+
+describe('planSessionLaunchContext — the one session→context mapping (MOTIR-7884)', () => {
+  it('anchors at the first key, else opens project-wide; `via` rides only when given', () => {
+    expect(planSessionLaunchContext('s_1', 'MOTIR-812', undefined)).toEqual({
+      kind: 'work-item',
+      itemKey: 'MOTIR-812',
+      sessionId: 's_1',
+    });
+    expect(planSessionLaunchContext('s_1', null, undefined)).toEqual({
+      kind: 'project',
+      sessionId: 's_1',
+    });
+    expect(planSessionLaunchContext('s_1', undefined, 'approvals')).toEqual({
+      kind: 'project',
+      sessionId: 's_1',
+      via: 'approvals',
+    });
+    expect(planSessionLaunchContext('s_1', 'MOTIR-812', 'approvals')).toEqual({
+      kind: 'work-item',
+      itemKey: 'MOTIR-812',
+      sessionId: 's_1',
+      via: 'approvals',
+    });
   });
 });

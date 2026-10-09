@@ -93,8 +93,13 @@ export interface PlanRowDestinationInput {
   routes?: ReaderRoutes;
 }
 
-/** The overlay context a session opens at: anchored at its first key, else project-wide. */
-function launchContext(
+/**
+ * The overlay context a session opens at: anchored at its first key, else
+ * project-wide. Exported (MOTIR-7884) so every door that turns a session into an
+ * overlay address — the approval overlay's plan forward among them — asks this
+ * one function rather than restating the ternary.
+ */
+export function planSessionLaunchContext(
   sessionId: string,
   anchorKey: string | null | undefined,
   via: PlanningEntrance | undefined,
@@ -135,7 +140,7 @@ export function planRowDestination({
         ? { kind: 'plan-page', href: planPage, reason: 'no-conversation' }
         : {
             kind: 'planning-surface',
-            href: withPlanningOverlay(host, launchContext(sessionId, anchorKey, via)),
+            href: withPlanningOverlay(host, planSessionLaunchContext(sessionId, anchorKey, via)),
           };
     case 'approved':
     case 'declined':
@@ -165,6 +170,6 @@ export function sessionHoldDestination({
   if (routes && routes.identifier !== null) return null;
   return {
     kind: 'planning-surface',
-    href: withPlanningOverlay(host, launchContext(sessionId, anchorKey, undefined)),
+    href: withPlanningOverlay(host, planSessionLaunchContext(sessionId, anchorKey, undefined)),
   };
 }
