@@ -67,6 +67,7 @@ import {
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { planReview, planReviewItem } from '../helpers/planReview';
+import { narrationEntry, narrationRead, narrationSession } from '../helpers/planNarration';
 
 function session(
   bodies: string[],
@@ -457,6 +458,23 @@ describe('the rail — which conversation this is', () => {
       'You can read this conversation. Continuing it needs permission to plan with Motir AI.',
     );
     expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('READ-ONLY still shows the planner’s narration, with its collapse-all control (MOTIR-8064)', () => {
+    const lay = narrationSession('s-lay', 'lay', 'Session handling');
+    renderRail({
+      session: session(['q']),
+      reopened: { startedBy: null, mine: false, lastActivityAt: new Date().toISOString() },
+      readOnly: true,
+      narration: narrationRead([lay], [narrationEntry(1, 's-lay', 'Laying out the work.')]),
+      narrationKept: { planId: 'plan_1', live: [], earlier: [], loadingEarlier: false },
+    });
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByTestId('plan-narration-message').textContent).toBe('Laying out the work.');
+    expect(screen.getByTestId('plan-narration-head-line').textContent).toContain(
+      'Laying out Session handling',
+    );
+    expect(screen.getByTestId('plan-narration-toggle-all')).toBeTruthy();
   });
 });
 
