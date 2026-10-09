@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, type ReactNode } from 'react';
+import { useRef, type CSSProperties, type ReactNode } from 'react';
 import { Check, Monitor, Moon, Sun } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { STYLE_IDS, STYLE_REGISTRY, type StyleId } from '../../theme/styles';
@@ -80,6 +80,10 @@ export interface AxisOption<T extends string> {
   leading?: ReactNode;
   /** Optional class on the label span (e.g. a per-type font scope). */
   labelClassName?: string;
+  /** Optional inline style on the label span (e.g. a font-set member's face). */
+  labelStyle?: CSSProperties;
+  /** Optional content after the label inside the chip (e.g. a script sample). */
+  detail?: ReactNode;
   /** Optional data-* attrs on the chip so it can preview that axis value. */
   scope?: Record<string, string>;
 }
@@ -143,7 +147,10 @@ export function AxisRadioGroup<T extends string>({
             )}
           >
             {opt.leading}
-            <span className={opt.labelClassName}>{opt.label}</span>
+            <span className={opt.labelClassName} style={opt.labelStyle}>
+              {opt.label}
+            </span>
+            {opt.detail}
             {selected ? <Check className="size-3.5 shrink-0" aria-hidden /> : null}
           </button>
         );

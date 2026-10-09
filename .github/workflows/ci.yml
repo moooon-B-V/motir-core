@@ -2823,6 +2823,54 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm test:coverage:plan-progress
 
+  story-7974-coverage:
+    name: Coverage (tool-call narration)
+    runs-on: ubuntu-latest
+    # Story MOTIR-7974 (one line per tool call on the planning rail) — MOTIR-7981's
+    # per-file floor over the files the story wrote
+    # (`vitest.coverage.tool-call-narration.config.ts`): the per-call rules and the
+    # act record, measured by the story gate (a recorded stream through the relay,
+    # the reader, the fold and the rail) and the per-card suites against Postgres.
+    # Locally it ran 9 files in under a minute; the 20-minute ceiling is the
+    # neighbouring lanes', which do the same install, migrate and package build.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-7974
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-7974
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-7974.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-7974.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm test:coverage:tool-call-narration
+
   story-7883-coverage:
     name: Coverage (plan approval only in the overlay)
     runs-on: ubuntu-latest
@@ -3160,6 +3208,7 @@ jobs:
         story-7820-coverage,
         story-7883-coverage,
         story-7928-coverage,
+        story-7974-coverage,
         story-7602-coverage,
         story-7797-coverage,
         e2e,

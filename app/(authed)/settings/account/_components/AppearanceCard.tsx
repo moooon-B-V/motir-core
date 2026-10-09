@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { TriangleAlert } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { StyleVignette } from '@/components/theme/StyleVignette';
@@ -12,11 +12,14 @@ import {
   ThemeSegmentedControl,
   TypePicker,
 } from '@/components/theme/AppearancePickers';
+import { isFontSetLocale } from '@motir/design-system';
 import { useTheme } from '@/lib/contexts/theme-context';
+import type { FontPicks } from '@/lib/appearance/fontPicks';
 import { STYLE_REGISTRY } from '@/lib/theme/styles';
 import { PALETTE_REGISTRY } from '@/lib/theme/palettes';
 import { TYPE_REGISTRY } from '@/lib/theme/typography';
 import type { ThemePattern } from '@/lib/theme/types';
+import { LanguageFontPicker, fontPickOptions } from './LanguageFontPicker';
 
 /**
  * The Appearance pane's controls + showcase (Story 7.3 · Subtask 7.3.58) — Motir's
@@ -39,9 +42,17 @@ import type { ThemePattern } from '@/lib/theme/types';
  * user to every device, reconciled from the seq-guarded 200 body. A failed save
  * degrades quietly via the `syncState: 'error'` footer below — the local switch is
  * never lost. The pane opens reflecting the server-seeded preference (7.3.61).
+ *
+ * Typography follows the page's language (MOTIR-7899, the revision-3 design in
+ * `design/settings/appearance--fonts-by-language.mock.html`): a Latin-script
+ * page lists the type pairings, and a page whose language has its own fonts
+ * lists those instead, seeded from the stored picks the server page passes in.
  */
-export function AppearanceCard() {
+export function AppearanceCard({ initialFontPicks = {} }: { initialFontPicks?: FontPicks }) {
   const t = useTranslations('settings.appearance');
+  const locale = useLocale();
+  const fontLocale = isFontSetLocale(locale) ? locale : null;
+  const languageFonts = fontLocale !== null && fontPickOptions(fontLocale).members.length > 0;
   const {
     pattern,
     styleId,
@@ -139,15 +150,25 @@ export function AppearanceCard() {
             <PalettePicker value={palette} onChange={setPalette} label={t('palette.name')} />
           </AxisField>
 
-          <AxisField
-            name={t('type.name')}
-            help={t('type.help')}
-            note={
-              <AxisNote name={TYPE_REGISTRY[type].name} tagline={TYPE_REGISTRY[type].tagline} />
-            }
-          >
-            <TypePicker value={type} onChange={setType} label={t('type.name')} />
-          </AxisField>
+          {languageFonts ? (
+            <AxisField name={t('type.name')} help={t('type.help')}>
+              <LanguageFontPicker
+                locale={fontLocale}
+                initialFontPicks={initialFontPicks}
+                label={t('type.name')}
+              />
+            </AxisField>
+          ) : (
+            <AxisField
+              name={t('type.name')}
+              help={t('type.help')}
+              note={
+                <AxisNote name={TYPE_REGISTRY[type].name} tagline={TYPE_REGISTRY[type].tagline} />
+              }
+            >
+              <TypePicker value={type} onChange={setType} label={t('type.name')} />
+            </AxisField>
+          )}
         </div>
       </Card>
 

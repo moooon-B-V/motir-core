@@ -219,6 +219,9 @@ describe('the due set', () => {
 
   it('SKIPS a request cancelled between the SELECT and the write — the day-29 cancel sticks', async () => {
     const user = await createTestUser();
+    await adminDb.userAppearancePreference.create({
+      data: { userId: user.id, fontPickJa: 'm-plus-rounded-1c' },
+    });
     await scheduleDue(user.id);
     const emailBefore = (await readUser(user.id)).email;
 
@@ -242,6 +245,11 @@ describe('the due set', () => {
     expect(after.name).toBe('Owner');
     // The credential survives too — a skipped erasure erases NOTHING, not "less".
     expect(await adminDb.account.count({ where: { userId: user.id } })).toBe(1);
+    // And so do the font picks (MOTIR-7898).
+    expect(
+      (await adminDb.userAppearancePreference.findUniqueOrThrow({ where: { userId: user.id } }))
+        .fontPickJa,
+    ).toBe('m-plus-rounded-1c');
   });
 
   it('REFUSES to erase the last owner of a shared organization, and leaves the request scheduled', async () => {
@@ -316,6 +324,26 @@ describe('DELETED — what is theirs alone', () => {
     });
     expect(completed.status).toBe('completed');
     expect(completed.completedAt).not.toBeNull();
+  });
+
+  it('deletes the appearance preference, font picks included (MOTIR-7898)', async () => {
+    const user = await createTestUser();
+    await adminDb.userAppearancePreference.create({
+      data: {
+        userId: user.id,
+        pattern: 'dark',
+        fontPickJa: 'm-plus-rounded-1c',
+        fontPickKo: 'nanum-gothic',
+      },
+    });
+    await scheduleDue(user.id);
+
+    await accountErasureSweepService.sweep();
+
+    // The user row is ANONYMISED, not deleted, so the FK cascade never fires:
+    // only the explicit delete in the erasure removes this row.
+    expect(await adminDb.user.count({ where: { id: user.id } })).toBe(1);
+    expect(await adminDb.userAppearancePreference.count({ where: { userId: user.id } })).toBe(0);
   });
 
   it('RELEASES the real address, so the person can open a new account with it', async () => {

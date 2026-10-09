@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 // authority for transactions, validation, axis defaults, and DTO mapping; this
 // leaf holds none of that.
 //
-// Layer rules (CLAUDE.md): the write (`upsert`) REQUIRES `tx`; the pure read
+// Layer rules (CLAUDE.md): the writes (`upsert`, `deleteByUserId`) REQUIRE `tx`; the pure read
 // (`findByUserId`) uses the `db` singleton. No business logic, no transactions,
 // no DTO mapping.
 //
@@ -18,7 +18,8 @@ import { db } from '@/lib/db';
 // absence-semantics).
 
 /**
- * The patch an `upsert` applies — any subset of the four axes. An `undefined`
+ * The patch an `upsert` applies — any subset of the four axes and the eleven
+ * per-locale font picks. An `undefined`
  * field is left untouched; passing `null` explicitly clears an axis back to its
  * default. The service validates each value before it reaches here.
  */
@@ -27,6 +28,19 @@ export interface UpsertUserAppearancePreferenceInput {
   styleId?: string | null;
   paletteId?: string | null;
   typeId?: string | null;
+  // One optional font-set member id per locale (Story MOTIR-7736 · Subtask
+  // MOTIR-7894). Same untouched-vs-cleared semantics as the four axes above.
+  fontPickEn?: string | null;
+  fontPickZh?: string | null;
+  fontPickJa?: string | null;
+  fontPickKo?: string | null;
+  fontPickDe?: string | null;
+  fontPickFr?: string | null;
+  fontPickEs?: string | null;
+  fontPickIt?: string | null;
+  fontPickNl?: string | null;
+  fontPickPl?: string | null;
+  fontPickPt?: string | null;
 }
 
 export const userAppearancePreferenceRepository = {
@@ -50,5 +64,15 @@ export const userAppearancePreferenceRepository = {
       create: { userId, ...patch },
       update: patch,
     });
+  },
+
+  /**
+   * Remove the user's row, if any (account erasure, MOTIR-7898). Required `tx`
+   * (rides the erasure transaction). Returns the number of rows removed: 0 for a
+   * user who never pinned anything.
+   */
+  async deleteByUserId(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.userAppearancePreference.deleteMany({ where: { userId } });
+    return result.count;
   },
 };

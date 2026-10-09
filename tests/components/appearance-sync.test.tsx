@@ -27,6 +27,7 @@ function preference(over: Partial<AppearancePreferenceDto> = {}): AppearancePref
     styleId: STYLE_IDS[0]!,
     paletteId: PALETTE_IDS[0]!,
     typeId: TYPE_IDS[0]!,
+    fontPicks: {},
     ...over,
   };
 }
@@ -175,5 +176,164 @@ describe('ThemeProvider cross-device sync (7.3.62)', () => {
     });
     expect(screen.getByTestId('sync').textContent).toBe('idle');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+// MOTIR-7897 — the per-language font pick: page-locale picks re-type <html> in
+// the handler, other-locale picks touch no DOM, and both ride the shared
+// debounced, seq-guarded PATCH, merged per locale.
+describe('ThemeProvider setFontPick (MOTIR-7897)', () => {
+  const html = document.documentElement;
+  const fontAttrs = () => ({
+    sans: html.getAttribute('data-font-set-sans'),
+    serif: html.getAttribute('data-font-set-serif'),
+    mono: html.getAttribute('data-font-set-mono'),
+  });
+
+  function FontProbe() {
+    const { fontPicks, setFontPick, setType, syncState } = useTheme();
+    return (
+      <div>
+        <span data-testid="picks">{JSON.stringify(fontPicks)}</span>
+        <span data-testid="sync">{syncState}</span>
+        <button onClick={() => setFontPick('ja', 'm-plus-rounded-1c')}>ja-mplus</button>
+        <button onClick={() => setFontPick('ja', null)}>ja-auto</button>
+        <button onClick={() => setFontPick('ko', 'nanum-gothic')}>ko-nanum</button>
+        <button onClick={() => setType(TYPE_IDS[1]!)}>type</button>
+      </div>
+    );
+  }
+
+  function renderFontProbe(signedIn: boolean) {
+    return render(
+      <ThemeProvider signedIn={signedIn}>
+        <FontProbe />
+      </ThemeProvider>,
+    );
+  }
+
+  const picks = () => JSON.parse(screen.getByTestId('picks').textContent ?? '{}');
+  const flush = () =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+
+  beforeEach(() => {
+    html.lang = 'ja';
+    for (const role of ['sans', 'serif', 'mono']) html.removeAttribute(`data-font-set-${role}`);
+  });
+
+  afterEach(() => {
+    html.lang = '';
+    for (const role of ['sans', 'serif', 'mono']) html.removeAttribute(`data-font-set-${role}`);
+  });
+
+  it('applies a page-locale pick to <html> in the same tick, and null removes it', async () => {
+    fetchMock.mockResolvedValue(okResponse(preference({ fontPicks: { ja: 'm-plus-rounded-1c' } })));
+    renderFontProbe(true);
+
+    fireEvent.click(screen.getByText('ja-mplus'));
+    expect(fontAttrs()).toEqual({ sans: 'm-plus-rounded-1c', serif: null, mono: null });
+    expect(picks()).toEqual({ ja: 'm-plus-rounded-1c' });
+
+    fireEvent.click(screen.getByText('ja-auto'));
+    expect(fontAttrs()).toEqual({ sans: null, serif: null, mono: null });
+    expect(picks()).toEqual({ ja: null });
+  });
+
+  it('changes no attribute for another language’s pick', () => {
+    // The pending pick flushes on unmount, so the write needs an answer.
+    fetchMock.mockResolvedValue(okResponse(preference({ fontPicks: { ko: 'nanum-gothic' } })));
+    renderFontProbe(true);
+
+    fireEvent.click(screen.getByText('ko-nanum'));
+
+    expect(fontAttrs()).toEqual({ sans: null, serif: null, mono: null });
+    expect(picks()).toEqual({ ko: 'nanum-gothic' });
+  });
+
+  it('sends two locales and another axis picked inside one window as ONE PATCH', async () => {
+    fetchMock.mockResolvedValue(
+      okResponse(
+        preference({
+          typeId: TYPE_IDS[1]!,
+          fontPicks: { ja: 'm-plus-rounded-1c', ko: 'nanum-gothic' },
+        }),
+      ),
+    );
+    renderFontProbe(true);
+
+    fireEvent.click(screen.getByText('ja-mplus'));
+    fireEvent.click(screen.getByText('ko-nanum'));
+    fireEvent.click(screen.getByText('type'));
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/appearance-preference');
+    expect(JSON.parse(opts.body as string)).toEqual({
+      typeId: TYPE_IDS[1]!,
+      fontPicks: { ja: 'm-plus-rounded-1c', ko: 'nanum-gothic' },
+    });
+    expect(picks()).toEqual({ ja: 'm-plus-rounded-1c', ko: 'nanum-gothic' });
+    expect(screen.getByTestId('sync').textContent).toBe('idle');
+  });
+
+  it('keeps the newer pick when an older flush’s response resolves late', async () => {
+    let resolveFirst!: (r: Response) => void;
+    fetchMock
+      .mockReturnValueOnce(
+        new Promise<Response>((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockResolvedValueOnce(okResponse(preference({ fontPicks: {} })));
+    renderFontProbe(true);
+
+    fireEvent.click(screen.getByText('ja-mplus'));
+    await flush(); // flush 1 (ja = m-plus) in flight
+    fireEvent.click(screen.getByText('ja-auto'));
+    await flush(); // flush 2 (ja = null) resolves first
+
+    await act(async () => {
+      resolveFirst(okResponse(preference({ fontPicks: { ja: 'm-plus-rounded-1c' } })));
+    });
+
+    expect(picks()).toEqual({ ja: null });
+    expect(fontAttrs().sans).toBeNull();
+  });
+
+  it.each([
+    ['a 422 refusal', () => Promise.resolve({ ok: false, status: 422, json: async () => ({}) })],
+    ['a rejected fetch', () => Promise.reject(new Error('offline'))],
+  ])('keeps the pick and surfaces the error state on %s', async (_label, failure) => {
+    fetchMock
+      .mockImplementationOnce(failure)
+      .mockResolvedValueOnce(okResponse(preference({ fontPicks: { ko: 'nanum-gothic' } })));
+    renderFontProbe(true);
+
+    fireEvent.click(screen.getByText('ja-mplus'));
+    await flush();
+
+    expect(screen.getByTestId('sync').textContent).toBe('error');
+    expect(picks()).toEqual({ ja: 'm-plus-rounded-1c' });
+    expect(fontAttrs().sans).toBe('m-plus-rounded-1c');
+
+    // A later successful save clears the state.
+    fireEvent.click(screen.getByText('ko-nanum'));
+    await flush();
+    expect(screen.getByTestId('sync').textContent).toBe('idle');
+  });
+
+  it('does nothing for a signed-out visitor', async () => {
+    renderFontProbe(false);
+
+    fireEvent.click(screen.getByText('ja-mplus'));
+    await flush();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fontAttrs()).toEqual({ sans: null, serif: null, mono: null });
+    expect(picks()).toEqual({});
+    expect(localStorage.length).toBe(0);
   });
 });

@@ -274,7 +274,8 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     table: 'user_appearance_preference',
     model: 'userAppearancePreference',
     tier: 'identity',
-    basis: 'The cross-device appearance preference (theme, density, typeface).',
+    basis:
+      'The cross-device appearance preference: theme, style, palette, type pairing, and the font picked for each language.',
     where: byUserId,
   },
   {

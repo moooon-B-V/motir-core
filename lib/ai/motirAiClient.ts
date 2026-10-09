@@ -1679,14 +1679,88 @@ export async function offboardCodeGraph(input: {
 // to call is MOTIR-2139, in the other repo
 // (`docs/decisions/code-graph-index-fleet.md` §11).
 
-// GET /v1/jobs/:id/stream — yield SSE frames (status / done / error) as they
-// arrive; the generator ends when the stream closes (motir-ai closes it on a
-// terminal state). A transport failure throws a typed error before the first
-// yield.
+// GET /v1/jobs/:id/stream — yield SSE frames (status / progress / done / error)
+// as they arrive, FOLLOWING THE JOB TO ITS END. A transport failure throws a
+// typed error before the first yield.
+//
+// ⚠️ ONE motir-ai stream is a WINDOW, not the job (MOTIR-7985). motir-ai holds a
+// stream open for five minutes and then closes it with `done { timedOut: true }`
+// whatever the job's status — a transport limit, not an outcome. Relayed as-is,
+// that `done` read as "the run settled" to every consumer: the planning rail
+// said "Nothing came back to change" five minutes into a run that went on for
+// fifteen more, and never heard how it really ended. So this generator
+// re-subscribes on a timed-out `done` and swallows it; the only `done` it yields
+// is the one motir-ai writes on a terminal status.
+//
+// A re-subscribe replays the job from seq 0 (motir-ai's contract §2.1), so
+// {@link followJobStream} drops what this caller has already been handed:
+// progress frames by their `seq`, and the opening `status` frame when it repeats
+// the last status relayed.
+//
 // `coreProjectId` is required for the same reason as {@link getJob} — see the ⚠️
 // there. The stream is the same passthrough one layer down, so it had the same
 // hole and takes the same parameter.
-export async function* streamJob(
+export function streamJob(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+  return followJobStream(() => streamJobWindow(jobId, coreProjectId));
+}
+
+/** Whether a `done` frame is motir-ai closing a stream WINDOW rather than the job
+ *  ending — `done { timedOut: true }`, written when the stream's deadline passes. */
+export function isStreamWindowTimeout(frame: JobStreamEvent): boolean {
+  return (
+    frame.event === 'done' &&
+    typeof frame.data === 'object' &&
+    frame.data !== null &&
+    (frame.data as { timedOut?: unknown }).timedOut === true
+  );
+}
+
+/**
+ * Chain stream WINDOWS into one stream of the job (MOTIR-7985). `openWindow`
+ * subscribes once; every window that ends on a timed-out `done` is followed by
+ * another, until one ends any other way — a terminal `done`, an `error` frame,
+ * or the upstream closing. Frames a later window replays are dropped, so the
+ * caller sees each progress frame once and in order.
+ */
+export async function* followJobStream(
+  openWindow: () => AsyncIterable<JobStreamEvent>,
+): AsyncGenerator<JobStreamEvent> {
+  let lastSeq = 0;
+  let lastStatus: unknown = undefined;
+  for (;;) {
+    let windowClosed = false;
+    for await (const frame of openWindow()) {
+      if (isStreamWindowTimeout(frame)) {
+        windowClosed = true;
+        break;
+      }
+      if (frame.event === 'status') {
+        const status = fieldOf(frame.data, 'status');
+        if (status !== undefined && status === lastStatus) continue;
+        lastStatus = status;
+      } else {
+        const seq = fieldOf(frame.data, 'seq');
+        if (typeof seq === 'number') {
+          if (seq <= lastSeq) continue;
+          lastSeq = seq;
+        }
+      }
+      yield frame;
+    }
+    if (!windowClosed) return;
+  }
+}
+
+function fieldOf(data: unknown, key: string): unknown {
+  return typeof data === 'object' && data !== null
+    ? (data as Record<string, unknown>)[key]
+    : undefined;
+}
+
+// One subscription to `GET /v1/jobs/:id/stream` — one WINDOW of the job. Ends
+// when motir-ai closes the stream: on the job's terminal status, or when the
+// window's deadline passes (`done { timedOut: true }`).
+async function* streamJobWindow(
   jobId: string,
   coreProjectId: string,
 ): AsyncGenerator<JobStreamEvent> {

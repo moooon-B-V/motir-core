@@ -3,7 +3,7 @@
 import { useLayoutEffect } from 'react';
 import { GlobalErrorContent, useGlobalErrorLocale } from '@/components/errors/GlobalErrorContent';
 import { localeDir } from '@/lib/i18n/locales';
-import { themeInitScript } from '@/lib/theme/init-script';
+import { globalErrorInitScript } from '@/lib/theme/init-script';
 import { fontVariables } from './fonts';
 import './globals.css';
 
@@ -21,9 +21,11 @@ import './globals.css';
 //     failed, so this runs the theme init script with NO server preference:
 //     it applies the appearance last stored on THIS device (the signed-in
 //     layout reconciles that store on every page) and resolves `system` through
-//     `matchMedia`. Ink and ground then both come from `--el-*` under the ONE
-//     `data-theme` it sets — never ink from the OS over a ground from the app,
-//     which is how MOTIR-4708's 404 rendered at 1.00 : 1;
+//     `matchMedia`. The per-language font picks come from the same device
+//     cache (MOTIR-7896): the page language's `data-font-set-*` attributes the
+//     last signed-in render stored here. Ink and ground then both come from
+//     `--el-*` under the ONE `data-theme` it sets — never ink from the OS over
+//     a ground from the app, which is how MOTIR-4708's 404 rendered at 1.00 : 1;
 //   - the LOCALE and its catalog — see `GlobalErrorContent`.
 //
 // The script runs twice on purpose, and it is idempotent: inline in `<head>` for
@@ -32,7 +34,7 @@ import './globals.css';
 
 function applyStoredAppearance() {
   const script = document.createElement('script');
-  script.text = themeInitScript;
+  script.text = globalErrorInitScript;
   document.head.appendChild(script);
   script.remove();
 }
@@ -55,7 +57,7 @@ export default function GlobalError({
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: globalErrorInitScript }} />
       </head>
       <body>
         <GlobalErrorContent error={error} retry={retry} locale={locale} />

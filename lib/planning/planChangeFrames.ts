@@ -41,6 +41,41 @@
 // surfaces where a developer sees it instead of vanishing. Do not read the
 // snapshot as a guarantee; read it as the set somebody has actually decided
 // about.
+//
+// ⚠️ TWO KINDS JOINED THE LIST AHEAD OF THEIR PRODUCER, NOT FROM A SWEEP
+// (Story MOTIR-7974 · MOTIR-7976): `tool_call` and `tool_call_failed`. No
+// `motir-ai` emitted either when they were added. They are the per-call frame
+// contract below, accepted here FIRST so the consumer is ready before the
+// producer talks — which is the opposite order from every other entry, and the
+// reason a re-run of the sweep will not find them until the emitters land.
+//
+// ── THE PER-CALL WIRE CONTRACT (MOTIR-7974) ─────────────────────────────────
+// The motir-ai emitters (MOTIR-7977 for retrieval calls, MOTIR-7978 for the
+// walk's own session tools) send EXACTLY these field names. motir-ai sends
+// STRUCTURE only — it never formats a sentence and never sees a locale; the
+// words are motir-core's message catalogues.
+//
+//   event: tool_call            — emitted AS THE CALL STARTS
+//     { callId: string,         // unique within the job
+//       tool: string,           // the raw tool name, always present
+//       family: string,         // one of TOOL_CALL_FAMILIES
+//       verb: string,           // one of TOOL_CALL_VERBS
+//       object: { kind: 'path' | 'query' | 'item' | 'parent' | 'none', value?: string },
+//       itemRef?: string | null }  // the item the calling AUTHOR session is writing
+//                                  // (its key, or its title when it has no key yet)
+//
+//   event: retrieval            — UNCHANGED as shipped, the AFTER-call audit:
+//     { tool, family, ok, args, blocked?, callId?: string }
+//     A `callId` joins it to its `tool_call`: `ok: false` marks that call
+//     FAILED, `blocked: true` (an older producer's shape) marks it SKIPPED, and a
+//     success draws nothing more — the call's line already says it.
+//
+//   event: tool_call_failed     — a refused or erroring WALK WRITE
+//     { callId: string, reason: 'refused' | 'error', code?: string }
+//     (retrieval calls report through `retrieval.ok` instead).
+//
+// A value outside its closed set is not an error on the wire: the rail reads it
+// as `null` and shows the family's — or the generic — line. Nothing here throws.
 
 import type { PlanChangeProgress } from '@/lib/hooks/usePlanChangeConversation';
 
@@ -99,6 +134,8 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'target_read',
   'target_settled',
   'token',
+  'tool_call',
+  'tool_call_failed',
   'turn',
   'validate_early_ask',
   'validated',
@@ -152,6 +189,9 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
    *  text is blank (`signalNote` returns early), so "its absence is not an empty
    *  row" is guaranteed upstream as well as here. */
   note: { show: 'note' },
+  /** ONE LINE PER TOOL CALL, drawn as the call STARTS (MOTIR-7974). Added ahead
+   *  of its producer — see the header. */
+  tool_call: { show: 'call' },
 
   // ── THE OUTCOMES (narrated before this card; unchanged by it) ─────────────
   pass: { show: 'proposed' },
@@ -190,6 +230,10 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
   validate_early_ask: { quiet: OTHER_SURFACE },
   validity_reopen: { quiet: OTHER_SURFACE },
 
+  tool_call_failed: {
+    quiet: 'consumed as a mark on its tool_call act, never a line of its own',
+  },
+
   token: { quiet: BOOKKEEPING },
   packed: { quiet: BOOKKEEPING },
   wired: { quiet: BOOKKEEPING },
@@ -208,6 +252,46 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
   target_read: { quiet: NOT_AN_ACT },
   target_settled: { quiet: NOT_AN_ACT },
 };
+
+/** The closed VERB set a `tool_call` frame names (MOTIR-7974). */
+export const TOOL_CALL_VERBS = [
+  'read',
+  'search',
+  'explore',
+  'look_up',
+  'lay',
+  'write',
+  'add',
+  'update',
+  'remove',
+  'validate',
+  'settle',
+] as const;
+export type ToolCallVerb = (typeof TOOL_CALL_VERBS)[number];
+
+/**
+ * The closed FAMILY set: the six retrieval families `motir-ai` offers
+ * (`RETRIEVAL_FAMILIES` in `src/llm/retrievalTools.ts`, `code_read` carrying
+ * `read_file` and `list_changed_files`) and the five walk families.
+ */
+export const TOOL_CALL_FAMILIES = [
+  'plan_tree',
+  'code_graph',
+  'code_health',
+  'code_read',
+  'web',
+  'lessons',
+  'lay',
+  'author',
+  'item',
+  'validate',
+  'settle',
+] as const;
+export type ToolCallFamily = (typeof TOOL_CALL_FAMILIES)[number];
+
+/** What a call acts ON. `none` is a call with no specific object. */
+export const TOOL_CALL_OBJECT_KINDS = ['path', 'query', 'item', 'parent', 'none'] as const;
+export type ToolCallObjectKind = (typeof TOOL_CALL_OBJECT_KINDS)[number];
 
 /** Is this a kind somebody has decided about? */
 export function isKnownFrameKind(event: string): event is PlanChangeFrameKind {

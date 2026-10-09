@@ -42,7 +42,14 @@ import {
   PlanSessionPlanStaleClientError,
   type StalePlanFinishedCard,
 } from '@/lib/planning/planSessionClientErrors';
-import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
+import {
+  FRAME_DISPOSITIONS,
+  TOOL_CALL_FAMILIES,
+  TOOL_CALL_VERBS,
+  isKnownFrameKind,
+  type ToolCallFamily,
+  type ToolCallVerb,
+} from '@/lib/planning/planChangeFrames';
 import {
   streamAskJob,
   streamAugmentJob,
@@ -154,6 +161,31 @@ export type PlanChangeProgress =
   | { kind: 'note'; text: string }
   | { kind: 'proposed'; count: number }
   | { kind: 'validating' }
+  /**
+   * ONE TOOL CALL the planner STARTED (Story MOTIR-7974 · MOTIR-7976) — read off
+   * the `tool_call` frame, whose wire contract is written down in
+   * `lib/planning/planChangeFrames.ts`.
+   *
+   * Every field is nullable because the frame is parsed DEFENSIVELY: a field
+   * missing, of the wrong type or outside its closed set is `null`, and the rail
+   * then shows the family's (or the generic) line — never a hole and never the
+   * text "undefined". `outcome` starts `running`; a LATER frame carrying the same
+   * `callId` marks it (`applyPlanFrame`), so a failed lookup or a refused write
+   * never reads as a success.
+   */
+  | {
+      kind: 'call';
+      callId: string | null;
+      tool: string | null;
+      family: ToolCallFamily | null;
+      verb: ToolCallVerb | null;
+      object: { kind: 'path' | 'query' | 'item' | 'parent'; value: string } | null;
+      itemRef: string | null;
+      /** `refused` is a walk write the walk refused (`tool_call_failed` with
+       *  reason `refused`); `failed` an error or an `ok: false` lookup. The
+       *  design (MOTIR-7975) marks the two with different words. */
+      outcome: 'running' | 'failed' | 'refused' | 'skipped';
+    }
   /**
    * ⚠️ A frame NOBODY HAS DECIDED ABOUT — the LOUD default (MOTIR-4069).
    *
@@ -483,6 +515,78 @@ function withoutReading(acts: PlanChangeProgress[]): PlanChangeProgress[] {
   return acts.filter((act) => act.kind !== 'reading');
 }
 
+/**
+ * The longest object value a `call` act keeps. A MEMORY guard, not the display
+ * cap — how much of a path or query the rail SHOWS is the design's and the
+ * renderer's; this only stops a pathological frame from growing the record.
+ */
+export const TOOL_CALL_VALUE_MAX = 2000;
+
+/** A non-blank string, or null — never a throw, never `"undefined"`. */
+function nonBlank(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+/** `raw` if it is a member of the closed set, else null. */
+function memberOf<T extends string>(set: readonly T[], raw: unknown): T | null {
+  return typeof raw === 'string' && (set as readonly string[]).includes(raw) ? (raw as T) : null;
+}
+
+const CALL_OBJECT_KINDS = ['path', 'query', 'item', 'parent'] as const;
+
+/** Parse a `tool_call` frame's payload into its act — total over ANY input. */
+function narrateToolCall(d: Record<string, unknown>): PlanChangeProgress {
+  const rawObject = d['object'];
+  let object: Extract<PlanChangeProgress, { kind: 'call' }>['object'] = null;
+  if (rawObject !== null && typeof rawObject === 'object') {
+    const o = rawObject as Record<string, unknown>;
+    // `none` is a call with no specific object, so it is absent here exactly as
+    // a missing object is: both read as the family's generic line.
+    const kind = memberOf(CALL_OBJECT_KINDS, o['kind']);
+    const value = nonBlank(o['value']);
+    if (kind && value) object = { kind, value: value.slice(0, TOOL_CALL_VALUE_MAX) };
+  }
+  return {
+    kind: 'call',
+    callId: nonBlank(d['callId']),
+    tool: nonBlank(d['tool']),
+    family: memberOf(TOOL_CALL_FAMILIES, d['family']),
+    verb: memberOf(TOOL_CALL_VERBS, d['verb']),
+    object,
+    itemRef: nonBlank(d['itemRef']),
+    outcome: 'running',
+  };
+}
+
+/** The statuses a planning job ENDS on — motir-ai's terminal set (MOTIR-7985). */
+const TERMINAL_JOB_STATUSES: ReadonlySet<string> = new Set(['succeeded', 'failed', 'canceled']);
+
+function frameField(data: unknown, key: string): unknown {
+  return typeof data === 'object' && data !== null
+    ? (data as Record<string, unknown>)[key]
+    : undefined;
+}
+
+/** Wait before subscribing again to a job whose stream closed while it still ran:
+ *  1s, doubling, at most 15s — a connection that keeps dropping is not hammered.
+ *  Resolves early on abort; the caller checks `aborted` before it waits. */
+function pauseBeforeResubscribe(attempt: number, signal: AbortSignal): Promise<void> {
+  const ms = Math.min(1000 * 2 ** attempt, 15_000);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 /** Map one raw SSE frame to the narration the rail shows, or null to ignore it. */
 export function narrateFrame(event: string, data: unknown): PlanChangeProgress | null {
   const d = (data ?? {}) as Record<string, unknown>;
@@ -540,6 +644,8 @@ export function narrateFrame(event: string, data: unknown): PlanChangeProgress |
       const raw = d['proposed'];
       return { kind: 'proposed', count: typeof raw === 'number' ? raw : 0 };
     }
+    case 'call':
+      return narrateToolCall(d);
     case 'searching':
       return { kind: 'searching' };
     case 'drilling':
@@ -552,6 +658,81 @@ export function narrateFrame(event: string, data: unknown): PlanChangeProgress |
       // rather than a silent null — the same mistake, one level in.
       return null;
   }
+}
+
+/** The part of the state one planning frame can change. */
+export type PlanFrameState = Pick<PlanChangeConversationState, 'progress' | 'acts'>;
+
+/**
+ * Apply one frame of a PLANNING run to the act record and the live line
+ * (Story MOTIR-7974 · MOTIR-7976).
+ *
+ * {@link narrateFrame} stays a pure one-frame → one-act function — that is the
+ * totality test's contract. JOINING a later frame to an earlier act needs the
+ * record, so it lives here:
+ *
+ *  1. a `retrieval` whose `callId` matches a `call` act (newest first) MARKS it —
+ *     `skipped` for `blocked: true` (an older producer's shape), `failed` for
+ *     `ok: false` — and appends NOTHING. A matched success changes nothing: the
+ *     call's line already says it, and a second line per lookup is the log sheet
+ *     3 of `plan-change-run-live.mock.html` forbids;
+ *  2. a `tool_call_failed` with a matching `callId` marks it — `refused` for
+ *     reason `refused`, else `failed`; with no match it does nothing — a mark has
+ *     no line of its own;
+ *  3. anything else — a `retrieval` with no `callId` or none that matches (an
+ *     older producer, a job that emits no `tool_call`) included — narrates and
+ *     appends exactly as before, replacing the live line.
+ *
+ * A mark on the act the live line holds updates the live line too. Matching is
+ * by `callId` ALONE, so parallel author sessions interleave in arrival order and
+ * each mark finds its own call. Returns the SAME object when nothing changes.
+ */
+export function applyPlanFrame(
+  state: PlanFrameState,
+  event: string,
+  data: unknown,
+): PlanFrameState {
+  if (event === 'retrieval' || event === 'tool_call_failed') {
+    const d = (data ?? {}) as Record<string, unknown>;
+    const callId = nonBlank(d['callId']);
+    const index = callId === null ? -1 : findCallAct(state.acts, callId);
+    if (index >= 0) {
+      const outcome: 'failed' | 'refused' | 'skipped' | null =
+        event === 'tool_call_failed'
+          ? d['reason'] === 'refused'
+            ? 'refused'
+            : 'failed'
+          : d['blocked'] === true
+            ? 'skipped'
+            : d['ok'] === false
+              ? 'failed'
+              : null;
+      if (outcome === null) return state;
+      const current = state.acts[index]!;
+      const marked = { ...current, outcome } as PlanChangeProgress;
+      const acts = state.acts.slice();
+      acts[index] = marked;
+      return { acts, progress: state.progress === current ? marked : state.progress };
+    }
+    // A failure mark for a call this record never saw: nothing to mark, and a
+    // mark is never a line of its own (`tool_call_failed` is QUIET).
+    if (event === 'tool_call_failed') return state;
+  }
+  const progress = narrateFrame(event, data);
+  // APPEND to the rail and REPLACE the live line, in one update. A quiet frame
+  // yields null and does neither, which is the decision the disposition map
+  // recorded rather than a frame falling through.
+  if (!progress) return state;
+  return { progress, acts: [...state.acts, progress] };
+}
+
+/** The index of the newest `call` act carrying `callId`, or -1. */
+function findCallAct(acts: readonly PlanChangeProgress[], callId: string): number {
+  for (let i = acts.length - 1; i >= 0; i -= 1) {
+    const act = acts[i]!;
+    if (act.kind === 'call' && act.callId === callId) return i;
+  }
+  return -1;
 }
 
 /**
@@ -938,6 +1119,10 @@ export function usePlanChangeConversation({
     // The address now names the session a restart already swapped in (MOTIR-7650):
     // it is on screen, so there is nothing to open.
     if (sessionId && sessionId === adoptedSessionRef.current) return;
+    // …or names the session a START turn just created (MOTIR-7973): the host
+    // rewrites `planStart` to `planSession=<id>` once the first turn lands, and the
+    // thread it names is the one already on screen, mid-run.
+    if (sessionId && sessionId === stateRef.current.session?.id) return;
     // Any other address opens as it always did, and the adoption is spent: coming
     // BACK to the restarted session's address later must open it again.
     adoptedSessionRef.current = null;
@@ -1316,31 +1501,81 @@ export function usePlanChangeConversation({
             onDone: () => void,
             onFrame: (event: string, data: unknown) => void,
           ) => streamAugmentJob(jobId, controller.signal, onError, onDone, onFrame);
-      await stream(
-        (code) => {
-          failed = true;
-          if (!mountedRef.current) return;
-          const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
-          // The thread and any PRIOR proposal survive — recoverable in place.
+      // The JOB's own status, as its `status` frames report it (MOTIR-7985). The
+      // stream ending says only that a connection closed; this says whether the
+      // run did, and how. `null` when no status frame arrived at all.
+      let jobStatus: string | null = null;
+      let lastSeq = 0;
+      for (let attempt = 0; ; attempt++) {
+        await stream(
+          (code) => {
+            failed = true;
+            if (!mountedRef.current) return;
+            const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
+            // The thread and any PRIOR proposal survive — recoverable in place.
+            setState((s) => ({
+              ...s,
+              phase: s.review ? 'review' : 'idle',
+              progress: null,
+              liveReview: null,
+              errorCode: gated ? null : (code ?? 'FAILED'),
+              outOfCredits: gated,
+            }));
+          },
+          () => {},
+          (event, data) => {
+            if (event === 'status') {
+              const status = frameField(data, 'status');
+              if (typeof status === 'string') {
+                // A re-subscribe opens on the status it left off at: not news.
+                if (status === jobStatus) return;
+                jobStatus = status;
+              }
+            } else {
+              // A re-subscribe replays the job from its first frame; the rail
+              // has narrated those already.
+              const seq = frameField(data, 'seq');
+              if (typeof seq === 'number') {
+                if (seq <= lastSeq) return;
+                lastSeq = seq;
+              }
+            }
+            if (!mountedRef.current) return;
+            // APPEND, REPLACE the live line, or MARK an earlier call — one update,
+            // decided by `applyPlanFrame` (MOTIR-7976). A quiet frame changes
+            // nothing, which is the decision the disposition map recorded rather
+            // than a frame falling through.
+            setState((s) => {
+              const next = applyPlanFrame(s, event, data);
+              return next === s ? s : { ...s, ...next };
+            });
+          },
+        );
+        if (failed || controller.signal.aborted || !mountedRef.current) break;
+        // ⚠️ THE STREAM ENDED, THE JOB DID NOT (MOTIR-7985). The relay follows the
+        // job past motir-ai's stream window itself, so this is a connection that
+        // closed under a run still going — a dropped network, a restarted
+        // server. Settling here would tell the person "Nothing came back" about a
+        // run that is still working, so the rail subscribes again instead.
+        if (jobStatus === null || TERMINAL_JOB_STATUSES.has(jobStatus)) break;
+        await pauseBeforeResubscribe(attempt, controller.signal);
+        if (controller.signal.aborted || !mountedRef.current) break;
+      }
+      if (!failed && jobStatus === 'failed') {
+        // The job FAILED and no reason arrived with it (the relay sends one when
+        // motir-ai has it). Still a failure, never "nothing came back".
+        failed = true;
+        if (mountedRef.current) {
           setState((s) => ({
             ...s,
             phase: s.review ? 'review' : 'idle',
             progress: null,
             liveReview: null,
-            errorCode: gated ? null : (code ?? 'FAILED'),
-            outOfCredits: gated,
+            errorCode: 'FAILED',
+            outOfCredits: false,
           }));
-        },
-        () => {},
-        (event, data) => {
-          if (!mountedRef.current) return;
-          const progress = narrateFrame(event, data);
-          // APPEND to the rail and REPLACE the live line, in one update. A quiet
-          // frame yields null and does neither, which is the decision the
-          // disposition map recorded rather than a frame falling through.
-          if (progress) setState((s) => ({ ...s, progress, acts: [...s.acts, progress] }));
-        },
-      );
+        }
+      }
       if (failed) {
         // The run is OVER at the failure: release it before the end re-read, or
         // a Try again pressed while the re-read waits would find a run still in
@@ -1350,6 +1585,7 @@ export function usePlanChangeConversation({
         return;
       }
       if (!mountedRef.current) return;
+      const canceled = jobStatus === 'canceled';
 
       // SETTLED → first, let the PLANNER SPEAK (MOTIR-2226). The run's result
       // carries the findings report it owes on every turn, and the one question
@@ -1387,7 +1623,7 @@ export function usePlanChangeConversation({
           // the stop — so the review block is live and Approve / Discard are both
           // reachable from the stopped state. That is the card's whole point: if
           // stopping threw the work away, nobody would stop a run.
-          ...(s.stopping ? { stopping: false, stopped: true } : {}),
+          ...(s.stopping || canceled ? { stopping: false, stopped: true } : {}),
         }));
         stoppingRef.current = false;
       } else {
@@ -1408,11 +1644,14 @@ export function usePlanChangeConversation({
           // the planner ASKED and is waiting (`asked`); the user STOPPED it
           // (`s.stopping`); or the run genuinely proposed nothing, which is the
           // only one that is an error.
-          errorCode: asked || s.stopping ? null : 'EMPTY',
+          // A job CANCELED under the rail — a Stop pressed elsewhere, the
+          // abandoned-plan sweep — is the same outcome as a stop pressed here
+          // (MOTIR-7985): `EMPTY` is only ever a run that SUCCEEDED with nothing.
+          errorCode: asked || s.stopping || canceled ? null : 'EMPTY',
           // The interval closes HERE and only here: the stream has ended, so the
           // walk reached its boundary and read the flag. Until this moment the
           // bar says "stopping", which is the honest thing to say.
-          ...(s.stopping ? { stopping: false, stopped: true } : {}),
+          ...(s.stopping || canceled ? { stopping: false, stopped: true } : {}),
         }));
         stoppingRef.current = false;
       }

@@ -1,6 +1,7 @@
 import type { ProjectContext } from '@/lib/projects';
 import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { MotirAiConfigError } from '@/lib/ai/errors';
 import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
@@ -183,7 +184,22 @@ async function submitConversationJob(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  const context: JobContextBag = { prompt, ...(anchorKey ? { anchorKey } : {}) };
+  // The CODE half (MOTIR-7922): the same planning producer the plan-edit submits
+  // use (`aiPlanEditsService`), on THIS one submit so it covers both `ask_project`
+  // and `debug_bug`. motir-ai offers its code-graph tools only when
+  // `context.code.repos[]` names a repository, so without it every question and
+  // every debug turn ran code-blind on a fully indexed project. `undefined` means
+  // "no connected repo", and the key is then OMITTED, never sent empty.
+  const code = await resolvePlanningCodeContext({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    projectId: ctx.projectId,
+  });
+  const context: JobContextBag = {
+    prompt,
+    ...(anchorKey ? { anchorKey } : {}),
+    ...(code ? { code } : {}),
+  };
   return submitJob(kind, tenantFor(ctx, organizationId, isMeta, internalBilling), context, {
     userId: ctx.userId,
   });

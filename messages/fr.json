@@ -3571,7 +3571,8 @@
       },
       "type": {
         "name": "Typographie",
-        "help": "L’association de polices pour les titres et le corps du texte."
+        "help": "L’association de polices pour les titres et le corps du texte.",
+        "automatic": "Automatique ({font})"
       },
       "showcase": {
         "eyebrow": "Votre apparence, en direct dans Motir",
@@ -4394,18 +4395,10 @@
     "nudge": {
       "body": "Seulement {count} élément de travail prêt : développer {key} ({title}) ?",
       "expandLabel": "Développer",
-      "expanding": "Développement…",
+      "expandHint": "Ouvre la planification Motir AI sur {key}. Elle peut d’abord vous demander ce que vous voulez planifier.",
       "dismissAria": "Ignorer la suggestion de développement",
       "dismissLabel": "Ignorer",
-      "emptyHint": "Aucun élément n’est prêt : développer une ébauche ajoutera du nouveau travail.",
-      "reviewTitle": "Enfants proposés",
-      "opChange": "modifier",
-      "opRemove": "supprimer",
-      "approveLabel": "Approuver",
-      "approving": "Approbation…",
-      "declineLabel": "Refuser",
-      "approved": "{count, plural, one {# enfant créé} other {# enfants créés}}",
-      "error": "Une erreur s’est produite ({code})."
+      "emptyHint": "Aucun élément n’est prêt : développer une ébauche ajoutera du nouveau travail."
     },
     "lanes": {
       "switchAria": "Couloirs des éléments prêts",
@@ -7432,6 +7425,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "Planifier {key}"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {
@@ -7582,7 +7578,83 @@
           "codeGraph": "graphe de code",
           "codeHealth": "santé du code",
           "web": "web",
-          "lessons": "leçons"
+          "lessons": "leçons",
+          "codeRead": "dépôt"
+        },
+        "call": {
+          "tool": {
+            "skeleton": "Lecture de la structure du plan",
+            "search_work_items": "Recherche de « {query} » dans les éléments de travail",
+            "search_work_items_semantic": "Recherche de « {query} » dans les éléments de travail",
+            "get_item": "Consultation de {item}",
+            "get_subtree": "Lecture des éléments sous {item}",
+            "walk_blocking": "Recherche de ce qui bloque {item}",
+            "code_search": "Recherche de « {query} » dans le code",
+            "code_explore": "Exploration du code autour de « {query} »",
+            "code_callers": "Recherche des appelants de {symbol}",
+            "code_callees": "Recherche de ce qu’appelle {symbol}",
+            "code_impact": "Vérification de l’impact d’une modification de {symbol}",
+            "code_node": "Lecture de {symbol} dans le graphe de code",
+            "get_coding_convention": "Lecture des conventions de code",
+            "get_code_health": "Lecture du rapport de santé du code",
+            "read_file": "Lecture de {path}",
+            "list_changed_files": "Liste des fichiers modifiés sur la branche",
+            "web_search": "Recherche de « {query} » sur le web",
+            "search_lessons": "Recherche de « {query} » dans les leçons",
+            "lay": "Disposition du niveau sous {parent}",
+            "drill_into": "Ouverture de {parent} pour disposer ses enfants",
+            "propose_node": "Proposition de « {title} »",
+            "complete_level": "Finalisation de ce niveau",
+            "target_already_covered": "Cible déjà couverte, c’est noté",
+            "author": "Début de la rédaction de {item}",
+            "deepen_node": "Rédaction de la description et des critères d’acceptation de {item}",
+            "raise_gap": "Signalement d’une lacune dans le plan",
+            "add_item": "Ajout de « {title} »",
+            "update_item": "Mise à jour de {item}",
+            "remove_item": "Suppression de {item}",
+            "log_bug": "Signalement d’un bug : « {title} »",
+            "validate_plan": "Vérification du plan",
+            "settle_conversation": "Arbitrage des changements sous {parent}",
+            "ask_user": "Rédaction d’une question pour vous",
+            "clear_plan": "Effacement du brouillon du plan",
+            "search_planning_rules": "Recherche de « {query} » dans les règles de planification",
+            "report_findings": "Rédaction de ses conclusions",
+            "log_planning_mistake": "Consignation d’une erreur de planification",
+            "log_planning_bug": "Signalement d’un bug de planification",
+            "classify_revision": "Classification de la révision",
+            "return_to_conversation": "Retour à la conversation"
+          },
+          "family": {
+            "plan_tree": "Lecture du plan",
+            "code_graph": "Lecture du graphe de code",
+            "code_health": "Lecture de la santé du code",
+            "code_read": "Lecture du dépôt",
+            "web": "Recherche sur le web",
+            "lessons": "Lecture des leçons",
+            "lay": "Disposition d’un niveau",
+            "author": "Rédaction d’un élément",
+            "item": "Modification d’un élément",
+            "validate": "Vérification du plan",
+            "settle": "Conclusion de la conversation",
+            "none": "Travail sur le plan"
+          },
+          "mark": {
+            "failed": "· échec",
+            "refused": "· refusé",
+            "skipped": "· ignoré — plus de consultations disponibles"
+          },
+          "count": "{count, plural, one {# appel} other {# appels}}",
+          "countFailed": "{count, plural, one {# appel} other {# appels}} · {failed} en échec",
+          "earlier": "{count, plural, one {# appel précédent} other {# appels précédents}}",
+          "barParallel": "{line} · {title}",
+          "announceFailed": "{line} — échec",
+          "announceRefused": "{line} — refusé",
+          "full": {
+            "path": "Chemin complet : {value}",
+            "query": "Requête complète : {value}",
+            "symbol": "Nom complet : {value}",
+            "title": "Titre complet : {value}"
+          }
         }
       },
       "openerFollowUp": "Vous venez de choisir {label}. Motir AI planifie ce que ce choix conditionne.",

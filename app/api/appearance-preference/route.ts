@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { appearancePreferenceService } from '@/lib/services/appearancePreferenceService';
 import { mapAppearancePreferenceError } from '@/lib/appearance/errorResponse';
+import type { FontPicksPatch } from '@/lib/appearance/fontPicks';
+import { isFontSetLocale } from '@motir/design-system';
 
 // /api/appearance-preference (Story 7.3 · Subtask 7.3.60) — the CURRENT user's
 // cross-device appearance preference (the three design-system axes + the
@@ -11,8 +13,11 @@ import { mapAppearancePreferenceError } from '@/lib/appearance/errorResponse';
 // Routes are HTTP-only (CLAUDE.md): parse → one service call → typed-error→status.
 //
 // GET → 200 { preference: AppearancePreferenceDto } (every axis resolved)
-// PATCH { pattern?, styleId?, paletteId?, typeId? } → 200 { preference }
+// PATCH { pattern?, styleId?, paletteId?, typeId?, fontPicks? } → 200 { preference }
 //   — partial update; unknown field → 400, wrong type → 400, invalid id → 422.
+//   `fontPicks` (Story MOTIR-7736) is `{ [locale]: memberId | null }`: an object
+//   whose keys are the eleven locales and whose values are a string or null;
+//   whether the member belongs to that locale's set is the service's 422.
 //   The response carries the resolved preference so the client updates from it
 //   (no tree re-fetch — the inline-edit-no-whole-tree-refresh contract).
 
@@ -48,7 +53,10 @@ export async function PATCH(req: Request): Promise<Response> {
     );
   }
 
-  const { pattern, styleId, paletteId, typeId, ...rest } = body as Record<string, unknown>;
+  const { pattern, styleId, paletteId, typeId, fontPicks, ...rest } = body as Record<
+    string,
+    unknown
+  >;
   if (Object.keys(rest).length > 0) {
     return NextResponse.json(
       { code: 'BAD_REQUEST', error: `Unknown field: ${Object.keys(rest)[0]}.` },
@@ -70,12 +78,36 @@ export async function PATCH(req: Request): Promise<Response> {
     }
   }
 
+  if (fontPicks !== undefined) {
+    if (typeof fontPicks !== 'object' || fontPicks === null || Array.isArray(fontPicks)) {
+      return NextResponse.json(
+        { code: 'BAD_REQUEST', error: '`fontPicks` must be an object.' },
+        { status: 400 },
+      );
+    }
+    for (const [locale, value] of Object.entries(fontPicks)) {
+      if (!isFontSetLocale(locale)) {
+        return NextResponse.json(
+          { code: 'BAD_REQUEST', error: `Unknown locale: ${locale}.` },
+          { status: 400 },
+        );
+      }
+      if (value !== null && typeof value !== 'string') {
+        return NextResponse.json(
+          { code: 'BAD_REQUEST', error: `\`fontPicks.${locale}\` must be a string or null.` },
+          { status: 400 },
+        );
+      }
+    }
+  }
+
   try {
     const preference = await appearancePreferenceService.update(session.user.id, {
       pattern: pattern as string | null | undefined,
       styleId: styleId as string | null | undefined,
       paletteId: paletteId as string | null | undefined,
       typeId: typeId as string | null | undefined,
+      fontPicks: fontPicks as FontPicksPatch | undefined,
     });
     return NextResponse.json({ preference });
   } catch (err) {

@@ -175,6 +175,27 @@ export type CascadeOutcome =
   | { outcome: 'access_denied'; itemId: string }
   | { outcome: 'unresolvable' };
 
+/**
+ * Some children could not be completed by a cascade pass for a reason that is
+ * not a business refusal (Bug MOTIR-7989). Thrown only after every other child
+ * has been attempted, so it never costs a sibling its completion; the message
+ * names each child left open and why, which is what the job's run log shows.
+ */
+export class ChildCascadeIncompleteError extends Error {
+  constructor(
+    readonly itemId: string,
+    readonly failures: ReadonlyArray<{ childId: string; error: unknown }>,
+  ) {
+    const detail = failures
+      .map((f) => `${f.childId} (${f.error instanceof Error ? f.error.message : String(f.error)})`)
+      .join('; ');
+    super(`The cascade from ${itemId} left ${failures.length} child(ren) open: ${detail}`, {
+      cause: failures[0]?.error,
+    });
+    this.name = 'ChildCascadeIncompleteError';
+  }
+}
+
 export const childStatusCascadeService = {
   /**
    * Complete the item's not-done DIRECT children, if the item has just entered a
@@ -188,7 +209,12 @@ export const childStatusCascadeService = {
    * derivation, by contrast, is a function OF the children's aggregate, which is
    * exactly why that one must lock first.
    *
-   * Never throws for a business reason; returns a typed outcome instead.
+   * Each child moves in its own transaction (MOTIR-7989), which the same
+   * argument permits: no child's write depends on a sibling's.
+   *
+   * Never throws for a business reason; returns a typed outcome instead. Any
+   * other failure surfaces as `ChildCascadeIncompleteError`, after every child
+   * has been attempted.
    */
   async cascadeToChildren(
     itemId: string,
@@ -284,17 +310,23 @@ export const childStatusCascadeService = {
     if (openChildren.length === 0) return { outcome: 'post_dated_only', itemId, postDatedIds };
 
     const ctx = { userId: ownerUserId, workspaceId };
-    const applied: Array<{
-      childId: string;
-      fromStatusKey: string;
-      toStatusKey: string;
-      revisionId: string;
-    }> = [];
+    const applied: string[] = [];
+    const failed: Array<{ childId: string; error: unknown }> = [];
+    let refusal: CascadeOutcome | null = null;
 
-    try {
-      await withWorkspaceContext(ctx, async (tx) => {
-        for (const child of openChildren) {
-          const { transition } = await workItemsService.applyStatusTransition(
+    // ⚠️ ONE TRANSACTION PER CHILD (Bug MOTIR-7989). This loop used to sit
+    // INSIDE one `withWorkspaceContext`, so the whole child set shared Prisma's
+    // default 5 s budget and committed all-or-nothing: MOTIR-7730's 29 children
+    // (~150 ms each in production) were rolled back together, and every
+    // idempotent retry re-ran the same batch. Nothing needs them to commit
+    // together — each child already gets its own event — so each is its own
+    // small transaction, a failing child leaves its siblings committed, and a
+    // retry finds only what is still open (`filterNotDone` above).
+    for (const child of openChildren) {
+      let transition;
+      try {
+        ({ transition } = await withWorkspaceContext(ctx, (tx) =>
+          workItemsService.applyStatusTransition(
             child.id,
             doneKey,
             ctx,
@@ -304,33 +336,44 @@ export const childStatusCascadeService = {
             // `doneKey`, a done-category status, and the mark refuses only a move
             // OUT of that category.
             { system: true },
-          );
-          // Null when the child reached `done` between the read and the write;
-          // that is the outcome we wanted, so there is simply nothing to emit.
-          if (transition) applied.push({ childId: child.id, ...transition });
+          ),
+        ));
+      } catch (err) {
+        // The two business refusals are about the PROJECT (its done status, its
+        // access), not this child, so every later child would meet them too.
+        if (err instanceof UnknownStatusError) {
+          refusal = { outcome: 'no_matching_status', itemId };
+          break;
         }
-      });
-    } catch (err) {
-      if (err instanceof UnknownStatusError) return { outcome: 'no_matching_status', itemId };
-      if (err instanceof ProjectAccessDeniedError || err instanceof ProjectNotFoundError) {
-        return { outcome: 'access_denied', itemId };
+        if (err instanceof ProjectAccessDeniedError || err instanceof ProjectNotFoundError) {
+          refusal = { outcome: 'access_denied', itemId };
+          break;
+        }
+        failed.push({ childId: child.id, error: err });
+        continue;
       }
-      throw err;
-    }
-
-    // Post-commit, never inside the transaction — a rollback must not have
-    // notified. ONE event per child that really moved; each is what carries the
-    // cascade to that child's OWN children.
-    for (const a of applied) {
+      // Null when the child reached `done` between the read and the write;
+      // that is the outcome we wanted, so there is simply nothing to emit.
+      if (!transition) continue;
+      applied.push(child.id);
+      // Post-commit, never inside the transaction — a rollback must not have
+      // notified. ONE event per child that really moved; each is what carries the
+      // cascade to that child's OWN children.
       await sendEvent('work-item/transitioned', {
         workspaceId,
-        workItemId: a.childId,
+        workItemId: child.id,
         actorId: ownerUserId,
-        fromStatusKey: a.fromStatusKey,
-        toStatusKey: a.toStatusKey,
-        revisionId: a.revisionId,
+        fromStatusKey: transition.fromStatusKey,
+        toStatusKey: transition.toStatusKey,
+        revisionId: transition.revisionId,
       });
     }
+
+    // A real fault still fails the job, AFTER every sibling has had its own
+    // chance — the job's retry is what recovers a transient one, and it now
+    // re-attempts only the children this pass left open.
+    if (failed.length > 0) throw new ChildCascadeIncompleteError(itemId, failed);
+    if (refusal) return refusal;
 
     if (applied.length === 0) {
       return postDatedIds.length > 0
@@ -340,7 +383,7 @@ export const childStatusCascadeService = {
     return {
       outcome: 'cascaded',
       itemId,
-      childIds: applied.map((a) => a.childId),
+      childIds: applied,
       toStatus: doneKey,
       ...(postDatedIds.length > 0 ? { postDatedIds } : {}),
     };
