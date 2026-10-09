@@ -438,7 +438,6 @@ function withoutReading(acts: PlanChangeProgress[]): PlanChangeProgress[] {
   return acts.filter((act) => act.kind !== 'reading');
 }
 
-/** Map one raw SSE frame to the narration the rail shows, or null to ignore it. */
 /** The statuses a planning job ENDS on — motir-ai's terminal set (MOTIR-7985). */
 const TERMINAL_JOB_STATUSES: ReadonlySet<string> = new Set(['succeeded', 'failed', 'canceled']);
 
@@ -450,11 +449,10 @@ function frameField(data: unknown, key: string): unknown {
 
 /** Wait before subscribing again to a job whose stream closed while it still ran:
  *  1s, doubling, at most 15s — a connection that keeps dropping is not hammered.
- *  Resolves early on abort. */
+ *  Resolves early on abort; the caller checks `aborted` before it waits. */
 function pauseBeforeResubscribe(attempt: number, signal: AbortSignal): Promise<void> {
   const ms = Math.min(1000 * 2 ** attempt, 15_000);
   return new Promise((resolve) => {
-    if (signal.aborted) return resolve();
     const timer = setTimeout(() => {
       signal.removeEventListener('abort', onAbort);
       resolve();
@@ -467,6 +465,7 @@ function pauseBeforeResubscribe(attempt: number, signal: AbortSignal): Promise<v
   });
 }
 
+/** Map one raw SSE frame to the narration the rail shows, or null to ignore it. */
 export function narrateFrame(event: string, data: unknown): PlanChangeProgress | null {
   const d = (data ?? {}) as Record<string, unknown>;
 

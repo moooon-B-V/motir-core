@@ -574,6 +574,22 @@ describe('usePlanChangeConversation — the stream is not the run (MOTIR-7985)',
     expect(result.current.state.errorCode).toBe('FAILED');
   });
 
+  it('a job that FAILS on a follow-up keeps the earlier review in hand', async () => {
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    expect(result.current.state.phase).toBe('review');
+
+    stream.mockImplementationOnce(streamOf([status('running'), status('failed')]));
+    await act(async () => {
+      await result.current.send('Split it in two.');
+    });
+
+    expect(result.current.state.errorCode).toBe('FAILED');
+    expect(result.current.state.phase).toBe('review');
+  });
+
   it('a job CANCELED under the rail reads as stopped, not as EMPTY', async () => {
     fetchReview.mockResolvedValue(planReview([]));
     stream.mockImplementation(streamOf([status('running'), status('canceled')]));
@@ -598,6 +614,56 @@ describe('usePlanChangeConversation — the stream is not the run (MOTIR-7985)',
 
     expect(stream).toHaveBeenCalledTimes(1);
     expect(result.current.state.errorCode).toBe('EMPTY');
+  });
+
+  it('a job CANCELED after it proposed keeps the review, marked stopped', async () => {
+    stream.mockImplementation(streamOf([status('running'), searched(1), status('canceled')]));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.stopped).toBe(true);
+    expect(result.current.state.errorCode).toBeNull();
+  });
+
+  it('frames with no readable status or seq are narrated, not deduped', async () => {
+    stream.mockImplementation(
+      streamOf([
+        ['status', null],
+        ['status', { jobId: 'job-1' }],
+        ['search', { jobId: 'job-1', relatedCount: 1 }],
+        ['search', { jobId: 'job-1', relatedCount: 2 }],
+      ]),
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    // No status ever arrived, so the end is the run's end: subscribed once.
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(result.current.state.acts.filter((a) => a.kind === 'searching')).toHaveLength(2);
+  });
+
+  it('an unmount during the wait before re-subscribing ends the loop', async () => {
+    stream.mockImplementation(streamOf([status('running')]));
+    const hook = await mounted();
+
+    let sending!: Promise<void>;
+    act(() => {
+      sending = hook.result.current.send('Add recurring invoices.');
+    });
+    await waitFor(() => expect(stream).toHaveBeenCalledTimes(1));
+    hook.unmount();
+    await act(async () => {
+      await sending;
+    });
+
+    expect(stream).toHaveBeenCalledTimes(1);
   });
 });
 
