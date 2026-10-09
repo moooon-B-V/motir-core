@@ -8,6 +8,7 @@ import type { ProjectContext } from '@/lib/projects';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestWorkItem } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { plansService } from '@/lib/services/plansService';
 import { truncateAuthTables } from '../../helpers/db';
 import { renderWithIntl } from '../../helpers/renderWithIntl';
 
@@ -98,18 +99,32 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 
 // ── The page's address ──────────────────────────────────────────────────────
-const nav = vi.hoisted(() => ({ pathname: '/ready', search: '' }));
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
-  usePathname: () => nav.pathname,
-  useSearchParams: () => new URLSearchParams(nav.search),
+// A SUBSCRIBED address, as Next's is: a shallow replace re-renders every reader of
+// `useSearchParams`, which is what re-runs an effect keyed on the address.
+const nav = vi.hoisted(() => ({
+  pathname: '/ready',
+  search: '',
+  listeners: new Set<() => void>(),
 }));
+vi.mock('next/navigation', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const subscribe = (fn: () => void) => {
+    nav.listeners.add(fn);
+    return () => nav.listeners.delete(fn);
+  };
+  return {
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+    usePathname: () => useSyncExternalStore(subscribe, () => nav.pathname),
+    useSearchParams: () => new URLSearchParams(useSyncExternalStore(subscribe, () => nav.search)),
+  };
+});
 const { shallowReplace, shallowPush } = vi.hoisted(() => ({
   shallowReplace: vi.fn((href: string) => {
     window.history.replaceState(null, '', href);
     const url = new URL(href, 'http://localhost:3000');
     nav.pathname = url.pathname;
     nav.search = url.search.replace(/^\?/, '');
+    for (const notify of nav.listeners) notify();
   }),
   shallowPush: vi.fn(),
 }));
@@ -202,7 +217,23 @@ function installFetch(): void {
       unserved.push(`${method} ${url.pathname}`);
       return new Response(JSON.stringify({ code: 'NOT_SERVED' }), { status: 404 });
     };
-    const p = run();
+    // Honour the caller's abort as a browser does: an aborted read REJECTS, and
+    // whatever the handler answers afterwards never reaches the caller.
+    const signal = init?.signal;
+    const handled = run();
+    // The handler's own work is settled even when its caller stopped listening.
+    inFlight.add(handled);
+    void handled.finally(() => inFlight.delete(handled)).catch(() => {});
+    const p = signal
+      ? Promise.race([
+          handled,
+          new Promise<never>((_, reject) => {
+            const abort = () => reject(new DOMException('aborted', 'AbortError'));
+            if (signal.aborted) abort();
+            else signal.addEventListener('abort', abort, { once: true });
+          }),
+        ])
+      : handled;
     inFlight.add(p);
     void p.finally(() => inFlight.delete(p)).catch(() => {});
     return p;
@@ -476,6 +507,44 @@ describe('SEAM: Expand’s address → ONE session on the stub, ONE “Plan <KEY
         OVERLAY_PARAM_NAMES.session,
       ),
     ).toBe(before.sessions[0]!.id);
+    assertNoConversationRequestUnserved();
+  });
+
+  it('a RESUMED conversation holding a proposed plan comes back REVIEWABLE — the address rewrite does not cut its read', async () => {
+    // The stub's conversation already ran, and its plan proposed a child.
+    const earlier = await planRoute(
+      new Request(`${BASE}/api/work-items/${stub.id}/ai/plan`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: startTurn() }),
+      }),
+      { params: Promise.resolve({ id: stub.id }) },
+    );
+    expect(earlier.status).toBe(200);
+    const { planId } = (await earlier.json()) as { planId: string };
+    const ctx = { userId: fx.ownerId, workspaceId: fx.workspaceId };
+    await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Export as CSV', kind: 'subtask' },
+          parentRef: stub.id,
+        },
+      ],
+      ctx,
+    );
+    await plansService.markPlanned(planId, ctx);
+    served.length = 0;
+
+    const view = await launch();
+
+    // The plan was READ to its end — never cut off by the planStart → planSession
+    // replace — and the overlay holds it for a decision.
+    expect(served).toContain(`GET /api/plans/${planId} 200`);
+    expect(shallowReplace).toHaveBeenCalledTimes(1);
+    expect(view.getByTestId('plan-change-confirm-bar')).toBeTruthy();
+    expect(posts(), 'the launch sent nothing').toBe(0);
     assertNoConversationRequestUnserved();
   });
 });

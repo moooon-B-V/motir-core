@@ -490,8 +490,17 @@ function PlanWorkspaceHost({
   // `planStart` and writing `planSession=<id>`, so a reload resumes the
   // conversation rather than asking to start it again. A replace, not a push:
   // Back should not return to an address that asks for a send already made.
+  //
+  // ⚠️ NOT WHILE THE OPEN IS STILL `loading`. A RESUMED thread already holds its
+  // user turn when the open answers, but the open then reads the thread's pending
+  // plan; rewriting the address mid-read re-runs the open effect, which aborts
+  // that read and — the address now naming the thread on screen — does not start
+  // another, so the plan never arrives and its confirm bar never draws.
   const startedSessionId =
-    launch.startTurn && state.session && state.session.turns.some((turn) => turn.role === 'user')
+    launch.startTurn &&
+    state.phase !== 'loading' &&
+    state.session &&
+    state.session.turns.some((turn) => turn.role === 'user')
       ? state.session.id
       : null;
   useEffect(() => {
