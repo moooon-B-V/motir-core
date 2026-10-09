@@ -2831,7 +2831,8 @@ jobs:
     # (`vitest.coverage.tool-call-narration.config.ts`): the per-call rules and the
     # act record, measured by the story gate (a recorded stream through the relay,
     # the reader, the fold and the rail) and the per-card suites against Postgres.
-    # Locally it ran 9 files in under 30 seconds.
+    # Locally it ran 9 files in under a minute; the 20-minute ceiling is the
+    # neighbouring lanes', which do the same install, migrate and package build.
     timeout-minutes: 20
     needs: changes
     if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
@@ -3160,6 +3161,7 @@ jobs:
         story-7631-coverage,
         story-7820-coverage,
         story-7883-coverage,
+        story-7974-coverage,
         story-7602-coverage,
         story-7797-coverage,
         e2e,
