@@ -247,11 +247,12 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
-  // W: authorPlan.ts → plansService.recordPlanStep / endPlanStep — upserts one row per session (a repeat replaces it; `end` on no row is a no-op)
+  // W: authorPlan.ts → plansService.recordPlanStep / endPlanStep — upserts one row per session (a repeat replaces it; `end` on no row is a no-op);
+  //    plansService.recordPlanNarration — APPENDS a session's sentences (a repeat appends them again), so the tool as a whole is not idempotent (MOTIR-8062)
   report_plan_step: {
     readOnlyHint: false,
     destructiveHint: false,
-    idempotentHint: true,
+    idempotentHint: false,
     openWorldHint: false,
   },
   // W: planSession.ts → planChangeSessionsService.openPublic — may create a session; re-acquires target locks (parks cards, extends the lease)

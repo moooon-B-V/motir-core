@@ -2,13 +2,21 @@
 // Services call these just before returning, so no Prisma row (Date objects,
 // the enum types, the raw Json columns) ever crosses the API boundary.
 
-import type { Plan, PlanItem, PlanStep } from '@/generated/prisma/client';
+import type {
+  Plan,
+  PlanItem,
+  PlanNarration,
+  PlanNarrationSession,
+  PlanStep,
+} from '@/generated/prisma/client';
 import type { PlanHistoryItemRow } from '@/lib/repositories/planItemRepository';
 import type {
   PlanDto,
   PlanItemDto,
   PlanItemPatch,
   PlanItemProposedFields,
+  PlanNarrationDto,
+  PlanNarrationSessionDto,
   PlanStepDto,
   PlanWithItemsDto,
   WorkItemPlanHistoryEntryDto,
@@ -88,6 +96,29 @@ export function toPlanStepDto(row: PlanStep): PlanStepDto {
     kind: row.kind,
     targetRef: row.targetRef,
     startedAt: row.startedAt.toISOString(),
+  };
+}
+
+/** One stored narration sentence as it crosses the boundary (MOTIR-8062). */
+export function toPlanNarrationDto(row: PlanNarration): PlanNarrationDto {
+  return {
+    id: row.id,
+    sessionKey: row.sessionKey,
+    seq: row.seq,
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** One session's stored step words as they cross the boundary (MOTIR-8062). */
+export function toPlanNarrationSessionDto(row: PlanNarrationSession): PlanNarrationSessionDto {
+  return {
+    sessionKey: row.sessionKey,
+    stepKind: row.stepKind,
+    targetRef: row.targetRef,
+    targetTitle: row.targetTitle,
+    firstReportedAt: row.firstReportedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 

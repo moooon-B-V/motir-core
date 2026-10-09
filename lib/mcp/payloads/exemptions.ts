@@ -49,7 +49,9 @@ export const EXEMPT_TOOLS = {
     'targetRef, startedAt }` — an advisory progress signal about a plan being written. The ' +
     'stored step is read back only on the cookie-authed plan review (`inFlightSteps`); no ' +
     '`/api/v1` operation returns a plan step, so there is no component to derive from ' +
-    '(MOTIR-7824).',
+    '(MOTIR-7824). A `narration` call returns `{ planId, sessionKey, narration: [{ seq, body }] }` ' +
+    '— the sentences it appended, read back only on the same cookie-authed plan review; no ' +
+    '`/api/v1` operation returns plan narration either (MOTIR-8062).',
   validate_work_item:
     'Returns a subtree FINISHABILITY verdict (valid / blockers / advisories) — a planning ' +
     'judgement computed over a tree, not a representation of a resource. No v1 operation ' +

@@ -734,6 +734,35 @@ export interface PlanStepDto {
 }
 
 /**
+ * One sentence a planner session wrote about its own work (Story MOTIR-8060 ·
+ * MOTIR-8062) — the planner's NARRATION, kept as history. `seq` is the plan's
+ * own order, gapless from 1; `sessionKey` names the session that wrote it.
+ */
+export interface PlanNarrationDto {
+  id: string;
+  sessionKey: string;
+  seq: number;
+  body: string;
+  createdAt: string;
+}
+
+/**
+ * One planner session's STEP WORDS on a plan (MOTIR-8062): the step it last
+ * reported and the target's title as it read then — kept after the session ends,
+ * so the chat panel can head that session's group with its real step. Both
+ * `targetRef` and `targetTitle` are null on `settle`; `targetTitle` is also null
+ * when the target could not be resolved.
+ */
+export interface PlanNarrationSessionDto {
+  sessionKey: string;
+  stepKind: PlanStepKindDto;
+  targetRef: string | null;
+  targetTitle: string | null;
+  firstReportedAt: string;
+  updatedAt: string;
+}
+
+/**
  * A plan as the API returns it (list row). The lifecycle timestamps + decider
  * ARE the history surface (when planned / when decided / by whom). `itemCount`
  * is the number of bundled PlanItems.

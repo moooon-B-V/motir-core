@@ -943,9 +943,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // What a reader picks this one on: it is the only plan door that says what
     // a planner is DOING rather than what it proposes, and it is advisory.
     summary:
-      'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
+      'Report the step a planner session is on (settle, lay, author), narrate it, or end it — an advisory progress signal on a generating plan.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '3909bbcb4967',
+    // Re-pinned for MOTIR-8062: the `narration` arm joins the description.
+    descriptionFingerprint: '8a4719704960',
   },
   open_plan_session: {
     // Re-worded for MOTIR-6028: a scope holds MANY conversations now, and the

@@ -40,6 +40,8 @@ import {
 } from '@/lib/repositories/planItemRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
+import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
+import { PLAN_NARRATION_BATCH_MAX, cleanNarrationSentence } from '@/lib/plans/planNarration';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
   workItemRepository,
@@ -196,6 +198,7 @@ import type {
   ApprovedShapeDivergingRevisionDto,
   WorkItemApprovedShapeVerdictDto,
   WorkItemApprovedShapeVerdictPageDto,
+  PlanNarrationDto,
   PlanStepDto,
   PlanStepKindDto,
 } from '@/lib/dto/plans';
@@ -207,6 +210,7 @@ import {
 import {
   toPlanDto,
   toPlanItemDto,
+  toPlanNarrationDto,
   toPlanStepDto,
   toPlanWithItemsDto,
   toWorkItemPlanHistoryEntryDto,
@@ -4470,6 +4474,39 @@ async function assertStepTarget(
 }
 
 /**
+ * The TITLE a step's target reads as right now (Story MOTIR-8060 · MOTIR-8062),
+ * resolved inside the step's own transaction so the session's stored step words
+ * name what the step named: a proposal's `proposedFields.title`, or a committed
+ * work item's title. `null` for no target or one that resolves to nothing — an
+ * unresolvable title never refuses the step (the step's own target rule already
+ * ran in {@link assertStepTarget}).
+ */
+async function resolveStepTargetTitle(
+  plan: { id: string; projectId: string },
+  targetRef: string | null,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<string | null> {
+  if (targetRef === null) return null;
+  if (targetRef.startsWith(TEMP_REF_PREFIX)) {
+    const item = await planItemRepository.findById(targetRef.slice(TEMP_REF_PREFIX.length), tx);
+    const fields = item?.proposedFields as Record<string, unknown> | null | undefined;
+    const title = fields?.['title'];
+    return typeof title === 'string' ? cleanNarrationSentence(title) : null;
+  }
+  const rows = await withProjectNarrowingSuspended(tx, plan.projectId, () =>
+    workItemRepository.findTitlesByIds([targetRef], ctx.workspaceId, tx),
+  );
+  return rows[0] ? cleanNarrationSentence(rows[0].title) : null;
+}
+
+/** What one `reportPlanStep` call wrote — each door reports which (MOTIR-8062). */
+export type ReportPlanStepResult =
+  | { kind: 'step'; step: PlanStepDto }
+  | { kind: 'end' }
+  | { kind: 'narration'; narration: PlanNarrationDto[] };
+
+/**
  * The one transaction both step writes share (MOTIR-7822): find the plan, assert
  * `ai:view_plan` on the PLAN's project, then lock, re-read, refuse anything but
  * `generating`, run `write`, and stamp the activity — all under the plan row's
@@ -6401,7 +6438,72 @@ export const plansService = {
         { kind: input.kind, targetRef, startedAt: now },
         tx,
       );
+      // The session's STEP WORDS (MOTIR-8062), in the same transaction: the head
+      // its chat-panel group keeps after `end` deletes the step row above.
+      await planNarrationRepository.upsertSession(
+        planId,
+        sessionKey,
+        {
+          stepKind: input.kind,
+          targetRef,
+          targetTitle: await resolveStepTargetTitle(plan, targetRef, ctx, tx),
+        },
+        tx,
+      );
       return toPlanStepDto(row);
+    });
+  },
+
+  /**
+   * Append a session's NARRATION (Story MOTIR-8060 · MOTIR-8062): its own
+   * plain-language sentences about its work, in the order it wrote them, to the
+   * plan's kept history. Each is cleaned to one line and capped; the whole call
+   * is refused — nothing written — when the batch is empty or over
+   * {@link PLAN_NARRATION_BATCH_MAX}, any sentence cleans to nothing, the plan is
+   * not `generating`, or the session holds no step. Accepted sentences take the
+   * next consecutive per-plan `seq` values under the plan row lock, share the
+   * call's server time, and stamp the plan's activity.
+   *
+   * ⚠️ IT NEVER TOUCHES THE STEP. Sentences go to their own table, so the
+   * session's `PlanStep` row (`startedAt` included) and its stored step words
+   * are untouched by construction.
+   */
+  async recordPlanNarration(
+    planId: string,
+    input: { sessionKey: string; narration: unknown },
+    ctx: ServiceContext,
+  ): Promise<PlanNarrationDto[]> {
+    const sessionKey = assertSessionKey(input.sessionKey);
+    const raw = input.narration;
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > PLAN_NARRATION_BATCH_MAX) {
+      throw new InvalidPlanStepError(
+        `\`narration\` is 1 to ${PLAN_NARRATION_BATCH_MAX} sentences — nothing was recorded.`,
+      );
+    }
+    const bodies: string[] = [];
+    for (const sentence of raw) {
+      const body = typeof sentence === 'string' ? cleanNarrationSentence(sentence) : null;
+      if (body === null) {
+        throw new InvalidPlanStepError(
+          'A narration sentence is one non-empty sentence — nothing was recorded.',
+        );
+      }
+      bodies.push(body);
+    }
+    return withGeneratingPlanStep(planId, ctx, async (_plan, tx, now) => {
+      const steps = await planStepRepository.listByPlan(planId, tx);
+      if (!steps.some((step) => step.sessionKey === sessionKey)) {
+        throw new InvalidPlanStepError(
+          `Session \`${sessionKey}\` has no step on this plan — report \`settle\` / \`lay\` / ` +
+            '`author` first; nothing was recorded.',
+        );
+      }
+      const base = await planNarrationRepository.maxSeq(planId, tx);
+      const rows = await planNarrationRepository.createMany(
+        bodies.map((body, i) => ({ planId, sessionKey, seq: base + i + 1, body, createdAt: now })),
+        tx,
+      );
+      return rows.map(toPlanNarrationDto);
     });
   },
 
@@ -6428,21 +6530,50 @@ export const plansService = {
    */
   async reportPlanStep(
     planId: string,
-    input: { sessionKey: string; step: PlanStepKindDto | 'end'; targetRef: string | null },
+    input: {
+      sessionKey: string;
+      step?: PlanStepKindDto | 'end';
+      targetRef: string | null;
+      narration?: string[];
+    },
     ctx: ServiceContext,
-  ): Promise<PlanStepDto | null> {
+  ): Promise<ReportPlanStepResult> {
+    // EXACTLY ONE of `step` / `narration` (MOTIR-8062): a step report re-stamps
+    // `startedAt`, so keeping the two apart is what lets a narration call never
+    // touch the step.
+    const hasStep = input.step !== undefined;
+    const hasNarration = input.narration !== undefined;
+    if (hasStep === hasNarration) {
+      throw new InvalidPlanStepError(
+        'Send exactly one of `step` or `narration` — nothing was recorded.',
+      );
+    }
+    if (hasNarration) {
+      if (input.targetRef !== null) {
+        throw new InvalidPlanStepError(
+          'A `narration` call names no target — send it with none; nothing was recorded.',
+        );
+      }
+      const narration = await plansService.recordPlanNarration(
+        planId,
+        { sessionKey: input.sessionKey, narration: input.narration },
+        ctx,
+      );
+      return { kind: 'narration', narration };
+    }
     if (input.step === 'end') {
       if (input.targetRef !== null) {
         throw new InvalidPlanStepError('An `end` step names no target — send it with none.');
       }
       await plansService.endPlanStep(planId, input.sessionKey, ctx);
-      return null;
+      return { kind: 'end' };
     }
-    return plansService.recordPlanStep(
+    const step = await plansService.recordPlanStep(
       planId,
-      { sessionKey: input.sessionKey, kind: input.step, targetRef: input.targetRef },
+      { sessionKey: input.sessionKey, kind: input.step!, targetRef: input.targetRef },
       ctx,
     );
+    return { kind: 'step', step };
   },
 
   async recordRevisionClassification(
