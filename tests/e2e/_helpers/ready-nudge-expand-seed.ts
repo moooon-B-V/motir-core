@@ -11,7 +11,7 @@
 // rule is not this story's — so these stubs only have to be real work items the
 // overlay can anchor on.
 
-import { db } from '@/lib/db';
+import { adminDb } from '@/tests/helpers/adminDb';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -57,7 +57,7 @@ export async function seedReadyExpand(email: string): Promise<ReadyExpandSeed> {
     workspaceId: workspace.id,
     actorUserId: owner.id,
   });
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
   });
@@ -94,7 +94,10 @@ export async function seedReadyExpand(email: string): Promise<ReadyExpandSeed> {
 
   // The immutable onboarding-ran marker — without it the overlay opens on its
   // onboarding routing first, which this journey is not about.
-  await db.project.update({ where: { id: project.id }, data: { onboardingRanAt: new Date() } });
+  await adminDb.project.update({
+    where: { id: project.id },
+    data: { onboardingRanAt: new Date() },
+  });
 
   return {
     email,
