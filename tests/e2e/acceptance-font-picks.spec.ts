@@ -400,7 +400,9 @@ test.describe('a second browser', () => {
         `data-font-set-sans="${JA_PICK.id}"`,
       );
 
-      await expect(page.getByTestId('dashboard-page')).toBeVisible({ timeout: FIRST_PAINT_MS });
+      await expect(page.getByRole('main').getByTestId('dashboard-page')).toBeVisible({
+        timeout: FIRST_PAINT_MS,
+      });
       const [first] = await japaneseNodes(page, 'sans', 1);
       expect(first, 'the dashboard renders Japanese text in the sans role').toBeDefined();
       await expectDrawnIn(cdp, first!, {
@@ -611,7 +613,9 @@ test('6 · a fresh browser fetches only the faces the page needs', async ({ brow
   try {
     const response = await page.goto('/dashboard');
     expect(await serverHtmlTag(response)).toContain(`data-font-set-sans="${JA_PICK.id}"`);
-    await expect(page.getByTestId('dashboard-page')).toBeVisible({ timeout: FIRST_PAINT_MS });
+    await expect(page.getByRole('main').getByTestId('dashboard-page')).toBeVisible({
+      timeout: FIRST_PAINT_MS,
+    });
     await page.evaluate(() => document.fonts.ready);
     // The log is read BEFORE any probe runs: a probe asks the browser to load
     // the face of the node it measures, which would add files to the log.
