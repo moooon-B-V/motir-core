@@ -142,7 +142,7 @@ describe('the plan page draws the planner narration (MOTIR-8064)', () => {
   });
 
   it('loads the earlier page through the paged read and keeps it above the window', async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
       Response.json({ entries: [narrationEntry(1, 's-a', 'The first one.')], earlierCount: 0 }),
     );
     vi.stubGlobal('fetch', fetchMock);
