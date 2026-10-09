@@ -1,0 +1,3662 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Appearance — Fonts by language (MOTIR-7736 · MOTIR-7895)</title>
+    <!--
+      DESIGN ASSET (HTML mockup, a DELTA) — MOTIR-7895, for the card that builds it
+      (MOTIR-7899, "Build the Fonts by language axis in AppearanceCard"). Amends
+      design-notes.md § Appearance pane and appearance.mock.html, which is NOT edited:
+      this file holds only the panels that change.
+
+      WHAT CHANGES: the Appearance Card gains a fifth AxisField below Typography,
+      "Fonts by language" — eleven rows, one per FONT_SET_LOCALES locale. ja / ko / zh
+      offer Automatic plus the two members of their one multi-member role, each chip
+      previewed in that member's own face; the eight Latin locales show plain text.
+
+      COMPOSED, NOT REDRAWN: the token block is the one auth-frame--language-control.mock.html
+      carries (packages/design-system/theme.css's Tier 0 + dark + the Tier-3 --el-* layer); the
+      FONT SETS section is copied verbatim from theme.css, so a page's lang and a picked member
+      re-type this mock exactly as they re-type the app. Field, chip and footer class strings
+      are the shipped AxisField / AxisRadioGroup / AppearanceCard ones.
+
+      PANELS — review every one:
+        1 Default, English page · 2 Japanese page, ja picked · 3 Japanese page, ko picked
+        4 ja picked under Editorial · 5 Couldn't sync · 6 Preview face loading
+        7 A stale stored pick · 8 Dark · 9 Narrow (~400px)
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Noto+Sans+JP:wght@400;500;600&family=M+PLUS+Rounded+1c:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;600&family=Nanum+Gothic:wght@400;700&family=Noto+Serif+SC:wght@400;600&family=LXGW+WenKai+TC:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --width-rail-chrome: 20px;
+        --spacing-rail-inset: 0px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+        --el-overlay-scrim: #000000a6;
+      }
+
+      /* ── Fonts: the pairing roles and the six member faces ──────────────────
+         The pairing's -source variables stand where next/font assigns them in
+         app/fonts.ts; the --font-set-* variables stand where the build's pane-only
+         loader assigns them. The six CJK faces are the six real members a person
+         can pick (fontSets.ts @ f383bc6d3) — no stand-in face. */
+      :root {
+        --font-sans-source: 'Inter';
+        --font-serif-source: 'Source Serif 4';
+        --font-mono-source: 'JetBrains Mono';
+        --font-editorial-source: 'Fraunces';
+        --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+        --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
+        --font-serif-pairing: var(--font-serif-source, Georgia);
+        --font-serif-tail: serif;
+        --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+        --font-mono-tail: monospace;
+        --font-set-ja-sans-noto-sans-jp: 'Noto Sans JP';
+        --font-set-ja-sans-m-plus-rounded-1c: 'M PLUS Rounded 1c';
+        --font-set-ko-sans-noto-sans-kr: 'Noto Sans KR';
+        --font-set-ko-sans-nanum-gothic: 'Nanum Gothic';
+        --font-set-zh-Hans-serif-noto-serif-sc: 'Noto Serif SC';
+        --font-set-zh-Hans-serif-lxgw-wenkai-tc: 'LXGW WenKai TC';
+      }
+      [data-type='editorial'] {
+        --font-serif-pairing: var(--font-editorial-source), 'Fraunces', Georgia;
+        --font-serif-tail: serif;
+        --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+        --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
+        --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+        --font-mono-tail: monospace;
+      }
+
+      /* ── FONT SETS — copied verbatim from packages/design-system/theme.css ── */
+      /* The composition. A custom property's var() is resolved on the element that
+         DECLARES it, so every element that can change one of the inputs (a pairing,
+         a language, a picked member) re-composes the three roles itself. */
+      :root,
+      [data-type],
+      [lang],
+      [data-font-set-sans],
+      [data-font-set-serif],
+      [data-font-set-mono] {
+        --font-sans:
+          var(--font-sans-pairing, 'Segoe UI'),
+          var(--font-script-sans, var(--font-sans-tail, sans-serif)),
+          var(--font-sans-tail, sans-serif);
+        --font-serif:
+          var(--font-serif-pairing, Georgia),
+          var(--font-script-serif, var(--font-serif-tail, serif)), var(--font-serif-tail, serif);
+        --font-mono:
+          var(--font-mono-pairing, 'SF Mono'),
+          var(--font-script-mono, var(--font-mono-tail, monospace)),
+          var(--font-mono-tail, monospace);
+      }
+
+      /* The script token is declared only on an element that carries a lang
+         attribute, and every element below it INHERITS the value. `:lang()` alone
+         would match every descendant and re-declare the set's default on each one,
+         so a nested [data-type] preview inside a page with a picked member would
+         re-compose with the default and lose the pick.
+
+         Latin: no script face. `initial` makes the token the guaranteed-invalid
+         value, so the composition's fallback (the pairing's own tail) takes the slot
+         and the stack equals the pairing's stack exactly. Listed per locale so a
+         Latin-language element nested in a CJK page resets. A page whose language no
+         set lists matches no block and also gets Latin, as resolveFontSet falls
+         back. */
+      [lang]:lang(en),
+      [lang]:lang(de),
+      [lang]:lang(fr),
+      [lang]:lang(es),
+      [lang]:lang(it),
+      [lang]:lang(nl),
+      [lang]:lang(pl),
+      [lang]:lang(pt) {
+        --font-script-sans: initial;
+        --font-script-serif: initial;
+        --font-script-mono: initial;
+      }
+
+      /* Simplified Chinese (zh-Hans): each role's default member. A CJK mono role
+         draws its Han glyphs from the set's sans face (fontSets.ts sameFaceAs), so
+         the block stays total over the three roles while loading no extra face. */
+      [lang]:lang(zh) {
+        --font-script-sans: var(--font-set-zh-Hans-sans-noto-sans-sc, sans-serif);
+        --font-script-serif: var(--font-set-zh-Hans-serif-noto-serif-sc, serif);
+        --font-script-mono: var(--font-set-zh-Hans-sans-noto-sans-sc, monospace);
+      }
+
+      /* A member picked by name. Comes after the set's block, so on an element
+         carrying both a lang and the attribute this one wins the specificity tie.
+         An id the registry does not list matches nothing and keeps the default. */
+      :lang(zh)[data-font-set-serif='lxgw-wenkai-tc'] {
+        --font-script-serif: var(--font-set-zh-Hans-serif-lxgw-wenkai-tc, serif);
+      }
+
+      /* Japanese (ja): each role's default member. A CJK mono role
+         draws its Han glyphs from the set's sans face (fontSets.ts sameFaceAs), so
+         the block stays total over the three roles while loading no extra face. */
+      [lang]:lang(ja) {
+        --font-script-sans: var(--font-set-ja-sans-noto-sans-jp, sans-serif);
+        --font-script-serif: var(--font-set-ja-serif-noto-serif-jp, serif);
+        --font-script-mono: var(--font-set-ja-sans-noto-sans-jp, monospace);
+      }
+
+      /* A member picked by name. Comes after the set's block, so on an element
+         carrying both a lang and the attribute this one wins the specificity tie.
+         An id the registry does not list matches nothing and keeps the default. */
+      :lang(ja)[data-font-set-sans='m-plus-rounded-1c'] {
+        --font-script-sans: var(--font-set-ja-sans-m-plus-rounded-1c, sans-serif);
+      }
+
+      /* Korean (ko): each role's default member. A CJK mono role
+         draws its Han glyphs from the set's sans face (fontSets.ts sameFaceAs), so
+         the block stays total over the three roles while loading no extra face. */
+      [lang]:lang(ko) {
+        --font-script-sans: var(--font-set-ko-sans-noto-sans-kr, sans-serif);
+        --font-script-serif: var(--font-set-ko-serif-noto-serif-kr, serif);
+        --font-script-mono: var(--font-set-ko-sans-noto-sans-kr, monospace);
+      }
+
+      /* A member picked by name. Comes after the set's block, so on an element
+         carrying both a lang and the attribute this one wins the specificity tie.
+         An id the registry does not list matches nothing and keeps the default. */
+      :lang(ko)[data-font-set-sans='nanum-gothic'] {
+        --font-script-sans: var(--font-set-ko-sans-nanum-gothic, sans-serif);
+      }
+
+      /* ── Review board chrome (NOT part of the design — just this review page) ── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-width: 1420px;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .board-head {
+        max-width: 1366px;
+        margin: 0 0 8px;
+      }
+      .board-head h1 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 22px;
+        color: var(--el-text);
+      }
+      .board-head p {
+        margin: 6px 0 0;
+        max-width: 110ch;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .panel-label {
+        margin: 48px 0 10px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .panel-label span {
+        font-family: var(--font-sans);
+        font-weight: 400;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        width: max-content;
+      }
+      .panel-note {
+        max-width: 1280px;
+        margin: 10px 0 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .panel-note b {
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .panel-note i {
+        color: var(--el-text);
+      }
+      .duo {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+
+      /* ── The pane (the shipped AppearanceCard + AppearancePickers class strings) ── */
+      .stage {
+        width: 1320px;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .duo .stage {
+        width: 640px;
+      }
+      .stage.narrow {
+        width: 400px;
+      }
+      .frame {
+        display: grid;
+        grid-template-columns: 232px minmax(0, 1fr);
+      }
+      .rail {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 20px 12px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+      }
+      .rail-group {
+        margin: 14px 0 4px;
+        padding: 0 var(--spacing-control-x);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        min-height: var(--height-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .rail-row.is-active {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .content {
+        padding: 28px 32px 32px;
+        min-width: 0;
+      }
+      .stage.narrow .content {
+        padding: 20px 16px;
+      }
+      .page-head h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .page-head p {
+        margin: 6px 0 22px;
+        max-width: 72ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
+        gap: 24px;
+        align-items: start;
+      }
+      .stage.narrow .layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        min-width: 0;
+      }
+      .card-head {
+        padding: var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card-sub {
+        margin: 2px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .card-body {
+        display: flex;
+        flex-direction: column;
+        padding: 0 var(--spacing-card-padding);
+      }
+      .card-foot {
+        padding: 12px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .axes-above {
+        margin: 0;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .axis {
+        padding: 16px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .axis:last-child {
+        border-bottom: 0;
+      }
+      .axis-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 4px 10px;
+        margin-bottom: 12px;
+      }
+      .axis-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .axis-help {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: left;
+      }
+      .chip.is-on {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+      }
+      .chip-check {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .chip-body {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.25;
+      }
+      .chip-name {
+        font-size: 14px;
+      }
+      .chip-sample {
+        font-size: 13px;
+        font-weight: 400;
+      }
+      .chip-role {
+        align-self: flex-start;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .face-ja-noto-sans-jp {
+        font-family: var(--font-set-ja-sans-noto-sans-jp), sans-serif;
+      }
+      .face-ja-m-plus-rounded-1c {
+        font-family: var(--font-set-ja-sans-m-plus-rounded-1c), sans-serif;
+      }
+      .face-ko-noto-sans-kr {
+        font-family: var(--font-set-ko-sans-noto-sans-kr), sans-serif;
+      }
+      .face-ko-nanum-gothic {
+        font-family: var(--font-set-ko-sans-nanum-gothic), sans-serif;
+      }
+      .face-zh-noto-serif-sc {
+        font-family: var(--font-set-zh-Hans-serif-noto-serif-sc), serif;
+      }
+      .face-zh-lxgw-wenkai-tc {
+        font-family: var(--font-set-zh-Hans-serif-lxgw-wenkai-tc), serif;
+      }
+      .fl-rows {
+        display: flex;
+        flex-direction: column;
+      }
+      .fl-row {
+        display: grid;
+        grid-template-columns: 9rem minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+        padding: 10px 0;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .fl-row:first-child {
+        border-top: 0;
+      }
+      .stage.narrow .fl-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+      }
+      .fl-lang {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .fl-plain {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .sync-note {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .warn-icon {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        fill: none;
+        stroke: var(--el-warning);
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .showcase {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .eyebrow {
+        margin: 0;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .vg {
+        padding: var(--spacing-card-padding);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+      }
+      .vg-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .vg-key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .pill {
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .vg-title {
+        margin: 12px 0 6px;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .vg-body {
+        margin: 0 0 14px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .btn-primary {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border: 0;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="board-head">
+      <h1>Appearance — Fonts by language</h1>
+      <p>
+        MOTIR-7895 · a delta on <span lang="en">design/settings/appearance.mock.html</span>. The
+        axis is drawn from FONT_SET_REGISTRY as read at f383bc6d3: only a role with more than one
+        member is offered, so exactly three languages have a choice. Faces are the six real members,
+        loaded from Google Fonts.
+      </p>
+    </header>
+    <p class="panel-label">
+      Panel 1 — Default, English page
+      <span>· /settings/account/appearance · lang="en" · type Motir · nothing stored</span>
+    </p>
+    <div class="panel">
+      <div class="stage" data-theme="light" lang="en">
+        <div class="frame">
+          <nav class="rail" aria-label="Account settings">
+            <p class="rail-group">General</p>
+            <a class="rail-row" href="#">Profile</a>
+            <p class="rail-group">Preferences</p>
+            <a class="rail-row" href="#">Language</a><a class="rail-row" href="#">Notifications</a
+            ><a class="rail-row is-active" href="#" aria-current="page">Appearance</a>
+            <p class="rail-group">Security</p>
+            <a class="rail-row" href="#">Two-factor</a><a class="rail-row" href="#">Tokens</a
+            ><a class="rail-row" href="#">Git accounts</a>
+            <p class="rail-group">Data</p>
+            <a class="rail-row" href="#">Data &amp; privacy</a>
+          </nav>
+          <main class="content">
+            <div class="page-head">
+              <h2>Appearance</h2>
+              <p>
+                Theme Motir to your taste — its colour, type and shape. Everything applies live
+                across the whole app, and saves to your account so it follows you to every device.
+              </p>
+            </div>
+            <div class="layout">
+              <div class="card">
+                <div class="card-head">
+                  <h3 class="card-title">Theme &amp; design</h3>
+                  <p class="card-sub">
+                    Pick a theme, style, palette and type pairing. The whole app re-skins instantly
+                    — this page included.
+                  </p>
+                </div>
+                <div class="card-body">
+                  <p class="axes-above">⋯ Theme · Style · Palette, unchanged ⋯</p>
+                  <div class="axis">
+                    <div class="axis-head">
+                      <span class="axis-name">Typography</span
+                      ><span class="axis-help">The faces for headlines, body and code.</span>
+                    </div>
+                    <div class="chips" role="radiogroup" aria-label="Typography">
+                      <button
+                        type="button"
+                        class="chip is-on"
+                        role="radio"
+                        aria-checked="true"
+                        tabindex="0"
+                      >
+                        <span>Motir</span
+                        ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Motir Sans</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Motir Mono</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Grotesk</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Editorial</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Mono-Technical</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="axis">
+                    <div class="axis-head">
+                      <span class="axis-name">Fonts by language</span
+                      ><span class="axis-help"
+                        >Which face each language is drawn in. Automatic follows Motir's
+                        default.</span
+                      >
+                    </div>
+                    <div class="fl-rows">
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="en">English</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="zh">中文</span>
+                        <div class="chips" role="radiogroup" aria-label="中文">
+                          <button
+                            type="button"
+                            class="chip is-on"
+                            role="radio"
+                            aria-checked="true"
+                            tabindex="0"
+                          >
+                            <span>Automatic (Noto Serif SC)</span
+                            ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-zh-noto-serif-sc">Noto Serif SC</span
+                              ><span class="chip-sample face-zh-noto-serif-sc" lang="zh"
+                                >汉字与诗文</span
+                              ></span
+                            ><span class="chip-role">Serif</span></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-zh-lxgw-wenkai-tc">LXGW WenKai TC</span
+                              ><span class="chip-sample face-zh-lxgw-wenkai-tc" lang="zh"
+                                >汉字与诗文</span
+                              ></span
+                            ><span class="chip-role">Serif</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="ja">日本語</span>
+                        <div class="chips" role="radiogroup" aria-label="日本語">
+                          <button
+                            type="button"
+                            class="chip is-on"
+                            role="radio"
+                            aria-checked="true"
+                            tabindex="0"
+                          >
+                            <span>Automatic (Noto Sans JP)</span
+                            ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ja-noto-sans-jp">Noto Sans JP</span
+                              ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                                >ひらがなと漢字</span
+                              ></span
+                            ><span class="chip-role">Sans</span></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ja-m-plus-rounded-1c"
+                                >M PLUS Rounded 1c</span
+                              ><span class="chip-sample face-ja-m-plus-rounded-1c" lang="ja"
+                                >ひらがなと漢字</span
+                              ></span
+                            ><span class="chip-role">Sans</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="ko">한국어</span>
+                        <div class="chips" role="radiogroup" aria-label="한국어">
+                          <button
+                            type="button"
+                            class="chip is-on"
+                            role="radio"
+                            aria-checked="true"
+                            tabindex="0"
+                          >
+                            <span>Automatic (Noto Sans KR)</span
+                            ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ko-noto-sans-kr">Noto Sans KR</span
+                              ><span class="chip-sample face-ko-noto-sans-kr" lang="ko"
+                                >한글과 한자</span
+                              ></span
+                            ><span class="chip-role">Sans</span></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ko-nanum-gothic">Nanum Gothic</span
+                              ><span class="chip-sample face-ko-nanum-gothic" lang="ko"
+                                >한글과 한자</span
+                              ></span
+                            ><span class="chip-role">Sans</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="de">Deutsch</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="fr">Français</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="es">Español</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="it">Italiano</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="nl">Nederlands</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="pl">Polski</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="pt">Português</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <section class="showcase" aria-label="Live look">
+                <p class="eyebrow">Your look — live across Motir</p>
+                <div class="vg">
+                  <div class="vg-meta">
+                    <span class="vg-key">PROD-128</span><span class="pill">In review</span>
+                  </div>
+                  <h4 class="vg-title">Rebuild the billing flow</h4>
+                  <p class="vg-body">
+                    Collapse the three checkout steps into one and drop the extra confirmation
+                    screen.
+                  </p>
+                  <button type="button" class="btn-primary">Comment</button>
+                </div>
+              </section>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>The access path is the one that ships:</b> the rail’s Preferences → Appearance row, drawn
+      active. No new door. The new axis is the fifth field of the same Card, below Typography.
+      <b>Eleven rows in FONT_SET_LOCALES order</b>, each labelled by its endonym with
+      <i>lang="&lt;locale&gt;"</i>. ja · ko · zh offer <b>Automatic first</b>, naming the role’s
+      default, then the two members of their one multi-member role, each previewed in its own face
+      with a script sample and a role tag. The eight Latin rows have nothing to choose, so they
+      carry <b>plain text and no radiogroup</b>.
+    </p>
+    <p class="panel-label">
+      Panel 2 — Japanese page, ja = M PLUS Rounded 1c
+      <span
+        >· lang="ja" data-font-set-sans="m-plus-rounded-1c" — the pick for the page’s own
+        language</span
+      >
+    </p>
+    <div class="panel">
+      <div class="stage" data-theme="light" lang="ja" data-font-set-sans="m-plus-rounded-1c">
+        <div class="frame">
+          <nav class="rail" aria-label="Account settings">
+            <p class="rail-group">General</p>
+            <a class="rail-row" href="#">Profile</a>
+            <p class="rail-group">Preferences</p>
+            <a class="rail-row" href="#">Language</a><a class="rail-row" href="#">Notifications</a
+            ><a class="rail-row is-active" href="#" aria-current="page">Appearance</a>
+            <p class="rail-group">Security</p>
+            <a class="rail-row" href="#">Two-factor</a><a class="rail-row" href="#">Tokens</a
+            ><a class="rail-row" href="#">Git accounts</a>
+            <p class="rail-group">Data</p>
+            <a class="rail-row" href="#">Data &amp; privacy</a>
+          </nav>
+          <main class="content">
+            <div class="page-head">
+              <h2>外観</h2>
+              <p>
+                Motir
+                の色、書体、形をお好みに。変更はアプリ全体にすぐ反映され、アカウントに保存されるので、どの端末でも同じ見た目になります。
+              </p>
+            </div>
+            <div class="layout">
+              <div class="card">
+                <div class="card-head">
+                  <h3 class="card-title">テーマとデザイン</h3>
+                  <p class="card-sub">
+                    テーマ、スタイル、パレット、書体の組み合わせを選びます。アプリ全体がすぐに切り替わります
+                    — このページも。
+                  </p>
+                </div>
+                <div class="card-body">
+                  <p class="axes-above">⋯ Theme · Style · Palette, unchanged ⋯</p>
+                  <div class="axis">
+                    <div class="axis-head">
+                      <span class="axis-name">書体</span
+                      ><span class="axis-help">見出し、本文、コードの書体。</span>
+                    </div>
+                    <div class="chips" role="radiogroup" aria-label="書体">
+                      <button
+                        type="button"
+                        class="chip is-on"
+                        role="radio"
+                        aria-checked="true"
+                        tabindex="0"
+                      >
+                        <span>Motir</span
+                        ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Motir Sans</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Motir Mono</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Grotesk</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Editorial</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Mono-Technical</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="axis">
+                    <div class="axis-head">
+                      <span class="axis-name">言語ごとのフォント</span
+                      ><span class="axis-help"
+                        >各言語をどの書体で表示するか。自動は Motir の既定に従います。</span
+                      >
+                    </div>
+                    <div class="fl-rows">
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="en">English</span>
+                        <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="zh">中文</span>
+                        <div class="chips" role="radiogroup" aria-label="中文">
+                          <button
+                            type="button"
+                            class="chip is-on"
+                            role="radio"
+                            aria-checked="true"
+                            tabindex="0"
+                          >
+                            <span>自動（Noto Serif SC）</span
+                            ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-zh-noto-serif-sc">Noto Serif SC</span
+                              ><span class="chip-sample face-zh-noto-serif-sc" lang="zh"
+                                >汉字与诗文</span
+                              ></span
+                            ><span class="chip-role">明朝</span></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-zh-lxgw-wenkai-tc">LXGW WenKai TC</span
+                              ><span class="chip-sample face-zh-lxgw-wenkai-tc" lang="zh"
+                                >汉字与诗文</span
+                              ></span
+                            ><span class="chip-role">明朝</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="ja" data-font-set-sans="m-plus-rounded-1c"
+                          >日本語</span
+                        >
+                        <div class="chips" role="radiogroup" aria-label="日本語">
+                          <button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span>自動（Noto Sans JP）</span></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ja-noto-sans-jp">Noto Sans JP</span
+                              ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                                >ひらがなと漢字</span
+                              ></span
+                            ><span class="chip-role">ゴシック</span></button
+                          ><button
+                            type="button"
+                            class="chip is-on"
+                            role="radio"
+                            aria-checked="true"
+                            tabindex="0"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ja-m-plus-rounded-1c"
+                                >M PLUS Rounded 1c</span
+                              ><span class="chip-sample face-ja-m-plus-rounded-1c" lang="ja"
+                                >ひらがなと漢字</span
+                              ></span
+                            ><span class="chip-role">ゴシック</span
+                            ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="ko">한국어</span>
+                        <div class="chips" role="radiogroup" aria-label="한국어">
+                          <button
+                            type="button"
+                            class="chip is-on"
+                            role="radio"
+                            aria-checked="true"
+                            tabindex="0"
+                          >
+                            <span>自動（Noto Sans KR）</span
+                            ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ko-noto-sans-kr">Noto Sans KR</span
+                              ><span class="chip-sample face-ko-noto-sans-kr" lang="ko"
+                                >한글과 한자</span
+                              ></span
+                            ><span class="chip-role">ゴシック</span></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ko-nanum-gothic">Nanum Gothic</span
+                              ><span class="chip-sample face-ko-nanum-gothic" lang="ko"
+                                >한글과 한자</span
+                              ></span
+                            ><span class="chip-role">ゴシック</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="de">Deutsch</span>
+                        <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="fr">Français</span>
+                        <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="es">Español</span>
+                        <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="it">Italiano</span>
+                        <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="nl">Nederlands</span>
+                        <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="pl">Polski</span>
+                        <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="pt">Português</span>
+                        <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <section class="showcase" aria-label="Live look">
+                <p class="eyebrow">あなたの見た目 — Motir 全体にライブで</p>
+                <div class="vg">
+                  <div class="vg-meta">
+                    <span class="vg-key">PROD-128</span><span class="pill">レビュー中</span>
+                  </div>
+                  <h4 class="vg-title">請求フローを作り直す</h4>
+                  <p class="vg-body">
+                    チェックアウトの三つの手順を一つにまとめ、Stripe の確認画面を減らします。
+                  </p>
+                  <button type="button" class="btn-primary">コメント</button>
+                </div>
+              </section>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>A pick for the page’s language re-types the whole page live</b>, with no reload: the rail,
+      the heads, the axis copy and the showcase’s Japanese are drawn in M PLUS Rounded 1c, while
+      Latin words (Motir, PROD-128, Stripe, the face names) keep the pairing’s face, because the
+      pairing sits ahead of the script face in <i>--font-sans</i>. The Japanese copy here is
+      illustrative; the ja catalogue belongs to the translate subtask.
+    </p>
+    <p class="panel-label">
+      Panel 3 — Japanese page, ko = Nanum Gothic
+      <span>· the pick for ANOTHER language — before (left) and after (right)</span>
+    </p>
+    <div class="panel">
+      <div class="duo">
+        <div class="stage" data-theme="light" lang="ja">
+          <main class="content">
+            <div class="card">
+              <div class="card-body">
+                <div class="axis">
+                  <div class="axis-head">
+                    <span class="axis-name">言語ごとのフォント</span
+                    ><span class="axis-help"
+                      >各言語をどの書体で表示するか。自動は Motir の既定に従います。</span
+                    >
+                  </div>
+                  <div class="fl-rows">
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="en">English</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="zh">中文</span>
+                      <div class="chips" role="radiogroup" aria-label="中文">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>自動（Noto Serif SC）</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-zh-noto-serif-sc">Noto Serif SC</span
+                            ><span class="chip-sample face-zh-noto-serif-sc" lang="zh"
+                              >汉字与诗文</span
+                            ></span
+                          ><span class="chip-role">明朝</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-zh-lxgw-wenkai-tc">LXGW WenKai TC</span
+                            ><span class="chip-sample face-zh-lxgw-wenkai-tc" lang="zh"
+                              >汉字与诗文</span
+                            ></span
+                          ><span class="chip-role">明朝</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="ja">日本語</span>
+                      <div class="chips" role="radiogroup" aria-label="日本語">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>自動（Noto Sans JP）</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ja-noto-sans-jp">Noto Sans JP</span
+                            ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                              >ひらがなと漢字</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ja-m-plus-rounded-1c"
+                              >M PLUS Rounded 1c</span
+                            ><span class="chip-sample face-ja-m-plus-rounded-1c" lang="ja"
+                              >ひらがなと漢字</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="ko">한국어</span>
+                      <div class="chips" role="radiogroup" aria-label="한국어">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>自動（Noto Sans KR）</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ko-noto-sans-kr">Noto Sans KR</span
+                            ><span class="chip-sample face-ko-noto-sans-kr" lang="ko"
+                              >한글과 한자</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ko-nanum-gothic">Nanum Gothic</span
+                            ><span class="chip-sample face-ko-nanum-gothic" lang="ko"
+                              >한글과 한자</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="de">Deutsch</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="fr">Français</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="es">Español</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="it">Italiano</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="nl">Nederlands</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="pl">Polski</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="pt">Português</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+        <div class="stage" data-theme="light" lang="ja">
+          <main class="content">
+            <div class="card">
+              <div class="card-body">
+                <div class="axis">
+                  <div class="axis-head">
+                    <span class="axis-name">言語ごとのフォント</span
+                    ><span class="axis-help"
+                      >各言語をどの書体で表示するか。自動は Motir の既定に従います。</span
+                    >
+                  </div>
+                  <div class="fl-rows">
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="en">English</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="zh">中文</span>
+                      <div class="chips" role="radiogroup" aria-label="中文">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>自動（Noto Serif SC）</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-zh-noto-serif-sc">Noto Serif SC</span
+                            ><span class="chip-sample face-zh-noto-serif-sc" lang="zh"
+                              >汉字与诗文</span
+                            ></span
+                          ><span class="chip-role">明朝</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-zh-lxgw-wenkai-tc">LXGW WenKai TC</span
+                            ><span class="chip-sample face-zh-lxgw-wenkai-tc" lang="zh"
+                              >汉字与诗文</span
+                            ></span
+                          ><span class="chip-role">明朝</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="ja">日本語</span>
+                      <div class="chips" role="radiogroup" aria-label="日本語">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>自動（Noto Sans JP）</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ja-noto-sans-jp">Noto Sans JP</span
+                            ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                              >ひらがなと漢字</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ja-m-plus-rounded-1c"
+                              >M PLUS Rounded 1c</span
+                            ><span class="chip-sample face-ja-m-plus-rounded-1c" lang="ja"
+                              >ひらがなと漢字</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="ko" data-font-set-sans="nanum-gothic"
+                        >한국어</span
+                      >
+                      <div class="chips" role="radiogroup" aria-label="한국어">
+                        <button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span>自動（Noto Sans KR）</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ko-noto-sans-kr">Noto Sans KR</span
+                            ><span class="chip-sample face-ko-noto-sans-kr" lang="ko"
+                              >한글과 한자</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span></button
+                        ><button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ko-nanum-gothic">Nanum Gothic</span
+                            ><span class="chip-sample face-ko-nanum-gothic" lang="ko"
+                              >한글과 한자</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="de">Deutsch</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="fr">Français</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="es">Español</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="it">Italiano</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="nl">Nederlands</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="pl">Polski</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="pt">Português</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Motir）</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>A pick for another language changes only that row:</b> the 한국어 label and the selected
+      chip. The page around it, the ja chrome included, is identical before and after, because the
+      page is Japanese and nothing on it is Korean.
+    </p>
+    <p class="panel-label">
+      Panel 4 — ja = M PLUS Rounded 1c under the Editorial pairing
+      <span>· data-type="editorial" — the pick and the pairing are independent</span>
+    </p>
+    <div class="panel">
+      <div
+        class="stage"
+        data-theme="light"
+        lang="ja"
+        data-type="editorial"
+        data-font-set-sans="m-plus-rounded-1c"
+      >
+        <main class="content">
+          <div class="page-head">
+            <h2>外観</h2>
+            <p>
+              Motir
+              の色、書体、形をお好みに。変更はアプリ全体にすぐ反映され、アカウントに保存されるので、どの端末でも同じ見た目になります。
+            </p>
+          </div>
+          <div class="layout">
+            <div class="card">
+              <div class="card-head">
+                <h3 class="card-title">テーマとデザイン</h3>
+                <p class="card-sub">
+                  テーマ、スタイル、パレット、書体の組み合わせを選びます。アプリ全体がすぐに切り替わります
+                  — このページも。
+                </p>
+              </div>
+              <div class="card-body">
+                <p class="axes-above">⋯ Theme · Style · Palette, unchanged ⋯</p>
+                <div class="axis">
+                  <div class="axis-head">
+                    <span class="axis-name">書体</span
+                    ><span class="axis-help">見出し、本文、コードの書体。</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="書体">
+                    <button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Motir</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Motir Sans</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Motir Mono</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Grotesk</span></button
+                    ><button
+                      type="button"
+                      class="chip is-on"
+                      role="radio"
+                      aria-checked="true"
+                      tabindex="0"
+                    >
+                      <span>Editorial</span
+                      ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Mono-Technical</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="axis">
+                  <div class="axis-head">
+                    <span class="axis-name">言語ごとのフォント</span
+                    ><span class="axis-help"
+                      >各言語をどの書体で表示するか。自動は Motir の既定に従います。</span
+                    >
+                  </div>
+                  <div class="fl-rows">
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="en">English</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Editorial）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="zh">中文</span>
+                      <div class="chips" role="radiogroup" aria-label="中文">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>自動（Noto Serif SC）</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-zh-noto-serif-sc">Noto Serif SC</span
+                            ><span class="chip-sample face-zh-noto-serif-sc" lang="zh"
+                              >汉字与诗文</span
+                            ></span
+                          ><span class="chip-role">明朝</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-zh-lxgw-wenkai-tc">LXGW WenKai TC</span
+                            ><span class="chip-sample face-zh-lxgw-wenkai-tc" lang="zh"
+                              >汉字与诗文</span
+                            ></span
+                          ><span class="chip-role">明朝</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="ja" data-font-set-sans="m-plus-rounded-1c"
+                        >日本語</span
+                      >
+                      <div class="chips" role="radiogroup" aria-label="日本語">
+                        <button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span>自動（Noto Sans JP）</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ja-noto-sans-jp">Noto Sans JP</span
+                            ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                              >ひらがなと漢字</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span></button
+                        ><button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ja-m-plus-rounded-1c"
+                              >M PLUS Rounded 1c</span
+                            ><span class="chip-sample face-ja-m-plus-rounded-1c" lang="ja"
+                              >ひらがなと漢字</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="ko">한국어</span>
+                      <div class="chips" role="radiogroup" aria-label="한국어">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>自動（Noto Sans KR）</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ko-noto-sans-kr">Noto Sans KR</span
+                            ><span class="chip-sample face-ko-noto-sans-kr" lang="ko"
+                              >한글과 한자</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ko-nanum-gothic">Nanum Gothic</span
+                            ><span class="chip-sample face-ko-nanum-gothic" lang="ko"
+                              >한글과 한자</span
+                            ></span
+                          ><span class="chip-role">ゴシック</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="de">Deutsch</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Editorial）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="fr">Français</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Editorial）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="es">Español</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Editorial）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="it">Italiano</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Editorial）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="nl">Nederlands</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Editorial）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="pl">Polski</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Editorial）</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="pt">Português</span>
+                      <p class="fl-plain">書体の組み合わせの書体（Editorial）</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <section class="showcase" aria-label="Live look">
+              <p class="eyebrow">あなたの見た目 — Motir 全体にライブで</p>
+              <div class="vg">
+                <div class="vg-meta">
+                  <span class="vg-key">PROD-128</span><span class="pill">レビュー中</span>
+                </div>
+                <h4 class="vg-title">請求フローを作り直す</h4>
+                <p class="vg-body">
+                  チェックアウトの三つの手順を一つにまとめ、Stripe の確認画面を減らします。
+                </p>
+                <button type="button" class="btn-primary">コメント</button>
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>The pairing changes the Latin serif to Fraunces</b> (the heads’ Latin words); the picked ja
+      sans member is unchanged in the body and the axis copy. The eight Latin rows now read
+      “Editorial”, live from the Type axis.
+    </p>
+    <p class="panel-label">
+      Panel 5 — Couldn’t sync
+      <span>· a pick applied on this device, the save refused or unreachable</span>
+    </p>
+    <div class="panel">
+      <div class="stage" data-theme="light" lang="en">
+        <main class="content">
+          <div class="page-head">
+            <h2>Appearance</h2>
+            <p>
+              Theme Motir to your taste — its colour, type and shape. Everything applies live across
+              the whole app, and saves to your account so it follows you to every device.
+            </p>
+          </div>
+          <div class="layout">
+            <div class="card">
+              <div class="card-head">
+                <h3 class="card-title">Theme &amp; design</h3>
+                <p class="card-sub">
+                  Pick a theme, style, palette and type pairing. The whole app re-skins instantly —
+                  this page included.
+                </p>
+              </div>
+              <div class="card-body">
+                <p class="axes-above">⋯ Theme · Style · Palette, unchanged ⋯</p>
+                <div class="axis">
+                  <div class="axis-head">
+                    <span class="axis-name">Typography</span
+                    ><span class="axis-help">The faces for headlines, body and code.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Typography">
+                    <button
+                      type="button"
+                      class="chip is-on"
+                      role="radio"
+                      aria-checked="true"
+                      tabindex="0"
+                    >
+                      <span>Motir</span
+                      ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Motir Sans</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Motir Mono</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Grotesk</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Editorial</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Mono-Technical</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="axis">
+                  <div class="axis-head">
+                    <span class="axis-name">Fonts by language</span
+                    ><span class="axis-help"
+                      >Which face each language is drawn in. Automatic follows Motir's
+                      default.</span
+                    >
+                  </div>
+                  <div class="fl-rows">
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="en">English</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="zh">中文</span>
+                      <div class="chips" role="radiogroup" aria-label="中文">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>Automatic (Noto Serif SC)</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-zh-noto-serif-sc">Noto Serif SC</span
+                            ><span class="chip-sample face-zh-noto-serif-sc" lang="zh"
+                              >汉字与诗文</span
+                            ></span
+                          ><span class="chip-role">Serif</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-zh-lxgw-wenkai-tc">LXGW WenKai TC</span
+                            ><span class="chip-sample face-zh-lxgw-wenkai-tc" lang="zh"
+                              >汉字与诗文</span
+                            ></span
+                          ><span class="chip-role">Serif</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="ja" data-font-set-sans="m-plus-rounded-1c"
+                        >日本語</span
+                      >
+                      <div class="chips" role="radiogroup" aria-label="日本語">
+                        <button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span>Automatic (Noto Sans JP)</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ja-noto-sans-jp">Noto Sans JP</span
+                            ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                              >ひらがなと漢字</span
+                            ></span
+                          ><span class="chip-role">Sans</span></button
+                        ><button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ja-m-plus-rounded-1c"
+                              >M PLUS Rounded 1c</span
+                            ><span class="chip-sample face-ja-m-plus-rounded-1c" lang="ja"
+                              >ひらがなと漢字</span
+                            ></span
+                          ><span class="chip-role">Sans</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="ko">한국어</span>
+                      <div class="chips" role="radiogroup" aria-label="한국어">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>Automatic (Noto Sans KR)</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ko-noto-sans-kr">Noto Sans KR</span
+                            ><span class="chip-sample face-ko-noto-sans-kr" lang="ko"
+                              >한글과 한자</span
+                            ></span
+                          ><span class="chip-role">Sans</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ko-nanum-gothic">Nanum Gothic</span
+                            ><span class="chip-sample face-ko-nanum-gothic" lang="ko"
+                              >한글과 한자</span
+                            ></span
+                          ><span class="chip-role">Sans</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="de">Deutsch</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="fr">Français</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="es">Español</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="it">Italiano</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="nl">Nederlands</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="pl">Polski</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="pt">Português</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="card-foot">
+                <p class="sync-note" role="status">
+                  <svg class="warn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                    />
+                    <path d="M12 9v4" />
+                    <path d="M12 17h.01" /></svg
+                  >Couldn't sync to your account — your changes are saved on this device.
+                </p>
+              </div>
+            </div>
+            <section class="showcase" aria-label="Live look">
+              <p class="eyebrow">Your look — live across Motir</p>
+              <div class="vg">
+                <div class="vg-meta">
+                  <span class="vg-key">PROD-128</span><span class="pill">In review</span>
+                </div>
+                <h4 class="vg-title">Rebuild the billing flow</h4>
+                <p class="vg-body">
+                  Collapse the three checkout steps into one and drop the extra confirmation screen.
+                </p>
+                <button type="button" class="btn-primary">Comment</button>
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>The existing footer, unchanged:</b> the TriangleAlert glyph and
+      <i>settings.appearance.sync.error</i>, <i>role="status"</i>. The pick stays applied locally. A
+      refused save shows the same note; no separate error string is drawn.
+    </p>
+    <p class="panel-label">
+      Panel 6 — Preview face still loading
+      <span>· the M PLUS Rounded 1c chip before its face arrives (font-display: swap)</span>
+    </p>
+    <div class="panel">
+      <div class="stage" data-theme="light" lang="en">
+        <main class="content">
+          <div class="card">
+            <div class="card-body">
+              <div class="axis">
+                <div class="axis-head">
+                  <span class="axis-name">Fonts by language</span
+                  ><span class="axis-help"
+                    >Which face each language is drawn in. Automatic follows Motir's default.</span
+                  >
+                </div>
+                <div class="fl-rows">
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="en">English</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="zh">中文</span>
+                    <div class="chips" role="radiogroup" aria-label="中文">
+                      <button
+                        type="button"
+                        class="chip is-on"
+                        role="radio"
+                        aria-checked="true"
+                        tabindex="0"
+                      >
+                        <span>Automatic (Noto Serif SC)</span
+                        ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-zh-noto-serif-sc">Noto Serif SC</span
+                          ><span class="chip-sample face-zh-noto-serif-sc" lang="zh"
+                            >汉字与诗文</span
+                          ></span
+                        ><span class="chip-role">Serif</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-zh-lxgw-wenkai-tc">LXGW WenKai TC</span
+                          ><span class="chip-sample face-zh-lxgw-wenkai-tc" lang="zh"
+                            >汉字与诗文</span
+                          ></span
+                        ><span class="chip-role">Serif</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="ja">日本語</span>
+                    <div class="chips" role="radiogroup" aria-label="日本語">
+                      <button
+                        type="button"
+                        class="chip is-on"
+                        role="radio"
+                        aria-checked="true"
+                        tabindex="0"
+                      >
+                        <span>Automatic (Noto Sans JP)</span
+                        ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-ja-noto-sans-jp">Noto Sans JP</span
+                          ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                            >ひらがなと漢字</span
+                          ></span
+                        ><span class="chip-role">Sans</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-ja-noto-sans-jp">M PLUS Rounded 1c</span
+                          ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                            >ひらがなと漢字</span
+                          ></span
+                        ><span class="chip-role">Sans</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="ko">한국어</span>
+                    <div class="chips" role="radiogroup" aria-label="한국어">
+                      <button
+                        type="button"
+                        class="chip is-on"
+                        role="radio"
+                        aria-checked="true"
+                        tabindex="0"
+                      >
+                        <span>Automatic (Noto Sans KR)</span
+                        ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-ko-noto-sans-kr">Noto Sans KR</span
+                          ><span class="chip-sample face-ko-noto-sans-kr" lang="ko"
+                            >한글과 한자</span
+                          ></span
+                        ><span class="chip-role">Sans</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-ko-nanum-gothic">Nanum Gothic</span
+                          ><span class="chip-sample face-ko-nanum-gothic" lang="ko"
+                            >한글과 한자</span
+                          ></span
+                        ><span class="chip-role">Sans</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="de">Deutsch</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="fr">Français</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="es">Español</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="it">Italiano</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="nl">Nederlands</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="pl">Polski</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="pt">Português</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>The chip draws its name and sample in the set’s default face at the same box size</b> until
+      its own face arrives, then swaps in place. No spinner, no skeleton, no dimming: the row does
+      not move.
+    </p>
+    <p class="panel-label">
+      Panel 7 — A stale stored pick
+      <span>· font_pick_ja names a member the registry no longer lists</span>
+    </p>
+    <div class="panel">
+      <div class="stage" data-theme="light" lang="en">
+        <main class="content">
+          <div class="card">
+            <div class="card-body">
+              <div class="axis">
+                <div class="axis-head">
+                  <span class="axis-name">Fonts by language</span
+                  ><span class="axis-help"
+                    >Which face each language is drawn in. Automatic follows Motir's default.</span
+                  >
+                </div>
+                <div class="fl-rows">
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="en">English</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="zh">中文</span>
+                    <div class="chips" role="radiogroup" aria-label="中文">
+                      <button
+                        type="button"
+                        class="chip is-on"
+                        role="radio"
+                        aria-checked="true"
+                        tabindex="0"
+                      >
+                        <span>Automatic (Noto Serif SC)</span
+                        ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-zh-noto-serif-sc">Noto Serif SC</span
+                          ><span class="chip-sample face-zh-noto-serif-sc" lang="zh"
+                            >汉字与诗文</span
+                          ></span
+                        ><span class="chip-role">Serif</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-zh-lxgw-wenkai-tc">LXGW WenKai TC</span
+                          ><span class="chip-sample face-zh-lxgw-wenkai-tc" lang="zh"
+                            >汉字与诗文</span
+                          ></span
+                        ><span class="chip-role">Serif</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="ja">日本語</span>
+                    <div class="chips" role="radiogroup" aria-label="日本語">
+                      <button
+                        type="button"
+                        class="chip is-on"
+                        role="radio"
+                        aria-checked="true"
+                        tabindex="0"
+                      >
+                        <span>Automatic (Noto Sans JP)</span
+                        ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-ja-noto-sans-jp">Noto Sans JP</span
+                          ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                            >ひらがなと漢字</span
+                          ></span
+                        ><span class="chip-role">Sans</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-ja-m-plus-rounded-1c">M PLUS Rounded 1c</span
+                          ><span class="chip-sample face-ja-m-plus-rounded-1c" lang="ja"
+                            >ひらがなと漢字</span
+                          ></span
+                        ><span class="chip-role">Sans</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="ko">한국어</span>
+                    <div class="chips" role="radiogroup" aria-label="한국어">
+                      <button
+                        type="button"
+                        class="chip is-on"
+                        role="radio"
+                        aria-checked="true"
+                        tabindex="0"
+                      >
+                        <span>Automatic (Noto Sans KR)</span
+                        ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-ko-noto-sans-kr">Noto Sans KR</span
+                          ><span class="chip-sample face-ko-noto-sans-kr" lang="ko"
+                            >한글과 한자</span
+                          ></span
+                        ><span class="chip-role">Sans</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span class="chip-body"
+                          ><span class="chip-name face-ko-nanum-gothic">Nanum Gothic</span
+                          ><span class="chip-sample face-ko-nanum-gothic" lang="ko"
+                            >한글과 한자</span
+                          ></span
+                        ><span class="chip-role">Sans</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="de">Deutsch</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="fr">Français</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="es">Español</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="it">Italiano</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="nl">Nederlands</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="pl">Polski</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                  <div class="fl-row">
+                    <span class="fl-lang" lang="pt">Português</span>
+                    <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>Automatic is shown selected</b>, the way rendering falls back to the set default
+      (<i>resolveFontSetMember</i>) and the read drops the stale value. No warning is drawn: there
+      is nothing for the person to fix.
+    </p>
+    <p class="panel-label">
+      Panel 8 — Dark <span>· data-theme="dark", English page, ko = Nanum Gothic</span>
+    </p>
+    <div class="panel">
+      <div class="stage" data-theme="dark" lang="en">
+        <div class="frame">
+          <nav class="rail" aria-label="Account settings">
+            <p class="rail-group">General</p>
+            <a class="rail-row" href="#">Profile</a>
+            <p class="rail-group">Preferences</p>
+            <a class="rail-row" href="#">Language</a><a class="rail-row" href="#">Notifications</a
+            ><a class="rail-row is-active" href="#" aria-current="page">Appearance</a>
+            <p class="rail-group">Security</p>
+            <a class="rail-row" href="#">Two-factor</a><a class="rail-row" href="#">Tokens</a
+            ><a class="rail-row" href="#">Git accounts</a>
+            <p class="rail-group">Data</p>
+            <a class="rail-row" href="#">Data &amp; privacy</a>
+          </nav>
+          <main class="content">
+            <div class="page-head">
+              <h2>Appearance</h2>
+              <p>
+                Theme Motir to your taste — its colour, type and shape. Everything applies live
+                across the whole app, and saves to your account so it follows you to every device.
+              </p>
+            </div>
+            <div class="layout">
+              <div class="card">
+                <div class="card-head">
+                  <h3 class="card-title">Theme &amp; design</h3>
+                  <p class="card-sub">
+                    Pick a theme, style, palette and type pairing. The whole app re-skins instantly
+                    — this page included.
+                  </p>
+                </div>
+                <div class="card-body">
+                  <p class="axes-above">⋯ Theme · Style · Palette, unchanged ⋯</p>
+                  <div class="axis">
+                    <div class="axis-head">
+                      <span class="axis-name">Typography</span
+                      ><span class="axis-help">The faces for headlines, body and code.</span>
+                    </div>
+                    <div class="chips" role="radiogroup" aria-label="Typography">
+                      <button
+                        type="button"
+                        class="chip is-on"
+                        role="radio"
+                        aria-checked="true"
+                        tabindex="0"
+                      >
+                        <span>Motir</span
+                        ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Motir Sans</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Motir Mono</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Grotesk</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Editorial</span></button
+                      ><button
+                        type="button"
+                        class="chip"
+                        role="radio"
+                        aria-checked="false"
+                        tabindex="-1"
+                      >
+                        <span>Mono-Technical</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="axis">
+                    <div class="axis-head">
+                      <span class="axis-name">Fonts by language</span
+                      ><span class="axis-help"
+                        >Which face each language is drawn in. Automatic follows Motir's
+                        default.</span
+                      >
+                    </div>
+                    <div class="fl-rows">
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="en">English</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="zh">中文</span>
+                        <div class="chips" role="radiogroup" aria-label="中文">
+                          <button
+                            type="button"
+                            class="chip is-on"
+                            role="radio"
+                            aria-checked="true"
+                            tabindex="0"
+                          >
+                            <span>Automatic (Noto Serif SC)</span
+                            ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-zh-noto-serif-sc">Noto Serif SC</span
+                              ><span class="chip-sample face-zh-noto-serif-sc" lang="zh"
+                                >汉字与诗文</span
+                              ></span
+                            ><span class="chip-role">Serif</span></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-zh-lxgw-wenkai-tc">LXGW WenKai TC</span
+                              ><span class="chip-sample face-zh-lxgw-wenkai-tc" lang="zh"
+                                >汉字与诗文</span
+                              ></span
+                            ><span class="chip-role">Serif</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="ja">日本語</span>
+                        <div class="chips" role="radiogroup" aria-label="日本語">
+                          <button
+                            type="button"
+                            class="chip is-on"
+                            role="radio"
+                            aria-checked="true"
+                            tabindex="0"
+                          >
+                            <span>Automatic (Noto Sans JP)</span
+                            ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ja-noto-sans-jp">Noto Sans JP</span
+                              ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                                >ひらがなと漢字</span
+                              ></span
+                            ><span class="chip-role">Sans</span></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ja-m-plus-rounded-1c"
+                                >M PLUS Rounded 1c</span
+                              ><span class="chip-sample face-ja-m-plus-rounded-1c" lang="ja"
+                                >ひらがなと漢字</span
+                              ></span
+                            ><span class="chip-role">Sans</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="ko" data-font-set-sans="nanum-gothic"
+                          >한국어</span
+                        >
+                        <div class="chips" role="radiogroup" aria-label="한국어">
+                          <button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span>Automatic (Noto Sans KR)</span></button
+                          ><button
+                            type="button"
+                            class="chip"
+                            role="radio"
+                            aria-checked="false"
+                            tabindex="-1"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ko-noto-sans-kr">Noto Sans KR</span
+                              ><span class="chip-sample face-ko-noto-sans-kr" lang="ko"
+                                >한글과 한자</span
+                              ></span
+                            ><span class="chip-role">Sans</span></button
+                          ><button
+                            type="button"
+                            class="chip is-on"
+                            role="radio"
+                            aria-checked="true"
+                            tabindex="0"
+                          >
+                            <span class="chip-body"
+                              ><span class="chip-name face-ko-nanum-gothic">Nanum Gothic</span
+                              ><span class="chip-sample face-ko-nanum-gothic" lang="ko"
+                                >한글과 한자</span
+                              ></span
+                            ><span class="chip-role">Sans</span
+                            ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="de">Deutsch</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="fr">Français</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="es">Español</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="it">Italiano</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="nl">Nederlands</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="pl">Polski</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                      <div class="fl-row">
+                        <span class="fl-lang" lang="pt">Português</span>
+                        <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <section class="showcase" aria-label="Live look">
+                <p class="eyebrow">Your look — live across Motir</p>
+                <div class="vg">
+                  <div class="vg-meta">
+                    <span class="vg-key">PROD-128</span><span class="pill">In review</span>
+                  </div>
+                  <h4 class="vg-title">Rebuild the billing flow</h4>
+                  <p class="vg-body">
+                    Collapse the three checkout steps into one and drop the extra confirmation
+                    screen.
+                  </p>
+                  <button type="button" class="btn-primary">Comment</button>
+                </div>
+              </section>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      Every ink and fill is an <i>--el-*</i> token, so the field, the chips, the selected tint and
+      the plain Latin rows flip with the theme.
+    </p>
+    <p class="panel-label">
+      Panel 9 — Narrow (~400px) <span>· the labels stack above the chips, and the chips wrap</span>
+    </p>
+    <div class="panel">
+      <div class="stage narrow" data-theme="light" lang="en">
+        <main class="content">
+          <div class="page-head">
+            <h2>Appearance</h2>
+            <p>
+              Theme Motir to your taste — its colour, type and shape. Everything applies live across
+              the whole app, and saves to your account so it follows you to every device.
+            </p>
+          </div>
+          <div class="layout">
+            <div class="card">
+              <div class="card-head">
+                <h3 class="card-title">Theme &amp; design</h3>
+                <p class="card-sub">
+                  Pick a theme, style, palette and type pairing. The whole app re-skins instantly —
+                  this page included.
+                </p>
+              </div>
+              <div class="card-body">
+                <p class="axes-above">⋯ Theme · Style · Palette, unchanged ⋯</p>
+                <div class="axis">
+                  <div class="axis-head">
+                    <span class="axis-name">Typography</span
+                    ><span class="axis-help">The faces for headlines, body and code.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Typography">
+                    <button
+                      type="button"
+                      class="chip is-on"
+                      role="radio"
+                      aria-checked="true"
+                      tabindex="0"
+                    >
+                      <span>Motir</span
+                      ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Motir Sans</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Motir Mono</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Grotesk</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Editorial</span></button
+                    ><button
+                      type="button"
+                      class="chip"
+                      role="radio"
+                      aria-checked="false"
+                      tabindex="-1"
+                    >
+                      <span>Mono-Technical</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="axis">
+                  <div class="axis-head">
+                    <span class="axis-name">Fonts by language</span
+                    ><span class="axis-help"
+                      >Which face each language is drawn in. Automatic follows Motir's
+                      default.</span
+                    >
+                  </div>
+                  <div class="fl-rows">
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="en">English</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="zh" data-font-set-serif="lxgw-wenkai-tc"
+                        >中文</span
+                      >
+                      <div class="chips" role="radiogroup" aria-label="中文">
+                        <button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span>Automatic (Noto Serif SC)</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-zh-noto-serif-sc">Noto Serif SC</span
+                            ><span class="chip-sample face-zh-noto-serif-sc" lang="zh"
+                              >汉字与诗文</span
+                            ></span
+                          ><span class="chip-role">Serif</span></button
+                        ><button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-zh-lxgw-wenkai-tc">LXGW WenKai TC</span
+                            ><span class="chip-sample face-zh-lxgw-wenkai-tc" lang="zh"
+                              >汉字与诗文</span
+                            ></span
+                          ><span class="chip-role">Serif</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="ja">日本語</span>
+                      <div class="chips" role="radiogroup" aria-label="日本語">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>Automatic (Noto Sans JP)</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ja-noto-sans-jp">Noto Sans JP</span
+                            ><span class="chip-sample face-ja-noto-sans-jp" lang="ja"
+                              >ひらがなと漢字</span
+                            ></span
+                          ><span class="chip-role">Sans</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ja-m-plus-rounded-1c"
+                              >M PLUS Rounded 1c</span
+                            ><span class="chip-sample face-ja-m-plus-rounded-1c" lang="ja"
+                              >ひらがなと漢字</span
+                            ></span
+                          ><span class="chip-role">Sans</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="ko">한국어</span>
+                      <div class="chips" role="radiogroup" aria-label="한국어">
+                        <button
+                          type="button"
+                          class="chip is-on"
+                          role="radio"
+                          aria-checked="true"
+                          tabindex="0"
+                        >
+                          <span>Automatic (Noto Sans KR)</span
+                          ><svg class="chip-check" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ko-noto-sans-kr">Noto Sans KR</span
+                            ><span class="chip-sample face-ko-noto-sans-kr" lang="ko"
+                              >한글과 한자</span
+                            ></span
+                          ><span class="chip-role">Sans</span></button
+                        ><button
+                          type="button"
+                          class="chip"
+                          role="radio"
+                          aria-checked="false"
+                          tabindex="-1"
+                        >
+                          <span class="chip-body"
+                            ><span class="chip-name face-ko-nanum-gothic">Nanum Gothic</span
+                            ><span class="chip-sample face-ko-nanum-gothic" lang="ko"
+                              >한글과 한자</span
+                            ></span
+                          ><span class="chip-role">Sans</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="de">Deutsch</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="fr">Français</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="es">Español</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="it">Italiano</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="nl">Nederlands</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="pl">Polski</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                    <div class="fl-row">
+                      <span class="fl-lang" lang="pt">Português</span>
+                      <p class="fl-plain">Your Type pairing's face (Motir)</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <p class="panel-note">
+      Below the pane’s single-column width each row stacks: the endonym on its own line, the chips
+      wrapping beneath it at their natural width.
+    </p>
+  </body>
+</html>

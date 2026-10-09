@@ -7,18 +7,19 @@ grows. Built FROM the real design system (`app/globals.css` `--el-*` / shape
 tokens + the shipped `components/ui/*` primitives), so the code subtasks compose
 the same primitives — no Pencil→code gap.
 
-| Surface                        | Asset                                                  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Account settings area**      | **`account-settings.mock.html`** (HTML mock)           | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **Token permission selection** | **`token-scopes.mock.html`** (HTML mock)               | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes) and, as amended by **MOTIR-2578**, MOTIR-2579 / -2580 (the permission picker over the MOTIR-2254 catalog — SIX rows, five domains; see that section, which supersedes the 7.7.18 one).                                                                                                                                                                                                    |
-| **Appearance pane**            | **`appearance.mock.html`** (HTML mock)                 | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route).                                                                                                                                                                                                                                       |
-| **Connect the CLI**            | **`../cli-connect/cli-connect.mock.html`** (HTML mock) | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → API tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                                                                                                                                                                                          |
-| **Profile pane**               | **`profile.mock.html`** (HTML mock)                    | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.**                                                                                                                                                                      |
-| **Two-factor authentication**  | **`two-factor.mock.html`** (HTML mock)                 | The `Security › Two-factor authentication` pane: enrol an authenticator app, email as a labelled lower-security fallback, ten single-use recovery codes, the browsers that stopped being asked, and the way out. Adds a SECOND entry to the rail's Security group — that row is the access path. Multi-panel (off · on · enrol · codes shown once · low/exhausted/turn-off/errors · dark). **Gates MOTIR-1220**; the login challenge is `../auth/two-factor-challenge.mock.html`.                                                                                                                                                                                             |
-| **Passkeys**                   | **`passkeys.mock.html`** (HTML mock)                   | The `Security` pane's PASSKEYS card — register a WebAuthn credential, see the ones you hold, rename one, remove one. Its OWN card between the two-factor state card and the methods list, never a third row inside them. Adds NO rail entry: it is a new section on a pane that already has a door. Multi-panel (zero · populated · registering · rename · remove · refusals · dark). **Gates MOTIR-3612**; the sign-in half is `../auth/passkey-sign-in.mock.html`.                                                                                                                                                                                                          |
-| **Workspace settings area**    | **`workspace-settings.mock.html`** (HTML mock)         | The FOURTH and last settings tier to become an AREA: the rail, its three-row registry, the switcher row that is its door, and — the thing no other tier has — the BELOW-THE-REVEAL arm, where all three routes `notFound()`, there is NO workspace rail, and every capability is folded into `/settings/organization`. Composes the three panes and re-specifies none (`design/workspaces/settings.pen` · `design/org-admin/security-policy.mock.html` · `design/jobs/`). Multi-panel (index · security · jobs · below-reveal · the switcher popover · dark · the registry). **Gates MOTIR-4846** (the area), **MOTIR-4847** (the entrance) **and MOTIR-4861** (the fold-in). |
-| **Arrival frame**              | **`arrival.mock.html`** (HTML mock)                    | The settings family's PENDING drawing: the pane-only frame each of the 31 `settings/**` routes renders IN-PAGE after its own gate, the width-is-a-prop rule, and the three-tier streaming allocation for all 14 heavy panes. Applies `design/shell/design-notes.md` § _The navigation-pending grammar_ (2nd revision); adds no `loading.tsx`. Multi-panel (in situ · anatomy · widths · the two superseded skeletons · mount points · dark). **Gates MOTIR-3443 and MOTIR-3448.**                                                                                                                                                                                             |
-| **Hosted agent room**          | **`hosted-agent.mock.html`** (HTML mock)               | A PROJECT-settings room (Automation group, under AI planning): the model a hosted run uses per difficulty — Trivial · Low · Medium · High — with its source (_Platform default_ / _Override_), an override select per row and _Reset to default_. Multi-panel (access path · default · choosing · overridden · withdrawn · read-only · loading · unavailable · ~400px). Sibling: `../runs/run-section--from-difficulty.mock.html`. **MOTIR-6991.**                                                                                                                                                                                                                            |
+| Surface                            | Asset                                                              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Account settings area**          | **`account-settings.mock.html`** (HTML mock)                       | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Token permission selection**     | **`token-scopes.mock.html`** (HTML mock)                           | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes) and, as amended by **MOTIR-2578**, MOTIR-2579 / -2580 (the permission picker over the MOTIR-2254 catalog — SIX rows, five domains; see that section, which supersedes the 7.7.18 one).                                                                                                                                                                                                    |
+| **Appearance pane**                | **`appearance.mock.html`** (HTML mock)                             | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route).                                                                                                                                                                                                                                       |
+| **Connect the CLI**                | **`../cli-connect/cli-connect.mock.html`** (HTML mock)             | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → API tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                                                                                                                                                                                          |
+| **Profile pane**                   | **`profile.mock.html`** (HTML mock)                                | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.**                                                                                                                                                                      |
+| **Two-factor authentication**      | **`two-factor.mock.html`** (HTML mock)                             | The `Security › Two-factor authentication` pane: enrol an authenticator app, email as a labelled lower-security fallback, ten single-use recovery codes, the browsers that stopped being asked, and the way out. Adds a SECOND entry to the rail's Security group — that row is the access path. Multi-panel (off · on · enrol · codes shown once · low/exhausted/turn-off/errors · dark). **Gates MOTIR-1220**; the login challenge is `../auth/two-factor-challenge.mock.html`.                                                                                                                                                                                             |
+| **Passkeys**                       | **`passkeys.mock.html`** (HTML mock)                               | The `Security` pane's PASSKEYS card — register a WebAuthn credential, see the ones you hold, rename one, remove one. Its OWN card between the two-factor state card and the methods list, never a third row inside them. Adds NO rail entry: it is a new section on a pane that already has a door. Multi-panel (zero · populated · registering · rename · remove · refusals · dark). **Gates MOTIR-3612**; the sign-in half is `../auth/passkey-sign-in.mock.html`.                                                                                                                                                                                                          |
+| **Workspace settings area**        | **`workspace-settings.mock.html`** (HTML mock)                     | The FOURTH and last settings tier to become an AREA: the rail, its three-row registry, the switcher row that is its door, and — the thing no other tier has — the BELOW-THE-REVEAL arm, where all three routes `notFound()`, there is NO workspace rail, and every capability is folded into `/settings/organization`. Composes the three panes and re-specifies none (`design/workspaces/settings.pen` · `design/org-admin/security-policy.mock.html` · `design/jobs/`). Multi-panel (index · security · jobs · below-reveal · the switcher popover · dark · the registry). **Gates MOTIR-4846** (the area), **MOTIR-4847** (the entrance) **and MOTIR-4861** (the fold-in). |
+| **Arrival frame**                  | **`arrival.mock.html`** (HTML mock)                                | The settings family's PENDING drawing: the pane-only frame each of the 31 `settings/**` routes renders IN-PAGE after its own gate, the width-is-a-prop rule, and the three-tier streaming allocation for all 14 heavy panes. Applies `design/shell/design-notes.md` § _The navigation-pending grammar_ (2nd revision); adds no `loading.tsx`. Multi-panel (in situ · anatomy · widths · the two superseded skeletons · mount points · dark). **Gates MOTIR-3443 and MOTIR-3448.**                                                                                                                                                                                             |
+| **Hosted agent room**              | **`hosted-agent.mock.html`** (HTML mock)                           | A PROJECT-settings room (Automation group, under AI planning): the model a hosted run uses per difficulty — Trivial · Low · Medium · High — with its source (_Platform default_ / _Override_), an override select per row and _Reset to default_. Multi-panel (access path · default · choosing · overridden · withdrawn · read-only · loading · unavailable · ~400px). Sibling: `../runs/run-section--from-difficulty.mock.html`. **MOTIR-6991.**                                                                                                                                                                                                                            |
+| **Appearance — Fonts by language** | **`appearance--fonts-by-language.mock.html`** (HTML mock, a DELTA) | Amends the Appearance pane: a fifth `AxisField` below Typography, eleven language rows in `FONT_SET_LOCALES` order. ja · ko · zh offer Automatic plus the two members of their one multi-member role, each chip in its own face; the eight Latin rows are plain text. Multi-panel (default · ja page ja-picked · ja page ko-picked · Editorial · couldn't sync · face loading · stale pick · dark · ~400px). **Gates MOTIR-7899.**                                                                                                                                                                                                                                            |
 
 ## Why the whole area (the corner that was cut, then fixed)
 
@@ -1156,6 +1157,131 @@ the registries + the showcase slice, and flipping the `accountSettingsNav`
 `appearance` entry from a placeholder to a real route (which keeps the
 route↔registry totality test green by construction). No new colour/shape primitive
 is required.
+
+---
+
+# Appearance — Fonts by language (MOTIR-7736)
+
+**Design system (step 1).** Read `package.json` (depends on `@motir/design-system`
+`workspace:*`) and `app/globals.css` (imports `@motir/design-system/theme.css`):
+both hold, so this is **branch (a), on Motir Design**. The installed version is the
+workspace package itself. The mock composes the shipped primitives' class strings
+(`AxisField`, `AxisRadioGroup`, the `AppearanceCard` footer) over the token block
+`../auth/auth-frame--language-control.mock.html` carries, and copies theme.css's
+**FONT SETS** section verbatim, so a page's `lang` and a picked member re-type the
+mock exactly as they re-type the app. No part is missing from the package; the one
+new composition (the two-line member chip) is **product-local**, a variant of the
+`AxisOption` chip, because no other surface previews a face with a script sample.
+
+**Amends** § _Appearance pane_ above (its panel list) and
+`appearance.mock.html`, which is **not edited**. Asset:
+**`appearance--fonts-by-language.mock.html`**, holding only the changed panels.
+**Drawn from** `packages/design-system/src/theme/fontSets.ts` as of `f383bc6d3`
+(`FONT_SET_REGISTRY`, `LOCALE_FONT_SET`, `FONT_SET_LOCALES`).
+
+## What changes
+
+The Appearance Card gains a **fifth `AxisField` below Typography**: name
+**Fonts by language**, help _Which face each language is drawn in. Automatic
+follows Motir's default._ Its body is **eleven rows** in `FONT_SET_LOCALES` order
+(en zh ja ko de fr es it nl pl pt), in the settings-row grammar: the label at a
+fixed 9rem column, the control beside it, `--el-border-soft` hairlines between.
+The access path is unchanged: the rail's Preferences → Appearance row (Panel 1
+draws it active).
+
+- **The label** is the endonym (English · 中文 · 日本語 · 한국어 · Deutsch ·
+  Français · Español · Italiano · Nederlands · Polski · Português), the language
+  switcher's own labels, untranslated, each with `lang="<locale>"`.
+  ⚠️ **Build note:** theme.css's `[lang]:lang(ja)` block re-declares the set's
+  default on any element carrying `lang`, so a nested label does NOT inherit the
+  page's `data-font-set-*`. The label of a language with a stored pick therefore
+  carries that pick's `data-font-set-<role>` attribute too, so 日本語 previews the
+  person's choice (Panels 2 and 3).
+- **A language with a choice** (ja, ko, zh) is an `AxisRadioGroup`:
+  1. **`Automatic (‹default›)`** first, naming the choosable role's DEFAULT family
+     (ja Noto Sans JP · ko Noto Sans KR · zh Noto Serif SC). Selected when nothing
+     is stored.
+  2. **Each member of the role(s) with more than one member**, in registry order
+     (ja: Noto Sans JP, M PLUS Rounded 1c · ko: Noto Sans KR, Nanum Gothic · zh:
+     Noto Serif SC, LXGW WenKai TC). The chip is two lines: the family name, then a
+     fixed script sample (ja ひらがなと漢字 · ko 한글과 한자 · zh 汉字与诗文), BOTH set in
+     that member's own face (`font-family: var(--font-set-<set>-<role>-<member>)`,
+     the face itself, not the composed `--font-sans`, whose Latin slot would draw the
+     name in the pairing's face). The sample carries the locale's `lang`.
+  3. A small uppercase **role tag** (Sans / Serif) after the text, inheriting the
+     chip's ink.
+
+  A member that is alone in its role is **not offered**: picking it changes
+  nothing. The default member IS offered alongside Automatic, because a stored
+  explicit default survives a later change of default while Automatic follows it.
+
+- **A language with nothing to choose** (the eight Latin locales): plain text,
+  no chip, no radiogroup: _Your Type pairing's face (‹active Type name›)_, which
+  updates live with the Type axis (Panel 4 reads "Editorial").
+- **No Save button**: the existing optimistic, debounced path, like every axis.
+
+## Panels
+
+1. **Default, English page** — nothing stored; Automatic selected on ja/ko/zh.
+2. **Japanese page, ja = M PLUS Rounded 1c** — `lang="ja"
+data-font-set-sans="m-plus-rounded-1c"` on the page: the rail, heads, axis copy
+   and the showcase's Japanese re-type; Latin words keep the pairing's face. The
+   Japanese chrome copy is illustrative; the ja catalogue is the translate
+   subtask's.
+3. **Japanese page, ko = Nanum Gothic** — before / after: only the 한국어 row (its
+   label and selected chip) differs.
+4. **ja picked under Editorial** — Latin serif becomes Fraunces; the ja sans pick
+   is unchanged. The pick and the pairing are independent.
+5. **Couldn't sync** — the existing footer, unchanged: `TriangleAlert` +
+   `settings.appearance.sync.error`, `role="status"`. It also covers a refused
+   save; no new error string.
+6. **Preview face still loading** — the chip draws its name and sample in the set's
+   DEFAULT face at the same box (`font-display: swap`), then swaps. No spinner,
+   skeleton or dimming.
+7. **A stale stored pick** — Automatic selected (the store already drops it and
+   `resolveFontSetMember` falls back). No warning.
+8. **Dark** — all inks are `--el-*`, so the field flips.
+9. **Narrow (~400px)** — the label stacks above the chips, which wrap.
+
+## Faces — loaded by the pane only
+
+The six member faces (Noto Sans JP, M PLUS Rounded 1c, Noto Sans KR, Nanum
+Gothic, Noto Serif SC, LXGW WenKai TC) are what the chips preview, and the mock
+loads exactly those from Google Fonts — never a stand-in. **On the shipped pane
+these preview faces are loaded by the Appearance pane only**, so no other page
+fetches a face just because the picker could offer it. The page's own language's
+CHOSEN face is a different thing — the first-byte apply loads that one on every
+page.
+
+## Copy keys (English only; the other ten catalogues are the translate subtask's)
+
+| Key                                                 | English                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------ |
+| `settings.appearance.fontsByLanguage.name`          | Fonts by language                                                        |
+| `settings.appearance.fontsByLanguage.help`          | Which face each language is drawn in. Automatic follows Motir's default. |
+| `settings.appearance.fontsByLanguage.automatic`     | Automatic ({font})                                                       |
+| `settings.appearance.fontsByLanguage.pairingFace`   | Your Type pairing's face ({type})                                        |
+| `settings.appearance.fontsByLanguage.role.sans`     | Sans                                                                     |
+| `settings.appearance.fontsByLanguage.role.serif`    | Serif                                                                    |
+| `settings.appearance.sync.error` (existing, reused) | Couldn't sync to your account — your changes are saved on this device.   |
+
+The endonyms and the three script samples are fixed strings, not keys.
+
+## Colour, shape and ink
+
+Colour is `--el-*` only: the selected chip is the shipped `--el-accent` border +
+`--el-tint-lavender` fill + `--el-accent-on-surface` ink, and the role tag and
+sample inherit the chip's ink, so they clear AA on the tint as the label does. The
+plain Latin rows use **`--el-text-secondary`** rather than muted, so they clear AA
+on any surface the card lands on. Shape is `--radius-badge` + `--spacing-chip-x/y`
+for chips, `--radius-card` / `--spacing-card-padding` for the card.
+
+## Build dependency (MOTIR-7899)
+
+MOTIR-7899 builds this as a fifth `AxisField` in `AppearanceCard`, derives the
+offer from the registry (roles with more than one member, labelled by the role
+default), reads and writes through `useTheme()`'s `setFontPick`, and loads the six
+preview faces in the pane only.
 
 ---
 
