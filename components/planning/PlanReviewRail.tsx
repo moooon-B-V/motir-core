@@ -7,7 +7,6 @@ import {
   Bot,
   Check,
   LoaderCircle,
-  MessageSquareText,
   OctagonAlert,
   RotateCw,
   Sparkles,
@@ -222,17 +221,14 @@ export function PlanReviewRail({
   // ── THE PLAN GATE, on its own page (Story MOTIR-6012 · MOTIR-6037; design Part XXII
   // §22.4, §22.5, Panel 8). The existing CTA IS the gate's Approve and the ghost
   // Decline IS the gate's Decline — nothing is moved. What an ASKED plan adds: Decline
-  // confirms once, in the approve language's band with an OPTIONAL reason, and a plan
-  // with no conversation to return to says why it opened here.
+  // confirms once, in the approve language's band with an OPTIONAL reason.
+  //
+  // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7885): a plan with no conversation
+  // used to say why it opened here. Every plan has a session now (`createPlan` attaches
+  // one; MOTIR-6020 backfilled the rest), so a null session is an invariant breach that
+  // degrades to this page SILENTLY — nothing here renders a reason for it.
   const asked = !decided && review.gate?.state === 'awaiting';
   const [declineConfirming, setDeclineConfirming] = useState(false);
-  // ⚠️ THE SESSION, NOT ITS TURNS (Story MOTIR-6043 · MOTIR-6045, design Part XXI
-  // §21.6). This read `!review.conversation?.hasTurns` until the settlement, which
-  // is why the notice below had three causes. An empty transcript is not an absent
-  // conversation, so an agent's plan, a cadence plan and a backfilled one all open
-  // the SURFACE and never reach this page for want of one. What is left is a plan
-  // with no session row at all — one population, one sentence.
-  const noConversation = asked && !review.conversation;
 
   return (
     <aside
@@ -328,8 +324,6 @@ export function PlanReviewRail({
             <ReviewAttribution review={review} t={t} />
           </p>
         </header>
-
-        {noConversation ? <NoConversationNotice /> : null}
 
         {/* HISTORY timeline */}
         <section className="flex flex-col gap-2">
@@ -789,35 +783,6 @@ function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof u
  * to `PlanDecisionReasonDto` is a type error here rather than a plan silently
  * rendering as reviewed-and-rejected.
  */
-/**
- * A PLAN WITH NO SESSION opened on its own page, and says why (MOTIR-6037; design
- * Part XXII §22.5 Panel 8, narrowed by Part XXI §21.6) — the reopened line's shape with a
- * `message-square-text` glyph. The page HAS a composer (Part XII), so it never says there
- * is nothing to talk to; only that there is no conversation to return to.
- *
- * ⚠️ ONE CAUSE, where there were three. The three read the plan's AUTHOR and ORIGIN —
- * an agent's plan, a cadence plan, an earlier plan — and all three of those populations
- * HAVE sessions (`agent-authored-plans.md` AMENDMENT 17 §4–§5) and now open the planning
- * surface instead. So `…noConversation.agent` / `.cadence` / `.earlier` are retired and
- * `.none` replaces them: nothing reaches this notice except a plan whose `sessionId` is
- * null, and inventing a reason for it from `authorSource` would be a guess.
- */
-function NoConversationNotice() {
-  const t = useTranslations('approvalGate.planApproval.noConversation');
-  const cause = t('none');
-  return (
-    <p
-      data-testid="plan-no-conversation"
-      className="flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
-    >
-      <MessageSquareText className="mt-px size-3.5 flex-none" aria-hidden />
-      <span>
-        {cause} {t('next')}
-      </span>
-    </p>
-  );
-}
-
 function declinedOutcomeKey(reason: PlanDecisionReasonDto | null): string {
   switch (reason) {
     case 'discarded':

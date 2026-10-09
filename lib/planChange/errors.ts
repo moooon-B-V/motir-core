@@ -82,6 +82,24 @@ export class PlanChangeTurnConflictError extends Error {
   }
 }
 
+/**
+ * A correction asked to re-run an ANSWERED turn as a plan change
+ * (`conversation-turn-intent.md` AMENDMENT 3). Whether a turn becomes a
+ * planning run is the planner's call alone, so that direction of the §3 flip is
+ * retired: nothing is recorded and no job is submitted. A person who wants
+ * changes says so in a new turn. → 422: the request names a re-run that is
+ * not offered.
+ */
+export class PlanChangeFlipNotOfferedError extends Error {
+  readonly code = 'PLAN_CHANGE_FLIP_NOT_OFFERED' as const;
+  constructor(turnId: string) {
+    super(
+      `Turn ${turnId} was answered; it cannot be re-run as a plan change. Say what should change in a new turn.`,
+    );
+    this.name = 'PlanChangeFlipNotOfferedError';
+  }
+}
+
 /** Submit was called on a thread with no `user` turns to submit — there is no
  *  intent to send (an empty conversation, or one holding only system markers).
  *  → 409: a state conflict, not a malformed request. */

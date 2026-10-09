@@ -3,6 +3,7 @@ import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanShapes, PLANS_SHAPES_PASSWORD } from './_helpers/plans-shapes-seed';
 import { SPLIT_MIN_CONTAINER_PX } from '@/lib/planning/railWidth';
+import { plansService } from '@/lib/services/plansService';
 
 // ── BELOW `md` THE PLAN PAGE'S CANVAS STILL HAS A HEIGHT (Bug MOTIR-6281) ─────
 //
@@ -45,8 +46,18 @@ test('below the split breakpoint the plan page stacks and its canvas keeps a rea
   await page.setViewportSize(narrow);
   await signIn(page, seed.email, PLANS_SHAPES_PASSWORD);
 
+  // ⚠️ DECLINED FIRST (re-pointed by Story MOTIR-7883, 2026-10-08). The subject is
+  // the plan PAGE's fixed frame, and a member's `/plans/<id>` for an undecided plan
+  // now lands in the planning overlay instead; a decided plan keeps its page, and
+  // the same frame, canvas and rail.
+  const owner = await adminDb.user.findUniqueOrThrow({ where: { email: seed.email } });
+  await plansService.declinePlan(seed.two.planId, {
+    userId: owner.id,
+    workspaceId: seed.workspaceId,
+  });
+
   // Shape two opens on the canvas, at the level holding the story it modifies.
-  await page.goto(`/plans/${seed.two.planId}`);
+  await page.goto(`/plans/${seed.two.planId}`); // decided: the plan page renders
   // Scoped to the LIVE page body: a page-rooted strict locator can also match a
   // streamed-out or SSR-staged copy of the same node (MOTIR-5037's guard).
   const main = page.getByRole('main');
@@ -87,10 +98,14 @@ test('below the split breakpoint the plan page stacks and its canvas keeps a rea
   expect(Math.abs(stacked.canvas - stacked.frame)).toBeLessThanOrEqual(1);
   expect(Math.abs(stacked.rail - stacked.frame)).toBeLessThanOrEqual(1);
 
-  // ── The rail is still reachable, and so is the decision it carries ─────────
-  const approve = page.getByRole('button', { name: /^Approve/ });
-  await approve.scrollIntoViewIfNeeded();
-  await expect(approve).toBeInViewport();
+  // ── The rail is still reachable, and so is the outcome it carries ──────────
+  // A decided plan's rail carries its OUTCOME where an undecided one carried the
+  // decision (Story MOTIR-7883 moved that decision into the overlay's footer).
+  const outcome = main
+    .getByRole('complementary', { name: 'Plan review' })
+    .getByTestId('plan-status-pill');
+  await outcome.scrollIntoViewIfNeeded();
+  await expect(outcome).toBeInViewport();
 
   // ── At the breakpoint the frame is the unchanged two-column track ──────────
   await page.setViewportSize({ width: SPLIT_MIN_CONTAINER_PX, height: narrow.height });

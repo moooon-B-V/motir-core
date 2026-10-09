@@ -209,6 +209,8 @@ export interface PlanChangeRailProps {
   /**
    * RE-RUN the user turn `turnId` under the other intent — the correction
    * affordance under an assistant bubble (`conversation-turn-intent.md` §3).
+   * Offered only from a plan change (or a debug) TO an answer: AMENDMENT 3
+   * retired the flip into a planning run.
    *
    * It names the TURN and never the direction: which intent to flip to is
    * derived server-side from what the turn currently ran as, so the one
@@ -1400,21 +1402,27 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
             </p>
           ) : null}
         </Bubble>
-        {/* The CORRECTION (ADR §3) — an interactive line in the shipped marker
-            vocabulary, distinguished from the passive markers by ink AND
-            underline rather than by colour alone. */}
-        {correction ? (
+        {/* The CORRECTION (ADR §3, as amended by AMENDMENT 3) — an interactive
+            line in the shipped marker vocabulary, distinguished from the passive
+            markers by ink AND underline rather than by colour alone.
+
+            ⚠️ ONLY TOWARDS AN ANSWER. Under an answer there is NO "Propose
+            changes instead": whether a turn becomes a planning run is the
+            planner's call alone, never a button (MOTIR-7924). A person who wants
+            changes says so in the composer, and the planner decides.
+
+            As wide as its label, not as the transcript: the log is a flex
+            column, and a stretched button caught clicks anywhere on its row. */}
+        {correction && correction.direction === 'ask' ? (
           <button
             type="button"
             onClick={() => correction.onCorrect(correction.turnId)}
             disabled={correction.pending}
             data-testid="plan-change-correct"
             data-direction={correction.direction}
-            className="rounded-(--radius-control) text-center text-xs font-semibold text-(--el-link) underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:cursor-not-allowed disabled:text-(--el-text-secondary) disabled:no-underline"
+            className="w-fit self-center rounded-(--radius-control) text-center text-xs font-semibold text-(--el-link) underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:cursor-not-allowed disabled:text-(--el-text-secondary) disabled:no-underline"
           >
-            {correction.pending
-              ? tc('correcting')
-              : tc(correction.direction === 'plan_change' ? 'correctToPlan' : 'correctToAsk')}
+            {correction.pending ? tc('correcting') : tc('correctToAsk')}
           </button>
         ) : null}
       </>

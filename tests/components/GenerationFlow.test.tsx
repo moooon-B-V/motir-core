@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { withPlanningOverlay } from '@/lib/planning/launcher';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { GenerationPhase, UsePlanGeneration } from '@/lib/hooks/usePlanGeneration';
 
@@ -8,11 +9,17 @@ import type { GenerationPhase, UsePlanGeneration } from '@/lib/hooks/usePlanGene
 // generation lifecycle via `usePlanGeneration` and renders each phase: the live
 // reveal (Panel C — REUSES the shipped PlanReviewCanvas, not redrawn) and the
 // terminal states it OWNS because Plan.status can't encode them (Panel D — failed
-// / out-of-credits / empty). On success it hands off to the 847 review surface.
+// / out-of-credits / empty). On success it hands off to the planning overlay on
+// the Plans list (Story MOTIR-7883 · MOTIR-7890).
 // The hook + heavy canvas are stubbed — orchestration is unit-tested separately.
 
-const push = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+const { push, shallowPush } = vi.hoisted(() => ({ push: vi.fn(), shallowPush: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => '/onboarding/discovery',
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
 vi.mock('@/components/planning/PlanReviewCanvas', () => ({
   PlanReviewCanvas: () => <div data-testid="plan-review-canvas" />,
 }));
@@ -30,12 +37,19 @@ function setPhase(phase: GenerationPhase, over: Partial<UsePlanGeneration> = {})
   hookReturn = { phase, planId: null, items: [], version: 0, start, stop, ...over };
 }
 
+const fetchMock = vi.fn();
 beforeEach(() => {
+  fetchMock.mockReset();
+  vi.stubGlobal('fetch', fetchMock);
+  shallowPush.mockClear();
   push.mockClear();
   start.mockClear();
   stop.mockClear();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('GenerationFlow (MOTIR-1396)', () => {
   it('auto-starts generation when it mounts (the hand-off "Generate" click is the trigger)', () => {
@@ -87,12 +101,33 @@ describe('GenerationFlow (MOTIR-1396)', () => {
     );
   });
 
-  it('PLANNED: hands off to the 847 review surface (/plans/:id), never approving here', () => {
+  it('PLANNED: hands off to the planning overlay on the Plans list, once, never approving here', async () => {
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            status: 'planned',
+            conversation: { sessionId: 's_42', targetKeys: [] },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    );
     setPhase('planned', { planId: 'plan_42' });
-    renderWithIntl(<GenerationFlow onExit={vi.fn()} />);
+    const { rerender } = renderWithIntl(<GenerationFlow onExit={vi.fn()} />);
+    await act(async () => {});
 
-    expect(push).toHaveBeenCalledWith('/plans/plan_42');
-    // No approve/decline controls — those live on the 847 detail.
+    // The overlay is not mounted on the onboarding route, so the hand-off
+    // NAVIGATES to /plans with it open — never an in-place write.
+    expect(push).toHaveBeenCalledExactlyOnceWith(
+      withPlanningOverlay('/plans', { kind: 'project', sessionId: 's_42' }),
+    );
+    expect(shallowPush).not.toHaveBeenCalled();
+    // No approve/decline controls — those live in the overlay.
     expect(screen.queryByRole('button', { name: /Approve/ })).toBeNull();
+
+    // A second render at `planned` does not push again.
+    rerender(<GenerationFlow onExit={vi.fn()} />);
+    await act(async () => {});
+    expect(push).toHaveBeenCalledTimes(1);
   });
 });

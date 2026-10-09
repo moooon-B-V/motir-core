@@ -7531,7 +7531,6 @@
         "failedClosed": "Ese intento no se completó, así que esta sesión se cerró. Los elementos de trabajo que tenía volvieron a donde estaban."
       },
       "answeredFrom": "{count, plural, =0 {Respondido sin citar nada} one {Respondido a partir de # elemento de trabajo} other {Respondido a partir de # elementos de trabajo}}",
-      "correctToPlan": "Proponer cambios en su lugar",
       "correctToAsk": "Responder esto en su lugar",
       "correcting": "Releyendo…",
       "correctedToPlan": "Releído como un cambio del plan",
@@ -12796,10 +12795,6 @@
         "helper": "Opcional. Se guarda con la decisión.",
         "proceed": "Sí, rechazar"
       },
-      "noConversation": {
-        "none": "No hay ninguna conversación registrada para este plan.",
-        "next": "Apruébalo o recházalo aquí, o pide a Motir que lo cambie abajo."
-      },
       "handoff": {
         "writing": "Tengo lo que necesito: estoy escribiendo el plan. No tienes que esperar aquí: cierra esto cuando quieras y el plan te estará esperando en <link>Esperando tu acción</link>.",
         "rewriting": "Estoy escribiendo una nueva versión de este plan. Puedes cerrar esto: sigue en <link>Esperando tu acción</link> y podrás decidir cuando termine."
@@ -13285,9 +13280,7 @@
   },
   "planDestination": {
     "conversation": "Abre la conversación",
-    "plan": "Abre el plan",
-    "noConversation": "sin conversación",
-    "noConversationWhy": "No hay ninguna conversación registrada para este plan."
+    "plan": "Abre el plan"
   },
   "orgClosing": {
     "banner": {

@@ -2,7 +2,9 @@ import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanShapes, PLANS_SHAPES_PASSWORD } from './_helpers/plans-shapes-seed';
 import { test, expect } from './_helpers/promoted-regression';
-import type { Page } from '@playwright/test';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
+import { plansService } from '@/lib/services/plansService';
+import type { Locator, Page } from '@playwright/test';
 
 // ACCEPTANCE — the plan DETAIL at three plan SHAPES (Story MOTIR-3232 · Subtask
 // MOTIR-3263). Verification-recipe steps 6, 7 and 8, driven through the real
@@ -79,22 +81,28 @@ test.afterAll(async () => {
 // keys a node by: the work item a proposal is ABOUT, falling back to the
 // plan-item id when there is not one yet. Every id here comes from the seed's
 // return value — never from a query written in this file.
+//
+// Each takes a SCOPE (re-pointed by Story MOTIR-7883, 2026-10-08): an undecided
+// plan is read in the planning overlay, so its legs pass the overlay that
+// `openUndecidedPlan` returns; leg 3 reads a DECIDED plan's own page and passes
+// the page.
+type Scope = Page | Locator;
 
-const canvas = (page: Page) => page.getByTestId('roadmap-canvas');
-const node = (page: Page, nodeId: string) => page.locator(`[data-node-id="${nodeId}"]`);
+const canvas = (scope: Scope) => scope.getByTestId('roadmap-canvas');
+const node = (scope: Scope, nodeId: string) => scope.locator(`[data-node-id="${nodeId}"]`);
 /** The wrapper `renderNode` puts the ring, the emphasis attribute and the dim on
  *  — a CHILD of the positioned node box, not the box itself. */
-const nodeBox = (page: Page, nodeId: string) =>
-  page.locator(`[data-node-id="${nodeId}"] > div`).first();
-const crumbs = (page: Page) => page.getByRole('navigation', { name: 'Breadcrumb' });
-const showChanges = (page: Page) => page.getByTestId('show-changes-toggle');
-const viewSwitcher = (page: Page) => page.getByRole('group', { name: 'Plan view' });
+const nodeBox = (scope: Scope, nodeId: string) =>
+  scope.locator(`[data-node-id="${nodeId}"] > div`).first();
+const crumbs = (scope: Scope) => scope.getByRole('navigation', { name: 'Breadcrumb' });
+const showChanges = (scope: Scope) => scope.getByTestId('show-changes-toggle');
+const viewSwitcher = (scope: Scope) => scope.getByRole('group', { name: 'Plan view' });
 
 /** The plan's own emphasis attribute, read as a nullable string so the ABSENT
  *  case is expressible — which is the half of leg 2 that catches an
  *  implementation marking everything. */
-async function emphasisOf(page: Page, nodeId: string): Promise<string | null> {
-  return nodeBox(page, nodeId).getAttribute('data-emphasised');
+async function emphasisOf(scope: Scope, nodeId: string): Promise<string | null> {
+  return nodeBox(scope, nodeId).getAttribute('data-emphasised');
 }
 
 test('Plan detail: the canvas lands where the plan is, Show changes marks what it touches, and a straddling plan opens as a list', async ({
@@ -113,7 +121,8 @@ test('Plan detail: the canvas lands where the plan is, Show changes marks what i
 
   // ── LEG 1 · recipe step 6 — the canvas arrives ON the proposed story ───────
   await chapter('A plan of one story and its subtasks lands on the story', async () => {
-    await page.goto(`/plans/${seed.one.planId}`);
+    // An undecided plan is read in the planning overlay (Story MOTIR-7883).
+    const overlay = await openUndecidedPlan(page, seed.one.planId);
 
     // ⚠️ IT OPENS ON THE LIST, and that is this shape rather than a surprise: its
     // proposals sit under TWO containers (the epic holds the story, the story
@@ -122,23 +131,24 @@ test('Plan detail: the canvas lands where the plan is, Show changes marks what i
     // it here, on a DIFFERENT topology from leg 3's, is stronger than leg 3
     // alone — a rule that keyed off "has an intra-plan ref" would pass leg 3 and
     // fail here.
-    await expect(page.getByTestId('plan-proposal-list')).toBeVisible();
-    expect(new URL(page.url()).search).toBe('');
+    await expect(overlay.getByTestId('plan-proposal-list')).toBeVisible();
+    // The overlay keeps its view LOCAL and never writes `?view=` into the address
+    // underneath it; the plan page's URL contract is leg 3's, on a decided plan.
+    expect(new URL(page.url()).searchParams.get('view')).toBeNull();
     await beat();
 
-    await viewSwitcher(page).getByRole('button', { name: 'Canvas' }).click();
-    await page.waitForURL(`**/plans/${seed.one.planId}?view=canvas`);
-    await expect(canvas(page)).toBeVisible();
+    await viewSwitcher(overlay).getByRole('button', { name: 'Canvas' }).click();
+    await expect(canvas(overlay)).toBeVisible();
 
     // The three proposed subtasks are here…
     for (const title of seed.one.subtaskTitles) {
-      await expect(page.getByText(title, { exact: false }).first()).toBeVisible();
+      await expect(canvas(overlay).getByText(title, { exact: false }).first()).toBeVisible();
     }
     // …and the epic's committed sibling stories are NOT. This is the half that
     // fails on a canvas showing the whole tree, and the half an assertion about
     // the subtasks alone would pass straight over.
     for (const sibling of seed.one.committedSiblings) {
-      await expect(node(page, sibling.id)).toHaveCount(0);
+      await expect(node(overlay, sibling.id)).toHaveCount(0);
     }
     await beat();
 
@@ -146,36 +156,35 @@ test('Plan detail: the canvas lands where the plan is, Show changes marks what i
     // PROPOSED story (the proposed word where a key would go — nothing is real
     // until approve), and the crumb above it names the committed epic.
     await expect(
-      crumbs(page).getByRole('button', { name: seed.one.proposedStory.crumb }),
+      crumbs(overlay).getByRole('button', { name: seed.one.proposedStory.crumb }),
     ).toHaveAttribute('aria-current', 'page');
-    await expect(crumbs(page).getByRole('button', { name: seed.one.epic.crumb })).toBeVisible();
+    await expect(crumbs(overlay).getByRole('button', { name: seed.one.epic.crumb })).toBeVisible();
     await beat();
 
     // …and it is an ORDINARY drilled view: the ancestor crumb navigates up, and
     // on the epic's level the proposed story is one card among its committed
     // siblings rather than a special case.
-    await crumbs(page).getByRole('button', { name: seed.one.epic.crumb }).click();
-    await expect(node(page, seed.one.proposedStory.id)).toBeVisible();
-    await expect(node(page, seed.one.committedSiblings[0]!.id)).toBeVisible();
+    await crumbs(overlay).getByRole('button', { name: seed.one.epic.crumb }).click();
+    await expect(node(overlay, seed.one.proposedStory.id)).toBeVisible();
+    await expect(node(overlay, seed.one.committedSiblings[0]!.id)).toBeVisible();
     await beat();
   });
 
   // ── LEG 2 · recipe step 7 — Show changes marks the PLAN, not the new ───────
   await chapter('Show changes marks everything the plan touches, and only that', async () => {
-    await page.goto(`/plans/${seed.two.planId}`);
+    const overlay = await openUndecidedPlan(page, seed.two.planId);
 
     // ⚠️ AND THIS IS ALSO LEG 3's CONTROL CASE. Every proposal here sits under ONE
-    // container, so the derived default is the CANVAS and the URL stays clean. A
+    // container, so the derived default is the CANVAS and no view is written. A
     // rule that always answered "list" would pass leg 3 and fail this line.
-    await expect(canvas(page)).toBeVisible();
-    expect(new URL(page.url()).search).toBe('');
+    await expect(canvas(overlay)).toBeVisible();
+    expect(new URL(page.url()).searchParams.get('view')).toBeNull();
     // It opened on the EPIC's level — the same fullest-container rule as leg 1,
     // landing somewhere else, which is what says the arrival is derived rather
     // than a hard-coded depth.
-    await expect(crumbs(page).getByRole('button', { name: seed.two.epic.crumb })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    await expect(
+      crumbs(overlay).getByRole('button', { name: seed.two.epic.crumb }),
+    ).toHaveAttribute('aria-current', 'page');
     await beat();
 
     // ⚠️ ARMED ON ARRIVAL (MOTIR-4020, design Part XIII §3). This leg used to
@@ -184,49 +193,60 @@ test('Plan detail: the canvas lands where the plan is, Show changes marks what i
     // therefore DISARMS — which is the other half of §3b's answer: the pressed
     // treatment plus `aria-pressed` is the affordance, and a reader who did not
     // arm it can still turn it off.
-    await expect(showChanges(page)).toBeEnabled();
-    await expect(showChanges(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(showChanges(overlay)).toBeEnabled();
+    await expect(showChanges(overlay)).toHaveAttribute('aria-pressed', 'true');
 
     // THE EMPHASIS SPANS TWO OPS: the two proposed stories AND the committed
     // story the plan modifies. An implementation that marked "the new cards"
     // would satisfy a one-op leg and miss what the control is for.
     for (const id of [...seed.two.addedNodeIds, seed.two.modified.id]) {
-      await expect(nodeBox(page, id)).toHaveAttribute('data-emphasised', 'true');
-      await expect(nodeBox(page, id)).not.toHaveClass(/opacity-35/);
+      await expect(nodeBox(overlay, id)).toHaveAttribute('data-emphasised', 'true');
+      await expect(nodeBox(overlay, id)).not.toHaveClass(/opacity-35/);
     }
     // …and the COMPLEMENT, which is the assertion that makes the first one mean
     // something: the untouched siblings carry no emphasis and DO carry the dim.
     // Asserted on the shipped class, never on a computed opacity — that would be
     // a brittle reading of a token the style axis is allowed to move.
     for (const untouched of seed.two.untouched) {
-      expect(await emphasisOf(page, untouched.id)).toBeNull();
-      await expect(nodeBox(page, untouched.id)).toHaveClass(/opacity-35/);
+      expect(await emphasisOf(overlay, untouched.id)).toBeNull();
+      await expect(nodeBox(overlay, untouched.id)).toHaveClass(/opacity-35/);
     }
     await beat();
 
     // Press it ONCE and BOTH go: the marks and the dimming.
-    await showChanges(page).click();
-    await expect(showChanges(page)).toHaveAttribute('aria-pressed', 'false');
+    await showChanges(overlay).click();
+    await expect(showChanges(overlay)).toHaveAttribute('aria-pressed', 'false');
     for (const id of [...seed.two.addedNodeIds, seed.two.modified.id]) {
-      expect(await emphasisOf(page, id)).toBeNull();
+      expect(await emphasisOf(overlay, id)).toBeNull();
     }
     for (const untouched of seed.two.untouched) {
-      await expect(nodeBox(page, untouched.id)).not.toHaveClass(/opacity-35/);
+      await expect(nodeBox(overlay, untouched.id)).not.toHaveClass(/opacity-35/);
     }
     await beat();
   });
 
   // ── LEG 3 · recipe step 8 — a straddling plan opens as a LIST ──────────────
   await chapter('A plan spread across two containers opens as a list', async () => {
-    await page.goto(`/plans/${seed.three.planId}`);
+    // ⚠️ DECLINED FIRST (re-pointed by Story MOTIR-7883, 2026-10-08). This leg is
+    // the plan PAGE's URL contract — a clean default, a pushed `?view=`, a reload
+    // and Back — and an undecided plan's page now redirects into the overlay,
+    // whose view is local. A decided plan keeps its page, and its body still
+    // derives the same default from the same proposals.
+    const owner = await adminDb.user.findUniqueOrThrow({ where: { email: seed.email } });
+    await plansService.declinePlan(seed.three.planId, {
+      userId: owner.id,
+      workspaceId: seed.workspaceId,
+    });
+    await page.goto(`/plans/${seed.three.planId}`); // decided: the plan page renders
+    const main = page.getByRole('main');
 
     // No single canvas level can show this plan — its proposals sit under a
     // committed story AND a committed epic — so the surface opens on the body
     // that can answer the question, instead of insisting on the one that cannot.
-    await expect(page.getByTestId('plan-proposal-list')).toBeVisible();
-    await expect(canvas(page)).toHaveCount(0);
+    await expect(main.getByTestId('plan-proposal-list')).toBeVisible();
+    await expect(canvas(main)).toHaveCount(0);
     for (const title of [...seed.three.addedSubtaskTitles, seed.three.addedStoryTitle]) {
-      await expect(page.getByTestId('plan-proposal-list')).toContainText(title);
+      await expect(main.getByTestId('plan-proposal-list')).toContainText(title);
     }
 
     // ⚠️ AND THE URL IS STILL CLEAN. This is the part a reasonable implementation
@@ -237,19 +257,19 @@ test('Plan detail: the canvas lands where the plan is, Show changes marks what i
 
     // The switcher flips to the canvas, and NOW the URL carries the parameter —
     // because the canvas is not this plan's default.
-    await viewSwitcher(page).getByRole('button', { name: 'Canvas' }).click();
+    await viewSwitcher(main).getByRole('button', { name: 'Canvas' }).click();
     await page.waitForURL(`**/plans/${seed.three.planId}?view=canvas`);
-    await expect(canvas(page)).toBeVisible();
+    await expect(canvas(main)).toBeVisible();
     await beat();
 
     // A reload keeps it — the URL is the single source of truth…
     await page.reload();
-    await expect(canvas(page)).toBeVisible();
+    await expect(canvas(main)).toBeVisible();
 
     // …and Back returns to the list, because the switch pushed history.
     await page.goBack();
     await page.waitForURL(`**/plans/${seed.three.planId}`);
-    await expect(page.getByTestId('plan-proposal-list')).toBeVisible();
+    await expect(main.getByTestId('plan-proposal-list')).toBeVisible();
     await beat();
   });
 });
@@ -267,12 +287,12 @@ test('Plan detail: the two degenerate canvas levels — all proposals, and none'
   // that does not exist yet, so the level has no committed neighbours at all.
   // No component test reaches this — the level's membership is computed from a
   // real plan against a real tree.
-  await page.goto(`/plans/${seed.one.planId}?view=canvas`);
-  await expect(canvas(page)).toBeVisible();
-  await expect(page.getByTestId('plan-item-node')).toHaveCount(seed.one.subtaskTitles.length);
+  const one = await openUndecidedPlan(page, seed.one.planId, { view: 'canvas' });
+  await expect(canvas(one)).toBeVisible();
+  await expect(one.getByTestId('plan-item-node')).toHaveCount(seed.one.subtaskTitles.length);
   // EVERY node on the level is one of them — the honest way to say "no committed
   // neighbours", and it does not depend on knowing which committed ids to name.
-  expect(await page.locator('[data-node-id]').count()).toBe(seed.one.subtaskTitles.length);
+  expect(await one.locator('[data-node-id]').count()).toBe(seed.one.subtaskTitles.length);
 
   // ⚠️ REVERSED by MOTIR-4020 (design Part XIII §3d), and the reversal is the
   // point. This case used to press the control and assert that every card lit —
@@ -282,12 +302,12 @@ test('Plan detail: the two degenerate canvas levels — all proposals, and none'
   // they land that the ring means nothing. So this level DISABLES the control,
   // with its own reason — the mirror of degenerate 2 below, same disposition and
   // opposite emptiness.
-  await expect(showChanges(page)).toBeDisabled();
-  await expect(showChanges(page)).toHaveAttribute(
+  await expect(showChanges(one)).toBeDisabled();
+  await expect(showChanges(one)).toHaveAttribute(
     'title',
     "Every item on this level is this plan's",
   );
-  const levelNodes = page.locator('[data-node-id]');
+  const levelNodes = one.locator('[data-node-id]');
   for (let i = 0; i < (await levelNodes.count()); i += 1) {
     const box = levelNodes.nth(i).locator('> div').first();
     // Nothing is ringed and nothing is dimmed: the screen says nothing, and now
@@ -302,18 +322,18 @@ test('Plan detail: the two degenerate canvas levels — all proposals, and none'
   // its cards are here. The control is DISABLED and says why, rather than
   // switching on to dim every card and ring none — a screen that says nothing is
   // worse than a control that says why it cannot help.
-  await page.goto(`/plans/${seed.two.planId}`);
-  await expect(canvas(page)).toBeVisible();
-  await expect(showChanges(page)).toBeEnabled();
+  const two = await openUndecidedPlan(page, seed.two.planId);
+  await expect(canvas(two)).toBeVisible();
+  await expect(showChanges(two)).toBeEnabled();
 
-  await crumbs(page).getByRole('button', { name: 'Roadmap' }).click();
+  await crumbs(two).getByRole('button', { name: 'Roadmap' }).click();
   // The epic is a card on the root level; none of the plan's cards are.
-  await expect(node(page, seed.two.epic.id)).toBeVisible();
+  await expect(node(two, seed.two.epic.id)).toBeVisible();
   for (const id of [...seed.two.addedNodeIds, seed.two.modified.id]) {
-    await expect(node(page, id)).toHaveCount(0);
+    await expect(node(two, id)).toHaveCount(0);
   }
-  await expect(showChanges(page)).toBeDisabled();
-  await expect(showChanges(page)).toHaveAttribute(
+  await expect(showChanges(two)).toBeDisabled();
+  await expect(showChanges(two)).toHaveAttribute(
     'aria-description',
     'No proposed changes on this level',
   );

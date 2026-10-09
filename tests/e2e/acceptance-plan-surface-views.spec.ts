@@ -47,19 +47,6 @@ const list = (page: Page) => workspace(page).getByTestId('plan-proposal-list');
 // (`PlanningCanvas.tsx:405`), which is what a browser can see.
 const canvas = (page: Page) => workspace(page).getByTestId('planning-canvas');
 const keepalive = (page: Page) => workspace(page).getByTestId('plan-review-canvas-keepalive');
-/** The PLAN PAGE's own list — scoped to `main`, not to the page.
- *
- * ⚠️ A page-rooted strict locator is what `tests/e2e-page-rooted-locators.test.ts`
- * refuses, and the reason is not style: React keeps the PREVIOUS subtree mounted
- * while the new one streams, and the hidden `S:0` SSR staging block is in the DOM
- * too — so a locator rooted at the PAGE can match a node this spec never put
- * there. It passes locally and loses a merge-queue slot, where the failure looks
- * like a merge that simply did not happen.
- *
- * (The prose here deliberately does not spell the page-rooted call out: the
- * scanner reads the file as text and does not strip comments, so an example in a
- * docstring trips the guard exactly as a real one would.) */
-const pageList = (page: Page) => page.getByRole('main').getByTestId('plan-proposal-list');
 const verb = (scope: Locator, name: string) => scope.getByRole('button', { name, exact: true });
 const overlayOpen = (url: URL) => url.searchParams.has('plan');
 
@@ -227,17 +214,10 @@ test('a proposed plan reads on the surface as its own page shows it, and approve
     await composer(page).fill('');
   });
 
-  await chapter('The plan’s own page shows exactly the same thing', async () => {
-    const surfaceUrl = page.url();
-    await page.goto(`/plans/${planId}?view=list`);
-    await expect(pageList(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
-    for (const title of THREE) {
-      await expect(pageList(page).getByText(title, { exact: false }).first()).toBeVisible();
-    }
-    await beat();
-    await page.goto(surfaceUrl);
-    await expect(views(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
-  });
+  // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7886): a chapter here opened the
+  // plan's own page and showed it held the same list. A member's `/plans/<id>` for an
+  // undecided plan now lands in this very overlay, so the comparison has nothing left
+  // to compare; the pane IS the plan page's `PlanProposalViews` (MOTIR-6186).
 
   await chapter('Approve from the List — the cards land in the backlog', async () => {
     await viewButton(page, planReview.viewList).click();

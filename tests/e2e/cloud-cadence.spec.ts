@@ -49,8 +49,9 @@
 
 import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   aiPlanningPanel,
   clickAiPlanningSave,
@@ -159,6 +160,33 @@ const sprintLengthField = (page: Page) => page.getByRole('spinbutton', { name: '
 const pausedBanner = (page: Page) => aiPlanningPanel(page).getByTestId('ai-planning-paused-banner');
 /** CONVERTED. A `<Link>` whose visible text is its accessible name. */
 const pausedLink = (page: Page) => page.getByRole('link', { name: 'Review the plan' });
+
+/**
+ * The paused link points at `planId` — in the planning OVERLAY over this settings
+ * page, since the plan it names is undecided (Story MOTIR-7883 · MOTIR-7890).
+ *
+ * ⚠️ POLLED, because the door's href is `/plans/<id>` until its review read
+ * settles and only then becomes the overlay address. And MATCHED, never composed:
+ * the address has one author (`planRowDestination`), so the assertion reads its
+ * `planSession` back and compares it to the plan's own session in the database —
+ * which is what "it points at THIS plan" means for an overlay address.
+ */
+async function expectPausedLinkOpens(page: Page, planId: string): Promise<void> {
+  const { sessionId } = await adminDb.plan.findUniqueOrThrow({
+    where: { id: planId },
+    select: { sessionId: true },
+  });
+  expect(sessionId, `plan ${planId} has a session to open`).not.toBeNull();
+  const here = new URL(page.url()).pathname;
+  await expect
+    .poll(async () => {
+      const href = await pausedLink(page).getAttribute('href');
+      if (!href) return null;
+      const url = new URL(href, page.url());
+      return url.pathname === here ? url.searchParams.get('planSession') : null;
+    })
+    .toBe(sessionId);
+}
 
 /** SCOPED to `main`. `DockShell` is a `<section aria-labelledby>` — so it IS a
  *  named region — but the name is its own `<h2>`, which is one of THREE titles
@@ -385,7 +413,7 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     await expect(banner).toContainText('Auto-plan is paused');
     // The link is the point — it makes the silence actionable.
     const planId = (await plansOf(seed.projectId))[0]!.id;
-    await expect(pausedLink(page)).toHaveAttribute('href', `/plans/${planId}`);
+    await expectPausedLinkOpens(page, planId);
     await beat();
 
     // The gate holds: a further tick creates nothing.
@@ -401,16 +429,22 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
   // ── 5 ─────────────────────────────────────────────────────────────────────
   await chapter('Decide, and cadence resumes', async () => {
     const planId = (await plansOf(seed.projectId))[0]!.id;
-    await page.goto(`/plans/${planId}`);
+    // Still `planned`, so it is decided where it is decided — the planning
+    // overlay's footer (Story MOTIR-7883 · MOTIR-7887).
+    const overlay = await openUndecidedPlan(page, planId);
     await beat();
 
     const declined = page.waitForResponse(
       (r) => r.url().includes(`/api/plans/${planId}/decline`) && r.request().method() === 'POST',
     );
-    await page.getByRole('button', { name: 'Decline' }).click();
+    await overlay
+      .getByTestId('plan-change-confirm-bar')
+      .getByRole('button', { name: 'Decline', exact: true })
+      .click();
     // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
-    await page
+    await overlay
       .getByTestId('plan-decline-confirm')
+      .first()
       .getByRole('button', { name: 'Yes, decline' })
       .click();
     expect((await declined).status()).toBe(200);
@@ -426,7 +460,7 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     // …and while THAT one waits, the panel reads paused again — but for the new
     // plan, so the indicator tracks the live gate rather than a stale verdict.
     await openAiPlanningSettings(page);
-    await expect(pausedLink(page)).toHaveAttribute('href', `/plans/${plans[1]!.id}`);
+    await expectPausedLinkOpens(page, plans[1]!.id);
     await beat();
   });
 });
@@ -487,5 +521,5 @@ test('the pending-proposal gate is origin-independent — a user-clicked plan pa
   // …and the panel reads paused, pointing at the user's own plan.
   await openAiPlanningSettings(page);
   await expect(pausedBanner(page)).toBeVisible();
-  await expect(pausedLink(page)).toHaveAttribute('href', `/plans/${userPlanId}`);
+  await expectPausedLinkOpens(page, userPlanId);
 });

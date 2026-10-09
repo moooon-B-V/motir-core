@@ -1,8 +1,8 @@
 import { PLAN_SESSION_STATE_VALUES } from '@/lib/dto/planSessions';
-import { plansService } from '@/lib/services/plansService';
 
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   seedPlansSurface,
   APPROVED_PLAN_COUNT,
@@ -43,7 +43,7 @@ import type { Page } from '@playwright/test';
 // ── The two tests, and why they are two ──────────────────────────────────────
 //
 // The first is the RECORDING: steps 1–6, paced for a person, chaptered. The
-// second is the pageerror sweep and the empty / concurrent-decision states — it
+// second is the pageerror sweep and the empty states — it
 // runs at a 600px-high viewport and resizes a list mid-flight, which is a thing
 // to ASSERT and not a thing to watch. Recording it would put a jarring
 // window-shrink in the middle of the receipt and teach a reviewer nothing about
@@ -132,16 +132,32 @@ const tabStrip = (page: Page) =>
 const tab = (page: Page, name: string) => tabStrip(page).getByRole('button', { name });
 const planRows = (page: Page) =>
   page.getByRole('list', { name: 'Planning conversations' }).getByRole('listitem');
-/** The whole ROW a plan's chip sits in — the chip is the plan's own link. */
+/** The whole ROW a DECIDED plan's door sits in — the row's title is the plan's own
+ *  link, `/plans/<id>`. ⚠️ DECIDED ROWS ONLY: an undecided plan's row title and
+ *  chip are overlay doors (Story MOTIR-7883 · MOTIR-7889), so no `/plans/<id>`
+ *  link exists on its row — read it by {@link rowTitled} instead. */
 const rowCardFor = (page: Page, planId: string) =>
   planRows(page).filter({ has: page.locator(`a[href="/plans/${planId}"]`) });
 const rowFor = (page: Page, planId: string) => page.locator(`a[href="/plans/${planId}"]`);
-/** The plan review rail — a named `complementary` landmark, so scoping through it
- *  resolves in the accessibility tree (MOTIR-5116). */
-const rail = (page: Page) => page.getByRole('complementary', { name: 'Plan review' });
-/** `PlanProposalList`'s scroller. A bare `<div>`, so it keeps its id and is
- *  scoped to the live route subtree instead. */
-const proposalList = (page: Page) => page.getByRole('main').getByTestId('plan-proposal-list');
+/** A row by its TITLE link's accessible name — the row's own door, whatever its
+ *  destination. The title is the latest plan's (`planSessionMappers`). */
+const rowTitled = (page: Page, title: string) =>
+  planRows(page).filter({ has: page.getByRole('link', { name: title, exact: true }) });
+/** The planning overlay, where an undecided plan opens (Story MOTIR-7883). */
+const overlayOf = (page: Page) => page.getByRole('dialog', { name: /plan/i });
+/** The overlay address, as the in-app door wrote it: on `/plans`, naming a session.
+ *  Matched, never composed — the address has one author (`planRowDestination`). */
+const isOverlayAddress = (url: URL) =>
+  url.pathname === '/plans' && url.searchParams.has('planSession');
+/** A plan's title, read back from the row the seed wrote rather than restated. */
+async function planTitle(planId: string): Promise<string> {
+  const row = await adminDb.plan.findUniqueOrThrow({
+    where: { id: planId },
+    select: { title: true },
+  });
+  if (!row.title) throw new Error(`plan ${planId} was seeded without a title`);
+  return row.title;
+}
 
 /** Scroll `<main>` — the shell's one scroller — to its bottom. An ACTION, and the
  *  signal it produces is awaited by the caller. */
@@ -195,7 +211,7 @@ async function loadWholeHistory(page: Page, oldestPlanId: string): Promise<void>
     .toBe(1);
 }
 
-test('Plans: the filter, ten at a time, who started a decided plan, the list view, and a stuck plan discarded', async ({
+test('Plans: the filter, ten at a time, who started a decided plan, and the list view', async ({
   page,
   chapter,
   beat,
@@ -338,37 +354,45 @@ test('Plans: the filter, ten at a time, who started a decided plan, the list vie
     // …and the UNDECIDED row names its starter too, with its own state.
     await tab(page, 'Waiting for approval').click();
     await page.waitForURL('**/plans?view=project&planState=planned');
-    const waiting = rowCardFor(page, seed.detailPlanId);
+    // ⚠️ BY ITS TITLE, not by `a[href="/plans/<id>"]`: the undecided row's title
+    // and chip are overlay doors (Story MOTIR-7883 · MOTIR-7889).
+    const waiting = rowTitled(page, await planTitle(seed.detailPlanId));
     await expect(waiting).toContainText(seed.requesterName);
-    await expect(rowFor(page, seed.detailPlanId)).toHaveAccessibleName(
-      'Open the plan — Waiting for approval',
-    );
+    await expect(
+      waiting.getByRole('link', { name: 'Open the plan — Waiting for approval', exact: true }),
+    ).toBeVisible();
     await beat();
   });
 
   // ── 4 — the same plan, read as a SET ──────────────────────────────────────
   await chapter('A plan can be read as a list of exactly what it changes', async () => {
-    await rowFor(page, seed.detailPlanId).click();
-    await page.waitForURL(`**/plans/${seed.detailPlanId}`);
+    // The chip is the plan's door, and an UNDECIDED plan opens in the planning
+    // overlay, in place over the list (Story MOTIR-7883 · MOTIR-7889). The address
+    // change is the authoritative signal, armed before the click.
+    const waiting = rowTitled(page, await planTitle(seed.detailPlanId));
+    const opened = page.waitForURL(isOverlayAddress);
+    await waiting
+      .getByRole('link', { name: 'Open the plan — Waiting for approval', exact: true })
+      .click();
+    await opened;
+    const overlay = overlayOf(page);
+    await expect(overlay.getByTestId('plan-proposal-views')).toBeVisible();
 
     // It opens on the CANVAS — every proposal sits under one parent, so there is
     // a level that can show it. (WHICH plans open on the list instead is the
     // sibling spec's; this one is seeded single-parent so the switcher is what
     // is under test.)
-    await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
-    expect(new URL(page.url()).search).toBe('');
+    await expect(overlay.getByTestId('planning-canvas')).toBeVisible();
     await beat();
 
-    const switcher = page.getByRole('group', { name: 'Plan view' });
-    await switcher.getByRole('button', { name: 'List' }).click();
-    await page.waitForURL(`**/plans/${seed.detailPlanId}?view=list`);
+    await overlay
+      .getByRole('group', { name: 'Plan view' })
+      .getByRole('button', { name: 'List', exact: true })
+      .click();
 
-    // SCOPED TO `main`: `PlanProposalList`'s scroller is a bare `<div>` with no
-    // role to ask for, and `main` is the live route subtree — which is what
-    // keeps a page-rooted id off React's streamed `<div hidden id="S:0">` copy
-    // and off the outgoing subtree a client-side navigation leaves mounted
-    // (`CLAUDE.md` § *a boundary makes every unscoped locator a race*).
-    const list = proposalList(page);
+    // SCOPED TO THE OVERLAY: `PlanProposalList`'s scroller is a bare `<div>` with
+    // no role to ask for, and the overlay dialog is the live subtree it renders in.
+    const list = overlay.getByTestId('plan-proposal-list');
     await expect(list).toBeVisible();
     // The two sections the plan actually has, and the proposals in them by name.
     await expect(list).toContainText('Adds');
@@ -377,70 +401,28 @@ test('Plans: the filter, ten at a time, who started a decided plan, the list vie
     await expect(list).toContainText(seed.detailModifyTitle);
     await beat();
 
-    // The URL is the single source of truth, so a RELOAD keeps the view…
-    await page.reload();
-    await expect(proposalList(page)).toBeVisible();
-
-    // …and BACK returns to the canvas, because switching pushed history rather
-    // than replacing it.
-    await page.goBack();
-    await page.waitForURL(`**/plans/${seed.detailPlanId}`);
-    await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
-    await beat();
+    // ⚠️ RETIRED 2026-10-09 by Story MOTIR-7883 (MOTIR-7889): the reload-keeps-the-
+    // view and Back-returns-to-the-canvas half. `?view=` is the plan PAGE's address,
+    // and a member reaches the page only for a DECIDED plan; in the overlay the
+    // view is local state, which a reload does not keep by design. Still covered:
+    // `tests/components/plan-detail-view-switch.test.tsx` and
+    // `tests/components/shallow-url-switches.test.tsx` (the page's switch pushes
+    // `?view=` as a history entry).
   });
 
-  // ── 5 — nothing is stranded mid-generation ────────────────────────────────
-  await chapter('A plan stuck half-written can be ended, and says so', async () => {
-    await page.goto('/plans?view=project&planState=generating');
-    await expect(tab(page, 'Writing')).toHaveAttribute('aria-pressed', 'true');
-    await rowFor(page, seed.generatingPlanId).click();
-    await page.waitForURL(`**/plans/${seed.generatingPlanId}`);
-
-    // The rail's ONE live control while generating — a real affordance, not a
-    // ghost beside a disabled Approve.
-    // BY ROLE: the discard control is a shipped `Button` in `PlanReviewRail`, so
-    // the accessibility tree excludes the streamed and outgoing copies
-    // (MOTIR-3929). `exact` keeps it off the confirm dialog's own copy.
-    const discard = rail(page).getByRole('button', { name: 'Discard this plan', exact: true });
-    await expect(discard).toBeEnabled();
-    await discard.click();
-
-    // The confirm names what is being thrown away, and what is not.
-    const confirm = page.getByRole('dialog');
-    await expect(confirm).toContainText('Discard this plan?');
-    await expect(confirm).toContainText('2 proposals');
-    await beat();
-
-    await confirm.getByRole('button', { name: 'Discard plan' }).click();
-
-    // ⚠️ THE REASON-SPECIFIC LINE, not the generic declined one. A plan that
-    // never finished being written is ENDED, not turned down, and
-    // `decisionReason` is what keeps the two distinguishable for ever — an
-    // implementation that reused the review copy would pass a status assertion
-    // and lose the distinction the column exists for.
-    // SCOPED TO THE RAIL — the pill is a bare `<span>` and the reason line a
-    // paragraph, both in `PlanReviewRail`; neither carries a role, and the rail
-    // is a named `complementary` region.
-    await expect(rail(page).getByTestId('plan-status-pill')).toContainText('Declined');
-    await expect(
-      rail(page).getByText('Plan discarded before it finished — your work items are unchanged'),
-    ).toBeVisible();
-    await expect(rail(page).getByText('Plan declined — your tree was left untouched')).toHaveCount(
-      0,
-    );
-    await beat();
-
-    // And it left the filter it was stuck in, which is the reader-visible half
-    // of the same fact.
-    await page.goto('/plans?view=project&planState=declined');
-    await expect(rowFor(page, seed.generatingPlanId)).toBeVisible();
-    await beat();
-  });
+  // ⚠️ RETIRED 2026-10-09 by Story MOTIR-7883 (MOTIR-7889): chapter 5, "A plan
+  // stuck half-written can be ended, and says so". It followed a `Writing` row
+  // into the generating plan's PAGE and pressed the review rail's *Discard this
+  // plan* (confirm naming the proposal count, then the rail's `Declined` pill and
+  // the discarded-before-it-finished line, then the row under `Declined`). That
+  // rail exists only on the undecided plan page, which a member no longer
+  // reaches, and the overlay draws no footer — so no discard — while a plan is
+  // being written (§23.1). Still covered: `tests/components/plan-review-rail-discard.test.tsx`,
+  // `tests/components/plan-detail-discard.test.tsx` and the discard reason in
+  // `tests/integration/plans/plansService.test.ts`; no e2e drives it.
 });
 
-test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a plan decided under you', async ({
-  page,
-}) => {
+test('Plans: the empty filter, an empty list view, and a list that SHRINKS', async ({ page }) => {
   await page.setViewportSize(SHORT_VIEWPORT);
   const seed = await seedPlansSurface('plans-surface-states@example.com');
   await signIn(page, seed.email, PLANS_SURFACE_PASSWORD);
@@ -468,11 +450,23 @@ test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a pl
   await expect(page.getByRole('link', { name: 'Plan with AI' })).toHaveCount(1);
 
   // ── EMPTY, one altitude down: the LIST view of a plan with nothing to list ──
-  await page.goto(`/plans/${seed.emptyPlanId}?view=list`);
-  // SCOPED TO `main` — the empty title is a `<p>` in `PlanProposalList`, not the
-  // `EmptyState` heading MOTIR-4822 converted, so there is no role to ask for.
-  await expect(page.getByRole('main').getByText('No proposals')).toBeVisible();
-  await expect(proposalList(page)).toHaveCount(0);
+  //
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887): the plan is still `generating`,
+  // so it is read in the planning overlay, which renders the same
+  // `PlanProposalViews`. The List switch is pressed HERE rather than through the
+  // helper's `view: 'list'`, which waits for `plan-proposal-list` — the very
+  // scroller an empty list never mounts. The overlay draws a generating plan LIVE,
+  // so its empty title is the being-written one, not the plan page's
+  // finished-empty "No proposals".
+  const overlay = await openUndecidedPlan(page, seed.emptyPlanId);
+  await overlay
+    .getByRole('group', { name: 'Plan view' })
+    .getByRole('button', { name: 'List', exact: true })
+    .click();
+  // SCOPED TO THE OVERLAY — the empty title is a `<p>` in `PlanProposalList`, not
+  // the `EmptyState` heading MOTIR-4822 converted, so there is no role to ask for.
+  await expect(overlay.getByText('Nothing proposed yet')).toBeVisible();
+  await expect(overlay.getByTestId('plan-proposal-list')).toHaveCount(0);
 
   // ── THE SHRINK, IN BOTH DIRECTIONS ────────────────────────────────────────
   //
@@ -507,43 +501,18 @@ test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a pl
   // BY ROLE, for the same reason as the first Declined-tab assertion (MOTIR-4822).
   await expect(page.getByRole('heading', { name: 'No conversations in this state' })).toBeVisible();
 
-  // ── ERROR: the plan was decided while the reader was looking at it ─────────
-  //
-  // ⚠️ LAST, AND THAT IS ORDER-DEPENDENT rather than arbitrary: it puts a plan
-  // into `Declined`, which is the tab every leg above needs EMPTY. Run it
-  // earlier and the two empty-state assertions become assertions about a
-  // one-row list, which would still pass a `toBeVisible` on the strip and prove
-  // nothing about the state they name.
-  //
-  // Staged for real rather than stubbed: the decision is taken THROUGH the
-  // shipped service, from outside the browser, exactly as a colleague in another
-  // tab would take it. The click that follows genuinely 409s.
-  await page.goto(`/plans/${seed.concurrentlyDecidedPlanId}`);
-  await expect(rail(page).getByTestId('plan-status-pill')).toContainText('Ready to review');
-
-  await plansService.declinePlan(seed.concurrentlyDecidedPlanId, {
-    userId: seed.userId,
-    workspaceId: seed.workspaceId,
-  });
-
-  await page.getByRole('button', { name: 'Decline' }).click();
-  // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
-  await page
-    .getByTestId('plan-decline-confirm')
-    .getByRole('button', { name: 'Yes, decline' })
-    .click();
-
-  // ⚠️ A 409 IS NOT AN ERROR ON THIS SURFACE (MOTIR-3240). The plan moved between
-  // render and click and the decision was still made, so the rail shows the
-  // plan's REAL state — never "that didn't work" printed above the answer.
-  await expect(rail(page).getByTestId('plan-status-pill')).toContainText('Declined');
-  await expect(rail(page).getByText('Plan declined — your tree was left untouched')).toBeVisible();
-  // ⚠️ SCOPED TO THE RAIL, because a bare `getByRole('alert')` is never zero in an
-  // App Router document: Next mounts `#__next-route-announcer__` with
-  // `role="alert"` after the first client navigation and leaves it there for the
-  // life of the page. The rail is where the error would be, and it is the only
-  // place the assertion means anything.
-  await expect(rail(page).getByRole('alert')).toHaveCount(0);
+  // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7887): the "plan decided
+  // under you" leg. It goto'd an UNDECIDED (`planned`) plan's page, declined it
+  // through the shipped service from outside the browser, then pressed the RAIL's
+  // Decline + "Yes, decline" and asserted the rail's MOTIR-3240 reconcile (pill
+  // `Declined`, "Plan declined — your tree was left untouched", no rail alert).
+  // That rail exists only on the undecided plan page, which a member no longer
+  // reaches; the overlay answers a concurrent decision differently (the
+  // conversation's "Someone decided this a moment ago." alert, the footer left
+  // in place), so the assertions have no overlay equivalent. Still covered:
+  // `tests/components/plan-approval-surface.test.tsx` (the overlay's decided-first
+  // lines) and `tests/components/use-plan-change-conversation.test.tsx` (a 409
+  // decline → `errorCode: 'decided'`); no e2e drives it.
 
   // The verdict is `afterEach`'s: `pageErrors` empty for this whole walk.
 });

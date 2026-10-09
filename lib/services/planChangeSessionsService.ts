@@ -1363,8 +1363,8 @@ export const planChangeSessionsService = {
    *
    * Two callers, one write. The REDIRECT: `ask_project` classified the turn as a
    * plan change, so the effective disposition moves before the plan-change job
-   * is dispatched. The CORRECTION: the person pressed "Propose changes instead"
-   * / "Answer this instead", so the turn is re-run the other way — same turn, no
+   * is dispatched. The CORRECTION: the person pressed "Answer this instead" (the
+   * only direction left, AMENDMENT 3), so the turn is re-run as an answer — same turn, no
    * second `user` row, because the thread is a record of who said what and they
    * said it once. `corrected` is what separates the two on the record.
    *
