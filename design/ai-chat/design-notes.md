@@ -4720,7 +4720,7 @@ mock: the change draws nothing new. It takes one element away.
 **Amendment to `design/ai-chat/plan-change-run-live.mock.html` sheet 3 and to the
 MOTIR-4066 section above, _"The run surface while it is RUNNING"_.** Story
 **MOTIR-7974** makes every tool call the planner takes produce its own line as the
-call **starts**: _Reading `lib/auth/session.ts`_, _Searching work items for
+call **starts**: _Reading `lib/auth/passwords.ts`_, _Searching work items for
 "billing"_, _Looking up MOTIR-1234_. One planning run makes dozens of calls, and
 one author session alone makes a dozen. This section decides where those lines go.
 **MOTIR-7979** builds the rendering to it, and **MOTIR-7976** (the frame parsing,
@@ -4911,13 +4911,13 @@ A line is never blank, never `undefined`, and never shows a raw message key.
 object is shortened: the verb words never are, and a line may wrap to a second
 row. The rule per object kind:
 
-| object                                  | rule                                                                                                                                                                                                   |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `path`                                  | keep the first segment and the file name, elide the middle (`packages/…/refreshTokenStore.ts`). If that is still over the cap, use `…/` + the file name. If the file name alone is over, keep its end. |
-| `query` (`{query}`)                     | keep the start, elide the end (`“sessions that outlive a passwor…”`)                                                                                                                                   |
-| `query` (`{symbol}`, a code-graph node) | keep the end, elide the start (`…okenIfExpiringWithinGraceWindow`), because the member name is the end                                                                                                 |
-| a key (`MOTIR-12345`)                   | **never shortened**                                                                                                                                                                                    |
-| a title (`item` · `parent` · `{title}`) | keep the start, elide the end                                                                                                                                                                          |
+| object                                  | rule                                                                                                                                                                                                |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`                                  | keep the first segment and the file name, elide the middle (`packages/…/StyleVignette.tsx`). If that is still over the cap, use `…/` + the file name. If the file name alone is over, keep its end. |
+| `query` (`{query}`)                     | keep the start, elide the end (`“sessions that outlive a passwor…”`)                                                                                                                                |
+| `query` (`{symbol}`, a code-graph node) | keep the end, elide the start (`…okenIfExpiringWithinGraceWindow`), because the member name is the end                                                                                              |
+| a key (`MOTIR-12345`)                   | **never shortened**                                                                                                                                                                                 |
+| a title (`item` · `parent` · `{title}`) | keep the start, elide the end                                                                                                                                                                       |
 
 **How the full value is reached.** A shortened object is the only part that
 changes behaviour. An object short enough to show in full adds nothing.
@@ -5089,7 +5089,7 @@ means the tool takes the family of the session it runs in.
 
 ### ⭐ Measured, and what the number decided
 
-Measured in chromium (Playwright, `/opt/pw-browsers/chromium`) against the mock's
+Measured in Chromium, driven by Playwright, against the mock's
 own rail markup at `22rem`. The rail height is the viewport minus the ~120 px of
 shell chrome that sheet 5 used, with the ordinary opening above the record (the
 opener, one user turn, _Sent to Motir AI_). The scenario is an author-heavy level:

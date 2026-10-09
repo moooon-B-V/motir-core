@@ -343,9 +343,6 @@
         }
       }
       @layer utilities {
-        .visible {
-          visibility: visible;
-        }
         .sr-only {
           position: absolute;
           width: 1px;
@@ -2956,115 +2953,6 @@
           }
         }
       }
-      .style-vignette[data-style='glassmorphism'] > .sv-canvas {
-        background-image:
-          radial-gradient(62% 70% at 12% -5%, var(--el-accent), transparent 70%),
-          radial-gradient(58% 65% at 105% 6%, var(--el-highlight), transparent 68%),
-          radial-gradient(72% 78% at 50% 112%, var(--el-link), transparent 72%);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            radial-gradient(
-              62% 70% at 12% -5%,
-              color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
-              transparent 70%
-            ),
-            radial-gradient(
-              58% 65% at 105% 6%,
-              color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
-              transparent 68%
-            ),
-            radial-gradient(
-              72% 78% at 50% 112%,
-              color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
-              transparent 72%
-            );
-        }
-      }
-      .style-vignette[data-style='cybercore-y2k'] > .sv-canvas {
-        background-color: var(--el-page-bg);
-        background-image:
-          linear-gradient(currentColor 1px, transparent 1px),
-          linear-gradient(90deg, currentColor 1px, transparent 1px);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
-            linear-gradient(
-              90deg,
-              color-mix(in srgb, currentColor 6%, transparent) 1px,
-              transparent 1px
-            );
-        }
-        background-size: 26px 26px;
-      }
-      .style-vignette[data-style='aurora'] > .sv-canvas {
-        background-color: var(--el-page-bg);
-        background-image:
-          radial-gradient(58% 75% at 12% 0%, var(--el-accent), transparent 60%),
-          radial-gradient(54% 70% at 92% 8%, var(--el-highlight), transparent 58%),
-          radial-gradient(68% 82% at 62% 104%, var(--el-link), transparent 62%),
-          radial-gradient(48% 64% at 34% 58%, var(--el-info), transparent 55%);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            radial-gradient(
-              58% 75% at 12% 0%,
-              color-mix(in srgb, var(--el-accent) var(--aurora-wash), transparent),
-              transparent 60%
-            ),
-            radial-gradient(
-              54% 70% at 92% 8%,
-              color-mix(in srgb, var(--el-highlight) var(--aurora-wash), transparent),
-              transparent 58%
-            ),
-            radial-gradient(
-              68% 82% at 62% 104%,
-              color-mix(in srgb, var(--el-link) var(--aurora-wash), transparent),
-              transparent 62%
-            ),
-            radial-gradient(
-              48% 64% at 34% 58%,
-              color-mix(in srgb, var(--el-info) var(--aurora-wash-soft), transparent),
-              transparent 55%
-            );
-        }
-      }
-      .style-vignette[data-style='retrofuturism'] > .sv-canvas {
-        background-color: var(--el-page-bg);
-        background-image:
-          repeating-linear-gradient(90deg, var(--el-accent) 0 1px, transparent 1px 18px),
-          linear-gradient(180deg, transparent 56%, var(--el-highlight) 64%, transparent 72%),
-          linear-gradient(180deg, var(--el-link), transparent 50%),
-          linear-gradient(0deg, var(--el-accent), transparent 46%);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            repeating-linear-gradient(
-              90deg,
-              color-mix(in srgb, var(--el-accent) var(--retro-grid), transparent) 0 1px,
-              transparent 1px 18px
-            ),
-            linear-gradient(
-              180deg,
-              transparent 56%,
-              color-mix(in srgb, var(--el-highlight) var(--retro-horizon), transparent) 64%,
-              transparent 72%
-            ),
-            linear-gradient(
-              180deg,
-              color-mix(in srgb, var(--el-link) var(--retro-sky), transparent),
-              transparent 50%
-            ),
-            linear-gradient(
-              0deg,
-              color-mix(in srgb, var(--el-accent) var(--retro-ground), transparent),
-              transparent 46%
-            );
-        }
-        background-size:
-          18px 100%,
-          100% 100%,
-          100% 100%,
-          100% 100%;
-        background-position: center bottom;
-      }
       :root,
       [data-appearance-scope] {
         --el-page-bg: var(--color-background);
@@ -4877,7 +4765,7 @@
         </h1>
         <p>
           <b>MOTIR-7975 · story MOTIR-7974.</b> While a Motir AI plan is written, every tool call
-          now says what it is doing as it starts: <i>Reading <code>lib/auth/session.ts</code></i
+          now says what it is doing as it starts: <i>Reading <code>lib/auth/passwords.ts</code></i
           >, <i>Searching work items for “billing”</i>, <i>Looking up MOTIR-1234</i>. A planning run
           makes dozens of them, and the shipped rail fits seven or eight rows at 1366 × 768. So this
           board decides where the lines go. A call line nests under the step that made it, and a
@@ -6447,7 +6335,7 @@
                                 <path d="M16 17H8"></path></svg></span
                             ><span class="min-w-0 flex-1 wrap-anywhere"
                               >Reading
-                              <span class="font-mono text-[11px]">lib/auth/session.ts</span></span
+                              <span class="font-mono text-[11px]">lib/auth/passwords.ts</span></span
                             >
                           </li>
                           <li
@@ -7010,7 +6898,9 @@
                                 <path d="M16 17H8"></path></svg></span
                             ><span class="min-w-0 flex-1 wrap-anywhere"
                               >Reading
-                              <span class="font-mono text-[11px]">lib/auth/idle.ts</span></span
+                              <span class="font-mono text-[11px]"
+                                >lib/auth/localeSync.ts</span
+                              ></span
                             >
                           </li>
                           <li
@@ -7568,7 +7458,9 @@
                                 <path d="M16 17H8"></path></svg></span
                             ><span class="min-w-0 flex-1 wrap-anywhere"
                               >正在读取
-                              <span class="font-mono text-[11px]">lib/auth/idle.ts</span></span
+                              <span class="font-mono text-[11px]"
+                                >lib/auth/localeSync.ts</span
+                              ></span
                             >
                           </li>
                           <li
@@ -7964,7 +7856,7 @@
                             <path d="M6 12h2"></path>
                             <path d="M6 8h2"></path></svg></span
                         ><span class="min-w-0 flex-1 wrap-anywhere"
-                          >Reading <span class="font-mono text-[11px]">lib/auth/session.ts</span>
+                          >Reading <span class="font-mono text-[11px]">lib/auth/passwords.ts</span>
                           <span class="font-medium">(Move token refresh…)</span></span
                         >
                       </li>
@@ -7993,7 +7885,7 @@
                             <path d="M6 8h2"></path></svg></span
                         ><span class="min-w-0 flex-1 wrap-anywhere"
                           >Reading
-                          <span class="font-mono text-[11px]">lib/auth/legacyCookie.ts</span>
+                          <span class="font-mono text-[11px]">lib/auth/twoFactorGate.ts</span>
                           <span class="font-medium">(Drop the legacy…)</span></span
                         >
                       </li>
@@ -8021,7 +7913,7 @@
                             <path d="M6 12h2"></path>
                             <path d="M6 8h2"></path></svg></span
                         ><span class="min-w-0 flex-1 wrap-anywhere"
-                          >Reading <span class="font-mono text-[11px]">lib/auth/idle.ts</span>
+                          >Reading <span class="font-mono text-[11px]">lib/auth/localeSync.ts</span>
                           <span class="font-medium">(Expire idle sessions…)</span></span
                         >
                       </li>
@@ -8526,7 +8418,8 @@
                                 <path d="M18 6 6 18"></path>
                                 <path d="m6 6 12 12"></path></svg></span
                             ><span class="min-w-0 flex-1 wrap-anywhere"
-                              >Reading <span class="font-mono text-[11px]">lib/auth/idle.ts</span>
+                              >Reading
+                              <span class="font-mono text-[11px]">lib/auth/localeSync.ts</span>
                               <span
                                 data-testid="plan-change-call-mark"
                                 class="font-medium text-(--el-text-strong)"
@@ -8728,7 +8621,8 @@
                                 <path d="M18 6 6 18"></path>
                                 <path d="m6 6 12 12"></path></svg></span
                             ><span class="min-w-0 flex-1 wrap-anywhere"
-                              >Reading <span class="font-mono text-[11px]">lib/auth/idle.ts</span>
+                              >Reading
+                              <span class="font-mono text-[11px]">lib/auth/localeSync.ts</span>
                               <span
                                 data-testid="plan-change-call-mark"
                                 class="font-medium text-(--el-text-strong)"
@@ -9374,10 +9268,10 @@
                                 tabindex="0"
                                 data-testid="plan-change-call-object"
                                 class="rounded-(--radius-control) underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none font-mono text-[11px] ring-2 ring-(--focus-ring-color)"
-                                ><span aria-hidden="true">packages/…/refreshTokenStore.ts</span
+                                ><span aria-hidden="true">packages/…/StyleVignette.tsx</span
                                 ><span class="sr-only"
                                   >Full path:
-                                  packages/design-system/src/components/planning/session/refreshTokenStore.ts</span
+                                  packages/design-system/src/components/theme/StyleVignette.tsx</span
                                 ></span
                               ></span
                             >
@@ -9498,7 +9392,7 @@
                     class="z-50 select-none rounded-(--radius-control) bg-(--el-tooltip-bg) text-(--el-tooltip-text) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-sans text-xs shadow-(--shadow-elevated)"
                   >
                     <span class="font-mono text-[11px]"
-                      >packages/design-system/src/components/planning/session/refreshTokenStore.ts</span
+                      >packages/design-system/src/components/theme/StyleVignette.tsx</span
                     >
                   </div>
                 </div>
@@ -9518,9 +9412,9 @@
                   <tr>
                     <td><code>path</code></td>
                     <td class="wrap">
-                      packages/design-system/src/components/planning/session/refreshTokenStore.ts
+                      packages/design-system/src/components/theme/StyleVignette.tsx
                     </td>
-                    <td class="wrap">Reading packages/…/refreshTokenStore.ts</td>
+                    <td class="wrap">Reading packages/…/StyleVignette.tsx</td>
                   </tr>
                   <tr>
                     <td><code>query</code></td>
@@ -9551,8 +9445,7 @@
               <p class="note">
                 Screen-reader text of the focused object, verbatim:
                 <code
-                  >Full path:
-                  packages/design-system/src/components/planning/session/refreshTokenStore.ts</code
+                  >Full path: packages/design-system/src/components/theme/StyleVignette.tsx</code
                 >
               </p>
             </div>
@@ -9685,9 +9578,9 @@
                                 tabindex="0"
                                 data-testid="plan-change-call-object"
                                 class="rounded-(--radius-control) underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none font-mono text-[11px]"
-                                ><span aria-hidden="true">packages/…/refreshTokenStore.ts</span
+                                ><span aria-hidden="true">packages/…/StyleVignette.tsx</span
                                 ><span class="sr-only"
-                                  >完整路径：packages/design-system/src/components/planning/session/refreshTokenStore.ts</span
+                                  >完整路径：packages/design-system/src/components/theme/StyleVignette.tsx</span
                                 ></span
                               ></span
                             >
@@ -9794,10 +9687,10 @@
                                 tabindex="0"
                                 data-testid="plan-change-call-object"
                                 class="rounded-(--radius-control) underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none font-mono text-[11px]"
-                                ><span aria-hidden="true">packages/…/refreshTokenStore.ts</span
+                                ><span aria-hidden="true">packages/…/StyleVignette.tsx</span
                                 ><span class="sr-only"
                                   >Full path:
-                                  packages/design-system/src/components/planning/session/refreshTokenStore.ts</span
+                                  packages/design-system/src/components/theme/StyleVignette.tsx</span
                                 ></span
                               ></span
                             >
