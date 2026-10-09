@@ -7531,7 +7531,6 @@
         "failedClosed": "Cette tentative n'a pas abouti, cette session a donc été fermée. Les éléments de travail qu'elle contenait sont revenus à leur état précédent."
       },
       "answeredFrom": "{count, plural, =0 {Répondu sans rien citer} one {Répondu à partir de # élément de travail} other {Répondu à partir de # éléments de travail}}",
-      "correctToPlan": "Proposer plutôt des modifications",
       "correctToAsk": "Répondre plutôt à cette question",
       "correcting": "Relecture…",
       "correctedToPlan": "Relu comme une modification du plan",

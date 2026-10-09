@@ -13,6 +13,7 @@ import {
   GuideSessionNotPlannableError,
   GuideTurnFilesRefusedError,
   PlanChangeJobNotRunningError,
+  PlanChangeFlipNotOfferedError,
   PlanChangeMailboxJobMismatchError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
@@ -54,6 +55,10 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
     err instanceof DebugTargetNotAvailableError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+  }
+  // The retired flip into a planning run (AMENDMENT 3): nothing was written.
+  if (err instanceof PlanChangeFlipNotOfferedError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
   }
   if (err instanceof EmptyPlanChangeTurnError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });

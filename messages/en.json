@@ -7525,7 +7525,6 @@
         "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were."
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
-      "correctToPlan": "Propose changes instead",
       "correctToAsk": "Answer this instead",
       "correcting": "Re-reading…",
       "correctedToPlan": "Re-read as a plan change",

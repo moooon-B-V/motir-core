@@ -7531,7 +7531,6 @@
         "failedClosed": "Dieser Versuch hat nicht geklappt, daher wurde diese Sitzung geschlossen. Die Arbeitselemente, die sie enthielt, sind wieder an ihrem ursprünglichen Platz."
       },
       "answeredFrom": "{count, plural, =0 {Ohne Quellenangabe beantwortet} one {Anhand von # Arbeitselement beantwortet} other {Anhand von # Arbeitselementen beantwortet}}",
-      "correctToPlan": "Stattdessen Änderungen vorschlagen",
       "correctToAsk": "Stattdessen beantworten",
       "correcting": "Wird neu gelesen…",
       "correctedToPlan": "Als Planänderung neu gelesen",

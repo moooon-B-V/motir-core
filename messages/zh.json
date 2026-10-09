@@ -7521,7 +7521,6 @@
         "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的工作项已恢复原状。"
       },
       "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
-      "correctToPlan": "改为提出变更",
       "correctToAsk": "改为回答这个问题",
       "correcting": "正在重新理解……",
       "correctedToPlan": "已改按计划变更理解",

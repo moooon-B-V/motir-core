@@ -6060,7 +6060,6 @@
   "planningWorkspace.conversation.error.askSilent": "Nothing came back. Try asking that a different way.",
   "planningWorkspace.conversation.error.failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were.",
   "planningWorkspace.conversation.answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
-  "planningWorkspace.conversation.correctToPlan": "Propose changes instead",
   "planningWorkspace.conversation.correctToAsk": "Answer this instead",
   "planningWorkspace.conversation.correcting": "Re-reading…",
   "planningWorkspace.conversation.correctedToPlan": "Re-read as a plan change",

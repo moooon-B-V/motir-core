@@ -7528,7 +7528,6 @@
         "failedClosed": "Ta próba się nie powiodła, więc sesja została zamknięta. Elementy robocze, które w niej były, wróciły na swoje miejsce."
       },
       "answeredFrom": "{count, plural, =0 {Odpowiedź bez powoływania się na źródła} one {Odpowiedź na podstawie # elementu roboczego} few {Odpowiedź na podstawie # elementów roboczych} many {Odpowiedź na podstawie # elementów roboczych} other {Odpowiedź na podstawie # elementu roboczego}}",
-      "correctToPlan": "Zamiast tego zaproponuj zmiany",
       "correctToAsk": "Zamiast tego odpowiedz na to",
       "correcting": "Ponowne czytanie…",
       "correctedToPlan": "Odczytano ponownie jako zmianę planu",

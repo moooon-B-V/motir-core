@@ -7528,7 +7528,6 @@
         "failedClosed": "その試行は完了しなかったため、このセッションは終了しました。保持していた作業項目は元の場所に戻っています。"
       },
       "answeredFrom": "{count, plural, =0 {何も引用せずに回答} other {# 件の作業項目に基づいて回答}}",
-      "correctToPlan": "代わりに変更を提案",
       "correctToAsk": "代わりにこれに回答",
       "correcting": "読み直しています…",
       "correctedToPlan": "計画の変更として読み直しました",
