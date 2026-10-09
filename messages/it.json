@@ -7531,7 +7531,6 @@
         "failedClosed": "Il tentativo non è andato a buon fine, quindi questa sessione è stata chiusa. Gli elementi di lavoro che conteneva sono tornati dov’erano."
       },
       "answeredFrom": "{count, plural, =0 {Risposta data senza citare nulla} one {Risposta basata su # elemento di lavoro} other {Risposta basata su # elementi di lavoro}}",
-      "correctToPlan": "Proponi invece delle modifiche",
       "correctToAsk": "Rispondi invece a questo",
       "correcting": "Rilettura…",
       "correctedToPlan": "Riletto come modifica al piano",
@@ -12796,10 +12795,6 @@
         "helper": "Facoltativo. Viene conservato insieme alla decisione.",
         "proceed": "Sì, rifiuta"
       },
-      "noConversation": {
-        "none": "Non c’è nessuna conversazione registrata per questo piano.",
-        "next": "Approvalo o rifiutalo qui — oppure chiedi a Motir di modificarlo qui sotto."
-      },
       "handoff": {
         "writing": "Ho quello che mi serve — sto scrivendo il piano adesso. Non devi aspettare qui: chiudi pure quando vuoi, e il piano ti aspetterà in <link>In attesa di te</link>.",
         "rewriting": "Sto scrivendo una nuova versione di questo piano. Puoi chiudere — resta in <link>In attesa di te</link>, e potrai decidere quando avrò finito."
@@ -13285,9 +13280,7 @@
   },
   "planDestination": {
     "conversation": "Apre la conversazione",
-    "plan": "Apre il piano",
-    "noConversation": "nessuna conversazione",
-    "noConversationWhy": "Non c’è nessuna conversazione registrata per questo piano."
+    "plan": "Apre il piano"
   },
   "orgClosing": {
     "banner": {

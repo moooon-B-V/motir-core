@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { adminDb } from '../helpers/adminDb';
 import { resetDatabase } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import { seedBillingOwner } from './_helpers/billing';
 import {
   readPlannerModelFixture,
@@ -232,8 +233,10 @@ test('plan review — a native plan names no model', async ({ page }) => {
   );
   await plansService.markPlanned(plan.id, ctx);
 
-  await page.goto(`/plans/${plan.id}`);
-  await expect(page.getByRole('main').getByText('A generated task').first()).toBeVisible();
+  // Still `planned`, so it is reviewed where a member reviews it — the planning
+  // overlay (Story MOTIR-7883 · MOTIR-7887).
+  const overlay = await openUndecidedPlan(page, plan.id);
+  await expect(overlay.getByText('A generated task').first()).toBeVisible();
   // Includes `title` attributes and the serialised page payload.
   expect(await page.content()).not.toContain(NATIVE);
 });

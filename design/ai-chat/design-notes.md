@@ -4692,3 +4692,23 @@ wrap before they shrink.
 
 `session.end.reason.restarted` changes because "started over" reads like the in-session START OVER
 (`clear_plan`), which keeps the session.
+
+## ⭐ The correction runs one way — no "Propose changes instead" under an answer (MOTIR-7924, 2026-10-09)
+
+**Amends** _The correction marker, and the redirect's second stream_ in
+§ _Ask about this project_ (MOTIR-1815), and
+`docs/decisions/conversation-turn-intent.md` AMENDMENT 3 is its record. No delta
+mock: the change draws nothing new. It takes one element away.
+
+- **Under an answer there is no correction marker at all.** Whether a turn
+  becomes a planning run is the planner's call, never a button. A person who
+  wants changes types them in the composer, and the planner reads that turn.
+- **Under a proposal (and a debug result), "Answer this instead" is unchanged**
+  in vocabulary, position and states, with one fix: it is as wide as its label
+  (`w-fit self-center`), not a full-width row. The log is a flex column, and the
+  stretched button caught clicks anywhere on its line.
+- **The passive markers stay.** _"Re-read as a plan change"_ still labels a
+  turn corrected that way before this change; _"Re-read as a question"_ labels
+  the remaining direction.
+- **Retired copy:** `planningWorkspace.conversation.correctToPlan` and the
+  short-lived `correctConfirm.*` confirm, removed from every locale.

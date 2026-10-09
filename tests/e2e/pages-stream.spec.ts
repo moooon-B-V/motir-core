@@ -11,6 +11,7 @@ import {
   workspaceInvitesService,
   INVITE_IDENTIFIER_PREFIX,
 } from '@/lib/services/workspaceInvitesService';
+import { plansService } from '@/lib/services/plansService';
 import enMessages from '@/messages/en.json';
 
 // ACCEPTANCE — every remaining page streams (Story MOTIR-3440 · Subtask MOTIR-3450).
@@ -171,10 +172,22 @@ test('every remaining page opens on its own chrome, and /items keeps the toolbar
 
   // ── 2 — THE CANVAS FAMILY's one real diff ────────────────────────────────
   const plans = await seedPlanShapes(PLAN_EMAIL);
+  // ⚠️ DECIDED FIRST (Story MOTIR-7883 · MOTIR-7887, 2026-10-08): an undecided plan's
+  // bare `/plans/<id>` now redirects into the planning overlay, which would change
+  // what this chapter measures. A decided plan keeps its page — the same page, the
+  // same streamed reads — so the plan is declined through the shipped service.
+  const planOwner = await adminDb.user.findFirstOrThrow({
+    where: { email: plans.email },
+    select: { id: true },
+  });
+  await plansService.declinePlan(plans.one.planId, {
+    userId: planOwner.id,
+    workspaceId: plans.workspaceId,
+  });
 
   await chapter('A plan opens on its chrome while the canvas fills in', async () => {
     await signIn(page, plans.email, PLANS_SHAPES_PASSWORD);
-    await page.goto(`/plans/${plans.one.planId}`);
+    await page.goto(`/plans/${plans.one.planId}`); // decided: the plan page renders
 
     // MOTIR-3445 made this page's two follow-on reads one wave. The heading is
     // what a reader is waiting for, and it no longer waits for either.

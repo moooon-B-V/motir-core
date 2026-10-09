@@ -1,8 +1,19 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { withPlanningOverlay } from '@/lib/planning/launcher';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import { RunFindings } from '@/app/(authed)/runs/_components/RunFindings';
+
+// The plan links are plan-overlay doors (Story MOTIR-7883 · MOTIR-7890).
+const { push, shallowPush } = vi.hoisted(() => ({ push: vi.fn(), shallowPush: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/runs/run_1',
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
+
+const { RunFindings } = await import('@/app/(authed)/runs/_components/RunFindings');
 import type { DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 
 // WHAT THE RUN PRODUCED, on the surface (Story MOTIR-1789 · MOTIR-3983).
@@ -12,7 +23,24 @@ import type { DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 // teaches a reader to skip exactly the place the rare thing appears — and that
 // failure renders perfectly, which is why it needs a test rather than an eye.
 
-afterEach(cleanup);
+const fetchMock = vi.fn();
+beforeEach(() => {
+  push.mockReset();
+  shallowPush.mockReset();
+  fetchMock.mockReset();
+  fetchMock.mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({ status: 'planned', conversation: { sessionId: 's_8c', targetKeys: [] } }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 function ev(
   over: Partial<DispatchRunEventDto> & { kind: string; seq: number },
@@ -51,15 +79,28 @@ describe('⚠️ a run that produced NEITHER grows no region at all', () => {
 });
 
 describe('the PLAN in its two states, which must not look alike', () => {
-  it('a SUBMITTED plan is an ASK: it says it is waiting and offers the review', () => {
+  it('a SUBMITTED plan is an ASK: it says it is waiting and offers the review', async () => {
     render(<RunFindings events={[submitted(3, 'pln_8c41', 6)]} />);
+    await act(async () => {});
 
     const row = screen.getByTestId('finding-plan-submitted');
     expect(row.textContent).toContain('Plan submitted');
     expect(row.textContent).toContain('6 proposals');
     expect(row.textContent).toContain('waiting for you');
+    // The door resolves the plan NOW: an undecided one opens the overlay in place.
     const link = screen.getByRole('link', { name: 'Review →' });
-    expect(link.getAttribute('href')).toBe('/plans/pln_8c41');
+    const overlay = withPlanningOverlay('/runs/run_1', { kind: 'project', sessionId: 's_8c' });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(link.getAttribute('href')).toBe(overlay);
+    expect(fireEvent.click(link, { button: 0 })).toBe(false);
+    expect(shallowPush).toHaveBeenCalledExactlyOnceWith(overlay);
+    expect(push).not.toHaveBeenCalled();
+    // A ⌘-click is the browser's.
+    const meta = new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true });
+    act(() => {
+      link.dispatchEvent(meta);
+    });
+    expect(meta.defaultPrevented).toBe(false);
   });
 
   it('an APPROVED plan is NEWS: no waiting language, and named plan by plan', () => {
@@ -78,6 +119,11 @@ describe('the PLAN in its two states, which must not look alike', () => {
     expect(row.textContent).toContain('MOTIR-1793');
     expect(row.textContent).toContain('pln_b12');
     expect(row.textContent).toContain('MOTIR-1801');
+    // `plan_approved` IS the fact that the plan is decided: its page, and no read.
+    expect(screen.getByRole('link', { name: 'pln_a077' }).getAttribute('href')).toBe(
+      '/plans/pln_a077',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('the two are DIFFERENT rows — an ask never wears the news face', () => {

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
 
 // WHAT THE RUN PRODUCED beyond code (MOTIR-3983 ·
 // `design/runs/design-notes.md` § What the run PRODUCED).
@@ -116,12 +117,14 @@ export function RunFindings({ events }: RunFindingsProps) {
             <span className="text-(--el-text-secondary)">{t('findings.waitingForYou')}</span>
           </span>
           {f.planId !== null ? (
-            <Link
-              href={routes.plan(f.planId)}
+            // A `plan_submitted` event says nothing about the plan's status NOW, so
+            // the door resolves it (Story MOTIR-7883 · MOTIR-7890).
+            <PlanOverlayDoor
+              planId={f.planId}
               className="flex-none font-medium text-(--el-accent-on-surface) underline-offset-2 hover:underline"
             >
               {t('findings.review')}
-            </Link>
+            </PlanOverlayDoor>
           ) : null}
         </div>
       ))}
@@ -150,12 +153,15 @@ export function RunFindings({ events }: RunFindingsProps) {
             {approved.map((f) => (
               <li key={f.seq}>
                 {f.planId !== null ? (
-                  <Link
-                    href={routes.plan(f.planId)}
+                  // `plan_approved` IS the fact that the plan is decided: no read,
+                  // and the rule answers the reader's plan page.
+                  <PlanOverlayDoor
+                    planId={f.planId}
+                    known={{ planStatus: 'approved', sessionId: null, anchorKey: null }}
                     className="text-(--el-accent-on-surface) underline-offset-2 hover:underline"
                   >
                     {f.planId}
-                  </Link>
+                  </PlanOverlayDoor>
                 ) : null}
                 {f.forKey !== null ? ` ${t('findings.approvedFor', { key: f.forKey })}` : null}
                 {f.proposals !== null

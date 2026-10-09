@@ -2,6 +2,7 @@ import type { Locator, Page, Response } from '@playwright/test';
 import { test, expect } from './_helpers/promoted-regression';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import {
   agentSession,
   authorPlanOverMcp,
@@ -61,6 +62,7 @@ import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 // before anything reads the tree it produced. Every `beat()` is PACING taken
 // after the state it holds on has already been asserted — never a wait.
 
+const PLAN_TITLE = 'Refunds, and a webhook re-judged';
 const STORY = 'Refund requests';
 const REASON = {
   trivial: 'one flag renamed in two call sites.',
@@ -95,16 +97,18 @@ function mcpOrigin(baseURL: string | undefined): string {
   return baseURL;
 }
 
-/** One proposal's row on the review's list, found by its one control. */
-const proposalRow = (page: Page, title: string): Locator =>
-  page
+/** One proposal's row on the review's list, found by its one control. `root` is
+ *  what the list renders under — the page, or the planning overlay an undecided
+ *  plan is reviewed in (Story MOTIR-7883). */
+const proposalRow = (page: Page, title: string, root: Page | Locator = page): Locator =>
+  root
     .getByTestId('plan-proposal-list')
     .getByRole('listitem')
     .filter({ has: page.getByRole('button', { name: new RegExp(escape(title)) }) });
 
 /** Open a proposal's peek from its list row. */
-async function openPeek(page: Page, title: string): Promise<Locator> {
-  await page
+async function openPeek(page: Page, title: string, root: Page | Locator = page): Promise<Locator> {
+  await root
     .getByTestId('plan-proposal-list')
     .getByRole('button', { name: new RegExp(escape(title)) })
     .click();
@@ -175,7 +179,7 @@ test('a plan’s leaves carry a difficulty — read on the review, re-judged on 
 
   const client = await agentSession(seed.token, mcpOrigin(baseURL));
   const authored = await authorPlanOverMcp(client, seed.projectKey, {
-    title: 'Refunds, and a webhook re-judged',
+    title: PLAN_TITLE,
     harness: AGENT_HARNESS,
     model: AGENT_MODEL,
     storyTitle: STORY,
@@ -192,37 +196,54 @@ test('a plan’s leaves carry a difficulty — read on the review, re-judged on 
 
   await signIn(page, seed.email, AGENT_PLAN_SEED_PASSWORD);
 
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7889), 2026-10-08: the plan is
+  // undecided, so its chip opens it in the planning overlay IN PLACE, over the Plans
+  // list, and every review read below is scoped to the overlay. The overlay renders
+  // the same proposal views; it has no review rail, so the undecided `Ready to
+  // review` pill is not read (the decided page's pill is, after the approve).
+  const overlay = page.getByRole('dialog', { name: /plan/i });
+
   await chapter('The agent’s plan is waiting in Plans — open it', async () => {
     await page.goto('/plans');
-    const row = page.locator(`a[href="/plans/${authored.planId}"]`);
-    await expect(row).toHaveAccessibleName('Open the plan — Waiting for approval');
-    await row.click();
-    await page.waitForURL(`**/plans/${authored.planId}`);
-    await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
-      'Ready to review',
+    // Found by its row's title link and its own name — an undecided plan's chip is
+    // an overlay door, whose href is the overlay address, not `/plans/<id>`.
+    const chip = page
+      .getByRole('list', { name: 'Planning conversations' })
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('link', { name: PLAN_TITLE, exact: true }) })
+      .getByRole('link', { name: /^Open the plan — / });
+    await expect(chip).toHaveAccessibleName('Open the plan — Waiting for approval');
+    await chip.click();
+    await page.waitForURL(
+      (url) => url.pathname === '/plans' && url.searchParams.has('planSession'),
     );
+    await expect(overlay.getByTestId('plan-proposal-views')).toBeVisible();
     // Two containers (the new story, the committed one) → it opens on the LIST.
-    await expect(page.getByRole('main').getByTestId('plan-proposal-list')).toBeVisible();
+    await expect(overlay.getByTestId('plan-proposal-list')).toBeVisible();
   });
 
   await chapter('Every leaf’s difficulty sits beside its size on the list', async () => {
     for (const level of LEVELS) {
-      const fact = proposalRow(page, LEAVES[level]).getByTestId('plan-list-difficulty');
+      const fact = proposalRow(page, LEAVES[level], overlay).getByTestId('plan-list-difficulty');
       await expect(fact).toHaveAttribute('data-difficulty', level);
       await expect(fact).toContainText(LABEL[level]);
     }
     // Directly after the points, before the minutes.
-    await expect(proposalRow(page, LEAVES.medium)).toContainText(
+    await expect(proposalRow(page, LEAVES.medium, overlay)).toContainText(
       /3 pts · (Difficulty )?Medium · 45 min/,
     );
     // The unjudged leaf and the story draw nothing — no placeholder.
-    await expect(proposalRow(page, UNJUDGED).getByTestId('plan-list-difficulty')).toHaveCount(0);
-    await expect(proposalRow(page, STORY).getByTestId('plan-list-difficulty')).toHaveCount(0);
+    await expect(
+      proposalRow(page, UNJUDGED, overlay).getByTestId('plan-list-difficulty'),
+    ).toHaveCount(0);
+    await expect(proposalRow(page, STORY, overlay).getByTestId('plan-list-difficulty')).toHaveCount(
+      0,
+    );
   });
 
   await chapter('Open each leaf: Trivial, Low, Medium, High', async () => {
     for (const level of LEVELS) {
-      const peek = await openPeek(page, LEAVES[level]);
+      const peek = await openPeek(page, LEAVES[level], overlay);
       const row = peekDifficulty(peek);
       await expect(row).toContainText(LABEL[level]);
       // The item page's own glyph, not a second rendering.
@@ -235,18 +256,18 @@ test('a plan’s leaves carry a difficulty — read on the review, re-judged on 
   });
 
   await chapter('A leaf left unjudged reads None; the story has no such field', async () => {
-    const peek = await openPeek(page, UNJUDGED);
+    const peek = await openPeek(page, UNJUDGED, overlay);
     await expect(peekDifficulty(peek)).toContainText('None');
     await expect(peekDifficulty(peek).locator('[data-difficulty]')).toHaveCount(0);
     await closePeek(page);
 
-    const story = await openPeek(page, STORY);
+    const story = await openPeek(page, STORY, overlay);
     await expect(story.locator('dt', { hasText: PEEK_CAPTION })).toHaveCount(0);
     await closePeek(page);
   });
 
   await chapter('The re-plan re-judges a committed subtask: Low → High', async () => {
-    const row = proposalRow(page, REJUDGED);
+    const row = proposalRow(page, REJUDGED, overlay);
     const change = row
       .locator('div')
       .filter({ has: page.locator('dt', { hasText: /^Difficulty$/ }) })
@@ -255,7 +276,7 @@ test('a plan’s leaves carry a difficulty — read on the review, re-judged on 
     await row.scrollIntoViewIfNeeded();
     await beat();
 
-    const peek = await openPeek(page, REJUDGED);
+    const peek = await openPeek(page, REJUDGED, overlay);
     const rail = peekDifficulty(peek);
     await expect(rail).toContainText('High');
     await expect(rail.getByTestId('quick-view-changed-mark')).toBeVisible();
@@ -268,21 +289,25 @@ test('a plan’s leaves carry a difficulty — read on the review, re-judged on 
   });
 
   await chapter('On the canvas, each new leaf’s card carries it too', async () => {
-    await page
+    // The overlay's view is local — it never writes `?view=` — so the switch is
+    // confirmed by the canvas it renders, not by the address.
+    await overlay
       .getByRole('group', { name: 'Plan view' })
-      .getByRole('button', { name: 'Canvas' })
+      .getByRole('button', { name: 'Canvas', exact: true })
       .click();
-    await page.waitForURL(`**/plans/${authored.planId}?view=canvas`);
-    await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
+    await expect(overlay.getByTestId('planning-canvas')).toBeVisible();
+    await expect(
+      overlay.getByRole('application', { name: 'Marketplace payouts plan' }),
+    ).toBeVisible();
     for (const level of LEVELS) {
-      const card = page.locator('[data-node-id]').filter({ hasText: LEAVES[level] });
+      const card = overlay.locator('[data-node-id]').filter({ hasText: LEAVES[level] });
       await expect(card.getByTestId('plan-item-difficulty')).toHaveAttribute(
         'data-difficulty',
         level,
       );
     }
     await expect(
-      page
+      overlay
         .locator('[data-node-id]')
         .filter({ hasText: UNJUDGED })
         .getByTestId('plan-item-difficulty'),
@@ -290,7 +315,9 @@ test('a plan’s leaves carry a difficulty — read on the review, re-judged on 
   });
 
   await chapter('Approve the plan', async () => {
-    const approve = page.getByRole('button', { name: /Approve.*to your backlog/ });
+    const approve = overlay
+      .getByTestId('plan-change-confirm-bar')
+      .getByRole('button', { name: 'Approve', exact: true });
     await expect(approve).toBeVisible();
     const approved = page.waitForResponse(
       (r: Response) =>
@@ -299,6 +326,7 @@ test('a plan’s leaves carry a difficulty — read on the review, re-judged on 
     );
     await approve.click();
     expect((await approved).status(), 'the approve').toBe(200);
+    await page.goto(`/plans/${authored.planId}`); // decided: the plan page renders
     await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText('Approved');
   });
 
@@ -352,24 +380,26 @@ test('a plan whose leaves carry no difficulty renders the review without error, 
   await signIn(page, seed.email, AGENT_PLAN_SEED_PASSWORD);
 
   // One container → the canvas.
-  await page.goto(`/plans/${authored.planId}?view=canvas`);
-  await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
-    'Ready to review',
-  );
+  //
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is
+  // undecided, so its review is the planning overlay, which renders the same
+  // proposal views; each body is asked for through the helper's switch (the
+  // overlay never reads `?view=`).
+  const canvas = await openUndecidedPlan(page, authored.planId, { view: 'canvas' });
   for (const title of authored.leafTitles) {
-    await expect(page.locator('[data-node-id]').filter({ hasText: title })).toHaveCount(1);
+    await expect(canvas.locator('[data-node-id]').filter({ hasText: title })).toHaveCount(1);
   }
-  await expect(page.getByTestId('plan-item-difficulty')).toHaveCount(0);
+  await expect(canvas.getByTestId('plan-item-difficulty')).toHaveCount(0);
 
-  await page.goto(`/plans/${authored.planId}?view=list`);
-  await expect(page.getByRole('main').getByTestId('plan-proposal-list')).toBeVisible();
+  const list = await openUndecidedPlan(page, authored.planId, { view: 'list' });
+  await expect(list.getByTestId('plan-proposal-list')).toBeVisible();
   for (const title of authored.leafTitles) {
-    await expect(proposalRow(page, title)).toBeVisible();
+    await expect(proposalRow(page, title, list)).toBeVisible();
   }
-  await expect(page.getByTestId('plan-list-difficulty')).toHaveCount(0);
+  await expect(list.getByTestId('plan-list-difficulty')).toHaveCount(0);
 
   for (const title of authored.leafTitles) {
-    const peek = await openPeek(page, title);
+    const peek = await openPeek(page, title, list);
     await expect(peekDifficulty(peek)).toContainText('None');
     await closePeek(page);
   }

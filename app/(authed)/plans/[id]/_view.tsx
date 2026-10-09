@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect, RedirectType } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { ChevronLeft } from 'lucide-react';
 import type { ReaderPageContext } from '@/lib/pages/projectPageContext';
@@ -14,6 +14,7 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { PlanDetail } from '@/components/planning/PlanDetail';
 import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 import { readerRoutes } from '@/lib/visitor/routes';
+import { planRowDestination } from '@/lib/planning/planDestination';
 
 // The PLAN DETAIL route (Story 7.21 · Subtask 7.4.5 / MOTIR-847) — `/plans/[id]`,
 // the generation-review MODE of the canvas+chat workspace (MOTIR-1193). It MOUNTS
@@ -49,6 +50,38 @@ export default async function PlanDetailView({
     if (err instanceof PlanNotFoundError) notFound();
     if (err instanceof ProjectAccessDeniedError) notFound();
     throw err;
+  }
+
+  // AN UNDECIDED PLAN IS DECIDED IN THE OVERLAY, NEVER ON THIS PAGE (Story MOTIR-7883 ·
+  // MOTIR-7888). The owner's rule (Yue, 2026-10-08): a plan is approved only where it
+  // can be seen in context — the planning overlay on its own conversation. A typed,
+  // shared or followed `/plans/<id>` is the last road to a bare page carrying Approve and
+  // Decline for such a plan, so a MEMBER is sent to the Plans list with the overlay open
+  // on that plan's session, as a REPLACE so Back does not return to an address that
+  // only bounces again.
+  //
+  // ⚠️ AN ENDED SESSION'S PLAN IS REDIRECTED TOO, ON PURPOSE. A plan is *closed* when it
+  // is decided, not when its session ended (the owner's follow-up of 2026-10-08), and
+  // the overlay reads an ended session's undecided plan as it reads an open one. So this
+  // reads no session end at all.
+  //
+  // `planRowDestination` alone decides: it answers the planning surface for exactly an
+  // undecided plan with a session, and the page for a DECIDED plan (a record) — which,
+  // with a session-less plan (an invariant breach) and every Visitor (to whom the
+  // planning workspace is not served), falls through to render. It sits before the
+  // member-only reads below, so a redirected request spends nothing on them.
+  if (!isVisitorContext(ctx) && review.conversation) {
+    // A member's addresses, built for the reader like every shared body's (MOTIR-6888).
+    const memberRoutes = readerRoutes(null);
+    const destination = planRowDestination({
+      planStatus: review.status,
+      planId: id,
+      sessionId: review.conversation.sessionId,
+      host: memberRoutes.view('/plans'),
+      anchorKey: review.conversation.targetKeys[0] ?? null,
+      routes: memberRoutes,
+    });
+    if (destination.kind === 'planning-surface') redirect(destination.href, RedirectType.replace);
   }
 
   // The ESTABLISH STEP (Story MOTIR-1775 · MOTIR-1782). Once the plan is approved

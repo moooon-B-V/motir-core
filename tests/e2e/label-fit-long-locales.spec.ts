@@ -28,6 +28,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { assertLabelsFit } from './_helpers/label-fit';
+import { decidedTwinOf } from './_helpers/i18n-walk';
 import {
   LABEL_FIT_PLAN,
   LABEL_FIT_PROPOSAL,
@@ -64,7 +65,7 @@ interface Surface {
  *  listbox or popover is measured too: the shell's account, help and project
  *  menus once (on the first surface), a board card's actions menu, and the item
  *  page's menus and its pickers' option lists. */
-function surfaces(seed: LabelFitSeed): Surface[] {
+function surfaces(seed: LabelFitSeed, decidedPlanId: string): Surface[] {
   const main = (page: Page) => page.getByRole('main');
   const shows = (text: string) => (page: Page) =>
     expect(main(page).getByText(text, { exact: true }).first()).toBeVisible({ timeout: 15_000 });
@@ -105,7 +106,14 @@ function surfaces(seed: LabelFitSeed): Surface[] {
       ready: shows(LABEL_FIT_TITLES.todo),
     },
     { name: 'plans', path: '/plans', ready: shows(LABEL_FIT_PLAN) },
-    { name: 'plan detail', path: `/plans/${seed.planId}`, ready: shows(LABEL_FIT_PROPOSAL) },
+    // A DECIDED twin of the seeded plan (Story MOTIR-7883 · MOTIR-7887): a member's
+    // `/plans/<id>` for an undecided plan opens the planning overlay, so the plan
+    // PAGE is a decided plan's. The seeded plan stays undecided for /approvals.
+    {
+      name: 'plan detail',
+      path: `/plans/${decidedPlanId}`, // decided: the plan page renders
+      ready: shows(LABEL_FIT_PROPOSAL),
+    },
     { name: 'approvals', path: '/approvals', ready: shows(LABEL_FIT_PLAN) },
     { name: 'account settings', path: '/settings/account' },
     { name: 'organization settings', path: '/settings/organization' },
@@ -144,10 +152,12 @@ async function openAndMeasurePopups(page: Page, selector: string, label: string)
 
 test.describe('labels fit their controls in the longer-running languages', () => {
   let seed: LabelFitSeed;
+  let decidedPlanId: string;
 
   test.beforeAll(async () => {
     await resetDatabase();
     seed = await seedLabelFitTenant(EMAIL);
+    decidedPlanId = await decidedTwinOf(seed.planId);
   });
 
   test.afterAll(async () => {
@@ -162,7 +172,7 @@ test.describe('labels fit their controls in the longer-running languages', () =>
       await page.setViewportSize({ width: run.width, height: run.height });
       await signIn(page, seed.email, seed.password);
 
-      for (const surface of surfaces(seed)) {
+      for (const surface of surfaces(seed, decidedPlanId)) {
         // The route exists: a not-found page also renders a `main`, so the role
         // read alone measured a 404 for `/sprints` (MOTIR-7761).
         const response = await page.goto(surface.path);

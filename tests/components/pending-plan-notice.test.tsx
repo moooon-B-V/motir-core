@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PendingPlanNotice } from '@/app/(authed)/items/[key]/_components/PendingPlanNotice';
 import type { WorkItemPendingProposalDto } from '@/lib/dto/plans';
-import { readerRoutes } from '@/lib/visitor/routes';
+import { withPlanningOverlay } from '@/lib/planning/launcher';
+import { ReaderRoutesProvider } from '@/lib/visitor/useReaderRoutes';
 
 // The PENDING-PLAN indicator on the work-item detail page (bug MOTIR-4197 ·
 // design MOTIR-4256) under happy-dom, against the real `en` catalogue — the
@@ -37,8 +38,51 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+// ⚠️ THE LINKS ARE OVERLAY DOORS (Story MOTIR-7883 · MOTIR-7889). Each resolves its
+// plan through the review read — stubbed here at the global `fetch` — and lands where
+// `planRowDestination` says: the planning overlay IN PLACE over this item page, at the
+// plan's own session. Every plan below is undecided with a session anchored on PROD-49.
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/items/PROD-49',
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
+}));
+const { shallowPush } = vi.hoisted(() => ({ shallowPush: vi.fn() }));
+vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
+
+const fetchMock = vi.fn(async (url: string) => {
+  const planId = decodeURIComponent(url.split('/').pop()!);
+  return new Response(
+    JSON.stringify({
+      status: 'planned',
+      conversation: { sessionId: `s_${planId}`, targetKeys: ['PROD-49'] },
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  );
+});
+
+/** Where a plan's door lands once its read settles: the overlay over the item page. */
+const overlayOf = (planId: string) =>
+  withPlanningOverlay('/items/PROD-49', {
+    kind: 'work-item',
+    itemKey: 'PROD-49',
+    sessionId: `s_${planId}`,
+  });
+
+/** Let every door's review read settle. */
+const settle = () => act(async () => {});
+
+beforeEach(() => {
+  push.mockReset();
+  shallowPush.mockReset();
+  fetchMock.mockClear();
+  vi.stubGlobal('fetch', fetchMock);
+});
+
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 const modifyBy = (
@@ -77,10 +121,11 @@ const addBy = (
 });
 
 describe('PendingPlanNotice — ONE plan', () => {
-  it('a `modify` says a plan proposes CHANGES, and the control links to that plan', () => {
+  it('a `modify` says a plan proposes CHANGES, and the control opens that plan in the overlay', async () => {
     renderWithIntl(
       <PendingPlanNotice identifier="PROD-49" proposals={[modifyBy('pln_8f21', 'Epic 8 sweep')]} />,
     );
+    await settle();
 
     const notice = screen.getByTestId('pending-plan-notice');
     expect(notice.getAttribute('role')).toBe('status');
@@ -95,19 +140,39 @@ describe('PendingPlanNotice — ONE plan', () => {
     // The control is a REAL link (navigation keeps link semantics), its
     // accessible name is op-neutral and CONTAINS the visible label (WCAG 2.5.3).
     const link = screen.getByRole('link', { name: 'Review the plan that names PROD-49' });
-    expect(link.getAttribute('href')).toBe('/plans/pln_8f21');
+    expect(link.getAttribute('href')).toBe(overlayOf('pln_8f21'));
     expect(link.textContent).toContain('Review plan');
   });
 
-  it('a `remove` is a DIFFERENT sentence — a plan proposes to ARCHIVE this item', () => {
+  it('a plain click opens the overlay IN PLACE; a modified click is the browser’s', async () => {
+    renderWithIntl(
+      <PendingPlanNotice identifier="PROD-49" proposals={[modifyBy('pln_8f21', 'Epic 8 sweep')]} />,
+    );
+    await settle();
+    const link = screen.getByRole('link', { name: 'Review the plan that names PROD-49' });
+
+    const modified = new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true });
+    act(() => {
+      link.dispatchEvent(modified);
+    });
+    expect(modified.defaultPrevented).toBe(false);
+    expect(shallowPush).not.toHaveBeenCalled();
+
+    fireEvent.click(link, { button: 0 });
+    expect(shallowPush).toHaveBeenCalledExactlyOnceWith(overlayOf('pln_8f21'));
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('a `remove` is a DIFFERENT sentence — a plan proposes to ARCHIVE this item', async () => {
     renderWithIntl(
       <PendingPlanNotice identifier="PROD-49" proposals={[removeBy('pln_a417', 'Cancel 8.6')]} />,
     );
+    await settle();
     expect(screen.getByText('A plan proposes to archive this item')).toBeTruthy();
     expect(screen.queryByText('A plan proposes changes to this item')).toBeNull();
     expect(
       screen.getByRole('link', { name: 'Review the plan that names PROD-49' }).getAttribute('href'),
-    ).toBe('/plans/pln_a417');
+    ).toBe(overlayOf('pln_a417'));
   });
 
   it('a `stale` plan shows the SAME copy and the same link as a `planned` one', () => {
@@ -125,7 +190,7 @@ describe('PendingPlanNotice — ONE plan', () => {
 });
 
 describe('PendingPlanNotice — SEVERAL plans become a LIST', () => {
-  it('one row per plan, the plan NAME as the link, its own op sentence, no control', () => {
+  it('one row per plan, the plan NAME as the link, its own op sentence, no control', async () => {
     renderWithIntl(
       <PendingPlanNotice
         identifier="PROD-49"
@@ -137,51 +202,60 @@ describe('PendingPlanNotice — SEVERAL plans become a LIST', () => {
       />,
     );
 
+    await settle();
+    // ONE read per plan, shared by nothing else on the page.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(screen.getByText('3 pending plans name this item')).toBeTruthy();
 
     const rows = screen.getAllByRole('listitem');
     expect(rows).toHaveLength(3);
 
     const first = screen.getByRole('link', { name: 'Epic 8 — launch-readiness sweep' });
-    expect(first.getAttribute('href')).toBe('/plans/pln_8f21');
+    expect(first.getAttribute('href')).toBe(overlayOf('pln_8f21'));
     expect(rows[0]!.textContent).toContain('— proposes changes');
 
     const second = screen.getByRole('link', { name: 'Cancel the abandoned 8.6 branch' });
-    expect(second.getAttribute('href')).toBe('/plans/pln_a417');
+    expect(second.getAttribute('href')).toBe(overlayOf('pln_a417'));
     expect(rows[1]!.textContent).toContain('— proposes to archive it');
 
     // `Plan.title` is nullable: the SHIPPED `planReview.untitledPlan` string is
     // reused, so the item page and the review surface say one thing about an
     // unnamed plan.
     const third = screen.getByRole('link', { name: 'Untitled plan' });
-    expect(third.getAttribute('href')).toBe('/plans/pln_c903');
+    expect(third.getAttribute('href')).toBe(overlayOf('pln_c903'));
+
+    // Each row opens ITS OWN plan's session.
+    fireEvent.click(second, { button: 0 });
+    expect(shallowPush).toHaveBeenCalledExactlyOnceWith(overlayOf('pln_a417'));
 
     // The single-plan control is gone: one control cannot name three plans.
     expect(screen.queryByRole('link', { name: /Review the plan that names/ })).toBeNull();
     expect(screen.queryByText('Review plan')).toBeNull();
   });
 
-  it('a blank title falls back to the untitled string too', () => {
+  it('a blank title falls back to the untitled string too', async () => {
     renderWithIntl(
       <PendingPlanNotice
         identifier="PROD-49"
         proposals={[modifyBy('a', '   '), modifyBy('b', 'Named')]}
       />,
     );
+    await settle();
     expect(screen.getByRole('link', { name: 'Untitled plan' }).getAttribute('href')).toBe(
-      '/plans/a',
+      overlayOf('a'),
     );
   });
 });
 
 describe('PendingPlanNotice — the CHILDREN claims (MOTIR-4365 · AMENDMENT A §A1)', () => {
-  it('an `add`-only plan says a plan proposes to ADD n work items, and keeps the control', () => {
+  it('an `add`-only plan says a plan proposes to ADD n work items, and keeps the control', async () => {
     renderWithIntl(
       <PendingPlanNotice
         identifier="PROD-49"
         proposals={[addBy('pln_8f21', 'Expand PROD-49 into subtasks', 8)]}
       />,
     );
+    await settle();
 
     expect(screen.getByText('A plan proposes to add 8 work items under this item')).toBeTruthy();
     // Neither shipped op sentence appears: the claim is not a change and not an
@@ -190,7 +264,7 @@ describe('PendingPlanNotice — the CHILDREN claims (MOTIR-4365 · AMENDMENT A �
     expect(screen.queryByText('A plan proposes to archive this item')).toBeNull();
 
     const link = screen.getByRole('link', { name: 'Review the plan that names PROD-49' });
-    expect(link.getAttribute('href')).toBe('/plans/pln_8f21');
+    expect(link.getAttribute('href')).toBe(overlayOf('pln_8f21'));
   });
 
   it('ONE child takes the SINGULAR arm of the same key — the plural is ICU, not a branch', () => {
@@ -278,14 +352,16 @@ describe('PendingPlanNotice — the empty case', () => {
 // MOTIR-6888 — on the Visitor tree the notice's plan link is the public
 // project's Visitor plan page, never the member `/plans/<id>`.
 describe('PendingPlanNotice on the Visitor tree', () => {
-  it('links to the Visitor plan page', () => {
+  it('links to the Visitor plan page', async () => {
     renderWithIntl(
-      <PendingPlanNotice
-        identifier="PROD-49"
-        proposals={[modifyBy('pln_8f21', 'Epic 8 sweep')]}
-        routes={readerRoutes('ACME')}
-      />,
+      <ReaderRoutesProvider identifier="ACME">
+        <PendingPlanNotice
+          identifier="PROD-49"
+          proposals={[modifyBy('pln_8f21', 'Epic 8 sweep')]}
+        />
+      </ReaderRoutesProvider>,
     );
+    await settle();
     const link = screen.getByRole('link', { name: 'Review the plan that names PROD-49' });
     expect(link.getAttribute('href')).toBe('/p/ACME/plans/pln_8f21');
   });

@@ -219,7 +219,7 @@ describe('the TAG says the same thing on both rows', () => {
     );
   });
 
-  it('a To-approve row with NO SESSION reads the no-conversation form', () => {
+  it('a To-approve row with NO SESSION reads the plain plan form, and says nothing more (MOTIR-7885)', () => {
     nav.path = '/workbench';
     renderWithIntl(
       <ApprovalRow
@@ -240,18 +240,25 @@ describe('the TAG says the same thing on both rows', () => {
     );
     const tag = screen.getByTestId('plan-destination');
     expect(tag.textContent).toContain(en.planDestination.plan);
-    expect(tag.textContent).toContain(en.planDestination.noConversation);
-    expect(tag.getAttribute('title')).toBe(en.planDestination.noConversationWhy);
+    expect(tag.getAttribute('data-destination')).toBe('plan-page');
+    // The retired copy, inlined because its key is gone (Story MOTIR-7883).
+    expect(tag.textContent).not.toContain('no conversation');
+    expect(tag.hasAttribute('title')).toBe(false);
   });
 });
 
 describe('THE CHIP RULE — the arrow means somewhere the row does not go (§21.5)', () => {
-  it('UNDECIDED: the chip is a second link to the plan page', () => {
+  // Story MOTIR-7883 · MOTIR-7889: the plan page no longer decides anything.
+  it('UNDECIDED: the chip opens the same overlay as the row', () => {
     renderWithIntl(<SessionRow view={sessionView(FACTS, { id: 'p_31', status: 'planned' })} />);
     const chip = screen.getByRole('link', {
       name: `Open the plan — ${en.aiPlanning.sessions.planState.planned}`,
     });
-    expect(chip.getAttribute('href')).toBe('/plans/p_31');
+    const title = screen.getAllByRole('link')[0]!;
+    expect(chip.getAttribute('href')).toBe(title.getAttribute('href'));
+    expect(new URL(chip.getAttribute('href')!, 'http://x').searchParams.get('planSession')).toBe(
+      's_1',
+    );
   });
 
   it('DECIDED: the chip is a plain label — no link, no second tab stop', () => {

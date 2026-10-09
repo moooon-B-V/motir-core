@@ -2,6 +2,7 @@ import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanShapes, PLANS_SHAPES_PASSWORD, SIX_STEPS } from './_helpers/plans-shapes-seed';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 
 // PLANNING A `manual` WORK ITEM AS A TO-DO LIST — THE ACCEPTANCE RECEIPT
 // (Story MOTIR-3810 · Subtask MOTIR-4625). The story's `verification_recipe`,
@@ -69,7 +70,7 @@ test('a plan proposes a manual card WITH its steps, and approving writes them', 
   const proposedRows = page.getByTestId('proposal-todos-list').getByTestId('todo-row-readonly');
 
   await chapter('A plan proposes provisioning work, and it is a manual card', async () => {
-    await page.goto(`/plans/${seed.six.planId}?view=list`);
+    await openUndecidedPlan(page, seed.six.planId, { view: 'list' });
     const list = page.getByTestId('plan-proposal-list');
     await expect(list).toBeVisible();
     await expect(
@@ -118,7 +119,7 @@ test('a plan proposes a manual card WITH its steps, and approving writes them', 
   });
 
   await chapter('The CANVAS door shows the very same steps', async () => {
-    await page.goto(`/plans/${seed.six.planId}?view=canvas`);
+    await openUndecidedPlan(page, seed.six.planId, { view: 'canvas' });
     const node = page.locator('[data-node-id]').filter({ hasText: seed.six.withStepsTitle });
     await expect(node.first()).toBeVisible();
     await node.first().press('Enter');
@@ -132,7 +133,7 @@ test('a plan proposes a manual card WITH its steps, and approving writes them', 
   });
 
   await chapter('A proposal with no steps shows no section at all', async () => {
-    await page.goto(`/plans/${seed.six.planId}?view=list`);
+    await openUndecidedPlan(page, seed.six.planId, { view: 'list' });
     await page.getByRole('button', { name: new RegExp(seed.six.steplessTitle) }).click();
     await expect(peek).toBeVisible();
     // ABSENT, not an empty `0 of 0`: a row's absence is a statement about the
@@ -144,8 +145,12 @@ test('a plan proposes a manual card WITH its steps, and approving writes them', 
   });
 
   await chapter('Approve — the plan becomes work items', async () => {
-    await page.goto(`/plans/${seed.six.planId}`);
-    const approve = page.getByRole('button', { name: /Approve/ });
+    // The plan is undecided, so it is approved where it is decided: the overlay's
+    // own footer (Story MOTIR-7883).
+    const overlay = await openUndecidedPlan(page, seed.six.planId);
+    const approve = overlay
+      .getByTestId('plan-change-confirm-bar')
+      .getByRole('button', { name: 'Approve', exact: true });
     await expect(approve).toBeVisible();
 
     // Arm the response wait BEFORE the click so the persisted flip cannot be
@@ -159,7 +164,9 @@ test('a plan proposes a manual card WITH its steps, and approving writes them', 
     await approve.click();
     expect((await approved).status()).toBe(200);
 
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
+    // DECIDED now, so the plan's own page is its record — and it reads Approved.
+    await page.goto(`/plans/${seed.six.planId}`); // decided: the plan page renders
+    await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText('Approved');
     await beat();
   });
 

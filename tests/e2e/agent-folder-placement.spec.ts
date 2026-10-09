@@ -1,4 +1,4 @@
-import type { APIRequestContext, Page } from '@playwright/test';
+import type { APIRequestContext, Locator, Page } from '@playwright/test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -6,6 +6,7 @@ import { test, expect } from '@playwright/test';
 import { actionWrite } from './_helpers/authoritative-signal';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openUndecidedPlan } from './_helpers/open-undecided-plan';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -152,17 +153,17 @@ async function authorPlan(
   return planId;
 }
 
-const reviewCanvas = (page: Page) =>
-  page.getByRole('application', { name: 'Proposed plan canvas' });
-const node = (page: Page, nodeId: string) => page.locator(`[data-node-id="${nodeId}"]`);
-const nodeTitled = (page: Page, title: string) =>
-  page.locator('[data-node-id]').filter({ hasText: title });
+// Each review locator takes the ROOT it reads under — the planning overlay an
+// undecided plan is reviewed in since Story MOTIR-7883 (`openUndecidedPlan`).
+// The overlay names its canvas for the project, not "Proposed plan canvas".
+const reviewCanvas = (root: Locator) =>
+  root.getByRole('application', { name: 'Legacy import plan' });
+const node = (root: Locator, nodeId: string) => root.locator(`[data-node-id="${nodeId}"]`);
+const nodeTitled = (root: Locator, title: string) =>
+  root.locator('[data-node-id]').filter({ hasText: title });
 const tree = (page: Page) => page.getByRole('treegrid', { name: 'Work Items', exact: true });
-const crumbs = (page: Page) =>
-  page
-    .getByRole('main')
-    .getByTestId('roadmap-canvas')
-    .getByRole('navigation', { name: 'Breadcrumb' });
+const crumbs = (root: Locator) =>
+  root.getByTestId('roadmap-canvas').getByRole('navigation', { name: 'Breadcrumb' });
 
 test('an integration files work, an agent proposes into the folder, and a reviewer approves it into place', async ({
   page,
@@ -211,15 +212,17 @@ test('an integration files work, an agent proposes into the folder, and a review
   await client.close();
 
   await signIn(page, seed.email, PASSWORD);
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is
+  // undecided, so it is reviewed in the planning overlay, which renders the same
+  // proposal views; the canvas is asked for through the helper's switch (the
+  // overlay never reads `?view=`).
+  let overlay!: Locator;
 
   // ── Step 3 — the reviewer sees where each card lands ─────────────────────
   await test.step('An agent’s plan opens INSIDE the folder each card will be filed into', async () => {
-    await page.goto(`/plans/${planId}?view=canvas`);
-    await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
-      'Ready to review',
-    );
+    overlay = await openUndecidedPlan(page, planId, { view: 'canvas' });
     // The landmark FIRST: nothing below may pass against a page that never mounted.
-    await expect(reviewCanvas(page)).toBeVisible();
+    await expect(reviewCanvas(overlay)).toBeVisible();
 
     // ⚠️ RESTATED by bug MOTIR-5782 (design Part XVIII decision 2). A folder is a
     // LEVEL on this canvas now, so both proposals sit on Backlog ideas' level and
@@ -228,17 +231,17 @@ test('an integration files work, an agent proposes into the folder, and a review
     // reader is already standing on, and is kept only for the stale case
     // (decision 6, asserted in the second test below). The list body keeps the
     // placement fact unchanged, which is where `folderPath` is still read.
-    await expect(crumbs(page).getByRole('button', { name: `Folder: ${FOLDER}` })).toBeVisible();
-    const mapFields = nodeTitled(page, 'Map legacy fields');
+    await expect(crumbs(overlay).getByRole('button', { name: `Folder: ${FOLDER}` })).toBeVisible();
+    const mapFields = nodeTitled(overlay, 'Map legacy fields');
     await expect(mapFields).toHaveCount(1);
     await expect(mapFields.getByTestId('placement-line')).toHaveCount(0);
   });
 
   await test.step('Show changes: Old reports moves from the root into Backlog ideas', async () => {
-    const toggle = page.getByRole('main').getByTestId('show-changes-toggle');
+    const toggle = overlay.getByTestId('show-changes-toggle');
     // Armed on arrival (MOTIR-4020), so the reader lands on the marked changes.
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    const move = node(page, oldReports.id).getByTestId('diff-line');
+    const move = node(overlay, oldReports.id).getByTestId('diff-line');
     await expect(move).toContainText('Placement');
     await expect(move).toContainText('Project root');
     await expect(move).toContainText(FOLDER);
@@ -246,13 +249,16 @@ test('an integration files work, an agent proposes into the folder, and a review
 
   // ── Step 4 — approve, and all three sit inside the folder ────────────────
   await test.step('Approve — and the plan’s cards become filed work', async () => {
-    const approve = page.getByRole('button', { name: /^Approve/ });
+    const approve = overlay
+      .getByTestId('plan-change-confirm-bar')
+      .getByRole('button', { name: 'Approve', exact: true });
     await expect(approve).toBeEnabled();
     const approved = page.waitForResponse(
       (r) => r.url().includes(`/api/plans/${planId}/approve`) && r.request().method() === 'POST',
     );
     await approve.click();
     expect((await approved).status()).toBe(200);
+    await page.goto(`/plans/${planId}`); // decided: the plan page renders
     await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText('Approved');
   });
 
@@ -297,12 +303,14 @@ test('a folder deleted after the plan was written refuses the approve and create
   await client.close();
 
   await signIn(page, seed.email, PASSWORD);
-  await page.goto(`/plans/${planId}?view=canvas`);
-  await expect(reviewCanvas(page)).toBeVisible();
+  // ⚠️ RE-POINTED by Story MOTIR-7883 (MOTIR-7887), 2026-10-08: the plan is
+  // undecided, so it is reviewed — and its approve refused — in the planning overlay.
+  const overlay = await openUndecidedPlan(page, planId, { view: 'canvas' });
+  await expect(reviewCanvas(overlay)).toBeVisible();
   // RESTATED with the moment above: the plan arrives inside Scratch, so the crumb
   // names the folder and the card spends no slot on saying so (decision 2).
-  await expect(crumbs(page).getByRole('button', { name: 'Folder: Scratch' })).toBeVisible();
-  const card = nodeTitled(page, 'Draft scratch notes');
+  await expect(crumbs(overlay).getByRole('button', { name: 'Folder: Scratch' })).toBeVisible();
+  const card = nodeTitled(overlay, 'Draft scratch notes');
   await expect(card).toHaveCount(1);
   await expect(card.getByTestId('placement-line')).toHaveCount(0);
 
@@ -310,36 +318,32 @@ test('a folder deleted after the plan was written refuses the approve and create
   const deleted = await request.delete(`${V1}/folders/${scratch.id}`, { headers: bearer(seed) });
   expect(deleted.status(), await deleted.text()).toBe(200);
 
-  const approve = page.getByRole('button', { name: /^Approve/ });
+  const approve = overlay
+    .getByTestId('plan-change-confirm-bar')
+    .getByRole('button', { name: 'Approve', exact: true });
   const refused = page.waitForResponse(
     (r) => r.url().includes(`/api/plans/${planId}/approve`) && r.request().method() === 'POST',
   );
   await approve.click();
   expect((await refused).status()).toBe(400);
 
-  // The refusal names the PROPOSAL: the folder's name went with its row, so the
-  // copy cannot name Scratch (design Part XVII §17.5, amended on MOTIR-5423).
-  await expect(
-    page
-      .getByRole('alert')
-      .filter({ hasText: 'Nothing was created' })
-      .filter({ hasText: 'Draft scratch notes' }),
-  ).toContainText('is filed into a folder that was deleted after this plan was written.');
-  await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
-    'Ready to review',
-  );
+  // ⚠️ RETIRED 2026-10-08 by Story MOTIR-7883 (MOTIR-7887): the keyed refusal
+  // alert naming the proposal, the rail's still-`Ready to review` status and the
+  // dead Approve after a reload are the review RAIL's, drawn only on an undecided
+  // plan's page, which now opens in the overlay. Still covered by
+  // tests/components/plan-folder-placement.test.tsx (the keyed refusal copy, and
+  // Approve disabled while a proposal is filed into a deleted folder).
 
-  // Reloaded, the card carries the stale state and Approve is a dead control.
-  await page.reload();
-  await expect(reviewCanvas(page)).toBeVisible();
-  const staleCard = nodeTitled(page, 'Draft scratch notes');
+  // Reopened, the card carries the stale state.
+  const reopened = await openUndecidedPlan(page, planId, { view: 'canvas' });
+  await expect(reviewCanvas(reopened)).toBeVisible();
+  const staleCard = nodeTitled(reopened, 'Draft scratch notes');
   await expect(staleCard.getByTestId('placement-line')).toHaveAttribute(
     'data-folder-missing',
     'true',
   );
   await expect(staleCard.getByTestId('placement-line')).toContainText('Folder deleted');
   await expect(staleCard).toContainText('Out of date');
-  await expect(page.getByRole('button', { name: /^Approve/ })).toBeDisabled();
 
   expect(
     await db.workItem.count({ where: { projectId: seed.projectId, title: 'Draft scratch notes' } }),

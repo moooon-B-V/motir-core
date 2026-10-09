@@ -27,6 +27,7 @@ import { adminDb } from '@/tests/helpers/adminDb';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { backlogService } from '@/lib/services/backlogService';
 import { plansService } from '@/lib/services/plansService';
+import type { PlanItemProposedFields } from '@/lib/dto/plans';
 import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 import { isLandedWorkbenchUrl } from './workbench-landing';
 
@@ -280,7 +281,9 @@ export const SEEDED_PROPOSAL = 'Settings in eleven languages';
 
 export interface Surface {
   name: string;
-  path: string;
+  /** The route — or, for a surface whose subject has to be SEEDED first (the
+   *  decided plan page), a resolver that seeds it and returns the route. */
+  path: string | (() => Promise<string>);
   /** A string on the page that equals its catalogue value in `locale`. */
   landmark: (page: Page, locale: string) => Promise<void>;
   /**
@@ -339,7 +342,12 @@ export function walkSurfaces(seed: { itemKey: string; planId: string }): Surface
     },
     {
       name: 'plan review',
-      path: `/plans/${seed.planId}`,
+      // ⚠️ A DECIDED twin of the seeded plan, not the seeded plan itself (Story
+      // MOTIR-7883 · MOTIR-7887): a member's `/plans/<id>` for an UNDECIDED plan
+      // redirects into the planning overlay, so the plan PAGE — its header, its
+      // back link, its labels — is now a decided plan's. The seeded plan stays
+      // undecided: it is the approvals queue's waiting row below.
+      path: () => decidedTwinOf(seed.planId).then((id) => `/plans/${id}`), // decided: the plan page renders
       landmark: (page, l) =>
         expect(
           main(page).getByRole('link', { name: msg(l, 'planReview.backToPlans') }),
@@ -383,7 +391,7 @@ export function walkSurfaces(seed: { itemKey: string; planId: string }): Surface
  */
 export async function visitSurface(page: Page, surface: Surface, locale: string): Promise<void> {
   const where = `${surface.name} · ${locale}`;
-  await page.goto(surface.path);
+  await page.goto(typeof surface.path === 'string' ? surface.path : await surface.path());
   await expect(page.locator('html'), where).toHaveAttribute('lang', locale);
   await expect(page.getByRole('main')).toBeVisible({ timeout: 15_000 });
   await surface.landmark(page, locale);
@@ -457,6 +465,58 @@ export async function seedOwnProject(email: string): Promise<OwnProjectSeed> {
   );
   await plansService.markPlanned(plan.id, ctx);
   return { itemKey: first.identifier, planId: plan.id };
+}
+
+/**
+ * A DECLINED twin of `planId` — same project, same requester, the same `add`
+ * proposals — for a walk that reads the plan PAGE (Story MOTIR-7883 ·
+ * MOTIR-7887). A member's `/plans/<id>` for an undecided plan now opens the
+ * planning overlay instead; a decided plan keeps its page, so this is the plan a
+ * page walk visits, while `planId` itself stays undecided for the approvals
+ * queue. Decided through the shipped service (`declinePlan` — through the door
+ * when the plan was asked), never by writing a status.
+ *
+ * Idempotent: a walk that calls it per locale finds the twin it already made.
+ */
+export async function decidedTwinOf(planId: string): Promise<string> {
+  const source = await adminDb.plan.findUniqueOrThrow({
+    where: { id: planId },
+    select: { workspaceId: true, projectId: true, createdById: true, title: true },
+  });
+  const title = `${source.title ?? 'Plan'} (decided)`;
+  const existing = await adminDb.plan.findFirst({
+    where: { projectId: source.projectId, title, status: 'declined' },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const createdById =
+    source.createdById ??
+    (
+      await adminDb.workspaceMembership.findFirstOrThrow({
+        where: { workspaceId: source.workspaceId },
+        orderBy: { createdAt: 'asc' },
+        select: { userId: true },
+      })
+    ).userId;
+  const ctx = { userId: createdById, workspaceId: source.workspaceId };
+  const adds = await adminDb.planItem.findMany({
+    where: { planId, op: 'add' },
+    orderBy: { createdAt: 'asc' },
+    select: { proposedFields: true },
+  });
+  const twin = await plansService.createPlan(source.projectId, { title, createdById }, ctx);
+  await plansService.addProposals(
+    twin.id,
+    adds.map((item) => ({
+      op: 'add' as const,
+      proposedFields: item.proposedFields as PlanItemProposedFields | null,
+    })),
+    ctx,
+  );
+  await plansService.markPlanned(twin.id, ctx);
+  await plansService.declinePlan(twin.id, ctx);
+  return twin.id;
 }
 
 /** Pin the sprint's dates and the work item's due date to the seeded date. */
