@@ -252,7 +252,13 @@
     "--el-vote-bg": "#2a253a",
     "--el-warning": "#dd5b00",
     "--el-warning-surface": "#3a2a1a",
-    "--el-warning-text": "#e5e5e5"
+    "--el-warning-text": "#e5e5e5",
+    "--el-live-mark-1": "#7b6ce5",
+    "--el-live-text-1": "color-mix(in srgb, #7b6ce5 60%, #f3f4f6)",
+    "--el-live-mark-2": "#2a9d99",
+    "--el-live-text-2": "color-mix(in srgb, #2a9d99 60%, #f3f4f6)",
+    "--el-live-mark-3": "#ff64c8",
+    "--el-live-text-3": "color-mix(in srgb, #ff64c8 60%, #f3f4f6)"
   },
   "amethyst/light": {
     "--el-accent": "#5645d4",
@@ -507,7 +513,13 @@
     "--el-vote-bg": "#e6e0f5",
     "--el-warning": "#dd5b00",
     "--el-warning-surface": "#ffe8d4",
-    "--el-warning-text": "#37352f"
+    "--el-warning-text": "#37352f",
+    "--el-live-mark-1": "#5645d4",
+    "--el-live-text-1": "color-mix(in srgb, #5645d4 60%, #1a1a1a)",
+    "--el-live-mark-2": "#2a9d99",
+    "--el-live-text-2": "color-mix(in srgb, #2a9d99 60%, #1a1a1a)",
+    "--el-live-mark-3": "#ff64c8",
+    "--el-live-text-3": "color-mix(in srgb, #ff64c8 60%, #1a1a1a)"
   },
   "motir/dark": {
     "--el-accent": "#edeef0",
@@ -762,7 +774,13 @@
     "--el-vote-bg": "#1f2236",
     "--el-warning": "#f08a4b",
     "--el-warning-surface": "#36230f",
-    "--el-warning-text": "#d7d9dd"
+    "--el-warning-text": "#d7d9dd",
+    "--el-live-mark-1": "#7db1ff",
+    "--el-live-text-1": "color-mix(in srgb, #7db1ff 60%, #edeef0)",
+    "--el-live-mark-2": "#2db6a8",
+    "--el-live-text-2": "color-mix(in srgb, #2db6a8 60%, #edeef0)",
+    "--el-live-mark-3": "#fa5500",
+    "--el-live-text-3": "color-mix(in srgb, #fa5500 60%, #edeef0)"
   },
   "motir/light": {
     "--el-accent": "#1a1d21",
@@ -1017,6 +1035,12 @@
     "--el-vote-bg": "#e4e6f3",
     "--el-warning": "#c2410c",
     "--el-warning-surface": "#fde0c8",
-    "--el-warning-text": "#20242a"
+    "--el-warning-text": "#20242a",
+    "--el-live-mark-1": "#155bc4",
+    "--el-live-text-1": "color-mix(in srgb, #155bc4 60%, #16191d)",
+    "--el-live-mark-2": "#0e8f86",
+    "--el-live-text-2": "color-mix(in srgb, #0e8f86 60%, #16191d)",
+    "--el-live-mark-3": "#d66000",
+    "--el-live-text-3": "color-mix(in srgb, #d66000 60%, #16191d)"
   }
 }
