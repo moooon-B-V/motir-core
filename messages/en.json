@@ -3570,7 +3570,8 @@
       },
       "type": {
         "name": "Typography",
-        "help": "The typeface pairing for headings and body."
+        "help": "The typeface pairing for headings and body.",
+        "automatic": "Automatic ({font})"
       },
       "showcase": {
         "eyebrow": "Your look — live across Motir",
