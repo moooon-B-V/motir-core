@@ -7531,15 +7531,8 @@
         "failedClosed": "Il tentativo non è andato a buon fine, quindi questa sessione è stata chiusa. Gli elementi di lavoro che conteneva sono tornati dov’erano."
       },
       "answeredFrom": "{count, plural, =0 {Risposta data senza citare nulla} one {Risposta basata su # elemento di lavoro} other {Risposta basata su # elementi di lavoro}}",
-      "correctToPlan": "Proponi invece delle modifiche",
       "correctToAsk": "Rispondi invece a questo",
       "correcting": "Rilettura…",
-      "correctConfirm": {
-        "label": "Conferma l’esecuzione di pianificazione",
-        "body": "Proporre modifiche avvia un’esecuzione di pianificazione, che consuma crediti Motir AI.",
-        "yes": "Proponi modifiche",
-        "cancel": "Mantieni la risposta"
-      },
       "correctedToPlan": "Riletto come modifica al piano",
       "correctedToAsk": "Riletto come domanda",
       "handoff": "Interpretato come modifica al piano: elaborazione della proposta",

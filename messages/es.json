@@ -7531,15 +7531,8 @@
         "failedClosed": "Ese intento no se completó, así que esta sesión se cerró. Los elementos de trabajo que tenía volvieron a donde estaban."
       },
       "answeredFrom": "{count, plural, =0 {Respondido sin citar nada} one {Respondido a partir de # elemento de trabajo} other {Respondido a partir de # elementos de trabajo}}",
-      "correctToPlan": "Proponer cambios en su lugar",
       "correctToAsk": "Responder esto en su lugar",
       "correcting": "Releyendo…",
-      "correctConfirm": {
-        "label": "Confirmar la ejecución de planificación",
-        "body": "Proponer cambios inicia una ejecución de planificación, que gasta créditos de Motir AI.",
-        "yes": "Proponer cambios",
-        "cancel": "Mantener la respuesta"
-      },
       "correctedToPlan": "Releído como un cambio del plan",
       "correctedToAsk": "Releído como una pregunta",
       "handoff": "Lo interpreto como un cambio del plan: trabajando en la propuesta",

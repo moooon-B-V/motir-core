@@ -146,7 +146,6 @@ describe('i18n — the keys this story added, and the one it removed', () => {
       ['shell', 'aiCallout', 'actions', 'ask', 'title'],
       ['shell', 'aiCallout', 'actions', 'ask', 'description'],
       ['planningWorkspace', 'conversation', 'answeredFrom'],
-      ['planningWorkspace', 'conversation', 'correctToPlan'],
       ['planningWorkspace', 'conversation', 'correctToAsk'],
       ['planningWorkspace', 'conversation', 'correcting'],
       ['planningWorkspace', 'conversation', 'handoff'],
@@ -181,6 +180,24 @@ describe('i18n — the keys this story added, and the one it removed', () => {
         | undefined;
       expect(chat, `${name}.onboarding.chat`).toBeTruthy();
       expect(Object.keys(chat!), name).not.toContain('assistantInitial');
+    }
+  });
+
+  it('⭐ "Propose changes instead" is GONE from both — no button starts a planning run', () => {
+    // MOTIR-7924 (`conversation-turn-intent.md` AMENDMENT 3): whether a turn
+    // becomes a planning run is the planner's call, so the correction no longer
+    // offers the flip from an answer into one, and its copy and its confirm have
+    // no renderer left. Asserted here, not merely deleted: a removal has two sides.
+    for (const [name, cat] of [
+      ['en', enC],
+      ['zh', zhC],
+    ] as const) {
+      const conversation = (cat['planningWorkspace'] as Record<string, unknown> | undefined)?.[
+        'conversation'
+      ] as Record<string, unknown> | undefined;
+      expect(conversation, `${name}.planningWorkspace.conversation`).toBeTruthy();
+      expect(Object.keys(conversation!), name).not.toContain('correctToPlan');
+      expect(Object.keys(conversation!), name).not.toContain('correctConfirm');
     }
   });
 

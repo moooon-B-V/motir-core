@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 
-// A FINISHED ask, and the Stop that follows a correction (bug MOTIR-7924).
+// A FINISHED ask, and the Stop pressed before the planner hands off (bug MOTIR-7924).
 //
 // Three defects shared one root: an answered ask never closed its record. Its
 // opening `reading` act stayed on the rail under the answer ("Reading your
@@ -188,18 +188,22 @@ describe('an ANSWERED ask closes its record', () => {
   });
 });
 
-describe('a Stop pressed after a correction starts stops the PLAN run', () => {
-  it('⚠️ pressed while the correction POST is pending, it is raised on the plan job once its id is known', async () => {
+describe('a Stop pressed before the planner hands off stops the PLAN run', () => {
+  // A turn becomes a planning run only when the PLANNER reads it as one
+  // (`conversation-turn-intent.md` AMENDMENT 3): at the door, or when the ask job
+  // settles as a redirect. Either way the plan job's id arrives AFTER the person
+  // may already have pressed Stop, and the stop must land on that job.
+  it('⚠️ pressed while the turn’s POST is pending, it is raised on the plan job once its id is known', async () => {
     const { result } = await answered();
     const door = deferred<typeof FLIPPED>();
-    rerunAsk.mockReturnValueOnce(door.promise);
+    submitAsk.mockReturnValueOnce(door.promise);
     // Hold the plan run open so the stop can be observed landing on it.
     const planStream = deferred<void>();
     stream.mockImplementationOnce(async () => planStream.promise);
 
-    let correcting!: Promise<void>;
+    let sending!: Promise<void>;
     act(() => {
-      correcting = result.current.correctTurn('t0');
+      sending = result.current.send('split the payments epic');
     });
     expect(result.current.state.phase).toBe('streaming');
 
@@ -222,7 +226,7 @@ describe('a Stop pressed after a correction starts stops the PLAN run', () => {
 
     await act(async () => {
       planStream.resolve();
-      await correcting;
+      await sending;
     });
     // …and the run ends STOPPED, not EMPTY.
     expect(result.current.state.stopped).toBe(true);
@@ -232,16 +236,16 @@ describe('a Stop pressed after a correction starts stops the PLAN run', () => {
 
   it('pressed while the ASK job streams, it is raised on the plan job the ask hands off to', async () => {
     const { result } = await answered();
-    rerunAsk.mockResolvedValueOnce({ jobId: 'ask-2', turnId: 't0', session: ANSWERED });
+    submitAsk.mockResolvedValueOnce({ jobId: 'ask-2', turnId: 't1', session: ANSWERED });
     const askStream = deferred<void>();
     streamAsk.mockImplementationOnce(async () => askStream.promise);
     settleAsk.mockResolvedValueOnce(FLIPPED);
     const planStream = deferred<void>();
     stream.mockImplementationOnce(async () => planStream.promise);
 
-    let correcting!: Promise<void>;
+    let sending!: Promise<void>;
     act(() => {
-      correcting = result.current.correctTurn('t0');
+      sending = result.current.send('split the payments epic');
     });
     await waitFor(() => expect(result.current.state.jobId).toBe('ask-2'));
 
@@ -260,26 +264,26 @@ describe('a Stop pressed after a correction starts stops the PLAN run', () => {
 
     await act(async () => {
       planStream.resolve();
-      await correcting;
+      await sending;
     });
     expect(result.current.state.stopped).toBe(true);
   });
 
-  it('a pending stop on a correction that only ANSWERS clears with the answer', async () => {
+  it('a pending stop on a turn that only ANSWERS clears with the answer', async () => {
     const { result } = await answered();
     const door = deferred<{ jobId: string; turnId: string; session: PlanChangeSessionDto }>();
-    rerunAsk.mockReturnValueOnce(door.promise);
+    submitAsk.mockReturnValueOnce(door.promise);
 
-    let correcting!: Promise<void>;
+    let sending!: Promise<void>;
     act(() => {
-      correcting = result.current.correctTurn('t0');
+      sending = result.current.send('and which are late?');
     });
     await act(async () => {
       await result.current.stop();
     });
     await act(async () => {
-      door.resolve({ jobId: 'ask-2', turnId: 't0', session: ANSWERED });
-      await correcting;
+      door.resolve({ jobId: 'ask-2', turnId: 't1', session: ANSWERED });
+      await sending;
     });
 
     expect(stopRun).not.toHaveBeenCalled();
@@ -288,12 +292,12 @@ describe('a Stop pressed after a correction starts stops the PLAN run', () => {
     expect(result.current.state.stopped).toBe(false);
   });
 
-  it('a stop pressed with NO pending stop still leaves a fresh correction unstopped', async () => {
+  it('a hand-off with NO stop pressed runs unstopped', async () => {
     const { result } = await answered();
-    rerunAsk.mockResolvedValueOnce(FLIPPED);
+    submitAsk.mockResolvedValueOnce(FLIPPED);
 
     await act(async () => {
-      await result.current.correctTurn('t0');
+      await result.current.send('split the payments epic');
     });
 
     expect(stopRun).not.toHaveBeenCalled();

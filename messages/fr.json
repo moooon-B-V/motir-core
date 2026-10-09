@@ -7531,15 +7531,8 @@
         "failedClosed": "Cette tentative n'a pas abouti, cette session a donc été fermée. Les éléments de travail qu'elle contenait sont revenus à leur état précédent."
       },
       "answeredFrom": "{count, plural, =0 {Répondu sans rien citer} one {Répondu à partir de # élément de travail} other {Répondu à partir de # éléments de travail}}",
-      "correctToPlan": "Proposer plutôt des modifications",
       "correctToAsk": "Répondre plutôt à cette question",
       "correcting": "Relecture…",
-      "correctConfirm": {
-        "label": "Confirmer l’exécution de planification",
-        "body": "Proposer des modifications lance une exécution de planification, qui consomme des crédits Motir AI.",
-        "yes": "Proposer des modifications",
-        "cancel": "Garder la réponse"
-      },
       "correctedToPlan": "Relu comme une modification du plan",
       "correctedToAsk": "Relu comme une question",
       "handoff": "Interprété comme une modification du plan — travail sur la proposition",

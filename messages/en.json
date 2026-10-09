@@ -7525,15 +7525,8 @@
         "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were."
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
-      "correctToPlan": "Propose changes instead",
       "correctToAsk": "Answer this instead",
       "correcting": "Re-reading…",
-      "correctConfirm": {
-        "label": "Confirm the planning run",
-        "body": "Proposing changes starts a planning run, which spends Motir AI credits.",
-        "yes": "Propose changes",
-        "cancel": "Keep the answer"
-      },
       "correctedToPlan": "Re-read as a plan change",
       "correctedToAsk": "Re-read as a question",
       "handoff": "Reading it as a plan change — working on the proposal",

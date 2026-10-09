@@ -445,22 +445,25 @@ describe('the REDIRECT — a turn the handler hands back', () => {
 });
 
 describe('the CORRECTION — re-running one turn the other way', () => {
-  it('flips an answered turn to plan_change, latches the flag, and appends no second user turn', async () => {
+  it('⭐ REFUSES to flip an answered turn into a plan change — the planner decides that (422, nothing written)', async () => {
+    // MOTIR-7924 (`conversation-turn-intent.md` AMENDMENT 3): whether a turn
+    // becomes a planning run is the planner's call, never a person's button.
     const asked = (await (await ask(askReq({ body: 'split the billing epic' }))).json()) as {
       turnId: string;
     };
-    submitJobMock.mockResolvedValue({ jobId: 'job-augment-9' });
+    submitJobMock.mockClear();
 
-    const body = (await (await ask(askReq({ turnId: asked.turnId, flip: true }))).json()) as {
-      outcome: string;
-    };
-    expect(body.outcome).toBe('redirected');
+    const res = await ask(askReq({ turnId: asked.turnId, flip: true }));
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { code: string }).code).toBe('PLAN_CHANGE_FLIP_NOT_OFFERED');
 
+    // No job was submitted, and the turn still reads as what it ran as.
+    expect(submitJobMock).not.toHaveBeenCalled();
     const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.filter((t) => t.role === 'user')).toHaveLength(1);
     expect(thread.turns.find((t) => t.id === asked.turnId)).toMatchObject({
-      intent: 'plan_change',
-      intentCorrected: true,
+      intent: 'ask',
+      intentCorrected: false,
     });
   });
 
