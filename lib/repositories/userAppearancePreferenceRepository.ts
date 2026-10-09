@@ -18,7 +18,8 @@ import { db } from '@/lib/db';
 // absence-semantics).
 
 /**
- * The patch an `upsert` applies — any subset of the four axes. An `undefined`
+ * The patch an `upsert` applies — any subset of the four axes and the eleven
+ * per-locale font picks. An `undefined`
  * field is left untouched; passing `null` explicitly clears an axis back to its
  * default. The service validates each value before it reaches here.
  */
@@ -27,6 +28,19 @@ export interface UpsertUserAppearancePreferenceInput {
   styleId?: string | null;
   paletteId?: string | null;
   typeId?: string | null;
+  // One optional font-set member id per locale (Story MOTIR-7736 · Subtask
+  // MOTIR-7894). Same untouched-vs-cleared semantics as the four axes above.
+  fontPickEn?: string | null;
+  fontPickZh?: string | null;
+  fontPickJa?: string | null;
+  fontPickKo?: string | null;
+  fontPickDe?: string | null;
+  fontPickFr?: string | null;
+  fontPickEs?: string | null;
+  fontPickIt?: string | null;
+  fontPickNl?: string | null;
+  fontPickPl?: string | null;
+  fontPickPt?: string | null;
 }
 
 export const userAppearancePreferenceRepository = {

@@ -10,6 +10,7 @@
 // per-axis resolution.)
 
 import type { ThemePattern } from './theme/types';
+import type { FontSetLocale } from './theme/fontSets';
 
 /** The current user's resolved appearance preference — one valid id per axis. */
 export interface AppearancePreferenceDto {
@@ -21,6 +22,13 @@ export interface AppearancePreferenceDto {
   paletteId: string;
   /** Axis 3 — the active `data-type` id (e.g. `motir`). */
   typeId: string;
+  /**
+   * The person's font pick per language (Story MOTIR-7736): a font-set member
+   * id for each locale they chose one for. Only stored picks that are still
+   * members of that locale's set appear; a locale absent from the map is
+   * "automatic" — the set default.
+   */
+  fontPicks: Partial<Record<FontSetLocale, string>>;
 }
 
 /**

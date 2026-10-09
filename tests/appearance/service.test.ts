@@ -36,6 +36,7 @@ describe('appearancePreferenceService.getResolved', () => {
       styleId: DEFAULT_STYLE_ID,
       paletteId: DEFAULT_PALETTE_ID,
       typeId: DEFAULT_TYPE_ID,
+      fontPicks: {},
     });
     // Reading never creates a row — absence stays absence.
     expect(await userAppearancePreferenceRepository.findByUserId(user.id)).toBeNull();
@@ -117,6 +118,7 @@ describe('appearancePreferenceService.update', () => {
       styleId: 'soft-playful',
       paletteId: DEFAULT_PALETTE_ID,
       typeId: DEFAULT_TYPE_ID,
+      fontPicks: {},
     });
     // A fresh read returns the same resolved shape (it persisted).
     expect(await appearancePreferenceService.getResolved(user.id)).toEqual(returned);
@@ -133,6 +135,7 @@ describe('appearancePreferenceService.update', () => {
       styleId: 'soft-playful',
       paletteId: 'cobalt',
       typeId: DEFAULT_TYPE_ID,
+      fontPicks: {},
     });
     // Still exactly one row for the user (upsert patched, didn't insert anew).
     expect(await db.userAppearancePreference.count({ where: { userId: user.id } })).toBe(1);
@@ -175,5 +178,92 @@ describe('appearancePreferenceService.update', () => {
     );
     // The transaction never opened — no row was created.
     expect(await userAppearancePreferenceRepository.findByUserId(user.id)).toBeNull();
+  });
+});
+
+// MOTIR-7894 — the per-locale font pick, the preference's fifth axis.
+describe('appearancePreferenceService.update — fontPicks', () => {
+  it('round-trips a pick: stored, returned and read back', async () => {
+    const user = await createTestUser();
+
+    const returned = await appearancePreferenceService.update(user.id, {
+      fontPicks: { ja: 'm-plus-rounded-1c' },
+    });
+
+    expect(returned.fontPicks).toEqual({ ja: 'm-plus-rounded-1c' });
+    expect((await appearancePreferenceService.getResolved(user.id)).fontPicks).toEqual({
+      ja: 'm-plus-rounded-1c',
+    });
+    const row = await userAppearancePreferenceRepository.findByUserId(user.id);
+    expect(row?.fontPickJa).toBe('m-plus-rounded-1c');
+  });
+
+  it('clears one locale with null and leaves an omitted locale untouched', async () => {
+    const user = await createTestUser();
+    await appearancePreferenceService.update(user.id, {
+      fontPicks: { ja: 'm-plus-rounded-1c', ko: 'nanum-gothic' },
+    });
+
+    const after = await appearancePreferenceService.update(user.id, { fontPicks: { ja: null } });
+
+    expect(after.fontPicks).toEqual({ ko: 'nanum-gothic' });
+    const row = await userAppearancePreferenceRepository.findByUserId(user.id);
+    expect(row?.fontPickJa).toBeNull();
+    expect(row?.fontPickKo).toBe('nanum-gothic');
+  });
+
+  it('leaves the picks untouched when a patch names another axis only', async () => {
+    const user = await createTestUser();
+    await appearancePreferenceService.update(user.id, { fontPicks: { zh: 'lxgw-wenkai-tc' } });
+
+    const after = await appearancePreferenceService.update(user.id, { pattern: 'dark' });
+
+    expect(after.fontPicks).toEqual({ zh: 'lxgw-wenkai-tc' });
+  });
+
+  it.each([
+    ["another locale's member", { ja: 'noto-sans-kr' }],
+    ['an unknown member', { ja: 'comic-sans' }],
+    ['a Latin locale (accepts nothing)', { en: 'type-pairing' }],
+    ['an unknown locale', { xx: 'noto-sans-jp' }],
+  ])('refuses %s with a typed error and changes nothing', async (_label, fontPicks) => {
+    const user = await createTestUser();
+    await appearancePreferenceService.update(user.id, { fontPicks: { ko: 'nanum-gothic' } });
+    const before = await userAppearancePreferenceRepository.findByUserId(user.id);
+
+    await expect(
+      appearancePreferenceService.update(user.id, {
+        fontPicks: fontPicks as Record<string, string>,
+      }),
+    ).rejects.toBeInstanceOf(InvalidAppearanceValueError);
+
+    expect(await userAppearancePreferenceRepository.findByUserId(user.id)).toEqual(before);
+  });
+
+  it('reads a stored pick the registry no longer has as absent (automatic)', async () => {
+    const user = await createTestUser();
+    await appearancePreferenceService.update(user.id, { fontPicks: { ja: 'm-plus-rounded-1c' } });
+    // A member removed from the registry after it was stored.
+    await db.userAppearancePreference.update({
+      where: { userId: user.id },
+      data: { fontPickJa: 'retired-face' },
+    });
+
+    expect((await appearancePreferenceService.getResolved(user.id)).fontPicks).toEqual({});
+  });
+
+  it('keeps both of two concurrent saves for different locales', async () => {
+    const user = await createTestUser();
+
+    await Promise.all([
+      appearancePreferenceService.update(user.id, { fontPicks: { ja: 'm-plus-rounded-1c' } }),
+      appearancePreferenceService.update(user.id, { fontPicks: { ko: 'nanum-gothic' } }),
+    ]);
+
+    expect((await appearancePreferenceService.getResolved(user.id)).fontPicks).toEqual({
+      ja: 'm-plus-rounded-1c',
+      ko: 'nanum-gothic',
+    });
+    expect(await db.userAppearancePreference.count({ where: { userId: user.id } })).toBe(1);
   });
 });

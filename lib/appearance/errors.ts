@@ -8,8 +8,18 @@
 //     registered id / a valid pattern — a rejection of stale client state, not
 //     a server fault; the resolver/registry is the source of truth)
 
-/** The four axes of the three-axis design system, plus the light/dark pattern. */
-export type AppearanceAxis = 'pattern' | 'styleId' | 'paletteId' | 'typeId';
+import type { FontSetLocale } from '@motir/design-system';
+
+/**
+ * The four axes of the three-axis design system, plus the light/dark pattern,
+ * plus one per-locale font pick (`fontPicks.ja`, Story MOTIR-7736).
+ */
+export type AppearanceAxis =
+  | 'pattern'
+  | 'styleId'
+  | 'paletteId'
+  | 'typeId'
+  | `fontPicks.${FontSetLocale}`;
 
 export class InvalidAppearanceValueError extends Error {
   readonly code = 'INVALID_APPEARANCE_VALUE' as const;

@@ -27,6 +27,7 @@ function preference(over: Partial<AppearancePreferenceDto> = {}): AppearancePref
     styleId: STYLE_IDS[0]!,
     paletteId: PALETTE_IDS[0]!,
     typeId: TYPE_IDS[0]!,
+    fontPicks: {},
     ...over,
   };
 }

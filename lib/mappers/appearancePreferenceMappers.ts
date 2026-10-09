@@ -5,6 +5,12 @@ import { resolveStyle } from '@/lib/theme/styles';
 import { resolvePalette } from '@/lib/theme/palettes';
 import { resolveType } from '@/lib/theme/typography';
 import { resolveAxesToApplied } from '@/lib/theme/appearance-resolution';
+import { FONT_SET_LOCALES } from '@motir/design-system';
+import {
+  FONT_PICK_COLUMN,
+  isFontSetMemberOfLocale,
+  type FontPicks,
+} from '@/lib/appearance/fontPicks';
 
 // Prisma → DTO mapping for the appearance-preference surface (Story 7.3 ·
 // Subtask 7.3.60). The single place absence + stale values collapse to the
@@ -24,7 +30,24 @@ export function toAppearancePreferenceDto(
     styleId: resolveStyle(row?.styleId).id,
     paletteId: resolvePalette(row?.paletteId).id,
     typeId: resolveType(row?.typeId).id,
+    fontPicks: toFontPicks(row),
   };
+}
+
+/**
+ * The stored per-locale font picks (Story MOTIR-7736) that are still members
+ * of their locale's set. A null column is automatic and a stale member (one
+ * that has since left the registry) is dropped, so it too reads as automatic —
+ * the same collapse the four axes above get.
+ */
+function toFontPicks(row: UserAppearancePreference | null): FontPicks {
+  const picks: FontPicks = {};
+  if (!row) return picks;
+  for (const locale of FONT_SET_LOCALES) {
+    const value = row[FONT_PICK_COLUMN[locale]];
+    if (value !== null && isFontSetMemberOfLocale(locale, value)) picks[locale] = value;
+  }
+  return picks;
 }
 
 /**
