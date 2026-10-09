@@ -243,9 +243,16 @@ async function stripCount(page: Page, tab: string): Promise<number> {
 async function itemsOnPage(page: Page): Promise<string[]> {
   const shut = page.locator('[data-testid^="workbench-group-toggle-"][aria-expanded="false"]');
   for (let n = await shut.count(); n > 0; n = await shut.count()) {
-    const toggle = shut.first();
-    await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // Pin the toggle by its id: `shut.first()` re-resolves to the NEXT closed group the moment
+    // this one opens. A click that lands before the page hydrates is lost, so the click is
+    // retried until the state it asks for is the state the page reports — and never repeated
+    // once it has taken, which would close the group again.
+    const testId = await shut.first().getAttribute('data-testid');
+    const toggle = main(page).getByTestId(testId!);
+    await expect(async () => {
+      if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 3_000 });
+    }).toPass({ timeout: 30_000 });
   }
   return page
     .locator('[role="row"][data-testid^="workbench-row-"]')
