@@ -7531,6 +7531,12 @@
       "correctToPlan": "In plaats daarvan wijzigingen voorstellen",
       "correctToAsk": "In plaats daarvan dit beantwoorden",
       "correcting": "Opnieuw lezen…",
+      "correctConfirm": {
+        "label": "De planningsrun bevestigen",
+        "body": "Wijzigingen voorstellen start een planningsrun, die Motir AI-tegoed verbruikt.",
+        "yes": "Wijzigingen voorstellen",
+        "cancel": "Het antwoord houden"
+      },
       "correctedToPlan": "Opnieuw gelezen als planwijziging",
       "correctedToAsk": "Opnieuw gelezen als vraag",
       "handoff": "Gelezen als planwijziging — er wordt aan het voorstel gewerkt",

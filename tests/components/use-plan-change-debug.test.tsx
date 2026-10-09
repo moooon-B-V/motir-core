@@ -178,8 +178,9 @@ describe('the debug run', () => {
     expect(streamAugment).not.toHaveBeenCalled();
     expect(settleAsk).toHaveBeenLastCalledWith('debug-1', expect.anything(), 's1');
 
+    // The record survives the landing — except the opening `reading` act, whose
+    // "Reading your request…" would read as still working (bug MOTIR-7924).
     expect(result.current.state.acts).toEqual([
-      { kind: 'reading' },
       { kind: 'redirectedDebug' },
       { kind: 'retrieval', family: 'code_graph', blocked: false },
       { kind: 'matching' },

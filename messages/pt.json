@@ -7534,6 +7534,12 @@
       "correctToPlan": "Propor alterações em vez disso",
       "correctToAsk": "Responder a isto em vez disso",
       "correcting": "Relendo…",
+      "correctConfirm": {
+        "label": "Confirmar a execução de planejamento",
+        "body": "Propor alterações inicia uma execução de planejamento, que consome créditos do Motir AI.",
+        "yes": "Propor alterações",
+        "cancel": "Manter a resposta"
+      },
       "correctedToPlan": "Relido como alteração de plano",
       "correctedToAsk": "Relido como pergunta",
       "handoff": "Interpretando como alteração de plano — trabalhando na proposta",

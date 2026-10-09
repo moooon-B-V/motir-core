@@ -7531,6 +7531,12 @@
       "correctToPlan": "代わりに変更を提案",
       "correctToAsk": "代わりにこれに回答",
       "correcting": "読み直しています…",
+      "correctConfirm": {
+        "label": "計画の実行を確認",
+        "body": "変更を提案すると計画の実行が始まり、Motir AI のクレジットを消費します。",
+        "yes": "変更を提案",
+        "cancel": "回答のままにする"
+      },
       "correctedToPlan": "計画の変更として読み直しました",
       "correctedToAsk": "質問として読み直しました",
       "handoff": "計画の変更として読み取りました — 提案を作成しています",

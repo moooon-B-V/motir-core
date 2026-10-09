@@ -7534,6 +7534,12 @@
       "correctToPlan": "Stattdessen Änderungen vorschlagen",
       "correctToAsk": "Stattdessen beantworten",
       "correcting": "Wird neu gelesen…",
+      "correctConfirm": {
+        "label": "Planungslauf bestätigen",
+        "body": "Wenn Sie Änderungen vorschlagen, startet ein Planungslauf, der Motir AI-Guthaben verbraucht.",
+        "yes": "Änderungen vorschlagen",
+        "cancel": "Antwort behalten"
+      },
       "correctedToPlan": "Als Planänderung neu gelesen",
       "correctedToAsk": "Als Frage neu gelesen",
       "handoff": "Als Planänderung verstanden – am Vorschlag wird gearbeitet",

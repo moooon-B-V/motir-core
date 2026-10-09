@@ -7531,6 +7531,12 @@
       "correctToPlan": "Zamiast tego zaproponuj zmiany",
       "correctToAsk": "Zamiast tego odpowiedz na to",
       "correcting": "Ponowne czytanie…",
+      "correctConfirm": {
+        "label": "Potwierdź przebieg planowania",
+        "body": "Zaproponowanie zmian uruchamia przebieg planowania, który zużywa kredyty Motir AI.",
+        "yes": "Zaproponuj zmiany",
+        "cancel": "Zachowaj odpowiedź"
+      },
       "correctedToPlan": "Odczytano ponownie jako zmianę planu",
       "correctedToAsk": "Odczytano ponownie jako pytanie",
       "handoff": "Odczytuję to jako zmianę planu — praca nad propozycją",

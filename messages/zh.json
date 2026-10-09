@@ -7524,6 +7524,12 @@
       "correctToPlan": "改为提出变更",
       "correctToAsk": "改为回答这个问题",
       "correcting": "正在重新理解……",
+      "correctConfirm": {
+        "label": "确认规划运行",
+        "body": "提出变更会启动一次规划运行，并会消耗 Motir AI 额度。",
+        "yes": "提出变更",
+        "cancel": "保留回答"
+      },
       "correctedToPlan": "已改按计划变更理解",
       "correctedToAsk": "已改按提问理解",
       "handoff": "按计划变更理解 — 正在生成提案",

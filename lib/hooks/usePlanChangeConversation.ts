@@ -425,6 +425,19 @@ function firstAct(
   return { progress: act, acts: [act] };
 }
 
+/**
+ * The act record with the ask's opening `reading` act taken out (bug MOTIR-7924).
+ *
+ * `reading` says "Reading your request…" — a sentence about something HAPPENING —
+ * and the record outlives the run on purpose, so an ask that has ENDED (answered,
+ * silent, failed or refused) must not keep it: a finished answer with that line
+ * under it reads as still working. The acts that follow it stay, because they are
+ * the record of what the run actually did; for a plain answer there are none.
+ */
+function withoutReading(acts: PlanChangeProgress[]): PlanChangeProgress[] {
+  return acts.filter((act) => act.kind !== 'reading');
+}
+
 /** Map one raw SSE frame to the narration the rail shows, or null to ignore it. */
 export function narrateFrame(event: string, data: unknown): PlanChangeProgress | null {
   const d = (data ?? {}) as Record<string, unknown>;
@@ -703,6 +716,17 @@ export function usePlanChangeConversation({
    * second Enter from firing a second turn.
    */
   const stoppingRef = useRef(false);
+  /**
+   * A stop pressed before this run had a job the stop door can address (bug
+   * MOTIR-7924) — during a submit whose job id has not come back yet, or while an
+   * ASK or DEBUG job streams, which the door does not stop (it matches only the
+   * session's plan job). It is HELD, not dropped: the branch that adopts the plan
+   * job raises it there, and a run that ends without one clears it.
+   */
+  const pendingStopRef = useRef(false);
+  /** The ask / debug job streaming right now — a job id {@link stop} must not
+   *  post, because the stop door refuses it (MOTIR-7924). */
+  const unstoppableJobRef = useRef<string | null>(null);
   /** The session a restart swapped in (MOTIR-7650), so the address naming it
    *  afterwards is recognised as already open. */
   const adoptedSessionRef = useRef<string | null>(null);
@@ -1033,6 +1057,50 @@ export function usePlanChangeConversation({
     }
   }, []);
 
+  /**
+   * RAISE the stop on `jobId` (MOTIR-4068) — the one place the stop door is
+   * called, shared by {@link stop} and by the branches that adopt a plan job a
+   * stop was already waiting for (MOTIR-7924). A failed raise is said honestly:
+   * the run is NOT stopping, so the bar must not keep claiming it is.
+   */
+  const raiseStop = useCallback(async (sessionId: string, jobId: string) => {
+    try {
+      await stopPlanChangeRun(sessionId, jobId, `stop:${jobId}`);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (!mountedRef.current) return;
+      // The RAISE failed — the run is NOT stopping, and saying so is the honest
+      // answer. Leaving the bar in its stopping state would tell the user their
+      // click landed when it did not, and they would wait instead of clicking
+      // again. The run itself is untouched, so nothing else changes.
+      stoppingRef.current = false;
+      setState((s) => ({ ...s, stopping: false }));
+    }
+  }, []);
+
+  /**
+   * A PLAN job is being adopted: hand it the stop that was waiting for one, if
+   * any (MOTIR-7924). Answers whether a stop was carried, so the adopting reducer
+   * keeps `stopping` set instead of resetting it — the reset is what used to drop
+   * a Stop pressed during the correction's submit.
+   */
+  const takePendingStop = useCallback(() => {
+    const carried = pendingStopRef.current;
+    pendingStopRef.current = false;
+    unstoppableJobRef.current = null;
+    return carried;
+  }, []);
+
+  /** A run ENDED without ever adopting a plan job: a stop still waiting for one
+   *  has nothing left to stop, so the bar stops saying "stopping". */
+  const releasePendingStop = useCallback(() => {
+    unstoppableJobRef.current = null;
+    if (!pendingStopRef.current) return;
+    pendingStopRef.current = false;
+    stoppingRef.current = false;
+    if (mountedRef.current) setState((s) => ({ ...s, stopping: false }));
+  }, []);
+
   /** What a refused SUBMIT means for the rail: another holder's card (refused in
    *  place, AMENDMENT 23 §4), a session that has ended under it (re-read it), or a
    *  recoverable failure. */
@@ -1044,6 +1112,8 @@ export function usePlanChangeConversation({
         ...s,
         phase: s.review ? 'review' : 'idle',
         progress: null,
+        // A refused correction must not leave its `reading` line behind (MOTIR-7924).
+        acts: withoutReading(s.acts),
         errorCode: gated || held ? null : 'FAILED',
         outOfCredits: gated,
         ...(held ? { targetHeld: held } : {}),
@@ -1205,6 +1275,9 @@ export function usePlanChangeConversation({
       const controller = new AbortController();
       abortRef.current = controller;
       resetLiveRun();
+      // The previous run's job is OVER: until this run's id comes back there is
+      // no job to stop, and a Stop pressed now waits for it (MOTIR-7924).
+      setState((s) => ({ ...s, jobId: null }));
       let livePlan: string | null = null;
       // Remembered before the hop, so a retry after a failure re-sends to the
       // thread this turn actually landed in.
@@ -1224,6 +1297,7 @@ export function usePlanChangeConversation({
       try {
         const { jobId, planId, session } = await submit(controller.signal);
         if (!mountedRef.current) return;
+        const carried = takePendingStop();
         // The hosted run's plan is watched live from the moment it is known.
         livePlan = planId ?? null;
         setLivePlanId(livePlan);
@@ -1257,15 +1331,17 @@ export function usePlanChangeConversation({
           // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
           // flags are per-RUN: leaving them set would carry a previous run's
           // ending onto the one just started, which is the mirror of the bug
-          // this state exists to prevent.
-          stopping: false,
+          // this state exists to prevent. The one thing carried is a stop
+          // pressed for THIS run before its job id was known (MOTIR-7924).
+          stopping: carried,
           stopped: false,
           // The mailbox is per-RUN, so the queue is too: a new job has an empty
           // one, and carrying the last run's turns into it would show the user
           // sentences that can never be read again.
           queued: [],
         }));
-        stoppingRef.current = false;
+        stoppingRef.current = carried;
+        if (carried) void raiseStop(session.id, jobId);
 
         await finishPlanRun(jobId, planId, anchor, controller);
       } catch (err) {
@@ -1275,9 +1351,18 @@ export function usePlanChangeConversation({
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         endLive(livePlan);
+        releasePendingStop();
       }
     },
-    [finishPlanRun, resetLiveRun, endLive, refuseRun],
+    [
+      finishPlanRun,
+      resetLiveRun,
+      endLive,
+      refuseRun,
+      raiseStop,
+      takePendingStop,
+      releasePendingStop,
+    ],
   );
 
   /**
@@ -1314,6 +1399,10 @@ export function usePlanChangeConversation({
       const controller = new AbortController();
       abortRef.current = controller;
       resetLiveRun();
+      // The previous run's job is OVER — above all a finished ask's, which the
+      // stop door never matched (MOTIR-7924). Until this run's id comes back a
+      // Stop has nothing to post, so it waits for the job instead.
+      setState((s) => ({ ...s, jobId: null }));
       let livePlan: string | null = null;
       // An ask is project-wide by construction, so a retry after one must not
       // re-aim at an anchor an earlier plan-change run happened to use.
@@ -1346,6 +1435,7 @@ export function usePlanChangeConversation({
               ...s,
               phase: s.review ? 'review' : 'idle',
               progress: null,
+              acts: withoutReading(s.acts),
               errorCode: gated ? null : (code ?? 'FAILED'),
               outOfCredits: gated,
             }));
@@ -1381,6 +1471,12 @@ export function usePlanChangeConversation({
           session: settled.session,
           phase: s.review ? 'review' : 'idle',
           progress: null,
+          // The ask is OVER, so its record closes (bug MOTIR-7924): the opening
+          // `reading` act would otherwise stay under the answer saying "Reading
+          // your request…", and the finished job id would stay in state for the
+          // NEXT run's Stop to post — a job the stop door never matched.
+          acts: withoutReading(s.acts),
+          jobId: null,
           // `silent` is NOT the honest "I could not find that" — that is prose
           // the handler returns, and it lands as an ordinary answer with no
           // citations. This is the job producing nothing at all.
@@ -1412,11 +1508,14 @@ export function usePlanChangeConversation({
             acts: [debugAct],
             errorCode: null,
             outOfCredits: false,
-            stopping: false,
+            // A stop pressed during the submit waits on: a debug job is not one
+            // the stop door addresses (MOTIR-7924).
+            stopping: pendingStopRef.current,
             stopped: false,
             queued: [],
           }));
-          stoppingRef.current = false;
+          unstoppableJobRef.current = submitted.jobId;
+          stoppingRef.current = pendingStopRef.current;
           const landed = await followDebug(submitted.jobId, submitted.session);
           if (landed) settleTo(landed);
           return;
@@ -1433,6 +1532,9 @@ export function usePlanChangeConversation({
         if ('outcome' in submitted) {
           lastAskTurnRef.current = null;
           lastAskAnchorRef.current = null;
+          // THE CORRECTION'S PLAN JOB (MOTIR-7924): a Stop pressed while its
+          // submit was in flight is raised HERE, on the job it was meant for.
+          const carried = takePendingStop();
           livePlan = submitted.planId ?? null;
           setLivePlanId(livePlan);
           setState((s) => ({
@@ -1448,11 +1550,12 @@ export function usePlanChangeConversation({
             ...firstAct('submitted'),
             errorCode: null,
             outOfCredits: false,
-            stopping: false,
+            stopping: carried,
             stopped: false,
             queued: [],
           }));
-          stoppingRef.current = false;
+          stoppingRef.current = carried;
+          if (carried) void raiseStop(submitted.session.id, submitted.jobId);
           await finishPlanRun(submitted.jobId, submitted.planId, null, controller);
           return;
         }
@@ -1476,8 +1579,10 @@ export function usePlanChangeConversation({
           // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
           // flags are per-RUN: leaving them set would carry a previous run's
           // ending onto the one just started, which is the mirror of the bug
-          // this state exists to prevent.
-          stopping: false,
+          // this state exists to prevent. A stop pressed for THIS run during its
+          // submit is kept: an ask job is not one the stop door addresses, so it
+          // waits for the plan job the ask may hand off to (MOTIR-7924).
+          stopping: pendingStopRef.current,
           stopped: false,
           // The mailbox is per-RUN, so the queue is too: a new job has an empty
           // one, and carrying the last run's turns into it would show the user
@@ -1489,7 +1594,8 @@ export function usePlanChangeConversation({
             ? { turnAnchors: { ...(s.turnAnchors ?? {}), [submitted.turnId]: anchorKey } }
             : {}),
         }));
-        stoppingRef.current = false;
+        unstoppableJobRef.current = submitted.jobId;
+        stoppingRef.current = pendingStopRef.current;
 
         let failed = false;
         await streamAskJob(
@@ -1503,6 +1609,7 @@ export function usePlanChangeConversation({
               ...s,
               phase: s.review ? 'review' : 'idle',
               progress: null,
+              acts: withoutReading(s.acts),
               errorCode: gated ? null : (code ?? 'FAILED'),
               outOfCredits: gated,
             }));
@@ -1529,6 +1636,7 @@ export function usePlanChangeConversation({
           const debugJobId = settled.jobId;
           const debugSession = settled.session;
           const debugAct: PlanChangeProgress = { kind: 'redirectedDebug' };
+          unstoppableJobRef.current = debugJobId;
           setState((s) => ({
             ...s,
             session: debugSession,
@@ -1543,6 +1651,8 @@ export function usePlanChangeConversation({
 
         if (settled.outcome === 'redirected') {
           const redirect = settled;
+          // A Stop pressed while the ASK streamed was held for this job (MOTIR-7924).
+          const carried = takePendingStop();
           livePlan = redirect.planId ?? null;
           setLivePlanId(livePlan);
           setState((s) => ({
@@ -1557,6 +1667,7 @@ export function usePlanChangeConversation({
             progress: { kind: 'redirected' },
             acts: [...s.acts, { kind: 'redirected' }],
           }));
+          if (carried) void raiseStop(redirect.session.id, redirect.jobId);
           await finishPlanRun(redirect.jobId, redirect.planId, null, controller);
           return;
         }
@@ -1569,9 +1680,19 @@ export function usePlanChangeConversation({
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         endLive(livePlan);
+        releasePendingStop();
       }
     },
-    [finishPlanRun, resetLiveRun, endLive, refuseRun, settleEnd],
+    [
+      finishPlanRun,
+      resetLiveRun,
+      endLive,
+      refuseRun,
+      settleEnd,
+      raiseStop,
+      takePendingStop,
+      releasePendingStop,
+    ],
   );
 
   /**
@@ -1684,6 +1805,8 @@ export function usePlanChangeConversation({
         setState((s) => ({
           ...s,
           phase: 'streaming',
+          // The last run's job is not this one's (MOTIR-7924).
+          jobId: null,
           ...firstAct('submitted'),
           errorCode: null,
           outOfCredits: false,
@@ -1742,6 +1865,8 @@ export function usePlanChangeConversation({
       setState((s) => ({
         ...s,
         phase: 'streaming',
+        // The last run's job is not this one's (MOTIR-7924).
+        jobId: null,
         ...firstAct('submitted'),
         errorCode: null,
         outOfCredits: false,
@@ -1843,6 +1968,9 @@ export function usePlanChangeConversation({
       setState((s) => ({
         ...s,
         phase: 'streaming',
+        // The finished turn's job is not this run's: a Stop pressed before the
+        // correction's own job id comes back waits for it (bug MOTIR-7924).
+        jobId: null,
         ...firstAct('reading'),
         errorCode: null,
         outOfCredits: false,
@@ -2133,23 +2261,20 @@ export function usePlanChangeConversation({
     const { jobId, phase } = stateRef.current;
     // Nothing to stop, or a stop already in flight. Not an error and not
     // reported as one: the control stays reachable in both states by design.
-    if (!jobId || phase !== 'streaming' || stoppingRef.current) return;
+    if (phase !== 'streaming' || stoppingRef.current) return;
 
     stoppingRef.current = true;
     setState((s) => ({ ...s, stopping: true }));
-    try {
-      await stopPlanChangeRun(stateRef.current.session?.id ?? '', jobId, `stop:${jobId}`);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      if (!mountedRef.current) return;
-      // The RAISE failed — the run is NOT stopping, and saying so is the honest
-      // answer. Leaving the bar in its stopping state would tell the user their
-      // click landed when it did not, and they would wait instead of clicking
-      // again. The run itself is untouched, so nothing else changes.
-      stoppingRef.current = false;
-      setState((s) => ({ ...s, stopping: false }));
+    // ⚠️ NO PLAN JOB TO ADDRESS YET (bug MOTIR-7924) — a submit whose job id has
+    // not come back, or an ask / debug job the door does not match. The stop is
+    // HELD, and the branch that adopts the plan job raises it there; posting the
+    // id in hand would be refused and silently undo the click.
+    if (!jobId || jobId === unstoppableJobRef.current) {
+      pendingStopRef.current = true;
+      return;
     }
-  }, []);
+    await raiseStop(stateRef.current.session?.id ?? '', jobId);
+  }, [raiseStop]);
 
   // `failing` is the poll's own, so it rides on the state it describes.
   const exposed = useMemo(

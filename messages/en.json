@@ -7528,6 +7528,12 @@
       "correctToPlan": "Propose changes instead",
       "correctToAsk": "Answer this instead",
       "correcting": "Re-reading…",
+      "correctConfirm": {
+        "label": "Confirm the planning run",
+        "body": "Proposing changes starts a planning run, which spends Motir AI credits.",
+        "yes": "Propose changes",
+        "cancel": "Keep the answer"
+      },
       "correctedToPlan": "Re-read as a plan change",
       "correctedToAsk": "Re-read as a question",
       "handoff": "Reading it as a plan change — working on the proposal",

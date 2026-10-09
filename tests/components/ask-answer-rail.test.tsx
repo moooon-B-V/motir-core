@@ -197,10 +197,45 @@ describe('the correction marker', () => {
     expect(marker.getAttribute('data-direction')).toBe('plan_change');
 
     fireEvent.click(marker);
+    // It starts a paid planning run, so it CONFIRMS first (bug MOTIR-7924).
+    expect(handlers.onCorrectTurn).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('plan-change-correct-confirm-yes'));
 
     // ⭐ The USER turn, not the assistant one: the re-run replays what the
     // person said, and appends no second user turn.
     expect(handlers.onCorrectTurn).toHaveBeenCalledWith(turns[0]!.id);
+  });
+
+  it('asks before "Propose changes instead" starts a planning run, and Keep the answer starts nothing', () => {
+    const turns = exchange('the payments epic should come first', 'It currently sits second.');
+    renderRail({ session: session(turns) });
+
+    fireEvent.click(screen.getByTestId('plan-change-correct'));
+
+    const confirm = screen.getByTestId('plan-change-correct-confirm');
+    expect(confirm.getAttribute('role')).toBe('group');
+    expect(confirm.textContent).toContain(
+      'Proposing changes starts a planning run, which spends Motir AI credits.',
+    );
+    expect(screen.queryByTestId('plan-change-correct')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('plan-change-correct-confirm-cancel'));
+    expect(handlers.onCorrectTurn).not.toHaveBeenCalled();
+    // The marker comes back, ready to be pressed again.
+    expect(screen.getByTestId('plan-change-correct').textContent).toBe('Propose changes instead');
+  });
+
+  it('is only as wide as its label — not a full-width target over the act record', () => {
+    renderRail({
+      session: session(
+        exchange('the payments epic should come first', 'It currently sits second.'),
+      ),
+    });
+
+    const marker = screen.getByTestId('plan-change-correct');
+    // The log is a flex column: without these the button stretches across it.
+    expect(marker.className).toContain('w-fit');
+    expect(marker.className).toContain('self-center');
   });
 
   it('offers "Answer this instead" under a PROPOSAL', () => {
