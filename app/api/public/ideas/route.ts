@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { InvalidIdeaFilterError } from '@/lib/ideas/errors';
 import { PUBLIC_IDEAS_CACHE_CONTROL } from '@/lib/ideas/publicCache';
+import { resolvePublicIdeaLocale } from '@/lib/ideas/publicLocale';
 import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 import { ideasPublicService } from '@/lib/services/ideasPublicService';
 
@@ -14,6 +15,10 @@ import { ideasPublicService } from '@/lib/services/ideasPublicService';
 // reach this handler. Pure transport: capability gate, one service call, map
 // errors. Cacheable for about an hour at the CDN, matching motir.co's hourly
 // revalidate.
+//
+// `?locale=` (MOTIR-7775) is read from the QUERY ONLY — never `Accept-Language`
+// or a cookie — so the locale is part of the URL and every cache keys on it
+// with no `Vary`. An unsupported value is answered in English.
 
 export async function GET(req: Request): Promise<NextResponse> {
   const absent = publicSurfaceUnavailable();
@@ -21,12 +26,15 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   const params = new URL(req.url).searchParams;
   try {
-    const list = await ideasPublicService.listActive({
-      category: params.get('category') ?? undefined,
-      tags: params.getAll('tag'),
-      q: params.get('q') ?? undefined,
-      kind: params.get('kind') ?? undefined,
-    });
+    const list = await ideasPublicService.listActive(
+      {
+        category: params.get('category') ?? undefined,
+        tags: params.getAll('tag'),
+        q: params.get('q') ?? undefined,
+        kind: params.get('kind') ?? undefined,
+      },
+      resolvePublicIdeaLocale(params.get('locale')),
+    );
     return NextResponse.json(list, { headers: { 'Cache-Control': PUBLIC_IDEAS_CACHE_CONTROL } });
   } catch (err) {
     if (err instanceof InvalidIdeaFilterError) {

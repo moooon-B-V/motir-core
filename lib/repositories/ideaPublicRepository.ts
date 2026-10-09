@@ -48,21 +48,35 @@ export interface IdeaTagCountRow {
   count: number;
 }
 
-function activeWhere(query: PublicIdeaQuery): Prisma.IdeaWhereInput {
+function activeWhere(
+  query: PublicIdeaQuery,
+  locale: IdeaTranslationLocale | undefined,
+): Prisma.IdeaWhereInput {
   const and: Prisma.IdeaWhereInput[] = [{ status: 'active' }];
   if (query.category) and.push({ category: query.category });
   if (query.kind) and.push({ kind: query.kind });
   for (const slug of query.tags) and.push({ tags: { some: { tag: { slug } } } });
   if (query.q) {
     const contains = { contains: query.q, mode: 'insensitive' as const };
-    and.push({
-      OR: [
-        { title: contains },
-        { pitch: contains },
-        { gap: contains },
-        { tags: { some: { tag: { label: contains } } } },
-      ],
-    });
+    const or: Prisma.IdeaWhereInput[] = [
+      { title: contains },
+      { pitch: contains },
+      { gap: contains },
+      { tags: { some: { tag: { label: contains } } } },
+    ];
+    // MOTIR-7775: under a locale, the same substring match over that locale's
+    // text too — substring, so CJK text (no word boundaries, no case) matches.
+    if (locale) {
+      or.push(
+        {
+          translations: {
+            some: { locale, OR: [{ title: contains }, { pitch: contains }, { gap: contains }] },
+          },
+        },
+        { tags: { some: { tag: { translations: { some: { locale, label: contains } } } } } },
+      );
+    }
+    and.push({ OR: or });
   }
   return { AND: and };
 }
@@ -78,18 +92,24 @@ export const ideaPublicRepository = {
     locale?: IdeaTranslationLocale,
   ): Promise<IdeaWithRelations[]> {
     return dbRead.idea.findMany({
-      where: activeWhere(query),
+      where: activeWhere(query, locale),
       orderBy: [{ kind: 'asc' }, { addedAt: 'desc' }, { id: 'desc' }],
       take,
       include: includeFor(locale),
     });
   },
 
-  /** Active ideas per category for the query (the caller drops `category` itself). */
-  async categoryCounts(query: PublicIdeaQuery): Promise<IdeaCategoryCountRow[]> {
+  /**
+   * Active ideas per category for the query (the caller drops `category`
+   * itself), under the same `locale` as the list so `q` counts the same ideas.
+   */
+  async categoryCounts(
+    query: PublicIdeaQuery,
+    locale?: IdeaTranslationLocale,
+  ): Promise<IdeaCategoryCountRow[]> {
     const rows = await dbRead.idea.groupBy({
       by: ['category'],
-      where: activeWhere(query),
+      where: activeWhere(query, locale),
       _count: { _all: true },
     });
     return rows.map((r) => ({ category: r.category, count: r._count._all }));

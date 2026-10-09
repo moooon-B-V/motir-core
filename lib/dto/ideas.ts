@@ -4,6 +4,7 @@ import type {
   IdeaStatus,
   IdeaTranslationLocale,
 } from '@/generated/prisma/client';
+import type { IdeaTranslatableField } from '@/lib/ideas/translatableFields';
 
 /**
  * The idea store's DTOs (Story MOTIR-7662) — two contracts in one file, kept
@@ -40,21 +41,38 @@ export interface IdeaEvidenceDto {
 
 // ── PUBLIC ──────────────────────────────────────────────────────────────────
 
+/** The locale a public read served: English, or one of the ten translations. */
+export type PublicIdeaLocaleDto = 'en' | IdeaTranslationLocale;
+
+/** A public evidence row; `claimFallback` is true when the claim is the English. */
+export interface PublicIdeaEvidenceDto extends IdeaEvidenceDto {
+  claimFallback: boolean;
+}
+
+/** A public tag reference; `labelFallback` is true when the label is the English. */
+export interface PublicIdeaTagRefDto extends IdeaTagRefDto {
+  labelFallback: boolean;
+}
+
 export interface PublicIdeaDto {
   slug: string;
   title: string;
   pitch: string;
   kind: IdeaKind;
   category: IdeaCategoryRefDto;
-  tags: IdeaTagRefDto[];
+  tags: PublicIdeaTagRefDto[];
   capabilities: string[];
-  evidence: IdeaEvidenceDto[];
+  evidence: PublicIdeaEvidenceDto[];
   gap: string | null;
   whyNow: string | null;
   whyMotir: string | null;
   whoElse: string | null;
   addedAt: string;
   lastReviewedAt: string | null;
+  /** The locale served (Story MOTIR-7772 · MOTIR-7775). */
+  locale: PublicIdeaLocaleDto;
+  /** The idea fields shown in English although a translation was asked for. */
+  fallbackFields: IdeaTranslatableField[];
 }
 
 export interface PublicIdeaCategoryCountDto extends IdeaCategoryRefDto {
@@ -66,11 +84,19 @@ export interface PublicIdeaListDto {
   /** Counts over every filter EXCEPT `category`, so the chips stay choosable. */
   categories: PublicIdeaCategoryCountDto[];
   total: number;
+  /** The locale served. Category labels stay English: motir.co names its own sections. */
+  locale: PublicIdeaLocaleDto;
 }
 
-export interface PublicIdeaTagDto extends IdeaTagRefDto {
+export interface PublicIdeaTagDto extends PublicIdeaTagRefDto {
   /** How many ACTIVE ideas carry the tag. */
   count: number;
+}
+
+/** `GET /api/public/ideas/tags`. */
+export interface PublicIdeaTagListDto {
+  tags: PublicIdeaTagDto[];
+  locale: PublicIdeaLocaleDto;
 }
 
 // ── STAFF ───────────────────────────────────────────────────────────────────
@@ -104,7 +130,10 @@ export interface StaffIdeaTagRefDto extends IdeaTagRefDto {
  * typed OPTIONAL so a hand-built fixture without them still type-checks — the
  * mapper always sets every one of them.
  */
-export interface StaffIdeaDto extends Omit<PublicIdeaDto, 'addedAt' | 'evidence' | 'tags'> {
+export interface StaffIdeaDto extends Omit<
+  PublicIdeaDto,
+  'addedAt' | 'evidence' | 'tags' | 'locale' | 'fallbackFields'
+> {
   id: string;
   status: IdeaStatus;
   retiredReason: string | null;

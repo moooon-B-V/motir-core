@@ -77,19 +77,28 @@ describe('write → public read', () => {
       whoElse: null,
       lastReviewedAt: null,
     });
+    // `claimFallback` / `labelFallback` are MOTIR-7775's additive fields; with
+    // no locale asked for, nothing is a fallback.
     expect(idea.evidence).toEqual([
       {
         claim: 'One',
         sourceName: 'A, May 2026',
         url: 'https://a.example',
         sourceDate: '2026-05-01',
+        claimFallback: false,
       },
-      { claim: 'Two', sourceName: 'B', url: 'https://b.example', sourceDate: null },
+      {
+        claim: 'Two',
+        sourceName: 'B',
+        url: 'https://b.example',
+        sourceDate: null,
+        claimFallback: false,
+      },
     ]);
     expect(idea.tags).toEqual(
       expect.arrayContaining([
-        { slug: 'smb', label: 'SMB' },
-        { slug: 'consumer', label: 'CONSUMER' },
+        { slug: 'smb', label: 'SMB', labelFallback: false },
+        { slug: 'consumer', label: 'CONSUMER', labelFallback: false },
       ]),
     );
     expect((await ideasPublicService.listActive({ category: 'logistics' })).items).toHaveLength(1);
