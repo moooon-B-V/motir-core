@@ -96,7 +96,22 @@ function release(planId: string, entry: CacheEntry): void {
   if (reads.get(planId) === entry) reads.delete(planId);
 }
 
-export function useOpenPlanOverlay(planId: string, known?: KnownPlanFacts): OpenPlanOverlay {
+export interface OpenPlanOverlayOptions {
+  /**
+   * Compose the overlay address on THIS page instead of the current one, and
+   * NAVIGATE there with `router.push` rather than `shallowPush` (MOTIR-7890). The
+   * caller is declaring that the overlay is not mounted where it stands — the
+   * onboarding hand-off, outside `app/(authed)` — so an in-place write would set
+   * an address nothing reads. Absent, the door opens in place over the current page.
+   */
+  host?: string;
+}
+
+export function useOpenPlanOverlay(
+  planId: string,
+  known?: KnownPlanFacts,
+  options?: OpenPlanOverlayOptions,
+): OpenPlanOverlay {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -135,10 +150,12 @@ export function useOpenPlanOverlay(planId: string, known?: KnownPlanFacts): Open
   const resolution: Resolution | null =
     knownFacts ?? (read !== null && read.planId === planId ? read.resolution : null);
 
+  const hostOverride = options?.host ?? null;
   const host = useMemo(() => {
+    if (hostOverride !== null) return hostOverride;
     const qs = searchParams.toString();
     return `${pathname}${qs ? `?${qs}` : ''}`;
-  }, [pathname, searchParams]);
+  }, [hostOverride, pathname, searchParams]);
 
   const destinationOf = useCallback(
     (facts: Resolution | null) =>
@@ -160,7 +177,8 @@ export function useOpenPlanOverlay(planId: string, known?: KnownPlanFacts): Open
       const go = (facts: Resolution | null) => {
         const answer = destinationOf(facts);
         if (answer === null) router.push(routes.plan(planId));
-        else if (answer.kind === 'planning-surface') shallowPush(answer.href);
+        else if (answer.kind === 'planning-surface' && hostOverride === null)
+          shallowPush(answer.href);
         else router.push(answer.href);
       };
       if (resolution !== null) {
@@ -175,7 +193,7 @@ export function useOpenPlanOverlay(planId: string, known?: KnownPlanFacts): Open
       }
       void pending.promise.then(go);
     },
-    [resolution, destinationOf, router, routes, planId],
+    [resolution, destinationOf, router, routes, planId, hostOverride],
   );
 
   return { href, open, resolved: resolution !== null };

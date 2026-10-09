@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, CreditCard, MessageSquare, RotateCcw, Square } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +10,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import { usePlanGeneration } from '@/lib/hooks/usePlanGeneration';
+import { useOpenPlanOverlay } from '@/lib/hooks/useOpenPlanOverlay';
 
 // The 7.4 generation ENTRY surface (Subtask 7.4.9 / MOTIR-1396) — mounted by the
 // onboarding hand-off (MOTIR-1041) once the user triggers "Generate". It drives
@@ -20,7 +20,10 @@ import { usePlanGeneration } from '@/lib/hooks/usePlanGeneration';
 //     LEVEL on the canvas as the engine emits them, by REUSING the shipped
 //     presentational `PlanReviewCanvas` (MOTIR-1194/847) fed the substrate poll —
 //     it does NOT redraw the canvas or re-implement the review/approve controls
-//     (#82). On success it HANDS OFF to the 847 review surface (`/plans/:id`).
+//     (#82). On success it HANDS OFF to the planning overlay on the Plans list,
+//     at the generated plan's session — where a plan is decided (Story
+//     MOTIR-7883 · MOTIR-7890). The overlay is mounted only under `app/(authed)`,
+//     and this flow renders on the onboarding route, so the hand-off NAVIGATES.
 //   • Terminal states (Panel D) — FAILED (retry), OUT-OF-CREDITS (top up — the
 //     842/846 typed outcome, never a generic error), and EMPTY (no direction docs
 //     → discovery). These live HERE, not on the 847 detail: `Plan.status` has no
@@ -28,7 +31,7 @@ import { usePlanGeneration } from '@/lib/hooks/usePlanGeneration';
 //     surface them.
 //
 // Proposals are PlanItems, not work items — nothing here enters the ready-set /
-// board / `motir next`; that happens only on approve (7.21), on the surface this
+// board / `motir next`; that happens only on approve (7.21), in the overlay this
 // hands off to.
 
 export interface GenerationFlowProps {
@@ -45,7 +48,6 @@ const TOP_UP_HREF = '/settings/organization/billing';
 
 export function GenerationFlow({ onExit, projectKey }: GenerationFlowProps) {
   const t = useTranslations('aiPlanning.generation');
-  const router = useRouter();
   const { phase, planId, items, version, start, stop } = usePlanGeneration();
 
   // Auto-start when this surface mounts (the hand-off's "Generate" click is the
@@ -59,11 +61,6 @@ export function GenerationFlow({ onExit, projectKey }: GenerationFlowProps) {
   useEffect(() => {
     start();
   }, [start]);
-
-  // SUCCESS → hand off to the 847 review surface (approve / decline live there).
-  useEffect(() => {
-    if (phase === 'planned' && planId) router.push(`/plans/${planId}`);
-  }, [phase, planId, router]);
 
   // ── Terminal: out of credits (the 7.2 metering outcome) ──────────────────────
   if (phase === 'out_of_credits') {
@@ -136,10 +133,11 @@ export function GenerationFlow({ onExit, projectKey }: GenerationFlowProps) {
     );
   }
 
-  // ── Success hand-off (navigating to /plans/:id) ──────────────────────────────
+  // ── Success hand-off (navigating to the overlay on /plans) ───────────────────
   if (phase === 'planned') {
     return (
       <TerminalShell ariaLabel={t('redirecting')}>
+        {planId ? <PlannedHandOff planId={planId} /> : null}
         <div className="flex flex-col items-center gap-3 text-(--el-text-secondary)">
           <Spinner size="lg" />
           <p className="text-sm">{t('redirecting')}</p>
@@ -205,6 +203,25 @@ export function GenerationFlow({ onExit, projectKey }: GenerationFlowProps) {
       }
     />
   );
+}
+
+/**
+ * SUCCESS → the planning overlay on the Plans list, at the generated plan's
+ * session (Story MOTIR-7883 · MOTIR-7890). The overlay is not mounted on the
+ * onboarding route, so the door is told its host (`/plans`) and navigates there —
+ * the same landing a typed `/plans/<id>` redirects to. A child, because the hook
+ * cannot be called conditionally and `planId` is null until generation returns
+ * one; the ref hands each plan off ONCE, whatever re-renders or StrictMode do.
+ */
+function PlannedHandOff({ planId }: { planId: string }) {
+  const { open, resolved } = useOpenPlanOverlay(planId, undefined, { host: '/plans' });
+  const handedOff = useRef<string | null>(null);
+  useEffect(() => {
+    if (!resolved || handedOff.current === planId) return;
+    handedOff.current = planId;
+    open();
+  }, [planId, resolved, open]);
+  return null;
 }
 
 /** The centred host the terminal (Panel D) + redirect states render in — the same

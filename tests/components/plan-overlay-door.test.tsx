@@ -249,3 +249,25 @@ describe('open() with no event — the imperative form', () => {
     );
   });
 });
+
+describe('the `host` option — a door where the overlay is not mounted (MOTIR-7890)', () => {
+  it('composes the address on that host and NAVIGATES there', async () => {
+    answer('planned', { sessionId: 's1', targetKeys: ['MOTIR-12'] });
+    let door: ReturnType<typeof useOpenPlanOverlay> | null = null;
+    function Probe() {
+      door = useOpenPlanOverlay('p_1', undefined, { host: '/plans' });
+      return null;
+    }
+    render(<Probe />);
+    await act(async () => {});
+    const expected = withPlanningOverlay('/plans', {
+      kind: 'work-item',
+      itemKey: 'MOTIR-12',
+      sessionId: 's1',
+    });
+    expect(door!.href).toBe(expected);
+    act(() => door!.open());
+    expect(push).toHaveBeenCalledExactlyOnceWith(expected);
+    expect(shallowPush).not.toHaveBeenCalled();
+  });
+});

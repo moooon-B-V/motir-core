@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { withPlanningOverlay } from '@/lib/planning/launcher';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import {
@@ -96,6 +97,24 @@ const explanationText = () =>
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
+// The paused banner's link is a plan-overlay door (Story MOTIR-7883 · MOTIR-7890):
+// it reads the plan's review to learn where it lands. That read is answered here,
+// OFF `fetchMock`, so the settings PATCH counts below stay about the PATCH alone.
+const { push, shallowPush } = vi.hoisted(() => ({ push: vi.fn(), shallowPush: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/settings/project/ai-planning',
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
+const planReads = vi.fn();
+function planReview() {
+  return new Response(
+    JSON.stringify({ status: 'planned', conversation: { sessionId: 's_8f2', targetKeys: [] } }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
 function okResponse(body: unknown = dto()) {
   return { ok: true, status: 200, json: async () => body } as unknown as Response;
 }
@@ -106,7 +125,16 @@ function errorResponse(status: number, body: unknown = {}) {
 
 beforeEach(() => {
   fetchMock = vi.fn().mockResolvedValue(okResponse());
-  vi.stubGlobal('fetch', fetchMock);
+  planReads.mockReset();
+  push.mockReset();
+  shallowPush.mockReset();
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+    if (/^\/api\/plans\/[^/]+$/.test(String(url))) {
+      planReads(url);
+      return Promise.resolve(planReview());
+    }
+    return (fetchMock as unknown as typeof fetch)(url, init);
+  });
 });
 
 afterEach(() => {
@@ -397,8 +425,9 @@ describe('AiPlanningSettingsEditor — read-only + not-connected states', () => 
 describe('AiPlanningSettingsEditor — the auto-plan PAUSED state (MOTIR-1740)', () => {
   const banner = () => screen.getByTestId('ai-planning-paused-banner');
 
-  it('says cadence is paused, and LINKS to the plan that is waiting', () => {
+  it('says cadence is paused, and LINKS to the plan that is waiting', async () => {
     mount({ aiAutoPlanEnabled: true }, { pause: pauseView() });
+    await act(async () => {});
 
     expect(banner().textContent).toContain(
       'Auto-plan is paused — a plan is waiting for your review.',
@@ -407,10 +436,19 @@ describe('AiPlanningSettingsEditor — the auto-plan PAUSED state (MOTIR-1740)',
     // The meta line reuses the Plans list's own strings for the same facts.
     expect(banner().textContent).toContain('planned 3 days ago');
     expect(banner().textContent).toContain('12 items');
-    // The way OUT — the shipped plan detail (MOTIR-847).
+    // The way OUT — the planning overlay over this page, where a plan is decided
+    // (Story MOTIR-7883 · MOTIR-7890).
     const link = screen.getByTestId('ai-planning-paused-link');
-    expect(link.getAttribute('href')).toBe('/plans/pln_8f2');
+    const overlay = withPlanningOverlay('/settings/project/ai-planning', {
+      kind: 'project',
+      sessionId: 's_8f2',
+    });
+    expect(planReads).toHaveBeenCalledExactlyOnceWith('/api/plans/pln_8f2');
+    expect(link.getAttribute('href')).toBe(overlay);
     expect(link.textContent).toContain('Review the plan');
+    fireEvent.click(link, { button: 0 });
+    expect(shallowPush).toHaveBeenCalledExactlyOnceWith(overlay);
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('announces as a status region, and carries its meaning in WORDS, not colour', () => {
