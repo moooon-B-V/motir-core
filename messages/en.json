@@ -12842,8 +12842,8 @@
         "consequence": "Approving adds these to your backlog. Declining ends the plan and changes nothing.",
         "reopened": "Reopened from Waiting on you · started by {name} · last active {when}",
         "reopenedYours": "Reopened from Waiting on you · started by you · last active {when}",
-        "held": "Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in Waiting on you meanwhile.",
-        "heldBy": "{harness} is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in Waiting on you meanwhile.",
+        "held": "Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — until then it is under Planning, and it returns to Waiting on you.",
+        "heldBy": "{harness} is writing a new version of this plan. Approve and Decline come back when it finishes — until then it is under Planning, and it returns to Waiting on you.",
         "stale": {
           "title": "This plan changed while you were reading it.",
           "next": "Nothing was approved or declined. The canvas now shows the new version — look it over, then decide again."
@@ -12863,7 +12863,7 @@
       },
       "handoff": {
         "writing": "I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in <link>Waiting on you</link>.",
-        "rewriting": "I’m writing a new version of this plan. You can close this — it stays in <link>Waiting on you</link>, and you can decide once I’m done."
+        "rewriting": "I’m writing a new version of this plan. You can close this — it is under Planning while I work, and it comes back to <link>Waiting on you</link> for you to decide once I’m done."
       }
     },
     "planAsk": {

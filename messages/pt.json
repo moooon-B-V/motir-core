@@ -12848,8 +12848,8 @@
         "consequence": "Aprovar adiciona estes ao seu backlog. Recusar encerra o plano e não altera nada.",
         "reopened": "Reaberto a partir de Aguardando você · iniciado por {name} · última atividade {when}",
         "reopenedYours": "Reaberto a partir de Aguardando você · iniciado por você · última atividade {when}",
-        "held": "O Motir AI está escrevendo uma nova versão deste plano. Aprovar e Recusar voltam quando ele terminar — enquanto isso, o plano continua em Aguardando você.",
-        "heldBy": "{harness} está escrevendo uma nova versão deste plano. Aprovar e Recusar voltam quando terminar — enquanto isso, o plano continua em Aguardando você.",
+        "held": "O Motir AI está escrevendo uma nova versão deste plano. Aprovar e Recusar voltam quando ele terminar — até lá, o plano fica em Em planejamento e depois volta para Aguardando você.",
+        "heldBy": "{harness} está escrevendo uma nova versão deste plano. Aprovar e Recusar voltam quando terminar — até lá, o plano fica em Em planejamento e depois volta para Aguardando você.",
         "stale": {
           "title": "Este plano mudou enquanto você o lia.",
           "next": "Nada foi aprovado nem recusado. O canvas agora mostra a nova versão — revise-a e decida novamente."
@@ -12869,7 +12869,7 @@
       },
       "handoff": {
         "writing": "Já tenho o que preciso — estou escrevendo o plano agora. Você não precisa esperar aqui: feche isto quando quiser, e o plano estará esperando por você em <link>Aguardando você</link>.",
-        "rewriting": "Estou escrevendo uma nova versão deste plano. Você pode fechar isto — ele continua em <link>Aguardando você</link>, e você poderá decidir quando eu terminar."
+        "rewriting": "Estou escrevendo uma nova versão deste plano. Você pode fechar isto — enquanto trabalho, ele fica em Em planejamento e, quando eu terminar, volta para <link>Aguardando você</link> para você decidir."
       }
     },
     "planAsk": {

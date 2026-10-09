@@ -90,6 +90,7 @@ export type PlanRevisionChangeKind =
   | 'declined'
   | 'revision_started'
   | 'revision_ended'
+  | 'revision_renewed'
   | 'bug_filed'
   | 'brief_edited'
   | 'reason_classified';
