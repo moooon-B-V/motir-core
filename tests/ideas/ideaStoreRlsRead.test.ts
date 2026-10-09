@@ -88,3 +88,61 @@ describe('the unbound read', () => {
     expect(await adminDb.ideaTag.count({ where: { slug: 'nope' } })).toBe(0);
   });
 });
+
+describe('the translation tables (Story MOTIR-7772 · MOTIR-7773)', () => {
+  // The three tables copy the idea tables' posture (`20261009200000_idea_translations`):
+  // an unconditional read arm and a write arm behind `app.platform_staff`.
+  async function seedTranslations() {
+    const kit = await adminDb.idea.findUniqueOrThrow({
+      where: { slug: 'the-ai-transparency-kit' },
+      include: { evidence: true, tags: true },
+    });
+    await adminDb.ideaTranslation.create({ data: { ideaId: kit.id, locale: 'ja', title: '題' } });
+    if (kit.evidence[0]) {
+      await adminDb.ideaEvidenceTranslation.create({
+        data: { evidenceId: kit.evidence[0].id, locale: 'ja', claim: '主張' },
+      });
+    }
+    await adminDb.ideaTagTranslation.create({
+      data: { tagId: kit.tags[0]!.tagId, locale: 'ja', label: 'ラベル' },
+    });
+    return kit;
+  }
+
+  it('ADMITS every translation row with nothing bound', async () => {
+    const kit = await seedTranslations();
+    const read = await asAppRole(async (tx) => ({
+      ideas: await tx.ideaTranslation.count(),
+      evidence: await tx.ideaEvidenceTranslation.count(),
+      tags: await tx.ideaTagTranslation.count(),
+    }));
+    expect(read).toEqual({ ideas: 1, evidence: kit.evidence.length > 0 ? 1 : 0, tags: 1 });
+  });
+
+  it('REFUSES a translation write with nothing bound, and ADMITS it under app.platform_staff', async () => {
+    const kit = await seedTranslations();
+    await expect(
+      asAppRole((tx) =>
+        tx.ideaTranslation.create({ data: { ideaId: kit.id, locale: 'ko', title: '제목' } }),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      asAppRole((tx) =>
+        tx.ideaTagTranslation.create({
+          data: { tagId: kit.tags[0]!.tagId, locale: 'ko', label: '라벨' },
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(await adminDb.ideaTranslation.count({ where: { locale: 'ko' } })).toBe(0);
+
+    await asAppRole(async (tx) => {
+      await tx.$executeRawUnsafe(`SELECT set_config('app.platform_staff', 'true', true)`);
+      await tx.ideaTranslation.create({ data: { ideaId: kit.id, locale: 'ko', title: '제목' } });
+      await tx.ideaTagTranslation.create({
+        data: { tagId: kit.tags[0]!.tagId, locale: 'ko', label: '라벨' },
+      });
+    });
+    expect(await adminDb.ideaTranslation.count({ where: { locale: 'ko' } })).toBe(1);
+    expect(await adminDb.ideaTagTranslation.count({ where: { locale: 'ko' } })).toBe(1);
+  });
+});

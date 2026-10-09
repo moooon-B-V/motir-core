@@ -263,6 +263,8 @@ export default defineConfig({
         'lib/ideas/publicCache.ts',
         'lib/ideas/routeErrors.ts',
         'lib/ideas/schemas.ts',
+        // Story MOTIR-7772 · MOTIR-7773 — the per-locale field list.
+        'lib/ideas/translatableFields.ts',
         'lib/platform/ideasGate.ts',
         'app/api/platform/ideas/route.ts',
         'app/api/platform/ideas/\\[slug\\]/route.ts',
@@ -3499,6 +3501,12 @@ export default defineConfig({
           statements: 90,
         },
         'lib/ideas/schemas.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ideas/translatableFields.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
