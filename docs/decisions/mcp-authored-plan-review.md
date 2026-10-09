@@ -85,11 +85,21 @@ deliberately not made here: a decision record states the direction, and the surf
 carries its own change. The same holds for the copy MOTIR-6033's published design attaches to the
 no-conversation state, which is MOTIR-6044's.
 
+**⚠️ AMENDED 2026-10-08 by Story MOTIR-7883 (MOTIR-7891).** The no-conversation state the paragraph
+above hands to MOTIR-6043 / MOTIR-6044 no longer exists. Its copy is deleted, and the null-session
+arm of `planRowDestination` answers `'no-session'`, an invariant breach no surface explains
+(`approval-gates.md` §11.5b, as amended). **What this does NOT drop:** an MCP-authored plan with a
+session and no turns opens the planning surface — and that overlay is now the ONLY place a member
+reaches it while it is undecided, whether its session is open or has ended.
+
 ## Consequences
 
 - An undecided MCP-authored plan opens the **planning surface** at its session, turns or no turns.
 - `approvalGate.planApproval.noConversation.agent` — _"{harness} wrote this plan outside a
-  conversation, so it opened on its own page"_ — can no longer be true, and MOTIR-6044 retires it.
+  conversation, so it opened on its own page"_ — can no longer be true, and MOTIR-6044 retires it. _(⚠️ AMENDED 2026-10-08 by
+  Story MOTIR-7883 (MOTIR-7891): the remaining `.none` key is retired too —
+  `approvalGate.planApproval.noConversation` and `planDestination.noConversation` /
+  `.noConversationWhy` are deleted.)_
 - The planning surface must be legible for a session with **no turns**: the transcript is empty and
   the plan is the content. MOTIR-6158 (the plan drawn as it is written) is where that is built.
 - Nothing about DECIDING a plan changes. The plan-approval gate, its verbs, its routing and its
@@ -99,7 +109,9 @@ no-conversation state, which is MOTIR-6044's.
 
 - **Where a row opens for any OTHER plan** — a cadence plan, a backfilled plan, a plan with no
   session row at all. Story MOTIR-6043 and `approval-gates.md` §11.5b own the destination rule in
-  full.
+  full. _(⚠️ AMENDED 2026-10-08 by Story MOTIR-7883 (MOTIR-7891): see
+  §11.5b as amended — an undecided plan opens only in the planning overlay, open session or ended,
+  and a plan with no session at all is an invariant breach that lands on its page with no copy.)_
 - **The copy** on any row or notice (MOTIR-6044).
 - **What the planning surface SHOWS once open** — the level it lands on (MOTIR-6154) and the cards
   arriving with their edges and motion (MOTIR-6158).

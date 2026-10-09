@@ -152,8 +152,11 @@ auto-planner started on its own asks the workspace owner.
 
 **Opening the row does not open the full-screen view.** It takes you back to the
 planning surface, to the conversation that produced the plan, with the plan shown
-for review. A plan with no conversation opens its own plan page instead. There
-you can do one of three things:
+for review. Opening any link to a plan waiting for you — a row, a work item's
+notice, a run's finding, a shared address — opens the planning view over the page
+you are on, including when that plan's conversation has closed. A plan's own page
+shows plans that are already decided. In the planning view you can do one of
+three things:
 
 - **Approve** turns the plan into work items, exactly as the plan's approve
   button always has.
@@ -594,9 +597,5 @@ guessing about the rest:
   request; outside a gate, merging still happens on GitHub.
 - **There is no per-project setting** that turns any of this on or off.
 - **No email and no bell notification** is sent when a gate is raised.
-- **Approving a plan through Waiting on you is decided but not built yet.** Its rules
-  are in the decision record's §11. Until it ships, a plan is still approved or
-  declined only from its own plan page and the planning surface, and it does not
-  appear in Waiting on you.
 
 Each is a separate piece of work, and this page will grow as they land.
