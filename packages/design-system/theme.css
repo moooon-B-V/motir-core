@@ -4031,6 +4031,18 @@
   --el-showcase-wave-1: var(--color-primary);
   --el-showcase-wave-2: var(--color-accent-teal);
   --el-showcase-wave-3: var(--color-accent);
+  /* motir.co's live link ("Motir builds itself" in the header): its square
+     and its words walk the wave hues. The mark is each hue as is; the text
+     is each hue mixed 60/40 with the primary ink, because the raw teal and
+     warm hues fall below AA as text in most light palettes (down to 2.4:1),
+     and at 60% every hue clears 4.5:1 on the page and the surface in every
+     palette and theme. */
+  --el-live-mark-1: var(--color-primary);
+  --el-live-mark-2: var(--color-accent-teal);
+  --el-live-mark-3: var(--color-accent);
+  --el-live-text-1: color-mix(in srgb, var(--color-primary) 60%, var(--color-foreground));
+  --el-live-text-2: color-mix(in srgb, var(--color-accent-teal) 60%, var(--color-foreground));
+  --el-live-text-3: color-mix(in srgb, var(--color-accent) 60%, var(--color-foreground));
 }
 
 /* Dark-mode lift for the sidebar hover token. The other three --el-sidebar-*
