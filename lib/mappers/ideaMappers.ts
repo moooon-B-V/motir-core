@@ -8,6 +8,7 @@ import type {
   StaffIdeaTagDto,
 } from '@/lib/dto/ideas';
 import { IDEA_CATEGORY_LABELS } from '@/lib/ideas/categories';
+import { tagLabelTranslations, toStaffTranslationView } from '@/lib/ideas/staffTranslations';
 import type { IdeaWithRelations } from '@/lib/repositories/ideaRepository';
 import type { IdeaTagWithCount } from '@/lib/repositories/ideaTagRepository';
 
@@ -56,23 +57,46 @@ export function toPublicIdeaDto(row: IdeaWithRelations): PublicIdeaDto {
   };
 }
 
+/**
+ * The staff idea: the public fields, the staff record, and — Story MOTIR-7772 ·
+ * MOTIR-7774 — every locale's text plus `missingLocales`. Expects a row read
+ * with every locale's translations (the staff reads load them).
+ */
 export function toStaffIdeaDto(row: IdeaWithRelations): StaffIdeaDto {
+  const view = toStaffTranslationView(row);
+  const base = toPublicIdeaDto(row);
   return {
-    ...toPublicIdeaDto(row),
+    ...base,
+    evidence: base.evidence.map((e, i) => ({
+      ...e,
+      claimTranslations: view.claimTranslations[i] ?? {},
+    })),
+    tags: row.tags
+      .map((a) => ({
+        slug: a.tag.slug,
+        label: a.tag.label,
+        labelTranslations: tagLabelTranslations(a.tag.translations),
+      }))
+      .sort((a, b) => a.slug.localeCompare(b.slug)),
     id: row.id,
     status: row.status,
     retiredReason: row.retiredReason,
     retiredAt: row.retiredAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
+    translations: view.translations,
+    missingLocales: view.missingLocales,
   };
 }
 
+/** A vocabulary tag. `labelTranslations` is present only when the tag has one. */
 export function toStaffIdeaTagDto(row: IdeaTagWithCount): StaffIdeaTagDto {
+  const labelTranslations = tagLabelTranslations(row.translations);
   return {
     slug: row.slug,
     label: row.label,
     description: row.description,
     count: row._count.assignments,
+    ...(Object.keys(labelTranslations).length > 0 ? { labelTranslations } : {}),
   };
 }
 

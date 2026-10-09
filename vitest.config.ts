@@ -265,6 +265,9 @@ export default defineConfig({
         'lib/ideas/schemas.ts',
         // Story MOTIR-7772 · MOTIR-7773 — the per-locale field list.
         'lib/ideas/translatableFields.ts',
+        // Story MOTIR-7772 · MOTIR-7774 — the staff translation view and the tag route.
+        'lib/ideas/staffTranslations.ts',
+        'app/api/platform/ideas/tags/\\[slug\\]/route.ts',
         'lib/platform/ideasGate.ts',
         'app/api/platform/ideas/route.ts',
         'app/api/platform/ideas/\\[slug\\]/route.ts',
@@ -3507,6 +3510,18 @@ export default defineConfig({
           statements: 90,
         },
         'lib/ideas/translatableFields.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ideas/staffTranslations.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/platform/ideas/tags/\\[slug\\]/route.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

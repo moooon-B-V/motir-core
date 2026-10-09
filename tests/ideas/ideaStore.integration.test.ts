@@ -233,7 +233,8 @@ describe('every staff ideas route admits a staff token', () => {
         probed += 1;
       }
     }
-    expect(probed).toBe(10);
+    // 10 verbs from MOTIR-7675, plus `PATCH tags/[slug]` (MOTIR-7774).
+    expect(probed).toBe(11);
   });
 });
 

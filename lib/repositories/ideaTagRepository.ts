@@ -36,15 +36,21 @@ export const ideaTagRepository = {
     return tx.ideaTag.create({ data });
   },
 
-  /** The vocabulary rows for these slugs (those that exist), with their label translations. */
+  /**
+   * The vocabulary rows for these slugs (those that exist), with their label
+   * translations and usage counts.
+   */
   async findBySlugs(
     slugs: string[],
     tx: Prisma.TransactionClient,
     locale?: IdeaTranslationLocale,
-  ): Promise<IdeaTagWithTranslations[]> {
+  ): Promise<IdeaTagWithCount[]> {
     return tx.ideaTag.findMany({
       where: { slug: { in: slugs } },
-      include: { translations: translationsOf(locale) },
+      include: {
+        _count: { select: { assignments: true } },
+        translations: translationsOf(locale),
+      },
     });
   },
 

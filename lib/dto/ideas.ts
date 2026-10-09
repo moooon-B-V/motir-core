@@ -1,4 +1,9 @@
-import type { IdeaCategory, IdeaKind, IdeaStatus } from '@/generated/prisma/client';
+import type {
+  IdeaCategory,
+  IdeaKind,
+  IdeaStatus,
+  IdeaTranslationLocale,
+} from '@/generated/prisma/client';
 
 /**
  * The idea store's DTOs (Story MOTIR-7662) — two contracts in one file, kept
@@ -70,13 +75,52 @@ export interface PublicIdeaTagDto extends IdeaTagRefDto {
 
 // ── STAFF ───────────────────────────────────────────────────────────────────
 
-export interface StaffIdeaDto extends Omit<PublicIdeaDto, 'addedAt'> {
+/** Text by non-English locale; a locale with no text is ABSENT (Story MOTIR-7772). */
+export type IdeaLocaleTextDto = Partial<Record<IdeaTranslationLocale, string>>;
+
+/** One locale's idea text. A field missing in that locale is absent, never null. */
+export interface IdeaTranslationDto {
+  title?: string;
+  pitch?: string;
+  capabilities?: string[];
+  gap?: string;
+  whyNow?: string;
+  whyMotir?: string;
+  whoElse?: string;
+}
+
+/** A staff evidence row, with its claim in every locale it has one. */
+export interface StaffIdeaEvidenceDto extends IdeaEvidenceDto {
+  claimTranslations?: IdeaLocaleTextDto;
+}
+
+/** A staff tag reference, with its label in every locale it has one. */
+export interface StaffIdeaTagRefDto extends IdeaTagRefDto {
+  labelTranslations?: IdeaLocaleTextDto;
+}
+
+/**
+ * The staff idea. The translation fields (Story MOTIR-7772 · MOTIR-7774) are
+ * typed OPTIONAL so a hand-built fixture without them still type-checks — the
+ * mapper always sets every one of them.
+ */
+export interface StaffIdeaDto extends Omit<PublicIdeaDto, 'addedAt' | 'evidence' | 'tags'> {
   id: string;
   status: IdeaStatus;
   retiredReason: string | null;
   retiredAt: string | null;
   addedAt: string;
   updatedAt: string;
+  evidence: StaffIdeaEvidenceDto[];
+  tags: StaffIdeaTagRefDto[];
+  /** Every locale's text for the idea's own fields. */
+  translations?: Partial<Record<IdeaTranslationLocale, IdeaTranslationDto>>;
+  /**
+   * The locales where any field with English text — the idea's own, an evidence
+   * claim, an assigned tag's label — has none. A `capabilities` list counts only
+   * at the English list's length.
+   */
+  missingLocales?: IdeaTranslationLocale[];
 }
 
 export interface StaffIdeaListDto {
@@ -89,6 +133,8 @@ export interface StaffIdeaTagDto extends IdeaTagRefDto {
   description: string | null;
   /** Ideas of ANY status carrying the tag. */
   count: number;
+  /** The label in every locale it has one; absent when it has none. */
+  labelTranslations?: IdeaLocaleTextDto;
 }
 
 export interface IdeaResearchRunDto {

@@ -209,6 +209,18 @@ export const ideaRepository = {
     await tx.idea.delete({ where: { id } });
   },
 
+  /**
+   * Lock one idea's row for the rest of the transaction (`SELECT … FOR UPDATE`)
+   * — the guard under which a write decides what its English changed. Returns
+   * the row's id, or null when no idea has the slug.
+   */
+  async lockBySlug(slug: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
+    const rows = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "idea" WHERE "slug" = ${slug} FOR UPDATE
+    `;
+    return rows[0] ?? null;
+  },
+
   /** One idea of any status, or null — the staff console's and skill's read. */
   async findBySlugForStaff(slug: string): Promise<IdeaWithRelations | null> {
     return dbRead.idea.findUnique({ where: { slug }, include: ALL_LOCALES });
