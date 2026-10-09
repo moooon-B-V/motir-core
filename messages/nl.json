@@ -7428,6 +7428,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "{key} plannen"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {

@@ -638,6 +638,19 @@ export function PlanningWorkspaceOverlay({
   const seededDraft = seededFirst?.intent === 'replan' ? seededFirst : null;
   const seededSend = seededFirst?.intent === 'plan' ? seededFirst : null;
   const resumedSeed = settledSeed?.kind === 'resume';
+  // EXPAND STARTS THE CONVERSATION (MOTIR-7973; design MOTIR-7875). A `planStart`
+  // launch sends `Plan <KEY>` once, for the person — only once its anchor RESOLVED
+  // for this viewer, because a start turn about a card the workspace degraded away
+  // from would be a turn about nothing on screen. The claim key is the anchor's,
+  // so a remount or a second open on this page cannot send it twice; the rail
+  // sends only into a thread with no user turn, so a resumed one sends nothing.
+  const startSend =
+    workspaceLaunch?.startTurn && settled?.target
+      ? {
+          turn: t('startTurn.plan', { key: settled.target.identifier }),
+          key: `start:${settled.target.identifier}`,
+        }
+      : null;
   // The follow-up framing rides a pick's first open AND its resume.
   const followUp =
     settledSeed !== null && settledSeed.kind !== 'fallback' && settledSeed.intent === 'plan'
@@ -762,6 +775,7 @@ export function PlanningWorkspaceOverlay({
           {...(seededSend
             ? { autoSendTurn: seededSend.firstTurn, seedGateId: seededSend.gateId }
             : {})}
+          {...(startSend ? { autoSendTurn: startSend.turn, autoSendKey: startSend.key } : {})}
           {...(followUp ? { followUp } : {})}
           {...(resumedSeed ? { sessionIsResume: true } : {})}
           initialCanvasTrail={settled?.trail}
@@ -785,7 +799,12 @@ function launchContext(launch: PlanningLaunch): PlanningLaunchContext {
   // A guide round-trips as itself: the card it walks is its whole context.
   if (launch.mode === 'guide' && launch.itemKey) return { kind: 'guide', itemKey: launch.itemKey };
   if (launch.from === 'work-item' && launch.itemKey) {
-    return { kind: 'work-item', itemKey: launch.itemKey, hasPlan: launch.mode === 'replan' };
+    return {
+      kind: 'work-item',
+      itemKey: launch.itemKey,
+      hasPlan: launch.mode === 'replan',
+      ...(launch.startTurn ? { startTurn: true } : {}),
+    };
   }
   if (launch.from === 'convention-refine' && launch.repoKey) {
     return { kind: 'convention-refine', repoKey: launch.repoKey };

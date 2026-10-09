@@ -7431,6 +7431,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "Planejar {key}"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {

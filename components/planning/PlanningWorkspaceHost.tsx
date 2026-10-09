@@ -220,6 +220,10 @@ export interface PlanningWorkspaceHostProps {
    *  (MOTIR-6435; `picked-option-planning-starts.md`). Passed to the rail, which
    *  sends it the first moment the conversation is idle and empty. */
   autoSendTurn?: string;
+  /** The page-level claim the one-time send is held under (`claimPickAutoSend`).
+   *  Defaults to `seedGateId` — a pick's gate; a start turn (MOTIR-7973) passes
+   *  `start:<KEY>`. */
+  autoSendKey?: string | null;
   /** The choice a pick-seeded conversation follows up — the rail's follow-up
    *  framing (design MOTIR-6432). Set on a pick's first open AND its resume. */
   followUp?: PlanningSeedPickDTO | null;
@@ -279,6 +283,7 @@ function PlanWorkspaceHost({
   initialDraft,
   seedGateId = null,
   autoSendTurn,
+  autoSendKey,
   followUp = null,
   sessionIsResume = false,
 }: PlanningWorkspaceHostProps) {
@@ -479,6 +484,24 @@ function PlanWorkspaceHost({
     onTriageChanged: report?.notifySubmissionsChanged,
     onRestarted,
   });
+
+  // THE START TURN HAS LANDED (MOTIR-7973): once the thread holds a user turn, the
+  // address that asked to START it now names it instead — ONE replace, dropping
+  // `planStart` and writing `planSession=<id>`, so a reload resumes the
+  // conversation rather than asking to start it again. A replace, not a push:
+  // Back should not return to an address that asks for a send already made.
+  const startedSessionId =
+    launch.startTurn && state.session && state.session.turns.some((turn) => turn.role === 'user')
+      ? state.session.id
+      : null;
+  useEffect(() => {
+    if (startedSessionId === null) return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(OVERLAY_PARAM_NAMES.start)) return;
+    url.searchParams.delete(OVERLAY_PARAM_NAMES.start);
+    url.searchParams.set(OVERLAY_PARAM_NAMES.session, startedSessionId);
+    shallowReplace(`${url.pathname}${url.search}${url.hash}`);
+  }, [startedSessionId]);
 
   // THE SESSION'S END (MOTIR-7643): an end releases the cards the session held at
   // Planning, so the canvas re-reads them at their prior status — the same refetch
@@ -1020,7 +1043,9 @@ function PlanWorkspaceHost({
           projectName={projectName}
           {...(justReturnedFromOnboarding ? { justReturnedFromOnboarding: true } : {})}
           {...(initialDraft ? { initialDraft } : {})}
-          {...(autoSendTurn ? { autoSendTurn, autoSendKey: seedGateId } : {})}
+          {...(autoSendTurn
+            ? { autoSendTurn, autoSendKey: autoSendKey !== undefined ? autoSendKey : seedGateId }
+            : {})}
           {...(seedDraft
             ? { initialDraft: seedDraft.text, initialDraftCaret: seedDraft.caret }
             : {})}

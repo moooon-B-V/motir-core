@@ -7425,6 +7425,9 @@
     }
   },
   "planningWorkspace": {
+    "startTurn": {
+      "plan": "Plan {key}"
+    },
     "refusalSeed": {
       "heading": "{key} · {title}",
       "verb": {
