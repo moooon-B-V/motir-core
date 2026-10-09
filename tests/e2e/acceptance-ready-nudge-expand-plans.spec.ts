@@ -363,7 +363,8 @@ test('Expand on the /ready nudge starts a planning conversation on the stub', as
       { timeout: FIRST_PAINT_MS },
     );
     await approveVerb(page).click();
-    await expect(workspace(page).getByTestId('plan-approve-progress')).toBeVisible({
+    // The bar's progress is the announced one; the rail draws an aria-hidden twin.
+    await expect(bar(page).getByTestId('plan-approve-progress')).toBeVisible({
       timeout: FIRST_PAINT_MS,
     });
     await beat();
