@@ -234,9 +234,12 @@ describe('the staff write is what the public read serves', () => {
       sourceDate: e.sourceDate,
     });
     expect(ja.evidence.map(untranslated)).toEqual(en.evidence.map(untranslated));
-    for (const key of ['slug', 'kind', 'category', 'addedAt', 'lastReviewedAt'] as const) {
+    for (const key of ['slug', 'kind', 'addedAt', 'lastReviewedAt'] as const) {
       expect(ja[key]).toEqual(en[key]);
     }
+    // The category's stored key never translates; its label does (MOTIR-8082).
+    expect(ja.category).toEqual({ slug: 'pets', label: 'ペット' });
+    expect(en.category).toEqual({ slug: 'pets', label: 'Pets' });
     expect(en).toMatchObject({ locale: 'en', fallbackFields: [], title: 'Pet clinics' });
   });
 
