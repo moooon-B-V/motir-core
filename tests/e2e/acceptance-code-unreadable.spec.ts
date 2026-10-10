@@ -197,8 +197,9 @@ test('an unreadable code graph — no plan written, answers carry a notice, and 
     // Information, not the failure treatment — and nothing to review.
     await expect(rail(page).getByRole('alert')).toHaveCount(0);
     await expect(rail(page).getByText(/didn.t go through/i)).toHaveCount(0);
-    // The plan on the canvas is exactly what it was.
-    expect(await nodeIds(page)).toEqual(before);
+    // The plan on the canvas is exactly what it was. The canvas reloads when the turn
+    // settles, so the ids are polled until it has finished — the wait IS the assertion.
+    await expect.poll(() => nodeIds(page)).toEqual(before);
     expect(await storedFaces()).toEqual(['declined']);
     await beat();
   });
@@ -218,7 +219,7 @@ test('an unreadable code graph — no plan written, answers carry a notice, and 
     // keeps its notice and only the newest carries Try again.
     await expect(declinedNotice(page)).toHaveCount(2);
     await expect(retry(page)).toHaveCount(1);
-    expect(await nodeIds(page)).toEqual(before);
+    await expect.poll(() => nodeIds(page)).toEqual(before);
     await beat();
   });
 
