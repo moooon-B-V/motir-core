@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "Solo i proprietari e gli amministratori di un’area di lavoro possono modificarne le impostazioni di sicurezza.",
       "refused": "Operazione non riuscita: {reason}",
       "organizationClosing": "Questa organizzazione è programmata per l’eliminazione ed è in sola lettura. Solo il suo proprietario può annullare l’eliminazione.",
-      "memberProjectsFailed": "Impossibile caricare i suoi progetti."
+      "memberProjectsFailed": "Impossibile caricare i suoi progetti.",
+      "systemReplayWorkspaceRow": "Quella dead-letter appartiene a un workspace: riesegui dalla sezione Dead-letter di quel workspace.",
+      "systemReplayOperatorOnly": "Solo l’operatore della piattaforma può rieseguire le dead-letter di sistema."
     },
     "links": {
       "notFound": "Quell’elemento di lavoro non esiste più.",
@@ -3044,7 +3046,13 @@
         "template": "Modello",
         "lastEvent": "Ultimo evento",
         "never": "Ancora nessun evento dal provider"
-      }
+      },
+      "systemDlqTitle": "Dead-letter senza workspace",
+      "systemDlqSummary": "{waiting} in attesa di essere rieseguite · {replayed} rieseguite negli ultimi 7 giorni",
+      "systemDlqTableCaption": "Dead-letter di sistema",
+      "systemDlqEmptyTitle": "Nessuna dead-letter di sistema",
+      "systemDlqEmptyDesc": "Ogni job senza workspace è riuscito o è ancora in fase di nuovo tentativo.",
+      "systemRunsTitle": "Esecuzioni di sistema"
     },
     "account": {
       "eyebrow": "Impostazioni dell’account",

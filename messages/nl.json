@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "Alleen eigenaren en beheerders van een werkruimte kunnen de beveiligingsinstellingen ervan wijzigen.",
       "refused": "Dat is niet gelukt: {reason}",
       "organizationClosing": "Deze organisatie staat gepland voor verwijdering en is alleen-lezen. Alleen de Eigenaar kan de verwijdering annuleren.",
-      "memberProjectsFailed": "Kan de projecten van deze persoon niet laden."
+      "memberProjectsFailed": "Kan de projecten van deze persoon niet laden.",
+      "systemReplayWorkspaceRow": "Dat dead-letter-item hoort bij een workspace – speel het opnieuw af vanaf het tabblad Dead letter van die workspace.",
+      "systemReplayOperatorOnly": "Alleen de platformbeheerder kan dead letters van het systeem opnieuw afspelen."
     },
     "links": {
       "notFound": "Dat werkitem bestaat niet meer.",
@@ -3044,7 +3046,13 @@
         "template": "Sjabloon",
         "lastEvent": "Laatste gebeurtenis",
         "never": "Nog geen gebeurtenis van de provider"
-      }
+      },
+      "systemDlqTitle": "Dead letters zonder workspace",
+      "systemDlqSummary": "{waiting} wachten op opnieuw afspelen · {replayed} opnieuw afgespeeld in de afgelopen 7 dagen",
+      "systemDlqTableCaption": "Dead letters van het systeem",
+      "systemDlqEmptyTitle": "Geen dead letters van het systeem",
+      "systemDlqEmptyDesc": "Elke taak zonder workspace is geslaagd of wordt nog opnieuw geprobeerd.",
+      "systemRunsTitle": "Systeemruns"
     },
     "account": {
       "eyebrow": "Accountinstellingen",

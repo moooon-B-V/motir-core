@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "只有工作区的所有者或管理员才能更改其安全设置。",
       "refused": "操作未完成：{reason}",
       "organizationClosing": "该组织已计划删除，目前为只读状态。只有组织所有者可以取消删除。",
-      "memberProjectsFailed": "无法加载其项目。"
+      "memberProjectsFailed": "无法加载其项目。",
+      "systemReplayWorkspaceRow": "该死信属于某个工作区——请在该工作区的“死信”标签页中重放。",
+      "systemReplayOperatorOnly": "只有平台运营者才能重放系统死信。"
     },
     "links": {
       "notFound": "该工作项已不存在。",
@@ -3044,7 +3046,13 @@
         "template": "模板",
         "lastEvent": "最近事件",
         "never": "尚未收到服务商事件"
-      }
+      },
+      "systemDlqTitle": "无工作区的死信",
+      "systemDlqSummary": "{waiting} 条等待重放 · 最近 7 天内已重放 {replayed} 条",
+      "systemDlqTableCaption": "系统死信",
+      "systemDlqEmptyTitle": "没有系统死信",
+      "systemDlqEmptyDesc": "所有无工作区的作业均已成功，或仍在重试中。",
+      "systemRunsTitle": "系统运行"
     },
     "account": {
       "eyebrow": "账户设置",

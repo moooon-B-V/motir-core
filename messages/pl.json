@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "Tylko właściciele i administratorzy obszaru roboczego mogą zmieniać jego ustawienia zabezpieczeń.",
       "refused": "Nie udało się: {reason}",
       "organizationClosing": "Ta organizacja jest zaplanowana do usunięcia i jest tylko do odczytu. Tylko jej właściciel może anulować usunięcie.",
-      "memberProjectsFailed": "Nie udało się załadować projektów tej osoby."
+      "memberProjectsFailed": "Nie udało się załadować projektów tej osoby.",
+      "systemReplayWorkspaceRow": "Ten wpis w kolejce niedostarczonych należy do przestrzeni roboczej — uruchom go ponownie na karcie Niedostarczone tej przestrzeni.",
+      "systemReplayOperatorOnly": "Tylko operator platformy może ponownie uruchamiać systemowe niedostarczone wpisy."
     },
     "links": {
       "notFound": "Ten element roboczy już nie istnieje.",
@@ -3044,7 +3046,13 @@
         "template": "Szablon",
         "lastEvent": "Ostatnie zdarzenie",
         "never": "Brak zdarzeń od dostawcy"
-      }
+      },
+      "systemDlqTitle": "Niedostarczone bez przestrzeni roboczej",
+      "systemDlqSummary": "{waiting} czeka na ponowne uruchomienie · {replayed} uruchomionych ponownie w ostatnich 7 dniach",
+      "systemDlqTableCaption": "Systemowe niedostarczone",
+      "systemDlqEmptyTitle": "Brak systemowych niedostarczonych",
+      "systemDlqEmptyDesc": "Każde zadanie bez przestrzeni roboczej zakończyło się powodzeniem albo jest nadal ponawiane.",
+      "systemRunsTitle": "Uruchomienia systemowe"
     },
     "account": {
       "eyebrow": "Ustawienia konta",

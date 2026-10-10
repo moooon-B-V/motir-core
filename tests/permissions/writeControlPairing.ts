@@ -274,6 +274,16 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
   },
   'settings/workspace/actions.ts#setMemberRoleAction': { kind: 'role', role: 'workspace:manager' },
   'settings/workspace/jobs/actions.ts#replayDlqAction': { kind: 'role', role: 'workspace:manager' },
+  // MOTIR-8083: the platform OPERATOR's replay of a workspace-less dead letter. Not a
+  // tenant permission at all — the service asserts `PLATFORM_ADMIN_EMAIL` (and refuses a
+  // row that has a workspace), and the control exists only on the System tab, which
+  // `parseJobsParams` / `showSystemTab` render for that operator alone. So there is no
+  // capability for a client control to read; `self` is the kind that asks for none.
+  'settings/workspace/jobs/actions.ts#replaySystemDlqAction': {
+    kind: 'self',
+    reason:
+      'the platform operator (PLATFORM_ADMIN_EMAIL), asserted in the service; the control only exists on the operator-only System tab',
+  },
   'settings/workspace/security/actions.ts#setWorkspaceRequireTwoFactorAction': {
     kind: 'role',
     role: 'workspace:manager',

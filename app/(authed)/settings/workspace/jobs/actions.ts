@@ -6,7 +6,12 @@ import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { jobsDashboardService } from '@/lib/services/jobsDashboardService';
-import { ReplayForbiddenError, DlqEntryNotFoundError } from '@/lib/jobs/errors';
+import {
+  ReplayForbiddenError,
+  DlqEntryNotFoundError,
+  SystemReplayForbiddenError,
+  SystemReplayWorkspaceRowError,
+} from '@/lib/jobs/errors';
 
 // Server Actions for the operator dashboard (Subtask 1.6.5). HTTP/transport
 // layer only: read the session + active workspace, call exactly one service
@@ -66,6 +71,48 @@ export async function replayDlqAction(dlqId: string): Promise<ActionResult> {
   // section on `/settings/organization` — and a replay performed there must
   // re-read the row it just stamped, or the DLQ table keeps showing the entry as
   // un-replayed until something else happens to refresh the page.
+  revalidatePath('/settings/workspace/jobs');
+  revalidatePath('/settings/organization');
+  return { ok: true, alreadyReplayed: outcome === 'already-replayed' };
+}
+
+/**
+ * The OPERATOR's replay of a dead letter with no workspace (MOTIR-8083) — the
+ * System tab's Replay control. Transport only: the session, one service call,
+ * typed errors to copy. The platform-operator gate and the "no workspace on the
+ * row" refusal both live in the service, so a non-operator posting this directly
+ * fails exactly as a click would, and so does a workspace's row.
+ *
+ * No workspace context is read: the operator replays across the deployment, and
+ * the row being replayed has no workspace to scope to.
+ */
+export async function replaySystemDlqAction(dlqId: string): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const t = await getErrorsTranslator();
+  if (!dlqId) return { ok: false, error: t('actions.missingDlqId') };
+
+  let outcome: 'replayed' | 'already-replayed';
+  try {
+    ({ outcome } = await jobsDashboardService.replaySystemDLQ({
+      dlqId,
+      userId: session.user.id,
+      userEmail: session.user.email,
+    }));
+  } catch (err) {
+    if (err instanceof SystemReplayForbiddenError) {
+      return { ok: false, error: t('actions.systemReplayOperatorOnly') };
+    }
+    if (err instanceof SystemReplayWorkspaceRowError) {
+      return { ok: false, error: t('actions.systemReplayWorkspaceRow') };
+    }
+    if (err instanceof DlqEntryNotFoundError) {
+      return { ok: false, error: t('actions.dlqGone') };
+    }
+    throw err;
+  }
+
+  // Both doors onto the System tab, as `replayDlqAction` revalidates them.
   revalidatePath('/settings/workspace/jobs');
   revalidatePath('/settings/organization');
   return { ok: true, alreadyReplayed: outcome === 'already-replayed' };
