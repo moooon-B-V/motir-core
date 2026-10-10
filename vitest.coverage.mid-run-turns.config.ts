@@ -31,9 +31,6 @@ import baseConfig from './vitest.config';
 // when a file’s reading rises. CI: the `story-7990-coverage` job, which needs
 // Postgres.
 
-/** The story’s gate: each file below is held to AT LEAST this. */
-const GATE = { statements: 90, branches: 90, functions: 90, lines: 90 } as const;
-
 const MEASURED = [
   'lib/services/planRunContextService.ts',
   'lib/services/planChangeLateChangeService.ts',
@@ -63,6 +60,8 @@ export default defineConfig({
       'tests/ai/runPauseRoutes.test.ts',
       'tests/components/plan-change-mid-run-rail.test.tsx',
       'tests/components/plan-change-run-pause.test.tsx',
+      // The pieces on their own, in every state their props can take.
+      'tests/components/plan-change-mid-run-pieces.test.tsx',
       // The no-run submit path, listed so it is proven UNCHANGED beside the new one.
       'tests/ai/askRoutes.test.ts',
       'tests/ai/askGate.test.ts',
@@ -127,15 +126,22 @@ export default defineConfig({
           functions: 100,
           lines: 100,
         },
-        // ⚠️ THE TWO RAIL COMPONENTS ARE HELD AT THE GATE, NOT AT A MEASURED READING.
-        // They land with the rail work (`components/planning/MidRunTurn.tsx`,
-        // `RunPause.tsx`) and the suites that cover them
-        // (`plan-change-mid-run-rail`, `plan-change-run-pause`), none of which had
-        // merged when this lane was measured. When they have, run
-        // `pnpm coverage:mid-run-turns`, replace these two rows with the readings
-        // rounded down, and date them.
-        'components/planning/MidRunTurn.tsx': GATE,
-        'components/planning/RunPause.tsx': GATE,
+        // The rail components: the rail suites draw them inside the rail, and
+        // `plan-change-mid-run-pieces` draws each piece alone in every state its props
+        // can take (a late revision with no plan to link, a reply the hook has not
+        // matched to an entry, a refusal code the catalogue has no line for).
+        'components/planning/MidRunTurn.tsx': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'components/planning/RunPause.tsx': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
       },
     },
   },

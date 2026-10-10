@@ -3075,8 +3075,8 @@ jobs:
   story-7990-coverage:
     name: Coverage (talk to the planner)
     runs-on: ubuntu-latest
-    # A new lane with no CI run to quote yet. Locally the 10 spec files that exist
-    # today ran in ~1.5 min against Postgres, coverage-instrumented; the ceiling bounds
+    # A new lane with no CI run to quote yet. Locally the 13 spec files ran in
+    # ~1.7 min against Postgres, coverage-instrumented; the ceiling bounds
     # a hang rather than setting a target — replace it with a measured figure.
     timeout-minutes: 20
     needs: changes
