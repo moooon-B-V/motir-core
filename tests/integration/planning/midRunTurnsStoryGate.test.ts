@@ -82,6 +82,8 @@ const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { POST: askRoute } = await import('@/app/api/ai/ask/route');
 const { POST: settleRoute } = await import('@/app/api/ai/ask/settle/route');
 const { POST: lateChanges } = await import('@/app/api/ai/plan-change/session/late-changes/route');
+const { __resetSharedRateLimitStoreForTest } = await import('@/lib/rateLimit/store');
+const { pinSharedRateLimitStoreDeadline } = await import('../../helpers/rateLimitStore');
 const { POST: mailboxRoute } = await import('@/app/api/ai/plan-change/session/mailbox/route');
 const { GET: readPauseRoute, POST: answerPauseRoute } =
   await import('@/app/api/ai/plan-change/session/run-pause/route');
@@ -335,6 +337,10 @@ async function foreignRun() {
 // ─── lifecycle ───────────────────────────────────────────────────────────────
 
 beforeEach(async () => {
+  // The late-changes route is rate-limited; its refusals count through the shared
+  // store, so pin the test-time deadline (MOTIR-3067).
+  __resetSharedRateLimitStoreForTest();
+  pinSharedRateLimitStoreDeadline();
   askSeq = 0;
   keySeq = 0;
   jobs.clear();
