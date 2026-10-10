@@ -7,6 +7,7 @@ import { Clock, History, Undo2 } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import { Bubble } from '@/components/planning/PlanChangeRail';
 import { PlanningTargetChip } from '@/components/planning/PlanningTargetChip';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { PlanChangeTurnDto } from '@/lib/dto/planChange';
 import type { QueuedTurn } from '@/lib/hooks/usePlanChangeConversation';
 
@@ -47,6 +48,7 @@ function Ack({ children, testId }: { children: ReactNode; testId: string }) {
 /** State 10's note: the take-back idiom, a `history` glyph, and a link to the plan. */
 function RevisionNote({ planId }: { planId: string | null }) {
   const tm = useTranslations(`${NS}.midRun`);
+  const routes = useReaderRoutes();
   return (
     <p
       data-testid="plan-change-revision"
@@ -57,7 +59,7 @@ function RevisionNote({ planId }: { planId: string | null }) {
         {tm('revisedNote')}{' '}
         {planId ? (
           <Link
-            href={`/plans/${encodeURIComponent(planId)}`}
+            href={routes.plan(planId)}
             data-testid="plan-change-revision-link"
             className="font-medium text-(--el-link) underline underline-offset-2 hover:text-(--el-link-pressed) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >

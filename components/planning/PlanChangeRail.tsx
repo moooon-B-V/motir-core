@@ -87,6 +87,7 @@ import {
   TargetRefusal,
 } from '@/components/planning/SessionEndParts';
 import { workbenchTabHref } from '@/lib/workbench/tab';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 + 6). Changing
@@ -1929,10 +1930,11 @@ function EarlierNotice({
   projectName: string;
 }) {
   const ts = useTranslations('planningWorkspace.session');
+  const routes = useReaderRoutes();
   const [first, ...rest] = earlier.targetKeys;
   const link = (chunks: React.ReactNode) => (
     <Link
-      href={`/plans?session=${encodeURIComponent(earlier.id)}`}
+      href={routes.view(`/plans?session=${encodeURIComponent(earlier.id)}`)}
       className="font-semibold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
       {chunks}
