@@ -23,7 +23,7 @@
 import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ApprovalGateStateDTO, PlanGateHeldDTO } from '@/lib/dto/approvalGate';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import type { PlanStepDto } from '@/lib/dto/plans';
+import type { PlanNarrationReadDto, PlanStepDto } from '@/lib/dto/plans';
 import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
 import type { ExecutorDto, WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import type {
@@ -1166,6 +1166,18 @@ export interface PlanReviewDto {
    * `getPlanReview` always sets it.
    */
   conversation?: PlanConversationDto | null;
+
+  /**
+   * THE PLANNER'S NARRATION (MOTIR-8063) — every planner session's step words
+   * plus the newest `PLAN_NARRATION_READ_WINDOW` sentences, at EVERY status (unlike
+   * `inFlightSteps`): it is kept history, readable after a session ends and after
+   * the plan is decided. A plan with none carries
+   * `{ sessions: [], entries: [], earlierCount: 0 }`. Earlier sentence pages come
+   * from `GET /api/plans/[id]/narration` (`fetchPlanNarrationPage`). OPTIONAL on
+   * the type only so hand-built review fixtures stay valid; `getPlanReview`
+   * always sets it.
+   */
+  narration?: PlanNarrationReadDto;
 
   items: PlanReviewItemDto[];
   /** The committed edges this plan re-judges (MOTIR-6362) — see

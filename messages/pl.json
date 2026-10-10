@@ -7582,85 +7582,22 @@
           "web": "sieć",
           "lessons": "lekcje",
           "codeRead": "repozytorium"
-        },
-        "call": {
-          "tool": {
-            "skeleton": "Czytanie zarysu planu",
-            "search_work_items": "Szukanie „{query}” w elementach roboczych",
-            "search_work_items_semantic": "Szukanie „{query}” w elementach roboczych",
-            "get_item": "Sprawdzanie {item}",
-            "get_subtree": "Czytanie elementów pod {item}",
-            "walk_blocking": "Śledzenie, co blokuje {item}",
-            "code_search": "Szukanie „{query}” w kodzie",
-            "code_explore": "Badanie kodu wokół „{query}”",
-            "code_callers": "Szukanie miejsc wywołujących {symbol}",
-            "code_callees": "Szukanie funkcji wywoływanych przez {symbol}",
-            "code_impact": "Sprawdzanie skutków zmiany {symbol}",
-            "code_node": "Czytanie {symbol} w grafie kodu",
-            "get_coding_convention": "Czytanie konwencji kodowania",
-            "get_code_health": "Czytanie raportu o kondycji kodu",
-            "read_file": "Czytanie: {path}",
-            "list_changed_files": "Wyświetlanie plików zmienionych w gałęzi",
-            "web_search": "Szukanie „{query}” w sieci",
-            "search_lessons": "Szukanie „{query}” w lekcjach",
-            "lay": "Rozkładanie poziomu pod {parent}",
-            "drill_into": "Otwieranie {parent}, by rozłożyć elementy podrzędne",
-            "propose_node": "Proponowanie „{title}”",
-            "complete_level": "Kończenie tego poziomu",
-            "target_already_covered": "Odnotowywanie, że cel jest już pokryty",
-            "author": "Rozpoczynanie pisania {item}",
-            "deepen_node": "Pisanie opisu i kryteriów akceptacji dla {item}",
-            "raise_gap": "Zgłaszanie luki w planie",
-            "add_item": "Dodawanie „{title}”",
-            "update_item": "Aktualizowanie {item}",
-            "remove_item": "Usuwanie {item}",
-            "log_bug": "Rejestrowanie błędu: „{title}”",
-            "validate_plan": "Sprawdzanie planu",
-            "settle_conversation": "Ustalanie, co zmienić pod {parent}",
-            "ask_user": "Formułowanie pytania",
-            "clear_plan": "Czyszczenie wersji roboczej planu",
-            "search_planning_rules": "Sprawdzanie reguł planowania pod kątem „{query}”",
-            "report_findings": "Spisywanie ustaleń",
-            "log_planning_mistake": "Odnotowywanie błędu planowania",
-            "log_planning_bug": "Rejestrowanie błędu planowania",
-            "classify_revision": "Klasyfikowanie rewizji",
-            "return_to_conversation": "Powrót do rozmowy"
-          },
-          "family": {
-            "plan_tree": "Czytanie planu",
-            "code_graph": "Czytanie grafu kodu",
-            "code_health": "Czytanie kondycji kodu",
-            "code_read": "Czytanie repozytorium",
-            "web": "Szukanie w sieci",
-            "lessons": "Czytanie lekcji",
-            "lay": "Rozkładanie poziomu",
-            "author": "Pisanie elementu",
-            "item": "Zmienianie elementu",
-            "validate": "Sprawdzanie planu",
-            "settle": "Zamykanie rozmowy",
-            "none": "Praca nad planem"
-          },
-          "mark": {
-            "failed": "· niepowodzenie",
-            "refused": "· odrzucono",
-            "skipped": "· pominięto — wyczerpano wyszukiwania"
-          },
-          "count": "{count, plural, one {# wywołanie} few {# wywołania} many {# wywołań} other {# wywołania}}",
-          "countFailed": "{count, plural, one {# wywołanie} few {# wywołania} many {# wywołań} other {# wywołania}} · nieudane: {failed}",
-          "earlier": "{count, plural, one {# wcześniejsze wywołanie} few {# wcześniejsze wywołania} many {# wcześniejszych wywołań} other {# wcześniejszego wywołania}}",
-          "barParallel": "{line} · {title}",
-          "announceFailed": "{line} — niepowodzenie",
-          "announceRefused": "{line} — odrzucono",
-          "full": {
-            "path": "Pełna ścieżka: {value}",
-            "query": "Pełne zapytanie: {value}",
-            "symbol": "Pełna nazwa: {value}",
-            "title": "Pełny tytuł: {value}"
-          }
         }
       },
       "openerFollowUp": "Wybrano właśnie {label}. Motir AI planuje to, co ten wybór blokuje.",
-      "composerPlaceholderGuide": "Powiedz Motir AI, jak poszedł ten krok…"
+      "composerPlaceholderGuide": "Powiedz Motir AI, jak poszedł ten krok…",
+      "narration": {
+        "label": "notatki planisty",
+        "hideAll": "Ukryj notatki planisty ({count})",
+        "showAll": "Pokaż notatki planisty ({count})",
+        "groupCount": "{count, plural, one {# notatka} few {# notatki} many {# notatek} other {# notatki}}",
+        "earlier": "{count, plural, one {# wcześniejsza notatka} few {# wcześniejsze notatki} many {# wcześniejszych notatek} other {# wcześniejszej notatki}}",
+        "done": "· gotowe",
+        "kindSettle": "ustalenie",
+        "settleLine": "Ustala, co zmienić",
+        "groupLive": "{step} — w toku",
+        "groupFinished": "{step} — zakończone"
+      }
     },
     "targets": {
       "sectionLabel": "Elementy robocze",
@@ -8838,6 +8775,13 @@
       "decidedElsewhere": "Rozstrzygnięte gdzie indziej",
       "reconnecting": "Ponowne łączenie…",
       "cleared": "Rozwiązane"
+    },
+    "group": {
+      "expand": "Rozwiń {key}",
+      "collapse": "Zwiń {key}",
+      "count": "{count, plural, one {# element roboczy na tej karcie} few {# elementy robocze na tej karcie} many {# elementów roboczych na tej karcie} other {# elementu roboczego na tej karcie}}",
+      "context": "Nie na tej karcie",
+      "members": "Elementy robocze w {key}"
     },
     "toFix": {
       "reason": {

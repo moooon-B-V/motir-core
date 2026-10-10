@@ -1,5 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { IDEA_CATEGORIES, IDEA_CATEGORY_TRANSLATIONS } from '@/lib/ideas/categories';
 import { IdeaNotFoundError } from '@/lib/ideas/errors';
+import { resolvePublicIdeaLocale } from '@/lib/ideas/publicLocale';
+import { IDEA_TRANSLATION_LOCALES } from '@/lib/ideas/translatableFields';
 import { ideasAdminService } from '@/lib/services/ideasAdminService';
 import { ideasPublicService } from '@/lib/services/ideasPublicService';
 import { truncateAuthTables } from '../helpers/db';
@@ -99,9 +102,10 @@ describe('a locale on the public reads', () => {
     const legal = list.items.find((i) => i.slug === 'legal-team')!;
     expect(legal.title).toBe('Motir buys legal-team');
     expect(legal.fallbackFields).toEqual(['title', 'pitch', 'capabilities', 'whyMotir', 'whoElse']);
-    expect(list.categories.map((c) => c.label)).toEqual(
-      (await ideasPublicService.listActive()).categories.map((c) => c.label),
-    );
+    expect(list.categories.map((c) => [c.slug, c.label])).toEqual([
+      ['legal', '法務'],
+      ['pets', 'ペット'],
+    ]);
 
     expect(await ideasPublicService.listTags('ja')).toEqual([
       { slug: 'pets', label: 'ペット', labelFallback: false, count: 1 },
@@ -147,5 +151,51 @@ describe('a locale on the public reads', () => {
         IdeaNotFoundError,
       );
     }
+  });
+});
+
+describe('category labels in a locale (bug MOTIR-8082)', () => {
+  it('serves zh and ko labels on the list, its category list and one idea, with slugs untouched', async () => {
+    await seed();
+    const english = await ideasPublicService.listActive();
+    for (const [locale, legal, pets] of [
+      ['zh', '法务', '宠物'],
+      ['ko', '법무', '반려동물'],
+    ] as const) {
+      const list = await ideasPublicService.listActive({}, locale);
+      expect(list.categories.map((c) => [c.slug, c.label])).toEqual([
+        ['legal', legal],
+        ['pets', pets],
+      ]);
+      expect(list.items.find((i) => i.slug === 'legal-team')?.category).toEqual({
+        slug: 'legal',
+        label: legal,
+      });
+      expect((await ideasPublicService.getBySlug('clinic', locale)).category).toEqual({
+        slug: 'pets',
+        label: pets,
+      });
+      expect(list.categories.map((c) => c.slug)).toEqual(english.categories.map((c) => c.slug));
+      // The category filter value stays the slug in every locale.
+      expect((await ideasPublicService.listActive({ category: 'pets' }, locale)).total).toBe(1);
+    }
+  });
+
+  it('serves English with no locale, under en, and (via the resolver) for an unsupported code', async () => {
+    await seed();
+    expect((await ideasPublicService.getBySlug('clinic')).category.label).toBe('Pets');
+    expect((await ideasPublicService.getBySlug('clinic', 'en')).category.label).toBe('Pets');
+    const unsupported = resolvePublicIdeaLocale('xx');
+    expect(unsupported).toBe('en');
+    const list = await ideasPublicService.listActive({}, unsupported);
+    expect(list.categories.map((c) => c.label)).toEqual(['Legal', 'Pets']);
+  });
+});
+
+describe('IDEA_CATEGORY_TRANSLATIONS', () => {
+  it('labels every category in every translation locale, non-empty', () => {
+    for (const locale of IDEA_TRANSLATION_LOCALES)
+      for (const category of IDEA_CATEGORIES)
+        expect(IDEA_CATEGORY_TRANSLATIONS[locale][category]?.trim()).toBeTruthy();
   });
 });

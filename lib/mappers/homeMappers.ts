@@ -41,6 +41,8 @@ export function toHomeWorkItemRowDto(row: HomeWorkItemRow, viewerId: string): Ho
     resumeState: row.resumeState,
     resumeRunId: row.resumeRunId,
     resumeMembers: [],
+    groupHead: null,
+    groupMembers: [],
     priority: row.priority,
     assigneeId: row.assigneeId,
     reporterId: row.reporterId,

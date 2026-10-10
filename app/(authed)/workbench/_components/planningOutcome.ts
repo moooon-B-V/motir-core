@@ -54,8 +54,8 @@ export const UNKNOWN_OUTCOME: PlanningRowOutcome = {
  * producer is provably gone, not that anything the reader did failed.
  *
  * A plan still `generating` on the read has not left after all — it is simply
- * absent from one window — so it gets no outcome and the row keeps its progress
- * line. ⚠️ EXCEPT when nothing could have pushed it out of the window
+ * absent from one window — so it gets no outcome and the list drops the row quietly
+ * rather than claiming it is no longer being written. ⚠️ EXCEPT when nothing could have pushed it out of the window
  * (`failedIfGenerating`, the caller's "the ceiling did not bite"): the Planning read leaves
  * out exactly one kind of `generating` plan, the one whose attempt FAILED and now waits in
  * To resume (MOTIR-7914), so a `generating` plan that left an unclipped list is that one.

@@ -27,6 +27,7 @@ import type { RevisionReasonBranch } from '@/lib/plans/revisionReason';
 import type {
   CorrectProposalInput,
   PlanItemDto,
+  PlanNarrationDto,
   PlanStepDto,
   PlanStepKindDto,
   PlanWithItemsDto,
@@ -437,11 +438,16 @@ export const aiGenerationService = {
       jobId: string;
       planId?: string | null;
       sessionKey: string;
-      step: PlanStepKindDto | 'end';
+      step?: PlanStepKindDto | 'end';
       targetRef: string | null;
+      /** The session's own sentences (MOTIR-8062) — sent INSTEAD of `step`. */
+      narration?: string[];
     },
     auth: { ctx: ServiceContext; projectId: string },
-  ): Promise<{ planId: string; step: PlanStepKindDto | 'end'; inFlight: PlanStepDto | null }> {
+  ): Promise<
+    | { planId: string; step: PlanStepKindDto | 'end'; inFlight: PlanStepDto | null }
+    | { planId: string; narration: PlanNarrationDto[] }
+  > {
     const { ctx, projectId } = auth;
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(input.jobId, ctx.workspaceId, tx),
@@ -449,12 +455,22 @@ export const aiGenerationService = {
     if (!plan || plan.projectId !== projectId) throw new NoPlanForJobError(input.jobId);
     if (input.planId && input.planId !== plan.id) throw new NoPlanForJobError(input.jobId);
 
-    const inFlight = await plansService.reportPlanStep(
+    const result = await plansService.reportPlanStep(
       plan.id,
-      { sessionKey: input.sessionKey, step: input.step, targetRef: input.targetRef },
+      {
+        sessionKey: input.sessionKey,
+        targetRef: input.targetRef,
+        ...(input.step !== undefined ? { step: input.step } : {}),
+        ...(input.narration !== undefined ? { narration: input.narration } : {}),
+      },
       ctx,
     );
-    return { planId: plan.id, step: input.step, inFlight };
+    if (result.kind === 'narration') return { planId: plan.id, narration: result.narration };
+    return {
+      planId: plan.id,
+      step: input.step!,
+      inFlight: result.kind === 'step' ? result.step : null,
+    };
   },
 
   async appendProposals(

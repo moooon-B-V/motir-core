@@ -7585,85 +7585,22 @@
           "web": "Web",
           "lessons": "Lektionen",
           "codeRead": "Repository"
-        },
-        "call": {
-          "tool": {
-            "skeleton": "Gliederung des Plans wird gelesen",
-            "search_work_items": "Arbeitselemente werden nach „{query}“ durchsucht",
-            "search_work_items_semantic": "Arbeitselemente werden nach „{query}“ durchsucht",
-            "get_item": "{item} wird nachgeschlagen",
-            "get_subtree": "Elemente unter {item} werden gelesen",
-            "walk_blocking": "Blocker von {item} werden verfolgt",
-            "code_search": "Code wird nach „{query}“ durchsucht",
-            "code_explore": "Code rund um „{query}“ wird erkundet",
-            "code_callers": "Aufrufer von {symbol} werden gesucht",
-            "code_callees": "Von {symbol} Aufgerufenes wird gesucht",
-            "code_impact": "Auswirkungen einer Änderung an {symbol} werden geprüft",
-            "code_node": "{symbol} wird im Code-Graph gelesen",
-            "get_coding_convention": "Coding-Konventionen werden gelesen",
-            "get_code_health": "Code-Health-Bericht wird gelesen",
-            "read_file": "{path} wird gelesen",
-            "list_changed_files": "Geänderte Dateien des Branches werden aufgelistet",
-            "web_search": "Web wird nach „{query}“ durchsucht",
-            "search_lessons": "Lektionen werden nach „{query}“ durchsucht",
-            "lay": "Ebene unter {parent} wird angelegt",
-            "drill_into": "{parent} wird geöffnet, um seine Unterelemente anzulegen",
-            "propose_node": "„{title}“ wird vorgeschlagen",
-            "complete_level": "Diese Ebene wird abgeschlossen",
-            "target_already_covered": "Ziel ist bereits abgedeckt – wird vermerkt",
-            "author": "{item} wird begonnen",
-            "deepen_node": "Beschreibung und Akzeptanzkriterien von {item} werden geschrieben",
-            "raise_gap": "Lücke im Plan wird gemeldet",
-            "add_item": "„{title}“ wird hinzugefügt",
-            "update_item": "{item} wird aktualisiert",
-            "remove_item": "{item} wird entfernt",
-            "log_bug": "Bug wird erfasst: „{title}“",
-            "validate_plan": "Plan wird geprüft",
-            "settle_conversation": "Änderungen unter {parent} werden festgelegt",
-            "ask_user": "Frage an Sie wird geschrieben",
-            "clear_plan": "Planentwurf wird geleert",
-            "search_planning_rules": "Planungsregeln werden nach „{query}“ durchsucht",
-            "report_findings": "Ergebnisse werden zusammengefasst",
-            "log_planning_mistake": "Planungsfehler wird vermerkt",
-            "log_planning_bug": "Planungs-Bug wird erfasst",
-            "classify_revision": "Überarbeitung wird eingeordnet",
-            "return_to_conversation": "Zurück zur Unterhaltung"
-          },
-          "family": {
-            "plan_tree": "Plan wird gelesen",
-            "code_graph": "Code-Graph wird gelesen",
-            "code_health": "Code-Gesundheit wird gelesen",
-            "code_read": "Repository wird gelesen",
-            "web": "Web wird durchsucht",
-            "lessons": "Lektionen werden gelesen",
-            "lay": "Ebene wird angelegt",
-            "author": "Element wird geschrieben",
-            "item": "Element wird geändert",
-            "validate": "Plan wird geprüft",
-            "settle": "Unterhaltung wird abgeschlossen",
-            "none": "Plan wird bearbeitet"
-          },
-          "mark": {
-            "failed": "· fehlgeschlagen",
-            "refused": "· abgelehnt",
-            "skipped": "· übersprungen – keine Abfragen mehr"
-          },
-          "count": "{count, plural, one {# Aufruf} other {# Aufrufe}}",
-          "countFailed": "{count, plural, one {# Aufruf} other {# Aufrufe}} · {failed} fehlgeschlagen",
-          "earlier": "{count, plural, one {# früherer Aufruf} other {# frühere Aufrufe}}",
-          "barParallel": "{line} · {title}",
-          "announceFailed": "{line} – fehlgeschlagen",
-          "announceRefused": "{line} – abgelehnt",
-          "full": {
-            "path": "Vollständiger Pfad: {value}",
-            "query": "Vollständige Abfrage: {value}",
-            "symbol": "Vollständiger Name: {value}",
-            "title": "Vollständiger Titel: {value}"
-          }
         }
       },
       "openerFollowUp": "Sie haben gerade {label} gewählt. Motir AI plant, was davon abhängt.",
-      "composerPlaceholderGuide": "Sagen Sie Motir AI, wie der Schritt gelaufen ist…"
+      "composerPlaceholderGuide": "Sagen Sie Motir AI, wie der Schritt gelaufen ist…",
+      "narration": {
+        "label": "Planer-Notizen",
+        "hideAll": "Planer-Notizen ausblenden ({count})",
+        "showAll": "Planer-Notizen einblenden ({count})",
+        "groupCount": "{count, plural, one {# Notiz} other {# Notizen}}",
+        "earlier": "{count, plural, one {# frühere Notiz} other {# frühere Notizen}}",
+        "done": "· erledigt",
+        "kindSettle": "klären",
+        "settleLine": "Klärt, was sich ändern soll",
+        "groupLive": "{step} — läuft",
+        "groupFinished": "{step} — abgeschlossen"
+      }
     },
     "targets": {
       "sectionLabel": "Arbeitselemente",
@@ -8841,6 +8778,13 @@
       "decidedElsewhere": "Anderswo entschieden",
       "reconnecting": "Verbindung wird wiederhergestellt…",
       "cleared": "Erledigt"
+    },
+    "group": {
+      "expand": "{key} ausklappen",
+      "collapse": "{key} einklappen",
+      "count": "{count, plural, one {# Arbeitselement in diesem Tab} other {# Arbeitselemente in diesem Tab}}",
+      "context": "Nicht in diesem Tab",
+      "members": "Arbeitselemente unter {key}"
     },
     "toFix": {
       "reason": {

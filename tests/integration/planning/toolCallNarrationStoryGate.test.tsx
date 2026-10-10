@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import { createTranslator } from 'next-intl';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -23,7 +23,7 @@ import { createTranslator } from 'next-intl';
 //      for a matched read, and no frame the map does not know.
 //   3. THE SCREEN. The folded record renders in the shipped `PlanChangeRail`, in
 //      en and in zh, mid-run (three parallel author sessions open) and at the
-//      end (every finished step folded behind its count).
+//      end — since MOTIR-8064, with NO call line drawn (see sections 3 and 4).
 //
 // The en/zh catalogue parity this card also asks for is
 // `tests/components/plan-change-catalogue-parity.test.ts` (MOTIR-7979), which
@@ -277,118 +277,71 @@ describe('2 · the fold — one row per call, each mark on its own call', () => 
   });
 });
 
-describe('3 · the screen, mid-run — three author sessions open at once', () => {
+// ⚠️ AMENDED BY STORY MOTIR-8060 · MOTIR-8064. The per-call lines this gate drew
+// were retired for both planners (`design/ai-chat/design-notes.md` § "⭐ Planner
+// narration in the chat panel"): the wire and the fold above are unchanged —
+// motir-ai still emits the frames and the hook still records them — but the
+// screen now draws NONE of them. These two sections pin that absence against the
+// same recording, mid-run and at the end, in en and zh.
+
+const CALL_CHROME = [
+  'plan-change-call',
+  'plan-change-calls',
+  'plan-change-calls-toggle',
+  'plan-change-calls-earlier',
+  'plan-change-call-mark',
+  'plan-change-call-object',
+];
+
+function expectNoCallChrome() {
+  for (const id of CALL_CHROME) expect(screen.queryAllByTestId(id), id).toHaveLength(0);
+}
+
+describe('3 · the screen, mid-run — three author sessions open at once, no call lines', () => {
   // The state right after the three interleaved reads' audits arrive: every
   // author session has started one call, and none has written yet.
   const MID = frameIndexOf('update_item', 1) - 1;
 
   for (const locale of LOCALES) {
-    it(`${locale}: each author step holds its own call, and the bar names the newest one’s card`, async () => {
+    it(`${locale}: each author step renders and none of its calls does; the bar repeats a step`, async () => {
       const t = TR[locale];
       const mid = fold(await readStream())[MID]!;
+      expect(mid.acts.some((a) => a.kind === 'call')).toBe(true);
       renderRail(mid, locale);
 
       const steps = screen.getAllByTestId('plan-change-act-authoring');
       expect(steps).toHaveLength(3);
       const titles = ['First leaf', 'Second leaf', 'Third leaf'];
       steps.forEach((step, i) => {
-        expect(step.getAttribute('data-step')).toBe('open');
         expect(step.textContent).toContain(t('act.authoringLine', { title: titles[i]! }));
-        const calls = within(step).getAllByTestId('plan-change-call');
-        expect(calls).toHaveLength(1);
-        expect(calls[0]!.textContent).toContain(t('act.call.tool.get_item', { item: 'MOTIR-42' }));
       });
+      expect(screen.getByTestId('plan-change-act-laying')).toBeTruthy();
+      expectNoCallChrome();
 
-      // The lay step finished: folded behind its count, which names its failures.
-      const lay = screen.getByTestId('plan-change-act-laying');
-      expect(lay.getAttribute('data-step')).toBe('folded');
-
-      // The newest STARTED call belongs to the third session.
-      expect(screen.getByTestId('plan-change-running-bar').textContent).toContain(
-        t('act.call.barParallel', {
-          line: t('act.call.tool.get_item', { item: 'MOTIR-42' }),
-          title: 'Third leaf',
-        }),
-      );
+      // The bar repeats the newest step row, never a call's object.
+      const bar = screen.getByTestId('plan-change-running-bar').textContent ?? '';
+      expect(bar).toContain(t('act.authoringLine', { title: 'Third leaf' }));
+      expect(bar).not.toContain('MOTIR-42');
     });
   }
 });
 
-describe('4 · the screen, at the end — every finished step folds behind its count', () => {
+describe('4 · the screen, at the end — the steps stand, the calls are not drawn', () => {
   for (const locale of LOCALES) {
-    it(`${locale}: PART 1’s calls stand alone; the lay folds to 17 calls · 6 failed and opens to every line`, async () => {
-      const t = TR[locale];
+    it(`${locale}: no call line, count or mark for any of the recording's calls`, async () => {
       const { acts } = fold(await readStream()).at(-1)!;
       renderRail({ acts, progress: acts.at(-1)! }, locale);
 
-      // PART 1's four calls came before any step: rows of their own.
+      expectNoCallChrome();
+      expect(screen.getAllByTestId('plan-change-act-laying')).toHaveLength(1);
+      expect(screen.getAllByTestId('plan-change-act-authoring')).toHaveLength(3);
       const record = screen.getByTestId('plan-change-acts');
-      const topLevel = [...record.children].filter(
-        (li) => li.getAttribute('data-testid') === 'plan-change-call',
-      );
-      expect(topLevel).toHaveLength(4);
-      expect(topLevel[1]!.textContent).toContain(t('act.call.tool.get_item', { item: 'MOTIR-42' }));
-      expect(topLevel[2]!.textContent).toContain(
-        t('act.call.tool.search_work_items_semantic', { query: 'sign in' }),
-      );
-
-      // The lay: 17 calls, 1 failed read + 5 refusals.
-      const lay = screen.getByTestId('plan-change-act-laying');
-      expect(lay.getAttribute('data-step')).toBe('folded');
-      const toggle = within(lay).getByTestId('plan-change-calls-toggle');
-      expect(toggle.textContent).toBe(t('act.call.countFailed', { count: 17, failed: 6 }));
-      expect(toggle.getAttribute('aria-expanded')).toBe('false');
-      expect(within(lay).getByTestId('plan-change-calls').hidden).toBe(true);
-
-      fireEvent.click(toggle);
-      expect(toggle.getAttribute('aria-expanded')).toBe('true');
-      const list = within(lay).getByTestId('plan-change-calls');
-      expect(list.hidden).toBe(false);
-      const lines = within(list).getAllByTestId('plan-change-call');
-      expect(lines).toHaveLength(17);
-
-      const read = lines.find((li) =>
-        li.textContent?.includes(t('act.call.tool.read_file', { path: 'lib/auth/session.ts' })),
-      );
-      expect(read?.getAttribute('data-outcome')).toBe('running');
-      const missing = lines.find((li) =>
-        li.textContent?.includes(t('act.call.tool.get_item', { item: 'MOTIR-999' })),
-      )!;
-      expect(missing.getAttribute('data-outcome')).toBe('failed');
-      expect(within(missing).getByTestId('plan-change-call-mark').textContent).toContain(
-        t('act.call.mark.failed'),
-      );
-      const refused = lines.filter((li) => li.getAttribute('data-outcome') === 'refused');
-      expect(refused).toHaveLength(5);
-      for (const li of refused) {
-        expect(within(li).getByTestId('plan-change-call-mark').textContent).toContain(
-          t('act.call.mark.refused'),
-        );
-      }
-      // A refused write still reads as its own line.
-      expect(
-        refused.some((li) =>
-          li.textContent?.includes(
-            t('act.call.tool.add_item', { title: 'Session cookie not cleared' }),
-          ),
-        ),
-      ).toBe(true);
-
-      // Each author step kept its own calls through the interleaving.
-      const authors = screen.getAllByTestId('plan-change-act-authoring');
-      const counts = authors.map(
-        (step) => within(step).getByTestId('plan-change-calls-toggle').textContent,
-      );
-      expect(counts).toEqual([
-        t('act.call.countFailed', { count: 3, failed: 1 }),
-        t('act.call.count', { count: 2 }),
-        t('act.call.count', { count: 2 }),
-      ]);
+      expect(record.textContent).not.toContain('lib/auth/session.ts');
+      expect(record.textContent).not.toContain('MOTIR-999');
 
       // One live region, holding only the announcer — never a call.
       const regions = document.querySelectorAll('[aria-live]');
       expect(regions).toHaveLength(1);
-      expect(regions[0]!.querySelectorAll('[data-testid="plan-change-call"]')).toHaveLength(0);
       expect(within(regions[0] as HTMLElement).getByTestId('plan-change-announcer')).toBeTruthy();
     });
   }

@@ -47,6 +47,7 @@
     "lib/**/*.json",
     "generated/**/*.ts",
     "messages/*.json",
+    "messages/sources/*.json",
     "instrumentation.ts",
     "instrumentation-client.ts",
     "proxy.ts",

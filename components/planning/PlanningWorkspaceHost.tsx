@@ -471,6 +471,7 @@ function PlanWorkspaceHost({
     answerRestartConfirm,
     planAgain,
     resume,
+    showEarlierNarration,
   } = usePlanChangeConversation({
     onApproved,
     anchorId,
@@ -1098,6 +1099,7 @@ function PlanWorkspaceHost({
           // A session of the viewer's own, or one the server did not name a starter for, is theirs.
           onResume={() => void resume()}
           canResume={state.reopened?.mine !== false || canManage}
+          onShowEarlierNarration={() => void showEarlierNarration()}
           gateView={gateView}
           declining={declineFrom === 'rail'}
           onRequestDecline={() => setDeclineFrom('rail')}

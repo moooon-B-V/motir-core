@@ -129,7 +129,9 @@ export async function buildPathReferenceAdvisories(
   // (1) THE OTHER NAMERS. The substring read over-matches; each body is re-read
   // with the same extraction and kept only on an exact path.
   const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    workItemRepository.findLiveBodiesContainingAny(projectId, ctx.workspaceId, paths, tx),
+    workItemRepository.findLiveBodiesContainingAny(projectId, ctx.workspaceId, paths, tx, [
+      ...terminalStatusKeys,
+    ]),
   );
   const openNamers = rows
     .filter((row) => !terminalStatusKeys.has(row.status))

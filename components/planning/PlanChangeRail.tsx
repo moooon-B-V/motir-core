@@ -29,6 +29,12 @@ import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
 import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
+import { PlanNarration, narrationHeadLines } from '@/components/planning/PlanNarration';
+import {
+  groupNarration,
+  mergeNarrationEntries,
+  narrationEarlierCount,
+} from '@/components/planning/planNarration';
 import { PlanningTargetKeyChip } from '@/components/planning/PlanningTargetChip';
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
@@ -291,6 +297,8 @@ export interface PlanChangeRailProps {
    * 3c). Absent ⇒ true. False draws the failure line read-only, naming who can.
    */
   canResume?: boolean;
+  /** "N earlier notes" (MOTIR-8064): page earlier narration sentences in. */
+  onShowEarlierNarration?: () => void;
 }
 
 export function PlanChangeRail({
@@ -330,6 +338,7 @@ export function PlanChangeRail({
   onPlanAgain,
   onResume,
   canResume = true,
+  onShowEarlierNarration,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tp = useTranslations('approvalGate.planApproval');
@@ -599,9 +608,21 @@ export function PlanChangeRail({
   // an empty region — the rail never says LESS than it was told.
   const acts: PlanChangeProgress[] =
     state.acts.length > 0 ? state.acts : state.progress ? [state.progress] : [];
+  // THE PLANNER'S NARRATION (MOTIR-8064): the stored read, grouped per session —
+  // the window plus the earlier pages the reader paged in, one derivation.
+  const narration = state.narration ?? null;
+  const narrationEntries = narration
+    ? mergeNarrationEntries(state.narrationKept?.earlier ?? [], narration.entries)
+    : [];
+  const narrationGroups = narration
+    ? groupNarration(
+        { sessions: narration.sessions, entries: narrationEntries },
+        state.narrationKept?.live ?? [],
+      )
+    : [];
   const logRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
-  const actCount = acts.length;
+  const actCount = acts.length + narrationEntries.length;
   useEffect(() => {
     const el = logRef.current;
     if (!el || !stickRef.current || actCount === 0) return;
@@ -919,7 +940,24 @@ export function PlanChangeRail({
           </Bubble>
         ) : null}
 
-        <PlanActRecord acts={acts} streaming={state.phase === 'streaming'} />
+        <PlanActRecord
+          acts={acts}
+          streaming={state.phase === 'streaming'}
+          sessionHeads={narrationGroups.some((group) => group.session !== null)}
+          heads={narrationHeadLines(narrationGroups, tc)}
+        />
+        {/* THE PLANNER'S OWN WORDS (Story MOTIR-8060 · MOTIR-8064;
+            `plan-change-run-live--narration.mock.html`): one group per session
+            under its stored step words, from the review read — so it is all
+            here again on reopen, after the plan ends, and for a Visitor. It is
+            not a turn: no thread reader sees it. */}
+        <PlanNarration
+          groups={narrationGroups}
+          total={narration ? narration.earlierCount + narration.entries.length : 0}
+          earlierCount={narrationEarlierCount(narrationEntries)}
+          loadingEarlier={state.narrationKept?.loadingEarlier ?? false}
+          {...(onShowEarlierNarration ? { onShowEarlier: onShowEarlierNarration } : {})}
+        />
 
         {/* STOPPED — a MARKER, not an alert (MOTIR-4068).
             It uses the shipped `system`-marker line verbatim: centred,
@@ -1269,7 +1307,7 @@ export function PlanChangeRail({
                   // lookup names its family (MOTIR-4069).
                   // With per-call lines (MOTIR-7975) that is the open step's newest
                   // call, and with parallel author sessions `{line} · {title}`.
-                  line: runningBarLine(acts, true, tc) ?? tc('progress.submitted'),
+                  line: runningBarLine(acts, tc) ?? tc('progress.submitted'),
                   stopping: state.stopping,
                   onStop,
                 }

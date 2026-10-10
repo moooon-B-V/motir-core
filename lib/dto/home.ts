@@ -126,6 +126,21 @@ export interface HomeWorkItemRowDto {
    * they stand now. Absent on every other tab.
    */
   resumeRun?: ResumeRunDto | null;
+  /**
+   * THE GROUPED WORK TABS ONLY — To do, In progress, Recently finished (Story MOTIR-8012 ·
+   * MOTIR-8015; `design/workbench/design-notes.md` § 36): whether this row HEADS a group of
+   * the tab's items. `'member'` — the row is on the tab AND heads tab items, drawn once;
+   * `'context'` — the row is NOT on the tab, and is here only so its members have their
+   * runnable container. `null` on a standalone row, and on every other tab.
+   */
+  groupHead: 'member' | 'context' | null;
+  /**
+   * THE GROUPED WORK TABS ONLY: the tab's items under this head, in group order, the head
+   * excluded. The group row's count IS `groupMembers.length` — there is no separate count
+   * field, so the count cannot disagree with the list. Empty on a standalone row and on
+   * every other tab.
+   */
+  groupMembers: HomeWorkItemRowDto[];
   /** The OPEN repair on a sent-back row — the lock that replaces both repairs while it
    *  runs (`hosted-agent-run.md` §8.6). Read only by the To fix read; `null` elsewhere. */
   repairRun: OpenRepairRunDto | null;
@@ -189,7 +204,12 @@ export interface HomePageDto {
    * and the shipped pager are unchanged.
    */
   planningSessions?: ToResumePlanningSessionDto[];
-  /** The size of the whole SET this page is a window on — the pager's denominator. */
+  /**
+   * The size of the whole SET this page is a window on — the pager's denominator. On
+   * To do, In progress and Recently finished it counts GROUPS (a standalone row is a
+   * group of one; MOTIR-8015), as it counts entries on To fix and To resume. The strip
+   * counts (`HomeTabCountsDto`) stay item counts, so the two may differ by design.
+   */
   total: number;
   /** The 1-based page actually served, after clamping. */
   page: number;

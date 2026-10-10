@@ -28,6 +28,12 @@ import {
 // 422. Checking "target required" here would be a second copy of that rule, and
 // the copy that refuses real steps.
 //
+// NARRATION (Story MOTIR-8060 · MOTIR-8062): the body may carry
+// `narration: string[]` — the session's own plain-language sentences — INSTEAD
+// of `step`, never with it and never with a `target`. They are appended to the
+// plan's kept history; the caps and the "session holds a step" rule are the
+// store's (`plansService.recordPlanNarration`). Exactly one of the two is sent.
+//
 // The signal is ADVISORY, so every refusal is a stable `{ code, error }` and
 // never a 500: the walk matches the code and carries on.
 //
@@ -81,11 +87,23 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof sessionKey !== 'string') {
     return fail(INVALID, '`sessionKey` is required and must be a string.', 400);
   }
-  if (!isStep(step)) {
+  const { narration } = b;
+  if ((step === undefined) === (narration === undefined)) {
+    return fail(INVALID, 'Send exactly one of `step` or `narration`.', 400);
+  }
+  if (step !== undefined && !isStep(step)) {
     return fail(INVALID, `\`step\` must be one of: ${STEPS.join(', ')}.`, 400);
   }
   if (target != null && typeof target !== 'string') {
     return fail(INVALID, '`target` must be a string.', 400);
+  }
+  if (narration !== undefined) {
+    if (!Array.isArray(narration) || narration.some((s) => typeof s !== 'string')) {
+      return fail(INVALID, '`narration` must be an array of strings.', 400);
+    }
+    if (target != null) {
+      return fail(INVALID, 'A `narration` call names no `target`.', 400);
+    }
   }
 
   try {
@@ -94,8 +112,9 @@ export async function POST(req: Request): Promise<Response> {
         jobId,
         planId: (planId as string | undefined) ?? null,
         sessionKey,
-        step,
         targetRef: (target as string | undefined) ?? null,
+        ...(step !== undefined ? { step: step as Step } : {}),
+        ...(narration !== undefined ? { narration: narration as string[] } : {}),
       },
       auth,
     );

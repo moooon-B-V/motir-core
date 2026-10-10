@@ -371,6 +371,32 @@ describe('workItemRepository.findLiveBodiesContainingAny', () => {
       ),
     ).toEqual([]);
   });
+
+  // MOTIR-8074: N `contains` terms were N full scans; one regex alternation must
+  // return exactly the same rows, and regex metacharacters in a path are literal.
+  it('matches any needle literally, and drops excluded statuses in the query', async () => {
+    const fx = await setup();
+    const a = await card(fx, 'Names a', creates('docs/a.b/page.mdx'));
+    const b = await card(fx, 'Names b', creates('docs/b+(c)/page.mdx'));
+    await card(fx, 'Names neither', creates('docs/axb/page.mdx'));
+    const read = (needles: string[], exclude: string[] = []) =>
+      withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findLiveBodiesContainingAny(
+          fx.projectId,
+          fx.workspaceId,
+          needles,
+          tx,
+          exclude,
+        ),
+      );
+    const ids = async (needles: string[], exclude?: string[]) =>
+      (await read(needles, exclude)).map((r) => r.id).sort();
+    expect(await ids(['docs/a.b/page.mdx', 'docs/b+(c)/page.mdx'])).toEqual([a.id, b.id].sort());
+    // `.` is a literal dot: `docs/a.b` must not match `docs/axb`.
+    expect(await ids(['docs/a.b/page.mdx'])).toEqual([a.id]);
+    const status = (await read(['docs/a.b/page.mdx']))[0]!.status;
+    expect(await ids(['docs/a.b/page.mdx'], [status])).toEqual([]);
+  });
 });
 
 describe('buildPathReferenceAdvisories — the host-read cap', () => {

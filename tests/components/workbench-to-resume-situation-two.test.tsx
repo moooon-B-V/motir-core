@@ -119,6 +119,8 @@ function gatedRun(): HomeWorkItemRowDto {
     resumeMembers: [],
     canFixHosted: false,
     repairRun: null,
+    groupHead: null,
+    groupMembers: [],
   } as HomeWorkItemRowDto;
 }
 

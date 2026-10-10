@@ -169,6 +169,37 @@ export interface PlanStalenessService {
   computePlanStaleness(planId: string, ctx: ServiceContext): Promise<PlanStalenessDto>;
 }
 
+/**
+ * Whether a plan in this status can have anything to report. Only an UNDECIDED plan can be stale
+ * (`planned`, or `stale` once it has been marked); a `generating` plan is still being written and a
+ * decided one is finished, so both are all-clear by construction — the rule the header above states.
+ */
+export function planStatusCanBeStale(status: string): boolean {
+  return status === 'planned' || status === 'stale';
+}
+
+/**
+ * The verdict for a plan that {@link planStatusCanBeStale} rules out: every item not stale, shaped per
+ * item so a caller that maps over `items` needs no second code path. It takes the items the caller
+ * ALREADY HOLDS, so it reads nothing — `getPlanReview` polls a `generating` plan every 2.5 s and used
+ * to re-read the plan and every item (each with its full body) only to build this constant (MOTIR-8103).
+ */
+export function allClearStaleness(
+  planId: string,
+  items: ReadonlyArray<{ id: string; workItemId: string | null }>,
+): PlanStalenessDto {
+  return {
+    planId,
+    stale: false,
+    items: items.map((item) => ({
+      planItemId: item.id,
+      workItemId: item.workItemId,
+      stale: false,
+      reasons: [],
+    })),
+  };
+}
+
 export const planStalenessService: PlanStalenessService = {
   async computePlanStaleness(planId: string, ctx: ServiceContext): Promise<PlanStalenessDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -186,18 +217,7 @@ export const planStalenessService: PlanStalenessService = {
     // caller that maps over `items` needs no second code path; it just has
     // nothing to report. The access checks above still run, so this is not a
     // cheaper answer to a question the caller was not allowed to ask.
-    if (plan.status !== 'planned' && plan.status !== 'stale') {
-      return {
-        planId,
-        stale: false,
-        items: items.map((item) => ({
-          planItemId: item.id,
-          workItemId: item.workItemId,
-          stale: false,
-          reasons: [],
-        })),
-      };
-    }
+    if (!planStatusCanBeStale(plan.status)) return allClearStaleness(planId, items);
 
     // --- Collect the distinct work-item ids the rules will read (real refs
     //     only; intra-plan temp-refs resolve at materialize, never stale). ---

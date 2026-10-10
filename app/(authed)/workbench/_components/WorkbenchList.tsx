@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -15,11 +15,17 @@ import { IssueListPager } from '../../items/_components/IssueListPager';
 import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 import { HostedModelsProvider } from '@/components/hosted/HostedModelsProvider';
 import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
+import { INDENT_PX } from '@/components/ui/TreeTable';
 import { useLiveRows } from './useLiveRows';
+import { ContextMarker, GroupChevron, GroupCount, GroupSlot } from './WorkbenchGroupRow';
 import { WorkbenchFixLine } from './WorkbenchFixLine';
 import { WorkbenchResumeLine } from './WorkbenchResumeLine';
 import { PlanningSessionResumeEntry } from './PlanningSessionResumeEntry';
-import type { WorkbenchRowView } from './workbenchRows';
+import {
+  initiallyExpandedGroups,
+  workbenchGroupDisplayRows,
+  type WorkbenchRowView,
+} from './workbenchRows';
 import type { ToResumePlanningSessionDto } from '@/lib/dto/home';
 import type { ReactNode } from 'react';
 
@@ -277,6 +283,7 @@ function WorkbenchRow({
   held = false,
   viewerId = null,
   onContinueStarted,
+  group = null,
 }: {
   row: WorkbenchRowView;
   showFinished: boolean;
@@ -292,15 +299,36 @@ function WorkbenchRow({
   viewerId?: string | null;
   /** A Continue hosted press started, or found the row stale: re-read the page. */
   onContinueStarted?: () => void;
+  /**
+   * A GROUPED work tab's row (§ 36): what leads the title — the group's chevron or the
+   * reserved slot — whether it is a member indented under its head, and, on a group row,
+   * the count and whether the head is only context. `null` on every other tab.
+   */
+  group?: {
+    lead: ReactNode;
+    child: boolean;
+    /** Set on a GROUP row: whether its head is on the tab or only context. */
+    head?: 'member' | 'context';
+    count?: ReactNode;
+  } | null;
 }) {
   const t = useTranslations('workbench');
   const finishedLabel = useFinishedLabel();
+  // A CONTEXT head (§ 36.2) is not on the tab: it keeps its Status pill, which says where
+  // the container is, and drops what would read as the reader's — role, assignee, CI and a
+  // finish it has not had. Its title goes secondary, still AA on the hover fill.
+  const context = group?.head === 'context';
   const gridTemplateColumns = showFinished ? GRID_TEMPLATE_FINISHED : GRID_TEMPLATE;
   const cells = (
     <>
       <div role="cell" className="flex min-w-0 items-center">
         <RowLink row={row} label={`${row.identifier} ${row.title}`} />
-        <span className="flex min-w-0 items-center gap-2">
+        <span
+          className="flex min-w-0 items-center gap-2"
+          // A member sits one tree level in: `TreeTable`'s indent, `/ready`'s `ml-[22px]`.
+          style={group?.child ? { marginLeft: INDENT_PX } : undefined}
+        >
+          {group?.lead}
           <IssueTypeIcon type={row.kind} className="h-4 w-4 shrink-0" />
           {/* ⚠️ `--el-text-secondary`, NOT the `--el-text-muted` the /items row
               uses for the same identifier. Muted clears AA on the white page by
@@ -317,11 +345,12 @@ function WorkbenchRow({
               'min-w-0 flex-1 truncate group-hover:underline',
               // A HELD row's title goes secondary (§ 30 Panel 3) — still AA on the
               // `--el-surface` hover fill.
-              held ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
+              held || context ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
             )}
           >
             {row.title}
           </span>
+          {group?.count}
           {/* THE CI BADGE (MOTIR-5475), in the TITLE cell and in its GLYPH form —
               the same placement and the same shared rule as the `/items` row.
               The column set above is UNCHANGED: the title track is the only
@@ -329,7 +358,9 @@ function WorkbenchRow({
               622px minimum and its measured 440px title track at 1200 both hold.
               *Recently finished* needs no special case — it lists done-category
               items, and `ciBadgeState` draws nothing for those. */}
-          <CiStateBadge ciState={row.ciState} statusCategory={row.statusCategory} form="glyph" />
+          {context ? null : (
+            <CiStateBadge ciState={row.ciState} statusCategory={row.statusCategory} form="glyph" />
+          )}
           {/* ARRIVED under the reader (§ 26, Panel 1) — a WORD in the shipped
               neutral `Pill`, kept until the next load. It rides at the end of
               the title cell, which at `< md` is the end of the row's first line. */}
@@ -339,23 +370,32 @@ function WorkbenchRow({
 
       {/* The meta line. `md:contents` promotes these three to grid children of
           the row at `md`; below it they wrap as one indented flex line. */}
-      <div role="presentation" className="flex flex-wrap items-center gap-2 pl-6 md:contents">
+      <div
+        role="presentation"
+        className="flex flex-wrap items-center gap-2 pl-6 md:contents"
+        // Narrow keeps the member's indent on its second line too (§ 36.8).
+        style={group?.child ? { paddingLeft: 24 + INDENT_PX } : undefined}
+      >
         <div role="cell" className="flex min-w-0 items-center">
-          <span
-            className={cn(
-              'truncate text-xs',
-              // `Both` takes weight as well as ink — the non-colour redundant
-              // cue (finding #35), and the one value worth spotting.
-              row.role === 'both'
-                ? 'font-medium text-(--el-text-strong)'
-                : 'text-(--el-text-secondary)',
-            )}
-          >
-            {t(`row.role.${row.role}`)}
-          </span>
+          {context ? (
+            <ContextMarker />
+          ) : (
+            <span
+              className={cn(
+                'truncate text-xs',
+                // `Both` takes weight as well as ink — the non-colour redundant
+                // cue (finding #35), and the one value worth spotting.
+                row.role === 'both'
+                  ? 'font-medium text-(--el-text-strong)'
+                  : 'text-(--el-text-secondary)',
+              )}
+            >
+              {t(`row.role.${row.role}`)}
+            </span>
+          )}
         </div>
         <div role="cell" className="flex min-w-0 items-center">
-          <AssigneeCell row={row} />
+          {context ? null : <AssigneeCell row={row} />}
         </div>
         <div role="cell" className="flex min-w-0 items-center">
           <StatusValue
@@ -370,7 +410,7 @@ function WorkbenchRow({
         {showFinished ? (
           <div role="cell" className="flex min-w-0 items-center">
             <span className="truncate text-xs text-(--el-text-secondary)">
-              {row.completedAt ? finishedLabel(row.completedAt) : ''}
+              {row.completedAt && !context ? finishedLabel(row.completedAt) : ''}
             </span>
           </div>
         ) : null}
@@ -480,7 +520,10 @@ function WorkbenchRow({
   return (
     <div
       role="row"
-      data-testid={`workbench-row-${row.identifier}`}
+      data-testid={
+        group?.head ? `workbench-group-${row.identifier}` : `workbench-row-${row.identifier}`
+      }
+      data-group-head={group?.head}
       className={cn(
         rowClass,
         'flex flex-col gap-1 px-4 py-2.5',
@@ -547,6 +590,108 @@ function splitWatchingGroups(rows: WorkbenchRowView[]): {
 /** A stable empty default — `useLiveRows` compares its input by identity. */
 const NO_SESSIONS: ToResumePlanningSessionDto[] = [];
 
+/** The three tabs that draw their items under a runnable container (§ 36). */
+const GROUPED_TABS: ReadonlySet<WorkbenchTab> = new Set(['todo', 'in-progress', 'finished']);
+
+/** A member, tagged with the head it was sent under so a HELD member keeps its group. */
+interface MemberEntry {
+  headId: string;
+  row: WorkbenchRowView;
+}
+
+/**
+ * The page's expand state (§ 36.5): client-local, keyed by container id, never in the
+ * URL. It survives a live update and resets on the next LOAD — a pager move or a tab
+ * switch, which is `resetKey`; a reload remounts. A page holding exactly one group opens
+ * it on that load.
+ */
+function useExpandedGroups(
+  rows: readonly WorkbenchRowView[],
+  resetKey: string,
+): [ReadonlySet<string>, (id: string) => void] {
+  const [state, setState] = useState(() => ({
+    resetKey,
+    open: initiallyExpandedGroups(rows) as ReadonlySet<string>,
+  }));
+  let open = state.open;
+  if (state.resetKey !== resetKey) {
+    open = initiallyExpandedGroups(rows);
+    setState({ resetKey, open });
+  }
+  const toggle = (id: string) =>
+    setState((prev) => {
+      const next = new Set(prev.open);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { ...prev, open: next };
+    });
+  return [open, toggle];
+}
+
+/**
+ * One group (§ 36.3): the head as a group row and, when open, its members one level in.
+ * Its own `rowgroup`, named for the container, which is the structure the eye gets too.
+ */
+function WorkbenchGroup({
+  head,
+  members,
+  open,
+  count,
+  arrived,
+  arrivedIds,
+  showFinished,
+  onToggle,
+}: {
+  head: WorkbenchRowView;
+  /** The members to draw — the server's, plus any held in place (§ 36.7). */
+  members: WorkbenchRowView[];
+  open: boolean;
+  /** The server's count; `null` once the group is held after its last member left. */
+  count: number | null;
+  /** The group row carries `New`: the group arrived, or a member did while it was shut. */
+  arrived: boolean;
+  arrivedIds: ReadonlySet<string>;
+  showFinished: boolean;
+  onToggle: () => void;
+}) {
+  const t = useTranslations('workbench.group');
+  const id = useId();
+  const kind = head.groupHead === 'context' ? 'context' : 'member';
+  return (
+    <div
+      role="rowgroup"
+      id={id}
+      aria-label={t('members', { key: head.identifier })}
+      data-testid={`workbench-group-members-${head.identifier}`}
+    >
+      <WorkbenchRow
+        row={head}
+        showFinished={showFinished}
+        arrived={arrived}
+        group={{
+          lead: (
+            <GroupChevron itemKey={head.identifier} open={open} controls={id} onToggle={onToggle} />
+          ),
+          child: false,
+          head: kind,
+          count: <GroupCount count={count} />,
+        }}
+      />
+      {open
+        ? members.map((member) => (
+            <WorkbenchRow
+              key={member.id}
+              row={member}
+              showFinished={showFinished}
+              arrived={arrivedIds.has(member.id)}
+              group={{ lead: <GroupSlot />, child: true }}
+            />
+          ))
+        : null}
+    </div>
+  );
+}
+
 export function WorkbenchList({
   rows,
   label,
@@ -607,13 +752,26 @@ export function WorkbenchList({
   // settled-row rule is about a decision queue. A card that moves To do → In
   // progress leaving the To do list is the list being correct, and holding it
   // would show a card in a tab it is no longer in with nothing to explain why.
-  const live = useLiveRows(rows, `${tab}:${pagination.page}`, (row) => row.id);
+  const resetKey = `${tab}:${pagination.page}`;
+  const live = useLiveRows(rows, resetKey, (row) => row.id);
   // The sessions take the SAME held-row rule (§ 35.5): a Resumed entry stays until the next load.
   const liveSessions = useLiveRows(
     planningSessions,
-    `${tab}:${pagination.page}:sessions`,
+    `${resetKey}:sessions`,
     (entry) => entry.sessionId,
   );
+  // THE GROUPED TABS (§ 36.7, § 26 unchanged). The heads above take today's rule: an
+  // arrival is marked, a row that leaves is kept in place unmarked until the next load —
+  // so a group whose last member left is held WHOLE. The members take the same rule one
+  // level down, tracked over the page's flattened member set so the mark lands on the
+  // member that arrived, inside its group.
+  const grouped = GROUPED_TABS.has(tab);
+  const memberEntries = useMemo<MemberEntry[]>(
+    () => rows.flatMap((head) => head.groupMembers.map((row) => ({ headId: head.id, row }))),
+    [rows],
+  );
+  const liveMembers = useLiveRows(memberEntries, resetKey, (entry) => entry.row.id);
+  const [expanded, toggleGroup] = useExpandedGroups(rows, resetKey);
 
   // These tabs hold nothing (see the note above), so `live.rows` empties exactly
   // when the server's does — the branch reads the live set anyway, so the two
@@ -635,6 +793,28 @@ export function WorkbenchList({
     (isToResume && live.rows.some((row) => row.canContinueHosted && row.resume !== null));
 
   const groups = tab === 'watching' ? splitWatchingGroups(live.rows) : null;
+
+  // The server's count for each head on the page; a held head has none to draw.
+  const serverCount = new Map(rows.map((head) => [head.id, head.groupMembers.length]));
+  const membersOf = (headId: string) =>
+    liveMembers.rows.filter((entry) => entry.headId === headId).map((entry) => entry.row);
+  // A page's lines, in the service's order, cut into rowgroups: each group its own, and
+  // each run of standalone rows one between them.
+  const segments: (
+    | { type: 'group'; head: WorkbenchRowView }
+    | { type: 'rows'; rows: WorkbenchRowView[] }
+  )[] = [];
+  if (grouped) {
+    for (const line of workbenchGroupDisplayRows(live.rows, expanded)) {
+      if (line.type === 'group') segments.push({ type: 'group', head: line.head });
+      else if (line.child) continue;
+      else {
+        const last = segments[segments.length - 1];
+        if (last?.type === 'rows') last.rows.push(line.row);
+        else segments.push({ type: 'rows', rows: [line.row] });
+      }
+    }
+  }
   const list = (
     <div
       data-surface="card"
@@ -706,6 +886,38 @@ export function WorkbenchList({
               </div>
             ) : null}
           </>
+        ) : grouped ? (
+          segments.map((segment) =>
+            segment.type === 'group' ? (
+              <WorkbenchGroup
+                key={segment.head.id}
+                head={segment.head}
+                members={membersOf(segment.head.id)}
+                open={expanded.has(segment.head.id)}
+                count={serverCount.get(segment.head.id) ?? null}
+                arrived={
+                  live.arrivedIds.has(segment.head.id) ||
+                  (!expanded.has(segment.head.id) &&
+                    membersOf(segment.head.id).some((m) => liveMembers.arrivedIds.has(m.id)))
+                }
+                arrivedIds={liveMembers.arrivedIds}
+                showFinished={showFinished}
+                onToggle={() => toggleGroup(segment.head.id)}
+              />
+            ) : (
+              <div role="rowgroup" key={`rows-${segment.rows[0]!.id}`}>
+                {segment.rows.map((row) => (
+                  <WorkbenchRow
+                    key={row.id}
+                    row={row}
+                    showFinished={showFinished}
+                    arrived={live.arrivedIds.has(row.id)}
+                    group={{ lead: <GroupSlot />, child: false }}
+                  />
+                ))}
+              </div>
+            ),
+          )
         ) : (
           <div role="rowgroup">
             {live.rows.map((row) => (

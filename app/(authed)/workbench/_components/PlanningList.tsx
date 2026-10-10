@@ -111,9 +111,23 @@ export function PlanningList({
     try {
       const review = await fetchPlanReview(planId, signal);
       const outcome = planningOutcomeOf(review, { failedIfGenerating: !ceilingBitesRef.current });
-      // Still `generating`: it was absent from one window, not finished. Nothing
-      // is recorded, so the next read can hold it again.
-      if (!outcome) return;
+      // Still `generating`: it left the window (e.g. past the ceiling), it did not
+      // finish — so "no longer being written" would be false. The row is dropped
+      // quietly; if it returns to the page, the merge treats it as an arrival.
+      if (!outcome) {
+        setTracked((current) => {
+          if (!current.heldIds.has(planId)) return current;
+          const heldIds = new Set(current.heldIds);
+          heldIds.delete(planId);
+          return {
+            ...current,
+            rows: current.rows.filter((row) => row.planId !== planId),
+            heldIds,
+          };
+        });
+        requestedRef.current.delete(planId);
+        return;
+      }
       setOutcomes((current) => new Map(current).set(planId, outcome));
     } catch {
       // The read failed, so the row says the one thing the poll proved: it is no

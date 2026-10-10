@@ -220,6 +220,22 @@ export interface HomeWorkItemRow {
 }
 
 /**
+ * One work item of a Workbench work tab, narrowed to what GROUPING needs (Story
+ * MOTIR-8012 · MOTIR-8014): its parent, and the fields `groupRank` /
+ * `compareReadyPosition` rank on (kind, priority, key) plus the Recently finished
+ * axis (`completedAt`). The full row is read later, for one page only, through
+ * {@link workItemRepository.findHomeRowsByIds}.
+ */
+export interface HomeGroupingRow {
+  id: string;
+  parentId: string | null;
+  kind: HomeWorkItemRow['kind'];
+  priority: HomeWorkItemRow['priority'];
+  key: HomeWorkItemRow['key'];
+  completedAt: HomeWorkItemRow['completedAt'];
+}
+
+/**
  * The Prisma `select` producing a {@link HomeWorkItemRow}. Exported because the
  * WATCHING read projects the same row through the `watcher.workItem` relation —
  * one shape, one place, so the two tabs can never drift into rendering different
@@ -980,6 +996,11 @@ function pointsAggExpr(
   return Prisma.sql`COALESCE(SUM(${col})${filter}, 0)`;
 }
 
+/** Escape a string for use as a literal inside a Postgres ARE (regex) alternation. */
+function escapeRegexLiteral(value: string): string {
+  return value.replace(/[\\^$.|?*+()[\]{}]/g, '\\$&');
+}
+
 export const workItemRepository = {
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<WorkItem | null> {
     const client = tx ?? dbRead;
@@ -1467,6 +1488,43 @@ export const workItemRepository = {
   },
 
   /**
+   * THE WHOLE SLICE of a grouped Workbench work tab — To do, In progress or Recently
+   * finished — as six narrow fields per item (Story MOTIR-8012 · MOTIR-8014).
+   *
+   * ⚠️ UNWINDOWED, BECAUSE GROUPING MUST SEE EVERY MEMBER BEFORE IT CAN CUT A PAGE: a
+   * group ranks by its BEST member, and that member can sit anywhere in the tab. The
+   * service groups these rows in memory, cuts a page of whole groups, and reads full
+   * rows for that page only — the two-step shape To fix uses
+   * ({@link listToFixGroupKeysByAssigneeOrReporterInWorkspace}). Bounded by what it
+   * reads: the reader's own items in the active project, six narrow columns.
+   *
+   * The `where` is {@link homeMembershipWhere}'s — the FOURTH reader of it, after the
+   * list, the count and the watermark — so the set is the tab's set, row for row. The
+   * order is `homeOrderBy`'s, only so the read is stable; the service re-ranks.
+   */
+  async listHomeGroupingRowsByAssigneeOrReporterInWorkspace(
+    userId: string,
+    workspaceId: string,
+    projectScopes: readonly HomeProjectScope[],
+    options: HomeMembershipOptions,
+    tx: Prisma.TransactionClient,
+  ): Promise<HomeGroupingRow[]> {
+    if (projectScopes.length === 0) return [];
+    return tx.workItem.findMany({
+      where: homeMembershipWhere(userId, workspaceId, projectScopes, options),
+      select: {
+        id: true,
+        parentId: true,
+        kind: true,
+        priority: true,
+        key: true,
+        completedAt: true,
+      },
+      orderBy: homeOrderBy(options.sortField ?? 'updatedAt'),
+    });
+  },
+
+  /**
    * TO FIX's ENTRY KEYS, in the tab's order (MOTIR-7589; `design/workbench/design-notes.md`
    * § 34.2) — every card on the reader's To fix slice, as `{ id, fixDetail }` only.
    *
@@ -1626,7 +1684,8 @@ export const workItemRepository = {
 
   /**
    * Workbench rows BY ID (MOTIR-7589) — the members and heads of a page of To fix
-   * entries, in the shared {@link HOME_WORK_ITEM_SELECT} projection plus `parentId`
+   * entries, AND (MOTIR-8014) the page rows and context heads of the grouped work
+   * tabs (To do, In progress, Recently finished), in the shared {@link HOME_WORK_ITEM_SELECT} projection plus `parentId`
    * (the head rule follows ancestry). Workspace-gated; archived and triaged rows
    * excluded, so a card that left since the keys were read is simply not returned.
    */
@@ -3242,12 +3301,18 @@ export const workItemRepository = {
    * empty needle list short-circuits rather than issuing a degenerate `OR []`,
    * which Prisma reads as match-nothing on some versions and match-everything on
    * none — not a question worth asking. Read-only path → `dbRead`.
+   *
+   * `excludeStatuses` drops rows already known to be irrelevant IN the query (the
+   * service passes the project's terminal set), so a mostly-finished project does
+   * not pay to scan history it will discard. Matching is one regex alternation
+   * over the escaped needles — see the note at the pattern.
    */
   async findLiveBodiesContainingAny(
     projectId: string,
     workspaceId: string,
     needles: string[],
     tx?: Prisma.TransactionClient,
+    excludeStatuses: readonly string[] = [],
   ): Promise<
     Array<{
       id: string;
@@ -3259,22 +3324,31 @@ export const workItemRepository = {
   > {
     if (needles.length === 0) return [];
     const client = tx ?? dbRead;
-    return client.workItem.findMany({
-      where: {
-        projectId,
-        workspaceId,
-        archivedAt: null,
-        triagedAt: null,
-        OR: needles.map((needle) => ({ descriptionMd: { contains: needle } })),
-      },
-      select: {
-        id: true,
-        identifier: true,
-        status: true,
-        descriptionMd: true,
-        targetRepos: true,
-      },
-    });
+    // ONE regex alternation, not `OR` of N `contains` (MOTIR-8074). Each
+    // `LIKE '%needle%'` term is its own full pass over every body in the project,
+    // so N needles cost N scans — measured at 7.4 s for 26 absent needles and
+    // 53 s for 200 over 8,000 × 14 KB bodies, past the 5 s transaction budget. The
+    // alternation is compiled to one automaton and read in a single pass (0.8 s /
+    // 2.1 s on the same data). The paths this is asked about are, by construction,
+    // mostly ABSENT files, which is the worst case for the `OR` form.
+    const pattern = needles.map(escapeRegexLiteral).join('|');
+    return client.$queryRaw<
+      Array<{
+        id: string;
+        identifier: string;
+        status: string;
+        descriptionMd: string | null;
+        targetRepos: string[];
+      }>
+    >`
+      SELECT w."id", w."identifier", w."status", w."descriptionMd", w."targetRepos"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND w."triagedAt" IS NULL
+          AND NOT (w."status" = ANY(${[...excludeStatuses]}::text[]))
+          AND w."descriptionMd" ~ ${pattern}`;
   },
 
   /**

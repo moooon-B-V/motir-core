@@ -21,6 +21,7 @@ import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
+import { homePageItems } from '../helpers/homePage';
 
 // MOTIR-5477 — THE STORY'S SEAM GATE.
 //
@@ -199,7 +200,7 @@ async function fromWorkbench(s: Scenario, itemId: string): Promise<string | null
     homeService.listInProgress(ctx),
     homeService.listToFix(ctx),
   ]);
-  return [...inProgress.items, ...toFix.items].find((r) => r.id === itemId)?.ciState;
+  return [...homePageItems(inProgress), ...toFix.items].find((r) => r.id === itemId)?.ciState;
 }
 
 const ciAst = (value: string): FilterAst => ({

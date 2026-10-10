@@ -570,9 +570,10 @@ describe('the LIVE island — the poll (§ 36.7, § 36.8)', () => {
     mount(page([row({ planId: 'p1' }), row({ planId: 'p2' })], 60));
     await poll();
 
-    const heldRow = screen.getByTestId('planning-row-p1');
-    expect(heldRow.textContent).not.toContain(en.workbench.planningSession.left.title);
-    expect(heldRow.textContent).toContain('No longer being written.');
+    // Past the ceiling it did not finish and did not fail: the row is dropped quietly (main's
+    // rule), never read as the failed form.
+    expect(screen.queryByTestId('planning-row-p1')).toBeNull();
+    expect(document.body.textContent).not.toContain(en.workbench.planningSession.left.title);
   });
 
   it('a LATE response never overwrites a newer one', async () => {
