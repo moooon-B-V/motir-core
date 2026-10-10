@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
 import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
-import { MotirAiError } from '@/lib/ai/errors';
 import { mapPlanChangeError } from '@/app/api/ai/plan-change/_errors';
 import { planChangeRunPauseService } from '@/lib/services/planChangeRunPauseService';
 
@@ -85,10 +84,9 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     const mapped = mapPlanChangeError(err);
+    // `mapPlanChangeError` already answers a `MotirAiError` (502) and an out-of-credits
+    // one (402), so no branch of its own is needed here.
     if (mapped) return mapped;
-    if (err instanceof MotirAiError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 502 });
-    }
     throw err;
   }
 }

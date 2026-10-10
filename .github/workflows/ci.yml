@@ -3062,6 +3062,60 @@ jobs:
       - run: pnpm prisma migrate deploy
       - run: pnpm coverage:bug-filing
 
+  # Story MOTIR-7990 (talk to the planner while it plans) — MOTIR-8003's story gate
+  # and per-file floor over the files the story added in core
+  # (`vitest.coverage.mid-run-turns.config.ts`): the run snapshot, the late revision,
+  # the planner's mid-run pause (table, service and both doors) and the two rail
+  # components that draw it, measured by the gate spec that drives the doors over
+  # Postgres plus each card's own suites, and the shipped ask suites beside them so
+  # the no-run submit path is proven unchanged.
+  #
+  # It needs Postgres (the session lock, the mailbox, the pause rows) and the package
+  # build (the component suites import the design system), like `story-7631-coverage`.
+  story-7990-coverage:
+    name: Coverage (talk to the planner)
+    runs-on: ubuntu-latest
+    # A new lane with no CI run to quote yet. Locally the 10 spec files that exist
+    # today ran in ~1.5 min against Postgres, coverage-instrumented; the ceiling bounds
+    # a hang rather than setting a target — replace it with a measured figure.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-7990
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-7990
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-7990.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-7990.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:mid-run-turns
+
   # Story MOTIR-1626 (9.8, the review agent) — MOTIR-6826's story gate: a per-file
   # floor over the server files the story created (`vitest.coverage.review-agent.config.ts`),
   # measured by the story journeys plus the per-card server suites. Needs Postgres, and
@@ -3211,6 +3265,7 @@ jobs:
         story-7974-coverage,
         story-7602-coverage,
         story-7797-coverage,
+        story-7990-coverage,
         e2e,
         e2e-at-scale,
         sandbox,
