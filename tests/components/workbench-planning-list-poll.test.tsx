@@ -143,6 +143,30 @@ describe('PlanningList — the poll’s remaining arms', () => {
     expect(planReads).toHaveLength(1);
   });
 
+  it('a still-generating answer that lands after the row is back in the window leaves it alone', async () => {
+    let answer: ((res: Response) => void) | null = null;
+    const slow = new Promise<Response>((resolve) => {
+      answer = resolve;
+    });
+    let polls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (String(input) === '/api/plans/p1') return slow;
+        polls += 1;
+        return json(polls === 1 ? page([row('p2')], 1) : page([row('p1'), row('p2')], 2));
+      }),
+    );
+    mount(page([row('p1'), row('p2')], 2));
+
+    await poll(2);
+    expect(screen.getByTestId('planning-row-p1').dataset['held']).not.toBe('true');
+    await act(async () => {
+      answer?.(json({ status: 'generating', decisionReason: null }));
+    });
+    expect(screen.getByTestId('planning-row-p1')).toBeTruthy();
+  });
+
   it('a failure that lands AFTER a newer read was applied says nothing about now', async () => {
     let fail: ((err: Error) => void) | null = null;
     const slow = new Promise<never>((_, reject) => {
