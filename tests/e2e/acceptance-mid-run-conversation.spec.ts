@@ -96,12 +96,14 @@ const byId = (page: Page, id: string) => rail(page).getByTestId(id);
 const userTurn = (page: Page, text: string) =>
   byId(page, 'conversation-user-turn').filter({ hasText: text });
 /**
- * The work item the run is anchored on. The canvas opens INSIDE a container anchor
- * (MOTIR-6154), so a proposal the planner writes under it is drawn on the open level;
- * one written at the project root would only be counted in the arrivals offer.
+ * The work item whose children the canvas is showing. A run started from the anchor
+ * story opens the overlay on the anchor's own level (the breadcrumb reads
+ * Roadmap › Authentication), so a proposal the planner writes UNDER THE EPIC is drawn
+ * there; one written under the anchor itself, or at the project root, would only be
+ * counted in the arrivals offer ("1 new in …  Go there").
  */
 const anchorId = async () =>
-  (await adminDb.workItem.findFirstOrThrow({ where: { identifier: seed.loginKey } })).id;
+  (await adminDb.workItem.findFirstOrThrow({ where: { identifier: seed.authEpicKey } })).id;
 /** A proposal card on the canvas, by the title it shows. */
 const node = (page: Page, title: string) =>
   workspace(page).getByTestId('plan-item-node').filter({ hasText: title });
