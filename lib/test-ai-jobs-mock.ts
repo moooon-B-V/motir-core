@@ -46,6 +46,20 @@ export interface AskJobOutcome {
   /** A `debug` verdict ECHOES the anchor the turn was sent with (A1.2), which the
    *  dispatch re-resolves rather than trusts. */
   anchorKey?: string;
+  /**
+   * RUN MODE (Story MOTIR-7990 · MOTIR-8004), declared only by a spec that types
+   * into a planning run still in progress. Each is passed onto `result.ask`
+   * exactly as `intent` / `answer` / `citations` are, and ONLY when declared, so
+   * every other reply is byte-identical to before.
+   *
+   * `forward` — on a `plan_change`, the words to forward to the RUNNING planner;
+   * core only compares it to two texts it already holds.
+   * `offerForward` — on an `ask`, the turn the handler was unsure was a change.
+   * `run` — whether the answering session could read the run snapshot.
+   */
+  forward?: { text: string } | null;
+  offerForward?: { text: string } | null;
+  run?: { readable: boolean; reason?: string | null } | null;
 }
 
 /**
@@ -113,7 +127,23 @@ export interface GuideJobOutcome {
  * end the session on (AMENDMENT 23 §2).
  */
 export interface PlanJobOutcome {
-  status?: 'succeeded' | 'failed';
+  /**
+   * `running` HOLDS the run in progress (Story MOTIR-7990 · MOTIR-8004): `GET
+   * /v1/jobs/:id` answers `running` with no result, and the stream never reaches
+   * a terminal frame — it hands the relay back `done { timedOut: true }` windows,
+   * which `followJobStream` follows by subscribing again, exactly as it does for a
+   * long real run. A spec ENDS the run by rewriting this entry to `succeeded` (or
+   * `failed`). ⚠️ The lane had no run that was ever *in progress* before this:
+   * every `plan` job settled as an instant success and closed its stream at once.
+   */
+  status?: 'succeeded' | 'failed' | 'running';
+  /**
+   * On a `succeeded` run: send the terminal `status` frame motir-ai sends when a
+   * job ends. Off by default (the shipped success stream is `search`, `done`), so
+   * every existing reply is unchanged; a spec that needs the rail to SEE the walk
+   * end — which is what fires the late-changes claim — turns it on.
+   */
+  statusFrame?: boolean;
   /**
    * The planner's UTTERANCE for a succeeded run (Story MOTIR-7797 · MOTIR-7809),
    * returned as `result.turn` — the shape `readPlanningTurn`
@@ -136,6 +166,17 @@ export interface SubmittedJob {
    * `POST /api/internal/ai/log-bug` — exactly as motir-ai would for that job.
    */
   readBackToken?: string;
+  /**
+   * The RUN SNAPSHOT an `ask_project` submit carried (`context.run`, Story
+   * MOTIR-7990 · MOTIR-8004): the plan the typed-into run is writing, and whether
+   * the answering session could read it. Present only on a mid-run ask, so a spec
+   * can tell a question typed into a run from one typed into none.
+   */
+  runPlanId?: string;
+  runReadable?: boolean;
+  /** A `plan` submit's `context.planId` — set on a REVISION of that plan, absent
+   *  on a run that starts a plan of its own. */
+  planId?: string;
 }
 
 export interface AiJobsFixture {
@@ -180,6 +221,9 @@ export interface AiJobsFixture {
 
 const json = { headers: { 'content-type': 'application/json' } } as const;
 
+/** How long one held-run stream window lasts before the relay subscribes again. */
+const HELD_WINDOW_MS = 400;
+
 function fixturePath(): string | null {
   return process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ?? null;
 }
@@ -210,11 +254,15 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
   if (!p) return index;
   try {
     const token = kind === 'plan' && !refused ? readBackTokenOf(rawBody) : null;
+    const snapshot = submitContext(rawBody);
     const entry: SubmittedJob = {
       kind,
       hasCode: submitCarriesCode(rawBody),
       ...(refused ? { refused } : { jobId: jobIdFor(kind, index) }),
       ...(token ? { readBackToken: token } : {}),
+      ...(snapshot.runPlanId !== undefined ? { runPlanId: snapshot.runPlanId } : {}),
+      ...(snapshot.runReadable !== undefined ? { runReadable: snapshot.runReadable } : {}),
+      ...(kind === 'plan' && snapshot.planId !== undefined ? { planId: snapshot.planId } : {}),
     };
     f.submitted = [...(f.submitted ?? []), entry];
     writeFixtureFileSync(p, JSON.stringify(f, null, 2));
@@ -238,6 +286,30 @@ function readBackTokenOf(rawBody: string): string | null {
     return typeof token === 'string' && token !== '' ? token : null;
   } catch {
     return null;
+  }
+}
+
+/** The run snapshot (`context.run`) and plan (`context.planId`) a submit carried. */
+function submitContext(rawBody: string): {
+  runPlanId?: string;
+  runReadable?: boolean;
+  planId?: string;
+} {
+  try {
+    const context = (JSON.parse(rawBody) as { context?: Record<string, unknown> }).context ?? {};
+    const run = context['run'];
+    const runRecord =
+      typeof run === 'object' && run !== null ? (run as Record<string, unknown>) : null;
+    const runPlanId = runRecord?.['planId'];
+    const runReadable = runRecord?.['readable'];
+    const planId = context['planId'];
+    return {
+      ...(typeof runPlanId === 'string' ? { runPlanId } : {}),
+      ...(typeof runReadable === 'boolean' ? { runReadable } : {}),
+      ...(typeof planId === 'string' ? { planId } : {}),
+    };
+  } catch {
+    return {};
   }
 }
 
@@ -283,6 +355,22 @@ function planOutcomeAt(n: number): PlanJobOutcome {
 function planRunFails(jobId: string): boolean {
   const { kind, index } = kindOf(jobId);
   return kind === 'plan' && planOutcomeAt(index).status === 'failed';
+}
+
+/** Whether a succeeded planning run should also send the terminal `status` frame. */
+function planRunReportsStatus(jobId: string): boolean {
+  const { kind, index } = kindOf(jobId);
+  if (kind !== 'plan') return false;
+  const outcome = planOutcomeAt(index);
+  return (
+    outcome.statusFrame === true && outcome.status !== 'failed' && outcome.status !== 'running'
+  );
+}
+
+/** Whether this job is a planning run the fixture is HOLDING in progress. */
+function planRunHeld(jobId: string): boolean {
+  const { kind, index } = kindOf(jobId);
+  return kind === 'plan' && planOutcomeAt(index).status === 'running';
 }
 
 /** The routing verdict for the `n`-th routing run, with the last entry repeating. */
@@ -406,6 +494,33 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
     })
     .persist();
 
+  // GET /v1/jobs/:id/stream for a planning run the fixture HOLDS in progress.
+  //
+  // ⚠️ REGISTERED BEFORE THE GENERAL STREAM ON PURPOSE: undici tries interceptors
+  // in registration order and this one's path predicate is true only for a held
+  // run, so every other job falls through to the general reply below untouched.
+  // A held run answers each subscription with `status: running` and the stream
+  // WINDOW's `done { timedOut: true }`, which the relay (`followJobStream`) follows
+  // by subscribing again — the same loop a long real run makes. The delay is what
+  // keeps that loop from spinning: one window is a few hundred milliseconds, not a
+  // busy poll of this file. Rewriting the run to `succeeded` / `failed` makes the
+  // predicate false, so the NEXT window gets the terminal reply.
+  pool
+    .intercept({
+      path: (p) => {
+        const m = /^\/v1\/jobs\/([^/?]+)\/stream(\?|$)/.exec(p);
+        return m ? planRunHeld(decodeURIComponent(m[1]!)) : false;
+      },
+      method: 'GET',
+    })
+    .reply(() => ({
+      statusCode: 200,
+      data: `event: search\ndata: {}\n\nevent: status\ndata: {"status":"running"}\n\nevent: done\ndata: {"timedOut":true}\n\n`,
+      responseOptions: { headers: { 'content-type': 'text/event-stream' } },
+    }))
+    .delay(HELD_WINDOW_MS)
+    .persist();
+
   // GET /v1/jobs/:id/stream — the SSE the relay forwards to the rail.
   //
   // ⚠️ It carries the REAL frame vocabulary rather than assistant tokens: the
@@ -419,7 +534,9 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       // dead run: a terminal `status: failed` frame, then the close.
       const data = planRunFails(id)
         ? `event: search\ndata: {}\n\nevent: status\ndata: {"status":"failed"}\n\nevent: done\ndata: {}\n\n`
-        : `event: search\ndata: {}\n\nevent: done\ndata: {}\n\n`;
+        : planRunReportsStatus(id)
+          ? `event: search\ndata: {}\n\nevent: status\ndata: {"status":"succeeded"}\n\nevent: done\ndata: {}\n\n`
+          : `event: search\ndata: {}\n\nevent: done\ndata: {}\n\n`;
       return {
         statusCode: 200,
         data,
@@ -443,6 +560,10 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       // exactly what the ENVELOPE contract says anyway (per-kind, additive).
       const outcome = askOutcomeAt(index);
       const routing = routingOutcomeAt(index);
+      if (planRunHeld(id)) {
+        const held: Record<string, unknown> = { status: 'running', result: null };
+        return { statusCode: 200, data: held, responseOptions: json };
+      }
       if (planRunFails(id)) {
         const data: Record<string, unknown> = {
           status: 'failed',
@@ -492,6 +613,12 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                 answer: outcome.answer ?? null,
                 citations: outcome.citations ?? [],
                 ...(outcome.anchorKey ? { anchorKey: outcome.anchorKey } : {}),
+                // Run mode (MOTIR-8004): present only when the fixture declared them.
+                ...(outcome.forward !== undefined ? { forward: outcome.forward } : {}),
+                ...(outcome.offerForward !== undefined
+                  ? { offerForward: outcome.offerForward }
+                  : {}),
+                ...(outcome.run !== undefined ? { run: outcome.run } : {}),
               },
             }
           : kind === 'debug_bug' && debugBugOutcomeAt(index).debugBug !== undefined
