@@ -262,7 +262,7 @@ describe('the relay — a failed attempt is RECORDED, not ended', () => {
     });
 
     it.each(['planned', 'stale'] as const)(
-      'a session whose latest plan is %s ends as before (situation 2 is a sibling card)',
+      'a session whose latest plan is %s keeps it: the failure is recorded, nothing ends (MOTIR-7936)',
       T,
       async (status) => {
         const sessionId = await openSession(await seedCard(), { lastJobId: 'job-1' });
@@ -278,8 +278,8 @@ describe('the relay — a failed attempt is RECORDED, not ended', () => {
         );
 
         const s = await sessionRow(sessionId);
-        expect(s.endReason).toBe('failed');
-        expect(s.failedAt).toBeNull();
+        expect(s.endedAt).toBeNull();
+        expect(s.failedAt).not.toBeNull();
         expect((await planRow(plan.id)).status).toBe(status);
       },
     );

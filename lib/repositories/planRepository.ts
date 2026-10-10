@@ -133,6 +133,67 @@ export const planRepository = {
     });
   },
 
+  /** How many of a session's plans WAIT FOR A DECISION (`planned` / `stale`), leaving one
+   *  out — the end arms' guard (MOTIR-7936): a session holding a plan a person is yet to
+   *  decide is never ended by a failure beside it. `excludePlanId` is the plan being
+   *  declined, so it never counts itself. */
+  async countAwaitingDecisionBySession(
+    sessionId: string,
+    excludePlanId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.plan.count({
+      where: {
+        sessionId,
+        status: { in: ['planned', 'stale'] },
+        ...(excludePlanId ? { id: { not: excludePlanId } } : {}),
+      },
+    });
+  },
+
+  /**
+   * `planned` / `stale` plans whose revision lease is HELD BY A JOB THAT STARTED BEFORE
+   * `olderThan` and never ended: the latest `revision_started` row has no later
+   * `revision_ended`. The sweep's backstop for a revision whose failure no relay saw
+   * (MOTIR-7936). Cross-workspace — runs under the system context against the plan and
+   * plan_revision system-read policies.
+   */
+  async listStaleRevisionCandidates(
+    olderThan: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      id: string;
+      workspaceId: string;
+      projectId: string;
+      sessionId: string | null;
+      sourceJobId: string | null;
+      leaseStartedAt: Date;
+    }>
+  > {
+    return tx.$queryRaw`
+      SELECT p."id", p."workspace_id" AS "workspaceId", p."project_id" AS "projectId",
+             p."session_id" AS "sessionId", p."source_job_id" AS "sourceJobId",
+             (SELECT max(r."changed_at") FROM "plan_revision" r
+               WHERE r."plan_id" = p."id" AND r."change_kind" = 'revision_started') AS "leaseStartedAt"
+      FROM "plan" p
+      WHERE p."status" IN ('planned', 'stale')
+        AND EXISTS (
+          SELECT 1 FROM "plan_revision" s
+          WHERE s."plan_id" = p."id" AND s."change_kind" = 'revision_started'
+            AND s."changed_at" <= ${olderThan}
+            AND NOT EXISTS (
+              SELECT 1 FROM "plan_revision" e
+              WHERE e."plan_id" = p."id" AND e."change_kind" = 'revision_ended'
+                AND (e."changed_at", e."id") > (s."changed_at", s."id")
+            )
+        )
+      ORDER BY p."created_at" ASC, p."id" ASC
+      LIMIT ${limit}
+    `;
+  },
+
   /**
    * A session's LATEST plan with what a RESUME checks (MOTIR-7916): its id, status and the
    * job that wrote it. Read cheaply before a job is spent and again under the locks before

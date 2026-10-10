@@ -5,6 +5,7 @@ import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessio
 import {
   endSessionForAbandonedPlan,
   recordFailureWithin,
+  settleFailedJob,
 } from '@/lib/services/planSessionEndService';
 import { getJob } from '@/lib/ai/motirAiClient';
 import { failureRecordFrom, type JobWalkStop } from '@/lib/planChange/failureRecord';
@@ -174,7 +175,13 @@ export type AbandonedPlanOutcome =
   /** A failure nobody watched, RECORDED on the open session — the plan stays
    *  `generating` and the session waits in To resume (MOTIR-7912). */
   | { planId: string; projectId: string; outcome: 'awaiting_resume'; reason: AbandonReason }
-  | { planId: string; projectId: string; outcome: 'left_as_is'; reason: KeepReason };
+  | { planId: string; projectId: string; outcome: 'left_as_is'; reason: KeepReason }
+  /** A revision whose job died and whose failure no relay saw: its lease is given back and
+   *  the failure recorded on the plan's session (MOTIR-7936). */
+  | { planId: string; projectId: string; outcome: 'revision_failed'; reason: AbandonReason }
+  /** A revision whose job ended without a failure (canceled, or finished without closing
+   *  its lease): the lease is given back, nothing recorded (MOTIR-7936). */
+  | { planId: string; projectId: string; outcome: 'revision_released'; reason: AbandonReason };
 
 export interface AbandonedPlanSweepSummary {
   /** Candidate plans examined this pass. */
@@ -284,6 +291,29 @@ export function classifySessionCandidate(
   return { action: 'decline' };
 }
 
+/**
+ * The decision table for a REVISION whose lease was never closed (MOTIR-7936), pure: given
+ * what the revision's job says and how long the lease has been open, what became of it?
+ * Reuses {@link classifyAbandonedCandidate} for "is the producer coming back" and adds
+ * the one distinction a revision needs — a `failed` (or vanished, or aged-out) job is a
+ * failure to record; a `canceled` or `succeeded` one only owes its lease back.
+ */
+export function classifyRevisionCandidate(
+  job: PlanJobStateDto | null,
+  ageMs: number,
+):
+  | { action: 'fail'; reason: AbandonReason }
+  | { action: 'release'; reason: AbandonReason }
+  | { action: 'keep'; reason: KeepReason } {
+  const verdict = classifyAbandonedCandidate(job, ageMs);
+  if (!verdict.abandoned) return { action: 'keep', reason: verdict.reason };
+  if (verdict.reason === 'job_terminal' && job?.status !== 'failed') {
+    return { action: 'release', reason: verdict.reason };
+  }
+  // A revision always has a job; a missing one is a lease nobody can end.
+  return { action: 'fail', reason: verdict.reason };
+}
+
 async function readWalkStop(jobId: string, coreProjectId: string): Promise<JobWalkStop | null> {
   try {
     return (await getJob(jobId, coreProjectId)).walkStop ?? null;
@@ -337,8 +367,6 @@ export const abandonedPlanService = {
     const candidates = await withSystemContext((tx) =>
       planRepository.listAbandonedCandidates(olderThan, batchSize, tx),
     );
-    if (candidates.length === 0) return { scanned: 0, declined: 0, outcomes: [] };
-
     const outcomes: AbandonedPlanOutcome[] = [];
     for (const plan of candidates) {
       // ASK only when there is somebody to ask (MOTIR-3236). A candidate with no
@@ -496,6 +524,61 @@ export const abandonedPlanService = {
         outcome: 'declined',
         reason: verdict.reason,
       });
+    }
+
+    // THE REVISION BACKSTOP (MOTIR-7936): a `planned` / `stale` plan whose revision lease was
+    // opened by a job that died unseen. The relay settles the ordinary case at once; this
+    // gives the lease back — and records the failure — for the one nobody was watching.
+    const stale = await withSystemContext((tx) =>
+      planRepository.listStaleRevisionCandidates(olderThan, batchSize, tx),
+    );
+    for (const plan of stale) {
+      if (!plan.sourceJobId) continue;
+      const job = await deps.resolveJobState(plan.sourceJobId, plan.projectId);
+      const decision = classifyRevisionCandidate(
+        job,
+        now.getTime() - new Date(plan.leaseStartedAt).getTime(),
+      );
+      if (decision.action === 'keep') {
+        outcomes.push({
+          planId: plan.id,
+          projectId: plan.projectId,
+          outcome: 'left_as_is',
+          reason: decision.reason,
+        });
+        continue;
+      }
+      const settled = await settleFailedJob(
+        plan.sourceJobId,
+        { userId: '', workspaceId: plan.workspaceId, projectId: plan.projectId },
+        { status: decision.action === 'fail' ? 'failed' : 'canceled' },
+        deps.getJobWalkStop
+          ? {
+              readJob: async (jobId, projectId) => ({
+                error: job?.failure ?? null,
+                walkStop: await deps.getJobWalkStop!(jobId, projectId),
+              }),
+            }
+          : {},
+      ).catch((err: unknown) => {
+        console.warn(`[abandoned-plan-sweep] settling the revision of plan ${plan.id} failed`, err);
+        return null;
+      });
+      outcomes.push(
+        settled
+          ? {
+              planId: plan.id,
+              projectId: plan.projectId,
+              outcome: decision.action === 'fail' ? 'revision_failed' : 'revision_released',
+              reason: decision.reason,
+            }
+          : {
+              planId: plan.id,
+              projectId: plan.projectId,
+              outcome: 'left_as_is',
+              reason: 'row_moved',
+            },
+      );
     }
 
     return {

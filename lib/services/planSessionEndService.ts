@@ -122,6 +122,31 @@ export async function endSessionWithin(
     if (!stillIdle) return { ended: false, session: fresh };
   }
 
+  // NO END ARM ENDS A SESSION THAT HOLDS A PLAN WAITING FOR A DECISION (MOTIR-7936). A
+  // failure beside a `planned` / `stale` plan is a failed REVISION or a failed second
+  // attempt, and the plan a person is yet to decide must not be taken from them with the
+  // session. Only the failed attempt's own `generating` plan is declined (`abandoned`) and
+  // its plan-held locks given back; the session stays open with no failure record.
+  if (
+    reason === 'failed' &&
+    (await planRepository.countAwaitingDecisionBySession(sessionId, null, tx)) > 0
+  ) {
+    if (latestPlanId) {
+      const plan = await planRepository.findById(latestPlanId, workspaceId, tx);
+      if (plan?.status === 'generating') {
+        await planRepository.update(
+          plan.id,
+          { status: 'declined', decidedAt: now, decidedById: null, decisionReason: 'abandoned' },
+          tx,
+        );
+      }
+      if (plan && (plan.status === 'generating' || plan.status === 'declined')) {
+        await planTargetLockService.releaseForPlanWithin(plan.id, by.actor, tx, { system: true });
+      }
+    }
+    return { ended: false, session: fresh };
+  }
+
   const session = await planChangeSessionRepository.update(
     sessionId,
     {
@@ -287,7 +312,11 @@ export async function recordFailureWithin(
   if (!fresh || fresh.endedAt) return 'ended';
   if (opts.onlyPlanId !== undefined && latestPlanId !== opts.onlyPlanId) return 'not_latest';
   const plan = latestPlanId ? await planRepository.findById(latestPlanId, workspaceId, tx) : null;
-  if (plan?.status !== 'generating') return 'plan_not_generating';
+  // A failed REVISION leaves a `planned` / `stale` plan beside the failure (MOTIR-7936):
+  // the session still waits, and the plan stays decidable.
+  if (plan?.status !== 'generating' && plan?.status !== 'planned' && plan?.status !== 'stale') {
+    return 'plan_not_generating';
+  }
   return (await planChangeSessionRepository.markFailed(sessionId, record, tx))
     ? 'recorded'
     : 'ended';
@@ -295,8 +324,10 @@ export async function recordFailureWithin(
 
 /** What a settled failure came to. */
 export interface SettleFailedJobResult {
-  settled: 'recorded' | 'ended';
-  sessionId: string;
+  /** `released`: a failed or canceled REVISION gave its lease back and no failure was
+   *  recorded (a canceled job, or a plan with no open conversation session). */
+  settled: 'recorded' | 'ended' | 'released';
+  sessionId: string | null;
 }
 
 /** The seam a test replaces: what motir-ai says about the failed job. */
@@ -327,6 +358,12 @@ export async function settleFailedJob(
   input: { status: 'failed' | 'canceled'; lastPosition?: JobWalkPosition | null },
   deps: SettleFailedJobDeps = {},
 ): Promise<SettleFailedJobResult | null> {
+  // A REVISION'S JOB first (MOTIR-7936): a job that is the `sourceJobId` of a `planned` /
+  // `stale` plan is a revision (or a late failure of the walk that wrote it), and settling
+  // it gives the plan's lease back at once instead of leaving it to expire.
+  const revision = await settleFailedRevision(jobId, ctx, input, deps);
+  if (revision) return revision;
+
   const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
     planChangeSessionRepository.findByProjectAndLastJobId(
       ctx.projectId,
@@ -358,6 +395,87 @@ export async function settleFailedJob(
   if (outcome === 'recorded') return { settled: 'recorded', sessionId: session.id };
   if (outcome === 'ended') return null;
   return end();
+}
+
+/**
+ * SETTLE A FAILED OR CANCELED REVISION (MOTIR-7936). Resolves the plan the job writes
+ * (`sourceJobId`, status `planned` / `stale`); then, in ONE transaction taking the plan's
+ * lock and then its session's (the order every decision body takes):
+ *
+ *   * releases the revision lease — idempotent, so a relay and the sweep settling one
+ *     failure leave ONE `revision_ended` row;
+ *   * for a `failed` job whose plan names an OPEN `conversation` session, records the
+ *     failure on it (the session keeps its plan and waits in To resume).
+ *
+ * A job whose plan has moved on (re-pointed at a newer job, decided) is left alone:
+ * the holder check below runs under the lock. Returns `null` when the job is no
+ * revision's, so the caller falls through to the session arm.
+ */
+async function settleFailedRevision(
+  jobId: string,
+  ctx: { userId: string; workspaceId: string; projectId: string },
+  input: { status: 'failed' | 'canceled'; lastPosition?: JobWalkPosition | null },
+  deps: SettleFailedJobDeps,
+): Promise<SettleFailedJobResult | null> {
+  const located = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+    const plan = await planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx);
+    if (!plan || (plan.status !== 'planned' && plan.status !== 'stale')) return null;
+    const session = plan.sessionId
+      ? await planChangeSessionRepository.findById(plan.sessionId, ctx.workspaceId, tx)
+      : null;
+    const signer =
+      plan.createdById ??
+      session?.createdById ??
+      (await workspaceMembershipRepository.findStandInManagerByWorkspace(ctx.workspaceId, tx))
+        ?.userId ??
+      null;
+    return { plan, session, signer };
+  });
+  if (!located || !located.signer) return null;
+  const { plan, session, signer } = located;
+  const recordable = input.status === 'failed' && session && session.origin === 'conversation';
+
+  const job = recordable
+    ? await (deps.readJob ?? readFailedJob)(jobId, ctx.projectId).catch(() => null)
+    : null;
+  const record = recordable
+    ? failureRecordFrom({
+        failedJobId: jobId,
+        now: new Date(),
+        walkStop: job?.walkStop ?? null,
+        lastPosition: input.lastPosition ?? null,
+        error: job?.error ?? null,
+      })
+    : null;
+
+  return withWorkspaceContext(
+    { userId: signer, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+    async (tx) => {
+      await planRepository.lockById(plan.id, tx);
+      const fresh = await planRepository.findById(plan.id, ctx.workspaceId, tx);
+      // Moved on under us: a newer job writes it, or it was decided. Not this job's to settle.
+      if (!fresh || fresh.sourceJobId !== jobId) return null;
+      if (fresh.status !== 'planned' && fresh.status !== 'stale') return null;
+      // Loaded lazily: `plansService` imports this module for its decision transactions, so a
+      // static import back would close the cycle this file's header warns about.
+      const { plansService } = await import('@/lib/services/plansService');
+      await plansService.releaseRevisionLeaseWithin(
+        tx,
+        plan.id,
+        { userId: signer, workspaceId: ctx.workspaceId },
+        { source: null, harness: null, model: null },
+        { failed: true, jobId, status: input.status },
+        { closeExpired: true },
+      );
+      if (record && session) {
+        const outcome = await recordFailureWithin(tx, session.id, ctx.workspaceId, record, {
+          onlyPlanId: plan.id,
+        });
+        if (outcome === 'recorded') return { settled: 'recorded', sessionId: session.id };
+      }
+      return { settled: 'released', sessionId: session?.id ?? null } as const;
+    },
+  );
 }
 
 async function readFailedJob(jobId: string, coreProjectId: string) {

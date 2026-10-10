@@ -7253,26 +7253,50 @@ export const plansService = {
       async (tx) => {
         const locked = await planRepository.lockById(planId, tx);
         if (!locked) throw new PlanNotFoundError(planId);
-        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
-        if (!fresh) throw new PlanNotFoundError(planId);
-        const held = revisionLeaseOf(
-          await planRevisionRepository.listByPlan(planId, tx),
-          new Date(),
-        );
-        if (!held) return { planId, released: false };
-        await planRevisionsService.recordRevision(
-          {
-            planId,
-            changeKind: REVISION_ENDED_KIND,
-            ...generationActor(fresh, ctx),
-            actor,
-            diff: { revision: true, ...diff },
-          },
-          tx,
-        );
-        return { planId, released: true };
+        return plansService.releaseRevisionLeaseWithin(tx, planId, ctx, actor, diff);
       },
     );
+  },
+
+  /**
+   * RELEASE THE LEASE INSIDE THE CALLER'S TRANSACTION, with no permission assertion
+   * (Story MOTIR-7905 · MOTIR-7936) — the body of {@link releaseRevisionLease}, for a SYSTEM
+   * caller: the failure settle (a relay's terminal frame, or the abandoned-plan sweep) gives a
+   * dead revision's lease back at once, so the plan is decidable now rather than in ten minutes.
+   *
+   * The caller holds the plan's row lock (`planRepository.lockById`). Idempotent: with nothing
+   * held it writes nothing and reports `released: false`, so a relay and the sweep settling one
+   * failure leave ONE `revision_ended` row.
+   */
+  async releaseRevisionLeaseWithin(
+    tx: Prisma.TransactionClient,
+    planId: string,
+    ctx: ServiceContext,
+    actor: PlanRevisionAgentActor,
+    diff: Record<string, unknown> = {},
+    opts: { closeExpired?: boolean } = {},
+  ): Promise<{ planId: string; released: boolean }> {
+    const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+    if (!fresh) throw new PlanNotFoundError(planId);
+    // `closeExpired` reads the lease as of the epoch, so a start with no end counts as held
+    // however old it is: the failure settle writes the closing row an expired lease never
+    // got, which is what stops the sweep from re-finding the plan on every pass.
+    const held = revisionLeaseOf(
+      await planRevisionRepository.listByPlan(planId, tx),
+      opts.closeExpired ? new Date(0) : new Date(),
+    );
+    if (!held) return { planId, released: false };
+    await planRevisionsService.recordRevision(
+      {
+        planId,
+        changeKind: REVISION_ENDED_KIND,
+        ...generationActor(fresh, ctx),
+        actor,
+        diff: { revision: true, ...diff },
+      },
+      tx,
+    );
+    return { planId, released: true };
   },
 
   async declinePlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {

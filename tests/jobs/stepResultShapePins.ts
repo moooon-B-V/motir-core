@@ -370,7 +370,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   'reconcile-abandoned-plans': {
     file: 'lib/jobs/definitions/abandonedPlanSweep.ts',
     shape:
-      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "no_producer_recent" | "row_moved" | "session_waiting" }>; scanned: number }',
+      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "no_producer_recent" | "row_moved" | "session_waiting" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" }>; scanned: number }',
   },
   'reconcile-established-runs': {
     file: 'lib/jobs/definitions/migrateOnboardingSweep.ts',
