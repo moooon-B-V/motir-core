@@ -255,6 +255,14 @@ export type PlanSessionFailureReasonDto =
 
 /** A failed attempt waiting to resume — see {@link PlanChangeSessionDto.failure}. */
 export interface PlanSessionFailureDto {
+  /**
+   * Whether the way on is **Resume** — the session holds a half-written failed walk (or a shape
+   * with no other exit) — rather than a plain turn: a failed session whose most recent
+   * undecided plan is `planned` / `stale` (situation 2) is continued by the next turn, and its
+   * composer stays open. Absent ⇒ true. Derived by the same classifier the submit door refuses
+   * by (MOTIR-7905 · MOTIR-7918 / MOTIR-7941).
+   */
+  resumable?: boolean;
   failedAt: string;
   reason: PlanSessionFailureReasonDto;
   stopPhase: 'lay' | 'author' | null;

@@ -7824,6 +7824,16 @@
         "writing": "A new plan is being written from this conversation.",
         "restored": "Work this plan changes is open again, so this plan is current again. Nothing new was started.",
         "restoredOne": "{workItem} is open again, so this plan is current again. Nothing new was started."
+      },
+      "refusal": {
+        "waitingOn": "Waiting on {name}",
+        "waitingOnSomeone": "Waiting on someone",
+        "why": {
+          "question": "Their planner asked a question and is waiting for the answer.",
+          "reply": "Their conversation is waiting for their reply.",
+          "failed": "Their attempt failed and is waiting for them to resume it."
+        },
+        "openSession": "Open their session"
       }
     },
     "arrival": {
@@ -7948,6 +7958,13 @@
       "earlierOpen": "Open it",
       "disabledStreaming": "Available when this run finishes",
       "swapped": "Your earlier session is closed. A new session is open."
+    },
+    "waiting": {
+      "failedHead": "This attempt stopped",
+      "kept": "The plan so far is kept, and the work items it covers stay at Planning.",
+      "holdReason": "Resume to carry on — no message can be sent while the attempt is stopped.",
+      "onlyStarter": "Only {name} or a project manager can resume this.",
+      "onlyStarterAnon": "Only the person who started this or a project manager can resume it."
     }
   },
   "codeHealth": {

@@ -7820,6 +7820,16 @@
         "writing": "正在基于本对话撰写新计划。",
         "restored": "此计划涉及的工作已重新打开，此计划重新生效。没有开始新计划。",
         "restoredOne": "{workItem} 已重新打开，此计划重新生效。没有开始新计划。"
+      },
+      "refusal": {
+        "waitingOn": "正在等待 {name}",
+        "waitingOnSomeone": "正在等待某人",
+        "why": {
+          "question": "对方的规划器提出了疑问，正在等回答。",
+          "reply": "对方的对话正在等回复。",
+          "failed": "对方的尝试失败了，正在等对方继续。"
+        },
+        "openSession": "打开他们的会话"
       }
     },
     "arrival": {
@@ -7944,6 +7954,13 @@
       "earlierOpen": "打开",
       "disabledStreaming": "本次运行结束后可用",
       "swapped": "你之前的会话已关闭，新的会话已打开。"
+    },
+    "waiting": {
+      "failedHead": "这次尝试停下了",
+      "kept": "已写的计划得到保留，它涉及的工作项仍处于规划中。",
+      "holdReason": "继续即可接着写——尝试停下期间无法发送消息。",
+      "onlyStarter": "只有 {name} 或项目管理员可以继续它。",
+      "onlyStarterAnon": "只有发起者或项目管理员可以继续它。"
     }
   },
   "codeHealth": {

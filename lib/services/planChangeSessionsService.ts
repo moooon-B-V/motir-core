@@ -156,6 +156,27 @@ export function buildAccumulatedIntent(
   );
 }
 
+/** Whether a FAILED-WAITING session's way on is Resume (a resumable failed walk, or a shape
+ *  with no other exit) rather than a plain turn — `classifyFailedWaitingTurn`'s `refuse_resume`. */
+async function failedWalkResumable(
+  row: PlanChangeSession,
+  pctx: ProjectContext,
+  tx?: Prisma.TransactionClient,
+): Promise<boolean> {
+  const plans = tx
+    ? await planRepository.listUndecidedBySession(row.id, tx)
+    : await withWorkspaceServiceContext(pctx.workspaceId, (t) =>
+        planRepository.listUndecidedBySession(row.id, t),
+      );
+  return (
+    classifyFailedWaitingTurn({
+      waiting: sessionWaitingState(row),
+      failedJobId: row.failedJobId,
+      plans: plans.map((p) => ({ ...p, status: undecidedStatus(p.status) })),
+    }) === 'refuse_resume'
+  );
+}
+
 /** Read a session's thread and map both to the DTO. `tx` joins a surrounding
  *  transaction (an append returns the thread it just extended).
  *
@@ -205,7 +226,14 @@ async function toDto(
   );
   // A guide thread's files (MOTIR-7486), resolved once as the caller may see them.
   const fileIds = turns.flatMap((t) => t.attachmentIds);
-  const dto = toPlanChangeSessionDto(row, turns, workItemRefs);
+  const base = toPlanChangeSessionDto(row, turns, workItemRefs);
+  // Whether a FAILED session holds a half-written walk that only Resume continues, or a plan
+  // that waits for the person (situation 2) — the one fact the overlay needs to choose between
+  // Resume + a held composer and the decide door + an open one (MOTIR-7918 / MOTIR-7941). The
+  // SAME classifier the submit door refuses by, so the screen and the server cannot disagree.
+  const dto = base.failure
+    ? { ...base, failure: { ...base.failure, resumable: await failedWalkResumable(row, pctx, tx) } }
+    : base;
   if (fileIds.length === 0) return dto;
   const attachments = await attachmentsService.listViewableByIds(fileIds, {
     userId: pctx.userId,

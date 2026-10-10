@@ -7827,6 +7827,16 @@
         "writing": "Er wordt een nieuw plan geschreven vanuit dit gesprek.",
         "restored": "Werk dat dit plan wijzigt is weer open, dus dit plan is weer actueel. Er is niets nieuws gestart.",
         "restoredOne": "{workItem} is weer open, dus dit plan is weer actueel. Er is niets nieuws gestart."
+      },
+      "refusal": {
+        "waitingOn": "Wacht op {name}",
+        "waitingOnSomeone": "Wacht op iemand",
+        "why": {
+          "question": "De planner stelde een vraag en wacht op het antwoord.",
+          "reply": "Het gesprek wacht op een antwoord.",
+          "failed": "De poging is mislukt en wacht tot die wordt hervat."
+        },
+        "openSession": "Hun sessie openen"
       }
     },
     "arrival": {
@@ -7951,6 +7961,13 @@
       "earlierOpen": "Openen",
       "disabledStreaming": "Beschikbaar zodra deze run klaar is",
       "swapped": "Je eerdere sessie is gesloten. Er is een nieuwe sessie geopend."
+    },
+    "waiting": {
+      "failedHead": "Deze poging is gestopt",
+      "kept": "Het plan tot nu toe is bewaard en de bijbehorende werkitems blijven op ‘In planning’.",
+      "holdReason": "Hervat om verder te gaan — zolang de poging gestopt is, kan er geen bericht worden verstuurd.",
+      "onlyStarter": "Alleen {name} of een projectmanager kan dit hervatten.",
+      "onlyStarterAnon": "Alleen de persoon die dit startte of een projectmanager kan het hervatten."
     }
   },
   "codeHealth": {

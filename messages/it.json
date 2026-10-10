@@ -7830,6 +7830,16 @@
         "writing": "Un nuovo piano viene scritto da questa conversazione.",
         "restored": "Il lavoro modificato da questo piano è di nuovo aperto, quindi questo piano è di nuovo attuale. Non è stato avviato nulla di nuovo.",
         "restoredOne": "{workItem} è di nuovo aperto, quindi questo piano è di nuovo attuale. Non è stato avviato nulla di nuovo."
+      },
+      "refusal": {
+        "waitingOn": "In attesa di {name}",
+        "waitingOnSomeone": "In attesa di qualcuno",
+        "why": {
+          "question": "Il suo pianificatore ha fatto una domanda e attende la risposta.",
+          "reply": "La sua conversazione attende la sua risposta.",
+          "failed": "Il suo tentativo non è riuscito e attende di essere ripreso."
+        },
+        "openSession": "Apri la sua sessione"
       }
     },
     "arrival": {
@@ -7954,6 +7964,13 @@
       "earlierOpen": "Aprila",
       "disabledStreaming": "Disponibile al termine di questa esecuzione",
       "swapped": "La sessione precedente è chiusa. È aperta una nuova sessione."
+    },
+    "waiting": {
+      "failedHead": "Questo tentativo si è interrotto",
+      "kept": "Il piano scritto finora è conservato e gli elementi di lavoro coinvolti restano «In pianificazione».",
+      "holdReason": "Riprendi per proseguire: finché il tentativo è interrotto non si può inviare alcun messaggio.",
+      "onlyStarter": "Solo {name} o un responsabile del progetto può riprenderlo.",
+      "onlyStarterAnon": "Solo la persona che l’ha avviato o un responsabile del progetto può riprenderlo."
     }
   },
   "codeHealth": {

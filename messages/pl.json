@@ -7827,6 +7827,16 @@
         "writing": "Na podstawie tej rozmowy powstaje nowy plan.",
         "restored": "Praca, którą zmienia ten plan, jest znowu otwarta, więc ten plan znowu jest aktualny. Nic nowego nie rozpoczęto.",
         "restoredOne": "{workItem} jest znowu otwarty, więc ten plan znowu jest aktualny. Nic nowego nie rozpoczęto."
+      },
+      "refusal": {
+        "waitingOn": "Czeka na: {name}",
+        "waitingOnSomeone": "Czeka na kogoś",
+        "why": {
+          "question": "Planista zadał pytanie i czeka na odpowiedź.",
+          "reply": "Rozmowa czeka na odpowiedź.",
+          "failed": "Próba nie powiodła się i czeka na wznowienie."
+        },
+        "openSession": "Otwórz ich sesję"
       }
     },
     "arrival": {
@@ -7951,6 +7961,13 @@
       "earlierOpen": "Otwórz ją",
       "disabledStreaming": "Dostępne po zakończeniu tego uruchomienia",
       "swapped": "Twoja wcześniejsza sesja jest zamknięta. Otwarto nową sesję."
+    },
+    "waiting": {
+      "failedHead": "Ta próba została zatrzymana",
+      "kept": "Dotychczasowy plan został zachowany, a powiązane elementy robocze pozostają w stanie „Planowanie”.",
+      "holdReason": "Wznów, aby kontynuować — gdy próba jest zatrzymana, nie można wysłać wiadomości.",
+      "onlyStarter": "Tylko {name} lub kierownik projektu może to wznowić.",
+      "onlyStarterAnon": "Tylko osoba, która to rozpoczęła, lub kierownik projektu może to wznowić."
     }
   },
   "codeHealth": {

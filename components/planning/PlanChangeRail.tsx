@@ -74,6 +74,7 @@ import {
   WaitingPlanStillWaits,
   TargetRefusal,
 } from '@/components/planning/SessionEndParts';
+import { FailedWaitingNotice } from '@/components/planning/SessionWaitingParts';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
@@ -276,6 +277,16 @@ export interface PlanChangeRailProps {
   onCarrySend?: (text: string) => void;
   /** PLAN IT AGAIN on the stale notice (MOTIR-7945's accept; design state 10). */
   onPlanAgain?: () => void;
+  /**
+   * RESUME a session waiting on a failed attempt (Story MOTIR-7905 · MOTIR-7918). Optional: a
+   * host that offers none draws the failure line without the control.
+   */
+  onResume?: () => void;
+  /**
+   * May THIS viewer resume the session — its starter, or a project manager (design panel 3b /
+   * 3c). Absent ⇒ true. False draws the failure line read-only, naming who can.
+   */
+  canResume?: boolean;
 }
 
 export function PlanChangeRail({
@@ -313,6 +324,8 @@ export function PlanChangeRail({
   onAnswerRestart,
   onCarrySend,
   onPlanAgain,
+  onResume,
+  canResume = true,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tp = useTranslations('approvalGate.planApproval');
@@ -446,6 +459,46 @@ export function PlanChangeRail({
   // THE ENDED SESSION (AMENDMENT 23 §1): read from the server's row, so a reload
   // draws the same end. It accepts no turn — the composer slot says so instead.
   const ended = Boolean(state.session?.endedAt);
+  // A FAILED HOSTED ATTEMPT WAITS TO BE RESUMED (Story MOTIR-7905 · MOTIR-7918): the session
+  // is OPEN, so there is no end marker, no *Start a new session* and no Try again — the
+  // failure line with Resume stands in their place. Read from the server's row, so a reload
+  // draws the same thing. `resumable === false` is situation 2 (a plan waits), MOTIR-7941's.
+  const failure = !ended ? (state.session?.failure ?? null) : null;
+  const awaitsResume = failure !== null && failure.resumable !== false;
+  // The first failure this viewer saw on this session: a newer one is *failed again*.
+  const [firstFailure, setFirstFailure] = useState<{ sessionId: string; at: string } | null>(null);
+  const failureSessionId = state.session?.id ?? null;
+  const failureAt = failure?.failedAt ?? null;
+  // Adjusted DURING RENDER (React's derived-state pattern): remember the first failure seen on
+  // this session, without an effect's extra frame.
+  if (
+    failureSessionId !== null &&
+    failureAt !== null &&
+    (firstFailure === null || firstFailure.sessionId !== failureSessionId)
+  ) {
+    setFirstFailure({ sessionId: failureSessionId, at: failureAt });
+  }
+  // OPENED ON A PENDING QUESTION (Story MOTIR-7905 · MOTIR-7918; panel 1): a door that lands on
+  // a session whose planner is waiting for an answer scrolls the question into view and puts the
+  // cursor in the composer, ONCE per opened session. A question that arrives LIVE in a thread
+  // the viewer is already in is not "opened on" and steals nothing.
+  const railRef = useRef<HTMLElement>(null);
+  const openedRef = useRef<string | null>(null);
+  const openedSessionId = state.session?.id ?? null;
+  const hasPendingQuestion = question !== null;
+  useEffect(() => {
+    if (openedSessionId === null || state.phase === 'loading') return;
+    if (openedRef.current === openedSessionId) return;
+    openedRef.current = openedSessionId;
+    if (!hasPendingQuestion) return;
+    document.getElementById(PENDING_QUESTION_ID)?.scrollIntoView({ block: 'center' });
+    railRef.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus();
+  }, [openedSessionId, hasPendingQuestion, state.phase]);
+  const failedAgain =
+    failureAt !== null &&
+    firstFailure !== null &&
+    firstFailure.sessionId === failureSessionId &&
+    failureAt > firstFailure.at;
   // PLAN SOMETHING NEW (MOTIR-7650; design panels 1 + 5): offered on the viewer's
   // OWN open `conversation` session only — never on a guide conversation (A3.5), a
   // read-only reopen, somebody else's session, or an ended one, which already
@@ -553,6 +606,7 @@ export function PlanChangeRail({
 
   return (
     <aside
+      ref={railRef}
       className="flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
       aria-label={t('railLabel')}
     >
@@ -1067,8 +1121,23 @@ export function PlanChangeRail({
         {/* DECIDED WHILE TYPING (design state 6): refused in place, the words kept. */}
         {ended && state.carryDecided ? <CarryDecidedNotice text={state.carryDecided.text} /> : null}
 
+        {/* THE FAILURE LINE (Story MOTIR-7905 · MOTIR-7918; panels 3–5): where the walk stopped,
+            why, and Resume. The plan so far stays on the canvas. */}
+        {awaitsResume && failure ? (
+          <FailedWaitingNotice
+            failure={failure}
+            failedAgain={failedAgain}
+            resuming={state.resuming === true}
+            resumeError={state.resumeError ?? null}
+            canResume={canResume && Boolean(onResume)}
+            starterName={state.reopened?.startedBy?.name ?? null}
+            onResume={() => onResume?.()}
+          />
+        ) : null}
+
         {state.errorCode &&
         !ended &&
+        !awaitsResume &&
         state.errorCode !== 'timedOut' &&
         !(gated && (state.errorCode === 'stale' || state.errorCode === 'decided')) ? (
           <div className="flex flex-col items-start gap-2">
@@ -1126,7 +1195,7 @@ export function PlanChangeRail({
           {...(onStartNewSession ? { onStartNew: onStartNewSession } : {})}
           pending={busy}
         />
-      ) : state.readOnly ? (
+      ) : awaitsResume && !canResume ? null : state.readOnly ? (
         // A member without `ai:plan` reads a reopened conversation and cannot
         // continue it — the composer is REPLACED by the reason (design §19.8,
         // panel 6), in the composer's own slot.
@@ -1165,6 +1234,9 @@ export function PlanChangeRail({
             state.phase === 'loading' ||
             state.phase === 'deciding' ||
             heldBlocks ||
+            // A session waiting to resume takes no ordinary turn — the server refuses the
+            // submit (MOTIR-7916), and Resume is the only thing that restarts the walk.
+            awaitsResume ||
             Boolean(state.stalePlan?.pressing)
           }
           // The pending question travels to the composer, not to a header pill:

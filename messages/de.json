@@ -7830,6 +7830,16 @@
         "writing": "Aus diesem Gespräch wird ein neuer Plan erstellt.",
         "restored": "Arbeit, die dieser Plan ändert, ist wieder offen, daher ist dieser Plan wieder aktuell. Es wurde nichts Neues gestartet.",
         "restoredOne": "{workItem} ist wieder offen, daher ist dieser Plan wieder aktuell. Es wurde nichts Neues gestartet."
+      },
+      "refusal": {
+        "waitingOn": "Wartet auf {name}",
+        "waitingOnSomeone": "Wartet auf jemanden",
+        "why": {
+          "question": "Der Planer hat eine Frage gestellt und wartet auf die Antwort.",
+          "reply": "Die Unterhaltung wartet auf die Antwort der Person.",
+          "failed": "Der Versuch ist fehlgeschlagen und wartet darauf, fortgesetzt zu werden."
+        },
+        "openSession": "Deren Sitzung öffnen"
       }
     },
     "arrival": {
@@ -7954,6 +7964,13 @@
       "earlierOpen": "Öffnen",
       "disabledStreaming": "Verfügbar, wenn dieser Lauf abgeschlossen ist",
       "swapped": "Ihre frühere Sitzung ist geschlossen. Eine neue Sitzung ist geöffnet."
+    },
+    "waiting": {
+      "failedHead": "Dieser Versuch wurde angehalten",
+      "kept": "Der bisherige Plan bleibt erhalten, und die betroffenen Arbeitselemente bleiben „In Planung“.",
+      "holdReason": "Setzen Sie fort, um weiterzumachen – solange der Versuch angehalten ist, kann keine Nachricht gesendet werden.",
+      "onlyStarter": "Nur {name} oder ein Projektmanager kann dies fortsetzen.",
+      "onlyStarterAnon": "Nur die Person, die dies gestartet hat, oder ein Projektmanager kann es fortsetzen."
     }
   },
   "codeHealth": {
