@@ -24,7 +24,7 @@ import {
 //        and reply stay recorded). A different answer to an answered pause → 409 with
 //        the stored one; a pause that is not on this session and job → 404.
 //
-// HTTP only (CLAUDE.md 4-layer). NOT rate-limited, on the mailbox route's reasoning:
+// HTTP only (CLAUDE.md 4-layer). NOT rate-limited, deliberately, on the mailbox route's reasoning:
 // no job is submitted and no provider money is spent — an answer is a database write
 // and a mailbox entry for a run that is already running and paid for.
 export async function GET(req: Request): Promise<Response> {
