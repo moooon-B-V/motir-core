@@ -809,6 +809,10 @@ describe('the routes are actually WIRED to the guards', () => {
     // The boundary MAILBOX (Story MOTIR-4054 · MOTIR-4067 / MOTIR-4068): a turn
     // or a stop attached to a job that is ALREADY running and already paid for —
     // one row each, no model job submitted, the `turns` precedent exactly.
+    // A change forwarded after the walk finished becomes ONE revision of its
+    // plan through the shipped revise door, which carries its own limit
+    // (Story MOTIR-7990 · MOTIR-7997).
+    'app/api/ai/plan-change/session/late-changes/route.ts',
     'app/api/ai/plan-change/session/mailbox/route.ts',
     'app/api/ai/plan-change/session/mailbox/stop/route.ts',
     'app/api/ai/plan-change/session/planner-turn/route.ts',
@@ -818,6 +822,9 @@ describe('the routes are actually WIRED to the guards', () => {
     'app/api/ai/plan-change/session/restart/confirm/route.ts',
     'app/api/ai/plan-change/session/restart/route.ts',
     'app/api/ai/plan-change/session/route.ts',
+    // The planner's mid-run PAUSE: reads and answers one row, and the answer
+    // is a mailbox turn on a job already running — no model job (MOTIR-8007).
+    'app/api/ai/plan-change/session/run-pause/route.ts',
     'app/api/ai/plan-change/session/turns/route.ts',
     'app/api/ai/plan/generate/[jobId]/stream/route.ts',
     'app/api/ai/plan/sprint/[jobId]/review/route.ts',
