@@ -199,6 +199,32 @@ describe('?locale=', () => {
     });
   });
 
+  it('localizes the category label on the list, its category list and one idea (MOTIR-8082)', async () => {
+    await seedJa();
+    for (const [locale, label] of [
+      ['zh', '宠物'],
+      ['ko', '반려동물'],
+    ] as const) {
+      const list = await (await listGET(get(`?locale=${locale}`))).json();
+      expect(list.items[0].category).toEqual({ slug: 'pets', label });
+      expect(list.categories).toEqual([{ slug: 'pets', label, count: 1 }]);
+      const one = await (
+        await detailGET(get(`/clinic?locale=${locale}`), slugCtx('clinic'))
+      ).json();
+      expect(one.category).toEqual({ slug: 'pets', label });
+    }
+    // The filter value is the slug in every locale.
+    const filtered = await (await listGET(get('?locale=zh&category=pets'))).json();
+    expect(filtered.total).toBe(1);
+  });
+
+  it('keeps the English category label for an unsupported locale (MOTIR-8082)', async () => {
+    await seedJa();
+    const list = await (await listGET(get('?locale=xx'))).json();
+    expect(list.items[0].category).toEqual({ slug: 'pets', label: 'Pets' });
+    expect(list.categories[0].label).toBe('Pets');
+  });
+
   it('answers an unsupported or differently-cased locale in English, 200', async () => {
     await seedJa();
     for (const qs of ['?locale=xx', '?locale=JA', '?locale=en', '?locale=']) {
