@@ -663,9 +663,9 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                     },
                   }
                 : kind === 'plan' && planOutcomeAt(index).codeUnreadable
-                  ? // The HALT on an unreadable code graph (MOTIR-8144): no plan, no turn.
+                  ? // The HALT on an unreadable code graph (MOTIR-8144): no plan, no turn — only the
+                    // signal (the delta field is left out for the reason the routing arm gives).
                     {
-                      planDelta: { operations: [] },
                       codeUnreadable: CODE_UNREADABLE_SIGNAL,
                     }
                   : kind === 'plan' && planOutcomeAt(index).turn
