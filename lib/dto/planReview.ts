@@ -1127,6 +1127,15 @@ export interface PlanReviewDto {
    */
   lastActivityAt?: string;
   /**
+   * THE REVIEW'S VERSION TOKEN (MOTIR-8127) — set while the plan is `generating`, the only status
+   * a client polls. Hand it back as `?since=` and the read answers {@link PlanReviewUnchangedDto}
+   * instead of the whole review when nothing the review shows has moved. It is read BEFORE the
+   * review's own reads, so a write that lands in between makes the next poll read in full rather
+   * than skip it. Opaque: compare it, never parse it. OPTIONAL on the type only so hand-built
+   * review fixtures stay valid.
+   */
+  reviewVersion?: string;
+  /**
    * The step each RUNNING planner session is on, oldest first (MOTIR-7822) — raw
    * refs as the planner sent them. ALWAYS `[]` when the plan is not
    * `generating`, so a session that never cleared cannot outlive its plan on any
@@ -1217,4 +1226,14 @@ export interface PlanReviewDto {
    * not on the screen.
    */
   arrivalLevelTotal: number;
+}
+
+/**
+ * What `GET /api/plans/[id]?since=<token>` answers when the plan is `generating` and the token is
+ * still current (MOTIR-8127): a few bytes in place of the whole review. The client keeps the
+ * snapshot it already holds.
+ */
+export interface PlanReviewUnchangedDto {
+  unchanged: true;
+  reviewVersion: string;
 }

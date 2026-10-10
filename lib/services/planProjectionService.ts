@@ -9,7 +9,12 @@ import {
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { PlanItemDto, PlanItemPatch, PlanItemProposedFields } from '@/lib/dto/plans';
+import type {
+  PlanItemDto,
+  PlanItemPatch,
+  PlanItemProposedFields,
+  PlanWithItemsDto,
+} from '@/lib/dto/plans';
 import { DEFAULT_PROPOSED_KIND } from '@/lib/plans/validateProposals';
 import { isWorkItemRef } from '@/lib/plans/refs';
 import { edgeDisposition, type EdgeDisposition } from '@/lib/workItems/edgeDisposition';
@@ -308,6 +313,13 @@ export async function buildProjection(
   opts: {
     caller?: 'actor' | 'system';
     /**
+     * The plan with its items, ALREADY READ AND ADMITTED for `ctx` by the caller (MOTIR-8127). The
+     * review read has just admitted the reader and read every proposal; re-doing both here cost
+     * three transactions and a second full item read on every poll of a `generating` plan. Only a
+     * caller that passed the reader gate itself may hand one in — it replaces the gate below.
+     */
+    plan?: PlanWithItemsDto;
+    /**
      * HOW MUCH OF THE LIVE TREE to load (MOTIR-8146). `project` (the default) is the
      * project's whole live node set — what every validity walk and projected read
      * needs, because each can reach any node. `edge_coverage` loads only what the
@@ -328,9 +340,10 @@ export async function buildProjection(
   // internal `validate-plan-forest` route, validating a plan its own job wrote —
   // passes `caller: 'system'` and keeps the browse floor alone.
   const plan =
-    opts.caller === 'system'
+    opts.plan ??
+    (opts.caller === 'system'
       ? await plansService.getPlan(planId, ctx)
-      : await plansService.getPlanForReader(planId, ctx);
+      : await plansService.getPlanForReader(planId, ctx));
   const projectId = plan.projectId;
 
   // The project's live node set + the initial status an `add` would be created in.

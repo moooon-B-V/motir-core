@@ -5581,6 +5581,35 @@ export const plansService = {
    * 404ing a plan the actor just acted on. The caller list is in MOTIR-6330's PR.
    */
   async getPlanForReader(planId: string, ctx: ServiceContext): Promise<PlanWithItemsDto> {
+    const plan = await plansService.admitPlanReader(planId, ctx);
+    return plansService.loadAdmittedPlanWithItems(plan, ctx);
+  },
+
+  /**
+   * The ITEM half of {@link getPlanForReader} (MOTIR-8127): the plan with every proposal, for a
+   * plan row {@link admitPlanReader} has ALREADY admitted. Split out so the review read can take
+   * its version token between the admit and the item read; calling it on a row nobody admitted
+   * is a side door past the reader gate.
+   */
+  async loadAdmittedPlanWithItems(
+    plan: NonNullable<Awaited<ReturnType<typeof planRepository.findById>>>,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    const items = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(plan.id, tx),
+    );
+    return toPlanWithItemsDto(plan, items);
+  },
+
+  /**
+   * The ADMIT half of {@link getPlanForReader}, without the item read (MOTIR-8127): the browse
+   * floor and the Plans room's record-level admit, returning the plan ROW. The review's
+   * conditional read needs the same refusal an unknown id gets BEFORE it may answer
+   * "unchanged", and answering it must not cost the whole item set — that is the cost the
+   * conditional read exists to skip. Every refusal is {@link PlanNotFoundError} (or the browse
+   * denial), exactly as `getPlanForReader` throws them.
+   */
+  async admitPlanReader(planId: string, ctx: ServiceContext) {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
@@ -5590,10 +5619,7 @@ export const plansService = {
       readerMaySeePlan(plan, ctx, tx),
     );
     if (!admitted) throw new PlanNotFoundError(planId);
-    const items = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      planItemRepository.findByPlan(planId, tx),
-    );
-    return toPlanWithItemsDto(plan, items);
+    return plan;
   },
 
   /**

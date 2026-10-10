@@ -9,15 +9,19 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 // pinned is the poll's contract — a snapshot REPLACES, a stale response is
 // dropped, the three stops, and `failing` on and off.
 
-const { fetchReview } = vi.hoisted(() => ({ fetchReview: vi.fn() }));
+const { fetchReview, fetchSince } = vi.hoisted(() => ({
+  fetchReview: vi.fn(),
+  fetchSince: vi.fn(),
+}));
 
 vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/planning/planReviewClient')>();
-  return { ...actual, fetchPlanReview: fetchReview };
+  return { ...actual, fetchPlanReview: fetchReview, fetchPlanReviewSince: fetchSince };
 });
 
 import {
   FAILING_AFTER,
+  FULL_READ_EVERY,
   POLL_MS,
   STALL_MS,
   useGeneratingPlanPoll,
@@ -329,5 +333,111 @@ describe('useGeneratingPlanPoll (MOTIR-6295)', () => {
     expect(fetchReview).toHaveBeenCalledTimes(2);
     expect(result.current.version).toBe(2);
     unmount();
+  });
+
+  describe('an unchanged plan is answered in a few bytes (MOTIR-8127)', () => {
+    const versioned = (version: string, items = [A]): PlanReviewDto => ({
+      ...generating(items),
+      reviewVersion: version,
+    });
+
+    it('asks "changed since?" with the held version, and an unchanged answer keeps everything', async () => {
+      fetchReview.mockResolvedValue(versioned('rv1.a'));
+      fetchSince.mockResolvedValue({ unchanged: true, reviewVersion: 'rv1.a' });
+      const onSnapshot = vi.fn();
+      const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1', { onSnapshot }));
+      await flush();
+
+      // The first read is always FULL — there is no version to send yet.
+      expect(fetchReview).toHaveBeenCalledTimes(1);
+      expect(fetchSince).not.toHaveBeenCalled();
+      expect(result.current.version).toBe(1);
+      const held = result.current.review;
+
+      await tick();
+      expect(fetchSince).toHaveBeenCalledWith('plan_1', 'rv1.a', expect.any(AbortSignal));
+      expect(fetchReview).toHaveBeenCalledTimes(1);
+      // Nothing moved: the same snapshot object, no version bump, no onSnapshot.
+      expect(result.current.review).toBe(held);
+      expect(result.current.version).toBe(1);
+      expect(onSnapshot).toHaveBeenCalledTimes(1);
+      unmount();
+    });
+
+    it('a changed answer replaces the snapshot and the NEXT read sends the new version', async () => {
+      fetchReview.mockResolvedValue(versioned('rv1.a'));
+      fetchSince.mockResolvedValueOnce(versioned('rv1.b', [A, B]));
+      fetchSince.mockResolvedValue({ unchanged: true, reviewVersion: 'rv1.b' });
+      const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
+      await flush();
+
+      await tick();
+      expect(result.current.review?.items).toEqual([A, B]);
+      expect(result.current.version).toBe(2);
+
+      await tick();
+      expect(fetchSince).toHaveBeenLastCalledWith('plan_1', 'rv1.b', expect.any(AbortSignal));
+      expect(result.current.version).toBe(2);
+      unmount();
+    });
+
+    it('every FULL_READ_EVERYth poll is a full read, whatever the version says', async () => {
+      fetchReview.mockResolvedValue(versioned('rv1.a'));
+      fetchSince.mockResolvedValue({ unchanged: true, reviewVersion: 'rv1.a' });
+      const { unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
+      await flush();
+
+      // One full read, then FULL_READ_EVERY - 1 conditional ones…
+      for (let i = 0; i < FULL_READ_EVERY - 1; i += 1) await tick();
+      expect(fetchSince).toHaveBeenCalledTimes(FULL_READ_EVERY - 1);
+      expect(fetchReview).toHaveBeenCalledTimes(1);
+
+      // …then the backstop: a full read that catches what the version cannot see.
+      await tick();
+      expect(fetchReview).toHaveBeenCalledTimes(2);
+      expect(fetchSince).toHaveBeenCalledTimes(FULL_READ_EVERY - 1);
+      unmount();
+    });
+
+    it('a forced `refresh()` is always a full read', async () => {
+      fetchReview.mockResolvedValue(versioned('rv1.a'));
+      fetchSince.mockResolvedValue({ unchanged: true, reviewVersion: 'rv1.a' });
+      const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
+      await flush();
+
+      act(() => result.current.refresh());
+      await flush();
+      expect(fetchReview).toHaveBeenCalledTimes(2);
+      expect(fetchSince).not.toHaveBeenCalled();
+      unmount();
+    });
+
+    it('a review that carries no version is never read conditionally', async () => {
+      fetchReview.mockResolvedValue(generating());
+      const { unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
+      await flush();
+      await tick();
+      await tick();
+
+      expect(fetchSince).not.toHaveBeenCalled();
+      expect(fetchReview).toHaveBeenCalledTimes(3);
+      unmount();
+    });
+
+    it('an unchanged answer counts as a success: `failing` clears', async () => {
+      fetchReview.mockResolvedValueOnce(versioned('rv1.a'));
+      fetchSince.mockRejectedValueOnce(new Error('x'));
+      fetchSince.mockRejectedValueOnce(new Error('x'));
+      fetchSince.mockRejectedValueOnce(new Error('x'));
+      fetchSince.mockResolvedValue({ unchanged: true, reviewVersion: 'rv1.a' });
+      const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
+      await flush();
+      for (let i = 0; i < FAILING_AFTER; i += 1) await tick();
+      expect(result.current.failing).toBe(true);
+
+      await tick();
+      expect(result.current.failing).toBe(false);
+      unmount();
+    });
   });
 });

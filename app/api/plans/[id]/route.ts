@@ -19,13 +19,16 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // no-existence-leak rule the access gate already encodes for `browse`).
 /** The read itself, for a member's context or a Visitor's (MOTIR-6647). */
 async function serve(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
   ctx: ServiceContext | VisitorReadContext,
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const review = await planReviewService.getPlanReview(id, ctx);
+    // `?since=<reviewVersion>` is the generating-plan poll's conditional read (MOTIR-8127): a few
+    // bytes when nothing the review shows has moved, the whole review otherwise.
+    const since = new URL(req.url).searchParams.get('since');
+    const review = await planReviewService.getPlanReviewIfChanged(id, ctx, since);
     return NextResponse.json(review);
   } catch (err) {
     if (err instanceof PlanNotFoundError) {
