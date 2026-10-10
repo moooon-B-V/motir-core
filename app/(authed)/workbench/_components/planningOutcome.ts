@@ -14,9 +14,9 @@ import type { PlanDecisionReasonDto, PlanStatusDto } from '@/lib/dto/plans';
 /** The held row's line: a neutral chip (or none) and one sentence, both `workbench.planning.left.*`. */
 export interface PlanningRowOutcome {
   /** The chip's key, or `null` for the outcome-unknown form, which carries no chip. */
-  chipKey: 'planned' | 'discarded' | 'abandoned' | 'failed' | null;
+  chipKey: 'planned' | 'discarded' | 'abandoned' | null;
   /** The sentence's key. */
-  lineKey: 'plannedLine' | 'discardedLine' | 'abandonedLine' | 'unknownLine' | 'failedLine';
+  lineKey: 'plannedLine' | 'discardedLine' | 'abandonedLine' | 'unknownLine';
   /**
    * The status the plan is NOW, as the row's door reads it (§ 36.6 / § 36.8): a
    * written plan is still reviewed on its planning surface, a decided one is a
@@ -25,18 +25,6 @@ export interface PlanningRowOutcome {
    */
   planStatus: PlanStatusDto;
 }
-
-/**
- * A plan whose attempt FAILED (Story MOTIR-7905 · MOTIR-7917; design § 37.3). The session
- * keeps the plan `generating` and waits in To resume, so the row's chip says it MOVED there
- * rather than that it ended. Its words are `workbench.planningSession.left.*`, not
- * `workbench.planning.left.*`, because the line points at another tab.
- */
-export const FAILED_OUTCOME: PlanningRowOutcome = {
-  chipKey: 'failed',
-  lineKey: 'failedLine',
-  planStatus: 'generating',
-};
 
 /** The outcome-unknown form — the read has not landed, or it failed. */
 export const UNKNOWN_OUTCOME: PlanningRowOutcome = {
@@ -60,16 +48,13 @@ export const UNKNOWN_OUTCOME: PlanningRowOutcome = {
  * out exactly one kind of `generating` plan, the one whose attempt FAILED and now waits in
  * To resume (MOTIR-7914), so a `generating` plan that left an unclipped list is that one.
  */
-export function planningOutcomeOf(
-  plan: {
-    status: PlanStatusDto;
-    decisionReason: PlanDecisionReasonDto | null;
-  },
-  options: { failedIfGenerating?: boolean } = {},
-): PlanningRowOutcome | null {
+export function planningOutcomeOf(plan: {
+  status: PlanStatusDto;
+  decisionReason: PlanDecisionReasonDto | null;
+}): PlanningRowOutcome | null {
   switch (plan.status) {
     case 'generating':
-      return options.failedIfGenerating ? FAILED_OUTCOME : null;
+      return null;
     case 'planned':
     case 'stale':
       return { chipKey: 'planned', lineKey: 'plannedLine', planStatus: plan.status };

@@ -84,7 +84,7 @@ const overlayClosed = (url: URL) => !url.searchParams.has('plan');
 const sessionRow = (page: Page, sessionId: string) =>
   page.locator(`[data-planning-session="${sessionId}"]`);
 const resumeEntry = (page: Page, sessionId: string) =>
-  page.getByTestId(`to-resume-session-${sessionId}`);
+  page.getByRole('main').getByTestId(`to-resume-session-${sessionId}`);
 
 async function stubAiAccess(page: Page): Promise<void> {
   await page.route('**/api/ai/access', (route) =>

@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
 import { useRelativeLabel } from '@/components/approvals/useRelativeLabel';
 import { fetchPlanReview } from '@/lib/planning/planReviewClient';
+import { AI_DECIDED_PLAN_STATUSES } from '@/lib/dto/ai';
 import type { ToResumePlanningSessionDto } from '@/lib/dto/home';
 import {
   leftLineKeyOf,
@@ -174,7 +175,8 @@ export function useLeftLine(entry: Entry, held: boolean): LeftLineKey | null {
     const ctrl = new AbortController();
     fetchPlanReview(planId, ctrl.signal).then(
       (review) => {
-        if (review.status === 'approved' || review.status === 'declined') setDecided({ planId });
+        if ((AI_DECIDED_PLAN_STATUSES as readonly string[]).includes(review.status))
+          setDecided({ planId });
       },
       () => {},
     );

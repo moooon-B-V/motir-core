@@ -58,7 +58,8 @@ const { planChangeSessionsService } = await import('@/lib/services/planChangeSes
 const { planSessionResumeService } = await import('@/lib/services/planSessionResumeService');
 
 const T = { timeout: 180_000 };
-const RACE = { timeout: 300_000 };
+// MEASURED: 20 rounds of truncate + fixture + two racing writers took ~120-170 s on a loaded shard.
+const RACE_TEST_TIMEOUT_MS = 300_000;
 const ITERATIONS = 20;
 const HOUR = 60 * 60 * 1000;
 const MIN = 60 * 1000;
@@ -612,7 +613,7 @@ describe('12 · never in either tab', () => {
 describe('13 · concurrency across the chain', () => {
   it(
     `the relay's settle against the abandoned sweep, ${ITERATIONS} times: one failure record`,
-    RACE,
+    { timeout: RACE_TEST_TIMEOUT_MS },
     async () => {
       for (let i = 0; i < ITERATIONS; i++) {
         await truncateAuthTables();
@@ -642,7 +643,7 @@ describe('13 · concurrency across the chain', () => {
 
   it(
     `Resume against a person's end, ${ITERATIONS} times: ended with no failure, or open and bound — never both`,
-    RACE,
+    { timeout: RACE_TEST_TIMEOUT_MS },
     async () => {
       for (let i = 0; i < ITERATIONS; i++) {
         await truncateAuthTables();
@@ -682,7 +683,7 @@ describe('13 · concurrency across the chain', () => {
 
   it(
     `the owner's turn against the awaiting-reply sweep, ${ITERATIONS} times: one gate or none`,
-    RACE,
+    { timeout: RACE_TEST_TIMEOUT_MS },
     async () => {
       for (let i = 0; i < ITERATIONS; i++) {
         await truncateAuthTables();
