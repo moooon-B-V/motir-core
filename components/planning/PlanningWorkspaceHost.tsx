@@ -469,6 +469,7 @@ function PlanWorkspaceHost({
     startCopied,
     requestRestart,
     answerRestartConfirm,
+    planAgain,
   } = usePlanChangeConversation({
     onApproved,
     anchorId,
@@ -763,6 +764,12 @@ function PlanWorkspaceHost({
     [discard, declineFrom],
   );
   const staleRefusedAt = state.errorCode === 'stale' ? pressFrom : null;
+  // A turn found the plan in hand OUT OF DATE (MOTIR-7932; design state 10): the bar
+  // keeps its place without its verbs until Plan it again replaces the plan.
+  const planIsStale =
+    Boolean(state.stalePlan) &&
+    !state.stalePlan?.outcome &&
+    state.stalePlan?.planId === (state.review?.id ?? state.planId);
 
   // WHAT APPROVE SAYS WHILE IT RUNS (MOTIR-5249; design Part XXV), derived ONCE and
   // handed to both doors. Running: both doors show it, and only the pressed one is the
@@ -1027,6 +1034,7 @@ function PlanWorkspaceHost({
                   onConfirmDecline={confirmDecline}
                   staleRefused={staleRefusedAt === 'bar'}
                   approveProgress={approveProgressAt('bar')}
+                  stale={planIsStale}
                 />
               </div>
             ) : null}
@@ -1081,6 +1089,10 @@ function PlanWorkspaceHost({
           onStartNewSession={() => void startCopied()}
           onRequestRestart={() => void requestRestart()}
           onAnswerRestart={(answer) => void answerRestartConfirm(answer)}
+          // THE CARRY (MOTIR-7932): the hook routes an ended session's send to it, and
+          // its swap re-keys the address through `onRestarted`, the restart's path.
+          onCarrySend={(text) => void send(text)}
+          onPlanAgain={() => void planAgain()}
           gateView={gateView}
           declining={declineFrom === 'rail'}
           onRequestDecline={() => setDeclineFrom('rail')}

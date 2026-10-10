@@ -100,6 +100,26 @@ export const planRevisionRepository = {
   },
 
   /**
+   * The NEWEST `session_carried` row whose plan left `sessionId` (Story MOTIR-7928 ·
+   * MOTIR-7932) — the read the ended session's "this plan moved" line needs to name
+   * where the plan went. Required `tx` for the reason `listByPlan` gives: the policy
+   * joins to the plan, so an unbound read finds nothing.
+   */
+  async findLatestCarriedFromSession(
+    sessionId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<PlanRevision, 'planId' | 'diff'> | null> {
+    return tx.planRevision.findFirst({
+      where: {
+        changeKind: 'session_carried',
+        diff: { path: ['fromSessionId'], equals: sessionId },
+      },
+      orderBy: { changedAt: 'desc' },
+      select: { planId: true, diff: true },
+    });
+  },
+
+  /**
    * The LEASE-BEARING columns of MANY plans' trails in one round trip, oldest first
    * within each plan (Story MOTIR-6012 · MOTIR-6035) — the To-approve page's read of
    * which plan gates are HELD (`revisionLeaseOf`), one query per page rather than one

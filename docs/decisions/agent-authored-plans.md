@@ -21,6 +21,8 @@
   AMENDMENT 23's failure clauses are amended by its 2026-10-09 sub-amendment (MOTIR-7906, the
   decision card; written by MOTIR-7911) and consumed by story MOTIR-7905's code subtasks
   (MOTIR-7908 through MOTIR-7921 and their follow-ons) and by the carry story MOTIR-7928.
+  AMENDMENT 23 §6's 2026-10-09 amendment (an ended session whose plan still waits is carried WITH
+  that plan) is written by MOTIR-7931 and consumed by the children of story MOTIR-7928.
 
 > Every reading below was taken off `origin/main` at `d82b5fa7` on 2026-08-18. Where a
 > reading and a card's prose disagreed, the code won and the difference is recorded — in
@@ -4088,6 +4090,62 @@ own terminal and it has no hosted job to fail) and `guide` sessions keep their c
 
 The decision page (MOTIR-7906) is the record of authority; where it differs from this summary, the
 page wins. It supersedes the decision page `cmuvqpwut00k3hxoibeafy0he` **on these clauses only**.
+
+### AMENDMENT 23 §6, amended 2026-10-09 — an ended session whose plan still waits is carried WITH that plan
+
+**What changed, and on whose word.** Story MOTIR-7928 (_A waiting plan whose session has ended keeps
+its conversation_) narrows §6 of the decision page `cmuvqpwut00k3hxoibeafy0he` for one case. The
+owner's rule, 2026-10-08: _"if the user starts to chat to ask further change of the plan, we can
+create a new session to carry the existing plan."_ The decision page is not edited; its version 1
+stays the record of what was decided on 2026-10-05, and this block narrows it, the same relationship
+the paragraph above has with the page.
+
+**Superseded, for an ended session whose latest plan is undecided only:**
+
+- the page's §6: _"Never for `restarted` (the person asked for something new)"_;
+- the page's §6: _"No plan and no lock is copied."_;
+- this file's paragraph above: _"a failed or idle session can be copied into a fresh one"_.
+
+**The rule now.**
+
+- **Copyability is keyed on the ended session's undecided plan, not on its end reason.** An ended
+  `conversation` session is copyable when it holds a plan that is still undecided (`generating`,
+  `planned` or `stale`), whatever ended it. In practice that is `restarted` (Plan something new
+  pressed while a plan waited) and `failed`, which covers sessions that ended before MOTIR-7905
+  stopped a failure from ending its session. The plan read is the session's most recent UNDECIDED
+  plan, not its latest plan: in such a `failed` session the latest plan is the failed attempt,
+  already declined, and the plan that waits is an earlier one.
+- **What is carried.** The `user` and `assistant` turns, exactly as §6 already copies them. The
+  **plan moves**: `Plan.sessionId` is set to the new session, and the move is recorded on the plan's
+  revision trail as one `session_carried` row (`{ fromSessionId, toSessionId }`). The new session
+  takes the hold on the scope's cards, taking over from the owner's earlier sessions of the scope; a
+  conversation plan holds nothing of its own, so the session's hold is the plan's hold.
+- **When.** The owner's first turn in the overlay performs the carry, in the same transaction as
+  that turn. There is no separate start press. A plan decided between the read and the send is
+  refused (`PLAN_SESSION_PLAN_DECIDED`) and nothing is carried.
+- **After.** Further turns revise that same plan; they do not open a second one.
+
+**What still stands.**
+
+- A session ended `restarted` with NO undecided plan is still not copyable; _"the person asked for
+  something new"_ still holds there.
+- `declined` / `approved` are never copied. They cannot hold an undecided plan.
+- `idle` is unchanged: the idle close requires that no plan waits, so an idle end carries no plan
+  and its §6 copy is as before.
+- The ended session stays ended and unchanged. It is never reopened (MOTIR-7629's rule, which
+  MOTIR-7906 kept).
+- Only the session's starter may carry it.
+- Take-back (page §3) wins: when the owner already has an open session on the scope, the turn lands
+  there and nothing is carried.
+
+**The page's Consequences, amended by quotation.** _"A session can read Closed while a `planned` plan
+it produced still waits in To approve (§2 step 3). That plan is decided on its own surface, as
+today."_ It still can, and the plan can now also be carried into a new session by its owner's next
+turn. Where an undecided plan is decided is MOTIR-7883's overlay, not this block's subject.
+
+**Consumed by:** the carry service (MOTIR-7930) and the overlay on an ended session whose plan still
+waits (MOTIR-7932). MOTIR-7905 consumes the same mechanism for its sessions that ended `failed`
+before it.
 
 ### AMENDMENT 23 — sub-amendment (MOTIR-7906 · MOTIR-7937, 2026-10-10): situation 2 — a failure beside a waiting plan
 

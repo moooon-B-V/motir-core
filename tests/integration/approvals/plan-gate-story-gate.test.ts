@@ -514,7 +514,7 @@ describe('SEAM · DECLINE from the planning surface’s client (§11.4, §11.8 i
 });
 
 describe('SEAM · HELD, then decidable again — through the plan routes and the queue (§11.5c, §11.3)', () => {
-  it('while the lease runs the SAME gate stays in the queue with `held`, both verbs are refused; after it, a stamp from before is stale and a fresh one decides it', async () => {
+  it('while the lease runs the SAME gate stays awaiting but leaves the queue, both verbs are refused; after it, a stamp from before is stale and a fresh one decides it', async () => {
     const plan = await anchoredPlan(['One', 'Two']);
     const [gate] = await gatesOf(plan.planId);
     const before = await shownStamp(plan.planId);
@@ -522,13 +522,13 @@ describe('SEAM · HELD, then decidable again — through the plan routes and the
 
     await plansService.acquireRevisionLease(plan.planId, fx.ctx, HARNESS);
 
-    // Still ASKED — still listed, still counted, and the row says why it cannot be pressed.
+    // Still ASKED — the gate stays `awaiting` — but nothing waits on the person
+    // while the plan is being rewritten: it leaves Waiting on you for Planning
+    // (MOTIR-7988, amending §11.5c), list and count alike.
     const queue = await approvalGatesService.listAwaitingMe(meCtx());
-    expect(queue.items.map((r) => r.gateId)).toEqual([gate!.id]);
-    expect(queue.items[0]!.subject).toMatchObject({
-      held: { reason: 'revision_in_flight', heldBy: 'Claude Code' },
-    });
-    expect(await approvalGatesService.countAwaitingMe(meCtx())).toBe(1);
+    expect(queue.items.map((r) => r.gateId)).toEqual([]);
+    expect(await approvalGatesService.countAwaitingMe(meCtx())).toBe(0);
+    expect((await gatesOf(plan.planId))[0]!.state).toBe('awaiting');
 
     for (const press of [viaPlanApprove, viaPlanDecline]) {
       const refused = await press(plan.planId, { stamp: before });
@@ -550,6 +550,10 @@ describe('SEAM · HELD, then decidable again — through the plan routes and the
 
     // Nothing superseded, nothing re-raised.
     expect(await gatesOf(plan.planId)).toEqual([gate]);
+    // And it is back in Waiting on you.
+    expect((await approvalGatesService.listAwaitingMe(meCtx())).items.map((r) => r.gateId)).toEqual(
+      [gate!.id],
+    );
 
     // A press against the version read BEFORE the rewrite is refused stale.
     const stale = await viaPlanApprove(plan.planId, { stamp: before });

@@ -1,3 +1,4 @@
+import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
 import { withWorkspaceContext } from '@/lib/workspaces';
 import {
   workItemRepository,
@@ -75,6 +76,13 @@ async function readTabs(
 ): Promise<Record<WorkbenchTabKey, WorkbenchTabWatermarkDto>> {
   return withWorkspaceContext(ctx, async (tx) => {
     const projectScopes = await resolveActiveProjectScope(ctx, tx);
+    const projectIds = projectScopes.map((scope) => scope.projectId);
+    // The approvals tab's own exclusion (MOTIR-7988): a plan a revision holds is
+    // off the list, so it is off the reading too — and its return moves the count.
+    const heldPlanIds = await planRevisionHoldService.heldPlanIds(
+      { workspaceId: ctx.workspaceId, projectIds },
+      tx,
+    );
     const [
       toDo,
       inProgress,
@@ -108,7 +116,7 @@ async function readTabs(
         { slice: HOME_SLICE_TO_FIX },
         tx,
       ),
-      // TO RESUME (MOTIR-7707) — the third slice of the category, read the same way…
+      // TO RESUME (MOTIR-7707) — the third slice of the category, read the same way.
       workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
         ctx.userId,
         ctx.workspaceId,
@@ -133,31 +141,25 @@ async function readTabs(
       // the scope is built here the same way `homeService.tabCounts` builds it
       // for the badge — the browsable project ids, which are `[]` for a reader
       // who may not browse their active project, and the reader.
-      (async () => {
-        const projectIds = projectScopes.map((scope) => scope.projectId);
-        return approvalGateRepository.watermarkAwaitingRoutedTo(
-          {
+      approvalGateRepository.watermarkAwaitingRoutedTo(
+        {
+          projectIds,
+          userId: ctx.userId,
+          // The planning-session liveness set (MOTIR-7913), as the list reads it.
+          awaitingSessionIds: await planChangeSessionRepository.listAwaitingPersonIdsInProjects(
             projectIds,
-            userId: ctx.userId,
-            // The planning-session liveness set (MOTIR-7913), as the list reads it.
-            awaitingSessionIds: await planChangeSessionRepository.listAwaitingPersonIdsInProjects(
-              projectIds,
-              tx,
-            ),
-          },
-          tx,
-        );
-      })(),
+            tx,
+          ),
+          heldPlanIds,
+        },
+        tx,
+      ),
       watcherRepository.watermarkByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
       // …and the reader's FAILED PLANNING SESSIONS, which To resume now lists and counts
       // (MOTIR-7914): one aggregate over the list's own predicate, merged into the tab's pair
       // below so a new failure moves the tab's change detector as it moves the badge.
       planChangeSessionRepository.watermarkFailedOpenForOwner(
-        {
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-          projectIds: projectScopes.map((scope) => scope.projectId),
-        },
+        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectIds },
         tx,
       ),
     ]);

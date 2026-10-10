@@ -1,4 +1,12 @@
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
+import {
+  finishedCardsOf,
+  PlanAgainNotAvailableClientError,
+  PlanSessionPlanDecidedClientError,
+  PlanSessionPlanStaleClientError,
+} from '@/lib/planning/planSessionClientErrors';
+
+export type { StalePlanFinishedCard } from '@/lib/planning/planSessionClientErrors';
 import type {
   CopyableSessionDto,
   DebugLandingDto,
@@ -70,10 +78,36 @@ async function readError(res: Response): Promise<{ code: string | null; body: un
   }
 }
 
-/** The typed refusal for a failed response, its body kept. */
+/** The typed refusal for a failed response, its body kept — narrowed to its own
+ *  class for the codes a caller follows rather than shows (MOTIR-7932). */
 async function clientError(res: Response): Promise<PlanEditsClientError> {
   const { code, body } = await readError(res);
-  return new PlanEditsClientError(res.status, code, body);
+  const b = (body ?? {}) as Record<string, unknown>;
+  switch (code) {
+    case 'PLAN_SESSION_PLAN_STALE':
+      return new PlanSessionPlanStaleClientError(
+        res.status,
+        body,
+        typeof b.planId === 'string' ? b.planId : '',
+        finishedCardsOf(b.finishedCards),
+      );
+    case 'PLAN_SESSION_PLAN_AGAIN_NOT_AVAILABLE':
+      return new PlanAgainNotAvailableClientError(
+        res.status,
+        body,
+        typeof b.reason === 'string' ? b.reason : 'superseded',
+        typeof b.latestPlanId === 'string' ? b.latestPlanId : null,
+      );
+    case 'PLAN_SESSION_PLAN_DECIDED':
+      return new PlanSessionPlanDecidedClientError(
+        res.status,
+        body,
+        typeof b.planId === 'string' ? b.planId : null,
+        typeof b.planStatus === 'string' ? b.planStatus : null,
+      );
+    default:
+      return new PlanEditsClientError(res.status, code, body);
+  }
 }
 
 async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -113,11 +147,20 @@ export async function findResumableSession(signal?: AbortSignal): Promise<Resuma
  *  23 §6; MOTIR-7643) — the overlay's **Start a new session**. Sends no turn. */
 export async function startCopiedSession(
   fromSessionId: string,
+  opts: { body?: string; isAnswer?: boolean; anchorKey?: string | null } = {},
   signal?: AbortSignal,
 ): Promise<PlanChangeSessionDto> {
+  // With `body` this is the CARRY (MOTIR-7930): the new session's first turn, in
+  // the same transaction that moves a waiting plan into it. The answer may be the
+  // caller's OPEN session instead (`takenBack: true`), with the turn already in it.
   return post<PlanChangeSessionDto>(
     '/api/ai/plan-change/session',
-    { copyFrom: fromSessionId },
+    {
+      copyFrom: fromSessionId,
+      ...(opts.body !== undefined ? { body: opts.body } : {}),
+      ...(opts.isAnswer ? { isAnswer: true } : {}),
+      ...(opts.anchorKey ? { anchorKey: opts.anchorKey } : {}),
+    },
     signal,
   );
 }
@@ -228,10 +271,12 @@ export async function recordPlannerTurn(
 export async function submitPlanChange(
   sessionId: string,
   signal?: AbortSignal,
+  /** `planAgainOf` — the STALE plan whose Plan it again this is (MOTIR-7945). */
+  opts: { planAgainOf?: string } = {},
 ): Promise<PlanChangeSubmitResponse> {
   return post<PlanChangeSubmitResponse>(
     '/api/ai/plan-change/session/submit',
-    { sessionId },
+    { sessionId, ...(opts.planAgainOf ? { planAgainOf: opts.planAgainOf } : {}) },
     signal,
   );
 }

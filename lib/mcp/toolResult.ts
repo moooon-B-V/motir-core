@@ -74,6 +74,7 @@ import {
   PlanNotInExpectedStatusError,
   UnresolvedPlanRefError,
   PlanNotEditableError,
+  PlanRevisionInFlightError,
   PlanProposalReferencedError,
   PlanPersistenceError,
   PlanGrammarError,
@@ -597,6 +598,10 @@ export function toToolError(err: unknown): CallToolResult {
     // caller rather than a JSON-RPC internal error.
     err instanceof PlanNotEditableError ||
     err instanceof PlanProposalReferencedError ||
+    // PLAN_REVISION_IN_FLIGHT (MOTIR-7988) — `hold_plan_revision`'s `start` while
+    // another revision holds the plan. The message names who holds it and until
+    // when, which is the retry instruction an agent needs.
+    err instanceof PlanRevisionInFlightError ||
     err instanceof PlanPersistenceError ||
     // INVALID_PLAN_REF_GRAPH / PLAN_GRAMMAR_VIOLATION AT THE APPEND (MOTIR-5414).
     // The append now judges a `folder:<id>` placement where it is written — an

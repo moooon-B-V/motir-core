@@ -267,6 +267,8 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   record_plan_revision_reason: 'work_items:write',
   // A planner session's step (MOTIR-7824) — a plan-side write reaching no work item.
   report_plan_step: 'work_items:write',
+  // A plan's revision hold (MOTIR-7988) — a plan-side write reaching no work item.
+  hold_plan_revision: 'work_items:write',
   create_work_item: 'work_items:write',
   update_work_item: 'work_items:write',
   transition_status: 'work_items:write',

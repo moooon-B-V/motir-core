@@ -136,14 +136,19 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // console (MOTIR-7608); its tenant arm is the org's own.
     // The five `idea*`
     // tables are MOTIR-7662's idea store — Motir's own content, readable by
-    // anyone and written solely from this tier (`20261007100000_idea_store`).
+    // anyone and written solely from this tier (`20261007100000_idea_store`);
+    // the three `*_translation` tables hold the same content per locale
+    // (MOTIR-7773, `20261009200000_idea_translations`) under the same posture.
     expect(rows.map((r) => r.tablename)).toEqual([
       'enterprise_request',
       'idea',
       'idea_evidence',
+      'idea_evidence_translation',
       'idea_research_run',
       'idea_tag',
       'idea_tag_assignment',
+      'idea_tag_translation',
+      'idea_translation',
       'impersonation_session',
       'org_feature_flag',
       'organization',

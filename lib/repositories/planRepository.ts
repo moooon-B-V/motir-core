@@ -37,6 +37,23 @@ export interface GeneratingRequestedByScope {
   workspaceId: string;
   projectIds: readonly string[];
   userId: string;
+  /**
+   * The reader's `planned` plans a REVISION currently holds (Bug MOTIR-7988) —
+   * resolved by the service from the revision lease, which lives on the trail and
+   * so cannot be a column test. They are being written again, so they belong in
+   * the set; omitted or empty, the set is the `generating` plans alone.
+   */
+  revisingPlanIds?: readonly string[];
+}
+
+/**
+ * The PROJECT scope a revision-hold read covers (Bug MOTIR-7988) — the workspace,
+ * the project ids, and, when the read is one requester's, that requester.
+ */
+export interface RevisionHoldScope {
+  workspaceId: string;
+  projectIds: readonly string[];
+  createdById?: string;
 }
 
 /**
@@ -50,18 +67,25 @@ export interface GeneratingRequestedByScope {
  *   - `workspaceId` is explicit because RLS is inert under the dev/CI superuser;
  *   - `createdById = userId` excludes a cadence plan by construction (its
  *     requester is null) and a teammate's plan alike — no `origin` test needed;
- *   - `status = 'generating'` and only that: a plan proposed, declined or failed
+ *   - `status = 'generating'`, or a `planned` plan named in `revisingPlanIds`
+ *     (MOTIR-7988): a plan a revision holds is being written again, and it is
+ *     back in the set until the lease ends. A plan proposed, declined or failed
  *     has left the set on the next read.
  *
  * Served by `@@index([projectId, status, createdAt])` — `generating` is a small
  * tail and `createdById` filters inside it, so no new index is added.
  */
 function generatingRequestedByWhere(scope: GeneratingRequestedByScope): Prisma.PlanWhereInput {
+  const revising = scope.revisingPlanIds ?? [];
   return {
     workspaceId: scope.workspaceId,
     projectId: { in: [...scope.projectIds] },
     createdById: scope.userId,
-    status: 'generating',
+    ...(revising.length === 0
+      ? { status: 'generating' }
+      : {
+          OR: [{ status: 'generating' }, { status: 'planned', id: { in: [...revising] } }],
+        }),
     // A plan whose SESSION is failed and waiting to resume is NOT being written (MOTIR-7914):
     // the failure path leaves it `generating` on purpose, and without this carve-out it would
     // sit here and turn *stalled* — a claim that is false, because it waits for the person to
@@ -223,6 +247,26 @@ export const planRepository = {
       data: { sourceJobId: jobId, lastActivityAt: new Date() },
     });
     return result.count > 0;
+  },
+
+  /** A session's most recent UNDECIDED plan (`generating` / `planned` / `stale`),
+   *  or `null` — the plan a carry moves (Story MOTIR-7928 · MOTIR-7930). Not the
+   *  LATEST plan: a session that ended `failed` can hold a declined attempt on
+   *  top of an earlier plan that still waits. `tx` required: it guards the move. */
+  async findLatestUndecidedBySession(
+    sessionId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Plan | null> {
+    return tx.plan.findFirst({
+      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /** MOVE a plan to another session (MOTIR-7930) — one `update` of
+   *  `Plan.sessionId`, nothing else. */
+  async moveToSession(id: string, sessionId: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.plan.update({ where: { id }, data: { sessionId }, select: { id: true } });
   },
 
   /** The id of a session's LATEST plan — "is this plan the conversation's current
@@ -609,6 +653,36 @@ export const planRepository = {
       skip: window.skip,
       take: window.take,
     });
+  },
+
+  /**
+   * The `planned` plans in a scope that wrote a trail row at or after `since`
+   * (Bug MOTIR-7988) — the CANDIDATES for a held revision lease. A lease is held
+   * only while the plan's latest trail row is inside the window, so a plan with no
+   * row since `now − window` cannot be held, and this narrows the lease read to the
+   * handful of plans anyone touched in the last few minutes. The exact verdict is
+   * the service's (`revisionLeaseOf` over each candidate's trail).
+   *
+   * Every trail row counts here, internal ones included: a superset is harmless,
+   * the exact read excludes them.
+   */
+  async findPlannedIdsWithTrailSince(
+    scope: RevisionHoldScope,
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (scope.projectIds.length === 0) return [];
+    const rows = await tx.plan.findMany({
+      where: {
+        workspaceId: scope.workspaceId,
+        projectId: { in: [...scope.projectIds] },
+        status: 'planned',
+        ...(scope.createdById ? { createdById: scope.createdById } : {}),
+        revisions: { some: { changedAt: { gte: since } } },
+      },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
   },
 
   /**

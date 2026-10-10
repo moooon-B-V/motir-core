@@ -90,9 +90,22 @@ export type PlanRevisionChangeKind =
   | 'declined'
   | 'revision_started'
   | 'revision_ended'
+  | 'revision_renewed'
   | 'bug_filed'
   | 'brief_edited'
-  | 'reason_classified';
+  | 'reason_classified'
+  | 'session_carried';
+
+/**
+ * ⚠️ `session_carried` is the THIRTEENTH (Story MOTIR-7928 · MOTIR-7930), and like
+ * `brief_edited` it is about the PLAN, not a proposal. It records the plan MOVING
+ * to a new planning session: its session ended while it still waited, and its
+ * owner's next turn carried the conversation and the plan into a new one
+ * (`planChangeSessionsService.startCopied`). It carries no `planItemId`, its
+ * `diff` is `{ fromSessionId, toSessionId }`, and `changedById` is the person
+ * whose turn carried it. It is tenant-visible — a reviewer reading the trail sees
+ * the plan change conversations — so it is NOT internal.
+ */
 
 /**
  * ⚠️ `reason_classified` is the TWELFTH (Story MOTIR-5543 · MOTIR-6083), and it

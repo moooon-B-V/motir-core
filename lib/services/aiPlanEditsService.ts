@@ -496,61 +496,26 @@ export const aiPlanEditsService = {
     prompt: string,
     ctx: ProjectContext,
   ): Promise<PlanEditSubmitResult> {
-    await assertCanPlan(ctx);
+    return dispatchRevision(planId, prompt, ctx);
+  },
 
-    // Resolved through the service, so a plan in ANOTHER project is refused as
-    // NOT-FOUND rather than as forbidden: `getPlan` asserts browse access on the
-    // plan's own project, and a caller who cannot browse it must not learn it
-    // exists (the no-existence-leak posture the whole tree keeps).
-    const plan = await plansService.getPlan(planId, ctx);
-    if (plan.projectId !== ctx.projectId) throw new PlanNotFoundError(planId);
-
-    const actor: PlanRevisionAgentActor = {
-      source: 'native',
-      harness: 'Motir',
-      model: null,
-    };
-
-    // ── TWO CHEAP REFUSALS BEFORE A JOB IS SPENT ─────────────────────────────
-    // The ACQUIRE below is the authority and re-checks both under the plan row
-    // lock. These are here so the two refusals a reviewer actually hits — a
-    // decided plan, and a plan somebody is already revising — cost nothing: a
-    // job dispatched and then refused is an AI call the org paid for and nobody
-    // can read.
-    if (plan.status !== 'generating' && plan.status !== 'planned') {
-      throw new PlanNotEditableError(planId, plan.status);
-    }
-    const held = await plansService.readRevisionLease(planId, ctx);
-    if (held) throw new PlanRevisionInFlightError(planId, held.heldBy, held.expiresAt);
-
-    // The PLAN is the target. `planId` is the only address a revision has — its proposals have
-    // no `MOTIR-<n>` until somebody approves them — and `context.planId` is what makes this a
-    // REVISION on the far side (`readerForPlan`'s first arm): its silent loss would route every
-    // revision to the project arm. Nothing to unwind on a failed submit: the lease is taken
-    // BELOW, so a submit that never returned a job id has left the plan exactly as it found it.
-    const { tenant, planningFields } = await buildPlanningJobContext(ctx);
-    const { jobId } = await submitJob(
-      'plan',
-      tenant,
-      { planId, prompt, ...planningFields },
-      { userId: ctx.userId },
-    );
-
-    // ⚠️ ACQUIRE AFTER THE SUBMIT, because the acquire is what BINDS the plan to
-    // this job (`sourceJobId`) and the id does not exist until motir-ai answers.
-    // Folding the bind into the acquire is what keeps them atomic — a plan leased
-    // to a job the internal seams cannot resolve would be worse than either
-    // failure alone — and it is why there is no separate bind door.
-    //
-    // The residual race, stated rather than hidden: two reviewers pressing Send
-    // in the same instant both dispatch, and the loser's acquire is REFUSED. Its
-    // job is then orphaned — it resolves no plan by `sourceJobId` and fails its
-    // first callback, writing nothing. That costs one wasted AI call on a genuine
-    // simultaneous race, which the pre-check above already removes for every
-    // non-simultaneous one, and it is the cheaper end of the trade: the
-    // alternative holds a lease over a job that may never exist.
-    await plansService.acquireRevisionLease(planId, ctx, actor, { jobId });
-    return { jobId, planId };
+  /**
+   * REVISE the plan a CONVERSATION is waiting on (MOTIR-7945) — the session's
+   * submit routes a turn here when the session's most recent undecided plan is
+   * `planned`, so a further turn changes that plan instead of opening a second
+   * one beside it. `intent` is the session's accumulated intent.
+   *
+   * ⚠️ NOT A FORK of {@link submitRevise}: both run `dispatchRevision`, so the
+   * consent flag, the onboarding marker, the code and repository context, the
+   * cheap refusals and the acquire-after-submit order stay in ONE place. The
+   * caller binds the turn to the session afterwards.
+   */
+  async submitSessionRevision(
+    planId: string,
+    intent: string,
+    ctx: ProjectContext,
+  ): Promise<PlanEditSubmitResult> {
+    return dispatchRevision(planId, intent, ctx);
   },
 
   /**
@@ -588,3 +553,73 @@ export const aiPlanEditsService = {
     return streamJob(jobId, coreProjectId);
   },
 };
+
+/** The body {@link aiPlanEditsService.submitRevise} documents — shared with
+ *  `submitSessionRevision` so the two can never drift (MOTIR-7945). */
+async function dispatchRevision(
+  planId: string,
+  prompt: string,
+  ctx: ProjectContext,
+): Promise<PlanEditSubmitResult> {
+  await assertCanPlan(ctx);
+
+  // Resolved through the service, so a plan in ANOTHER project is refused as
+  // NOT-FOUND rather than as forbidden: `getPlan` asserts browse access on the
+  // plan's own project, and a caller who cannot browse it must not learn it
+  // exists (the no-existence-leak posture the whole tree keeps).
+  const plan = await plansService.getPlan(planId, ctx);
+  if (plan.projectId !== ctx.projectId) throw new PlanNotFoundError(planId);
+
+  const actor: PlanRevisionAgentActor = {
+    source: 'native',
+    harness: 'Motir',
+    model: null,
+  };
+
+  // ── TWO CHEAP REFUSALS BEFORE A JOB IS SPENT ─────────────────────────────
+  // The ACQUIRE below is the authority and re-checks both under the plan row
+  // lock. These are here so the two refusals a reviewer actually hits — a
+  // decided plan, and a plan somebody is already revising — cost nothing: a
+  // job dispatched and then refused is an AI call the org paid for and nobody
+  // can read.
+  if (plan.status !== 'generating' && plan.status !== 'planned') {
+    throw new PlanNotEditableError(planId, plan.status);
+  }
+  const held = await plansService.readRevisionLease(planId, ctx);
+  if (held) throw new PlanRevisionInFlightError(planId, held.heldBy, held.expiresAt);
+
+  // The tenant and every planning-context field come from the ONE builder every planning
+  // submit shares (consent flag, onboarding marker, code and repository context). A
+  // revision is the OTHER submit that bypasses `submitPlanEditJob` — deliberately, because it
+  // holds a lease and must not open a second plan — so it has to call the builder itself or
+  // never gets the fields at all (MOTIR-4343, MOTIR-4736). Nothing to unwind on a failed
+  // submit: the lease is taken BELOW, so a submit that never returned a job id has left the
+  // plan exactly as it found it.
+  const { tenant, planningFields } = await buildPlanningJobContext(ctx);
+  const { jobId } = await submitJob(
+    // ONE planning kind (ADR §6 step 2). `context.planId` below is what makes this a REVISION
+    // on the far side — `readerForPlan`'s first arm — so its silent loss would route every
+    // revision to the project arm. The PLAN is the target: `planId` is the only address a
+    // revision has, its proposals having no `MOTIR-<n>` until somebody approves them.
+    'plan',
+    tenant,
+    { planId, prompt, ...planningFields },
+    { userId: ctx.userId },
+  );
+
+  // ⚠️ ACQUIRE AFTER THE SUBMIT, because the acquire is what BINDS the plan to
+  // this job (`sourceJobId`) and the id does not exist until motir-ai answers.
+  // Folding the bind into the acquire is what keeps them atomic — a plan leased
+  // to a job the internal seams cannot resolve would be worse than either
+  // failure alone — and it is why there is no separate bind door.
+  //
+  // The residual race, stated rather than hidden: two reviewers pressing Send
+  // in the same instant both dispatch, and the loser's acquire is REFUSED. Its
+  // job is then orphaned — it resolves no plan by `sourceJobId` and fails its
+  // first callback, writing nothing. That costs one wasted AI call on a genuine
+  // simultaneous race, which the pre-check above already removes for every
+  // non-simultaneous one, and it is the cheaper end of the trade: the
+  // alternative holds a lease over a job that may never exist.
+  await plansService.acquireRevisionLease(planId, ctx, actor, { jobId });
+  return { jobId, planId };
+}

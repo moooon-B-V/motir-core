@@ -12,8 +12,14 @@ import {
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
 import { PLAN_TARGET_LOCK_LEASE_MS } from '@/lib/planChange/targetLock';
+import {
+  REVISION_ENDED_KIND,
+  REVISION_STARTED_KIND,
+  revisionLeaseOf,
+} from '@/lib/planChange/revisionLease';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { planRevisionsService } from '@/lib/services/planRevisionsService';
@@ -253,6 +259,46 @@ export async function endSession(
 }
 
 /**
+ * RELEASE THE LEASE OF A REVISION WHOSE JOB FAILED (MOTIR-7945). A job that died
+ * used to release nothing (`plansService.releaseRevisionLease`'s note), so a
+ * conversation whose revision failed held its plan for the whole lease window and
+ * its next turn was refused `PLAN_REVISION_IN_FLIGHT`.
+ *
+ * Only the revision THIS job started is ended — the open `revision_started` row
+ * must name `jobId` — so an older job's failure never ends a newer revision.
+ * Idempotent: with nothing held, or held by another job, it writes nothing.
+ * Signed by Motir (no acting user), like the drift service's moves; `plan` and
+ * `plan_revision` are pure workspace gates.
+ */
+export async function releaseRevisionForFailedJob(
+  jobId: string,
+  workspaceId: string,
+): Promise<{ planId: string; released: boolean } | null> {
+  return withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const plan = await planRepository.findBySourceJobId(jobId, workspaceId, tx);
+    if (!plan) return null;
+    const locked = await planRepository.lockById(plan.id, tx);
+    if (!locked) return null;
+    const rows = await planRevisionRepository.listByPlan(plan.id, tx);
+    if (!revisionLeaseOf(rows, new Date())) return { planId: plan.id, released: false };
+    const start = [...rows].reverse().find((r) => r.changeKind === REVISION_STARTED_KIND);
+    const startedBy = (start?.diff as { jobId?: unknown } | null)?.jobId;
+    if (startedBy !== jobId) return { planId: plan.id, released: false };
+    await planRevisionsService.recordRevision(
+      {
+        planId: plan.id,
+        changeKind: REVISION_ENDED_KIND,
+        changedById: null,
+        actor: { source: 'native', harness: 'Motir', model: null },
+        diff: { revision: true, jobId, failed: true },
+      },
+      tx,
+    );
+    return { planId: plan.id, released: true };
+  });
+}
+
+/**
  * END THE SESSION WHOSE ATTEMPT JUST FAILED (MOTIR-7638; AMENDMENT 23 §2) — the
  * stream relays call it on a terminal `failed` / `canceled` frame.
  *
@@ -266,6 +312,10 @@ export async function endSessionForFailedJob(
   jobId: string,
   ctx: { userId: string; workspaceId: string; projectId: string },
 ): Promise<PlanSessionEndResult | null> {
+  // A failed REVISION job also gives its plan back (MOTIR-7945): it is the
+  // plan's `sourceJobId` as well as the session's `lastJobId`, and without this
+  // the plan stayed leased to a dead job for the whole lease window.
+  await releaseRevisionForFailedJob(jobId, ctx.workspaceId);
   const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
     planChangeSessionRepository.findByProjectAndLastJobId(
       ctx.projectId,
@@ -546,4 +596,5 @@ export const planSessionEndService = {
   endSessionForFailedJob,
   endSessionForAbandonedPlan,
   settleFailedJob,
+  releaseRevisionForFailedJob,
 };

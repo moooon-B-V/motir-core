@@ -1,3 +1,4 @@
+import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
 import type { Prisma } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -715,6 +716,13 @@ export const homeService = {
   async tabCounts(ctx: HomeActorContext): Promise<HomeTabCountsDto> {
     return withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await resolveActiveProjectScope(ctx, tx);
+      const projectIds = projectScopes.map((scope) => scope.projectId);
+      // The plans a revision holds right now (MOTIR-7988) — out of the approvals
+      // count and into the planning one, exactly as the two lists read them.
+      const heldPlanIds = await planRevisionHoldService.heldPlanIds(
+        { workspaceId: ctx.workspaceId, projectIds },
+        tx,
+      );
       const [
         toDo,
         toFixCards,
@@ -778,7 +786,6 @@ export const homeService = {
         // predicate. Two tabs in one strip meaning two different things by "me"
         // is the divergence that ADR records itself refusing to "fix" back.
         (async () => {
-          const projectIds = projectScopes.map((scope) => scope.projectId);
           return approvalGateRepository.countAwaitingRoutedTo(
             {
               projectIds,
@@ -789,6 +796,7 @@ export const homeService = {
                 projectIds,
                 tx,
               ),
+              heldPlanIds,
             },
             tx,
           );
@@ -801,8 +809,9 @@ export const homeService = {
         planRepository.countGeneratingRequestedBy(
           {
             workspaceId: ctx.workspaceId,
-            projectIds: projectScopes.map((scope) => scope.projectId),
+            projectIds,
             userId: ctx.userId,
+            revisingPlanIds: heldPlanIds,
           },
           tx,
         ),

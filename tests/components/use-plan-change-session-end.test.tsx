@@ -97,6 +97,8 @@ import {
   SESSION_END_REREAD_MS,
 } from '@/lib/hooks/usePlanChangeConversation';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
+import { PlanSessionPlanDecidedClientError } from '@/lib/planning/planSessionClientErrors';
+import { planReview, planReviewItem } from '../helpers/planReview';
 
 function session(bodies: string[]): PlanChangeSessionDto {
   return {
@@ -350,6 +352,151 @@ describe('Start a new session (AMENDMENT 23 §6)', () => {
       await copying;
     });
     expect(startCopied).toHaveBeenCalledWith('s1');
+  });
+});
+
+// ── THE CARRY (Story MOTIR-7928 · MOTIR-7932; design states 3–6) ───────────
+//
+// The first send on an ENDED session whose plan still waits calls the carry, and
+// the overlay follows whichever of the server's three answers comes back.
+
+const WAITING = planReview(
+  [planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', kind: 'story', title: 'CSV' })],
+  { id: 'plan_w' },
+);
+
+function waitingSession(): PlanChangeSessionDto {
+  return {
+    ...ended(session(['Split ACME-40.'])),
+    endReason: 'restarted',
+    startedByViewer: true,
+    viewerCanPlan: true,
+    pendingPlanId: 'plan_w',
+  };
+}
+
+const CARRIED: PlanChangeSessionDto = {
+  ...session(['Split ACME-40.', 'Put PDF in this sprint.']),
+  id: 's2',
+  createdAt: '2026-07-27T12:00:00.000Z',
+  copiedFromSessionId: 's1',
+};
+
+async function mountedOnWaiting(onRestarted = vi.fn()) {
+  readSession.mockResolvedValue(waitingSession());
+  fetchReview.mockResolvedValue(WAITING);
+  const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1', onRestarted }));
+  await waitFor(() => expect(hook.result.current.state.phase).toBe('review'));
+  return { ...hook, onRestarted };
+}
+
+describe('the CARRY — the first send on an ended session whose plan waits', () => {
+  it('calls the carry ONCE with the words — never the ordinary turn — and holds the turn pending', async () => {
+    const pending = deferred();
+    startCopied.mockReturnValue(pending.promise);
+    const { result } = await mountedOnWaiting();
+
+    let first!: Promise<void>;
+    await act(async () => {
+      first = result.current.send('Put PDF in this sprint.');
+    });
+    expect(result.current.state.carrying).toEqual({ text: 'Put PDF in this sprint.' });
+    // A second send while the carry is in flight makes no second call.
+    await act(async () => {
+      await result.current.send('Again.');
+    });
+    expect(startCopied).toHaveBeenCalledTimes(1);
+    expect(startCopied).toHaveBeenCalledWith(
+      's1',
+      { body: 'Put PDF in this sprint.', isAnswer: false, anchorKey: null },
+      expect.anything(),
+    );
+    expect(submitAsk).not.toHaveBeenCalled();
+    expect(append).not.toHaveBeenCalled();
+    // The plan stays decidable while the carry is in flight.
+    expect(result.current.state.review?.id).toBe('plan_w');
+
+    pending.resolve({ ...CARRIED, takenBack: false });
+    submit.mockResolvedValue({ jobId: 'job-r', planId: 'plan_w', session: CARRIED });
+    await act(async () => {
+      await first;
+    });
+  });
+
+  it('CARRIED: swaps through the restart’s path, marks it carried, and revises the SAME plan', async () => {
+    startCopied.mockResolvedValue(CARRIED);
+    submit.mockResolvedValue({ jobId: 'job-r', planId: 'plan_w', session: CARRIED });
+    const { result, onRestarted } = await mountedOnWaiting();
+
+    await act(async () => {
+      await result.current.send('Put PDF in this sprint.');
+    });
+    expect(onRestarted).toHaveBeenCalledWith('s2');
+    expect(result.current.state.session?.id).toBe('s2');
+    expect(result.current.state.carriedFrom).toBe('s1');
+    expect(result.current.state.carrying).toBeNull();
+    // The planner answers the turn already appended: the session's own submit.
+    expect(submit).toHaveBeenCalledWith('s2', expect.anything());
+    expect(stream).toHaveBeenCalledWith(
+      'job-r',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(result.current.state.planId).toBe('plan_w');
+    expect(result.current.state.takenBackWaitingPlanId ?? null).toBeNull();
+  });
+
+  it('TAKEN BACK: swaps to the open session, keeps the waiting plan to lead back to, runs nothing', async () => {
+    const open2 = {
+      ...session(['Other scope.', 'Put PDF in this sprint.']),
+      id: 's_open',
+      takenBack: true,
+    };
+    startCopied.mockResolvedValue(open2);
+    const { result, onRestarted } = await mountedOnWaiting();
+
+    await act(async () => {
+      await result.current.send('Put PDF in this sprint.');
+    });
+    expect(onRestarted).toHaveBeenCalledWith('s_open');
+    expect(result.current.state.session?.id).toBe('s_open');
+    expect(result.current.state.takenBackWaitingPlanId).toBe('plan_w');
+    expect(result.current.state.carriedFrom ?? null).toBeNull();
+    expect(result.current.state.review).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('DECIDED while typing: the session does not change, the words are kept, the plan reads decided', async () => {
+    startCopied.mockRejectedValue(
+      new PlanSessionPlanDecidedClientError(409, {}, 'plan_w', 'approved'),
+    );
+    const { result, onRestarted } = await mountedOnWaiting();
+    fetchReview.mockResolvedValue({ ...WAITING, status: 'approved' });
+    readSession.mockResolvedValue({ ...waitingSession(), pendingPlanId: null });
+
+    await act(async () => {
+      await result.current.send('Put PDF in this sprint.');
+    });
+    expect(onRestarted).not.toHaveBeenCalled();
+    expect(result.current.state.session?.id).toBe('s1');
+    expect(result.current.state.session?.pendingPlanId).toBeNull();
+    expect(result.current.state.carryDecided).toEqual({ text: 'Put PDF in this sprint.' });
+    expect(result.current.state.decided).toBe('accepted');
+    expect(result.current.state.errorCode).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('another member’s send goes nowhere: an ended session they did not start carries nothing', async () => {
+    readSession.mockResolvedValue({ ...waitingSession(), startedByViewer: false });
+    fetchReview.mockResolvedValue(WAITING);
+    const { result } = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+    await waitFor(() => expect(result.current.state.phase).toBe('review'));
+    await act(async () => {
+      await result.current.send('Mine now.');
+    });
+    expect(startCopied).not.toHaveBeenCalled();
   });
 });
 

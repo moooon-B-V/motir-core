@@ -145,6 +145,7 @@ import {
 import { classifyRevision } from '@/lib/plans/approvedShapeChange';
 import {
   PLAN_REVISION_LEASE_MS,
+  REVISION_RENEWED_KIND,
   revisionLeaseOf,
   REVISION_STARTED_KIND,
   REVISION_ENDED_KIND,
@@ -7297,6 +7298,62 @@ export const plansService = {
       tx,
     );
     return { planId, released: true };
+  },
+
+  /**
+   * RENEW a held revision lease — one `revision_renewed` row, under the same lock
+   * (Bug MOTIR-7988). The lease's window runs from the latest trail row, so the
+   * heartbeat keeps the plan held while an MCP-driven revision is between two real
+   * writes; a hosted revision is one motir-ai job and never calls this.
+   *
+   * ⚠️ IT NEVER TAKES A LEASE THAT IS NOT HELD. A lapsed lease means the plan was
+   * decidable for a moment and a person may already be reading it as a question,
+   * so quietly re-holding it is a decision this door does not make: it answers
+   * `renewed: false` and the caller takes it again with
+   * {@link plansService.acquireRevisionLease}, which refuses a plan that is no
+   * longer editable and one somebody else is revising. Nothing is written then.
+   */
+  async renewRevisionLease(
+    planId: string,
+    ctx: ServiceContext,
+    actor: PlanRevisionAgentActor,
+  ): Promise<{ planId: string; renewed: boolean; expiresAt: Date | null }> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      async (tx) => {
+        const locked = await planRepository.lockById(planId, tx);
+        if (!locked) throw new PlanNotFoundError(planId);
+        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+        if (!fresh) throw new PlanNotFoundError(planId);
+        const held = revisionLeaseOf(
+          await planRevisionRepository.listByPlan(planId, tx),
+          new Date(),
+        );
+        if (!held) return { planId, renewed: false, expiresAt: null };
+        const at = new Date();
+        await planRevisionsService.recordRevision(
+          {
+            planId,
+            changeKind: REVISION_RENEWED_KIND,
+            ...generationActor(fresh, ctx),
+            actor,
+            diff: { revision: true },
+          },
+          tx,
+        );
+        return {
+          planId,
+          renewed: true,
+          expiresAt: new Date(at.getTime() + PLAN_REVISION_LEASE_MS),
+        };
+      },
+    );
   },
 
   async declinePlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {

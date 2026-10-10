@@ -521,7 +521,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
     'one documented exception — `watcher` carries no `updatedAt`, so its freshness lives ' +
     'across a relation Prisma cannot `_max` through.';
 
-  it('is ONE transaction of sixteen statements, and the shape is the point', async () => {
+  it('is ONE transaction of seventeen statements, and the shape is the point', async () => {
     for (let i = 0; i < 10; i += 1) await card(`Bulk ${i}`);
     await gateOn({ title: 'Decide me', assigneeId: fx.ownerId });
 
@@ -539,6 +539,12 @@ describe('COST — this read runs once a second per open Workbench', () => {
       'project.findUnique',
       'workspaceMembership.findUnique',
       'workflowStatus.findMany',
+      // The plans a revision holds right now (MOTIR-7988) — they leave the
+      // approvals count for Planning, so the approvals aggregate needs their ids.
+      // One indexed prefilter on `plan` (planned + a trail row inside the lease
+      // window); the trail itself is read ONLY when that finds a candidate, which
+      // in the steady state — no revision in flight — it does not.
+      'plan.findMany',
       // The seven tabs. Five work tabs, one aggregate each — To fix (MOTIR-6604)
       // and To resume (MOTIR-7707) are each one more slice of the same membership
       // read and so one more aggregate rather than a second round trip…
@@ -551,13 +557,13 @@ describe('COST — this read runs once a second per open Workbench', () => {
       // planning sessions that still wait on their person (MOTIR-7913) — a gate's subject
       // is an opaque id the aggregate cannot join, so the live set rides in as `IN (…)`…
       'planChangeSession.findMany',
+      'approvalGate.aggregate',
       // …Watching, the one tab that costs two…
       'watcher.count',
       'watcher.findFirst',
       // …and the reader's failed planning sessions, folded into To resume's pair
       // (MOTIR-7914) so a new failure moves the tab's change detector as it moves the badge.
       'planChangeSession.aggregate',
-      'approvalGate.aggregate',
     ]);
   });
 
@@ -567,9 +573,9 @@ describe('COST — this read runs once a second per open Workbench', () => {
     const watermark = await statementsOf(() => workbenchWatermarkService.read(ctx()));
     const counts = await statementsOf(() => homeService.tabCounts(ctx()));
 
-    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Sixteen statements is
+    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Seventeen statements is
     // not obviously cheap or expensive in the abstract; what settles it is that
-    // the strip ALREADY issues fifteen to render its badges for the tabs this
+    // the strip ALREADY issues sixteen to render its badges for the tabs this
     // read covers, and this read answers strictly more — every tab's freshness as
     // well as its size — for one more.
     //
@@ -588,7 +594,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
       if (i % 3 === 0) await watch(row.id, fx.ownerId);
     }
     const big = await statementsOf(() => workbenchWatermarkService.read(ctx()));
-    expect(big).toHaveLength(16);
+    expect(big).toHaveLength(17);
   });
 
   it('runs on indexes that are actually present', async () => {

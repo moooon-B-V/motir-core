@@ -24,6 +24,9 @@ import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 // including the metered-AI ones (402 out-of-credits / 502 transport) the submit
 // path can raise.
 // The conversation to submit is named by `sessionId` in the body (MOTIR-6023).
+// A turn over a waiting plan revises it, a stale plan answers 409
+// `PLAN_SESSION_PLAN_STALE` with its finished cards, and `planAgainOf` accepts
+// that outcome by planning again in the same session (MOTIR-7945).
 export async function POST(req: Request): Promise<Response> {
   const gate = await requireCompliantSession();
   if (!gate.ok) return gate.response;
@@ -47,8 +50,16 @@ export async function POST(req: Request): Promise<Response> {
   const sessionId = readSessionId((body as { sessionId?: unknown })?.sessionId);
   if (!sessionId) return missingSessionId();
 
+  // Plan it again (MOTIR-7945): the stale plan whose outcome the owner accepted.
+  // Absent or not a string means an ordinary turn.
+  const rawPlanAgainOf = (body as { planAgainOf?: unknown })?.planAgainOf;
+  const planAgainOf =
+    typeof rawPlanAgainOf === 'string' && rawPlanAgainOf.trim() ? rawPlanAgainOf.trim() : null;
+
   try {
-    const result = await planChangeSessionsService.submit(ctx, { sessionId });
+    const result = await planChangeSessionsService.submit(ctx, { sessionId }, undefined, {
+      planAgainOf,
+    });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     const mapped = mapPlanChangeError(err);

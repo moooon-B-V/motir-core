@@ -1,3 +1,4 @@
+import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
 import type {
   ApprovalGateKind,
   ApprovalGateState,
@@ -644,7 +645,17 @@ async function routingScope(
     projectIds,
     tx,
   );
-  return { projectIds, userId: ctx.userId, awaitingSessionIds };
+  return {
+    projectIds,
+    userId: ctx.userId,
+    awaitingSessionIds,
+    // A plan a revision holds is being planned again, not waiting on anybody
+    // (MOTIR-7988): its gate leaves the queue and the count until the lease ends.
+    heldPlanIds: await planRevisionHoldService.heldPlanIds(
+      { workspaceId: ctx.workspaceId, projectIds },
+      tx,
+    ),
+  };
 }
 
 /**
