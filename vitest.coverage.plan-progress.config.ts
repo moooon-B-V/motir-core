@@ -107,6 +107,8 @@ export default defineConfig({
       'tests/components/plan-review-canvas-cues.test.tsx',
       // MOTIR-7831 — the Planning tab.
       'tests/components/workbench-planning-tab.test.tsx',
+      // MOTIR-7905 — the To resume entry mapper added to the same file.
+      'tests/workbench/toResumePlanningSessionMapper.test.ts',
       // MOTIR-7832 — the island's poll arms the tab's own suite leaves unreached.
       'tests/components/workbench-planning-list-poll.test.tsx',
       // MOTIR-8066 — the narration story gate, so the floor on the widened
