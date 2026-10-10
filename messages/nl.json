@@ -9212,6 +9212,7 @@
             "retire": "Een idee ingetrokken",
             "delete": "Een idee verwijderd",
             "tag_add": "Een ideetag toegevoegd",
+            "tag_translate": "Een ideetag vertaald",
             "research_run": "Een onderzoeksrun voor ideeën vastgelegd"
           }
         }

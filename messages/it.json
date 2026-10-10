@@ -9215,6 +9215,7 @@
             "retire": "Ritirata un’idea",
             "delete": "Eliminata un’idea",
             "tag_add": "Aggiunto un tag a un’idea",
+            "tag_translate": "Tradotto un tag di un’idea",
             "research_run": "Registrata una ricerca di idee"
           }
         }

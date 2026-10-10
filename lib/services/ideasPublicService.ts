@@ -13,6 +13,7 @@ import {
   IdeaNotFoundError,
   InvalidIdeaFilterError,
 } from '@/lib/ideas/errors';
+import { localizeLabel, type PublicIdeaLocale } from '@/lib/ideas/publicLocale';
 import type { PublicIdeaFilters } from '@/lib/ideas/types';
 import { toPublicIdeaDto } from '@/lib/mappers/ideaMappers';
 import {
@@ -30,6 +31,12 @@ import {
  * The read is capped at `PUBLIC_IDEA_LIST_CAP` and the service THROWS when the
  * cap is reached, so the day pagination is owed it announces itself instead of
  * truncating silently.
+ *
+ * EVERY READ TAKES A LOCALE (Story MOTIR-7772 · MOTIR-7775), resolved by the
+ * route from `?locale=` alone (`resolvePublicIdeaLocale`). It loads that
+ * locale's translations and serves each field in it where it has text, in
+ * English elsewhere, naming the English ones. `'en'` loads none and serves the
+ * English as before. Category labels stay English in every locale.
  */
 export const PUBLIC_IDEA_LIST_CAP = 500;
 
@@ -62,40 +69,60 @@ export const ideasPublicService = {
    *   An unknown TAG is not an error: it simply matches nothing.
    * @throws IdeaListCapExceededError when the read reaches the cap.
    */
-  async listActive(filters: PublicIdeaFilters = {}): Promise<PublicIdeaListDto> {
+  async listActive(
+    filters: PublicIdeaFilters = {},
+    locale: PublicIdeaLocale = 'en',
+  ): Promise<PublicIdeaListDto> {
     const query = parseFilters(filters);
+    const translated = locale === 'en' ? undefined : locale;
     const [rows, counts] = await Promise.all([
-      ideaPublicRepository.listActive(query, PUBLIC_IDEA_LIST_CAP + 1),
-      ideaPublicRepository.categoryCounts({ ...query, category: undefined }),
+      ideaPublicRepository.listActive(query, PUBLIC_IDEA_LIST_CAP + 1, translated),
+      ideaPublicRepository.categoryCounts({ ...query, category: undefined }, translated),
     ]);
     if (rows.length > PUBLIC_IDEA_LIST_CAP)
       throw new IdeaListCapExceededError(PUBLIC_IDEA_LIST_CAP);
 
     const byCategory = new Map(counts.map((c) => [c.category, c.count]));
     return {
-      items: rows.map(toPublicIdeaDto),
+      items: rows.map((row) => toPublicIdeaDto(row, locale)),
       categories: IDEA_CATEGORIES.filter((c) => (byCategory.get(c) ?? 0) > 0).map((c) => ({
         slug: c,
         label: IDEA_CATEGORY_LABELS[c],
         count: byCategory.get(c)!,
       })),
       total: rows.length,
+      locale,
     };
   },
 
-  /** Every tag in use on an active idea, with its active count. */
-  async listTags(): Promise<PublicIdeaTagDto[]> {
-    const rows = await ideaPublicRepository.tagCounts();
-    return rows.map((r) => ({ slug: r.slug, label: r.label, count: r.count }));
+  /** Every tag in use on an active idea, with its active count, labelled in `locale`. */
+  async listTags(locale: PublicIdeaLocale = 'en'): Promise<PublicIdeaTagDto[]> {
+    const rows = await ideaPublicRepository.tagCounts(locale === 'en' ? undefined : locale);
+    return rows.map((r) => {
+      const label = localizeLabel(
+        {
+          label: r.label,
+          translations:
+            locale !== 'en' && r.translatedLabel !== null
+              ? [{ locale, label: r.translatedLabel }]
+              : [],
+        },
+        locale,
+      );
+      return { slug: r.slug, label: label.text, labelFallback: label.fallback, count: r.count };
+    });
   },
 
   /**
    * One active idea. An unknown slug and a retired one throw the SAME error, so
    * a public reader cannot tell a retired idea ever existed.
    */
-  async getBySlug(slug: string): Promise<PublicIdeaDto> {
-    const row = await ideaPublicRepository.findActiveBySlug(slug);
+  async getBySlug(slug: string, locale: PublicIdeaLocale = 'en'): Promise<PublicIdeaDto> {
+    const row = await ideaPublicRepository.findActiveBySlug(
+      slug,
+      locale === 'en' ? undefined : locale,
+    );
     if (!row) throw new IdeaNotFoundError(slug);
-    return toPublicIdeaDto(row);
+    return toPublicIdeaDto(row, locale);
   },
 };

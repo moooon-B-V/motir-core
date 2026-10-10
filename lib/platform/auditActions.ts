@@ -297,7 +297,7 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * `{ kind: 'token', apiTokenId }`.
    *
    * `retire` and `delete` are `required`: the trail must say why an idea left
-   * the public list. The other four are `inherited` — required on the row, but
+   * the public list. The others are `inherited` — required on the row, but
    * supplied by the caller's context (the skill's run, or "edited in the
    * console") rather than typed per idea.
    */
@@ -306,6 +306,8 @@ export const PLATFORM_AUDIT_ACTIONS = {
   'idea.retire': { kind: 'write', reason: 'required' },
   'idea.delete': { kind: 'write', reason: 'required' },
   'idea.tag_add': { kind: 'write', reason: 'inherited' },
+  // Story MOTIR-7772 · MOTIR-7774 — label translations merged into an existing tag.
+  'idea.tag_translate': { kind: 'write', reason: 'inherited' },
   'idea.research_run': { kind: 'write', reason: 'inherited' },
 } as const satisfies Record<
   string,

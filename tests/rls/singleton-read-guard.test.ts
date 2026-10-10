@@ -307,7 +307,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // `app.platform_staff`, which the same test proves refuses an unbound write.
   'ideaPublicRepository.ts#listActive': [
     'public',
-    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) + idea_translation_read + idea_evidence_translation_read + idea_tag_translation_read (20261009200000_idea_translations) · ideaStoreRlsRead.test "the unbound read" + "the translation tables" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
   'ideaPublicRepository.ts#categoryCounts': [
     'public',
@@ -315,23 +315,23 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   ],
   'ideaPublicRepository.ts#tagCounts': [
     'public',
-    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) + idea_translation_read + idea_evidence_translation_read + idea_tag_translation_read (20261009200000_idea_translations) · ideaStoreRlsRead.test "the unbound read" + "the translation tables" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
   'ideaPublicRepository.ts#findActiveBySlug': [
     'public',
-    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) + idea_translation_read + idea_evidence_translation_read + idea_tag_translation_read (20261009200000_idea_translations) · ideaStoreRlsRead.test "the unbound read" + "the translation tables" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
   'ideaRepository.ts#findBySlugForStaff': [
     'public',
-    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) + idea_translation_read + idea_evidence_translation_read + idea_tag_translation_read (20261009200000_idea_translations) · ideaStoreRlsRead.test "the unbound read" + "the translation tables" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
   'ideaRepository.ts#findAllForStaff': [
     'public',
-    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) + idea_translation_read + idea_evidence_translation_read + idea_tag_translation_read (20261009200000_idea_translations) · ideaStoreRlsRead.test "the unbound read" + "the translation tables" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
   'ideaTagRepository.ts#listAll': [
     'public',
-    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) · ideaStoreRlsRead.test "the unbound read" (under SET LOCAL ROLE motir_app, nothing bound)',
+    'idea_read + idea_evidence_read + idea_tag_read + idea_tag_assignment_read + idea_research_run_read (20261007100000_idea_store) + idea_translation_read + idea_evidence_translation_read + idea_tag_translation_read (20261009200000_idea_translations) · ideaStoreRlsRead.test "the unbound read" + "the translation tables" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
   'ideaResearchRunRepository.ts#listRecent': [
     'public',
