@@ -122,7 +122,10 @@ async function readSubject(
   // answers `kind_not_built` before the gate is looked at, and keeps answering it once
   // MOTIR-6035 registers the handler; forwarding such a link to the planning surface
   // is MOTIR-6037's.
-  if (kind === 'plan_approval') return { state: 'kind_not_built' };
+  // A card-less kind has no work item to read a port from (`plan_approval`, ADR §11.5b; and
+  // `planning_session`, MOTIR-7913 — its row opens the planning overlay through the
+  // plan-overlay door, never this port).
+  if (kind === 'plan_approval' || kind === 'planning_session') return { state: 'kind_not_built' };
   if (!gate) return { state: 'no_gate' };
   if (!isRegisteredGateKind(kind)) return { state: 'kind_not_built' };
   switch (kind) {

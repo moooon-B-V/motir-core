@@ -458,7 +458,7 @@ describe('a SUPERSEDED subject retires its AWAITING gate (ADR §6b)', () => {
     // §2's `assigneeId ?? reporterId` routes it to that same actor.
     const byRouting = await withWorkspaceContext(fx.ctx, (tx) =>
       approvalGateRepository.findAwaitingRoutedTo(
-        { projectIds: [fx.projectId], userId: fx.ctx.userId },
+        { projectIds: [fx.projectId], userId: fx.ctx.userId, awaitingSessionIds: [] },
         { skip: 0, take: 50 },
         tx,
       ),
@@ -706,7 +706,7 @@ describe('WITHDRAWING the current result retires its AWAITING gate (MOTIR-5574; 
 
     const byRouting = await withWorkspaceContext(fx.ctx, (tx) =>
       approvalGateRepository.findAwaitingRoutedTo(
-        { projectIds: [fx.projectId], userId: fx.ctx.userId },
+        { projectIds: [fx.projectId], userId: fx.ctx.userId, awaitingSessionIds: [] },
         { skip: 0, take: 50 },
         tx,
       ),

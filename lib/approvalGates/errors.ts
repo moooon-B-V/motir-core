@@ -321,6 +321,9 @@ export class ApprovalGateStaleSubjectError extends ApprovalGateError {
 
 /** Why {@link ApprovalGateVerbNotOfferedError} refused — the three shapes a verb can miss by. */
 export type VerbNotOfferedReason =
+  /** ANY decision sent to a `planning_session` gate (MOTIR-7913): the person answers by
+   *  SENDING A TURN, and the gate offers no verb at all. */
+  | 'no_verbs_on_planning_session'
   | 'choose_on_other_kind'
   | 'approve_on_choice'
   | 'unknown_option'

@@ -60,6 +60,8 @@ export async function refusalVerdictOfferFor(
     case 'agent_review':
     // Manual work has no refusal at all — Mark done is its one verb (MOTIR-7474).
     case 'manual_work':
+    // A planning session's gate has no verbs at all (MOTIR-7913).
+    case 'planning_session':
       return false;
     default: {
       const unhandled: never = gate.kind;

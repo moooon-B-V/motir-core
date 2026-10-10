@@ -420,6 +420,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/impersonationExpirySweep.ts',
     shape: '{ closed: number; scanned: number }',
   },
+  'raise-awaiting-reply-planning-sessions': {
+    file: 'lib/jobs/definitions/planTargetLockSweep.ts',
+    // Added by MOTIR-7913: the lock sweep marks and gates a conversation the person left
+    // waiting on the planner's reply, ahead of the idle close.
+    shape: '{ raised: number; sessionIds: Array<string> }',
+  },
   'close-idle-planning-sessions': {
     file: 'lib/jobs/definitions/planTargetLockSweep.ts',
     // Added by MOTIR-7638 (AMENDMENT 23 §2): the lock sweep closes an idle

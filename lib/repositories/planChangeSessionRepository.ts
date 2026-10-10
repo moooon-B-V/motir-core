@@ -3,6 +3,7 @@ import { dbRead } from '@/lib/db';
 import {
   CLEARED_AWAITING_COLUMNS,
   CLEARED_FAILURE_COLUMNS,
+  AWAITING_PERSON_WHERE,
   FAILED_WAITING_WHERE,
   NOT_WAITING_WHERE,
   parsePlanSessionAwaiting,
@@ -17,6 +18,32 @@ import {
  * alias; `Prisma.PlanChangeSessionUncheckedUpdateInput` itself is named only here.
  */
 export type PlanChangeSessionUpdateInput = Prisma.PlanChangeSessionUncheckedUpdateInput;
+
+/**
+ * The SQL predicate of {@link planChangeSessionRepository.listAwaitingReplyCandidates}
+ * (MOTIR-7913), over an aliased `plan_change_session s`. The last turn is read with
+ * `ORDER BY seq DESC LIMIT 1`; a `system` marker turn (a submission) is a last turn
+ * that is NOT the planner's, so a session mid-submission never qualifies.
+ */
+function awaitingReplyCandidateSql(before: Date): Prisma.Sql {
+  return Prisma.sql`
+    s."ended_at" IS NULL
+    AND s."origin" = 'conversation'
+    AND s."created_by_id" IS NOT NULL
+    AND s."failed_at" IS NULL
+    AND s."awaiting_person_since" IS NULL
+    AND s."last_activity_at" < ${before}
+    AND (
+      SELECT t."role" = 'assistant' AND t."question" IS NULL
+      FROM "plan_change_turn" t
+      WHERE t."session_id" = s."id"
+      ORDER BY t."seq" DESC
+      LIMIT 1
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM "plan" p WHERE p."session_id" = s."id" AND p."status" = 'generating'
+    )`;
+}
 
 /**
  * ONE definition of "the owner's failed-waiting sessions" for the list and the count
@@ -391,6 +418,92 @@ export const planChangeSessionRepository = {
       orderBy: [{ lastActivityAt: 'asc' }, { id: 'asc' }],
       take: limit,
     });
+  },
+
+  /**
+   * What a Waiting on you ROW says about the sessions it names (MOTIR-7913): each
+   * session's wait, targets, newest plan and the planner's latest turn. One query for
+   * the page; a session that no longer exists is absent.
+   */
+  async findManyForGateSummary(ids: readonly string[], tx: Prisma.TransactionClient) {
+    if (ids.length === 0) return [];
+    return tx.planChangeSession.findMany({
+      where: { id: { in: [...ids] } },
+      select: {
+        id: true,
+        projectId: true,
+        targetKeys: true,
+        awaitingPersonSince: true,
+        awaitingPersonCause: true,
+        plans: {
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: { id: true, title: true },
+        },
+        turns: {
+          where: { role: 'assistant' },
+          orderBy: { seq: 'desc' },
+          take: 1,
+          select: { body: true, question: true },
+        },
+      },
+    });
+  },
+
+  /**
+   * The ids of the sessions in these projects that are AWAITING THEIR PERSON right now
+   * (`AWAITING_PERSON_WHERE`; MOTIR-7913) — the liveness set the Waiting on you read
+   * admits a `planning_session` gate through, so a stale gate row for a session that
+   * has since failed or ended is never listed.
+   */
+  async listAwaitingPersonIdsInProjects(
+    projectIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (projectIds.length === 0) return [];
+    const rows = await tx.planChangeSession.findMany({
+      where: { projectId: { in: [...projectIds] }, ...AWAITING_PERSON_WHERE },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  },
+
+  /**
+   * THE REPLY-WAIT DISCOVERY (MOTIR-7913): open `conversation` sessions with an owner,
+   * in NEITHER wait, whose LAST turn is the planner's with no question, with no
+   * `generating` plan (no job in flight), quiet since before `before`. Cross-tenant, so
+   * it runs under the system context; the raise re-checks each one under its own lock
+   * with {@link isAwaitingReplyCandidate}. Oldest first, bounded per pass.
+   *
+   * A raw read because "the last turn is X" is not a Prisma `where`; both queries below
+   * spell it through ONE fragment so discovery and re-check cannot drift.
+   */
+  async listAwaitingReplyCandidates(
+    before: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    const rows = await tx.$queryRaw<Array<{ id: string; workspace_id: string }>>`
+      SELECT s."id", s."workspace_id"
+      FROM "plan_change_session" s
+      WHERE ${awaitingReplyCandidateSql(before)}
+      ORDER BY s."last_activity_at" ASC, s."id" ASC
+      LIMIT ${limit}
+    `;
+    return rows.map((row) => ({ id: row.id, workspaceId: row.workspace_id }));
+  },
+
+  /** The same predicate for ONE session — the raise's re-check under the session's lock. */
+  async isAwaitingReplyCandidate(
+    id: string,
+    before: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT s."id" FROM "plan_change_session" s
+      WHERE s."id" = ${id} AND ${awaitingReplyCandidateSql(before)}
+    `;
+    return rows.length > 0;
   },
 
   // ── THE WAITING STATE (Story MOTIR-7905 · MOTIR-7908) ────────────────────────

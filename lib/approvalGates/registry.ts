@@ -20,6 +20,7 @@ import { decisionConfirmationGateHandler } from '@/lib/approvalGates/decisionCon
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
 import { manualWorkGateHandler } from '@/lib/approvalGates/manualWorkHandler';
 import { planApprovalGateHandler } from '@/lib/approvalGates/planApprovalHandler';
+import { planningSessionGateHandler } from '@/lib/approvalGates/planningSessionHandler';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 import type { GateDecision } from '@/lib/dto/approvalGate';
@@ -104,6 +105,10 @@ import type { TransactionBudget } from '@/lib/workspaces/context';
 // MOTIR-7474 registers `manual_work`: a manual card a run reached, waiting on a person
 // (`docs/decisions/manual-work-gate.md`). Its one verb is Mark done; it is decided by the
 // work being done and withdrawn when the card stops being manual.
+//
+// MOTIR-7913 registers `planning_session`: a hosted planning session that needs its person
+// (Story MOTIR-7905; ADR §1's MOTIR-7906 amendment). The second card-less kind; it has NO
+// verbs — the person answers by sending a turn.
 export type RegisteredGateKind =
   | 'design_result'
   | 'decision_approval'
@@ -113,7 +118,8 @@ export type RegisteredGateKind =
   | 'decision_confirmation'
   | 'plan_approval'
   | 'agent_review'
-  | 'manual_work';
+  | 'manual_work'
+  | 'planning_session';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -526,6 +532,7 @@ export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   plan_approval: planApprovalGateHandler,
   agent_review: agentReviewGateHandler,
   manual_work: manualWorkGateHandler,
+  planning_session: planningSessionGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

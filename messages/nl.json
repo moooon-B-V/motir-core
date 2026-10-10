@@ -8747,7 +8747,8 @@
         "decision_confirmation": "Beslissing bevestigen",
         "plan_approval": "Goedkeuring van plan",
         "agent_review": "Agentreview",
-        "manual_work": "Handmatig werk"
+        "manual_work": "Handmatig werk",
+        "planning_session": "Planningssessie"
       },
       "reviewRow": "{key} beoordelen — {sentence}",
       "pullRequest": {

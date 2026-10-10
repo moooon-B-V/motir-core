@@ -7067,6 +7067,7 @@
   "workbench.approvals.kind.plan_approval": "Plan approval",
   "workbench.approvals.kind.agent_review": "Agent review",
   "workbench.approvals.kind.manual_work": "Manual work",
+  "workbench.approvals.kind.planning_session": "Planning session",
   "workbench.approvals.reviewRow": "Review {key} — {sentence}",
   "workbench.approvals.pullRequest.more": "+{count} more",
   "workbench.approvals.pullRequest.repos": "In {repos}",

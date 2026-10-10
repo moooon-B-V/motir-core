@@ -8747,7 +8747,8 @@
         "decision_confirmation": "決定の確認",
         "plan_approval": "計画の承認",
         "agent_review": "エージェントのレビュー",
-        "manual_work": "手作業"
+        "manual_work": "手作業",
+        "planning_session": "プランニングセッション"
       },
       "reviewRow": "{key} をレビュー — {sentence}",
       "pullRequest": {

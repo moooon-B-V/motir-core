@@ -8747,7 +8747,8 @@
         "decision_confirmation": "Potwierdzenie decyzji",
         "plan_approval": "Zatwierdzenie planu",
         "agent_review": "Przegląd agenta",
-        "manual_work": "Praca ręczna"
+        "manual_work": "Praca ręczna",
+        "planning_session": "Sesja planowania"
       },
       "reviewRow": "Przejrzyj {key} — {sentence}",
       "pullRequest": {

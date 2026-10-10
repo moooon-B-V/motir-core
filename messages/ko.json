@@ -8744,7 +8744,8 @@
         "decision_confirmation": "결정 확인",
         "plan_approval": "계획 승인",
         "agent_review": "에이전트 검토",
-        "manual_work": "수동 작업"
+        "manual_work": "수동 작업",
+        "planning_session": "기획 세션"
       },
       "reviewRow": "{key} 검토 — {sentence}",
       "pullRequest": {

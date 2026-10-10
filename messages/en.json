@@ -8744,7 +8744,8 @@
         "decision_confirmation": "Confirm decision",
         "plan_approval": "Plan approval",
         "agent_review": "Agent review",
-        "manual_work": "Manual work"
+        "manual_work": "Manual work",
+        "planning_session": "Planning session"
       },
       "reviewRow": "Review {key} — {sentence}",
       "pullRequest": {

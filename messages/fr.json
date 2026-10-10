@@ -8750,7 +8750,8 @@
         "decision_confirmation": "Confirmer la décision",
         "plan_approval": "Approbation de plan",
         "agent_review": "Revue par agent",
-        "manual_work": "Travail manuel"
+        "manual_work": "Travail manuel",
+        "planning_session": "Session de planification"
       },
       "reviewRow": "Examiner {key} — {sentence}",
       "pullRequest": {

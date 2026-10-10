@@ -4371,7 +4371,8 @@ async function readerMaySeePlan(
   const held = await projectAccessService.getPermissions(plan.projectId, ctx, tx);
   if (holdsRecordView(held, ctx, 'plan:view_any')) return true;
   const routedPlanIds = await approvalGateRepository.findAwaitingRoutedPlanIds(
-    { projectIds: [plan.projectId], userId: ctx.userId },
+    // The plan kind alone is selected, so no planning-session set is owed.
+    { projectIds: [plan.projectId], userId: ctx.userId, awaitingSessionIds: [] },
     tx,
   );
   if (plan.sessionId !== null) {

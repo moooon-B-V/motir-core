@@ -25,6 +25,7 @@ import {
 } from '@/lib/planChange/failureRecord';
 import type { PlanSessionFailureRecord } from '@/lib/planChange/sessionWaitingState';
 import { getJob } from '@/lib/ai/motirAiClient';
+import { clearWithin as clearPlanningSessionGate } from '@/lib/services/planningSessionGateService';
 
 // THE ONE END OPERATION (story MOTIR-7630 · MOTIR-7637;
 // `docs/decisions/agent-authored-plans.md` AMENDMENT 23 §2).
@@ -137,6 +138,10 @@ export async function endSessionWithin(
     },
     tx,
   );
+  // THE PLANNING-SESSION GATE ENDS WITH THE SESSION (MOTIR-7913): withdrawn `session_ended`
+  // in the same transaction as the end write, whatever the reason. The end write above
+  // already nulled the marker; this supersedes the gate row.
+  await clearPlanningSessionGate(tx, { sessionId, cause: 'session_ended' });
   if (!ownsRelease) return { ended: true, session };
 
   if (latestPlanId) {

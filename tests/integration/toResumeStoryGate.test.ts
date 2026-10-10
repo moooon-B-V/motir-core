@@ -977,7 +977,7 @@ describe('guard · the derivation reads exactly the five run-holding kinds', () 
     // Every kind a CARD can carry — `plan_approval` is card-less by a check constraint
     // (`approval_gate_work_item_iff_not_plan`), so no run's leg can hold one.
     const kinds = (Object.values(ApprovalGateKind) as ApprovalGateKind[]).filter(
-      (kind) => kind !== 'plan_approval',
+      (kind) => kind !== 'plan_approval' && kind !== 'planning_session',
     );
     expect(kinds.length).toBeGreaterThan(FIVE.length);
     for (const kind of kinds) {

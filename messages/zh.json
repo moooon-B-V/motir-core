@@ -8740,7 +8740,8 @@
         "decision_confirmation": "确认决策",
         "plan_approval": "计划审批",
         "agent_review": "智能体审查",
-        "manual_work": "人工工作"
+        "manual_work": "人工工作",
+        "planning_session": "规划会话"
       },
       "reviewRow": "查看 {key} — {sentence}",
       "pullRequest": {

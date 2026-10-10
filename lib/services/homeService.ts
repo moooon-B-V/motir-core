@@ -12,6 +12,7 @@ import {
   type HomeWorkItemRow,
 } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
@@ -706,10 +707,22 @@ export const homeService = {
         // reporterId`, ADR §2), so this number is counted on the gate's own
         // predicate. Two tabs in one strip meaning two different things by "me"
         // is the divergence that ADR records itself refusing to "fix" back.
-        approvalGateRepository.countAwaitingRoutedTo(
-          { projectIds: projectScopes.map((scope) => scope.projectId), userId: ctx.userId },
-          tx,
-        ),
+        (async () => {
+          const projectIds = projectScopes.map((scope) => scope.projectId);
+          return approvalGateRepository.countAwaitingRoutedTo(
+            {
+              projectIds,
+              userId: ctx.userId,
+              // A planning-session row counts only while its session still waits
+              // (MOTIR-7913) — the same live set `listAwaitingMe` reads.
+              awaitingSessionIds: await planChangeSessionRepository.listAwaitingPersonIdsInProjects(
+                projectIds,
+                tx,
+              ),
+            },
+            tx,
+          );
+        })(),
         // THE PLANNING COUNT (MOTIR-7828) — the plans this reader asked for that are
         // still being written. The SAME builder `workbenchPlanningService
         // .listMyPlansBeingWritten` pages (`generatingRequestedByWhere`), on the same

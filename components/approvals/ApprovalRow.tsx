@@ -127,6 +127,9 @@ const SENTENCE_KEY: Record<ApprovalGateKindDTO, SentenceKey> = {
   // KIND WHOSE SENTENCE DEPENDS ON STATE AND ROUTING: this is its awaiting form, and
   // `manualWorkSentenceKey` picks the other three.
   manual_work: 'manual_work',
+  // A hosted planning session that needs its person (MOTIR-7913): the Workbench card
+  // (MOTIR-7917) draws its row; until then it takes the neutral sentence, as `plan_approval` did.
+  planning_session: 'other',
 };
 
 type SentenceKey =

@@ -27,6 +27,10 @@ import {
 } from '@/lib/planning/refusalSeed';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
+import {
+  clearWithin as clearPlanningSessionGate,
+  raiseWithin as raisePlanningSessionGate,
+} from '@/lib/services/planningSessionGateService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
@@ -399,6 +403,20 @@ async function appendWithin(
       throw new PlanChangeTurnConflictError(fresh.id, seq);
     }
     throw err;
+  }
+
+  // THE PLANNING-SESSION GATE (MOTIR-7913), in the same transaction as the turn and under
+  // the same lock: the person's turn ANSWERS whatever the session was waiting on, and a
+  // planner turn that carries a question starts the wait. A reply wait is raised by the
+  // sweep, never here.
+  if (turn.role === 'user') {
+    await clearPlanningSessionGate(tx, { sessionId: fresh.id, cause: 'answered' });
+  } else if (turn.role === 'assistant' && turn.question) {
+    await raisePlanningSessionGate(tx, {
+      sessionId: fresh.id,
+      workspaceId: pctx.workspaceId,
+      cause: 'question',
+    });
   }
 
   // Every turn is activity, so it pushes the session's lease out too (AMENDMENT

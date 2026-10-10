@@ -8,6 +8,7 @@ import {
   HOME_SLICE_TODO,
 } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import {
   finishedWindowStart,
@@ -124,10 +125,21 @@ async function readTabs(
         // the scope is built here the same way `homeService.tabCounts` builds it
         // for the badge — the browsable project ids, which are `[]` for a reader
         // who may not browse their active project, and the reader.
-        approvalGateRepository.watermarkAwaitingRoutedTo(
-          { projectIds: projectScopes.map((scope) => scope.projectId), userId: ctx.userId },
-          tx,
-        ),
+        (async () => {
+          const projectIds = projectScopes.map((scope) => scope.projectId);
+          return approvalGateRepository.watermarkAwaitingRoutedTo(
+            {
+              projectIds,
+              userId: ctx.userId,
+              // The planning-session liveness set (MOTIR-7913), as the list reads it.
+              awaitingSessionIds: await planChangeSessionRepository.listAwaitingPersonIdsInProjects(
+                projectIds,
+                tx,
+              ),
+            },
+            tx,
+          );
+        })(),
         watcherRepository.watermarkByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
       ]);
     const pair = (reading: { count: number; latest: Date | null }): WorkbenchTabWatermarkDto => ({
