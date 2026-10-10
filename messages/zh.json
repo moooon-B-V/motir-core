@@ -7540,6 +7540,25 @@
       "queuedMarker": "已排队 —— Motir AI 写完当前这个工作项后会读到。",
       "queuedReadMarker": "已在阶段边界读取 —— 已并入本次运行。",
       "midRun": {
+        "pause": {
+          "offerHow": "重新开始会按你的新需求重写计划。继续则把它应用到已经写好的工作项上。",
+          "groupLabel": "重新开始？",
+          "startOver": "重新开始",
+          "keepGoing": "继续并应用",
+          "chosenStartOver": "你选择了重新开始",
+          "chosenKeepGoing": "你选择了继续",
+          "applying": "正在把你的变更应用到已写好的工作项",
+          "unclearNote": "目前还没有改动任何内容。",
+          "pausedWord": "已暂停",
+          "finishingChoice": "正在完成手头的工作项，随后等待你的选择。",
+          "waitingChoice": "等待你的选择。",
+          "finishingAnswer": "正在完成手头的工作项，随后等待你的回答。",
+          "answeredQueued": "已回答 —— 规划者会在下一步读到。",
+          "refusal": {
+            "PLAN_CHANGE_JOB_NOT_RUNNING": "运行在你的回答送达之前已经结束。",
+            "generic": "你的回答没有送达运行。"
+          }
+        },
         "answeringMarker": "正在一旁回答 —— 运行照常继续。",
         "answeredAside": "已在一旁回答 —— 没有发送给运行中的规划。",
         "forwardedAck": "这是一项变更，我已转交给规划者；它会在下一步读到。",

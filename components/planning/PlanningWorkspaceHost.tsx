@@ -469,6 +469,7 @@ function PlanWorkspaceHost({
     startCopied,
     requestRestart,
     answerRestartConfirm,
+    answerRunPause,
     planAgain,
   } = usePlanChangeConversation({
     onApproved,
@@ -1089,6 +1090,7 @@ function PlanWorkspaceHost({
           onStartNewSession={() => void startCopied()}
           onRequestRestart={() => void requestRestart()}
           onAnswerRestart={(answer) => void answerRestartConfirm(answer)}
+          onAnswerRunPause={(choice) => void answerRunPause(choice)}
           // THE CARRY (MOTIR-7932): the hook routes an ended session's send to it, and
           // its swap re-keys the address through `onRestarted`, the restart's path.
           onCarrySend={(text) => void send(text)}

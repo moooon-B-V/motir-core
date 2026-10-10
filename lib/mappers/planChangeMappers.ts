@@ -60,6 +60,7 @@ export function toPlanChangeRunPauseDto(row: PlanChangeRunPause): PlanChangeRunP
     replyText: row.answer === 'replied' ? row.replyText : null,
     delivery: row.mailboxEntryId ? 'delivered' : row.deliveryRefusedCode ? 'refused' : 'pending',
     refusedCode: row.deliveryRefusedCode,
+    mailboxEntryId: row.mailboxEntryId,
   };
 }
 

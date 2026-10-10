@@ -37,6 +37,8 @@ import {
   ProposalRef,
   QueuedLabel,
 } from '@/components/planning/MidRunTurn';
+import { PauseThread } from '@/components/planning/RunPause';
+import { isOpenUnclear, pauseAnchorIndex, pauseOf, pauseOwnedIds } from '@/lib/planning/runPause';
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
 import {
@@ -291,6 +293,11 @@ export interface PlanChangeRailProps {
    * (MOTIR-7998; design state 3b). Optional: absent, the chip is drawn as text.
    */
   onSelectProposal?: (planItemId: string) => void;
+  /**
+   * ANSWER the planner's mid-run pause (MOTIR-8010): *Start over* / *Keep going* on
+   * a re-plan offer. Optional: absent, the offer's buttons do nothing.
+   */
+  onAnswerRunPause?: (choice: 'start_over' | 'apply') => void;
 }
 
 export function PlanChangeRail({
@@ -329,6 +336,7 @@ export function PlanChangeRail({
   onCarrySend,
   onPlanAgain,
   onSelectProposal,
+  onAnswerRunPause,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tp = useTranslations('approvalGate.planApproval');
@@ -373,7 +381,34 @@ export function PlanChangeRail({
   const turns = state.session?.turns ?? [];
   // A forwarded change is a thread turn AND a mailbox entry: the thread draws it,
   // the standalone queued render below skips it (MOTIR-7998).
-  const threadOwned = threadOwnedMailboxIds(turns, []);
+  const runPause = pauseOf(state);
+  const threadOwned = threadOwnedMailboxIds(turns, pauseOwnedIds(runPause));
+  const pauseReplyEntry = runPause?.mailboxEntryId
+    ? (state.queued.find((q) => q.id === runPause.mailboxEntryId) ?? null)
+    : null;
+  const pauseBlock = runPause ? (
+    <PauseThread
+      pause={runPause}
+      pending={Boolean(state.answeringPause)}
+      onAnswer={(choice) => onAnswerRunPause?.(choice)}
+      replyEntry={pauseReplyEntry}
+      refusalCode={state.pauseAnswerRefusal?.code ?? null}
+    />
+  ) : null;
+  const pauseAnchor = runPause ? pauseAnchorIndex(turns, runPause) : -1;
+  // THE PAUSED STATE: an unanswered pause, or a reply the run has not read yet.
+  const paused =
+    runPause !== null &&
+    (runPause.answer === null ||
+      (runPause.answer === 'replied' && pauseReplyEntry?.read === false));
+  // THE REFUSED ANSWER KEEPS ITS WORDS, once: a reply the run never read is put back
+  // in the box when the box is empty.
+  const pauseRefusal = state.pauseAnswerRefusal ?? null;
+  const [seenPauseRefusal, setSeenPauseRefusal] = useState<typeof pauseRefusal>(null);
+  if (pauseRefusal !== seenPauseRefusal) {
+    setSeenPauseRefusal(pauseRefusal);
+    if (pauseRefusal?.text && draft.trim() === '') setDraft(pauseRefusal.text);
+  }
   const refusal = state.refusedForward ?? null;
   const [seenRefusal, setSeenRefusal] = useState<typeof refusal>(null);
   const [refusalRestored, setRefusalRestored] = useState(false);
@@ -536,7 +571,7 @@ export function PlanChangeRail({
     ) : null;
   const composerPlaceholder = heldBlocks
     ? ts('refused.placeholder', { key: held.target })
-    : question
+    : question || isOpenUnclear(runPause)
       ? tc('composerPlaceholderAnswer')
       : askingForReason
         ? tc('composerPlaceholderReplan')
@@ -772,6 +807,7 @@ export function PlanChangeRail({
           </div>
         ) : null}
 
+        {pauseAnchor < 0 ? pauseBlock : null}
         {turns.map((turn, i) => (
           <Fragment key={turn.id}>
             <Turn
@@ -805,6 +841,7 @@ export function PlanChangeRail({
                 {planMovedHere ? <PlanMovedLine /> : null}
               </>
             ) : null}
+            {i === pauseAnchor ? pauseBlock : null}
             {/* THE STALE ANSWER (design state 10), under the turn it answers. */}
             {staleTurnShown && turn.id === stale?.turnId ? staleNotice : null}
           </Fragment>
@@ -1205,6 +1242,7 @@ export function PlanChangeRail({
                   line: runningBarLine(acts, true, tc) ?? tc('progress.submitted'),
                   stopping: state.stopping,
                   onStop,
+                  ...(paused && runPause ? { paused: { kind: runPause.kind } } : {}),
                 }
               : null
           }

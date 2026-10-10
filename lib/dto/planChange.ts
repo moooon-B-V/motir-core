@@ -67,6 +67,12 @@ export interface PlanChangeRunPauseDto {
   /** `pending` until the answer reached the run's mailbox; `refused` when the run ended first. */
   delivery: 'pending' | 'delivered' | 'refused';
   refusedCode: string | null;
+  /**
+   * The mailbox entry the answer wrote (a decline's `fold`, a reply's `fold`, or
+   * START OVER's `restart`), or null while none has been written. The rail ties
+   * the reply's queued → read marks to the entry with this id (MOTIR-8010).
+   */
+  mailboxEntryId: string | null;
 }
 
 export interface PlanChangeTurnDto {

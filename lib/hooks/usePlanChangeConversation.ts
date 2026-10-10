@@ -5,6 +5,7 @@ import type {
   CopyableSessionDto,
   DebugLandingDto,
   EarlierSessionDto,
+  PlanChangeRunPauseDto,
   PlanChangeSessionDto,
   PlanTargetHeldByDto,
 } from '@/lib/dto/planChange';
@@ -37,6 +38,8 @@ import {
   type AskSubmitResponse,
 } from '@/lib/planning/planChangeClient';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
+import { isOpenUnclear, pauseOf, MAILBOX_POLL_MS } from '@/lib/planning/runPause';
+import { useRunPause } from '@/lib/hooks/useRunPause';
 import { carriesWaitingPlan } from '@/lib/planning/sessionCarry';
 import {
   PlanAgainNotAvailableClientError,
@@ -361,6 +364,22 @@ export interface PlanChangeConversationState {
    */
   midRunAsk?: { text: string } | null;
   /**
+   * The planner's latest mid-run PAUSE on this run (MOTIR-8010), as the poll last
+   * read it; absent until it has read one, when the session DTO's own `runPause`
+   * stands in (`pauseOf`). An unanswered pause on the running job IS the paused
+   * state. OPTIONAL (absent reads as unset) so a state built by hand needs no change.
+   */
+  runPause?: PlanChangeRunPauseDto | null;
+  /** An answer to the pause is in flight — both controls read disabled. */
+  answeringPause?: boolean;
+  /** The pause's answer was REFUSED because the run ended first (MOTIR-8010): why,
+   *  which choice, and the reply's text to hand back to the composer. */
+  pauseAnswerRefusal?: {
+    code: string;
+    choice: 'start_over' | 'apply' | 'reply';
+    text?: string;
+  } | null;
+  /**
    * The run ENDED because the user ended it.
    *
    * ⚠️ THIS IS NOT AN ERROR, and the code below goes out of its way not to record
@@ -509,7 +528,6 @@ const OUT_OF_CREDITS_CODES = new Set(['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits
  * about how quickly the surface stops saying QUEUED, not about catching the
  * boundary. It only ticks while a run is streaming AND something is unread.
  */
-const MAILBOX_POLL_MS = 3000;
 
 /**
  * How often an open surface re-reads a plan whose gate is AWAITING, so a revision
@@ -1016,6 +1034,10 @@ export function usePlanChangeConversation({
   // The side ASKS a mid-run turn opens (MOTIR-7996), each on its OWN controller so
   // the planning run's `abortRef` — and its Stop — are never touched by one.
   const midRunAbortsRef = useRef<Set<AbortController>>(new Set());
+
+  // The planner's mid-run PAUSE (MOTIR-8010): polled while a run streams, and
+  // answered by the offer's controls or by the composer's next turn.
+  const { answerRunPause } = useRunPause({ state, stateRef, setState, mountedRef });
 
   useEffect(() => {
     mountedRef.current = true;
@@ -2434,6 +2456,13 @@ export function usePlanChangeConversation({
         // ask streaming on its own keeps the path below. And it NEVER touches
         // `jobId`, `phase`, `stopping` or the run's `abortRef`: the planning run and
         // its Stop are unaffected, the ask streams and settles on its own controller.
+        // …EXCEPT while the planner's `unclear` question is open (MOTIR-8010): the
+        // turn IS its answer, sent to the pause door — never given a verdict by the
+        // answering session, never a second run, and `midRunAsk` is not set.
+        if (isOpenUnclear(pauseOf(stateRef.current))) {
+          await answerRunPause('reply', body);
+          return;
+        }
         const midRunPlanId = stateRef.current.planId;
         const midRunSessionId = stateRef.current.session?.id;
         if (midRunPlanId && midRunSessionId) {
@@ -2677,7 +2706,7 @@ export function usePlanChangeConversation({
         askAnchor,
       );
     },
-    [run, runAsk, carrySend],
+    [run, runAsk, carrySend, answerRunPause],
   );
 
   /** Re-send the accumulated intent after a failure — no new turn, so the
@@ -3210,5 +3239,6 @@ export function usePlanChangeConversation({
     requestRestart,
     answerRestartConfirm,
     planAgain,
+    answerRunPause,
   };
 }

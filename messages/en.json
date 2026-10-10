@@ -7544,6 +7544,25 @@
       "queuedMarker": "Queued — Motir AI reads this when it finishes the work item it is writing.",
       "queuedReadMarker": "Read at the boundary — folded into this run.",
       "midRun": {
+        "pause": {
+          "offerHow": "Start over writes the plan again from your new ask. Keep going applies it to the work items already written.",
+          "groupLabel": "Start over?",
+          "startOver": "Start over",
+          "keepGoing": "Keep going and apply it",
+          "chosenStartOver": "You chose to start over",
+          "chosenKeepGoing": "You chose to keep going",
+          "applying": "Applying your change to the written work items",
+          "unclearNote": "Nothing has been changed yet.",
+          "pausedWord": "paused",
+          "finishingChoice": "Finishing the work items it holds, then waiting for your choice.",
+          "waitingChoice": "Waiting for your choice.",
+          "finishingAnswer": "Finishing the work items it holds, then waiting for your answer.",
+          "answeredQueued": "Answered — the planner reads it at its next step.",
+          "refusal": {
+            "PLAN_CHANGE_JOB_NOT_RUNNING": "The run ended before your answer reached it.",
+            "generic": "Your answer did not reach the run."
+          }
+        },
         "answeringMarker": "Answering on the side — the run keeps going.",
         "answeredAside": "Answered on the side — nothing was sent to the run.",
         "forwardedAck": "That is a change, so I passed it to the planner. It reads it at its next step.",
