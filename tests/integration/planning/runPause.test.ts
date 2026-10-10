@@ -310,6 +310,24 @@ describe('answering a replan', () => {
   });
 });
 
+describe("the read door and the answer's mailbox entry", () => {
+  it('says nothing about a read while the pause is open', async () => {
+    await record({ kind: 'unclear', reason: undefined, question: 'Which?' });
+    const read = await planChangeRunPauseService.latestForSession(sessionId, ctx);
+    expect(read).toMatchObject({ answer: null, mailboxEntryId: null });
+    expect(read).not.toHaveProperty('entryRead');
+  });
+
+  it('reads an entry that is gone as not read', async () => {
+    const { pause } = await record({ kind: 'unclear', reason: undefined, question: 'Which?' });
+    await answer(pause.id, 'reply', 'The new one.');
+    await adminDb.planChangeMailboxEntry.deleteMany({ where: { answersPauseId: pause.id } });
+    expect(await planChangeRunPauseService.latestForSession(sessionId, ctx)).toMatchObject({
+      entryRead: false,
+    });
+  });
+});
+
 describe('answering an unclear pause', () => {
   it('a reply writes one fold turn with the text verbatim, marked as the answer', async () => {
     const { pause } = await record({
