@@ -2,7 +2,8 @@ import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markd
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
-import { WORKITEM_HREF_RE } from '@/lib/mentions/workItemRefs';
+import type { ReactNode } from 'react';
+import { INTRA_PLAN_REF_HREF_RE, WORKITEM_HREF_RE } from '@/lib/mentions/workItemRefs';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { PageRefChip } from '@/components/markdown/PageRefChip';
 import { PAGE_HREF_RE } from '@/lib/mentions/pageRefs';
@@ -23,13 +24,20 @@ import type { WorkItemRefMap } from '@/lib/dto/workItems';
 //     href outside its http/https/mailto/… allowlist, so a passthrough is
 //     added for well-formed `mention:` / `motir:` hrefs ahead of the default.
 //  2. rehype-sanitize's schema protocol allowlist.
-const sanitizeSchema = {
-  ...defaultSchema,
-  protocols: {
-    ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), 'mention', 'motir', 'motir-page'],
-  },
-};
+const sanitizeSchema = schemaWith(['mention', 'motir', 'motir-page']);
+// …and the same schema with `motir-ref` added, built ONLY for a render that opted
+// into `renderProposalRef` (MOTIR-7998), so no other surface's protocol list moves.
+const sanitizeSchemaWithProposalRef = schemaWith(['mention', 'motir', 'motir-page', 'motir-ref']);
+
+function schemaWith(extra: string[]) {
+  return {
+    ...defaultSchema,
+    protocols: {
+      ...defaultSchema.protocols,
+      href: [...(defaultSchema.protocols?.href ?? []), ...extra],
+    },
+  };
+}
 
 // A well-formed mention href: the id is the cuid character set, non-empty —
 // mirrors MENTION_TOKEN_RE in lib/mentions/parse.ts. (WORKITEM_HREF_RE is the
@@ -95,10 +103,20 @@ function urlTransform(url: string): string {
 // their render changes. It is a `pre` override here — inside the ONE pipeline —
 // rather than a second renderer, so the sanitize and highlight passes still run
 // over the code first.
+// A `motir-ref:planItem:<id>` href (MOTIR-7998) names a PROPOSAL of the plan under
+// review, which has no key yet. It is an OPT-IN scheme: only a render handed
+// `renderProposalRef` lets it past either scrub layer, and the callback decides
+// how it draws. A malformed one passes the transform (so the `a` handler can see
+// it) and degrades to its label — never an anchor with an empty href.
+function proposalRefTransform(url: string): string {
+  return url.startsWith('motir-ref:') ? url : urlTransform(url);
+}
+
 function buildComponents(
   workItemRefs?: WorkItemRefMap,
   copyableCode = false,
   pageRefs?: PageRefMap,
+  renderProposalRef?: ProposalRefRenderer,
 ): Components {
   return {
     ...(copyableCode
@@ -131,6 +149,10 @@ function buildComponents(
         if (!WORKITEM_HREF_RE.test(href)) return <>{children}</>;
         const id = href.slice('motir:'.length);
         return <WorkItemRefChip summary={workItemRefs?.[id]} fallbackLabel={children} />;
+      }
+      if (renderProposalRef && typeof href === 'string' && href.startsWith('motir-ref:')) {
+        const match = INTRA_PLAN_REF_HREF_RE.exec(href);
+        return match ? <>{renderProposalRef(match[1] as string, children)}</> : <>{children}</>;
       }
       if (typeof href === 'string' && href.startsWith('motir-page:')) {
         if (!PAGE_HREF_RE.test(href)) return <>{children}</>;
@@ -196,6 +218,9 @@ function codeChildOf(node: unknown): { language: string | null; text: string } {
   };
 }
 
+/** How a `[title](motir-ref:planItem:<id>)` link draws — opt-in, see `RenderMarkdownOptions`. */
+export type ProposalRefRenderer = (planItemId: string, label: ReactNode) => ReactNode;
+
 export interface RenderMarkdownOptions {
   /**
    * Resolved work-item reference summaries (Subtask 5.8.6), keyed by id, that
@@ -217,15 +242,30 @@ export interface RenderMarkdownOptions {
    * chip renders "Page unavailable" — never the token's stored title.
    */
   pageRefs?: PageRefMap;
+  /**
+   * OPT-IN (MOTIR-7998): how a `[title](motir-ref:planItem:<id>)` link draws — a
+   * PROPOSAL of the plan under review, named by the id of its plan item. Only when
+   * this is passed does that href survive the URL transform and the sanitizer;
+   * without it every surface renders exactly as before.
+   */
+  renderProposalRef?: ProposalRefRenderer;
 }
 
 export function renderMarkdown(md: string, opts: RenderMarkdownOptions = {}) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeHighlight]}
-      components={buildComponents(opts.workItemRefs, opts.copyableCode, opts.pageRefs)}
-      urlTransform={urlTransform}
+      rehypePlugins={[
+        [rehypeSanitize, opts.renderProposalRef ? sanitizeSchemaWithProposalRef : sanitizeSchema],
+        rehypeHighlight,
+      ]}
+      components={buildComponents(
+        opts.workItemRefs,
+        opts.copyableCode,
+        opts.pageRefs,
+        opts.renderProposalRef,
+      )}
+      urlTransform={opts.renderProposalRef ? proposalRefTransform : urlTransform}
     >
       {md}
     </ReactMarkdown>

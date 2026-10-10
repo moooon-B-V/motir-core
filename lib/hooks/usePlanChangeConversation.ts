@@ -353,6 +353,14 @@ export interface PlanChangeConversationState {
    */
   lateRevision?: { planId: string; revisionJobId: string; count: number } | null;
   /**
+   * A QUESTION the person typed while a run works, whose answer is still being
+   * written (MOTIR-7998). Set when the mid-run send starts and cleared when that
+   * ask settles or fails; it never touches `jobId`, `phase`, `stopping` or the
+   * run's abort controller. The rail draws the question and the answering cue from
+   * it. OPTIONAL (absent reads as null) so a state built by hand needs no change.
+   */
+  midRunAsk?: { text: string } | null;
+  /**
    * The run ENDED because the user ended it.
    *
    * ⚠️ THIS IS NOT AN ERROR, and the code below goes out of its way not to record
@@ -2441,7 +2449,12 @@ export function usePlanChangeConversation({
             s.session && s.session.id === incoming.id && s.session.turnCount > incoming.turnCount
               ? s.session
               : incoming;
-          setState((s) => ({ ...s, refusedForward: null, lateRevision: null }));
+          setState((s) => ({
+            ...s,
+            refusedForward: null,
+            lateRevision: null,
+            midRunAsk: { text: body },
+          }));
           try {
             const submitted = await submitMidRunAskTurn(
               midRunSessionId,
@@ -2507,6 +2520,8 @@ export function usePlanChangeConversation({
             setState((s) => ({ ...s, errorCode: code ?? 'MAILBOX_FAILED' }));
           } finally {
             midRunAbortsRef.current.delete(controller);
+            // The answer is no longer being written — settled, failed or aborted.
+            if (mountedRef.current) setState((s) => ({ ...s, midRunAsk: null }));
           }
           return;
         }

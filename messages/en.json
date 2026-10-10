@@ -7543,6 +7543,29 @@
       "queuedRead": "read",
       "queuedMarker": "Queued — Motir AI reads this when it finishes the work item it is writing.",
       "queuedReadMarker": "Read at the boundary — folded into this run.",
+      "midRun": {
+        "answeringMarker": "Answering on the side — the run keeps going.",
+        "answeredAside": "Answered on the side — nothing was sent to the run.",
+        "forwardedAck": "That is a change, so I passed it to the planner. It reads it at its next step.",
+        "queuedMarker": "Queued — the planner reads this at its next step.",
+        "readMarker": "Read — the planner has it.",
+        "forwardOffer": "If you want it as a change, reply “yes, forward it”.",
+        "forwardStale": "Not forwarded — nothing was changed.",
+        "revisedAck": "That is a change. The plan has finished writing, so I will apply it as a revision.",
+        "revisedNote": "Applied as a revision of this plan.",
+        "revisedLink": "See it on the timeline",
+        "refusal": {
+          "finished": "This run has finished.",
+          "stopped": "You stopped this run.",
+          "failed": "This run failed.",
+          "decided": "This plan has already been approved or declined.",
+          "held": "Another change is already being applied to this plan.",
+          "noPlan": "This run did not produce a plan to change.",
+          "generic": "The run has ended, so this was not forwarded.",
+          "tail": "Your message wasn’t sent. It is in the box below.",
+          "quoted": "Your message wasn’t sent: “{text}”"
+        }
+      },
       "act": {
         "submitted": "submit",
         "reading": "reading",

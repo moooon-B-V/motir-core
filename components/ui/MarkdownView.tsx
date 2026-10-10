@@ -1,4 +1,4 @@
-import { renderMarkdown } from '@/lib/markdown/render';
+import { renderMarkdown, type ProposalRefRenderer } from '@/lib/markdown/render';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { PageRefMap } from '@/lib/dto/pages';
 import './markdown-editor.css';
@@ -45,6 +45,11 @@ export interface MarkdownViewProps {
    * chips in `value`. Omitted, every page token renders "Page unavailable".
    */
   pageRefs?: PageRefMap;
+  /**
+   * OPT-IN (MOTIR-7998): draws a `[title](motir-ref:planItem:<id>)` link — a
+   * proposal with no key yet. Omitted, that href renders as it always has.
+   */
+  renderProposalRef?: ProposalRefRenderer;
 }
 
 export function MarkdownView({
@@ -53,6 +58,7 @@ export function MarkdownView({
   workItemRefs,
   copyableCode,
   pageRefs,
+  renderProposalRef,
   ...rest
 }: MarkdownViewProps) {
   // Link underlining (WCAG link-in-text-block) is handled inside renderMarkdown
@@ -63,7 +69,7 @@ export function MarkdownView({
       className={['wmde-markdown', 'motir-prose', className].filter(Boolean).join(' ')}
       {...rest}
     >
-      {renderMarkdown(value, { workItemRefs, copyableCode, pageRefs })}
+      {renderMarkdown(value, { workItemRefs, copyableCode, pageRefs, renderProposalRef })}
     </div>
   );
 }

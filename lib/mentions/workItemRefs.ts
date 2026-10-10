@@ -185,6 +185,13 @@ export function parseWorkItemRefs(text: string, projectIdentifier: string): Work
 export const INTRA_PLAN_REF_TOKEN_RE = /\[([^\]\[]*)\]\(motir-ref:planItem:([A-Za-z0-9_-]+)\)/g;
 
 /**
+ * A well-formed intra-plan href on its own: `motir-ref:planItem:<planItemId>`.
+ * Group 1 = the bare planItem id. Not `/g`, so `exec` is stateless. The Markdown
+ * renderer's opt-in `renderProposalRef` (MOTIR-7998) tests the HREF with this.
+ */
+export const INTRA_PLAN_REF_HREF_RE = /^motir-ref:planItem:([A-Za-z0-9_-]+)$/;
+
+/**
  * Extract the intra-plan sibling planItem ids referenced in a body — one per
  * distinct id in first-seen order. Pure string work; the structural `planItem:`
  * prefix is already stripped (these are the bare ids).

@@ -70,3 +70,31 @@ export function dispositionMarkerFor(
   if (!pendingQuestion(turns.slice(0, index))) return null;
   return turn.isAnswer ? 'answered' : 'superseded';
 }
+
+/**
+ * The mailbox entry ids the THREAD already draws (MOTIR-7998). A forwarded change
+ * is both a thread turn (`forwarded.mailboxEntryId`) and a mailbox entry
+ * (`state.queued`, same id), and the rail renders it ONCE — on the thread turn —
+ * so the standalone queued render skips every id returned here. `extra` is how a
+ * sibling renderer claims the mailbox entries it draws itself (the pause's
+ * decline or reply) without a second filter.
+ */
+export function threadOwnedMailboxIds(
+  turns: readonly PlanChangeTurnDto[],
+  extra: readonly string[],
+): ReadonlySet<string> {
+  const ids = new Set<string>(extra);
+  for (const turn of turns) {
+    if (turn.forwarded) ids.add(turn.forwarded.mailboxEntryId);
+  }
+  return ids;
+}
+
+/**
+ * Whether the offer on the assistant turn at `index` has gone STALE: a later user
+ * turn exists that was not itself forwarded (design state 5c). Derived from the
+ * thread, so a reloaded thread draws the same line.
+ */
+export function forwardOfferStale(turns: readonly PlanChangeTurnDto[], index: number): boolean {
+  return turns.slice(index + 1).some((turn) => turn.role === 'user' && !turn.forwarded);
+}
