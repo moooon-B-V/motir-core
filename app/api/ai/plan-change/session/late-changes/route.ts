@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
+import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 import { planChangeLateChangeService } from '@/lib/services/planChangeLateChangeService';
 import {
   mapPlanChangeError,
@@ -28,15 +29,18 @@ import {
 // no-existence-leak mismatch) before anything is claimed or submitted.
 //
 // HTTP only (CLAUDE.md 4-layer): parse the body, call the service, map typed
-// errors. NOT rate-limited, on the same reasoning as the sibling `mailbox` route:
-// the claim is a database write, and the one AI submit behind it is a revision the
-// shipped revise door already guards (lease, credits).
+// errors. RATE-LIMITED on the `ai:generate` bucket, like the revise door it
+// reuses: the revision it submits spends provider money. The limit is spent BEFORE
+// the claim, so a 429 leaves every stranded turn unclaimed for the next call.
 export async function POST(req: Request): Promise<Response> {
   const gate = await requireCompliantSession();
   if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) return noActiveProject();
+
+  const limited = await enforceAiRateLimit(ctx, 'ai:generate');
+  if (limited) return limited;
 
   let body: unknown;
   try {

@@ -781,6 +781,9 @@ describe('the routes are actually WIRED to the guards', () => {
     // target is a PLAN id rather than a work-item key, which changes nothing
     // about what it costs: it dispatches a model job.
     'app/api/ai/revise/route.ts',
+    // A change forwarded after the walk finished becomes ONE revision job, so it
+    // spends provider money like the revise door it reuses (MOTIR-7997).
+    'app/api/ai/plan-change/session/late-changes/route.ts',
   ];
 
   // Each of these submits NO model job. The reason is in the route's own header
@@ -809,10 +812,6 @@ describe('the routes are actually WIRED to the guards', () => {
     // The boundary MAILBOX (Story MOTIR-4054 · MOTIR-4067 / MOTIR-4068): a turn
     // or a stop attached to a job that is ALREADY running and already paid for —
     // one row each, no model job submitted, the `turns` precedent exactly.
-    // A change forwarded after the walk finished becomes ONE revision of its
-    // plan through the shipped revise door, which carries its own limit
-    // (Story MOTIR-7990 · MOTIR-7997).
-    'app/api/ai/plan-change/session/late-changes/route.ts',
     'app/api/ai/plan-change/session/mailbox/route.ts',
     'app/api/ai/plan-change/session/mailbox/stop/route.ts',
     'app/api/ai/plan-change/session/planner-turn/route.ts',
