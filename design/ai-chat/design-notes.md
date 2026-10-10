@@ -5128,3 +5128,15 @@ away.
 pass on it. It amends `plan-change-run-live.mock.html` sheet 3 and the MOTIR-4066
 section, which stay as records. It gates **MOTIR-7979** (the rendering and the en
 and zh catalogues).
+
+## ⭐ The overlay waits with you — the pending question, failed-waiting-to-resume, and the refusal's "Waiting on {name}" (MOTIR-7907, 2026-10-10)
+
+Mock: `planning-workspace--waiting-on-you.mock.html` (a DELTA; composes the shipped rail, composer and session-end parts). Decision MOTIR-7906.
+
+- **Pending question (panels 1, 2).** Reached from Waiting on you, the overlay opens on the question as the pending turn, using the shipped render (`PENDING_QUESTION_ID = 'plan-change-pending-question'`), with the composer focused and its placeholder _Answer Motir AI…_. **Answered:** the pending turn becomes an ordinary turn, the Waiting on you row clears, and the walk's progress line resumes.
+- **Failed, waiting to resume (panels 3–6, 8–10).** A hosted attempt that failed no longer ends the session. The overlay shows the **failure block** (where it stopped in the progress line's step words, why, the sentence that the plan so far is kept and its cards stay at Planning), the plan so far left visible on the canvas with its proposals intact, **Resume** in place of retry and of _Start a new session_, and the composer still usable. **A turn sent while failed is held, not a resume:** Resume is the only thing that restarts the walk (an ordinary submit is refused on a failed walk; MOTIR-7916); the composer's note is carried into the next attempt. Resuming: Resume disabled and the progress line returns. Failed again: the new reason replaces the old with _Second attempt_. _Plan something new_ from this state is MOTIR-7647's control, placed and not redrawn; confirming it ends the session and clears the To resume entry.
+- **SUPERSEDED:** MOTIR-7633's state _attempt failed → Closed · Start a new session_ **for a hosted attempt**. It stands for an attempt a failure ended BEFORE this story (legacy sessions). **STANDS:** the copy offer for non-failure ends, take-back, the read-only view, the end marker.
+- **The refusal (panel 7).** A delta on MOTIR-7633's: it names the holder and says **Waiting on {name}** in place of _free by about HH:MM_, keeping the link to their session where the viewer may read it. The sentence under it differs by cause (question · reply · failed) and tells the refused member only what the holder's state is — not the question's text or the failure's reason.
+- **Strings:** `planningWorkspace.waiting.pending|answered|cleared|failedHead|stopped|because|kept|resume|resuming|again` and `planningWorkspace.session.refusal.waitingOn|why.question|why.reply|why.failed|openSession`, en and zh as drawn.
+- **Tokens:** `--el-*` roles and shape tokens only; the failure keeps the warning role MOTIR-7633 used (`--el-icon-muted` glyph + `Waiting to resume` yellow tint pill; no danger ink).
+- **GIVES:** MOTIR-7918 (the whole overlay surface; sized 65 min — the refusal and four failure states are now specified, re-check at claim), MOTIR-7916 (the held-composer rule). **TAKES:** the failed→Closed state from MOTIR-7633 (hosted attempts only).
