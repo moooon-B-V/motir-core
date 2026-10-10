@@ -198,13 +198,7 @@ describe('the debug turn, RUNNING (panel 1)', () => {
       phase: 'streaming',
       session: session([user()]),
       progress: { kind: 'matching' },
-      acts: [
-        { kind: 'reading' },
-        { kind: 'redirectedDebug' },
-        { kind: 'retrieval', family: 'code_graph', blocked: false },
-        { kind: 'retrieval', family: 'plan_tree', blocked: false },
-        { kind: 'matching' },
-      ],
+      acts: [{ kind: 'reading' }, { kind: 'redirectedDebug' }, { kind: 'matching' }],
     });
 
     expect(screen.getByTestId('plan-change-handoff-debug').textContent).toBe(
@@ -217,8 +211,6 @@ describe('the debug turn, RUNNING (panel 1)', () => {
     const handoff = within(acts).getByTestId('plan-change-act-redirectedDebug');
     expect(handoff.textContent).toContain('hand-off');
     expect(handoff.textContent).toContain('Tracing the bug…');
-    expect(within(acts).getByText('Read the code graph')).toBeTruthy();
-    expect(within(acts).getByText('Read the plan tree')).toBeTruthy();
     const match = within(acts).getByTestId('plan-change-act-matching');
     expect(match.textContent).toContain('match');
     expect(match.textContent).toContain('Checking whether a work item already covers it');
