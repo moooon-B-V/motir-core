@@ -5,6 +5,8 @@ import enMessages from '@/messages/en.json';
 import type { GuideBlock } from '@/lib/apiDocs/guide';
 import type { McpToolHints, McpToolInputSchema } from './mcpToolSchema';
 import { MCP_TOOL_ANNOTATIONS, MCP_TOOL_INPUT_SCHEMAS, MCP_TOOL_TITLES } from './mcpToolSchemas';
+import type { Locale } from '@/lib/i18n/locales';
+import { localizedGroupText, localizedSummary, resolveCatalogueLocale } from './mcpCatalogueLocale';
 
 // The MCP server documentation, AS DATA (Story MOTIR-2309 · Subtask MOTIR-2325 ·
 // design `design/mcp-server/` · ADR `public-api-conventions.md` Amendment 13).
@@ -77,6 +79,13 @@ import { MCP_TOOL_ANNOTATIONS, MCP_TOOL_INPUT_SCHEMAS, MCP_TOOL_TITLES } from '.
 // than in `messages/*.json`, for the reason `guide.ts` records: a catalog entry
 // per paragraph makes a document unreadable to edit and puts config samples
 // inside a localization file. The page CHROME is localized in the catalogs.
+//
+// The published catalogue is the one place its prose is served per locale
+// (MOTIR-8031): `?locale=<code>` swaps each tool's `summary` for a translation in
+// `lib/apiDocs/mcpSummaryTranslations/<locale>.ts` and each group's `label` /
+// `gates` for the app catalogue's own translated `permissions.*`, per tool and
+// per group, and only while the English it was made from is still today's. The
+// rule lives in `mcpCatalogueLocale.ts`; the English stays authored here.
 
 /**
  * Every tool the MCP server exposes — structurally identical to `McpToolName`,
@@ -1356,13 +1365,89 @@ export interface McpToolCatalogueDocument {
   groups: McpCatalogueGroup[];
 }
 
-export function mcpToolCatalogueDocument(): McpToolCatalogueDocument {
+/**
+ * The published catalogue for a reader's language (MOTIR-8031). Everything but
+ * the human text is the English document's, and three fields let a renderer mark
+ * language honestly with a `lang` attribute.
+ */
+export interface McpLocalizedToolCatalogueDocument extends Omit<
+  McpToolCatalogueDocument,
+  'groups'
+> {
+  /** The served locale (never `'en'`: English is the unlocalized document). */
+  locale: Locale;
+  groups: Array<
+    Omit<McpCatalogueGroup, 'tools'> & {
+      /** The language `label` and `gates` are in: the locale or `'en'`. */
+      textLocale: Locale;
+      tools: Array<
+        McpToolRow & {
+          /** The language `summary` is in: the locale or `'en'`. */ summaryLocale: Locale;
+        }
+      >;
+    }
+  >;
+}
+
+function buildCatalogueDocument(): McpToolCatalogueDocument {
   const groups = mcpCatalogue();
   return {
     endpoint: MCP_ENDPOINT_PATH,
     toolCount: groups.reduce((count, group) => count + group.tools.length, 0),
     groups,
   };
+}
+
+function buildLocalizedDocument(locale: Exclude<Locale, 'en'>): McpLocalizedToolCatalogueDocument {
+  const english = buildCatalogueDocument();
+  return {
+    endpoint: english.endpoint,
+    toolCount: english.toolCount,
+    locale,
+    groups: english.groups.map((group) => {
+      const text = localizedGroupText(
+        permissionSlug(group.permission),
+        { label: group.label, gates: group.gates },
+        locale,
+      );
+      return {
+        ...group,
+        label: text.text.label,
+        gates: text.text.gates,
+        textLocale: text.locale,
+        tools: group.tools.map((tool) => {
+          const summary = localizedSummary(tool.name, tool.summary, locale);
+          return { ...tool, summary: summary.text, summaryLocale: summary.locale };
+        }),
+      };
+    }),
+  };
+}
+
+// Both depend only on compile-time data, so each is built once.
+let englishDocument: McpToolCatalogueDocument | undefined;
+const localizedDocuments = new Map<string, McpLocalizedToolCatalogueDocument>();
+
+/**
+ * `locale` is the RAW query value. English, absent, empty, mis-cased or unknown
+ * values all resolve to the unlocalized document, unchanged and with no new
+ * field; the value is never echoed.
+ */
+export function mcpToolCatalogueDocument(): McpToolCatalogueDocument;
+export function mcpToolCatalogueDocument(
+  locale: string | null | undefined,
+): McpToolCatalogueDocument | McpLocalizedToolCatalogueDocument;
+export function mcpToolCatalogueDocument(
+  locale?: string | null,
+): McpToolCatalogueDocument | McpLocalizedToolCatalogueDocument {
+  const resolved = resolveCatalogueLocale(locale);
+  if (resolved === null) return (englishDocument ??= buildCatalogueDocument());
+  let doc = localizedDocuments.get(resolved);
+  if (doc === undefined) {
+    doc = buildLocalizedDocument(resolved);
+    localizedDocuments.set(resolved, doc);
+  }
+  return doc;
 }
 
 // ── What the page hands off ─────────────────────────────────────────────────
