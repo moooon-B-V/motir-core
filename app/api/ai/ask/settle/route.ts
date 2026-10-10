@@ -37,6 +37,12 @@ import { mapPlanChangeError, noActiveProject, readSessionId } from '../../plan-c
 // the caller the 404 `NOT_FOUND`, a `diagnose` anchored on a card that is not a
 // triage bug a 422, and a card edited mid-write a retryable 409.
 //
+// A MID-RUN turn (MOTIR-7996) settles to two more outcomes, shaped like the rest:
+// `{ outcome: 'forwarded', delivery, session }` — the answering session read the
+// turn as a change and its words went down the running job's mailbox — and
+// `{ outcome: 'forward_refused', code, jobStatus, text, session }` — the run had
+// ended, nothing was written, and `text` is the words to hand back to the person.
+//
 // NOT rate-limited, deliberately (the `…/planner-turn` precedent): this reads a
 // job that was already submitted and already paid for at the `ai:generate`
 // ceiling. A limiter here would cap a database write and prevent no provider call

@@ -32,6 +32,8 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
+import { planChangeMailboxRepository } from '@/lib/repositories/planChangeMailboxRepository';
+import { planChangeRunPauseRepository } from '@/lib/repositories/planChangeRunPauseRepository';
 import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
@@ -198,7 +200,44 @@ async function toDto(
   );
   // A guide thread's files (MOTIR-7486), resolved once as the caller may see them.
   const fileIds = turns.flatMap((t) => t.attachmentIds);
-  const dto = toPlanChangeSessionDto(row, turns, workItemRefs);
+  // The planner's latest mid-run pause on the CURRENT run (MOTIR-8007). One indexed
+  // read, and only for a session that has a run.
+  const runPause = row.lastJobId
+    ? tx
+      ? await planChangeRunPauseRepository.findLatestForSession(
+          row.id,
+          row.lastJobId,
+          pctx.workspaceId,
+          tx,
+        )
+      : await withWorkspaceServiceContext(pctx.workspaceId, (t) =>
+          planChangeRunPauseRepository.findLatestForSession(
+            row.id,
+            row.lastJobId!,
+            pctx.workspaceId,
+            t,
+          ),
+        )
+    : null;
+  // Whether the run has READ the answer's mailbox entry: a reloaded rail has no live
+  // mailbox poll yet, and this is what lets it say "planning resumed" (MOTIR-7990).
+  const answerEntryId = runPause?.mailboxEntryId ?? null;
+  const readAnswerEntry = async (t: Prisma.TransactionClient): Promise<boolean> => {
+    const [entry] = await planChangeMailboxRepository.findTurnsByIds(
+      [answerEntryId!],
+      row.id,
+      row.lastJobId!,
+      pctx.workspaceId,
+      t,
+    );
+    return entry ? entry.consumedAt !== null : false;
+  };
+  const entryRead = answerEntryId
+    ? tx
+      ? await readAnswerEntry(tx)
+      : await withWorkspaceServiceContext(pctx.workspaceId, readAnswerEntry)
+    : undefined;
+  const dto = toPlanChangeSessionDto(row, turns, workItemRefs, runPause, entryRead);
   if (fileIds.length === 0) return dto;
   const attachments = await attachmentsService.listViewableByIds(fileIds, {
     userId: pctx.userId,
@@ -316,6 +355,10 @@ interface AppendTurn {
   attachmentIds?: readonly string[];
   /** The fixed confirm core writes on an `assistant` turn (MOTIR-7649). */
   confirm?: PlanChangeTurnConfirm | null;
+  /** The planning job running when a `user` turn was typed (MOTIR-7996). */
+  runJobId?: string | null;
+  /** The text an `assistant` answer offered to forward (MOTIR-7996). */
+  forwardOffer?: string | null;
 }
 
 async function appendLocked(
@@ -383,6 +426,8 @@ async function appendWithin(
         anchorKey: turn.anchorKey ?? null,
         attachmentIds: turn.attachmentIds ? [...turn.attachmentIds] : [],
         confirm: turn.confirm ?? null,
+        runJobId: turn.runJobId ?? null,
+        forwardOffer: turn.forwardOffer ?? null,
         // An explicit literal, not the DTO itself: Prisma's JSON input wants an
         // indexable object, and spelling the four fields keeps the column's
         // shape exactly the DTO's.
@@ -1656,6 +1701,12 @@ export const planChangeSessionsService = {
       jobId?: string;
       anchorKey?: string | null;
       /**
+       * The planning job that was RUNNING when this turn was typed (MOTIR-7996).
+       * Marks the turn as a mid-run turn, which is what keeps its settle from ever
+       * opening a new planning run for it.
+       */
+      runJobId?: string;
+      /**
        * The files a GUIDE turn carries (MOTIR-7484; `guide-turn-files.md` A3.2),
        * already validated by `aiGuideService` against the guided card. A turn
        * with files may carry no words, so the empty-body refusal narrows to a
@@ -1683,6 +1734,7 @@ export const planChangeSessionsService = {
       // The anchor the ASK SERVICE resolved (MOTIR-7064) — an identifier this
       // caller can see, never the raw posted string.
       anchorKey: opts.anchorKey ?? null,
+      ...(opts.runJobId ? { runJobId: opts.runJobId } : {}),
       ...(files.length > 0 ? { attachmentIds: files } : {}),
     });
   },
@@ -1716,6 +1768,9 @@ export const planChangeSessionsService = {
       body: string;
       citations?: readonly string[];
       debugLanding?: DebugLandingDto | null;
+      /** The exact text this answer OFFERS to forward to the running planner
+       *  (MOTIR-7996) — the offered `user` turn's body. */
+      forwardOffer?: string | null;
     },
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
@@ -1733,6 +1788,7 @@ export const planChangeSessionsService = {
         jobId: input.jobId,
         citations,
         debugLanding: input.debugLanding ?? null,
+        forwardOffer: input.forwardOffer ?? null,
       },
       {},
       async (tx) =>
@@ -1764,7 +1820,12 @@ export const planChangeSessionsService = {
     turnId: string,
     intent: PlanChangeTurnIntent,
     pctx: ProjectContext,
-    opts: { corrected?: boolean; jobId?: string } = {},
+    opts: {
+      corrected?: boolean;
+      jobId?: string;
+      forwardedEntryId?: string;
+      revisedLateJobId?: string;
+    } = {},
     address: PlanChangeSessionAddress,
   ): Promise<PlanChangeSessionDto> {
     const session = await requireSession(pctx, address);
@@ -1785,6 +1846,11 @@ export const planChangeSessionsService = {
           {
             intent,
             ...(opts.jobId ? { jobId: opts.jobId } : {}),
+            // The mailbox entry a mid-run turn was FORWARDED as (MOTIR-7996),
+            // written in the SAME locked write that records `plan_change`.
+            ...(opts.forwardedEntryId ? { forwardedEntryId: opts.forwardedEntryId } : {}),
+            // The REVISE_PLAN job a late change became (MOTIR-7997), same locked write.
+            ...(opts.revisedLateJobId ? { revisedLateJobId: opts.revisedLateJobId } : {}),
             // `corrected` LATCHES: a turn re-read a second time stays corrected,
             // because what the flag records is that Motir once got it wrong, and
             // that does not stop being true.

@@ -122,6 +122,7 @@ export type PersonalDataDelegate =
   | 'planChangeSession'
   | 'planChangeTurn'
   | 'planChangeMailboxEntry'
+  | 'planChangeRunPause'
   | 'workItemTodo'
   | 'folder'
   | 'page'
@@ -651,6 +652,15 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     // `plan_change_turn` only because of WHEN it is read, not WHOSE it is.
     basis: 'Turns and stops the reader sent to a running plan-change job.',
     where: (userId) => ({ authorId: userId }),
+  },
+  {
+    table: 'plan_change_run_pauses',
+    model: 'planChangeRunPause',
+    tier: 'tenant',
+    // `answered_by_id` records WHO answered the planner's mid-run offer or question
+    // (Story MOTIR-7990 · MOTIR-8007), and `reply_text` is their own words verbatim.
+    basis: 'Mid-run planner pauses the reader answered.',
+    where: (userId) => ({ answeredById: userId }),
   },
   {
     table: 'work_item_todo',

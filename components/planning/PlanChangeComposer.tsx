@@ -15,6 +15,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { PausedRunIndicator } from '@/components/planning/RunPause';
 import { PlanningTargetChip } from '@/components/planning/PlanningTargetChip';
 import { TargetSearchPopover } from '@/components/planning/TargetSearchPopover';
 import {
@@ -72,6 +73,13 @@ export interface RunningBar {
   /** The user has asked for a stop and the walk has not reached its boundary yet. */
   stopping: boolean;
   onStop: () => void;
+  /**
+   * The planner has PAUSED and is waiting on the person (Story MOTIR-7990 ·
+   * MOTIR-8010; design states 7 and 9a): the bar draws the paused indicator in the
+   * spinner's place, with the same Stop. Derived from an unanswered pause, never
+   * stored.
+   */
+  paused?: { kind: 'replan' | 'unclear' } | null;
 }
 
 /**
@@ -355,6 +363,21 @@ export function PlanChangeComposer({
   const insetPadding =
     mentions && attach ? 'pl-[60px]' : mentions || attach ? 'pl-8' : 'pl-(--spacing-input-x)';
 
+  // The pinned bar's Stop — one control, drawn by the running bar and the paused one.
+  const stopButton =
+    running !== null ? (
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={running.onStop}
+        disabled={running.stopping}
+        leftIcon={<CircleStop className="size-4" aria-hidden="true" />}
+        data-testid="plan-change-stop"
+      >
+        {running.stopping ? tc('stoppingAction') : tc('stop')}
+      </Button>
+    ) : null;
+
   return (
     <form
       onSubmit={submit}
@@ -367,7 +390,9 @@ export function PlanChangeComposer({
           that never scrolls and given a control — composition, not a new
           treatment (`design/ai-chat/plan-change-run-live.mock.html` sheet 4's
           token map). */}
-      {running !== null ? (
+      {running !== null && running.paused ? (
+        <PausedRunIndicator kind={running.paused.kind} finishing={false} stop={stopButton} />
+      ) : running !== null ? (
         <div
           data-testid="plan-change-running-bar"
           className="mb-2 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
@@ -381,16 +406,7 @@ export function PlanChangeComposer({
               work away, people wait runs out instead and the control is
               decorative. So no `--el-danger`, and the label is a word rather than
               an icon alone. */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={running.onStop}
-            disabled={running.stopping}
-            leftIcon={<CircleStop className="size-4" aria-hidden="true" />}
-            data-testid="plan-change-stop"
-          >
-            {running.stopping ? tc('stoppingAction') : tc('stop')}
-          </Button>
+          {stopButton}
         </div>
       ) : null}
 

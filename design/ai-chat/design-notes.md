@@ -5129,6 +5129,442 @@ pass on it. It amends `plan-change-run-live.mock.html` sheet 3 and the MOTIR-406
 section, which stay as records. It gates **MOTIR-7979** (the rendering and the en
 and zh catalogues).
 
+---
+
+## ⭐ The planning thread while a run works — answer, forward, offer, ask (MOTIR-7992, 2026-10-09)
+
+**Design system, read first.** Branch (a), on Motir Design. `package.json` depends on
+`@motir/design-system` (`workspace:*`, 0.13.0 in `packages/design-system/package.json`),
+and `app/globals.css` imports `@motir/design-system/theme.css`. Both checks hold. The
+project's own axes are the ones `app/layout.tsx` writes (`data-style`, `data-palette`,
+`data-type` from `applied.*`), and the board is drawn at the package defaults those axes
+resolve to for a fresh workspace. The package exports `./mock`, but this surface is the
+product's own rail, `PlanChangeRail` + `PlanChangeComposer`, not package parts, so the mock
+composes that rail's emitted markup and compiles the stylesheet over `theme.css`, exactly
+as the MOTIR-7975 delta does. Parts the package lacks, each **product-local**: the planner's
+START OVER offer (the shipped asking bubble plus the shipped A3.2 two-button group), the
+paused bar (the running bar with a different leading glyph and a dashed frame), and the
+answered-offer record line. None is proposed for the package: each is a composition of
+shipped pieces.
+
+**Amends** `design/ai-chat/plan-change-run-live.mock.html` (MOTIR-4066), sheets 2 and 4
+(the four states, and the queued label and marker). That mock is a record and is **not
+edited**. **Composes, and does not redraw,** `plan-change-run-live--per-call.mock.html`
+(MOTIR-7975): the step row, its nested call lines and the folded `N calls` disclosure are
+that board's grammar as it stands on `main`. It also leans on `ask-answers.mock.html`
+(MOTIR-1815) for the cited answer and on `plan-change-planner-speaks.mock.html`
+(MOTIR-2225) for the asking bubble.
+
+**Drawn from** the decision page for **MOTIR-7991, version 1** (approved 2026-10-09T18:06Z).
+Nothing it rules is re-opened here: the confirmation form, the START OVER button's
+compatibility with turn-intent A3.1, the three planner verdicts and the two words
+_ambiguous_ and _unclear about WHAT_ are taken as written.
+
+**Asset:** `design/ai-chat/plan-change-run-live--answer-or-forward.mock.html`, a **delta**
+holding only the panels that change. Every panel is the one 22rem running rail (header,
+the original ask, the act rail, the pinned footer with the running bar and the composer),
+so each state compares against the same picture. Each panel's caption carries its state
+number. Light is drawn throughout, **dark** in panel 10 (states 2, 4, 6, 9a, 11, 12 on a
+real `data-theme="dark"` scope) and **zh** in panel 11 (states 2, 6, 9a, 11).
+
+| Panel | States                                                        |
+| ----- | ------------------------------------------------------------- |
+| 1     | 1 answer streaming · 2 progress answer · 12 cannot read       |
+| 2     | 3a a committed card · 3b a proposal, with its canvas node     |
+| 3     | 4 forwarded → queued → read, and two changes at once          |
+| 4     | 5 the ambiguous offer: offer · confirmed · left unanswered    |
+| 5     | 6 the START OVER offer · 7a finishing · 7b paused             |
+| 6     | 8a started over · 8b declined → applying, and both reloaded   |
+| 7     | 9a the question · 9b the typed answer · 9c resumed            |
+| 8     | the three-way distinctness strip, with its pair table         |
+| 9     | 10 late change → revision · 11 refused, text kept · 13 no run |
+| 10    | dark                                                          |
+| 11    | zh                                                            |
+
+### The one rule that organises it: who is speaking is told by what the run is doing
+
+While a run works there are two voices in one thread and a person has no reason to learn
+their names. Three channels, three treatments, and every state below is one of them:
+
+| Channel                                                        | What it is on screen                                                                                                                                                                                                  |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The planner working**                                        | The **act rail**: the boxed `--el-surface-soft` list with the mono step column, and the **running bar** beneath it. The answering session never writes here.                                                          |
+| **The answering session** (answer, acknowledgement, offer)     | An **ordinary assistant bubble** (`--el-chat-bubble-ai`, no label). It is followed, where it matters, by one passive line: _Answered on the side — nothing was sent to the run._                                      |
+| **The planner asking the person** (START OVER offer, question) | The shipped **asking bubble**: `--el-warning-surface` fill, `--el-warning-text` ink, the label slot filled with the glyph and the word **asking**. With the paused bar beneath, it means _the run is waiting on you_. |
+
+The act record keeps its place in the transcript and keeps growing in place. Turns the
+person types land **below** it, as a queued turn already does, so the planner's record never
+interleaves with the chat.
+
+### State 1 — answering, while the run continues (panel 1)
+
+A question was sent and its answer is streaming. **Two activities share the rail and sit in
+different places**: the act rail and the pinned bar are the planner (a spinner on the newest
+call line and in the bar); the answer is a bubble below the act record with **its own small
+spinner inside the bubble** and a passive line under it, _Answering on the side — the run
+keeps going._ The user turn carries **no label, no clock and no marker line**. The bar still
+shows the planner's own line and Stop, unchanged.
+
+### State 2 — a progress answer, and its difference from a queued turn (panel 1)
+
+_"How far along is it?"_ is answered from the plan and the step signal: the level being laid
+and the cards being written. The turn is **unlabelled**. **The exact difference from state
+4ii**, so a reviewer checks a claim and not an impression. Both user bubbles are identical
+in fill and ink (`bg-(--el-chat-bubble-user)`, `text-(--el-accent-text)`). A queued turn adds
+three things and a question has none of them:
+
+| Element                      | Question (state 2)               | Queued (state 4ii)                                                                                    |
+| ---------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Label slot in the bubble     | none                             | `queued`, `font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80`                    |
+| Glyph in the label           | none                             | lucide `clock`, `size-3`                                                                              |
+| Marker line under the bubble | none                             | `text-center text-xs text-(--el-text-secondary)`: _Queued — the planner reads this at its next step._ |
+| What follows the bubble      | an assistant bubble that answers | an acknowledgement bubble that says it was passed on                                                  |
+
+The answer's own foot is the shipped count line (`answeredFrom`), and one passive line says
+**nothing was sent to the run**: that sentence is the thing no screen said before.
+
+### State 3 — explaining a card (panel 2)
+
+**3a, a committed card.** The shipped `WorkItemRefChip` in the sentence that rests on it,
+then the shipped count line. Recipe unchanged from `ask-answers.mock.html`.
+
+**3b, a proposal, which has no key yet. Decision: a chip, the shipped proposal chip, with
+the word _New_ in the key slot and no key.** The answer carries it as
+`[title](motir-ref:planItem:<id>)`, and the rail draws it as `PlanningTargetChip`'s
+`proposedWord` variant, the same composition `SupersedesChip` uses: type glyph, **New** in
+`font-mono font-semibold text-(--el-accent-on-surface)`, the title; `border border-dashed
+border-(--el-accent)` on `bg-(--el-tint-lavender)`, `--radius-control`,
+`--spacing-kbd-x/y`.
+
+Justified against how the canvas already selects a proposal:
+
+- **The canvas names a proposal by its frame and by the word _New_.** `PlanItemNode` draws an
+  `add` as `border-dashed border-(--el-accent) bg-(--el-tint-lavender)` and fills the
+  identifier slot with `t('newItem')`, which is _New_. The chip wears that frame and that
+  word, so the sentence and the node are visibly the same thing. The panel draws the node
+  beside the chip to show it.
+- **The canvas reaches a proposal through one door.** `PlanReviewCanvas` selects a node, then
+  View, then the peek in proposal mode, and `SupersedesChip`'s `onOpenProposal(planItemId)`
+  already opens that same peek from a chip on the peek's rail. A citation click does what the
+  canvas door does, so there is no second way to open a proposal.
+- **Plain text would lose the link, and an invented key would lie.** A proposal has no key
+  until approval, and `validateProposedBodyRefs` refuses any `motir-ref:` that is not the
+  canonical `planItem:` token, so the chip needs no new data. A fake `MOTIR-?` would
+  collide with a real key the moment the plan is approved.
+- **A proposal removed since the answer was written** (the decline path of state 8b) no
+  longer resolves, so the chip degrades to the unlinked frame, exactly as the shipped chip does
+  when `planItemId` is absent. It never throws and never shows a stale key.
+- **The count line counts keyed work items only.** A proposal is not a work item, so state 3b
+  reads _Answered from 1 work item_ when one committed card is cited beside it.
+
+### State 4 — a change: forwarded → queued → read (panel 3)
+
+One turn, three frames, and the **two-at-once** panel.
+
+- **4i · forwarded.** The turn is unlabelled; under it the answering session's short
+  acknowledgement, an ordinary assistant bubble: _That is a change, so I passed it to the
+  planner. It reads it at its next step._
+- **4ii · queued.** The **shipped** label, glyph and marker (`queuedLabel`, the clock,
+  `data-testid="plan-change-queued"`), reused, not redrawn. **One catalogue string is now
+  false and the rail card owes its rewrite**: `queuedMarker` still says _"…reads this when it
+  finishes the work item it is writing"_, which is the phase-boundary rule MOTIR-7991
+  supersedes. The line drawn here reads _Queued — the planner reads this at its next step._
+- **4iii · read.** The shipped `queuedRead` word, **`read`**, **replaces** the label: no clock
+  glyph, and the marker becomes _Read — the planner has it._ (`queuedReadMarker` says _"Read at
+  the boundary — folded into this run"_ today, false for the same reason.) Word, glyph and
+  marker all change, which is what keeps queued and read apart without a colour. **A change the
+  planner rules a CORRECTION ends here:** read, and one new row in the planner's own channel,
+  the act rail (`apply`, _Added “Pause the run” to the plan_). Nothing further is asked.
+- **Two at once.** The older change is `read`, the newer still `queued`, each with its own
+  marker, each with its own acknowledgement. Side by side they differ in word, glyph and
+  marker line.
+
+### State 5 — the ambiguous-turn offer (panel 4)
+
+**The decision page chose the person's NEXT TURN, with no button**, and says so in these
+words: _"the person confirms by typing their next turn ('yes, forward it'), and the
+answering session reads that turn against the offer it just made. No button."_ (MOTIR-7991
+v1, Ruling 2.) So no control is drawn.
+
+- **5a · the offer.** An ordinary assistant bubble that ends with the offer and says what has
+  not happened: _That could be a question or a change. I have not passed it to the planner,
+  and nothing has changed. If you want it as a change, reply “yes, forward it”._ The run keeps
+  moving: the bar is the moving bar.
+- **5b · the reply.** The person types _yes, forward it_. The **original turn takes the
+  shipped queued label and marker in place**: the forwarded turn is the one the person first
+  wrote, so nothing is duplicated and the thread shows what was sent. An acknowledgement
+  closes it.
+- **5c · left unanswered.** The person moves on and asks something else. The offer stays as
+  text, **no button was ever on it**, and one passive line under it says _Not forwarded —
+  nothing was changed._ (the voice of the shipped `supersededMarker`).
+- **No composer hint is drawn for 5.** The placeholder slot is real (below), but the offer
+  already names the reply, and a hint that must be cleared when the person moves on is a state
+  the decision did not ask for.
+
+### State 6 — the planner's START OVER offer (panel 5)
+
+A forwarded change has been read and ruled a RE-PLAN. One panel:
+
+- **The change turn it answers**, now `read` (4iii's treatment), so the offer visibly hangs
+  off it.
+- **The planner's turn.** The shipped **asking bubble**, with the label `asking`. It carries a
+  one-line reason in the planner's words, then one plain sentence saying what each choice
+  does. **How it differs from an answering-session turn**: the asking fill
+  (`--el-warning-surface` / `--el-warning-text`), the label `asking` with
+  `message-circle-question-mark`, and the paused bar beneath it. The answering session never
+  uses that bubble.
+- **Exactly two choices, one click each**: **Start over** (primary) and **Keep going and
+  apply it** (secondary), `Button size="sm"` in the shipped group,
+  `role="group" mt-2 flex flex-wrap gap-2`.
+- **No danger ink anywhere.** The bubble is the planner's _question_ tint, not an error. The
+  primary is the accent fill, the secondary the outlined button.
+
+**Is the primary a shipped START OVER label? No, it is new.** Searched on `main`: the rail's
+`planningWorkspace.restart` namespace holds _Plan something new_, _Confirm_ and _Keep
+planning_ (`messages/en.json`, `PlanChangeRail.tsx` `RestartControl` and the A3.2 confirm), and
+those belong to the **session** restart, which closes a session and opens a new one. The
+mailbox `restart` disposition (`planChangeMailboxService.ts`) has no label in the thread at
+all. So **Start over** / **重新开始** is new copy, and it is deliberately not _Confirm_:
+pressing it takes the mailbox arm, not the session restart. What **is** reused is the A3.2
+confirm's anatomy: an assistant bubble, a `size="sm"` primary and secondary in a labelled
+group, and the collapse to a record once answered.
+
+### State 7 — the paused run while the offer waits (panel 5)
+
+The walk is paused: sessions already running finish the work item they hold, and no new one
+opens. Two moments, both against state 6's layout, with a moving run beside them for
+comparison:
+
+- **7a · finishing.** Two cards are still being written, so **two spinners remain on the
+  act rows**. The bar is already the paused bar: _paused — Finishing the work items it holds,
+  then waiting for your choice._
+- **7b · paused.** Nothing runs. The act rail ends with a `pause` row (_Paused — nothing new
+  starts until you choose._), and the bar reads _paused — Waiting for your choice._
+- **Stop stays in both**, in the bar's trailing slot, unchanged.
+
+**The paused bar** is the running bar with three changes: the leading **spinner becomes a
+static `pause` glyph**, the frame gains **`border-dashed border-(--el-border-strong)`**, and
+the line gains a mono word **paused** (`font-mono text-[10px] font-semibold uppercase`) above
+it. The fill is still `--el-surface-soft`.
+
+| Distinguishing it from… | …a moving run (state 1)                     | …the shipped stopped state                       |
+| ----------------------- | ------------------------------------------- | ------------------------------------------------ |
+| Spinner in the bar      | moving has one; paused has a static glyph   | stopped has **no bar at all**                    |
+| The word                | none; the bar shows the planner's call line | none; the centred marker _You stopped this run._ |
+| Frame                   | solid                                       | not applicable                                   |
+| **Stop**                | present                                     | **absent**: the run is over                      |
+| The act rail's last row | a live call line with a spinner             | the act record, then the stopped marker          |
+
+Three non-colour channels carry paused (glyph, word, dashed frame), and the bar uses no
+warning or danger tint: **a pause is waiting, not failing.** The shipped `See it` jump
+appears at the bar's trailing edge, before Stop, only when the question has scrolled out of
+view; it is not drawn because every panel here has the question on screen.
+
+### State 8 — the offer answered (panel 6)
+
+- **8a · started over.** The buttons are gone and **one record line** stays under the bubble:
+  _You chose to start over._ The line is the shipped marker voice, and A3.2's _Kept planning_
+  is its precedent. The thread then hands off to the shipped START OVER arm's own rendering,
+  which this asset does not draw.
+- **8b · declined → applying.** The record reads _You chose to keep going_, and the planner's
+  line is an act row in its own channel: **`apply` — Applying your change to the written work
+  items**, with its call lines (_Updating Planning rail_, _Removing Web planning rail_). The
+  act rail is moving again and the bar is the moving bar.
+- **Reloaded**, both frames: the record is derived from the **stored answer**, not from the
+  click, so a reloaded thread draws the same bubble, the same line, **no buttons**, and nothing
+  is clickable. The panels draw it as a crop.
+
+**The canvas removal treatment exists and is reused; there is no gap.** A removal is drawn
+by `PlanItemNode` with `op: 'remove'`: `border-(--el-border-strong) bg-(--el-muted)
+shadow-(--shadow-subtle)`, the struck title in `--el-text-secondary`, the **remove** badge
+with `archive-x`, and the reason line. It is deliberately **not** red: MOTIR-4260 and
+MOTIR-4475 moved it onto the muted fill so no ink fails AA. Panel 6 draws one proposal in that
+frame, with the planner's reason. **One caveat for the render card, not a gap in the design:**
+the shipped `remove` row is the review diff's, so confirm that a planner `remove_item` on a
+proposal that has no key surfaces as an `op: 'remove'` row and not as the node silently
+leaving; the asset's point is that the frame is the shipped one.
+
+### State 9 — the planner steps back to ask what a change meant (panel 7)
+
+The UNCLEAR verdict. The planner has not decided anything; the walk is paused; **the answer
+is typed**.
+
+- **9a · the question.** The vague change (_make it better_) is `read`. Directly under it, the
+  **planner's turn**, the same asking bubble as state 6, carries the question in its own words
+  and one line, _Nothing has been changed yet._ **It has no buttons.** The bar is the paused
+  bar from state 7 with its **second wording**: _Waiting for your answer_, the shipped
+  `awaitingAnswer` string. Stop is reachable.
+- **Composer hint: the slot exists, so it is drawn.** `PlanChangeRail` already swaps the
+  placeholder for a pending question: `composerPlaceholderAnswer`, _Answer Motir AI…_. The
+  asset draws it. No new control and no new string for the hint.
+- **9b · the answer.** The typed reply sits **directly under the question**, in the same
+  unlabelled frame; then it goes **forwarded → queued → read with state 4's exact treatments**,
+  reused: the queued label and marker, then `read`. **No acknowledgement and no offer to
+  forward appear**: an answer to the planner's question is forwarded without a confirm. **The
+  tie to the question is the disposition line**, named here as the treatment: once the person
+  has answered, the question gains the centred marker line beneath it
+  (_Answered — the planner reads it at its next step_) and the reply is the turn that follows.
+  That is the shipped `answeredMarker` idiom, with the queued wording until the reply is read.
+- **9c · resumed.** Once read, the paused bar gives way to the moving act rail of state 1. The
+  question stays above as a **record**, and its line becomes the shipped _Answered — planning
+  resumed_. A reloaded thread shows it as text with that line, **never as a pending prompt**:
+  the pending state is derived from "no answer after it", not from local state.
+- This step-out files **no planning bug**, as the decision rules, so nothing in the thread
+  says one was filed.
+
+### The three-way distinctness strip (panel 8)
+
+Three invitations to the person, drawn side by side with their bars: the answering session's
+ambiguous offer (state 5), the planner's START OVER offer (state 6) and the planner's
+question (state 9a). None uses danger or error ink.
+
+| Pair        | Speaker treatment                                                                       | Buttons             | The bar                                                                                                     |
+| ----------- | --------------------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **5 vs 6**  | plain bubble, no label (side session) versus asking tint, labelled **asking** (planner) | none versus two     | the moving bar with a spinner versus **paused**, _waiting for your choice_                                  |
+| **5 vs 9a** | plain bubble versus asking tint, labelled **asking**                                    | none versus none    | moving versus **paused**, _waiting for your answer_; the composer placeholder changes to _Answer Motir AI…_ |
+| **6 vs 9a** | **the same** planner treatment, on purpose: both are the planner asking                 | **two versus none** | _waiting for your choice_ versus _waiting for your answer_; the placeholder changes on 9a only              |
+
+What each one is. The ambiguous offer is the **side session reading the person's turn**; it
+forwards only on the person's confirmation and the run never stops for it. The START OVER
+offer is the **planner offering a remedy** with two clicks. The question is the **planner
+asking**, answered by a typed turn. The paused bar is the one thing that is true of the two
+planner turns and false of the side session's, and that is by design: a person should be able
+to tell _the run is waiting on me_ from _Motir answered me_ at a glance.
+
+### State 10 — a late change becomes a revision (panel 9)
+
+The walk has finished and the plan is not yet closed (the review block still waits). A change
+is forwarded. The thread says what happened and where it points: an acknowledgement, then one
+note in the shipped **take-back idiom** (`TakenBackNotice`: `border border-(--el-border)
+bg-(--el-page-bg)`, a `history` glyph), _Applied as a revision of this plan_, with a link,
+**See it on the timeline**, in `--el-link`, to the plan's timeline. It is **not a refusal**:
+no tint, no `role="alert"`, and the change turn is `read` like any other.
+
+### State 11 — the run-ended refusal that keeps the text (panel 9)
+
+The run has finished, been stopped or failed, and a forward is refused. **The person's text
+stays in the composer** (focused, at its full height, the field's own focus ring). **The
+reason sits in the pinned footer, directly above the composer**, never in the transcript where
+it could scroll away from the words it explains. It reuses the shipped refusal treatment of
+the carry: `CarryDecidedNotice`'s band, `bg-(--el-tint-yellow)`, `--radius-control`,
+`--spacing-control-x/y`, `text-xs` in `--el-text-strong`, with the `undo-2` glyph. **No danger
+token**: the person did nothing wrong, and nothing failed in their words. Three wordings share
+the band: _This run has finished._ · _You stopped this run._ (the shipped stopped line) ·
+_This run failed._ followed by the shipped _Your message wasn't sent. It is in the box
+below._ (`planningWorkspace.session.carry.takenBackUnsent`).
+
+### State 12 — cannot read the run (panel 1, beside state 2)
+
+An honest assistant answer that says it could not read the plan or its steps and does not
+guess. It is the shipped no-answer's shape: **no chip, no count line, no number**. Beside
+state 2 the difference is exactly that, plus the sentence. The passive line under it still
+says nothing was sent to the run, which is true.
+
+### State 13 — no run in progress (panel 9)
+
+One frame: no bar, no queue, the person's draft in the live composer. A turn typed when no
+run is going takes **today's submit path**; the frame exists to say nothing changes.
+
+### Wording, en and zh
+
+The code card is en + zh, so every string is below. Strings that exist today are marked
+**shipped**; everything else is new copy for the rail card.
+
+| State | Element                            | en                                                                                                                                                                                                     | zh                                                                                                                                                |
+| ----- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| all   | passive line under an answer       | Answered on the side — nothing was sent to the run.                                                                                                                                                    | 已在一旁回答 —— 没有发送给运行中的规划。                                                                                                          |
+| 1     | streaming line                     | Answering on the side — the run keeps going.                                                                                                                                                           | 正在一旁回答 —— 运行照常继续。                                                                                                                    |
+| 1     | partial answer                     | It is laying level 3 of 4. Two cards are being…                                                                                                                                                        | 目前在铺第 3 层（共 4 层）。正在撰写的有两张…                                                                                                     |
+| 2     | question                           | How far along is it?                                                                                                                                                                                   | 进行到哪一步了？                                                                                                                                  |
+| 2     | answer                             | It is laying level 3 of 4, under ⟨MOTIR-7990⟩. Two cards are being written right now — Queue a turn and Pause the walk — and five are finished.                                                        | 目前在铺第 3 层（共 4 层），位于 ⟨MOTIR-7990⟩ 之下。正在撰写两张卡片 —— “排队一轮对话”和“暂停规划”—— 另有五张已完成。                             |
+| 2, 3  | count line (**shipped**)           | Answered from 1 work item                                                                                                                                                                              | 依据 1 个工作项作答                                                                                                                               |
+| 3a    | question · answer                  | What is MOTIR-7991 for? · ⟨MOTIR-7991⟩ settles how a change reaches the planner while it plans: questions are answered on the side, and only a change is passed on.                                    | MOTIR-7991 是做什么的？ · ⟨MOTIR-7991⟩ 确定了规划进行中变更如何送达规划者：问题在一旁回答，只有变更才会转交。                                     |
+| 3b    | question · answer                  | Why is “Pause the walk” in the plan? · ⟨New · Pause the walk⟩ is there so that a re-plan stops new sessions from opening while you decide. It follows from ⟨MOTIR-7991⟩.                               | 计划里为什么有“暂停规划”？ · ⟨新 · 暂停规划⟩ 是为了在你做决定期间，让重新规划不再开启新的会话。依据是 ⟨MOTIR-7991⟩。                              |
+| 3b    | key slot (**shipped**)             | New                                                                                                                                                                                                    | 新                                                                                                                                                |
+| 4i    | acknowledgement                    | That is a change, so I passed it to the planner. It reads it at its next step.                                                                                                                         | 这是一项变更，我已转交给规划者；它会在下一步读到。                                                                                                |
+| 4ii   | label (**shipped**) · marker       | queued · Queued — the planner reads this at its next step.                                                                                                                                             | 待读 · 已排队 —— 规划者会在下一步读到。                                                                                                           |
+| 4iii  | label (**shipped**) · marker       | read · Read — the planner has it.                                                                                                                                                                      | 已读 · 已读 —— 规划者已收到。                                                                                                                     |
+| 4iii  | correction row (act `apply`)       | Added Pause the run to the plan                                                                                                                                                                        | 已把“暂停运行”加入计划                                                                                                                            |
+| 5a    | user turn · offer                  | Maybe the settings card should be split up? · That could be a question or a change. I have not passed it to the planner, and nothing has changed. If you want it as a change, reply “yes, forward it”. | 也许设置卡片应该拆开？ · 这可能是个问题，也可能是一项变更。我还没有把它转交给规划者，也没有改动任何内容。如果你想把它当作变更，请回复“是，转交”。 |
+| 5b    | reply · acknowledgement            | yes, forward it · Done — I passed it to the planner as a change.                                                                                                                                       | 是，转交 · 好的 —— 已作为变更转交给规划者。                                                                                                       |
+| 5c    | stale line                         | Not forwarded — nothing was changed.                                                                                                                                                                   | 未转交 —— 没有改动任何内容。                                                                                                                      |
+| 6     | change turn                        | Forget the web rail — plan this for the mobile app instead.                                                                                                                                            | 不做网页端的规划栏了 —— 改为给移动应用做规划。                                                                                                    |
+| 6     | planner reason                     | This changes what most of the plan is for — the cards written so far assume the old ask.                                                                                                               | 这会改变计划大部分内容的用途 —— 目前写好的卡片都基于原来的需求。                                                                                  |
+| 6     | what each choice does              | Start over writes the plan again from your new ask. Keep going applies it to the cards already written.                                                                                                | 重新开始会按你的新需求重写计划。继续则把它应用到已经写好的卡片上。                                                                                |
+| 6     | the two choices · group label      | Start over · Keep going and apply it · Start over?                                                                                                                                                     | 重新开始 · 继续并应用 · 重新开始？                                                                                                                |
+| 6, 9a | label (**shipped**)                | asking                                                                                                                                                                                                 | 提问                                                                                                                                              |
+| 7     | bar word · 7a · 7b                 | paused · Finishing the work items it holds, then waiting for your choice. · Waiting for your choice.                                                                                                   | 已暂停 · 正在完成手头的工作项，随后等待你的选择。 · 等待你的选择。                                                                                |
+| 7     | act row (`pause`)                  | Paused — nothing new starts until you choose.                                                                                                                                                          | 已暂停 —— 在你选择之前不会开始新的内容。                                                                                                          |
+| 8a    | record                             | You chose to start over                                                                                                                                                                                | 你选择了重新开始                                                                                                                                  |
+| 8b    | record · planner line              | You chose to keep going · Applying your change to the written work items                                                                                                                               | 你选择了继续 · 正在把你的变更应用到已写好的工作项                                                                                                 |
+| 8b    | call lines (**shipped** form)      | Updating Planning rail · Removing Web planning rail                                                                                                                                                    | 正在更新 规划栏 · 正在移除 网页端规划栏                                                                                                           |
+| 8b    | canvas reason label                | Reason (**shipped**) · Not needed for the mobile ask                                                                                                                                                   | 原因（**shipped**）· 手机端的需求用不到                                                                                                           |
+| 9a    | planner question · note            | Which part should change — the card list, the order, or what a card covers? · Nothing has been changed yet.                                                                                            | 想改哪一部分 —— 卡片列表、顺序，还是某张卡片涵盖的内容？ · 目前还没有改动任何内容。                                                               |
+| 9a    | bar (**shipped** string)           | Waiting for your answer · (finishing) Finishing the work items it holds, then waiting for your answer.                                                                                                 | 等待你的回答 · （收尾中）正在完成手头的工作项，随后等待你的回答。                                                                                 |
+| 9a    | act row (`pause`)                  | Paused — nothing new starts until you answer.                                                                                                                                                          | 已暂停 —— 在你回答之前不会开始新的内容。                                                                                                          |
+| 9a    | composer placeholder (**shipped**) | Answer Motir AI…                                                                                                                                                                                       | 回答 Motir AI…                                                                                                                                    |
+| 9b    | vague turn · typed answer          | make it better · split the settings card into profile and billing                                                                                                                                      | 再改好一点 · 把设置卡片拆成个人资料和账单两张                                                                                                     |
+| 9b    | question's line while queued       | Answered — the planner reads it at its next step.                                                                                                                                                      | 已回答 —— 规划者会在下一步读到。                                                                                                                  |
+| 9c    | question's line (**shipped**)      | Answered — planning resumed                                                                                                                                                                            | 已回答 — 规划继续                                                                                                                                 |
+| 10    | change · acknowledgement           | Also add a card for exporting the plan. · That is a change. The plan has finished writing, so I will apply it as a revision.                                                                           | 再加一张导出计划的卡片。 · 这是一项变更。计划已经写完，所以我会把它作为修订应用。                                                                 |
+| 10    | outcome note · link                | Applied as a revision of this plan. · See it on the timeline                                                                                                                                           | 已作为本计划的修订应用。 · 在时间线中查看                                                                                                         |
+| 11    | band, three wordings               | This run has finished. · You stopped this run. (**shipped**) · This run failed.                                                                                                                        | 这次运行已经结束。 · 你停止了这次运行。 · 这次运行失败了。                                                                                        |
+| 11    | band tail (**shipped**)            | Your message wasn’t sent. It is in the box below.                                                                                                                                                      | 你的消息没有发送，它还在下方的输入框中。                                                                                                          |
+| 12    | answer                             | I could not read the plan or its steps just now, so I won’t guess how far along it is. Try asking again in a moment.                                                                                   | 我刚才没能读取计划或它的步骤，所以不会猜测进度。请稍后再问一次。                                                                                  |
+| 13    | draft                              | Add a card for exporting the plan.                                                                                                                                                                     | 加一张导出计划的卡片。                                                                                                                            |
+
+### Primitives composed
+
+The rail and its parts are the shipped components' markup: `PlanChangeRail` (header, the
+`Bubble` pair for the assistant and the user, the system marker line, the act `<ol>`, the
+review block), `PlanChangeComposer` (the running bar with `Button` secondary `sm` Stop, the
+composer, Send), `Button` primary / secondary / ghost `sm`, `IssueTypeIcon`-grammar chips
+(`WorkItemRefChip`, `PlanningTargetChip` proposed variant), `PlanItemNode` for the two canvas
+nodes, `CarryDecidedNotice`'s band and `TakenBackNotice`'s note. The act-rail rows are the
+MOTIR-7975 grammar. **New compositions** (product-local, none in the package): the paused bar,
+the START OVER offer's body and the answered-offer record line.
+
+### Tokens, by role
+
+**Colour, `--el-*` only.** The user bubble `--el-chat-bubble-user` / `--el-accent-text`; the
+assistant bubble `--el-chat-bubble-ai` / `--el-text`; the asking bubble `--el-warning-surface`
+/ `--el-warning-text`; markers and mono step labels `--el-text-secondary`; the act list
+`--el-surface-soft`; the nested call rule `--el-border-strong`; the bar `--el-surface-soft`
+with the paused frame `--el-border-strong`; the refusal band `--el-tint-yellow` on
+`--el-text-strong`; the proposal chip `--el-tint-lavender` + `--el-accent` + `--el-accent-on-surface`;
+the removed node `--el-muted`, `--el-border-strong`, `--el-text-secondary`; Start over
+`--el-accent` / `--el-accent-text`; the outlined button `--el-button-border`; links
+`--el-link`. **No `--el-danger*`, no `--color-*`, no raw value** anywhere on the board.
+
+**Shape, element-semantic only.** Bubbles and the bar `--radius-card`; the chip, the band,
+the note and the call-disclosure toggle `--radius-control`; buttons `--radius-btn` with
+`--height-btn-sm`; the composer `--radius-input`, `--height-input`, `--spacing-input-x`;
+badges `--radius-badge`; chips `--spacing-kbd-x/y` and `--spacing-chip-x/y`; the band
+`--spacing-control-x/y`; nodes `--shadow-card` / `--shadow-subtle`.
+
+**Ink checks.** Every muted-ish line is `--el-text-secondary`; `--el-text-muted` and
+`--el-text-faint` are not used. The one tinted-surface ink, `--el-warning-text` on
+`--el-warning-surface`, is the shipped asking recipe (about 10:1 in both themes), and the
+outlined button's `--el-text` is measured on that tint by `design-state-ink-contrast`.
+
+### What the render card owes (not decided here)
+
+- Rewrite `queuedMarker` and `queuedReadMarker`: both state the phase-boundary rule that
+  MOTIR-7991 supersedes. Add `apply` and `pause` to the act-label catalogue.
+- The START OVER offer's click calls the shipped `restart` arm, and a decline forwards _apply
+  this change to the written work items_ (MOTIR-8007). The paused bar and its wording come
+  from the walk's pause (MOTIR-8009).
+- An unanswered ambiguous offer goes stale on the next turn, derived from the thread, and a
+  reloaded thread derives every record in this asset (8a, 8b, 9c) from stored answers.
+
+### Deliverable
+
+`design/ai-chat/plan-change-run-live--answer-or-forward.mock.html` (panels 1 to 11) and this
+section. It amends `plan-change-run-live.mock.html` sheets 2 and 4, which stay as records.
+It gates the rail rendering, the START OVER offer in the thread and the hosted pause.
+
+---
+
 ## ⭐ Planner narration in the chat panel — the planner's own words, per session, and one control to fold them (MOTIR-8061, 2026-10-09)
 
 **Design system, identified first.** Read `package.json` (depends on

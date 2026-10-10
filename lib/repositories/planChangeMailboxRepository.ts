@@ -85,6 +85,26 @@ export const planChangeMailboxRepository = {
   },
 
   /**
+   * The `turn` entries of ONE job's mailbox with these ids, in `seq` order —
+   * consumed or not (MOTIR-8007: a pause names change turns the walk may already
+   * have read). Scoped to the session, job and tenant, so an id from anywhere else
+   * simply is not returned.
+   */
+  async findTurnsByIds(
+    ids: readonly string[],
+    sessionId: string,
+    jobId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeMailboxEntry[]> {
+    if (ids.length === 0) return [];
+    return tx.planChangeMailboxEntry.findMany({
+      where: { id: { in: [...ids] }, sessionId, jobId, workspaceId, kind: 'turn' },
+      orderBy: { seq: 'asc' },
+    });
+  },
+
+  /**
    * Whether this job has EVER been stopped — existence, not pending-ness.
    *
    * ⚠️ The stop is deliberately NOT read through {@link listPending}: consuming

@@ -7551,6 +7551,48 @@
       "queuedRead": "읽음",
       "queuedMarker": "대기 중 — Motir AI가 작성 중인 작업 항목을 마치면 이 메시지를 읽습니다.",
       "queuedReadMarker": "경계 지점에서 읽음 — 이번 실행에 반영됨.",
+      "midRun": {
+        "pause": {
+          "offerHow": "“처음부터 다시”는 새 요청에 따라 계획을 다시 작성합니다. “계속”은 이미 작성된 작업 항목에 요청을 적용합니다.",
+          "groupLabel": "처음부터 다시 할까요?",
+          "startOver": "처음부터 다시",
+          "keepGoing": "계속하고 적용",
+          "chosenStartOver": "처음부터 다시 하기로 선택했습니다",
+          "chosenKeepGoing": "계속하기로 선택했습니다",
+          "applying": "작성된 작업 항목에 변경 사항을 적용하는 중",
+          "unclearNote": "아직 아무것도 변경되지 않았습니다.",
+          "pausedWord": "일시 중지됨",
+          "finishingChoice": "진행 중인 작업 항목을 마친 뒤 선택을 기다립니다.",
+          "waitingChoice": "선택을 기다리는 중입니다.",
+          "finishingAnswer": "진행 중인 작업 항목을 마친 뒤 답변을 기다립니다.",
+          "answeredQueued": "답변함 — 계획 도구가 다음 단계에서 읽습니다.",
+          "refusal": {
+            "PLAN_CHANGE_JOB_NOT_RUNNING": "답변이 도착하기 전에 실행이 끝났습니다.",
+            "generic": "답변이 실행에 전달되지 않았습니다."
+          }
+        },
+        "answeringMarker": "따로 답변하는 중 — 실행은 계속됩니다.",
+        "answeredAside": "따로 답변함 — 실행에는 아무것도 보내지 않았습니다.",
+        "forwardedAck": "변경 사항이므로 계획 도구에 전달했습니다. 다음 단계에서 읽습니다.",
+        "queuedMarker": "대기 중 — 계획 도구가 다음 단계에서 이 메시지를 읽습니다.",
+        "readMarker": "읽음 — 계획 도구가 받았습니다.",
+        "forwardOffer": "변경 사항으로 처리하려면 “네, 전달해 주세요”라고 답장하세요.",
+        "forwardStale": "전달되지 않음 — 아무것도 변경되지 않았습니다.",
+        "revisedAck": "변경 사항입니다. 계획 작성이 이미 끝났으므로 수정으로 적용하겠습니다.",
+        "revisedNote": "이 계획의 수정으로 적용했습니다.",
+        "revisedLink": "타임라인에서 보기",
+        "refusal": {
+          "finished": "이 실행은 완료되었습니다.",
+          "stopped": "이 실행을 중지했습니다.",
+          "failed": "이 실행은 실패했습니다.",
+          "decided": "이 계획은 이미 승인되었거나 거절되었습니다.",
+          "held": "이 계획에는 이미 다른 변경 사항이 적용되고 있습니다.",
+          "noPlan": "이 실행에서는 변경할 계획이 만들어지지 않았습니다.",
+          "generic": "실행이 끝났으므로 이 메시지는 전달되지 않았습니다.",
+          "tail": "메시지가 전송되지 않았습니다. 아래 입력란에 남아 있습니다.",
+          "quoted": "메시지가 전송되지 않았습니다: “{text}”"
+        }
+      },
       "act": {
         "submitted": "제출",
         "reading": "읽기",

@@ -1,6 +1,11 @@
-import type { PlanChangeSession, PlanChangeTurn } from '@/generated/prisma/client';
+import type {
+  PlanChangeRunPause,
+  PlanChangeSession,
+  PlanChangeTurn,
+} from '@/generated/prisma/client';
 import type {
   DebugLandingDto,
+  PlanChangeRunPauseDto,
   PlanChangeSessionDto,
   PlanChangeTurnConfirmDto,
   PlanChangeTurnDto,
@@ -38,6 +43,31 @@ function toDebugLandingDto(value: unknown): DebugLandingDto | null {
   };
 }
 
+/** A run pause row → its DTO (MOTIR-8007). The delivery state is derived: an answer
+ *  with a mailbox entry is `delivered`, one with a refusal code is `refused`, anything
+ *  else (open, or claimed and not yet delivered) is `pending`. */
+export function toPlanChangeRunPauseDto(
+  row: PlanChangeRunPause,
+  entryRead?: boolean,
+): PlanChangeRunPauseDto {
+  return {
+    id: row.id,
+    jobId: row.jobId,
+    kind: row.kind as PlanChangeRunPauseDto['kind'],
+    changeTurnIds: row.changeTurnIds,
+    reason: row.reason,
+    question: row.question,
+    createdAt: row.createdAt.toISOString(),
+    answer: row.answer as PlanChangeRunPauseDto['answer'],
+    answeredAt: row.answeredAt ? row.answeredAt.toISOString() : null,
+    replyText: row.answer === 'replied' ? row.replyText : null,
+    delivery: row.mailboxEntryId ? 'delivered' : row.deliveryRefusedCode ? 'refused' : 'pending',
+    refusedCode: row.deliveryRefusedCode,
+    mailboxEntryId: row.mailboxEntryId,
+    ...(entryRead === undefined ? {} : { entryRead }),
+  };
+}
+
 export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
   return {
     id: row.id,
@@ -55,6 +85,10 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     guide: readGuideTurnRecord(row.guideTurn),
     attachmentIds: row.attachmentIds,
     confirm: (row.confirm as PlanChangeTurnConfirmDto | null) ?? null,
+    runJobId: row.runJobId,
+    forwardOffer: row.forwardOffer,
+    forwarded: row.forwardedEntryId ? { mailboxEntryId: row.forwardedEntryId } : null,
+    revisedLate: row.revisedLateJobId ? { revisionJobId: row.revisedLateJobId } : null,
     authorId: row.authorId,
     createdAt: row.createdAt.toISOString(),
   };
@@ -67,6 +101,8 @@ export function toPlanChangeSessionDto(
   row: PlanChangeSession,
   turns: PlanChangeTurn[],
   workItemRefs: WorkItemRefMap = {},
+  runPause: PlanChangeRunPause | null = null,
+  runPauseEntryRead?: boolean,
 ): PlanChangeSessionDto {
   return {
     id: row.id,
@@ -86,5 +122,6 @@ export function toPlanChangeSessionDto(
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
     endReason: row.endReason ?? null,
     copiedFromSessionId: row.copiedFromSessionId ?? null,
+    runPause: runPause ? toPlanChangeRunPauseDto(runPause, runPauseEntryRead) : null,
   };
 }
