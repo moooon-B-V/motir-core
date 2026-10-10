@@ -7440,3 +7440,12 @@ Mock: `plans-tabbed-list--waiting-to-resume.mock.html` — a DELTA on `plans-tab
 - **SUPERSEDES** MOTIR-7634's _Closed · the attempt failed_ end line for a hosted failure: it now applies only to a legacy session that a failure ended before this story.
 - **Strings:** `aiPlanning.sessions.planState.waiting` Waiting to resume / 待继续, `aiPlanning.sessions.stop` _Stopped at {where} · because {why} · {time}_ / _停在{where} · 原因：{why} · {time}_.
 - **GIVES:** MOTIR-7921 (tab, chip, stop line, door; 45 min still fits). **TAKES:** the failed→Closed row from MOTIR-7634.
+
+## ⭐ The Plans page — a situation-2 session's row (MOTIR-7935, 2026-10-10)
+
+Mock: `plans-tabbed-list--situation-2.mock.html` (a DELTA on MOTIR-7907's `plans-tabbed-list--waiting-to-resume.mock.html`).
+
+- **The row reads the PLAN's own state, not the session's failure:** _Waiting for approval_ (or _Out of date_), never Closed and not _Waiting to resume_ — the plan is what the person can act on, and it keeps the accent border the retired row's `awaitingReview` rule gave a plan that needs a decision. The session's failure is the stop line (_Your last change could not be made · {time}_), in the place _active {when}_ takes.
+- **The door:** the overlay at that session through MOTIR-7884; an undecided plan keeps its chip door (MOTIR-7889), and the row's own door is the same overlay.
+- Drawn beside a failed-walk row (_Waiting to resume_) and a Closed row, in light, dark and zh.
+- **GIVES:** MOTIR-7921 and MOTIR-7944 (the row; both still fit). **TAKES:** nothing from MOTIR-7907.
