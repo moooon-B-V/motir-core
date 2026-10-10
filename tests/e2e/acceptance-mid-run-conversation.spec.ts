@@ -95,6 +95,13 @@ const stopButton = (page: Page) => rail(page).getByTestId('plan-change-stop');
 const byId = (page: Page, id: string) => rail(page).getByTestId(id);
 const userTurn = (page: Page, text: string) =>
   byId(page, 'conversation-user-turn').filter({ hasText: text });
+/**
+ * The work item the run is anchored on. The canvas opens INSIDE a container anchor
+ * (MOTIR-6154), so a proposal the planner writes under it is drawn on the open level;
+ * one written at the project root would only be counted in the arrivals offer.
+ */
+const anchorId = async () =>
+  (await adminDb.workItem.findFirstOrThrow({ where: { identifier: seed.loginKey } })).id;
 /** A proposal card on the canvas, by the title it shows. */
 const node = (page: Page, title: string) =>
   workspace(page).getByTestId('plan-item-node').filter({ hasText: title });
@@ -299,7 +306,9 @@ test('A. a question is answered on the side and an unconfirmed offer goes nowher
     const read = planReadCarrying(page, started.planId, (items) =>
       items.some((i) => i.title === 'Notifications digest'),
     );
-    await appendAsAi(page, started.run, [{ op: 'add', title: 'Notifications digest' }]);
+    await appendAsAi(page, started.run, [
+      { op: 'add', title: 'Notifications digest', parentRef: await anchorId() },
+    ]);
     await read;
     await expect(node(page, 'Notifications digest').first()).toBeVisible();
     await expect(nodes()).toHaveCount(1);
@@ -429,7 +438,9 @@ test('B. a change is forwarded, read and lands on the canvas; a late one becomes
     const read = planReadCarrying(page, started.planId, (items) =>
       items.some((i) => i.title === 'Billing exports'),
     );
-    await appendAsAi(page, started.run, [{ op: 'add', title: 'Billing exports' }]);
+    await appendAsAi(page, started.run, [
+      { op: 'add', title: 'Billing exports', parentRef: await anchorId() },
+    ]);
     await read;
     await expect(node(page, 'Billing exports').first()).toBeVisible();
     await beat();
@@ -772,7 +783,9 @@ test('E. a vague change is asked about, answered in the composer, and the answer
     const read = planReadCarrying(page, started.planId, (items) =>
       items.some((i) => i.title === 'Settings'),
     );
-    ids = await appendAsAi(page, started.run, [{ op: 'add', title: 'Settings' }]);
+    ids = await appendAsAi(page, started.run, [
+      { op: 'add', title: 'Settings', parentRef: await anchorId() },
+    ]);
     await read;
     await expect(node(page, 'Settings').first()).toBeVisible();
 
@@ -883,7 +896,9 @@ test('E. a vague change is asked about, answered in the composer, and the answer
         items.some((i) => i.title === 'Billing settings'),
     );
     await retitleAsAi(page, started.run, ids[0]!, 'Profile settings');
-    await appendAsAi(page, started.run, [{ op: 'add', title: 'Billing settings' }]);
+    await appendAsAi(page, started.run, [
+      { op: 'add', title: 'Billing settings', parentRef: await anchorId() },
+    ]);
     await read;
     await expect(node(page, 'Profile settings').first()).toBeVisible();
     await expect(node(page, 'Billing settings').first()).toBeVisible();

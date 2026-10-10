@@ -227,7 +227,7 @@ export async function postPause(
 
 /** A proposal the planner appends. */
 export type AppendedProposal =
-  | { op: 'add'; title: string; kind?: string }
+  | { op: 'add'; title: string; kind?: string; parentRef?: string }
   | { op: 'remove'; workItemId: string; reason?: string };
 
 /**
@@ -247,7 +247,11 @@ export async function appendAsAi(
       jobId: run.jobId,
       proposals: proposals.map((p) =>
         p.op === 'add'
-          ? { op: 'add', proposedFields: { title: p.title, kind: p.kind ?? 'story' } }
+          ? {
+              op: 'add',
+              proposedFields: { title: p.title, kind: p.kind ?? 'story' },
+              ...(p.parentRef ? { parentRef: p.parentRef } : {}),
+            }
           : { op: 'remove', workItemId: p.workItemId, ...(p.reason ? { reason: p.reason } : {}) },
       ),
       ...(opts.final ? { final: true } : {}),
