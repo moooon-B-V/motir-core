@@ -17,6 +17,7 @@ import { truncateAuthTables } from '../../helpers/db';
 import { spyOnJobDispatch } from '../../helpers/jobs';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { toWorkbenchRowViews } from '@/app/(authed)/workbench/_components/workbenchRows';
+import { homePageItems } from '../../helpers/homePage';
 
 // THE `approved` STORY GATE (Story MOTIR-4905 · MOTIR-5142) — the properties
 // that belong to no single card of this story, against real Postgres and the
@@ -341,15 +342,15 @@ describe('every surface that counts open work counts an approved card', () => {
     const inProgress = await homeService.listInProgress(homeCtx());
     const finished = await homeService.listRecentlyFinished(homeCtx());
 
-    expect(inProgress.items.map((r) => r.identifier)).toContain(c.identifier);
-    expect(finished.items.map((r) => r.identifier)).not.toContain(c.identifier);
+    expect(homePageItems(inProgress).map((r) => r.identifier)).toContain(c.identifier);
+    expect(homePageItems(finished).map((r) => r.identifier)).not.toContain(c.identifier);
 
     // …and the ROW the tab renders carries the open category, which is what
     // decides the chip's tone. A row whose category came back `done` would sit
     // in the In progress tab wearing a finished pill.
     const workflow = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
     const [row] = toWorkbenchRowViews(
-      inProgress.items.filter((r) => r.identifier === c.identifier),
+      homePageItems(inProgress).filter((r) => r.identifier === c.identifier),
       workflow,
       [],
       false,

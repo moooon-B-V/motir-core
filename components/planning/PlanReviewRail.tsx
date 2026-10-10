@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
 import { PlanStaleBand } from '@/components/planning/PlanChangeConfirmBar';
+import { PlanReviewNarration } from '@/components/planning/PlanReviewNarration';
 import type { PlanHistoryEventDto, PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanDecisionReasonDto } from '@/lib/dto/plans';
 import type { PlanStatusDto, StaleReason } from '@/lib/dto/plans';
@@ -345,6 +346,11 @@ export function PlanReviewRail({
             ) : null}
           </ol>
         </section>
+
+        {/* THE PLANNER'S NARRATION (Story MOTIR-8060 · MOTIR-8064) — the same
+            groups the overlay's chat panel draws, from the review this page
+            polls, for a member and a Visitor alike. */}
+        <PlanReviewNarration review={review} />
 
         {/* STALENESS summary */}
         {review.stale || folderMissingCount > 0 ? (

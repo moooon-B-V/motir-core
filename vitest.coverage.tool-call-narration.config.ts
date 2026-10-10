@@ -55,6 +55,10 @@ export default defineConfig({
       'tests/components/plan-change-catalogue-parity.test.ts',
       'tests/components/plan-change-act-rail.test.tsx',
       'tests/components/debug-turn-rail.test.tsx',
+      // MOTIR-8064 — the per-call lines retired: the record now hands the step rows
+      // to the narration's session heads and announces those heads, which the
+      // panel's own suite drives.
+      'tests/components/plan-narration.test.tsx',
     ],
     coverage: {
       provider: 'v8',
@@ -62,22 +66,18 @@ export default defineConfig({
       reportsDirectory: 'coverage/tool-call-narration',
       all: false,
       include: [...GATED, ...REPORTED],
-      // Read off THIS lane's own command on 2026-10-09 (stmts / branch / fn / lines):
+      // Read off THIS lane's own command on 2026-10-09, after MOTIR-8064 retired
+      // the per-call lines (stmts / branch / fn / lines):
       //
       //   GATED
-      //   planCallLines.ts               98.06 / 91.72 / 100 / 98.36
-      //   PlanActRecord.tsx              94.30 / 91.39 / 100 / 98.05
+      //   planCallLines.ts              100    / 100   / 100   / 100
+      //   PlanActRecord.tsx             100    / 95.65 / 100   / 100
       //
       //   REPORTED (whole-file; the story's own arms are read per function)
-      //   PlanChangeRail.tsx             64.67 / 54.96 / 60.97 / 66.11
-      //   usePlanChangeConversation.ts    9.51 / 12.14 /  4.08 / 10.91
+      //   PlanChangeRail.tsx             64.95 / 54.33 / 57.77 / 66.66
+      //   usePlanChangeConversation.ts    7.63 /  9.07 /  3.2  /  8.77
       //
-      // The two unreached lines on gated files are reachable and simply unmeasured
-      // — each file sits above the floor without them, so no test was added for the
-      // number's sake: `fullValueKey`'s symbol and title arms (no suite renders a
-      // shortened code-graph name or title), and `PlanActRecord`'s reset of the
-      // reader's expansions when a NEW run replaces the record. Pinned at the floor,
-      // never at the reading.
+      // Pinned at the floor, never at the reading.
       thresholds: {
         perFile: true,
         ...Object.fromEntries(GATED.map((file) => [file, FLOOR])),

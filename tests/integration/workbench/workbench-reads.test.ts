@@ -10,6 +10,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { truncateAuthTables } from '../../helpers/db';
 import { spyOnJobDispatch } from '../../helpers/jobs';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { homePageItems } from '../../helpers/homePage';
 
 // THE WORKBENCH'S FOUR PERSONAL READS (Story MOTIR-4777 · MOTIR-4781), against a
 // real Postgres (the motir-core no-mocks rule).
@@ -57,7 +58,10 @@ afterAll(async () => {
 });
 
 const ctx = () => ({ ...fx.ctx, projectId: fx.projectId });
-const ids = (page: { items: { identifier: string }[] }) => page.items.map((r) => r.identifier);
+// The tab's OWN items, heads and their `groupMembers` flattened (MOTIR-8015) — a page of a
+// grouped tab carries a runnable container's items under their head.
+const ids = (page: Parameters<typeof homePageItems>[0]) =>
+  homePageItems(page).map((r) => r.identifier);
 
 /** A card the reader reports — created THROUGH the service, so it lands in the project's initial status. */
 async function card(title: string): Promise<{ id: string; identifier: string }> {
@@ -392,14 +396,16 @@ describe('the three work tabs order by KIND, and the offset boundary is exact', 
 
     // Twenty-five rows at 10 a page is three pages — the card asks for MORE than
     // two, because a single boundary can be right by accident.
-    const first = await homeService.listToDo(ctx(), { limit: 10 });
-    expect(first.total).toBe(25);
+    // MOTIR-8015: the pager counts GROUPS — the host story heads its five subtasks, so the
+    // 25 items are 20 groups, which is three pages at 7.
+    const first = await homeService.listToDo(ctx(), { limit: 7 });
+    expect(first.total).toBe(20);
     const pageCount = Math.ceil(first.total / first.pageSize);
     expect(pageCount).toBe(3);
 
     const walked: string[] = [];
     for (let page = 1; page <= pageCount; page += 1) {
-      walked.push(...ids(await homeService.listToDo(ctx(), { limit: 10, page })));
+      walked.push(...ids(await homeService.listToDo(ctx(), { limit: 7, page })));
     }
 
     // No repeat, no drop — the property a shared `kind` key would break without
@@ -410,16 +416,21 @@ describe('the three work tabs order by KIND, and the offset boundary is exact', 
     );
 
     // And the CONCATENATION is in rank order — the assertion a per-page check
-    // cannot make, which is the whole reason the walk above exists.
+    // cannot make, which is the whole reason the walk above exists. MOTIR-8015: groups
+    // rank by their BEST member, so the host story leads (its best member is a subtask,
+    // rank 0) with its subtasks under it; every other row is in rank order after it.
     const kindOf = new Map(seeded.map((r) => [r.identifier, r.kind]));
+    const hostIdentifier = seeded.find((r) => r.id === host)!.identifier;
+    expect(walked[0], 'the subtask-holding story heads the first group').toBe(hostIdentifier);
+    expect(walked.slice(1, 6).map((id) => kindOf.get(id))).toEqual(Array(5).fill('subtask'));
     const RANK = { subtask: 0, bug: 1, task: 2, story: 3, epic: 4 } as const;
-    const ranks = walked.map((id) => RANK[kindOf.get(id) as keyof typeof RANK]);
+    const ranks = walked.slice(6).map((id) => RANK[kindOf.get(id) as keyof typeof RANK]);
     expect(ranks, 'the concatenated pages are not in READY_KIND_RANK order').toEqual(
       [...ranks].sort((a, b) => a - b),
     );
-    // SENSITIVITY: the run really does contain every rank, so the assertion
+    // SENSITIVITY: the run really does contain every other rank, so the assertion
     // above is not vacuously true of a single-kind list.
-    expect(new Set(ranks).size).toBe(5);
+    expect(new Set(ranks).size).toBe(4);
   });
 
   it('leaves Recently finished on `completedAt DESC` while its siblings move to the rank', async () => {

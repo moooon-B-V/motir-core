@@ -150,7 +150,7 @@ export interface TreeTableProps<Row> {
   className?: string;
 }
 
-const INDENT_PX = 22; // per-level indent (design/work-items/tree.pen)
+export const INDENT_PX = 22; // per-level indent (design/work-items/tree.pen)
 const ROW_PX = 40; // fixed row height — the windowing unit (design/work-items/tree-scale.mock.html)
 const OVERSCAN = 8; // rows mounted beyond each viewport edge so fast scroll never flashes a gap
 

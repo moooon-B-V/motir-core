@@ -218,9 +218,20 @@ describe('no plan mutation escapes the trail', () => {
       ).toBe(true);
     }
 
+    // ⚠️ NOR IS A PLANNER'S NARRATION (Story MOTIR-8060 · MOTIR-8062). `recordPlanNarration`
+    // takes the same lock and appends the session's own sentences to `plan_narration` — what
+    // the planner SAID while it worked, kept for the chat panel. It changes nothing the plan
+    // proposes either, and a trail row per sentence would bury the history the same way.
+    const NOT_A_PLAN_CHANGE_NARRATION = new Set(['recordPlanNarration']);
+    for (const name of NOT_A_PLAN_CHANGE_NARRATION) {
+      expect(mutations, `${name} is no longer a derived mutation`).toContain(name);
+      expect(reaches(name, bodies).has('maxSeq'), `${name} no longer appends narration`).toBe(true);
+    }
+
     const untracked = mutations.filter(
       (name) =>
         !NOT_A_PLAN_CHANGE.has(name) &&
+        !NOT_A_PLAN_CHANGE_NARRATION.has(name) &&
         !reaches(name, bodies).has('recordRevision') &&
         !(name in PHASE_OF && reaches(PHASE_OF[name]!, bodies).has('recordRevision')),
     );

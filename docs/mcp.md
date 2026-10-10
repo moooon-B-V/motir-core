@@ -4618,7 +4618,8 @@ stalled. Call it as each planner session **opens** a step, and with
 | ------------ | ------ | -------- | -------------------------------------------------------------------------------------------------------- |
 | `planId`     | string | yes      | The id `create_plan` returned.                                                                           |
 | `sessionKey` | string | yes      | A stable name for the reporting session, 1–128 characters. A second report under it REPLACES its step.   |
-| `step`       | enum   | yes      | `settle` · `lay` · `author` · `end`.                                                                     |
+| `step`       | enum   | one of   | `settle` · `lay` · `author` · `end`. Send exactly one of `step` or `narration`.                          |
+| `narration`  | array  | one of   | 1–20 plain sentences the session says about what it is doing; appended, kept. See below.                 |
 | `target`     | string | no       | A `planItem:<id>` ref naming an `add` on this plan, or a committed work item by key (`MOTIR-123`) or id. |
 
 | `step`   | `target`                                                                     |
@@ -4649,13 +4650,29 @@ report_plan_step({ planId, sessionKey: "author-3", step: "end" })
 // → { …, targetRef: null, startedAt: null }
 ```
 
+**Narrate between steps.** Send `narration` (instead of `step`, and with no
+`target`) with a few plain sentences on what the session is doing and why. A person
+reads them in the plan's chat panel under that session's step, during the run and
+after it — they are KEPT with the plan, unlike the step itself. Each call appends in
+order (a plan-wide `seq`); whitespace is collapsed, and a sentence over 240
+characters is cut with an ellipsis. The session must hold a step (`settle`, `lay` or
+`author`) when it narrates. A step report also records the words shown at the head
+of that session's narration — its kind, target and the target's title.
+
+```jsonc
+report_plan_step({ planId, sessionKey: "author-3", narration: ["Splitting the export into two stories."] })
+// → { planId, sessionKey: "author-3", narration: [{ seq: 7, body: "Splitting the export into two stories." }] }
+```
+
 Requires **`ai:view_plan`**, the key every plan-authoring write names. A `motir run`
 credential (`CLI_TOKEN_GRANT`) does not carry it and cannot reach this tool: a run
 executing one work item has no business reporting progress on a plan.
 
 Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_GENERATING` off `generating`, naming the
 status; `PLAN_STEP_INVALID` for a target on `settle` or `end`, a ref naming nothing
-on this plan or in its project, a `folder:` ref, or a key that names no work item.
+on this plan or in its project, a `folder:` ref, or a key that names no work item;
+and, for `narration`, both or neither of `step` / `narration`, a `target`, an empty
+or over-long batch, a blank sentence, or a session that holds no step.
 
 ##### `hold_plan_revision` — hold a plan still while you revise it
 

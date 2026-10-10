@@ -2348,7 +2348,13 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         enum: ['settle', 'lay', 'author', 'end'],
         description:
-          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target).',
+          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step` or `narration`.',
+      },
+      narration: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Instead of `step`: one or more plain-language sentences saying what the session is doing and why, appended in order to the plan’s kept narration under `sessionKey` (at most 20 per call; whitespace is collapsed and a sentence longer than 240 characters is cut with an ellipsis). Refused with PLAN_STEP_INVALID when sent with `step` or `target`, when a sentence is empty, or when the session has not reported `settle`, `lay` or `author` yet. Nothing is recorded on a refusal.',
       },
       target: {
         type: 'string',
@@ -2357,7 +2363,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           'What the step works on: a `planItem:<id>` ref naming an `add` on THIS plan, or a committed work item in the plan’s project by its KEY (`MOTIR-123`) or id. Leave it out on `lay` for the project’s top level and on `author` for an item not yet on the plan. Refused on `settle` and `end`.',
       },
     },
-    required: ['planId', 'sessionKey', 'step'],
+    required: ['planId', 'sessionKey'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -4168,7 +4174,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     title: 'Report the step a planner session is on',
     readOnlyHint: false,
     destructiveHint: false,
-    idempotentHint: true,
+    idempotentHint: false,
     openWorldHint: false,
   },
   report_unbuildable_target: {

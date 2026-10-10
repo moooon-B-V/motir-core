@@ -8,6 +8,7 @@ import { adminDb } from '../helpers/adminDb';
 import { shaFor } from '../helpers/commitShaFixtures';
 import { truncateAuthTables } from '../helpers/db';
 import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
+import { homePageItems } from '../helpers/homePage';
 
 // TO RESUME (Story MOTIR-7701 · MOTIR-7707) — `WorkItem.resumeState`, against a real
 // Postgres: the derivation's every case, each trigger that moves it, and the Workbench
@@ -283,7 +284,7 @@ describe('the Workbench partition', () => {
     expect(entry!.resumeMembers.map((m) => m.id).sort()).toEqual([design.id, code.id].sort());
 
     const inProgress = await homeService.listInProgress(hctx());
-    expect(inProgress.items.map((r) => r.id)).toEqual([loose.id]);
+    expect(homePageItems(inProgress).map((r) => r.id)).toEqual([loose.id]);
     const toFix = await homeService.listToFix(hctx());
     expect(toFix.total).toBe(0);
 

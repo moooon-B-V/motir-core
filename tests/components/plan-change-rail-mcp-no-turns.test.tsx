@@ -6,6 +6,7 @@ import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { parsePlanningLaunch } from '@/lib/planning/launcher';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
+import { narrationEntry, narrationRead, narrationSession } from '../helpers/planNarration';
 
 // THE ZERO-TURN MCP RAIL (Subtask MOTIR-6298; design Part XXIII §23.11 · sheet 10 B).
 // An MCP agent's conversation happened in its own harness, so the rail says so —
@@ -59,12 +60,15 @@ const BASE: PlanChangeConversationState = {
 
 const onSend = vi.fn();
 
-function renderRail(conversationElsewhere?: { harness: string } | null) {
+function renderRail(
+  conversationElsewhere?: { harness: string } | null,
+  state: PlanChangeConversationState = BASE,
+) {
   return renderWithIntl(
     <PlanChangeRail
       launch={LAUNCH}
       projectName="PayFlow"
-      state={BASE}
+      state={state}
       index={indexPlanReview(null)}
       targets={[]}
       onAddTarget={vi.fn()}
@@ -147,5 +151,37 @@ describe('PlanChangeRail — the conversation happened ELSEWHERE (MOTIR-6298)', 
     cleanup();
     renderRail();
     expect(screen.queryByTestId('planning-mcp-no-turns')).toBeNull();
+  });
+});
+
+describe('PlanChangeRail — a plan.py plan’s narration (Story MOTIR-8060 · MOTIR-8064)', () => {
+  it('the once-empty MCP rail shows the planner’s sentences under each session’s real head', () => {
+    const lay = narrationSession('plan.py:run:1', 'lay', 'Session handling');
+    const author = narrationSession('plan.py:run:2', 'author', 'Expire idle sessions');
+    renderRail(
+      { harness: 'Claude Code (prompts/plan.py)' },
+      {
+        ...BASE,
+        narration: narrationRead(
+          [lay, author],
+          [
+            narrationEntry(1, 'plan.py:run:1', 'Laying out the session work.'),
+            narrationEntry(2, 'plan.py:run:2', 'Writing the expiry rule.'),
+          ],
+        ),
+        narrationKept: { planId: 'plan_1', live: [], earlier: [], loadingEarlier: false },
+      },
+    );
+    const note = screen.getByTestId('planning-mcp-no-turns');
+    const block = screen.getByTestId('plan-narration');
+    expect(note.compareDocumentPosition(block) & 4).toBe(4);
+    const heads = screen.getAllByTestId('plan-narration-head-line').map((h) => h.textContent);
+    expect(heads[0]).toContain('Laying out Session handling');
+    expect(heads[1]).toContain('Writing Expire idle sessions');
+    expect(screen.getAllByTestId('plan-narration-message').map((m) => m.textContent)).toEqual([
+      'Laying out the session work.',
+      'Writing the expiry rule.',
+    ]);
+    expect(screen.queryAllByTestId('plan-change-call')).toHaveLength(0);
   });
 });
