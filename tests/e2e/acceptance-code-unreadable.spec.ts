@@ -232,8 +232,9 @@ test('an unreadable code graph — no plan written, answers carry a notice, and 
     await sendQuestion(page, 'And how does an invoice get filed?');
     await expect(rail(page).getByText(LONG_ANSWER.slice(0, 60))).toBeVisible();
     await expect(askNotice(page)).toHaveCount(2);
-    // An answered turn offers no Try again.
-    await expect(retry(page)).toHaveCount(1);
+    // Try again lives only on the LATEST assistant turn, so once two answers follow the
+    // declined turns it is gone — and an answered turn never offers it.
+    await expect(retry(page)).toHaveCount(0);
     await beat();
   });
 
