@@ -92,6 +92,7 @@ async function readTabs(
       approvals,
       watching,
       failedSessions,
+      endedSessions,
     ] = await Promise.all([
       workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
         ctx.userId,
@@ -162,6 +163,12 @@ async function readTabs(
         { userId: ctx.userId, workspaceId: ctx.workspaceId, projectIds },
         tx,
       ),
+      // …and the sessions that ended `failed` before MOTIR-7905 and still hold a waiting plan
+      // (MOTIR-7939), the third form the same tab lists and counts.
+      planChangeSessionRepository.watermarkEndedWithWaitingPlanForOwner(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectIds },
+        tx,
+      ),
     ]);
     const latestOf = (a: Date | null, b: Date | null): Date | null =>
       a && b ? (a > b ? a : b) : (a ?? b);
@@ -174,8 +181,8 @@ async function readTabs(
       inProgress: pair(inProgress),
       toFix: pair(toFix),
       toResume: pair({
-        count: toResume.count + failedSessions.count,
-        latest: latestOf(toResume.latest, failedSessions.latest),
+        count: toResume.count + failedSessions.count + endedSessions.count,
+        latest: latestOf(latestOf(toResume.latest, failedSessions.latest), endedSessions.latest),
       }),
       recentlyFinished: pair(recentlyFinished),
       approvals: pair(approvals),

@@ -76,6 +76,28 @@ export const FAILED_WAITING_WHERE = {
   failedAt: { not: null },
 } as const;
 
+/** The plan statuses that are UNDECIDED — a session holding one has work in front of a person
+ *  or an engine (MOTIR-7939). One definition for every read that spells the set. */
+export const UNDECIDED_PLAN_STATUSES = ['generating', 'planned', 'stale'] as const;
+
+/** The undecided statuses a PERSON is waiting to decide — the plan a failure leaves beside
+ *  (situation 2), as opposed to a `generating` plan an engine is still writing. */
+export const WAITING_PLAN_STATUSES = ['planned', 'stale'] as const;
+
+/**
+ * ENDED `failed` sessions that still hold a plan waiting for a decision (MOTIR-7939) — the
+ * sessions that ended under the pre-MOTIR-7905 rule, which declined a `generating` plan and
+ * left a `planned` / `stale` one behind a session reading Closed. `plans: some` is the
+ * relation through `Plan.sessionId`, so a plan the carry moved to a new session (MOTIR-7930)
+ * leaves this set on its own. Keyed on the end REASON, not a date.
+ */
+export const ENDED_WITH_WAITING_PLAN_WHERE = {
+  endedAt: { not: null },
+  endReason: 'failed',
+  origin: 'conversation',
+  plans: { some: { status: { in: [...WAITING_PLAN_STATUSES] } } },
+} as const;
+
 /** Open sessions waiting on their person's next turn. */
 export const AWAITING_PERSON_WHERE = {
   endedAt: null,

@@ -2,6 +2,7 @@ import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import type { PlanAuthorSourceDto, PlanOriginDto } from '@/lib/dto/plans';
 import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
+import type { ToResumeForm } from '@/lib/planChange/toResumeForm';
 import type { ApprovalGateKindDTO, ApprovalGateStateDTO } from '@/lib/dto/approvalGate';
 import type {
   ExecutorDto,
@@ -204,15 +205,25 @@ export interface HomePageDto {
  */
 export interface ToResumePlanningSessionDto {
   sessionId: string;
-  /** The session's newest plan — the one Resume continues — or null when none was written. */
+  /** WHICH of the three forms this entry is (MOTIR-7939; decision MOTIR-7906): a failed walk
+   *  to Resume, a failure beside a plan that waits for approval, or a session that ended
+   *  `failed` before MOTIR-7905 and still holds one. Derived, never stored. */
+  form: ToResumeForm;
+  /** The plan the entry OPENS ON — a `failed_walk`'s `generating` plan, otherwise the waiting
+   *  plan — or null when the session wrote none. */
   planId: string | null;
-  /** `Plan.title`, as written, or null. */
+  /** The opened plan's `Plan.title`, as written, or null. */
   title: string | null;
+  /** The session's most recent `planned` / `stale` plan, or null — the second line of a
+   *  `failed_walk` entry that also holds one, and the entry's own plan on the other two forms. */
+  waitingPlan: { planId: string; title: string | null; status: 'planned' | 'stale' } | null;
   /** The project's name — the leading line's last fallback. */
   projectName: string;
   /** The session's `targetKeys` in stored order, each with the target's title
    *  (null when the key no longer resolves in the project). */
   targets: { key: string; title: string | null }[];
+  /** What the session stored, untranslated; null only on `ended_with_waiting_plan`, whose
+   *  failure record was cleared when the session ended. */
   failure: {
     /** ISO-8601. */
     failedAt: string;
@@ -221,9 +232,12 @@ export interface ToResumePlanningSessionDto {
     stopPhase: 'lay' | 'author' | null;
     stopRef: string | null;
     stopTitle: string | null;
-  };
-  /** The ONE progress derivation's snapshot (design: *N of M written*); null when the plan
-   *  has none to give — the entry is NOT dropped, the plan is still the person's work. */
+  } | null;
+  /** ISO-8601 — when the session ended; set only on `ended_with_waiting_plan`. */
+  endedAt: string | null;
+  /** The ONE progress derivation's snapshot (design: *N of M written*) — asked only for a
+   *  `failed_walk`; null when the plan has none to give or the form carries none. The entry is
+   *  NOT dropped: the plan is still the person's work. */
   progress: PlanProgressSnapshot | null;
 }
 

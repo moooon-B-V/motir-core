@@ -10,6 +10,8 @@ import {
   parsePlanSessionFailureRecord,
   type PlanSessionAwaiting,
   type PlanSessionFailureRecord,
+  UNDECIDED_PLAN_STATUSES,
+  ENDED_WITH_WAITING_PLAN_WHERE,
 } from '@/lib/planChange/sessionWaitingState';
 
 /**
@@ -61,6 +63,22 @@ function failedOpenForOwnerWhere(args: {
     projectId: { in: [...args.projectIds] },
     origin: 'conversation',
     ...FAILED_WAITING_WHERE,
+  };
+}
+
+/** The ENDED-`failed` sessions of the owner that still hold a waiting plan (MOTIR-7939) —
+ *  To resume's third form. One predicate for its list, its count and its watermark. */
+function endedWithWaitingPlanForOwnerWhere(args: {
+  userId: string;
+  workspaceId: string;
+  projectIds: readonly string[];
+}): Prisma.PlanChangeSessionWhereInput {
+  return {
+    workspaceId: args.workspaceId,
+    createdById: args.userId,
+    projectId: { in: [...args.projectIds] },
+    ...ENDED_WITH_WAITING_PLAN_WHERE,
+    plans: { some: { status: { in: [...ENDED_WITH_WAITING_PLAN_WHERE.plans.some.status.in] } } },
   };
 }
 
@@ -412,7 +430,7 @@ export const planChangeSessionRepository = {
         // this a failure that came before the first proposal, and a reply nobody has
         // read yet, are indistinguishable from a thread nobody is coming back to.
         ...NOT_WAITING_WHERE,
-        plans: { none: { status: { in: ['generating', 'planned', 'stale'] } } },
+        plans: { none: { status: { in: [...UNDECIDED_PLAN_STATUSES] } } },
       },
       select: { id: true, workspaceId: true },
       orderBy: [{ lastActivityAt: 'asc' }, { id: 'asc' }],
@@ -686,6 +704,51 @@ export const planChangeSessionRepository = {
       _max: { failedAt: true },
     });
     return { count: row._count._all, latest: row._max.failedAt ?? null };
+  },
+
+  /**
+   * The owner's ENDED-`failed` sessions that still hold a plan waiting for a decision,
+   * newest end first (`id` breaks a tie) — To resume's third form (MOTIR-7939). Same
+   * ownership and project scoping as {@link listFailedOpenForOwner}.
+   */
+  async listEndedWithWaitingPlanForOwner(
+    args: {
+      userId: string;
+      workspaceId: string;
+      projectIds: readonly string[];
+      skip: number;
+      take: number;
+    },
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.planChangeSession.findMany({
+      where: endedWithWaitingPlanForOwnerWhere(args),
+      select: { id: true, projectId: true, targetKeys: true, endedAt: true },
+      orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+      skip: args.skip,
+      take: args.take,
+    });
+  },
+
+  /** A count over the same predicate as {@link listEndedWithWaitingPlanForOwner}. */
+  async countEndedWithWaitingPlanForOwner(
+    args: { userId: string; workspaceId: string; projectIds: readonly string[] },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.planChangeSession.count({ where: endedWithWaitingPlanForOwnerWhere(args) });
+  },
+
+  /** The tab's watermark share for these sessions: how many, and the newest `endedAt`. */
+  async watermarkEndedWithWaitingPlanForOwner(
+    args: { userId: string; workspaceId: string; projectIds: readonly string[] },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ count: number; latest: Date | null }> {
+    const row = await tx.planChangeSession.aggregate({
+      where: endedWithWaitingPlanForOwnerWhere(args),
+      _count: { _all: true },
+      _max: { endedAt: true },
+    });
+    return { count: row._count._all, latest: row._max.endedAt ?? null };
   },
 
   /** A count over the same predicate as {@link listFailedOpenForOwner}. */

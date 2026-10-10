@@ -1,6 +1,9 @@
 import { Prisma, type Plan, type PlanStatus } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
-import { FAILED_WAITING_WHERE } from '@/lib/planChange/sessionWaitingState';
+import {
+  FAILED_WAITING_WHERE,
+  UNDECIDED_PLAN_STATUSES,
+} from '@/lib/planChange/sessionWaitingState';
 
 /** A plan the abandoned-plan sweep may act on — every `generating` plan past the
  *  grace, carrying the proposal COUNT read in the same statement.
@@ -153,7 +156,7 @@ export const planRepository = {
    *  (AMENDMENT 23 §2). */
   async countUndecidedBySession(sessionId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.plan.count({
-      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+      where: { sessionId, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
     });
   },
 
@@ -249,11 +252,34 @@ export const planRepository = {
     return result.count > 0;
   },
 
+  /**
+   * The UNDECIDED plans of a PAGE of sessions in ONE read (MOTIR-7939) — what To resume names
+   * a session's form and its waiting plan by, and the plan fields the progress read needs, so
+   * naming a page costs no per-row query. Newest first within a session.
+   */
+  async listUndecidedBySessions(sessionIds: readonly string[], tx: Prisma.TransactionClient) {
+    if (sessionIds.length === 0) return [];
+    return tx.plan.findMany({
+      where: { sessionId: { in: [...sessionIds] }, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
+      select: {
+        id: true,
+        sessionId: true,
+        projectId: true,
+        status: true,
+        title: true,
+        createdAt: true,
+        lastActivityAt: true,
+        authorSource: true,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
   /** Every UNDECIDED plan of a session with what a turn on a failed session classifies by
    *  (MOTIR-7938): its id, status, producing job and age. */
   async listUndecidedBySession(sessionId: string, tx: Prisma.TransactionClient) {
     return tx.plan.findMany({
-      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+      where: { sessionId, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
       select: { id: true, status: true, sourceJobId: true, createdAt: true },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
@@ -268,7 +294,7 @@ export const planRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<Plan | null> {
     return tx.plan.findFirst({
-      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+      where: { sessionId, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },
@@ -430,7 +456,7 @@ export const planRepository = {
       where: {
         projectId,
         workspaceId,
-        status: { in: ['generating', 'planned', 'stale'] },
+        status: { in: [...UNDECIDED_PLAN_STATUSES] },
         AND: [
           { NOT: { status: 'generating', sourceJobId: null, items: { none: {} } } },
           // ⚠️ A CLOSED plan holding NOTHING is nobody's decision either

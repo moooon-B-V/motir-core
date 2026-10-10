@@ -521,7 +521,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
     'one documented exception — `watcher` carries no `updatedAt`, so its freshness lives ' +
     'across a relation Prisma cannot `_max` through.';
 
-  it('is ONE transaction of seventeen statements, and the shape is the point', async () => {
+  it('is ONE transaction of eighteen statements, and the shape is the point', async () => {
     for (let i = 0; i < 10; i += 1) await card(`Bulk ${i}`);
     await gateOn({ title: 'Decide me', assigneeId: fx.ownerId });
 
@@ -564,6 +564,8 @@ describe('COST — this read runs once a second per open Workbench', () => {
       // …and the reader's failed planning sessions, folded into To resume's pair
       // (MOTIR-7914) so a new failure moves the tab's change detector as it moves the badge.
       'planChangeSession.aggregate',
+      // …and the sessions that ended `failed` before MOTIR-7905 yet hold a waiting plan (MOTIR-7939).
+      'planChangeSession.aggregate',
     ]);
   });
 
@@ -573,9 +575,9 @@ describe('COST — this read runs once a second per open Workbench', () => {
     const watermark = await statementsOf(() => workbenchWatermarkService.read(ctx()));
     const counts = await statementsOf(() => homeService.tabCounts(ctx()));
 
-    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Seventeen statements is
+    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Eighteen statements is
     // not obviously cheap or expensive in the abstract; what settles it is that
-    // the strip ALREADY issues sixteen to render its badges for the tabs this
+    // the strip ALREADY issues seventeen to render its badges for the tabs this
     // read covers, and this read answers strictly more — every tab's freshness as
     // well as its size — for one more.
     //
@@ -594,7 +596,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
       if (i % 3 === 0) await watch(row.id, fx.ownerId);
     }
     const big = await statementsOf(() => workbenchWatermarkService.read(ctx()));
-    expect(big).toHaveLength(17);
+    expect(big).toHaveLength(18);
   });
 
   it('runs on indexes that are actually present', async () => {
