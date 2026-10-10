@@ -16,7 +16,12 @@ vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
   return { ...actual, fetchPlanReview: fetchReview };
 });
 
-import { FAILING_AFTER, POLL_MS, useGeneratingPlanPoll } from '@/lib/hooks/useGeneratingPlanPoll';
+import {
+  FAILING_AFTER,
+  POLL_MS,
+  STALL_MS,
+  useGeneratingPlanPoll,
+} from '@/lib/hooks/useGeneratingPlanPoll';
 import { planReview, planReviewItem } from '../helpers/planReview';
 
 const A = planReviewItem({ planItemId: 'a', nodeId: 'a', title: 'A' });
@@ -113,7 +118,10 @@ describe('useGeneratingPlanPoll (MOTIR-6295)', () => {
     const onSnapshot = vi.fn();
     const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1', { onSnapshot }));
     await flush();
-    await tick(); // the second read is issued while the first is still out
+    // The second read is issued while the first is still out. An interval tick no longer does that
+    // (MOTIR-8102); an explicit `refresh()` still can, which is the overlap the stale guard exists for.
+    act(() => result.current.refresh());
+    await flush();
 
     late.resolve(generating([A]));
     await flush();
@@ -124,6 +132,66 @@ describe('useGeneratingPlanPoll (MOTIR-6295)', () => {
     expect(result.current.review?.items).toEqual([A]);
     expect(result.current.version).toBe(1);
     expect(onSnapshot).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
+  // MOTIR-8102 — the interval used to fire a new read every POLL_MS whether or not the previous
+  // one had landed, so a read slower than the interval piled up behind itself. REPRODUCTION: with
+  // the first read held open, three more intervals pass and the poll must not have read again.
+  it('does NOT start a new read while the previous one is still in flight (MOTIR-8102)', async () => {
+    const slow = deferred<PlanReviewDto>();
+    fetchReview.mockReturnValueOnce(slow.promise).mockResolvedValue(generating([A]));
+    const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
+    await flush();
+    expect(fetchReview).toHaveBeenCalledTimes(1);
+
+    await tick();
+    await tick();
+    await tick();
+    expect(fetchReview).toHaveBeenCalledTimes(1);
+
+    // The held read lands: the poll carries on at its normal cadence from there.
+    slow.resolve(generating([A, B]));
+    await flush();
+    expect(result.current.review?.items).toEqual([A, B]);
+    await tick();
+    expect(fetchReview).toHaveBeenCalledTimes(2);
+    unmount();
+  });
+
+  it('abandons a read that stays out past STALL_MS, counts it, and reads again (MOTIR-8102)', async () => {
+    const hung = deferred<PlanReviewDto>();
+    fetchReview.mockReturnValueOnce(hung.promise).mockResolvedValue(generating([A]));
+    const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
+    await flush();
+    const signal = fetchReview.mock.calls[0]![1] as AbortSignal;
+
+    // Just short of the bound the hung read is still out, so nothing is issued behind it.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STALL_MS - POLL_MS);
+    });
+    expect(fetchReview).toHaveBeenCalledTimes(1);
+    expect(signal.aborted).toBe(false);
+
+    // The first tick at or past the bound abandons it and reads again.
+    await tick();
+    expect(signal.aborted).toBe(true);
+    expect(fetchReview).toHaveBeenCalledTimes(2);
+    expect(result.current.review?.items).toEqual([A]);
+    unmount();
+  });
+
+  it('an explicit `refresh()` still reads over one in flight (MOTIR-8102)', async () => {
+    const slow = deferred<PlanReviewDto>();
+    fetchReview.mockReturnValueOnce(slow.promise).mockResolvedValue(generating([A]));
+    const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
+    await flush();
+    expect(fetchReview).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.refresh());
+    await flush();
+    expect(fetchReview).toHaveBeenCalledTimes(2);
+    expect(result.current.review?.items).toEqual([A]);
     unmount();
   });
 
@@ -233,7 +301,8 @@ describe('useGeneratingPlanPoll (MOTIR-6295)', () => {
     fetchReview.mockReturnValueOnce(early.promise).mockResolvedValue(generating([A]));
     const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
     await flush();
-    await tick(); // read 2 succeeds while read 1 is still out
+    act(() => result.current.refresh()); // read 2 succeeds while read 1 is still out (a tick would wait: MOTIR-8102)
+    await flush();
     early.reject(new Error('network'));
     await flush();
     await tick();

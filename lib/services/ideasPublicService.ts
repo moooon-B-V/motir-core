@@ -4,7 +4,7 @@ import type { IdeaCategory, IdeaKind } from '@/generated/prisma/client';
 import type { PublicIdeaDto, PublicIdeaListDto, PublicIdeaTagDto } from '@/lib/dto/ideas';
 import {
   IDEA_CATEGORIES,
-  IDEA_CATEGORY_LABELS,
+  ideaCategoryLabel,
   isIdeaCategory,
   isIdeaKind,
 } from '@/lib/ideas/categories';
@@ -36,7 +36,7 @@ import {
  * route from `?locale=` alone (`resolvePublicIdeaLocale`). It loads that
  * locale's translations and serves each field in it where it has text, in
  * English elsewhere, naming the English ones. `'en'` loads none and serves the
- * English as before. Category labels stay English in every locale.
+ * English as before.
  */
 export const PUBLIC_IDEA_LIST_CAP = 500;
 
@@ -87,7 +87,7 @@ export const ideasPublicService = {
       items: rows.map((row) => toPublicIdeaDto(row, locale)),
       categories: IDEA_CATEGORIES.filter((c) => (byCategory.get(c) ?? 0) > 0).map((c) => ({
         slug: c,
-        label: IDEA_CATEGORY_LABELS[c],
+        label: ideaCategoryLabel(c, locale),
         count: byCategory.get(c)!,
       })),
       total: rows.length,

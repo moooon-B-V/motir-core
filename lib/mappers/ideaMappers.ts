@@ -6,7 +6,7 @@ import type {
   StaffIdeaDto,
   StaffIdeaTagDto,
 } from '@/lib/dto/ideas';
-import { IDEA_CATEGORY_LABELS } from '@/lib/ideas/categories';
+import { IDEA_CATEGORY_LABELS, ideaCategoryLabel } from '@/lib/ideas/categories';
 import {
   localizeClaim,
   localizeIdea,
@@ -69,6 +69,7 @@ export function toPublicIdeaDto(
   const { fields, fallbackFields } = localizeIdea(row, locale);
   return {
     ...englishIdeaFields(row),
+    category: { slug: row.category, label: ideaCategoryLabel(row.category, locale) },
     ...fields,
     tags: row.tags
       .map((a) => {

@@ -12,7 +12,7 @@ import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
 // `PlanningList.tsx` it leaves unreached, each a real thing the network or the
 // document can do:
 //   · a read that ANSWERS but not 200 — a dropped read like a rejected one;
-//   · an outcome read that finds the plan STILL generating — nothing recorded;
+//   · an outcome read that finds the plan STILL generating — the row is dropped quietly;
 //   · a row held across two polls — its outcome is read ONCE, not per poll;
 //   · a failure that lands after a newer read was applied — it says nothing;
 //   · a `visibilitychange` to HIDDEN — no read;
@@ -124,7 +124,7 @@ describe('PlanningList — the poll’s remaining arms', () => {
     expect(screen.getByTestId('planning-row-p1')).toBeTruthy();
   });
 
-  it('a held row whose plan is STILL generating records no outcome, and is asked about ONCE', async () => {
+  it('a held row whose plan is STILL generating is dropped quietly, never labelled "no longer being written"', async () => {
     const fetchMock = vi.fn(async (input: string) =>
       String(input) === '/api/plans/p1'
         ? json({ status: 'generating', decisionReason: null })
@@ -134,14 +134,37 @@ describe('PlanningList — the poll’s remaining arms', () => {
     mount(page([row('p1'), row('p2')], 2));
 
     await poll(2);
-    const held = screen.getByTestId('planning-row-p1');
-    expect(held.dataset['held']).toBe('true');
-    // Absent from one window, not finished: no outcome is RECORDED for it, so it
-    // never claims the plan was written.
-    expect(held.textContent).not.toContain('Written');
-    // Two polls held it; the plan was read once.
+    // It left the window, it did not finish: the row goes, with no outcome line.
+    expect(screen.queryByTestId('planning-row-p1')).toBeNull();
+    expect(screen.getByTestId('planning-row-p2')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('No longer being written');
+    // Two polls ran; the plan was read once.
     const planReads = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/plans/p1');
     expect(planReads).toHaveLength(1);
+  });
+
+  it('a still-generating answer that lands after the row is back in the window leaves it alone', async () => {
+    let answer: ((res: Response) => void) | null = null;
+    const slow = new Promise<Response>((resolve) => {
+      answer = resolve;
+    });
+    let polls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (String(input) === '/api/plans/p1') return slow;
+        polls += 1;
+        return json(polls === 1 ? page([row('p2')], 1) : page([row('p1'), row('p2')], 2));
+      }),
+    );
+    mount(page([row('p1'), row('p2')], 2));
+
+    await poll(2);
+    expect(screen.getByTestId('planning-row-p1').dataset['held']).not.toBe('true');
+    await act(async () => {
+      answer?.(json({ status: 'generating', decisionReason: null }));
+    });
+    expect(screen.getByTestId('planning-row-p1')).toBeTruthy();
   });
 
   it('a failure that lands AFTER a newer read was applied says nothing about now', async () => {

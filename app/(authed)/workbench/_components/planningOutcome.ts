@@ -42,8 +42,8 @@ export const UNKNOWN_OUTCOME: PlanningRowOutcome = {
  * producer is provably gone, not that anything the reader did failed.
  *
  * A plan still `generating` on the read has not left after all — it is simply
- * absent from one window — so it gets no outcome and the row keeps its progress
- * line.
+ * absent from one window — so it gets no outcome, and the list drops the row quietly
+ * rather than claiming it is no longer being written.
  */
 export function planningOutcomeOf(plan: {
   status: PlanStatusDto;
