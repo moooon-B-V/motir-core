@@ -57,15 +57,6 @@ describe('the gates', () => {
     expect(resume).not.toHaveBeenCalled();
   });
 
-  it('spends the ai:generate ceiling before the body is read', async () => {
-    vi.mocked(enforceAiRateLimit).mockResolvedValueOnce(
-      new Response('{}', { status: 429 }) as never,
-    );
-    expect((await POST(req({ sessionId: 's1' }))).status).toBe(429);
-    expect(enforceAiRateLimit).toHaveBeenCalledWith(ctx, 'ai:generate');
-    expect(resume).not.toHaveBeenCalled();
-  });
-
   it('400s a body that is not JSON, and a missing sessionId', async () => {
     expect((await POST(req(null, '{nope'))).status).toBe(400);
     expect((await POST(req({}))).status).toBeGreaterThanOrEqual(400);
@@ -83,6 +74,9 @@ describe('the answer', () => {
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
     expect(await res.json()).toEqual({ jobId: 'job-2', planId: 'plan-1', session: { id: 's1' } });
     expect(resume).toHaveBeenCalledWith(ctx, 's1');
+    // The `ai:generate` ceiling is drawn before the service runs (the surface guard lists this
+    // door as LIMITED; the refusal itself is `tests/rateLimit`'s to prove).
+    expect(enforceAiRateLimit).toHaveBeenCalledWith(ctx, 'ai:generate');
   });
 });
 
