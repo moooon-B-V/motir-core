@@ -361,7 +361,15 @@ export interface PlanChangeConversationState {
    * work item); this state only carries it. Null otherwise. OPTIONAL (absent reads as
    * null) so a state built by hand — every rail test — needs no change.
    */
-  lateRevision?: { planId: string; revisionJobId: string; count: number } | null;
+  lateRevision?: {
+    planId: string;
+    revisionJobId: string;
+    count: number;
+    /** The mailbox entries the revision carried, when the end-of-run claim made it:
+     *  the persisted turns are not marked `revisedLate` on that path, so the rail
+     *  recognises the stranded turns by these ids. Absent on the settle path. */
+    entryIds?: string[];
+  } | null;
   /**
    * A QUESTION the person typed while a run works, whose answer is still being
    * written (MOTIR-7998). Set when the mid-run send starts and cleared when that
@@ -1655,6 +1663,7 @@ export function usePlanChangeConversation({
   const claimLateChanges = useCallback(async (runJobId: string, signal: AbortSignal) => {
     const sessionId = stateRef.current.session?.id;
     if (!sessionId || !stateRef.current.queued.some((t) => !t.read)) return;
+    const strandedIds = stateRef.current.queued.filter((t) => !t.read).map((t) => t.id);
     try {
       const answer = await submitLateChanges(sessionId, runJobId, signal);
       if (!mountedRef.current) return;
@@ -1666,6 +1675,7 @@ export function usePlanChangeConversation({
             planId: answer.planId,
             revisionJobId: answer.revisionJobId,
             count: answer.texts.length,
+            entryIds: strandedIds,
           },
         }));
       } else if (answer.outcome === 'refused') {

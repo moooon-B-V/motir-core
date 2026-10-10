@@ -139,7 +139,11 @@ export function PauseReply({
   const shown =
     entry ??
     (pause.delivery === 'delivered'
-      ? { id: pause.mailboxEntryId ?? '', text: pause.replyText ?? '', read: false }
+      ? {
+          id: pause.mailboxEntryId ?? '',
+          text: pause.replyText ?? '',
+          read: pause.entryRead === true,
+        }
       : null);
   return (
     <div className="flex flex-col gap-1" data-testid="planner-pause-reply">
@@ -274,7 +278,10 @@ export function PauseThread({
   }
   return (
     <>
-      <PlannerQuestionTurn pause={pause} resumed={Boolean(replyEntry?.read)} />
+      <PlannerQuestionTurn
+        pause={pause}
+        resumed={Boolean(replyEntry?.read) || pause.entryRead === true}
+      />
       {pause.answer === 'replied' ? <PauseReply pause={pause} entry={replyEntry} /> : null}
       <PauseRecord pause={pause} refusalCode={refusalCode} />
     </>

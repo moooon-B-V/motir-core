@@ -73,6 +73,13 @@ export interface PlanChangeRunPauseDto {
    * the reply's queued → read marks to the entry with this id (MOTIR-8010).
    */
   mailboxEntryId: string | null;
+  /**
+   * Whether the run has READ the mailbox entry the answer wrote. Filled by the read
+   * door, so a reloaded rail (which has no live mailbox poll yet) can still draw a
+   * reply as read and the question as "planning resumed". Absent where the DTO was
+   * built from a write, which never knows it.
+   */
+  entryRead?: boolean;
 }
 
 export interface PlanChangeTurnDto {

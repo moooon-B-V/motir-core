@@ -365,7 +365,18 @@ export const planChangeRunPauseService = {
         pctx.workspaceId,
         tx,
       );
-      return row ? toPlanChangeRunPauseDto(row) : null;
+      if (!row) return null;
+      // Whether the run has READ the answer's mailbox entry, so a reloaded rail can
+      // say "planning resumed" without a live poll of its own.
+      if (!row.mailboxEntryId) return toPlanChangeRunPauseDto(row);
+      const [entry] = await planChangeMailboxRepository.findTurnsByIds(
+        [row.mailboxEntryId],
+        sessionId,
+        row.jobId,
+        pctx.workspaceId,
+        tx,
+      );
+      return toPlanChangeRunPauseDto(row, entry ? entry.consumedAt !== null : false);
     });
   },
 };

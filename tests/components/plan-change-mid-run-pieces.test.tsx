@@ -248,6 +248,10 @@ describe('the planner’s question and the reply', () => {
     rerender(<PauseReply pause={replied} entry={null} />);
     expect(screen.getByTestId('plan-change-forwarded-queued')).toBeTruthy();
 
+    // A reloaded rail holds no entry: the pause itself says the run has read it.
+    rerender(<PauseReply pause={{ ...replied, entryRead: true }} entry={null} />);
+    expect(screen.getByTestId('plan-change-forwarded-read')).toBeTruthy();
+
     // Delivered, with neither the entry id nor the text on the pause yet.
     rerender(
       <PauseReply pause={unclear({ answer: 'replied', delivery: 'delivered' })} entry={null} />,
@@ -258,6 +262,24 @@ describe('the planner’s question and the reply', () => {
     rerender(<PauseReply pause={unclear({ answer: 'replied', replyText: 'x' })} entry={null} />);
     expect(screen.queryByTestId('plan-change-forwarded-queued')).toBeNull();
     expect(screen.queryByTestId('plan-change-forwarded-read')).toBeNull();
+  });
+
+  it('PauseThread calls a reloaded, already-read answer "planning resumed"', () => {
+    renderWithIntl(
+      <PauseThread
+        pause={unclear({
+          answer: 'replied',
+          replyText: 'x',
+          delivery: 'delivered',
+          entryRead: true,
+        })}
+        pending={false}
+        onAnswer={() => {}}
+        replyEntry={null}
+        refusalCode={null}
+      />,
+    );
+    expect(screen.getByTestId('planner-question-record').textContent).toContain('planning resumed');
   });
 });
 

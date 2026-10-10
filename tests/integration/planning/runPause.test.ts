@@ -324,6 +324,10 @@ describe('answering an unclear pause', () => {
     const reply = (await entries()).find((e) => e.answersPauseId === pause.id)!;
     expect(reply).toMatchObject({ disposition: 'fold', body: 'The new checkout, not the old.' });
     expect(reply.body).not.toContain('QUESTION-SENTINEL');
+    // Not read yet: the read door says so, for a rail that holds no live poll.
+    expect(await planChangeRunPauseService.latestForSession(sessionId, ctx)).toMatchObject({
+      entryRead: false,
+    });
     const delivery = await planChangeMailboxService.readForBoundary(RUN_JOB, ctx);
     expect(delivery.turns.find((t) => t.id === reply.id)).toMatchObject({
       answersQuestion: pause.id,
@@ -332,6 +336,8 @@ describe('answering an unclear pause', () => {
       answer: 'replied',
       replyText: 'The new checkout, not the old.',
       delivery: 'delivered',
+      // The boundary read above consumed the entry: the run has read the answer.
+      entryRead: true,
     });
     expect(submitJobMock).not.toHaveBeenCalled();
   });

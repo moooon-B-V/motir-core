@@ -1314,6 +1314,11 @@ function midRunPropsFor(
   return {
     queuedEntry: entryId ? (state.queued.find((q) => q.id === entryId) ?? null) : null,
     lateRevision: state.lateRevision ?? null,
+    revisedLate:
+      turn.revisedLate ??
+      (entryId && state.lateRevision?.entryIds?.includes(entryId)
+        ? { revisionJobId: state.lateRevision.revisionJobId }
+        : null),
     answeredAside: Boolean(origin?.runJobId) && !origin?.forwarded && !origin?.revisedLate,
     offerStale: Boolean(turn.forwardOffer) && forwardOfferStale(turns, index),
     onSelectProposal,
@@ -1487,6 +1492,9 @@ interface MidRunTurnProps {
   /** The `state.queued` entry matching this turn's `forwarded.mailboxEntryId`. */
   queuedEntry: QueuedTurn | null;
   lateRevision: { planId: string } | null;
+  /** The turn's late revision: its own persisted mark, or — for a change the
+   *  end-of-run claim revised — the revision that carried its mailbox entry. */
+  revisedLate: PlanChangeTurnDto['revisedLate'];
   /** This answer was given on the side — it owes the passive line. */
   answeredAside: boolean;
   /** This answer's forward offer has gone stale. */
@@ -1714,11 +1722,11 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
         ) : null}
         {/* A question typed mid-run is UNLABELLED (state 2); a forwarded change
             carries its queued / read marks, a late one its revision note. */}
-        {turn.forwarded || turn.revisedLate ? (
+        {turn.forwarded || midRun.revisedLate ? (
           <ForwardedMarks
             entry={midRun.queuedEntry}
             acknowledge
-            revisedLate={turn.revisedLate}
+            revisedLate={midRun.revisedLate}
             lateRevision={midRun.lateRevision}
           />
         ) : null}

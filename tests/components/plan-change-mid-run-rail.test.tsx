@@ -331,6 +331,37 @@ describe('a late change (state 10)', () => {
   });
 });
 
+describe('a change the end-of-run claim revised', () => {
+  it('draws the revision note under the forwarded turn whose entry the revision carried', () => {
+    const t = forwardedTurn('u1', 'Add an export card.', 'e1');
+    renderWithIntl(
+      rail(
+        stateOf([t], {
+          phase: 'idle',
+          queued: [],
+          lateRevision: { planId: 'plan-9', revisionJobId: 'rev-1', count: 1, entryIds: ['e1'] },
+        }),
+      ),
+    );
+    const note = screen.getByTestId('plan-change-revision');
+    expect(within(note).getByRole('link').getAttribute('href')).toBe('/plans/plan-9');
+  });
+
+  it('leaves a forwarded turn the revision did not carry as it was', () => {
+    const t = forwardedTurn('u1', 'Add an export card.', 'e1');
+    renderWithIntl(
+      rail(
+        stateOf([t], {
+          phase: 'idle',
+          queued: [],
+          lateRevision: { planId: 'plan-9', revisionJobId: 'rev-1', count: 1, entryIds: ['other'] },
+        }),
+      ),
+    );
+    expect(screen.queryByTestId('plan-change-revision')).toBeNull();
+  });
+});
+
 describe('the run-ended refusal (state 11)', () => {
   const idle = (over: Partial<PlanChangeConversationState> = {}) =>
     stateOf([], { phase: 'idle', jobId: null, ...over });

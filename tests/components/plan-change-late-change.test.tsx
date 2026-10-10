@@ -190,6 +190,7 @@ describe('the late-change claim at the end of a planning run', () => {
       planId: 'plan-1',
       revisionJobId: 'job-rev-1',
       count: 2,
+      entryIds: ['m1', 'm2'],
     });
     expect(hook.result.current.state.refusedForward).toBeNull();
   });

@@ -46,7 +46,10 @@ function toDebugLandingDto(value: unknown): DebugLandingDto | null {
 /** A run pause row → its DTO (MOTIR-8007). The delivery state is derived: an answer
  *  with a mailbox entry is `delivered`, one with a refusal code is `refused`, anything
  *  else (open, or claimed and not yet delivered) is `pending`. */
-export function toPlanChangeRunPauseDto(row: PlanChangeRunPause): PlanChangeRunPauseDto {
+export function toPlanChangeRunPauseDto(
+  row: PlanChangeRunPause,
+  entryRead?: boolean,
+): PlanChangeRunPauseDto {
   return {
     id: row.id,
     jobId: row.jobId,
@@ -61,6 +64,7 @@ export function toPlanChangeRunPauseDto(row: PlanChangeRunPause): PlanChangeRunP
     delivery: row.mailboxEntryId ? 'delivered' : row.deliveryRefusedCode ? 'refused' : 'pending',
     refusedCode: row.deliveryRefusedCode,
     mailboxEntryId: row.mailboxEntryId,
+    ...(entryRead === undefined ? {} : { entryRead }),
   };
 }
 
