@@ -7619,85 +7619,22 @@
           "web": "ウェブ",
           "lessons": "教訓",
           "codeRead": "リポジトリ"
-        },
-        "call": {
-          "tool": {
-            "skeleton": "計画の概要を読み込んでいます",
-            "search_work_items": "作業項目から「{query}」を検索しています",
-            "search_work_items_semantic": "作業項目から「{query}」を検索しています",
-            "get_item": "{item}を確認しています",
-            "get_subtree": "{item}の配下の項目を読み込んでいます",
-            "walk_blocking": "{item}をブロックしている項目をたどっています",
-            "code_search": "コードから「{query}」を検索しています",
-            "code_explore": "「{query}」周辺のコードを調べています",
-            "code_callers": "{symbol}の呼び出し元を探しています",
-            "code_callees": "{symbol}の呼び出し先を探しています",
-            "code_impact": "{symbol}の変更による影響を確認しています",
-            "code_node": "コードグラフで{symbol}を読み込んでいます",
-            "get_coding_convention": "コーディング規約を読み込んでいます",
-            "get_code_health": "コードヘルスレポートを読み込んでいます",
-            "read_file": "{path}を読み込んでいます",
-            "list_changed_files": "ブランチで変更されたファイルを一覧しています",
-            "web_search": "ウェブで「{query}」を検索しています",
-            "search_lessons": "教訓から「{query}」を検索しています",
-            "lay": "{parent}の下の階層を組み立てています",
-            "drill_into": "{parent}を開いて子項目を組み立てています",
-            "propose_node": "「{title}」を提案しています",
-            "complete_level": "この階層を仕上げています",
-            "target_already_covered": "対象がすでに網羅されていることを記録しています",
-            "author": "{item}の執筆を始めています",
-            "deepen_node": "{item}の説明と受け入れ基準を書いています",
-            "raise_gap": "計画の不足を指摘しています",
-            "add_item": "「{title}」を追加しています",
-            "update_item": "{item}を更新しています",
-            "remove_item": "{item}を削除しています",
-            "log_bug": "バグを登録しています：「{title}」",
-            "validate_plan": "計画を確認しています",
-            "settle_conversation": "{parent}の下で変更する内容を確定しています",
-            "ask_user": "質問を作成しています",
-            "clear_plan": "計画の下書きを消去しています",
-            "search_planning_rules": "計画ルールで「{query}」を確認しています",
-            "report_findings": "調査結果をまとめています",
-            "log_planning_mistake": "計画上のミスを記録しています",
-            "log_planning_bug": "計画のバグを登録しています",
-            "classify_revision": "改訂を分類しています",
-            "return_to_conversation": "会話に戻っています"
-          },
-          "family": {
-            "plan_tree": "計画を読み込んでいます",
-            "code_graph": "コードグラフを読み込んでいます",
-            "code_health": "コードヘルスを読み込んでいます",
-            "code_read": "リポジトリを読み込んでいます",
-            "web": "ウェブを検索しています",
-            "lessons": "教訓を読み込んでいます",
-            "lay": "階層を組み立てています",
-            "author": "項目を書いています",
-            "item": "項目を変更しています",
-            "validate": "計画を確認しています",
-            "settle": "会話をまとめています",
-            "none": "計画を作業中です"
-          },
-          "mark": {
-            "failed": "· 失敗",
-            "refused": "· 拒否",
-            "skipped": "· スキップ — 参照回数の上限に達しました"
-          },
-          "count": "{count, plural, other {#件の呼び出し}}",
-          "countFailed": "{count, plural, other {#件の呼び出し}} · {failed}件失敗",
-          "earlier": "{count, plural, other {以前の呼び出し#件}}",
-          "barParallel": "{line} · {title}",
-          "announceFailed": "{line} — 失敗",
-          "announceRefused": "{line} — 拒否",
-          "full": {
-            "path": "完全なパス：{value}",
-            "query": "完全なクエリ：{value}",
-            "symbol": "完全な名前：{value}",
-            "title": "完全なタイトル：{value}"
-          }
         }
       },
       "openerFollowUp": "{label} を選択しました。Motir AI がそれによって決まる作業を計画しています。",
-      "composerPlaceholderGuide": "ステップがどうだったか Motir AI に伝えてください…"
+      "composerPlaceholderGuide": "ステップがどうだったか Motir AI に伝えてください…",
+      "narration": {
+        "label": "プランナーのメモ",
+        "hideAll": "プランナーのメモを隠す（{count}）",
+        "showAll": "プランナーのメモを表示（{count}）",
+        "groupCount": "{count, plural, other {# 件のメモ}}",
+        "earlier": "{count, plural, other {以前のメモ # 件}}",
+        "done": "· 完了",
+        "kindSettle": "確定",
+        "settleLine": "変更内容を確定しています",
+        "groupLive": "{step} — 進行中",
+        "groupFinished": "{step} — 完了"
+      }
     },
     "targets": {
       "sectionLabel": "作業項目",
@@ -8856,6 +8793,13 @@
       "reconnecting": "再接続しています…",
       "cleared": "解消済み"
     },
+    "group": {
+      "expand": "{key} を展開",
+      "collapse": "{key} を折りたたむ",
+      "count": "{count, plural, other {このタブの作業項目 # 件}}",
+      "context": "このタブにはありません",
+      "members": "{key} の作業項目"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "マージキューで失敗 · <d>{detail}</d>",
@@ -9247,6 +9191,7 @@
             "retire": "アイデアを廃止",
             "delete": "アイデアを削除",
             "tag_add": "アイデアのタグを追加",
+            "tag_translate": "アイデアのタグを翻訳",
             "research_run": "アイデアの調査実行を記録"
           }
         }

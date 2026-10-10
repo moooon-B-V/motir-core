@@ -5562,3 +5562,334 @@ outlined button's `--el-text` is measured on that tint by `design-state-ink-cont
 `design/ai-chat/plan-change-run-live--answer-or-forward.mock.html` (panels 1 to 11) and this
 section. It amends `plan-change-run-live.mock.html` sheets 2 and 4, which stay as records.
 It gates the rail rendering, the START OVER offer in the thread and the hosted pause.
+
+---
+
+## ⭐ Planner narration in the chat panel — the planner's own words, per session, and one control to fold them (MOTIR-8061, 2026-10-09)
+
+**Design system, identified first.** Read `package.json` (depends on
+`@motir/design-system`, `workspace:*`) and `app/globals.css` (line 13,
+`@import '@motir/design-system/theme.css'`). Both hold, so the verdict is **(a) ON
+MOTIR DESIGN**, package **v0.13.0** (`packages/design-system/package.json`). The
+project's axes are per person (`app/layout.tsx` stamps the signed-in person's
+`data-style` / `data-palette` / `data-type`; a signed-out reader gets none), so the
+board renders at the package defaults, which is what a Visitor sees. The package
+exports `@motir/design-system/mock` (`renderMock`), but the surface is the
+product-local `PlanChangeRail`, which the package does not ship, so the board is
+composed from that component's **real rendered markup** with `theme.css` compiled
+in, as MOTIR-7975's board was. Parts the package lacks:
+
+- **narration group** (head + hairline message list + disclosure): product-local
+  component, because it is the act record's row shape and only the planning rail
+  uses it;
+- **collapse-all row**: product-local component, for the same reason.
+
+**Amendment to `design/ai-chat/plan-change-run-live.mock.html` sheet 3 and to
+MOTIR-7975's section above, _"The per-call line on the planning rail"_.** Story
+**MOTIR-8060** makes both planners (the hosted Motir AI planner and
+`prompts/plan.py`) write one plain-language sentence per step of work, in their own
+words, and keeps those sentences per plan with each session's step words. The user
+rejected the per-call lines: _"they are not understandable, the planner says it
+with understandable words"_. This section decides how the sentences are drawn.
+**MOTIR-8064** builds it; **MOTIR-8062** (the store) and **MOTIR-8063** (the read)
+supply the data.
+
+**Asset:** `plan-change-run-live--narration.mock.html`, a **delta** mock holding only
+the panels that change. `plan-change-run-live.mock.html`,
+`plan-change-run-live--per-call.mock.html`, their sections above, and the
+`design/ai-planning` progress-line files are records and are not edited.
+
+| Panel  | What it shows                                                                                                          |
+| ------ | ---------------------------------------------------------------------------------------------------------------------- |
+| **1**  | Before (shipped, call lines) and after (narration), and the three kinds told apart: reply bubble, step row, message    |
+| **2**  | 1, 2 and 6 concurrent sessions, and a long walk (settle → lay → 9 authors → lay) against the 1366 × 768 fold           |
+| **3**  | The collapse-all control: expanded, collapsed, one group opened alone, and what it never hides; its labels and memory  |
+| **4**  | Display length: a 40-char sentence, a 200-char sentence, an unbroken path, a long head title                           |
+| **5**  | zh interface with English narration, en interface with Chinese narration; the `lang` rule                              |
+| **6**  | plan.py live beside today's empty MCP rail; returned to mid-run, before → after                                        |
+| **7**  | A session ending (before → after), a session with no sentence, stalled, a withdrawn proposal, an unattributed sentence |
+| **8**  | Ended: `planned`, `stale`, `approved`, `declined`, expanded and collapsed                                              |
+| **9**  | Visitor read-only (expanded, collapsed, en and zh) with the control; no narration (live and ended) with no control     |
+| **10** | The data each element reads, and the screen-reader rules                                                               |
+
+Each frame is labelled with its `PlanStatus`, its reader (launcher, teammate or
+Visitor) and whether narration is present.
+
+### Rendered before drawn
+
+Every shipped fragment is the emitted markup of `PlanChangeRail` at motir-core
+`38a3cc9`, captured with `tests/helpers/renderWithIntl` → `container.innerHTML`, en
+and zh, in seven states (hosted live with calls, reopened live, plan.py live with
+the MCP notice, Visitor, idle, a pending question, a reply followed by an own
+turn). The three "before" rails are those captures verbatim. The stylesheet is
+Tailwind's own output for the page's classes over `theme.css`. What the render
+showed that the `.tsx` alone does not:
+
+- **A reopened overlay has no act record at all** (panel 6, before). The stream
+  acts lived only in the hook; a plan.py plan never had any.
+- **The stream's run rows (`submit`, `reading`) would not survive a reopen either.**
+  They are kept while live, but nothing a reader needs may live only there, which
+  is why the session heads come from the store, not from the stream.
+
+### ⚠️ MOTIR-7975's section, amended on the record (2026-10-09)
+
+**The tool-call lines are no longer drawn in the rail, for either planner.** That
+removes the `CallLine` rows, the step disclosure that folded them (_N calls_,
+_N calls · M failed_), the open step's _earlier calls_ row, the shortened object
+and its tooltip, and the running bar's `{line} · {title}` form. MOTIR-7975's
+grouping rules (how a call finds its step, the open window of two) have nothing
+left to group. Its live-region decision (the announcer is the one polite region)
+**stands** and is extended below.
+
+**Where a failed or refused call's mark went: it is dropped from the rail.** A
+step-level mark would be the call's information without the call: _"this step had a
+refused write"_ tells the reader nothing they can act on, and MOTIR-7975 already
+ruled a failed lookup is not a failed run. The planner reads the refusal and
+carries on, and when it matters, its own next sentence says so in words (_"There
+are none left, so this card is not needed."_). Nothing new is stored for it.
+
+**What stays from sheet 3:** the run rows a stream still produces (`submit`,
+`reading`, hand-off, notes, `proposed`, the loud `frame: <kind>` row) and their
+three-column shape. The stream's `laying` / `authoring` rows are **not** drawn any
+more: the session heads replace them, from the store.
+
+### The narration message, beside a reply and a step row (panel 1)
+
+| element                             | shape                                                                                                      | ink                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| reply bubble (shipped)              | avatar + `--el-chat-bubble-ai` bubble, `text-sm`                                                           | `--el-text`                                                  |
+| run row (shipped) / step head (new) | glyph · mono label · line, `text-xs`                                                                       | live `--el-text`; finished `--el-text-secondary`             |
+| **narration message** (new)         | no avatar, no bubble, no glyph; in an `<ol>` indented under its head's hairline; `text-xs leading-relaxed` | `--el-text-secondary`; the live session's newest `--el-text` |
+
+**Why quieter than a reply.** A reply is the planner speaking **to you**, and it may
+ask something. Narration is the planner thinking aloud about its own work. The
+reply keeps the bubble so the eye lands on it; narration takes the act record's
+size and secondary ink, so a long walk reads as a margin, not a conversation.
+**Why no glyph.** The glyph column is the step axis; a glyph per sentence would make
+every sentence look like a step.
+
+**The step row survives as the group's head, and so does the mono label column.**
+The head is `glyph · KIND · target title`: the kind word is a copy key
+(`settle` / `lay` / `author`, translated), the title is the stored target title (not
+translated), and a `settle` head, which has no target, reads _Settling what to
+change_. The mono column stays the axis a reader skims.
+
+### One group per session (panel 2)
+
+- A group is one planner session (`sessionKey`), headed by that session's stored
+  step words. Its messages sit under it in their own order. **A message never sits
+  under another session's head.**
+- **Groups are ordered by session start** (`firstReportedAt`, then id), never by
+  message time. A new message is appended to the end of its own group. Interleaving
+  by time reads as a log of crossed voices: three sessions writing at once would
+  alternate line by line and the reader would re-assemble each thought from
+  scattered lines. MOTIR-7975 rejected the same interleave for call lines, and it
+  is worse for sentences, which only make sense after the previous one from the
+  same session.
+- **A head always names its session's step, live or finished.** A live session's
+  head carries the shipped spinner in the glyph slot and `--el-text`. A finished
+  session's head carries `circle-check` in the glyph slot and the word **· done**
+  after its line, at `--el-text-secondary`. The head keeps the **shipped act line's
+  wording** (_Writing <title>_, _Laying out <title>_) rather than a past tense, so
+  one catalogue line serves both states and the mark carries the state.
+- The live session's newest message takes `--el-text`, as the shipped open step
+  did. **No new motion.**
+- Measured on the board: the long walk is 12 groups and about 30 message rows. At
+  the 1366 × 768 floor (a 648 px rail, MOTIR-7975's measurement) only the opening
+  and the first two groups fit above the fold; the transcript scrolls and
+  auto-scrolls to the newest message while the reader has not scrolled away, as
+  shipped. Collapsed, the same walk is 12 head rows.
+- **A long walk's earlier sentences.** The read returns the newest window of
+  sentences (`earlierCount` before it). When `earlierCount > 0` the block opens with
+  an _N earlier notes_ row (the shipped disclosure button, `chevron-up`); pressing it
+  pages the earlier sentences into their own groups, whose heads are already there.
+
+### The collapse-all control (panel 3)
+
+- **Placement: a sticky row at the top of the narration block, inside the
+  transcript** (`sticky top-0`, `--el-surface`, full rail width): a mono _planner
+  notes_ label and, at the right, the shipped disclosure button. Not the rail
+  header: at `22rem` the header already holds the status dot, _MOTIR AI_, the mode
+  chip and MOTIR-7647's _Plan something new_ control, and a labelled button with a
+  count would wrap; an icon-only one would hide the count. Sticky keeps it in reach
+  anywhere inside a long walk, and it scrolls away with the block when later turns
+  follow it.
+- **Labels.** Every group open: **Hide planner notes (N)**, `chevrons-down-up`,
+  `aria-expanded="true"`. Any group folded: **Show planner notes (N)**,
+  `chevrons-up-down`, `aria-expanded="false"`. N is the plan's total sentence count
+  (the window plus `earlierCount`).
+- **A collapsed group** keeps its head row and its own disclosure, **N notes**, so one
+  group can be opened alone. The all-control says _Hide_ only when every group is
+  open; pressing _Show_ opens all, and a later _Hide_ folds every group again,
+  including one opened alone.
+- **What it never hides:** the person's own turns, the planner's reply turns (which
+  may ask a question), every step head, and the pending question
+  (`plan-change-pending-question`). It folds narration messages and nothing else.
+- **Remembered per browser, globally:** `localStorage["motir:planning:planner-notes"]`
+  = `"collapsed"` | `"expanded"`; absent means expanded. Only the all-control writes
+  it; a single group's disclosure is view state and is not remembered. **Global, not
+  per plan**, because the request is about the reader (_"it's always the planner
+  speaking"_): a per-plan key would open every new plan expanded, which is what
+  they asked to stop. It needs no sign-in, so a Visitor gets it too. **No server
+  field is drawn.**
+- **Zero messages:** the row is not rendered. There is no disabled control.
+- **Open question (not drawn):** whether a signed-in person wants the choice to
+  follow them across devices, which would need a per-user server preference.
+
+### Display length (panel 4)
+
+- **A message wraps in full and is never clamped.** The store cuts every sentence to
+  one line of at most `PLAN_NARRATION_SENTENCE_MAX` (240) code points, four to five
+  rows at `22rem`. A clamp would put one more press in front of every long sentence,
+  and a tooltip on a plain sentence is not keyboard-reachable. The accessible name
+  is the text itself.
+- **An unbroken run** (a path, a URL) breaks anywhere (`wrap-anywhere`), as the
+  shipped user bubble does.
+- **A long head title wraps in full too**, with no ellipsis (`min-w-0 flex-1
+wrap-anywhere`). The head is the only place a session is named, and in a folded
+  group it is the only row left; cutting it could leave two heads that read the
+  same. The group's disclosure stays at the end of the head's first line. The
+  running bar keeps its shipped one-line truncation.
+
+### Language (panel 5)
+
+- Copy keys (the kind word, counts, marks, the control) follow the interface
+  locale. **A narration sentence is shown as the planner wrote it and is never
+  translated**; a target title is the proposal's own title and is not translated.
+- **`lang` is omitted.** No field carries a sentence's language, and a wrong guess is
+  worse than none: a wrong `lang` makes a screen reader read English with a Chinese
+  voice. The message inherits the rail's `lang` (the interface locale). Each message
+  and each head title carries **`dir="auto"`**, which costs nothing and keeps a
+  right-to-left sentence's punctuation in place.
+
+### The states (panels 6–9)
+
+- **Live, hosted planner** (panels 1–3): messages and heads arrive with each tick of
+  the review poll (`useGeneratingPlanPoll`, 2.5 s), not per stream frame. No call
+  lines.
+- **Live, plan.py** (panel 6): the previously empty MCP rail now holds the same
+  groups, under the shipped MCP notice and hand-off.
+- **Returned to mid-run** (panel 6): before, the reopened rail showed nothing of the
+  run (the user's report, _"then I don't see the tool calls anymore"_). After,
+  every message and head is restored by the first review read.
+- **A session ending** (panel 7): its group stays, loses live ink, takes
+  `circle-check` + **· done**, and keeps its real step words; the others carry on.
+- **No sentence yet, or ever** (panel 7): the head shows alone, with no disclosure,
+  no empty list, no placeholder and no reserved height.
+- **Stalled / reconnecting** (panel 7): nothing on the rail changes, and **the panel
+  does not dim**. The messages may be minutes old but are still true; dimming would
+  read as withdrawn. Stalled and reconnecting stay where they are shown today (the
+  progress line, the canvas live badge).
+- **A step naming a withdrawn proposal** (panel 7): the group's history stays,
+  because narration is per session, not per proposal. The head reads the step
+  words **as stored**, with no strike-through and no withdrawn mark: no field says
+  it was withdrawn, and the canvas shows withdrawals. The head is not a link, so
+  nothing breaks.
+- **A sentence whose session has no step-words row** (a step reported before the
+  store existed; panel 7): drawn as a **headless group**, its own hairline list,
+  placed before the headed groups. It is never given an invented head.
+- **Ended: `planned`, `stale`, `approved`, `declined`** (panel 8): every message
+  readable, every head with its real step words and the finished mark, nothing
+  live, and the control works exactly as while generating. The status chrome
+  around the transcript is shipped and unchanged.
+- **Visitor** (panel 9): the same messages and heads, read-only, no composer, and the
+  collapse control **remains** (it is a reading control and writes nothing to the
+  server). A reader who may not see the plan sees no panel.
+- **No narration** (`--no-narrate`, or a planner that wrote none; panel 9): step
+  heads only, no collapse row, no group disclosures, no placeholder.
+- **Collapsed and expanded** forms of the live (panel 3), ended (panel 8) and
+  Visitor (panel 9) frames, with one group opened alone in panels 3 and 8.
+
+### The data each element reads
+
+All from the review read (`GET /api/plans/[id]`), which MOTIR-8063 extends:
+
+| drawn element                   | data                                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| a group, its order, its head    | `narration.sessions[]`: `sessionKey`, `stepKind`, `targetTitle`, `firstReportedAt` (then id). `targetRef` is not drawn. |
+| a message, its group, its order | `narration.entries[]`: `body`, `sessionKey`, `seq`. `createdAt` is not drawn.                                           |
+| _N earlier notes_               | `narration.earlierCount`, then the paged narration read                                                                 |
+| live vs finished                | the review read's existing `inFlightSteps[].sessionKey` while the plan is `generating`; every other session is finished |
+| the collapse state              | this browser's `localStorage`                                                                                           |
+
+No other field is read or drawn: no sentence language, no per-message mark, no
+withdrawn flag.
+
+### Screen readers
+
+- **The announcer stays the only live region.** `plan-change-progress` keeps its
+  `sr-only` `plan-change-announcer`; no region is added.
+- **Messages are not announced.** The transcript is `role="log"`, which is
+  implicitly polite, so anything appended inside it would be spoken. The narration
+  block's wrapper (`data-testid="plan-narration"`) carries **`aria-live="off"`**, and
+  the nearest ancestor's value applies (WAI-ARIA 1.2, `aria-live`). **Not yet
+  verified in a screen reader:** Chromium's accessibility tree (CDP
+  `Accessibility.getFullAXTree`, run while drawing this) reports the log as polite
+  but exposes no per-descendant live status, so it could not confirm the override.
+  **MOTIR-8064 owes a VoiceOver or NVDA pass** on the built panel. If it shows the
+  messages are spoken, the fallback is to render the narration block as a sibling
+  after the `role="log"` container, which this board does not draw.
+- **What the announcer says now:** a session's head line when its group first
+  appears or its step words change (_Writing Expire idle sessions server-side_),
+  and _{step} — finished_ when it ends. Never a narration sentence, and nothing
+  about calls.
+- **On-demand reading:** the all-control is a `<button>` named by its visible label
+  with the count, with `aria-expanded` and `aria-controls` listing every group's
+  message list. Each group disclosure is a `<button>` (_3 notes_) with
+  `aria-expanded` and `aria-controls` its list. Each message list is an `<ol>` named
+  for its group (`aria-label`: _Writing Move token refresh into SessionStore —
+  finished_). Reading order: head, then its messages in order, then the next group.
+- Glyphs are `aria-hidden`; the spinner keeps its shipped `role="status"`;
+  **· done** is real text.
+
+### Primitives composed
+
+| element           | built from                                                                                                     | colour                                                       | shape                                                   |
+| ----------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------- |
+| narration block   | NEW `<div data-testid="plan-narration" aria-live="off">`                                                       | —                                                            | layout only                                             |
+| collapse-all row  | NEW sticky row: mono label + the shipped disclosure button (`chevrons-down-up` / `chevrons-up-down`)           | `--el-surface` row; label `--el-text-secondary`              | `--radius-control`, `--spacing-chip-x/y`, `text-[11px]` |
+| group list        | NEW `<ol data-testid="plan-narration-groups">`, the act record's panel                                         | `--el-surface-soft`                                          | `--radius-card`                                         |
+| step head         | the shipped act row (glyph · mono label · line), now from the stored step words                                | live `--el-text`; finished `--el-text-secondary`             | as shipped                                              |
+| finished mark     | NEW `circle-check` in the glyph slot + **· done** after the line                                               | `--el-text-secondary`                                        | —                                                       |
+| group disclosure  | the shipped disclosure button: chevron + _N notes_                                                             | as shipped                                                   | as shipped                                              |
+| message list      | NEW `<ol data-testid="plan-narration-messages" aria-label>`, indented under the head (`ml-5.5`), left hairline | `--el-border-strong` hairline                                | layout only                                             |
+| narration message | NEW `<li dir="auto" data-testid="plan-narration-message">`, `text-xs leading-relaxed wrap-anywhere`            | `--el-text-secondary`; the live session's newest `--el-text` | —                                                       |
+
+Colour is `--el-*` only and no token was added; `--el-text-secondary` clears AA on
+`--el-surface-soft` (6.51:1). Shape is element-semantic tokens only. Every state
+pairs a word or a structure with any glyph, so no state rests on colour.
+
+### Copy, en and zh (`planningWorkspace.conversation.narration.*`)
+
+| key             | en                                                              | zh                      |
+| --------------- | --------------------------------------------------------------- | ----------------------- |
+| `label`         | planner notes                                                   | 规划说明                |
+| `hideAll`       | Hide planner notes ({count})                                    | 收起规划说明（{count}） |
+| `showAll`       | Show planner notes ({count})                                    | 展开规划说明（{count}） |
+| `groupCount`    | `{count, plural, one {# note} other {# notes}}`                 | {count} 条说明          |
+| `earlier`       | `{count, plural, one {# earlier note} other {# earlier notes}}` | 更早的 {count} 条说明   |
+| `done`          | · done                                                          | · 已完成                |
+| `kindSettle`    | settle                                                          | 收束                    |
+| `settleLine`    | Settling what to change                                         | 正在确定要改什么        |
+| `groupLive`     | {step} — in progress                                            | {step} —— 进行中        |
+| `groupFinished` | {step} — finished                                               | {step} —— 已完成        |
+
+Reused, unchanged: `act.laying` / `act.authoring` (the kind words _lay_ / _author_,
+_铺层_ / _撰写_) and `act.layingLine` / `act.authoringLine` (the head lines). The
+announcer's finished line is `groupFinished`. A narration sentence and a target
+title are not copy keys.
+
+**Left unused by this delta** (MOTIR-8064 removes them with the call lines): every
+key under `act.call` — `act.call.tool.*` (40 keys), `act.call.family.*` (12),
+`act.call.mark.failed` / `.refused` / `.skipped`, `act.call.count`,
+`act.call.countFailed`, `act.call.earlier`, `act.call.barParallel`,
+`act.call.announceFailed`, `act.call.announceRefused` and `act.call.full.*`.
+
+### Deliverable
+
+`design/ai-chat/plan-change-run-live--narration.mock.html` (the delta mock, panels
+1–10) and this section. `prettier --check` is clean, and
+`tests/design-ink-contrast.test.ts`, `tests/design-state-ink-contrast.test.ts` and
+`tests/design-three-file-set.test.ts` pass on it. It amends sheet 3 and MOTIR-7975's
+section, which stay as records. It gates **MOTIR-8064** (the rendering and the en
+and zh catalogues).

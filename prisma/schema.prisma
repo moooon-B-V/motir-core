@@ -7256,21 +7256,28 @@ model Plan {
   /// decision timestamps cannot, because a plan records nothing between them.
   lastActivityAt DateTime                @default(now()) @map("last_activity_at")
 
-  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  session     PlanChangeSession? @relation(fields: [sessionId], references: [id], onDelete: NoAction)
-  decidedBy   User?              @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
-  createdBy   User?              @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  items       PlanItem[]
-  revisions   PlanRevision[]
+  workspace         Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project           Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  session           PlanChangeSession?     @relation(fields: [sessionId], references: [id], onDelete: NoAction)
+  decidedBy         User?                  @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdBy         User?                  @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  items             PlanItem[]
+  revisions         PlanRevision[]
   /// The step each RUNNING planner session is on (Story MOTIR-7820 ·
   /// MOTIR-7822) — one row per session, replaced on its next report and
   /// deleted when it ends. Read only while the plan is `generating`.
-  steps       PlanStep[]
+  steps             PlanStep[]
+  /// The planner's NARRATION (Story MOTIR-8060 · MOTIR-8062) — every plain-language
+  /// sentence a planner session wrote about its work, append-only and kept after
+  /// the step ends and after the plan is decided.
+  narration         PlanNarration[]
+  /// Each planner session's STEP WORDS (MOTIR-8062) — kind + target title as
+  /// last reported, kept after the session's `end` deletes its `PlanStep`.
+  narrationSessions PlanNarrationSession[]
   /// The targets this plan has PARKED at `planning` while it is open
   /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
   /// nothing — the restore is the release path's job, not the FK's.
-  targetLocks PlanTargetLock[]
+  targetLocks       PlanTargetLock[]
 
   @@index([workspaceId])
   @@index([projectId, createdAt])
@@ -7525,6 +7532,55 @@ model PlanStep {
   @@unique([planId, sessionKey])
   @@index([planId])
   @@map("plan_step")
+}
+
+/// One plain-language sentence a planner session wrote about its own work (Story
+/// MOTIR-8060 · MOTIR-8062): the planner's NARRATION, drawn as its messages in
+/// the plan's chat panel. APPEND-ONLY KEPT HISTORY: a row is never updated and
+/// never deleted, except by the plan's own cascade. No FK to `plan_step`, so a
+/// sentence outlives its session's step (`end` deletes the step, not this).
+model PlanNarration {
+  id         String   @id @default(cuid())
+  planId     String   @map("plan_id")
+  /// The writing session's opaque key, the same value `plan_step` carries.
+  sessionKey String   @map("session_key")
+  /// Per-plan order, gapless from 1, taken under the plan row lock.
+  seq        Int
+  /// The sentence, cleaned to one line and capped (`cleanNarrationSentence`).
+  body       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, seq])
+  @@index([planId, sessionKey])
+  @@map("plan_narration")
+}
+
+/// One planner session's STEP WORDS on a plan (MOTIR-8062): the step kind, its
+/// target ref and the target's TITLE as it read when the step was reported — the
+/// head of that session's group in the chat panel. Upserted on every accepted
+/// non-`end` step report (a re-report REPLACES kind/ref/title and keeps
+/// `firstReportedAt`); never touched by `end`, never deleted except by the plan's
+/// cascade. No FK to `plan_step`, so it survives the step's end.
+model PlanNarrationSession {
+  id              String       @id @default(cuid())
+  planId          String       @map("plan_id")
+  sessionKey      String       @map("session_key")
+  stepKind        PlanStepKind @map("step_kind")
+  /// `planItem:<id>` or a work-item id, as reported. NULL on `settle` and on an
+  /// untargeted `lay` / `author`.
+  targetRef       String?      @map("target_ref")
+  /// The target's title at report time, cleaned like a sentence. NULL when there
+  /// is no target or it could not be resolved.
+  targetTitle     String?      @map("target_title")
+  firstReportedAt DateTime     @default(now()) @map("first_reported_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, sessionKey])
+  @@map("plan_narration_session")
 }
 
 /// A Motir member's GitHub OAuth user-identity binding (Story 7.10 ·
@@ -13683,8 +13739,9 @@ model Idea {
   lastReviewedAt DateTime?    @map("last_reviewed_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  evidence IdeaEvidence[]
-  tags     IdeaTagAssignment[]
+  evidence     IdeaEvidence[]
+  tags         IdeaTagAssignment[]
+  translations IdeaTranslation[]
 
   @@index([status, category])
   @@index([status, kind])
@@ -13702,7 +13759,8 @@ model IdeaEvidence {
   url        String
   sourceDate DateTime? @map("source_date") @db.Date
 
-  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  idea         Idea                      @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  translations IdeaEvidenceTranslation[]
 
   @@unique([ideaId, position])
   @@map("idea_evidence")
@@ -13716,7 +13774,8 @@ model IdeaTag {
   description String?
   createdAt   DateTime @default(now()) @map("created_at")
 
-  assignments IdeaTagAssignment[]
+  assignments  IdeaTagAssignment[]
+  translations IdeaTagTranslation[]
 
   @@map("idea_tag")
 }
@@ -13733,6 +13792,76 @@ model IdeaTagAssignment {
   @@id([ideaId, tagId])
   @@index([tagId])
   @@map("idea_tag_assignment")
+}
+
+/// The ten locales an idea can be TRANSLATED into (Story MOTIR-7772 · MOTIR-7773)
+/// — the eleven UI locales (`lib/i18n/locales.ts`) minus `en`, because English
+/// lives on the base rows and is required there. Deliberately not `Locale`: that
+/// name is the UI's type, and this one means "the non-English ones".
+enum IdeaTranslationLocale {
+  zh
+  ja
+  ko
+  de
+  fr
+  es
+  it
+  nl
+  pl
+  pt
+
+  @@map("idea_translation_locale")
+}
+
+/// One idea's text in one non-English locale. Every text column is nullable and
+/// NULL means "missing in this locale"; `capabilities` counts as present only
+/// when its length equals the English list's, so a list that no longer matches
+/// its English is stale by construction (a `String[]` cannot be null). Written
+/// by a merge-only `INSERT … ON CONFLICT` that never touches the `idea` row, so a
+/// translation write does not move `Idea.updatedAt`.
+model IdeaTranslation {
+  ideaId       String                @map("idea_id")
+  locale       IdeaTranslationLocale
+  title        String?
+  pitch        String?
+  capabilities String[]              @default([])
+  gap          String?
+  whyNow       String?               @map("why_now")
+  whyMotir     String?               @map("why_motir")
+  whoElse      String?               @map("who_else")
+  updatedAt    DateTime              @default(now()) @updatedAt @map("updated_at")
+
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@id([ideaId, locale])
+  @@map("idea_translation")
+}
+
+/// One evidence claim in one non-English locale. Only the claim is translated —
+/// the source name, URL and date never are. Cascades with its evidence row, so a
+/// replaced evidence list can never keep a stale claim translation.
+model IdeaEvidenceTranslation {
+  evidenceId String                @map("evidence_id")
+  locale     IdeaTranslationLocale
+  claim      String
+
+  evidence IdeaEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@id([evidenceId, locale])
+  @@map("idea_evidence_translation")
+}
+
+/// One vocabulary tag's label in one non-English locale. The tag's `description`
+/// is staff-facing and never translated.
+model IdeaTagTranslation {
+  tagId  String                @map("tag_id")
+  locale IdeaTranslationLocale
+  label  String
+
+  tag IdeaTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([tagId, locale])
+  @@map("idea_tag_translation")
 }
 
 /// The research-run log the `motir-ideas` skill writes, so its coverage map

@@ -10,6 +10,12 @@ import type {
   PlanTargetHeldByDto,
 } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import type { PlanNarrationDto, PlanNarrationReadDto } from '@/lib/dto/plans';
+import {
+  liveNarrationSessions,
+  mergeNarrationEntries,
+  narrationEarlierCount,
+} from '@/components/planning/planNarration';
 import { announceGateStateDecided } from '@/lib/approvals/decidedGates';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { useGeneratingPlanPoll } from '@/lib/hooks/useGeneratingPlanPoll';
@@ -64,6 +70,7 @@ import {
 import {
   approvePlanRequest,
   declinePlanRequest,
+  fetchPlanNarrationPage,
   fetchPlanReview,
   PlanRequestError,
 } from '@/lib/planning/planReviewClient';
@@ -441,6 +448,18 @@ export interface PlanChangeConversationState {
    */
   debugLandings?: Readonly<Record<string, DebugLandingDto>>;
   /**
+   * THE PLANNER'S NARRATION (Story MOTIR-8060 · MOTIR-8064) — the stored read
+   * (`PlanReviewDto.narration`) of the plan this surface last read, replaced WHOLE
+   * on every review read the hook already makes (the generating-plan poll's
+   * snapshots and the proposed / decided reads). Never merged with stream state:
+   * it is what makes the chat panel's narration survive a reopen.
+   */
+  narration?: PlanNarrationReadDto | null;
+  /** What rides beside {@link narration}: whose plan it is, which sessions are
+   *  live on that snapshot, and the EARLIER sentence pages the panel fetched —
+   *  kept by `seq`, dropped when the plan changes, never overwritten by a poll. */
+  narrationKept?: PlanNarrationKept | null;
+  /**
    * PLAN SOMETHING NEW confirmed here (MOTIR-7650; ADR AMENDMENT 3): the id of the
    * session that just ended `restarted`, for the rail's earlier-session line above
    * the new session's opener. Null otherwise, and cleared by the next swap.
@@ -477,6 +496,40 @@ export interface PlanChangeConversationState {
 }
 
 /** What the stale notice draws (design state 10 and its variants). */
+export interface PlanNarrationKept {
+  planId: string;
+  /** Session keys holding an in-flight step on a `generating` snapshot. */
+  live: readonly string[];
+  /** Sentences before the read's window, fetched by "N earlier notes". Once any
+   *  are kept, each new read also keeps the window it replaces, so the kept run
+   *  stays contiguous with the next window. */
+  earlier: readonly PlanNarrationDto[];
+  loadingEarlier: boolean;
+}
+
+/** The narration fields a review read sets on the state. */
+function narrationFrom(
+  s: PlanChangeConversationState,
+  review: PlanReviewDto,
+): Pick<PlanChangeConversationState, 'narration' | 'narrationKept'> {
+  const kept = s.narrationKept?.planId === review.id ? s.narrationKept : null;
+  const earlier =
+    kept && kept.earlier.length > 0
+      ? mergeNarrationEntries(kept.earlier, s.narration?.entries ?? [])
+      : [];
+  return {
+    narration: review.narration ?? null,
+    narrationKept: {
+      planId: review.id,
+      live: liveNarrationSessions(review),
+      earlier,
+      loadingEarlier: kept?.loadingEarlier ?? false,
+    },
+  };
+}
+
+const NO_NARRATION = { narration: null, narrationKept: null } as const;
+
 export interface StalePlanState {
   planId: string;
   finishedCards: StalePlanFinishedCard[];
@@ -518,6 +571,7 @@ const INITIAL: PlanChangeConversationState = {
   targetHeld: null,
   turnAnchors: {},
   debugLandings: {},
+  ...NO_NARRATION,
 };
 
 const OUT_OF_CREDITS_CODES = new Set(['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits']);
@@ -1127,7 +1181,7 @@ export function usePlanChangeConversation({
     }));
   };
 
-  const { failing: liveFailing } = useGeneratingPlanPoll(livePlanId, {
+  const { failing: liveFailing, review: polledReview } = useGeneratingPlanPoll(livePlanId, {
     onSnapshot: (snap) => {
       if (!livePlanId || !mountedRef.current) return;
       // A named session's open ends HERE, in the same update as this snapshot:
@@ -1171,6 +1225,56 @@ export function usePlanChangeConversation({
     if (!liveFailing || !livePlanId || !settlesOpen(livePlanId)) return;
     setState((s) => ({ ...s, ...endOpening(s, true) }));
   }, [liveFailing, livePlanId]);
+
+  // THE NARRATION (MOTIR-8064) follows every review read this hook already makes:
+  // each poll snapshot (a decided plan's one read included, which `review` never
+  // carries) and every proposed / decided read that lands in `review` or
+  // `discardedReview`. No new request — the narration rides those reads, and
+  // each one replaces it whole.
+  useEffect(() => {
+    if (polledReview) setState((s) => ({ ...s, ...narrationFrom(s, polledReview) }));
+  }, [polledReview]);
+  const heldReview = state.review;
+  useEffect(() => {
+    if (heldReview) setState((s) => ({ ...s, ...narrationFrom(s, heldReview) }));
+  }, [heldReview]);
+  const endedReview = state.discardedReview;
+  useEffect(() => {
+    if (endedReview) setState((s) => ({ ...s, ...narrationFrom(s, endedReview) }));
+  }, [endedReview]);
+
+  /** "N earlier notes" (MOTIR-8064): page the sentences before the earliest in
+   *  hand into the kept run. Best-effort — a failed read leaves the panel as is. */
+  const showEarlierNarration = useCallback(async () => {
+    const { narration, narrationKept } = stateRef.current;
+    if (!narration || !narrationKept || narrationKept.loadingEarlier) return;
+    const inHand = mergeNarrationEntries(narrationKept.earlier, narration.entries);
+    if (narrationEarlierCount(inHand) === 0) return;
+    const planId = narrationKept.planId;
+    const setLoading = (loadingEarlier: boolean) =>
+      setState((s) =>
+        s.narrationKept?.planId === planId
+          ? { ...s, narrationKept: { ...s.narrationKept, loadingEarlier } }
+          : s,
+      );
+    setLoading(true);
+    try {
+      const page = await fetchPlanNarrationPage(planId, inHand[0]!.seq);
+      if (!mountedRef.current) return;
+      setState((s) => {
+        const kept = s.narrationKept;
+        if (kept?.planId !== planId) return s;
+        const earlier = mergeNarrationEntries(
+          page.entries,
+          kept.earlier,
+          s.narration?.entries ?? [],
+        );
+        return { ...s, narrationKept: { ...kept, earlier, loadingEarlier: false } };
+      });
+    } catch {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, []);
 
   // Open OR RESUME the thread on mount — the project's, or the ANCHORED item's.
   // Best-effort: a failure leaves an empty thread with a recoverable error, never
@@ -3105,6 +3209,7 @@ export function usePlanChangeConversation({
         session: copied,
         progress: null,
         acts: [],
+        ...NO_NARRATION,
         review: null,
         liveReview: null,
         discardedReview: null,
@@ -3190,6 +3295,7 @@ export function usePlanChangeConversation({
         session: result.session,
         progress: null,
         acts: [],
+        ...NO_NARRATION,
         review: null,
         liveReview: null,
         discardedReview: null,
@@ -3240,5 +3346,6 @@ export function usePlanChangeConversation({
     answerRestartConfirm,
     planAgain,
     answerRunPause,
+    showEarlierNarration,
   };
 }

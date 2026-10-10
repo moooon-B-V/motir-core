@@ -25,6 +25,7 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 import { connectRepairRepo, deliveredPr, setStatus } from '../helpers/repairFixtures';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import { setProjectAccess } from '@/tests/helpers/projectAccess';
+import { homePageItems } from '../helpers/homePage';
 
 // THE STORY GATE for To fix on the Workbench (Story MOTIR-6588 · MOTIR-6606), on a
 // real Postgres, through the real services.
@@ -227,12 +228,13 @@ async function whereIs(s: Scenario, itemId: string) {
   ]);
   // The counts are the lists' own totals — the badge never disagrees with the rows.
   expect(counts.toFix).toBe(toFix.total);
-  expect(counts.inProgress).toBe(inProgress.total);
+  // MOTIR-8015: In progress pages GROUPS, so its badge (items) is the page's items.
+  expect(counts.inProgress).toBe(homePageItems(inProgress).length);
   const row = toFix.items.find((r) => r.id === itemId);
   const tabs = [
     row ? 'to-fix' : null,
-    inProgress.items.some((r) => r.id === itemId) ? 'in-progress' : null,
-    finished.items.some((r) => r.id === itemId) ? 'finished' : null,
+    homePageItems(inProgress).some((r) => r.id === itemId) ? 'in-progress' : null,
+    homePageItems(finished).some((r) => r.id === itemId) ? 'finished' : null,
   ].filter((t): t is string => t !== null);
   return { tabs, row, counts };
 }

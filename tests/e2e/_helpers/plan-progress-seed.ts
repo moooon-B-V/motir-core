@@ -28,6 +28,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestPerson } from './testPerson';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 export const PLAN_PROGRESS_PASSWORD = 'plan-progress-e2e-pass-7';
 
@@ -152,4 +153,63 @@ export async function backdatePlanActivity(planId: string, byMs: number): Promis
   await adminDb.plan.update({ where: { id: planId }, data: { lastActivityAt: at } });
   await adminDb.planStep.updateMany({ where: { planId }, data: { startedAt: at } });
   return at;
+}
+
+/**
+ * Make the seed's project PUBLIC and seed an OUTSIDER to read it as a Visitor
+ * (Story MOTIR-8060 · MOTIR-8068). The outsider belongs to an organisation of
+ * their own — the reader `seedVisitorProject` describes — and has no membership
+ * in the seed's workspace and no visitor record yet, so their first visit meets
+ * the consent screen. `seedVisitorProject` builds its own project; this one is
+ * the plan-progress project, where both planners' plans already live.
+ */
+export async function makePlanProgressPublic(
+  seed: PlanProgressSeed,
+  slug: string,
+): Promise<{ email: string }> {
+  await adminDb.project.update({
+    where: { id: seed.projectId },
+    data: projectAccessData('public'),
+  });
+  const outsider = await createTestPerson({
+    email: `plan-progress-outsider-${slug}@example.com`,
+    password: PLAN_PROGRESS_PASSWORD,
+    name: 'Olive Outsider',
+  });
+  const own = await workspacesService.createWorkspace({
+    name: 'Olive Studio',
+    ownerUserId: outsider.id,
+  });
+  const ownProject = await projectsService.createProject({
+    workspaceId: own.workspace.id,
+    actorUserId: outsider.id,
+    name: 'Sketches',
+    identifier: 'SKT',
+  });
+  await adminDb.workspaceMembership.update({
+    where: { userId_workspaceId: { userId: outsider.id, workspaceId: own.workspace.id } },
+    data: { activeProjectId: ownProject.id },
+  });
+  return { email: outsider.email };
+}
+
+/**
+ * A second story beside the seed's own, under the same epic (Story MOTIR-8060 ·
+ * MOTIR-8068). A hosted plan asked from the seed's story LEASES that story for
+ * its session, so a plan.py plan running at the same time proposes under a
+ * card nobody holds — this one — rather than being refused `PLAN_TARGET_LOCKED`.
+ */
+export async function addPlanProgressStory(
+  seed: PlanProgressSeed,
+  title: string,
+): Promise<{ id: string; key: string }> {
+  const story = await adminDb.workItem.findUniqueOrThrow({
+    where: { id: seed.storyId },
+    select: { parentId: true },
+  });
+  const created = await workItemsService.createWorkItem(
+    { projectId: seed.projectId, kind: 'story', title, parentId: story.parentId ?? undefined },
+    seed.reader.ctx,
+  );
+  return { id: created.id, key: created.identifier };
 }

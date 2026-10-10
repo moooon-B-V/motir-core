@@ -19,8 +19,12 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 // No side effects on import — unlike `shell-session.ts`, which loads the job
 // registry — so any spec can use it.
 
-/** The three tabs the cascade can land on; `?tab=` on a landing names one of them. */
-const LANDING_TABS = ['approvals', 'in-progress', 'todo'] as const;
+/**
+ * Every tab the cascade can land on (`lib/workbench/landing.ts`): To approve, To fix, To resume,
+ * In progress, else To do. `?tab=` on a landing names one of them — a reader holding a card to
+ * repair lands on `to-fix`, and a helper that stops at three would wait on it forever.
+ */
+const LANDING_TABS = ['approvals', 'to-fix', 'to-resume', 'in-progress', 'todo'] as const;
 
 /** True once a landing on the Workbench has RESOLVED to one of its tabs. */
 export function isLandedWorkbenchUrl(url: URL): boolean {

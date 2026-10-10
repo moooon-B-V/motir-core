@@ -967,6 +967,8 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'billing.contactSales.refused.open.body': 'browser tab — "from another tab"',
     'billing.contactSales.refused.open.bodyNoDate': 'browser tab — "from another tab"',
     'settings.publicAddress.subdomain.open': 'browser tab — "open in a new tab"',
+    'workbench.group.count': 'UI tab — a Workbench tab, "on this tab" (MOTIR-8016)',
+    'workbench.group.context': 'UI tab — a Workbench tab, "not on this tab" (MOTIR-8016)',
   },
   nl: {
     'settings.account.notifications.helper': 'a notification — the notification sense of "melding"',

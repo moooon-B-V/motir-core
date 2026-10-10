@@ -9,8 +9,11 @@ import {
   HOME_SLICE_TODO,
   HOME_SLICE_UNFINISHED,
   type HomeCategorySlice,
+  type HomeGroupingRow,
+  type HomeMembershipOptions,
   type HomeProjectScope,
   type HomeWorkItemRow,
+  type ReadyContainerShapeRow,
 } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -32,6 +35,7 @@ import { gateResumeRepository } from '@/lib/repositories/gateResumeRepository';
 import { describeResumeRun } from '@/lib/services/resumeRunDetailService';
 import { resolveFixEntries, type FixEntry } from '@/lib/services/fixGroupService';
 import { fixGroupKeyOf } from '@/lib/workItems/fixReason';
+import { groupByContainer, isRunnableContainer } from '@/lib/workItems/readyFilter';
 
 // The Home landing surface's read layer (Story MOTIR-2649 · Subtask
 // MOTIR-2651) — the business logic behind `/home`'s two tabs. Orchestrates the
@@ -287,6 +291,102 @@ function toResumeEntryDto(
   };
 }
 
+/**
+ * One group of a grouped work tab (Story MOTIR-8012 · MOTIR-8015): its HEAD, whether that
+ * head is itself on the tab, and the tab's other items under it in group order. A
+ * standalone row is a group whose head is the row and whose `memberIds` is empty.
+ */
+interface HomeGroup {
+  headId: string;
+  headIsMember: boolean;
+  memberIds: string[];
+}
+
+/** How a grouped tab orders: `/ready`'s order, or newest-finished first. */
+type HomeGroupOrder = 'ready' | 'finished';
+
+/**
+ * GROUP a work tab's whole slice by RUNNABLE CONTAINER (`design/workbench/design-notes.md`
+ * § 36). An item whose parent is a runnable container (`isRunnableContainer` — never an
+ * epic, never a container holding a grandchild) groups under that parent; everything
+ * else keys to itself. A runnable container on the tab therefore keys to itself too, and
+ * its children on the tab join it: a MEMBER head, drawn once. Groups never nest, because
+ * a runnable container's own parent holds a grandchild and so is never runnable.
+ *
+ * `'ready'` (To do, In progress) is `/ready`'s order, through the ONE shared step
+ * `groupByContainer`; `'finished'` puts members newest first and groups by their newest
+ * member, the head key breaking a tie.
+ */
+function groupHomeSlice(
+  rows: readonly HomeGroupingRow[],
+  shapes: readonly ReadyContainerShapeRow[],
+  order: HomeGroupOrder,
+): HomeGroup[] {
+  const runnable = new Map(shapes.filter(isRunnableContainer).map((shape) => [shape.id, shape]));
+  const onTab = new Set(rows.map((row) => row.id));
+  const headOf = (row: HomeGroupingRow) => {
+    const container = row.parentId ? runnable.get(row.parentId) : undefined;
+    return container ? { id: container.id, key: container.key } : { id: row.id, key: row.key };
+  };
+  const ordered: { headId: string; members: HomeGroupingRow[] }[] =
+    order === 'ready'
+      ? groupByContainer(rows, headOf, (row) => row)
+      : groupNewestFirst(rows, headOf);
+  return ordered.map((group) => ({
+    headId: group.headId,
+    headIsMember: onTab.has(group.headId),
+    memberIds: group.members.filter((m) => m.id !== group.headId).map((m) => m.id),
+  }));
+}
+
+/** Recently finished's order: members `completedAt DESC, id DESC`; groups by newest member. */
+function groupNewestFirst(
+  rows: readonly HomeGroupingRow[],
+  headOf: (row: HomeGroupingRow) => { id: string; key: number },
+): { headId: string; members: HomeGroupingRow[] }[] {
+  const finishedAt = (row: HomeGroupingRow) => row.completedAt?.getTime() ?? 0;
+  const newestFirst = (a: HomeGroupingRow, b: HomeGroupingRow) =>
+    finishedAt(b) - finishedAt(a) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+  const byHead = new Map<string, { headId: string; headKey: number; members: HomeGroupingRow[] }>();
+  for (const row of rows) {
+    const head = headOf(row);
+    const group = byHead.get(head.id) ?? { headId: head.id, headKey: head.key, members: [] };
+    group.members.push(row);
+    byHead.set(head.id, group);
+  }
+  const groups = [...byHead.values()];
+  for (const group of groups) group.members.sort(newestFirst);
+  groups.sort(
+    (a, b) => finishedAt(b.members[0]!) - finishedAt(a.members[0]!) || a.headKey - b.headKey,
+  );
+  return groups;
+}
+
+/**
+ * One page group → its row DTOs. A group with members is its HEAD carrying them
+ * (`groupHead` + `groupMembers`); a standalone row is itself. A head that did not come
+ * back (archived, or it left between the two reads) leaves its members as standalone
+ * rows in the group's slot, so nothing on the tab is dropped; a member that did not
+ * come back is skipped, as To fix skips one.
+ */
+function toGroupDtos(
+  group: HomeGroup,
+  rowsById: ReadonlyMap<string, HomeWorkItemRow>,
+  viewerId: string,
+): HomeWorkItemRowDto[] {
+  const head = rowsById.get(group.headId);
+  const members = group.memberIds.flatMap((id) => {
+    const row = rowsById.get(id);
+    return row ? [toHomeWorkItemRowDto(row, viewerId)] : [];
+  });
+  if (!head) return members;
+  const headDto = toHomeWorkItemRowDto(head, viewerId);
+  if (members.length === 0) return group.headIsMember ? [headDto] : [];
+  return [
+    { ...headDto, groupHead: group.headIsMember ? 'member' : 'context', groupMembers: members },
+  ];
+}
+
 /** Shape one repository window into the wire DTO. */
 function toPage(
   rows: HomeWorkItemRow[],
@@ -361,7 +461,7 @@ export const homeService = {
 
   /** TO DO — nothing has been started. */
   async listToDo(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
-    return homeService.listSlice(ctx, HOME_SLICE_TODO, options);
+    return homeService.listGroupedSlice(ctx, { slice: HOME_SLICE_TODO }, 'ready', options);
   },
 
   /**
@@ -374,7 +474,60 @@ export const homeService = {
    * column cannot empty it.
    */
   async listInProgress(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
-    return homeService.listSlice(ctx, HOME_SLICE_IN_PROGRESS, options);
+    return homeService.listGroupedSlice(ctx, { slice: HOME_SLICE_IN_PROGRESS }, 'ready', options);
+  },
+
+  /**
+   * A WORK TAB, GROUPED BY RUNNABLE CONTAINER (Story MOTIR-8012 · MOTIR-8015;
+   * `design/workbench/design-notes.md` § 36) — To do, In progress and Recently finished.
+   *
+   * ⚠️ IT PAGES GROUPS, NOT ITEMS, and that forces the two-step shape To fix uses: a
+   * group ranks by its BEST member, which can sit anywhere in the tab, so the WHOLE
+   * slice is read as six narrow fields, grouped in memory, and only the page's rows are
+   * read in full. `total` counts groups (a standalone row is a group of one) and a group
+   * is never split across pages. Which items are on the tab is unchanged: the projection
+   * is `homeMembershipWhere`'s, the predicate the strip counts (`tabCounts()`, still
+   * item counts) read.
+   */
+  async listGroupedSlice(
+    ctx: HomeActorContext,
+    membership: HomeMembershipOptions,
+    order: HomeGroupOrder,
+    options: HomeListOptions = {},
+  ): Promise<HomePageDto> {
+    const pageSize = clampLimit(options.limit);
+    const { groups, rows, total, page } = await withWorkspaceContext(ctx, async (tx) => {
+      const projectScopes = await resolveActiveProjectScope(ctx, tx);
+      const slice = await workItemRepository.listHomeGroupingRowsByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        membership,
+        tx,
+      );
+      const parentIds = [...new Set(slice.flatMap((row) => (row.parentId ? [row.parentId] : [])))];
+      const shapes = await workItemRepository.findContainerShapes(parentIds, ctx.workspaceId, tx);
+      const all = groupHomeSlice(slice, shapes, order);
+      const window = windowFor(all.length, options.page, pageSize);
+      const onPage = all.slice(window.skip, window.skip + pageSize);
+      return {
+        groups: onPage,
+        total: all.length,
+        page: window.page,
+        rows: await workItemRepository.findHomeRowsByIds(
+          ctx.workspaceId,
+          onPage.flatMap((group) => [group.headId, ...group.memberIds]),
+          tx,
+        ),
+      };
+    });
+    const rowsById = new Map<string, HomeWorkItemRow>(rows.map((row) => [row.id, row]));
+    return {
+      items: groups.flatMap((group) => toGroupDtos(group, rowsById, ctx.userId)),
+      total,
+      page,
+      pageSize,
+    };
   },
 
   /**
@@ -578,38 +731,14 @@ export const homeService = {
     ctx: HomeActorContext,
     options: HomeListOptions = {},
   ): Promise<HomePageDto> {
-    const pageSize = clampLimit(options.limit);
-    const since = finishedWindowStart();
-    // Count-first, like its siblings — and with the SAME `sortField` + `since`
-    // the list uses, because the window is part of the predicate here and a
-    // count taken without it would be a denominator for a different set.
-    const { rows, total, page } = await withWorkspaceContext(ctx, async (tx) => {
-      const projectScopes = await resolveActiveProjectScope(ctx, tx);
-      const countOptions = {
-        slice: HOME_SLICE_DONE,
-        sortField: 'completedAt' as const,
-        since,
-      };
-      const found = await workItemRepository.countByAssigneeOrReporterInWorkspace(
-        ctx.userId,
-        ctx.workspaceId,
-        projectScopes,
-        countOptions,
-        tx,
-      );
-      const window = windowFor(found, options.page, pageSize);
-      return {
-        total: found,
-        page: window.page,
-        rows: await workItemRepository.findByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          { projectScopes, ...countOptions, take: pageSize, skip: window.skip },
-          tx,
-        ),
-      };
-    });
-    return toPage(rows, ctx.userId, { total, page, pageSize });
+    // The window is part of the predicate here, so the grouping projection reads it
+    // with the SAME `sortField` + `since` the strip count uses (`tabCounts()`).
+    return homeService.listGroupedSlice(
+      ctx,
+      { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
+      'finished',
+      options,
+    );
   },
 
   /**
