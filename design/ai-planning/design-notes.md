@@ -7436,6 +7436,7 @@ Mock: `plans-tabbed-list--waiting-to-resume.mock.html` — a DELTA on `plans-tab
 - **The chip.** Its tone is the To resume state pill's (`--el-tint-yellow`, `--el-text-strong`): distinct from Generating's info (sky) and Closed's warning (peach), and it carries the same word as the tab. (The design-system `Pill` has no yellow tone yet, so the code card adds `tone="awaiting"` to the part rather than inlining the tint.)
 - **The stop line** takes the place of _active {when}_ as Closed's end line does: _Stopped at {where} · because {why} · {time}_, in the same step and reason words as the To resume entry.
 - **The door.** The row opens the overlay at that session through MOTIR-7884 (`planVia=resume`); the chip is a plain pill, **not** a second door (one control, one tab stop).
+- **A project manager sees every member's waiting row here** (panel 2b; added after review, 2026-10-10): the row is unchanged, the overlay it opens offers Resume to the starter and to a project manager, and the reader's own To resume tab stays their own list.
 - **A waiting row with no plan yet** (the attempt failed before the first proposal) reads the same, with _Untitled conversation_ and the stop line naming where.
 - **SUPERSEDES** MOTIR-7634's _Closed · the attempt failed_ end line for a hosted failure: it now applies only to a legacy session that a failure ended before this story.
 - **Strings:** `aiPlanning.sessions.planState.waiting` Waiting to resume / 待继续, `aiPlanning.sessions.stop` _Stopped at {where} · because {why} · {time}_ / _停在{where} · 原因：{why} · {time}_.

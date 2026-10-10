@@ -250,6 +250,22 @@ describe('every refusal costs nothing', () => {
     );
   });
 
+  it('a project manager (`ai:configure`) CAN resume another member’s session', T, async () => {
+    const f = await failedSession();
+    const manager = await createTestUser({ name: 'Manager' });
+    await workspacesService.addMember({
+      userId: manager.id,
+      workspaceId: fx.workspaceId,
+      workspaceRole: 'manager',
+    });
+
+    const out = await planSessionResumeService.resume(asUser(manager.id), f.sessionId);
+
+    expect(out.planId).toBe(f.planId);
+    expect((await sessionRow(f.sessionId)).failedAt).toBeNull();
+    expect((await sessionRow(f.sessionId)).createdById).toBe(fx.ownerId);
+  });
+
   it('an ended session is refused', T, async () => {
     const f = await failedSession();
     await planSessionEndService.endSession(f.sessionId, 'restarted', {

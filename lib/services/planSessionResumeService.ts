@@ -52,6 +52,16 @@ interface ResumeTarget {
  * person actually hits cost nothing.
  */
 async function precheck(pctx: ProjectContext, sessionId: string): Promise<ResumeTarget> {
+  // WHO MAY RESUME (design change requested on MOTIR-7907): the session's starter, or a member
+  // who holds `ai:configure` — a project manager (`ai:decide_plan` is held by every member, so
+  // it would let everyone in). Read BEFORE the transaction: `getPermissions` opens its own
+  // context, and a second pooled connection taken while one is held is the deadlock shape
+  // `workItemsService` warns about.
+  const held = await projectAccessService.getPermissions(pctx.projectId, {
+    userId: pctx.userId,
+    workspaceId: pctx.workspaceId,
+  });
+  const mayResumeAny = held.has('ai:configure');
   return withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
     const session = await planChangeSessionRepository.findByIdInProject(
       sessionId,
@@ -62,7 +72,9 @@ async function precheck(pctx: ProjectContext, sessionId: string): Promise<Resume
     if (!session) throw new PlanSessionNotFoundError(sessionId);
     if (session.origin === 'guide') throw new GuideSessionNotPlannableError(session.id);
     if (session.endedAt) throw new PlanSessionEndedError(session.id);
-    if (session.createdById !== pctx.userId) throw new NotSessionOwnerError(session.id);
+    if (session.createdById !== pctx.userId && !mayResumeAny) {
+      throw new NotSessionOwnerError(session.id);
+    }
     if (sessionWaitingState(session) !== 'failed' || !session.failedJobId) {
       throw new SessionNotFailedError(session.id);
     }
@@ -121,7 +133,8 @@ async function bind(pctx: ProjectContext, target: ResumeTarget, jobId: string): 
 
 export const planSessionResumeService = {
   /**
-   * RESUME the caller's own failed-waiting session. Returns the new job to stream, the SAME
+   * RESUME a failed-waiting session — the caller's own, or any in the project for a member who
+   * is a project manager. Returns the new job to stream, the SAME
    * plan, and the session as it now stands (no longer failed).
    */
   async resume(pctx: ProjectContext, sessionId: string): Promise<PlanChangeSubmitResultDto> {

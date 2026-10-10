@@ -3849,10 +3849,19 @@ Mock: `workbench--planning-session-needs-you.mock.html` (a DELTA — it edits no
 
 It composes the per-run entry's frame (§ 35: line 1 + line 2, held row, state pill) and does not borrow its columns — a session is not a run, so there is no `motir continue` and no gate list. Line 1: plan lead + state pill + _failed {when}_. Line 2: **where the walk stopped** in the compact progress line's step words (_Laying {title}_ · _Writing {title}_ · _Laying the project's top level_ · _Drafting a new item_) · **why** in words (the stable code translated; never the raw code) · _N of M written_. Actions: **Resume** (primary) and **Open** (the overlay through MOTIR-7884, `planVia=resume` — a new entrance value, so the reopened line reads _Reopened from To resume_).
 
-- **States:** waiting to resume · **resuming** (the held row of § 26 as § 35 adopted it: Resume disabled, a note, the row clears when the attempt starts) · **failed again** (the new reason replaces the old; a quiet _Second attempt_ note; **earlier reasons are not listed** — one failure is the thing to act on) · **could not start a resume** (words for out of credits, not the owner, session ended meanwhile; the last has no Resume).
+- **States:** waiting to resume · **resuming** (the held row of § 26 as § 35 adopted it: Resume disabled, a note, the row clears when the attempt starts) · **failed again** (the new reason replaces the old; a quiet _Second attempt_ note; **earlier reasons are not listed** — one failure is the thing to act on) · **could not start a resume** (words for out of credits, neither the starter nor a project manager, session ended meanwhile; the last has no Resume).
 - **Order and count:** sessions first (newest failure first), gated runs after, under ONE `total`; the strip's To resume count counts both (`homeService.listToResume` / `tabCounts`).
 - **Tone:** calm, as § 35 — the `Waiting to resume` pill is the gate's Awaiting tint (`--el-tint-yellow`), no danger ink; the failure is a fact in the second line, not an alarm.
 - **Empty state unchanged** (panel 11).
+
+### 37.2a Who may resume — CHANGED after review (Mo, 2026-10-10: _"A manager should be able to resume any plan in the project, not only the user who started the plan"_)
+
+Resume is offered to **the session's starter OR a project manager** (the holder of `ai:configure`; every member holds `ai:decide_plan`, so that key would let everyone in). Consequences drawn in panels 9 and 16 and in the overlay mock (3b, 3c) and Plans mock (2b):
+
+- **To resume stays the READER'S OWN list**, with its count and watermark: a manager's tab does not fill with every member's failures, so the badge still means _mine_. **A manager reaches another member's failed session from the Plans page** (the _Waiting to resume_ tab and its rows, which already show the starter's name), and the overlay offers **Resume** there, with _started by {name} · you can resume it as a project manager_.
+- **A plain member who did not start it** opens the overlay read-only: the failure block says _Only {name} or a project manager can resume this_; no Resume, no _Plan something new_, no composer.
+- The refusal sentence for a caller who may not resume reads _Only the person who started this session or a project manager can resume it_ (`NOT_SESSION_OWNER`, wording only).
+- The manager's resume spends the **manager's** credits context and takes no hold: the card hold stays with the starter. Whether a manager should instead see every member's failures in a tab of their own is left open on purpose, for the reviewer.
 
 ### 37.3 The Planning tab's leave frame (panel 12)
 

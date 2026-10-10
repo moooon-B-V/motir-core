@@ -450,7 +450,9 @@ export class PlanningSeedNotFoundError extends Error {
 export class NotSessionOwnerError extends Error {
   readonly code = 'NOT_SESSION_OWNER' as const;
   constructor(readonly sessionId: string) {
-    super(`Only the owner of planning session ${sessionId} can resume it.`);
+    super(
+      `Only the person who started planning session ${sessionId}, or a project manager, can resume it.`,
+    );
     this.name = 'NotSessionOwnerError';
   }
 }
