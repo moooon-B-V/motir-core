@@ -131,6 +131,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-7981's tool-call narration coverage lane (Story MOTIR-7974): the story gate
       // streams a recorded run through the real anchored route against a real database.
       'ci.yml:story-7974-coverage',
+      // MOTIR-8066's planner-narration coverage lane (Story MOTIR-8060): the story gate
+      // drives both step doors and reads the narration back against a real database.
+      'ci.yml:story-8060-coverage',
       'ci.yml:test',
     ]);
   });

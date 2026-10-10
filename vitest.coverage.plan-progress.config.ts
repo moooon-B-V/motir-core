@@ -109,6 +109,9 @@ export default defineConfig({
       'tests/components/workbench-planning-tab.test.tsx',
       // MOTIR-7832 — the island's poll arms the tab's own suite leaves unreached.
       'tests/components/workbench-planning-list-poll.test.tsx',
+      // MOTIR-8066 — the narration story gate, so the floor on the widened
+      // `plan-step` route keeps measuring its narration branch.
+      'tests/integration/plans/planNarrationStoryGate.test.ts',
       // MOTIR-7988 — a plan a revision holds is listed under Planning, its row read
       // as one being written.
       'tests/integration/workbench/revision-hold-listing.test.ts',

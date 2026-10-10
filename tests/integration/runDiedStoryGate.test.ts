@@ -17,6 +17,7 @@ import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { setProjectAccess } from '@/tests/helpers/projectAccess';
+import { homePageItems } from '../helpers/homePage';
 
 // THE STORY GATE for a dead run on To fix (Story MOTIR-6590 · MOTIR-6883), on a real
 // Postgres, through the real services.
@@ -149,7 +150,7 @@ async function detailFromView(fx: WorkItemFixture, card: { id: string; identifie
 const onToFix = async (fx: WorkItemFixture, cardId: string, userId?: string) =>
   (await homeService.listToFix(hctx(fx, userId))).items.find((r) => r.id === cardId) ?? null;
 const onInProgress = async (fx: WorkItemFixture, cardId: string, userId?: string) =>
-  (await homeService.listInProgress(hctx(fx, userId))).items.some((r) => r.id === cardId);
+  homePageItems(await homeService.listInProgress(hctx(fx, userId))).some((r) => r.id === cardId);
 
 describe('case 1 — every way a run dies puts its card on To fix', () => {
   const ENDINGS = [

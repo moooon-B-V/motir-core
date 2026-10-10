@@ -220,6 +220,22 @@ export interface HomeWorkItemRow {
 }
 
 /**
+ * One work item of a Workbench work tab, narrowed to what GROUPING needs (Story
+ * MOTIR-8012 · MOTIR-8014): its parent, and the fields `groupRank` /
+ * `compareReadyPosition` rank on (kind, priority, key) plus the Recently finished
+ * axis (`completedAt`). The full row is read later, for one page only, through
+ * {@link workItemRepository.findHomeRowsByIds}.
+ */
+export interface HomeGroupingRow {
+  id: string;
+  parentId: string | null;
+  kind: HomeWorkItemRow['kind'];
+  priority: HomeWorkItemRow['priority'];
+  key: HomeWorkItemRow['key'];
+  completedAt: HomeWorkItemRow['completedAt'];
+}
+
+/**
  * The Prisma `select` producing a {@link HomeWorkItemRow}. Exported because the
  * WATCHING read projects the same row through the `watcher.workItem` relation —
  * one shape, one place, so the two tabs can never drift into rendering different
@@ -1467,6 +1483,43 @@ export const workItemRepository = {
   },
 
   /**
+   * THE WHOLE SLICE of a grouped Workbench work tab — To do, In progress or Recently
+   * finished — as six narrow fields per item (Story MOTIR-8012 · MOTIR-8014).
+   *
+   * ⚠️ UNWINDOWED, BECAUSE GROUPING MUST SEE EVERY MEMBER BEFORE IT CAN CUT A PAGE: a
+   * group ranks by its BEST member, and that member can sit anywhere in the tab. The
+   * service groups these rows in memory, cuts a page of whole groups, and reads full
+   * rows for that page only — the two-step shape To fix uses
+   * ({@link listToFixGroupKeysByAssigneeOrReporterInWorkspace}). Bounded by what it
+   * reads: the reader's own items in the active project, six narrow columns.
+   *
+   * The `where` is {@link homeMembershipWhere}'s — the FOURTH reader of it, after the
+   * list, the count and the watermark — so the set is the tab's set, row for row. The
+   * order is `homeOrderBy`'s, only so the read is stable; the service re-ranks.
+   */
+  async listHomeGroupingRowsByAssigneeOrReporterInWorkspace(
+    userId: string,
+    workspaceId: string,
+    projectScopes: readonly HomeProjectScope[],
+    options: HomeMembershipOptions,
+    tx: Prisma.TransactionClient,
+  ): Promise<HomeGroupingRow[]> {
+    if (projectScopes.length === 0) return [];
+    return tx.workItem.findMany({
+      where: homeMembershipWhere(userId, workspaceId, projectScopes, options),
+      select: {
+        id: true,
+        parentId: true,
+        kind: true,
+        priority: true,
+        key: true,
+        completedAt: true,
+      },
+      orderBy: homeOrderBy(options.sortField ?? 'updatedAt'),
+    });
+  },
+
+  /**
    * TO FIX's ENTRY KEYS, in the tab's order (MOTIR-7589; `design/workbench/design-notes.md`
    * § 34.2) — every card on the reader's To fix slice, as `{ id, fixDetail }` only.
    *
@@ -1626,7 +1679,8 @@ export const workItemRepository = {
 
   /**
    * Workbench rows BY ID (MOTIR-7589) — the members and heads of a page of To fix
-   * entries, in the shared {@link HOME_WORK_ITEM_SELECT} projection plus `parentId`
+   * entries, AND (MOTIR-8014) the page rows and context heads of the grouped work
+   * tabs (To do, In progress, Recently finished), in the shared {@link HOME_WORK_ITEM_SELECT} projection plus `parentId`
    * (the head rule follows ancestry). Workspace-gated; archived and triaged rows
    * excluded, so a card that left since the keys were read is simply not returned.
    */

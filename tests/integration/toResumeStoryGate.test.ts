@@ -19,6 +19,7 @@ import { captureJobEvents, JobTestEngine, type CapturedJobEvent } from '../helpe
 import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { setProjectAccess } from '@/tests/helpers/projectAccess';
+import { homePageItems } from '../helpers/homePage';
 
 // THE STORY GATE for a run that stops at a gate (Story MOTIR-7701 · MOTIR-7714), on a
 // real Postgres, through the real services.
@@ -406,7 +407,7 @@ const toResumeIds = async (userId?: string) =>
 const toFixIds = async (userId?: string) =>
   (await homeService.listToFix(hctx(userId))).items.map((r) => r.id);
 const inProgressIds = async (userId?: string) =>
-  (await homeService.listInProgress(hctx(userId))).items.map((r) => r.id);
+  homePageItems(await homeService.listInProgress(hctx(userId))).map((r) => r.id);
 
 /**
  * GUARD 1 — `resumeState` and a run's death are never both on one card. A card the

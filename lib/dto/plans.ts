@@ -734,6 +734,57 @@ export interface PlanStepDto {
 }
 
 /**
+ * One sentence a planner session wrote about its own work (Story MOTIR-8060 ·
+ * MOTIR-8062) — the planner's NARRATION, kept as history. `seq` is the plan's
+ * own order, gapless from 1; `sessionKey` names the session that wrote it.
+ */
+export interface PlanNarrationDto {
+  id: string;
+  sessionKey: string;
+  seq: number;
+  body: string;
+  createdAt: string;
+}
+
+/**
+ * One planner session's STEP WORDS on a plan (MOTIR-8062): the step it last
+ * reported and the target's title as it read then — kept after the session ends,
+ * so the chat panel can head that session's group with its real step. Both
+ * `targetRef` and `targetTitle` are null on `settle`; `targetTitle` is also null
+ * when the target could not be resolved.
+ */
+export interface PlanNarrationSessionDto {
+  sessionKey: string;
+  stepKind: PlanStepKindDto;
+  targetRef: string | null;
+  targetTitle: string | null;
+  firstReportedAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A window of a plan's narration sentences (MOTIR-8063): `entries` in ascending
+ * `seq`, and how many sentences come BEFORE the first of them. `seq` is gapless
+ * from 1, so `earlierCount` is the first entry's `seq − 1`, or `0` when
+ * `entries` is empty.
+ */
+export interface PlanNarrationPageDto {
+  entries: PlanNarrationDto[];
+  earlierCount: number;
+}
+
+/**
+ * The narration block the plan REVIEW read carries (MOTIR-8063): the newest
+ * window of sentences plus EVERY session's step words. Sessions are never
+ * windowed, so a sentence paged back to always has its group head here.
+ */
+export interface PlanNarrationReadDto extends PlanNarrationPageDto {
+  /** Every session that reported a step, by `firstReportedAt` then id — running,
+   *  finished, or with no sentence at all. */
+  sessions: PlanNarrationSessionDto[];
+}
+
+/**
  * A plan as the API returns it (list row). The lifecycle timestamps + decider
  * ARE the history surface (when planned / when decided / by whom). `itemCount`
  * is the number of bundled PlanItems.

@@ -129,7 +129,7 @@ describe('the tool is registered, permissioned and free', () => {
     expect(text).toContain('ai:view_plan');
   });
 
-  it('`tools/list` publishes the four steps and an OPTIONAL target', async () => {
+  it('`tools/list` publishes the four steps, an OPTIONAL target and the narration arm', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
     const { tools } = await client.listTools();
@@ -143,12 +143,16 @@ describe('the tool is registered, permissioned and free', () => {
     expect(schema.properties['sessionKey']!.minLength).toBe(1);
     expect(schema.properties['sessionKey']!.maxLength).toBe(128);
     expect(schema.properties).toHaveProperty('target');
-    expect(schema.required).toEqual(expect.arrayContaining(['planId', 'sessionKey', 'step']));
+    expect(schema.required).toEqual(['planId', 'sessionKey']);
+    // Exactly one of `step` / `narration` (MOTIR-8062) — the store's rule, so both are optional here.
+    expect(schema.properties).toHaveProperty('narration');
+    expect(schema.required).not.toContain('narration');
     expect(schema.required).not.toContain('target');
     // The two things a planner would otherwise learn by being refused.
     expect(tool.description).toContain('generating');
     expect(tool.description).toMatch(/ADVISORY/);
-    expect(tool.annotations?.idempotentHint).toBe(true);
+    // A narration call APPENDS, so the tool is no longer idempotent (MOTIR-8062).
+    expect(tool.annotations?.idempotentHint).toBe(false);
     expect(tool.annotations?.destructiveHint).toBe(false);
   });
 });
@@ -347,5 +351,73 @@ describe('the refusals arrive as typed tool errors, never an internal error', ()
     });
     expect(res.isError).toBe(true);
     expect(await adminDb.planStep.count({ where: { planId } })).toBe(0);
+  });
+});
+
+describe('the narration arm (Story MOTIR-8060 · MOTIR-8062)', () => {
+  it('appends sentences under a session that holds a step and returns the stored rows', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const { planId } = await generatingPlan(client, fx);
+    await call(client, REPORT_PLAN_STEP_TOOL_NAME, { planId, sessionKey: 's', step: 'settle' });
+
+    const res = await call(client, REPORT_PLAN_STEP_TOOL_NAME, {
+      planId,
+      sessionKey: 's',
+      narration: ['Reading the brief.', 'Two epics,\n likely.'],
+    });
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent).toEqual({
+      planId,
+      sessionKey: 's',
+      narration: [
+        { seq: 1, body: 'Reading the brief.' },
+        { seq: 2, body: 'Two epics, likely.' },
+      ],
+    });
+    expect(textOf(res)).toBe(`Recorded 2 narration sentences for session \`s\` on plan ${planId}.`);
+
+    const one = await call(client, REPORT_PLAN_STEP_TOOL_NAME, {
+      planId,
+      sessionKey: 's',
+      narration: ['Done.'],
+    });
+    expect(textOf(one)).toBe(`Recorded 1 narration sentence for session \`s\` on plan ${planId}.`);
+
+    const stored = await adminDb.planNarration.findMany({
+      where: { planId },
+      orderBy: { seq: 'asc' },
+    });
+    expect(stored.map((r) => r.body)).toEqual([
+      'Reading the brief.',
+      'Two epics, likely.',
+      'Done.',
+    ]);
+    // A narration call never touches the session's step.
+    const live = await review(planId, fx);
+    expect(live.inFlightSteps).toHaveLength(1);
+    expect(live.inFlightSteps![0]).toMatchObject({ sessionKey: 's', kind: 'settle' });
+  });
+
+  it.each([
+    ['both arms', { step: 'settle', narration: ['Both.'] }],
+    ['neither arm', {}],
+    ['a target', { narration: ['Aimed.'], target: 'planItem:whatever' }],
+    ['a blank sentence', { narration: ['  '] }],
+    ['a session with no step', { narration: ['Hi.'], sessionKey: 'ghost' }],
+  ])('refuses %s as a typed PLAN_STEP_INVALID, recording nothing', async (_label, extra) => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const { planId } = await generatingPlan(client, fx);
+    await call(client, REPORT_PLAN_STEP_TOOL_NAME, { planId, sessionKey: 's', step: 'settle' });
+
+    const res = await call(client, REPORT_PLAN_STEP_TOOL_NAME, {
+      planId,
+      sessionKey: 's',
+      ...extra,
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toContain('PLAN_STEP_INVALID');
+    expect(await adminDb.planNarration.count({ where: { planId } })).toBe(0);
   });
 });

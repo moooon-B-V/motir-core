@@ -16,6 +16,7 @@ import { truncateAuthTables } from '../../helpers/db';
 import { spyOnJobDispatch } from '../../helpers/jobs';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import { homePageItems } from '../../helpers/homePage';
 
 // THE WORKBENCH STORY GATE (Story MOTIR-4777 · MOTIR-4784) — the properties that
 // belong to no single card, against real Postgres and the shipped services.
@@ -70,7 +71,9 @@ afterAll(async () => {
 });
 
 const ctx = () => ({ ...fx.ctx, projectId: fx.projectId });
-const ids = (page: { items: { identifier: string }[] }) => page.items.map((r) => r.identifier);
+// The tab's own items, group heads' `groupMembers` flattened (MOTIR-8015).
+const ids = (page: Parameters<typeof homePageItems>[0]) =>
+  homePageItems(page).map((r) => r.identifier);
 const DAY = 24 * 60 * 60 * 1000;
 
 async function card(title: string): Promise<{ id: string; identifier: string }> {
@@ -481,7 +484,7 @@ describe('every read is exact at a page boundary', () => {
         await read(ctx(), { limit: 2 });
       const pageCount = Math.max(1, Math.ceil(first.total / first.pageSize));
       for (let page = 1; page <= pageCount; page += 1) {
-        const got: { items: { identifier: string }[]; total: number } = await read(ctx(), {
+        const got = await read(ctx(), {
           limit: 2,
           page,
         });
