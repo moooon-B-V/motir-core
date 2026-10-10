@@ -32,7 +32,11 @@ import {
 import { plansService } from '@/lib/services/plansService';
 import { buildProjection, projectedEdgeDisposition } from '@/lib/services/planProjectionService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
-import { planStalenessService } from '@/lib/services/planStalenessService';
+import {
+  allClearStaleness,
+  planStalenessService,
+  planStatusCanBeStale,
+} from '@/lib/services/planStalenessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
 import { RESTING_BLOCKED_KEY, RESTING_TODO_KEY } from '@/lib/plans/restingStatus';
@@ -822,7 +826,13 @@ export const planReviewService = {
     // reader's view is the same not-found as an unknown id (MOTIR-6330). The
     // resolution is shared with the narration page read (MOTIR-8063).
     const { ctx, plan } = await resolvePlanReader(planId, reader);
-    const staleness = await planStalenessService.computePlanStaleness(planId, ctx);
+    // Only an undecided plan can be stale. `getPlanForReader` above has ALREADY admitted the reader and read
+    // the plan with every item, so for any other status the all-clear verdict is built from those items
+    // instead of asking `computePlanStaleness` to re-read the plan, re-run the browse check and re-read every
+    // item to return the same constant — the poll of a `generating` plan paid that on every tick (MOTIR-8103).
+    const staleness = planStatusCanBeStale(plan.status)
+      ? await planStalenessService.computePlanStaleness(planId, ctx)
+      : allClearStaleness(planId, plan.items);
     // The plan's CONTENT trail (MOTIR-3536) — ONE query for the whole history,
     // walking the `(plan_id, changed_at)` index. It rides the plan read rather
     // than a per-event query because this model is re-read on every poll of a
