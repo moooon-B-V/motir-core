@@ -263,6 +263,25 @@ describe('the sweep backstop', () => {
     }),
   });
 
+  it(
+    'reads the stop point through the injected walk-stop reader on the revision arm',
+    T,
+    async () => {
+      const card = await seedCard();
+      const sessionId = await openSession(card);
+      const plan = await planIn(sessionId, 'planned');
+      await startRevision(plan.id, 'rev-sweep-stop', 30 * MIN);
+
+      const summary = await abandonedPlanService.reconcileAbandoned({
+        deps: { ...dead('failed'), getJobWalkStop: async () => null } as never,
+      });
+
+      expect(summary.outcomes).toContainEqual(
+        expect.objectContaining({ planId: plan.id, outcome: 'revision_failed' }),
+      );
+    },
+  );
+
   it('settles a stale revision whose job failed', T, async () => {
     const card = await seedCard();
     const sessionId = await openSession(card);

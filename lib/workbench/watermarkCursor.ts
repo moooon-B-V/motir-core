@@ -106,3 +106,8 @@ export function movedTabs(
     (key) => since[key].count !== now[key].count || since[key].latest !== now[key].latest,
   );
 }
+
+/** The later of two optional instants — a tab's `latest` when two reads are merged into it. */
+export function latestDate(a: Date | null, b: Date | null): Date | null {
+  return a && b ? (a > b ? a : b) : (a ?? b);
+}

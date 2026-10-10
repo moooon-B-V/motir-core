@@ -25,6 +25,7 @@ import {
 import {
   decodeWatermarkCursor,
   encodeWatermarkCursor,
+  latestDate,
   movedTabs,
 } from '@/lib/workbench/watermarkCursor';
 
@@ -170,8 +171,6 @@ async function readTabs(
         tx,
       ),
     ]);
-    const latestOf = (a: Date | null, b: Date | null): Date | null =>
-      a && b ? (a > b ? a : b) : (a ?? b);
     const pair = (reading: { count: number; latest: Date | null }): WorkbenchTabWatermarkDto => ({
       count: reading.count,
       latest: reading.latest?.toISOString() ?? null,
@@ -182,7 +181,10 @@ async function readTabs(
       toFix: pair(toFix),
       toResume: pair({
         count: toResume.count + failedSessions.count + endedSessions.count,
-        latest: latestOf(latestOf(toResume.latest, failedSessions.latest), endedSessions.latest),
+        latest: latestDate(
+          latestDate(toResume.latest, failedSessions.latest),
+          endedSessions.latest,
+        ),
       }),
       recentlyFinished: pair(recentlyFinished),
       approvals: pair(approvals),

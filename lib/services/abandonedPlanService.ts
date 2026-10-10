@@ -421,10 +421,16 @@ export const abandonedPlanService = {
           continue;
         }
         if (decision.action === 'record' && plan.sourceJobId) {
-          const walkStop = await (deps.getJobWalkStop ?? readWalkStop)(
-            plan.sourceJobId,
-            plan.projectId,
-          ).catch(() => null);
+          // A walk stop that cannot be read is no stop point, never a failed sweep.
+          let walkStop: JobWalkStop | null = null;
+          try {
+            walkStop = await (deps.getJobWalkStop ?? readWalkStop)(
+              plan.sourceJobId,
+              plan.projectId,
+            );
+          } catch {
+            walkStop = null;
+          }
           const record = failureRecordFrom({
             failedJobId: plan.sourceJobId,
             now,
@@ -548,22 +554,25 @@ export const abandonedPlanService = {
         });
         continue;
       }
-      const settled = await settleFailedJob(
-        plan.sourceJobId,
-        { userId: '', workspaceId: plan.workspaceId, projectId: plan.projectId },
-        { status: decision.action === 'fail' ? 'failed' : 'canceled' },
-        deps.getJobWalkStop
-          ? {
-              readJob: async (jobId, projectId) => ({
-                error: job?.failure ?? null,
-                walkStop: await deps.getJobWalkStop!(jobId, projectId),
-              }),
-            }
-          : {},
-      ).catch((err: unknown) => {
+      let settled: Awaited<ReturnType<typeof settleFailedJob>> | null;
+      try {
+        settled = await settleFailedJob(
+          plan.sourceJobId,
+          { userId: '', workspaceId: plan.workspaceId, projectId: plan.projectId },
+          { status: decision.action === 'fail' ? 'failed' : 'canceled' },
+          deps.getJobWalkStop
+            ? {
+                readJob: async (jobId, projectId) => ({
+                  error: job?.failure ?? null,
+                  walkStop: await deps.getJobWalkStop!(jobId, projectId),
+                }),
+              }
+            : {},
+        );
+      } catch (err) {
         console.warn(`[abandoned-plan-sweep] settling the revision of plan ${plan.id} failed`, err);
-        return null;
-      });
+        settled = null;
+      }
       outcomes.push(
         settled
           ? {

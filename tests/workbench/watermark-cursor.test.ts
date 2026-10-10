@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  latestDate,
   decodeWatermarkCursor,
   encodeWatermarkCursor,
   movedTabs,
@@ -130,5 +131,21 @@ describe('a cursor minted before To fix joined the watermark (MOTIR-6605)', () =
     const five = Array.from({ length: 5 }, () => [1, Date.parse('2026-09-17T09:00:00.000Z')]);
     const cursor = `w1.${Buffer.from(JSON.stringify(five), 'utf8').toString('base64url')}`;
     expect(decodeWatermarkCursor(cursor)).toBeNull();
+  });
+});
+
+describe('latestDate', () => {
+  const early = new Date('2026-10-01T00:00:00.000Z');
+  const late = new Date('2026-10-02T00:00:00.000Z');
+
+  it('is the later of two instants, whichever side holds it', () => {
+    expect(latestDate(early, late)).toBe(late);
+    expect(latestDate(late, early)).toBe(late);
+  });
+
+  it('is the one instant there is, or null when there is none', () => {
+    expect(latestDate(early, null)).toBe(early);
+    expect(latestDate(null, late)).toBe(late);
+    expect(latestDate(null, null)).toBeNull();
   });
 });
