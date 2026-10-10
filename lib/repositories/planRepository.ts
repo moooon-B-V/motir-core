@@ -249,6 +249,16 @@ export const planRepository = {
     return result.count > 0;
   },
 
+  /** Every UNDECIDED plan of a session with what a turn on a failed session classifies by
+   *  (MOTIR-7938): its id, status, producing job and age. */
+  async listUndecidedBySession(sessionId: string, tx: Prisma.TransactionClient) {
+    return tx.plan.findMany({
+      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+      select: { id: true, status: true, sourceJobId: true, createdAt: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
   /** A session's most recent UNDECIDED plan (`generating` / `planned` / `stale`),
    *  or `null` — the plan a carry moves (Story MOTIR-7928 · MOTIR-7930). Not the
    *  LATEST plan: a session that ended `failed` can hold a declined attempt on

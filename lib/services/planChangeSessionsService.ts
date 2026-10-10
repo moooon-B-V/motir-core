@@ -27,7 +27,7 @@ import {
   toSeedAncestors,
 } from '@/lib/planning/refusalSeed';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
+import { CLEARED_FAILURE_COLUMNS, sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import {
   clearWithin as clearPlanningSessionGate,
@@ -58,6 +58,7 @@ import { planRevisionsService } from '@/lib/services/planRevisionsService';
 import { plansService } from '@/lib/services/plansService';
 import { planDriftService } from '@/lib/services/planDriftService';
 import { PlanNotFoundError } from '@/lib/plans/errors';
+import { classifyFailedWaitingTurn } from '@/lib/planChange/failedWaitingTurn';
 import {
   classifySessionTurn,
   type SessionTurnPlanStatus,
@@ -779,9 +780,10 @@ async function reviseWithinSession(
   pctx: ProjectContext,
   planId: string,
   intent: string,
+  opts: { clearFailure?: boolean } = {},
 ): Promise<PlanChangeSubmitResultDto> {
   const { jobId } = await aiPlanEditsService.submitSessionRevision(planId, intent, pctx);
-  return bindRevisionTurn(session, pctx, { jobId, planId }, intent);
+  return bindRevisionTurn(session, pctx, { jobId, planId }, intent, opts);
 }
 
 /**
@@ -795,6 +797,7 @@ async function bindRevisionTurn(
   pctx: ProjectContext,
   submitted: { jobId: string; planId: string },
   intent: string,
+  opts: { clearFailure?: boolean } = {},
 ): Promise<PlanChangeSubmitResultDto> {
   const { jobId, planId } = submitted;
   const bound = await withWorkspaceContext(
@@ -810,7 +813,17 @@ async function bindRevisionTurn(
         session.id,
         pctx,
         { role: 'system', body: intent, jobId },
-        { lastJobId: jobId, lastSubmittedAt: new Date() },
+        {
+          lastJobId: jobId,
+          lastSubmittedAt: new Date(),
+          // The failure record is cleared in the SAME update, under the SAME session lock
+          // that re-read `endedAt` above (MOTIR-7938): a restart that won the lock never
+          // sees a cleared record, and a double send clears it once. Clearing an absent
+          // record is a no-op write of nulls.
+          ...(opts.clearFailure && sessionWaitingState(fresh) === 'failed'
+            ? CLEARED_FAILURE_COLUMNS
+            : {}),
+        },
         tx,
       );
       return toDto(row, pctx, tx);
@@ -2358,9 +2371,24 @@ export const planChangeSessionsService = {
     // (`planSessionResumeService`) or ending the session. A PRE-check, not a re-check under the
     // lock: the one window left needs the running attempt to fail in the same instant a person
     // submits, and closing it would orphan an already-opened plan.
-    if (sessionWaitingState(session) === 'failed') {
-      throw new PlanSessionAwaitingResumeError(session.id);
-    }
+    // NARROWED BY MOTIR-7938: only a session holding a resumable failed walk (or a shape with no
+    // other exit) is refused. A failed session whose most recent undecided plan is `planned` /
+    // `stale` — situation 2 — falls through to the revise routing, and the bind clears the
+    // failure in the same transaction that records the turn.
+    const failedTurn = classifyFailedWaitingTurn({
+      waiting: sessionWaitingState(session),
+      failedJobId: session.failedJobId,
+      plans:
+        sessionWaitingState(session) === 'failed'
+          ? (
+              await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+                planRepository.listUndecidedBySession(session.id, tx),
+              )
+            ).map((p) => ({ ...p, status: undecidedStatus(p.status) }))
+          : [],
+    });
+    if (failedTurn === 'refuse_resume') throw new PlanSessionAwaitingResumeError(session.id);
+    const clearFailure = failedTurn === 'continue';
     const turns = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
       planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId, tx),
     );
@@ -2397,7 +2425,9 @@ export const planChangeSessionsService = {
       latestUndecided: latest ? { id: latest.id, status: undecidedStatus(latest.status) } : null,
       planAgainOf: opts.planAgainOf,
     });
-    if (turn.kind === 'revise') return reviseWithinSession(session, pctx, turn.planId, intent);
+    if (turn.kind === 'revise') {
+      return reviseWithinSession(session, pctx, turn.planId, intent, { clearFailure });
+    }
     if (turn.kind === 'stale') throw await staleOutcome(turn.planId, pctx);
     if (turn.kind === 'plan_again_refused') {
       throw await planAgainRefusal(
@@ -2412,7 +2442,7 @@ export const planChangeSessionsService = {
     if (turn.kind === 'plan_again') {
       const claimed = await claimPlanAgain(session, pctx, turn.stalePlanId);
       if (claimed.kind === 'revise') {
-        return reviseWithinSession(session, pctx, claimed.planId, intent);
+        return reviseWithinSession(session, pctx, claimed.planId, intent, { clearFailure });
       }
       claim = claimed;
     }
