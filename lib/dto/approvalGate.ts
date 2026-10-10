@@ -828,6 +828,9 @@ export interface PlanningSessionSubjectSummaryDTO {
   planTitle: string | null;
   /** The session's first target key, or null for a project-wide session. */
   targetKey: string | null;
+  /** That target's title, or null when it has none or the key no longer resolves — what the
+   *  row's `targeted` plan-naming form reads (MOTIR-7917). */
+  targetTitle: string | null;
   /** The project's name — the leading line's last fallback. */
   projectName: string;
 }

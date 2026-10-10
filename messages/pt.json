@@ -8970,6 +8970,48 @@
         "unknownLine": "Não está mais sendo escrito."
       },
       "ceiling": "Mostrando seus {shown} planos mais recentes sendo escritos. Os outros {rest} estão na <link>página Planos</link>."
+    },
+    "planningSession": {
+      "kind": "Sessão de planejamento",
+      "waitingToResume": "A retomar",
+      "resume": "Retomar",
+      "resuming": "Retomando…",
+      "open": "Abrir",
+      "failedAt": "falhou {when}",
+      "written": "{n} de {m} escritos",
+      "second": "Segunda tentativa",
+      "stoppedAt": "Parou em",
+      "because": "porque {reason}",
+      "resumingNote": "Retoma de onde parou. Esta linha some quando começar.",
+      "reopened": "Reaberta de “A retomar” · iniciada por você · última atividade {when}",
+      "openAria": "Abrir a sessão de planejamento que falhou — {sentence}",
+      "couldNot": "Não foi possível iniciar a retomada.",
+      "stop": {
+        "lay": "Posicionando {title}",
+        "layTop": "Posicionando o nível superior do projeto",
+        "author": "Escrevendo {title}",
+        "draft": "Rascunhando um novo item"
+      },
+      "reason": {
+        "rate_limited": "o modelo atingiu o limite de requisições",
+        "out_of_credits": "a organização ficou sem créditos",
+        "model_unavailable": "o provedor de IA estava indisponível",
+        "token_expired": "a conexão com o provedor de IA expirou",
+        "internal": "algo deu errado do nosso lado"
+      },
+      "refusal": {
+        "credits": "Sua organização ficou sem créditos do Motir AI. Adicione créditos e retome.",
+        "notOwner": "Somente quem iniciou esta sessão ou um gerente do projeto pode retomá-la.",
+        "ended": "Esta sessão terminou nesse meio-tempo. Abra-a para ver como.",
+        "notFailed": "Esta sessão não está mais aguardando retomada. Abra-a para ver em que ponto está.",
+        "notResumable": "O plano que esta sessão mantinha não pode ser continuado. Abra-a para ver em que ponto está.",
+        "unavailable": "Não foi possível alcançar o Motir AI. Tente de novo em instantes."
+      },
+      "left": {
+        "title": "Movido para “A retomar”",
+        "line": "A tentativa falhou e o plano feito até aqui foi mantido. Retome-o em “A retomar”.",
+        "link": "Ir para “A retomar”"
+      }
     }
   },
   "approvalRecords": {
@@ -13020,6 +13062,15 @@
       },
       "consequence": "Marcar como concluído move {key} para Concluído.",
       "consequenceMerges": "Marcar como concluído registra isso aqui. {key} passa para Concluído quando o pull request dele for mesclado."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Sessão de planejamento",
+        "asked": "O Motir AI perguntou:",
+        "waitReply": "O Motir AI está aguardando sua resposta.",
+        "since": "desde {when}",
+        "open": "Abrir a sessão de planejamento — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

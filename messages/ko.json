@@ -8964,6 +8964,48 @@
         "unknownLine": "더 이상 작성되고 있지 않습니다."
       },
       "ceiling": "작성 중인 계획 중 최신 {shown}개를 표시합니다. 나머지 {rest}개는 <link>계획 페이지</link>에 있습니다."
+    },
+    "planningSession": {
+      "kind": "계획 세션",
+      "waitingToResume": "재개 필요",
+      "resume": "재개",
+      "resuming": "재개하는 중…",
+      "open": "열기",
+      "failedAt": "{when} 실패",
+      "written": "{m}개 중 {n}개 작성됨",
+      "second": "두 번째 시도",
+      "stoppedAt": "중단된 위치",
+      "because": "원인: {reason}",
+      "resumingNote": "중단된 지점부터 이어서 진행합니다. 시작되면 이 행은 사라집니다.",
+      "reopened": "‘재개 필요’에서 다시 열림 · 시작한 사람: 나 · 마지막 활동 {when}",
+      "openAria": "실패한 계획 세션 열기 — {sentence}",
+      "couldNot": "재개를 시작하지 못했습니다.",
+      "stop": {
+        "lay": "{title} 배치 중",
+        "layTop": "프로젝트 최상위 배치 중",
+        "author": "{title} 작성 중",
+        "draft": "새 항목 초안 작성 중"
+      },
+      "reason": {
+        "rate_limited": "모델의 요청 한도를 초과했습니다",
+        "out_of_credits": "조직의 크레딧이 소진되었습니다",
+        "model_unavailable": "AI 제공업체를 사용할 수 없었습니다",
+        "token_expired": "AI 제공업체와의 연결이 만료되었습니다",
+        "internal": "저희 쪽에서 문제가 발생했습니다"
+      },
+      "refusal": {
+        "credits": "조직의 Motir AI 크레딧이 소진되었습니다. 크레딧을 추가한 뒤 다시 재개하세요.",
+        "notOwner": "이 세션을 시작한 사람 또는 프로젝트 관리자만 재개할 수 있습니다.",
+        "ended": "그사이 이 세션이 종료되었습니다. 열어서 경위를 확인하세요.",
+        "notFailed": "이 세션은 더 이상 재개를 기다리고 있지 않습니다. 열어서 현재 상태를 확인하세요.",
+        "notResumable": "이 세션이 가지고 있던 계획은 이어서 진행할 수 없습니다. 열어서 현재 상태를 확인하세요.",
+        "unavailable": "Motir AI에 연결할 수 없었습니다. 잠시 후 다시 시도하세요."
+      },
+      "left": {
+        "title": "‘재개 필요’로 이동됨",
+        "line": "시도가 실패했지만 지금까지의 계획은 보관되어 있습니다. ‘재개 필요’에서 재개하세요.",
+        "link": "‘재개 필요’로 이동"
+      }
     }
   },
   "approvalRecords": {
@@ -13014,6 +13056,15 @@
       },
       "consequence": "완료로 표시하면 {key}이(가) 완료로 이동합니다.",
       "consequenceMerges": "완료로 표시하면 여기에 기록됩니다. 풀 리퀘스트가 병합되면 {key}이(가) 완료로 이동합니다."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "계획 세션",
+        "asked": "Motir AI의 질문:",
+        "waitReply": "Motir AI가 회신을 기다리고 있습니다.",
+        "since": "{when}부터",
+        "open": "계획 세션 열기 — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

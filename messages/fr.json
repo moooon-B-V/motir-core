@@ -8970,6 +8970,48 @@
         "unknownLine": "N’est plus en cours de rédaction."
       },
       "ceiling": "Affichage de vos {shown} plans en cours de rédaction les plus récents. Les {rest} autres se trouvent sur la <link>page Plans</link>."
+    },
+    "planningSession": {
+      "kind": "Session de planification",
+      "waitingToResume": "À reprendre",
+      "resume": "Reprendre",
+      "resuming": "Reprise en cours…",
+      "open": "Ouvrir",
+      "failedAt": "échec {when}",
+      "written": "{n} sur {m} rédigés",
+      "second": "Deuxième tentative",
+      "stoppedAt": "Arrêtée à",
+      "because": "parce que {reason}",
+      "resumingNote": "Reprise là où elle s’est arrêtée. Cette ligne disparaît dès qu’elle démarre.",
+      "reopened": "Rouverte depuis « À reprendre » · démarrée par vous · dernière activité {when}",
+      "openAria": "Ouvrir la session de planification en échec — {sentence}",
+      "couldNot": "Impossible de lancer la reprise.",
+      "stop": {
+        "lay": "Mise en place de {title}",
+        "layTop": "Mise en place du niveau supérieur du projet",
+        "author": "Rédaction de {title}",
+        "draft": "Rédaction d’un nouvel élément"
+      },
+      "reason": {
+        "rate_limited": "le modèle a atteint sa limite de requêtes",
+        "out_of_credits": "l’organisation n’a plus de crédits",
+        "model_unavailable": "le fournisseur d’IA était indisponible",
+        "token_expired": "la connexion au fournisseur d’IA a expiré",
+        "internal": "un problème est survenu de notre côté"
+      },
+      "refusal": {
+        "credits": "Votre organisation n’a plus de crédits Motir AI. Ajoutez des crédits, puis reprenez.",
+        "notOwner": "Seule la personne qui a démarré cette session ou un responsable de projet peut la reprendre.",
+        "ended": "Cette session s’est terminée entre-temps. Ouvrez-la pour voir comment.",
+        "notFailed": "Cette session n’attend plus d’être reprise. Ouvrez-la pour voir où elle en est.",
+        "notResumable": "Le plan que cette session contenait ne peut pas être poursuivi. Ouvrez-la pour voir où elle en est.",
+        "unavailable": "Motir AI est injoignable. Réessayez dans un instant."
+      },
+      "left": {
+        "title": "Déplacé vers « À reprendre »",
+        "line": "Sa tentative a échoué, et le plan réalisé jusqu’ici est conservé. Reprenez-le depuis « À reprendre ».",
+        "link": "Aller à « À reprendre »"
+      }
     }
   },
   "approvalRecords": {
@@ -13020,6 +13062,15 @@
       },
       "consequence": "Le marquer comme terminé fait passer {key} à Terminé.",
       "consequenceMerges": "Le marquer comme terminé l'enregistre ici. {key} passe à Terminé lorsque sa pull request est fusionnée."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Session de planification",
+        "asked": "Motir AI a demandé :",
+        "waitReply": "Motir AI attend votre réponse.",
+        "since": "depuis {when}",
+        "open": "Ouvrir la session de planification — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

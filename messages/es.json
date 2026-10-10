@@ -8970,6 +8970,48 @@
         "unknownLine": "Ya no se está redactando."
       },
       "ceiling": "Se muestran tus {shown} planes en redacción más recientes. Los otros {rest} están en la <link>página Planes</link>."
+    },
+    "planningSession": {
+      "kind": "Sesión de planificación",
+      "waitingToResume": "Por reanudar",
+      "resume": "Reanudar",
+      "resuming": "Reanudando…",
+      "open": "Abrir",
+      "failedAt": "falló {when}",
+      "written": "{n} de {m} escritos",
+      "second": "Segundo intento",
+      "stoppedAt": "Se detuvo en",
+      "because": "porque {reason}",
+      "resumingNote": "Se retoma desde donde se detuvo. Esta fila desaparece cuando empiece.",
+      "reopened": "Reabierta desde «Por reanudar» · iniciada por ti · última actividad {when}",
+      "openAria": "Abrir la sesión de planificación fallida — {sentence}",
+      "couldNot": "No se pudo iniciar la reanudación.",
+      "stop": {
+        "lay": "Colocando {title}",
+        "layTop": "Colocando el nivel superior del proyecto",
+        "author": "Escribiendo {title}",
+        "draft": "Redactando un elemento nuevo"
+      },
+      "reason": {
+        "rate_limited": "el modelo alcanzó su límite de solicitudes",
+        "out_of_credits": "la organización se quedó sin créditos",
+        "model_unavailable": "el proveedor de IA no estaba disponible",
+        "token_expired": "la conexión con el proveedor de IA caducó",
+        "internal": "algo salió mal por nuestra parte"
+      },
+      "refusal": {
+        "credits": "Tu organización se ha quedado sin créditos de Motir AI. Añade créditos y luego reanuda.",
+        "notOwner": "Solo la persona que inició esta sesión o un responsable del proyecto puede reanudarla.",
+        "ended": "Esta sesión terminó mientras tanto. Ábrela para ver cómo.",
+        "notFailed": "Esta sesión ya no está esperando a reanudarse. Ábrela para ver en qué punto está.",
+        "notResumable": "El plan que contenía esta sesión no se puede continuar. Ábrela para ver en qué punto está.",
+        "unavailable": "No se pudo contactar con Motir AI. Inténtalo de nuevo en un momento."
+      },
+      "left": {
+        "title": "Movido a «Por reanudar»",
+        "line": "Su intento falló y el plan hecho hasta ahora se conserva. Reanúdalo desde «Por reanudar».",
+        "link": "Ir a «Por reanudar»"
+      }
     }
   },
   "approvalRecords": {
@@ -13020,6 +13062,15 @@
       },
       "consequence": "Marcarlo como hecho mueve {key} a Hecho.",
       "consequenceMerges": "Marcarlo como hecho lo registra aquí. {key} pasa a Hecho cuando se fusione su pull request."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Sesión de planificación",
+        "asked": "Motir AI preguntó:",
+        "waitReply": "Motir AI está esperando tu respuesta.",
+        "since": "desde {when}",
+        "open": "Abrir la sesión de planificación — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

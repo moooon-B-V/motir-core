@@ -8960,6 +8960,48 @@
         "unknownLine": "已不再编写。"
       },
       "ceiling": "显示你最新的 {shown} 个正在编写的计划。其余 {rest} 个请见<link>计划页</link>。"
+    },
+    "planningSession": {
+      "kind": "规划会话",
+      "waitingToResume": "待继续",
+      "resume": "继续",
+      "resuming": "正在继续…",
+      "open": "打开",
+      "failedAt": "{when}失败",
+      "written": "已写 {n}/{m}",
+      "second": "第二次尝试",
+      "stoppedAt": "停在",
+      "because": "原因：{reason}",
+      "resumingNote": "正在从停下的地方接着写。开始后此行会消失。",
+      "reopened": "从“待继续”重新打开 · 由你发起 · 最近活动 {when}",
+      "openAria": "打开失败的规划会话——{sentence}",
+      "couldNot": "无法开始继续。",
+      "stop": {
+        "lay": "正在铺设「{title}」",
+        "layTop": "正在铺设项目顶层",
+        "author": "正在撰写「{title}」",
+        "draft": "正在起草新条目"
+      },
+      "reason": {
+        "rate_limited": "请求过于频繁",
+        "out_of_credits": "组织的额度已用完",
+        "model_unavailable": "AI 服务暂不可用",
+        "token_expired": "与 AI 服务的连接已过期",
+        "internal": "我们这边出了故障"
+      },
+      "refusal": {
+        "credits": "你的组织的 Motir AI 额度已用完。补充额度后再继续。",
+        "notOwner": "只有发起此会话的人或项目管理员可以继续它。",
+        "ended": "此会话已在此期间结束。打开它查看经过。",
+        "notFailed": "此会话已不再等待继续。打开它查看当前状态。",
+        "notResumable": "此会话持有的计划无法继续。打开它查看当前状态。",
+        "unavailable": "无法连接 Motir AI。请稍后再试。"
+      },
+      "left": {
+        "title": "已移到“待继续”",
+        "line": "其尝试失败了，目前写好的计划已保留。请在“待继续”中继续。",
+        "link": "前往“待继续”"
+      }
     }
   },
   "approvalRecords": {
@@ -13010,6 +13052,15 @@
       },
       "consequence": "标记完成后 {key} 将移至“已完成”。",
       "consequenceMerges": "标记完成会在此记录。{key} 会在其拉取请求合并后移至“已完成”。"
+    },
+    "planningSession": {
+      "row": {
+        "kind": "规划会话",
+        "asked": "Motir AI 提问：",
+        "waitReply": "Motir AI 在等你回复。",
+        "since": "自 {when}",
+        "open": "打开规划会话——{sentence}"
+      }
     }
   },
   "approvalOverlay": {

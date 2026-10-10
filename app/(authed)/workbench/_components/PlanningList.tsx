@@ -100,10 +100,17 @@ export function PlanningList({
    * One shared `AbortController` for the lifetime of the island, so a read in
    * flight is dropped on unmount and NOT when a sibling row's outcome lands.
    */
+  // Whether the ceiling is clipping the list — written in an effect, because the outcome read
+  // below runs outside render and must see the latest answer (a ref is not read in render).
+  const ceilingBitesRef = useRef(false);
+  const clipped = tracked.total > seed.items.length;
+  useEffect(() => {
+    ceilingBitesRef.current = clipped;
+  }, [clipped]);
   const readOutcome = useCallback(async (planId: string, signal?: AbortSignal) => {
     try {
       const review = await fetchPlanReview(planId, signal);
-      const outcome = planningOutcomeOf(review);
+      const outcome = planningOutcomeOf(review, { failedIfGenerating: !ceilingBitesRef.current });
       // Still `generating`: it was absent from one window, not finished. Nothing
       // is recorded, so the next read can hold it again.
       if (!outcome) return;

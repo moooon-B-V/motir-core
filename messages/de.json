@@ -8970,6 +8970,48 @@
         "unknownLine": "Wird nicht mehr geschrieben."
       },
       "ceiling": "Ihre {shown} neuesten Pläne, die gerade geschrieben werden, werden angezeigt. Die übrigen {rest} finden Sie auf der <link>Seite „Pläne“</link>."
+    },
+    "planningSession": {
+      "kind": "Planungssitzung",
+      "waitingToResume": "Wartet auf Fortsetzung",
+      "resume": "Fortsetzen",
+      "resuming": "Wird fortgesetzt…",
+      "open": "Öffnen",
+      "failedAt": "{when} fehlgeschlagen",
+      "written": "{n} von {m} geschrieben",
+      "second": "Zweiter Versuch",
+      "stoppedAt": "Angehalten bei",
+      "because": "weil {reason}",
+      "resumingNote": "Der Lauf wird dort fortgesetzt, wo er angehalten hat. Diese Zeile verschwindet, sobald er startet.",
+      "reopened": "Aus „Fortzusetzen“ erneut geöffnet · von Ihnen gestartet · zuletzt aktiv {when}",
+      "openAria": "Fehlgeschlagene Planungssitzung öffnen — {sentence}",
+      "couldNot": "Die Fortsetzung konnte nicht gestartet werden.",
+      "stop": {
+        "lay": "{title} wird angelegt",
+        "layTop": "Oberste Ebene des Projekts wird angelegt",
+        "author": "{title} wird geschrieben",
+        "draft": "Neues Element wird entworfen"
+      },
+      "reason": {
+        "rate_limited": "das Modell das Ratenlimit erreicht hat",
+        "out_of_credits": "der Organisation die Credits ausgegangen sind",
+        "model_unavailable": "der KI-Anbieter nicht verfügbar war",
+        "token_expired": "die Verbindung zum KI-Anbieter abgelaufen ist",
+        "internal": "auf unserer Seite etwas schiefgelaufen ist"
+      },
+      "refusal": {
+        "credits": "Ihrer Organisation sind die Credits für Motir AI ausgegangen. Fügen Sie Credits hinzu und setzen Sie dann fort.",
+        "notOwner": "Nur die Person, die diese Sitzung gestartet hat, oder ein Projektmanager kann sie fortsetzen.",
+        "ended": "Diese Sitzung wurde inzwischen beendet. Öffnen Sie sie, um zu sehen, wie.",
+        "notFailed": "Diese Sitzung wartet nicht mehr auf eine Fortsetzung. Öffnen Sie sie, um den Stand zu sehen.",
+        "notResumable": "Der Plan dieser Sitzung kann nicht fortgesetzt werden. Öffnen Sie sie, um den Stand zu sehen.",
+        "unavailable": "Motir AI war nicht erreichbar. Versuchen Sie es gleich noch einmal."
+      },
+      "left": {
+        "title": "Nach „Fortzusetzen“ verschoben",
+        "line": "Der Versuch ist fehlgeschlagen, der bisherige Plan bleibt erhalten. Setzen Sie ihn unter „Fortzusetzen“ fort.",
+        "link": "Zu „Fortzusetzen“"
+      }
     }
   },
   "approvalRecords": {
@@ -13020,6 +13062,15 @@
       },
       "consequence": "Das Markieren als erledigt setzt {key} auf Erledigt.",
       "consequenceMerges": "Das Markieren als erledigt erfasst es hier. {key} wird auf Erledigt gesetzt, wenn sein Pull Request gemergt wird."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Planungssitzung",
+        "asked": "Motir AI hat gefragt:",
+        "waitReply": "Motir AI wartet auf Ihre Antwort.",
+        "since": "seit {when}",
+        "open": "Planungssitzung öffnen — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

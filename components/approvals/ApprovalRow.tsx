@@ -28,6 +28,8 @@ import { decideApprovalGateAction } from '@/app/(authed)/items/[key]/approvalGat
 import { ManualWorkGlyph, useGuideDoor } from '@/components/approvals/ManualWorkGate';
 import { RefusalReasonCell, showsRefusalReason } from './RefusalReason';
 import { subjectGoneKey } from './subjectGoneKey';
+import { useRelativeLabel } from './useRelativeLabel';
+import { PlanningSessionRow } from './PlanningSessionRow';
 import type {
   ApprovalGateKindDTO,
   ApprovalGateStateDTO,
@@ -247,21 +249,6 @@ export type ApprovalRowRecord =
    * three different pieces of news.
    */
   | { section: 'held'; row: ApprovalQueueRowDto };
-
-/** Relative time — "4 days", in the active locale; the absolute date goes on hover. */
-function useRelativeLabel(): (iso: string) => string {
-  const locale = useLocale();
-  return (iso: string) => {
-    const ms = Date.now() - new Date(iso).getTime();
-    const hours = Math.round(ms / 3_600_000);
-    const fmt = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'narrow' });
-    // Clamped at 0 in both units: a clock skew must not render "in 2 hours" on a
-    // list of things that have already happened.
-    return hours < 48
-      ? fmt.format(-Math.max(hours, 0), 'hour')
-      : fmt.format(-Math.max(Math.round(hours / 24), 0), 'day');
-  };
-}
 
 /**
  * Open a row's approval over the page the list is on.
@@ -697,6 +684,18 @@ export function ApprovalRow({
   // card-less row (a plan gate whose plan is gone) still draws nothing: there is nothing
   // to name and nowhere to go.
   if (row.workItem === null) {
+    // A PLANNING SESSION that needs its person (Story MOTIR-7905 · MOTIR-7917; design § 37.1):
+    // no work item either, and no verb — the decision is the next turn.
+    if (row.subject?.kind === 'planning_session') {
+      return (
+        <PlanningSessionRow
+          record={record}
+          subject={row.subject}
+          gridTemplate={gridTemplate}
+          arrived={arrived}
+        />
+      );
+    }
     if (row.subject?.kind !== 'plan_approval') return null;
     return (
       <PlanApprovalRow

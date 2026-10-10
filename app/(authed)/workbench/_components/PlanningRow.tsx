@@ -62,6 +62,7 @@ export function PlanningRow({
   const routes = useReaderRoutes();
   const t = useTranslations('workbench');
   const tPlanning = useTranslations('workbench.planning');
+  const tSession = useTranslations('workbench.planningSession.left');
   const tPlan = useTranslations('approvalGate.planApproval.row');
   const peekRowClick = usePeekRowClick();
   const pathname = usePathname();
@@ -231,11 +232,27 @@ export function PlanningRow({
         ) : (
           <>
             {outcome.chipKey === null ? null : (
-              <Pill tone="neutral">{tPlanning(`left.${outcome.chipKey}`)}</Pill>
+              <Pill tone="neutral">
+                {outcome.chipKey === 'failed'
+                  ? tSession('title')
+                  : tPlanning(`left.${outcome.chipKey}`)}
+              </Pill>
             )}
             <span className="text-xs text-(--el-text-secondary)">
-              {tPlanning(`left.${outcome.lineKey}`)}
+              {outcome.lineKey === 'failedLine'
+                ? tSession('line')
+                : tPlanning(`left.${outcome.lineKey}`)}
             </span>
+            {outcome.chipKey === 'failed' ? (
+              /* A FAILED attempt is resumed from TO RESUME (§ 37.3), so the held row points
+                 at that tab — above the row door, like the title. */
+              <Link
+                href={workbenchTabHref('to-resume')}
+                className="relative z-10 text-xs font-medium text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              >
+                {tSession('link')}
+              </Link>
+            ) : null}
             {outcome.chipKey === 'planned' ? (
               /* A proposed plan's review is found on the FIRST tab (§ 29), so the
                  held row points at it — above the row door, like the title. */

@@ -8970,6 +8970,48 @@
         "unknownLine": "Non più in fase di stesura."
       },
       "ceiling": "Vengono mostrati i tuoi {shown} piani in fase di stesura più recenti. Gli altri {rest} si trovano nella <link>pagina Piani</link>."
+    },
+    "planningSession": {
+      "kind": "Sessione di pianificazione",
+      "waitingToResume": "Da riprendere",
+      "resume": "Riprendi",
+      "resuming": "Ripresa in corso…",
+      "open": "Apri",
+      "failedAt": "non riuscita {when}",
+      "written": "{n} di {m} scritti",
+      "second": "Secondo tentativo",
+      "stoppedAt": "Interrotta a",
+      "because": "perché {reason}",
+      "resumingNote": "Riprende da dove si era fermata. Questa riga scompare quando parte.",
+      "reopened": "Riaperta da «Da riprendere» · avviata da te · ultima attività {when}",
+      "openAria": "Apri la sessione di pianificazione non riuscita — {sentence}",
+      "couldNot": "Impossibile avviare la ripresa.",
+      "stop": {
+        "lay": "Posizionamento di {title}",
+        "layTop": "Posizionamento del livello superiore del progetto",
+        "author": "Scrittura di {title}",
+        "draft": "Stesura di un nuovo elemento"
+      },
+      "reason": {
+        "rate_limited": "il modello ha raggiunto il limite di richieste",
+        "out_of_credits": "l’organizzazione ha esaurito i crediti",
+        "model_unavailable": "il fornitore di IA non era disponibile",
+        "token_expired": "la connessione al fornitore di IA è scaduta",
+        "internal": "qualcosa è andato storto da parte nostra"
+      },
+      "refusal": {
+        "credits": "La tua organizzazione ha esaurito i crediti Motir AI. Aggiungi crediti, poi riprendi.",
+        "notOwner": "Solo la persona che ha avviato questa sessione o un responsabile del progetto può riprenderla.",
+        "ended": "Nel frattempo questa sessione è terminata. Aprila per vedere come.",
+        "notFailed": "Questa sessione non è più in attesa di essere ripresa. Aprila per vedere a che punto è.",
+        "notResumable": "Il piano che questa sessione conteneva non può essere proseguito. Aprila per vedere a che punto è.",
+        "unavailable": "Impossibile raggiungere Motir AI. Riprova tra un momento."
+      },
+      "left": {
+        "title": "Spostato in «Da riprendere»",
+        "line": "Il tentativo non è riuscito e il piano scritto finora è conservato. Riprendilo da «Da riprendere».",
+        "link": "Vai a «Da riprendere»"
+      }
     }
   },
   "approvalRecords": {
@@ -13020,6 +13062,15 @@
       },
       "consequence": "Segnandolo come completato, {key} passa a Completato.",
       "consequenceMerges": "Segnandolo come completato, viene registrato qui. {key} passa a Completato quando la sua pull request viene unita."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Sessione di pianificazione",
+        "asked": "Motir AI ha chiesto:",
+        "waitReply": "Motir AI attende la tua risposta.",
+        "since": "da {when}",
+        "open": "Apri la sessione di pianificazione — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

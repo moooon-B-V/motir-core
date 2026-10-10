@@ -8967,6 +8967,48 @@
         "unknownLine": "Nie jest już pisany."
       },
       "ceiling": "Wyświetlane są Twoje najnowsze pisane plany ({shown}). Pozostałe ({rest}) są na <link>stronie Plany</link>."
+    },
+    "planningSession": {
+      "kind": "Sesja planowania",
+      "waitingToResume": "Do wznowienia",
+      "resume": "Wznów",
+      "resuming": "Wznawianie…",
+      "open": "Otwórz",
+      "failedAt": "niepowodzenie {when}",
+      "written": "{n} z {m} napisanych",
+      "second": "Druga próba",
+      "stoppedAt": "Zatrzymano na",
+      "because": "przyczyna: {reason}",
+      "resumingNote": "Praca zostanie podjęta od miejsca, w którym się zatrzymała. Ten wiersz zniknie, gdy się rozpocznie.",
+      "reopened": "Ponownie otwarto z „Do wznowienia” · rozpoczęta przez Ciebie · ostatnia aktywność {when}",
+      "openAria": "Otwórz nieudaną sesję planowania — {sentence}",
+      "couldNot": "Nie udało się rozpocząć wznowienia.",
+      "stop": {
+        "lay": "Układanie: {title}",
+        "layTop": "Układanie najwyższego poziomu projektu",
+        "author": "Pisanie: {title}",
+        "draft": "Szkicowanie nowego elementu"
+      },
+      "reason": {
+        "rate_limited": "model osiągnął limit zapytań",
+        "out_of_credits": "w organizacji skończyły się kredyty",
+        "model_unavailable": "dostawca AI był niedostępny",
+        "token_expired": "połączenie z dostawcą AI wygasło",
+        "internal": "po naszej stronie wystąpił problem"
+      },
+      "refusal": {
+        "credits": "W Twojej organizacji skończyły się kredyty Motir AI. Dodaj kredyty, a potem wznów.",
+        "notOwner": "Tę sesję może wznowić tylko osoba, która ją rozpoczęła, lub kierownik projektu.",
+        "ended": "Ta sesja w międzyczasie się zakończyła. Otwórz ją, aby zobaczyć, jak.",
+        "notFailed": "Ta sesja nie czeka już na wznowienie. Otwórz ją, aby zobaczyć, na jakim jest etapie.",
+        "notResumable": "Plan, który zawierała ta sesja, nie może być kontynuowany. Otwórz ją, aby zobaczyć, na jakim jest etapie.",
+        "unavailable": "Nie udało się połączyć z Motir AI. Spróbuj ponownie za chwilę."
+      },
+      "left": {
+        "title": "Przeniesiono do „Do wznowienia”",
+        "line": "Próba się nie powiodła, a dotychczasowy plan został zachowany. Wznów go z „Do wznowienia”.",
+        "link": "Przejdź do „Do wznowienia”"
+      }
     }
   },
   "approvalRecords": {
@@ -13017,6 +13059,15 @@
       },
       "consequence": "Oznaczenie jako gotowe przeniesie {key} do statusu Gotowe.",
       "consequenceMerges": "Oznaczenie jako gotowe zostanie tu zapisane. {key} przejdzie do statusu Gotowe, gdy jego pull request zostanie scalony."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Sesja planowania",
+        "asked": "Motir AI zapytał:",
+        "waitReply": "Motir AI czeka na Twoją odpowiedź.",
+        "since": "od {when}",
+        "open": "Otwórz sesję planowania — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

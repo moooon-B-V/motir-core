@@ -519,6 +519,62 @@ describe('the LIVE island — the poll (§ 36.7, § 36.8)', () => {
     expect(heldRow.textContent).not.toContain('Written');
   });
 
+  it('a plan that left while still `generating` FAILED — the held row points at To resume (§ 37.3)', async () => {
+    const pages = [page([], 0)];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (String(input) === '/api/plans/p1') {
+          return {
+            ok: true,
+            json: async () => ({ status: 'generating', decisionReason: null }),
+          } as unknown as Response;
+        }
+        const next = pages.shift();
+        if (!next) throw new Error('no page stubbed');
+        return { ok: true, json: async () => next } as unknown as Response;
+      }),
+    );
+
+    mount(page([row({ planId: 'p1' })], 1));
+    await poll();
+
+    const heldRow = screen.getByTestId('planning-row-p1');
+    expect(heldRow.dataset['held']).toBe('true');
+    expect(heldRow.textContent).toContain(en.workbench.planningSession.left.title);
+    expect(heldRow.textContent).toContain(en.workbench.planningSession.left.line);
+    expect(heldRow.querySelector('a[href="/workbench?tab=to-resume"]')?.textContent).toBe(
+      en.workbench.planningSession.left.link,
+    );
+    expect(heldRow.textContent).not.toContain('No longer being written.');
+  });
+
+  it('when the ceiling clipped the list, a `generating` plan that left is NOT read as failed', async () => {
+    const pages = [page([row({ planId: 'p2' })], 60)];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (String(input) === '/api/plans/p1') {
+          return {
+            ok: true,
+            json: async () => ({ status: 'generating', decisionReason: null }),
+          } as unknown as Response;
+        }
+        const next = pages.shift();
+        if (!next) throw new Error('no page stubbed');
+        return { ok: true, json: async () => next } as unknown as Response;
+      }),
+    );
+
+    // 60 plans are being written but the tab shows its ceiling's worth.
+    mount(page([row({ planId: 'p1' }), row({ planId: 'p2' })], 60));
+    await poll();
+
+    const heldRow = screen.getByTestId('planning-row-p1');
+    expect(heldRow.textContent).not.toContain(en.workbench.planningSession.left.title);
+    expect(heldRow.textContent).toContain('No longer being written.');
+  });
+
   it('a LATE response never overwrites a newer one', async () => {
     // The first read resolves AFTER the second: the first page names only `p1`,
     // the second names `p1` + `p2`, and the rows must end up the second's.
@@ -604,6 +660,13 @@ describe('the LIVE island — the poll (§ 36.7, § 36.8)', () => {
 describe('the pure rules behind the island', () => {
   it('words each outcome from the plan read, and nothing from a plan still generating', () => {
     expect(planningOutcomeOf({ status: 'generating', decisionReason: null })).toBeNull();
+    // Unclipped, a plan that left while still `generating` is the FAILED one (MOTIR-7917).
+    expect(
+      planningOutcomeOf(
+        { status: 'generating', decisionReason: null },
+        { failedIfGenerating: true },
+      ),
+    ).toMatchObject({ chipKey: 'failed', lineKey: 'failedLine', planStatus: 'generating' });
     expect(planningOutcomeOf({ status: 'planned', decisionReason: null })).toMatchObject({
       chipKey: 'planned',
       lineKey: 'plannedLine',

@@ -232,6 +232,22 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
         await projectRepository.findManyByIds([...new Set(sessions.map((s) => s.projectId))], tx)
       ).map((project) => [project.id, project.name]),
     );
+    // The first target's title, per project — the row's § 29 `targeted` form names the plan by
+    // it (MOTIR-7917). A key that no longer resolves leaves the title null and the form falls.
+    const keysByProject = new Map<string, Set<string>>();
+    for (const session of sessions) {
+      const first = session.targetKeys[0];
+      if (!first) continue;
+      const keys = keysByProject.get(session.projectId) ?? new Set<string>();
+      keys.add(first);
+      keysByProject.set(session.projectId, keys);
+    }
+    const targetTitles = new Map<string, string>();
+    for (const [projectId, keys] of keysByProject) {
+      for (const item of await workItemRepository.findByIdentifiers(projectId, [...keys], tx)) {
+        targetTitles.set(`${projectId}:${item.identifier}`, item.title);
+      }
+    }
     const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
     for (const session of sessions) {
       if (!session.awaitingPersonSince || !session.awaitingPersonCause) continue;
@@ -247,6 +263,9 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
         since: session.awaitingPersonSince.toISOString(),
         planTitle: plan?.title ?? null,
         targetKey: session.targetKeys[0] ?? null,
+        targetTitle: session.targetKeys[0]
+          ? (targetTitles.get(`${session.projectId}:${session.targetKeys[0]}`) ?? null)
+          : null,
         projectName: projects.get(session.projectId) ?? '',
       };
       out.set(session.id, summary);

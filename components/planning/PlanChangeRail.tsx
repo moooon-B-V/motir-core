@@ -14,6 +14,7 @@ import {
   MessageCircleQuestionMark,
   PenLine,
   RefreshCw,
+  RotateCcw,
   SearchCheck,
   Sparkles,
   SquarePen,
@@ -331,6 +332,7 @@ export function PlanChangeRail({
   const ts = useTranslations('planningWorkspace.session');
   // The Planning tab's own copy (§ 36.13) — its reopened line, nothing else.
   const tWorkbenchPlanning = useTranslations('workbench.planning');
+  const tWorkbenchPlanningSession = useTranslations('workbench.planningSession');
   const tr = useTranslations('planningWorkspace.restart');
   const format = useFormatter();
   const [draft, setDraft] = useState(initialDraft ?? '');
@@ -611,6 +613,22 @@ export function PlanChangeRail({
             <PenLine className="mt-px size-3.5 flex-none" aria-hidden />
             <span>
               {tWorkbenchPlanning('reopened', {
+                when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+              })}
+            </span>
+          </p>
+        ) : state.reopened && launch.via === 'resume' ? (
+          // REOPENED FROM TO RESUME (MOTIR-7917; design `design/workbench/design-notes.md`
+          // § 37.2): a failed session's **Open** carries `planVia=resume`. The tab is the
+          // reader's own list, so — as with Planning — there is one form and no *started
+          // by {name}* twin.
+          <p
+            data-testid="planning-reopened-from-resume"
+            className="flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+          >
+            <RotateCcw className="mt-px size-3.5 flex-none" aria-hidden />
+            <span>
+              {tWorkbenchPlanningSession('reopened', {
                 when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
               })}
             </span>

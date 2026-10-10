@@ -8967,6 +8967,48 @@
         "unknownLine": "現在は作成されていません。"
       },
       "ceiling": "作成中の計画のうち、新しい {shown} 件を表示しています。残りの {rest} 件は<link>計画ページ</link>にあります。"
+    },
+    "planningSession": {
+      "kind": "計画セッション",
+      "waitingToResume": "再開待ち",
+      "resume": "再開",
+      "resuming": "再開中…",
+      "open": "開く",
+      "failedAt": "{when}に失敗",
+      "written": "{m}件中{n}件を作成済み",
+      "second": "2回目の試行",
+      "stoppedAt": "停止箇所",
+      "because": "原因: {reason}",
+      "resumingNote": "停止した箇所から再開します。開始すると、この行は消えます。",
+      "reopened": "「再開待ち」から再開 · 開始者: あなた · 最終アクティビティ: {when}",
+      "openAria": "失敗した計画セッションを開く — {sentence}",
+      "couldNot": "再開を開始できませんでした。",
+      "stop": {
+        "lay": "{title}を配置中",
+        "layTop": "プロジェクトの最上位を配置中",
+        "author": "{title}を作成中",
+        "draft": "新しい項目を下書き中"
+      },
+      "reason": {
+        "rate_limited": "モデルのレート制限に達したため",
+        "out_of_credits": "組織のクレジットが尽きたため",
+        "model_unavailable": "AIプロバイダーが利用できなかったため",
+        "token_expired": "AIプロバイダーとの接続の有効期限が切れたため",
+        "internal": "こちら側で問題が発生したため"
+      },
+      "refusal": {
+        "credits": "組織の Motir AI クレジットが尽きています。クレジットを追加してから再開してください。",
+        "notOwner": "このセッションを再開できるのは、開始した本人かプロジェクトマネージャーのみです。",
+        "ended": "このセッションはその間に終了しました。開いて経緯を確認してください。",
+        "notFailed": "このセッションはもう再開待ちではありません。開いて現在の状況を確認してください。",
+        "notResumable": "このセッションが保持していた計画は続行できません。開いて現在の状況を確認してください。",
+        "unavailable": "Motir AI に接続できませんでした。しばらくしてからもう一度お試しください。"
+      },
+      "left": {
+        "title": "「再開待ち」に移動しました",
+        "line": "試行は失敗しましたが、ここまでの計画は保持されています。「再開待ち」から再開してください。",
+        "link": "「再開待ち」へ移動"
+      }
     }
   },
   "approvalRecords": {
@@ -13017,6 +13059,15 @@
       },
       "consequence": "完了にすると {key} が完了に移動します。",
       "consequenceMerges": "完了にするとここに記録されます。プルリクエストがマージされると {key} は完了に移動します。"
+    },
+    "planningSession": {
+      "row": {
+        "kind": "計画セッション",
+        "asked": "Motir AI からの質問:",
+        "waitReply": "Motir AI があなたの返信を待っています。",
+        "since": "{when}から",
+        "open": "計画セッションを開く — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

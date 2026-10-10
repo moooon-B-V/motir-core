@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { planRowDestination } from '@/lib/planning/planDestination';
+import type { PlanningEntrance } from '@/lib/planning/launcher';
 import { fetchPlanReview } from '@/lib/planning/planReviewClient';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { isPlainPrimaryClick } from '@/lib/hooks/useOpenPlanningWorkspace';
@@ -105,6 +106,12 @@ export interface OpenPlanOverlayOptions {
    * an address nothing reads. Absent, the door opens in place over the current page.
    */
   host?: string;
+  /**
+   * Which list opened the overlay (`planVia`), so its reopened line names the entrance — the
+   * Waiting on you planning-session row passes `approvals`, To resume's Open passes `resume`
+   * (MOTIR-7917). Absent, the address carries none and the line is the Plans page's.
+   */
+  via?: PlanningEntrance;
 }
 
 export function useOpenPlanOverlay(
@@ -151,6 +158,7 @@ export function useOpenPlanOverlay(
     knownFacts ?? (read !== null && read.planId === planId ? read.resolution : null);
 
   const hostOverride = options?.host ?? null;
+  const via = options?.via;
   const host = useMemo(() => {
     if (hostOverride !== null) return hostOverride;
     const qs = searchParams.toString();
@@ -161,8 +169,8 @@ export function useOpenPlanOverlay(
     (facts: Resolution | null) =>
       facts === null || facts === 'failed'
         ? null
-        : planRowDestination({ ...facts, planId, host, routes }),
-    [planId, host, routes],
+        : planRowDestination({ ...facts, planId, host, routes, ...(via ? { via } : {}) }),
+    [planId, host, routes, via],
   );
 
   const destination = destinationOf(resolution);

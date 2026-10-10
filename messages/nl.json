@@ -8967,6 +8967,48 @@
         "unknownLine": "Wordt niet meer geschreven."
       },
       "ceiling": "Je {shown} nieuwste plannen die worden geschreven, worden getoond. De andere {rest} staan op de <link>pagina Plannen</link>."
+    },
+    "planningSession": {
+      "kind": "Planningssessie",
+      "waitingToResume": "Te hervatten",
+      "resume": "Hervatten",
+      "resuming": "Wordt hervat…",
+      "open": "Openen",
+      "failedAt": "{when} mislukt",
+      "written": "{n} van {m} geschreven",
+      "second": "Tweede poging",
+      "stoppedAt": "Gestopt bij",
+      "because": "omdat {reason}",
+      "resumingNote": "Gaat verder waar het gestopt is. Deze rij verdwijnt zodra het begint.",
+      "reopened": "Heropend vanuit ‘Te hervatten’ · door jou gestart · laatst actief {when}",
+      "openAria": "De mislukte planningssessie openen — {sentence}",
+      "couldNot": "De hervatting kon niet worden gestart.",
+      "stop": {
+        "lay": "{title} wordt neergezet",
+        "layTop": "Het hoogste niveau van het project wordt neergezet",
+        "author": "{title} wordt geschreven",
+        "draft": "Een nieuw item wordt opgesteld"
+      },
+      "reason": {
+        "rate_limited": "het model de limiet voor aanvragen bereikte",
+        "out_of_credits": "de organisatie geen tegoed meer had",
+        "model_unavailable": "de AI-aanbieder niet beschikbaar was",
+        "token_expired": "de verbinding met de AI-aanbieder verlopen was",
+        "internal": "er aan onze kant iets misging"
+      },
+      "refusal": {
+        "credits": "Je organisatie heeft geen Motir AI-tegoed meer. Voeg tegoed toe en hervat dan.",
+        "notOwner": "Alleen de persoon die deze sessie startte of een projectmanager kan hem hervatten.",
+        "ended": "Deze sessie is intussen beëindigd. Open hem om te zien hoe.",
+        "notFailed": "Deze sessie wacht niet meer op hervatting. Open hem om te zien hoe het ervoor staat.",
+        "notResumable": "Het plan van deze sessie kan niet worden voortgezet. Open de sessie om te zien hoe het ervoor staat.",
+        "unavailable": "Motir AI was niet bereikbaar. Probeer het zo meteen opnieuw."
+      },
+      "left": {
+        "title": "Verplaatst naar ‘Te hervatten’",
+        "line": "De poging is mislukt en het plan tot nu toe is bewaard. Hervat het vanuit ‘Te hervatten’.",
+        "link": "Naar ‘Te hervatten’"
+      }
     }
   },
   "approvalRecords": {
@@ -13017,6 +13059,15 @@
       },
       "consequence": "Als klaar markeren verplaatst {key} naar Klaar.",
       "consequenceMerges": "Als klaar markeren legt het hier vast. {key} gaat naar Klaar zodra de pull request wordt gemerged."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Planningssessie",
+        "asked": "Motir AI vroeg:",
+        "waitReply": "Motir AI wacht op je antwoord.",
+        "since": "sinds {when}",
+        "open": "De planningssessie openen — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

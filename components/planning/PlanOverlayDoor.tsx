@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useOpenPlanOverlay, type KnownPlanFacts } from '@/lib/hooks/useOpenPlanOverlay';
+import type { PlanningEntrance } from '@/lib/planning/launcher';
 
 // THE PLAN-OVERLAY DOOR as a link (Story MOTIR-7883 · MOTIR-7884).
 //
@@ -15,6 +16,8 @@ export interface PlanOverlayDoorProps {
   planId: string;
   /** The plan's status, session and first anchor, when the caller already holds them. */
   known?: KnownPlanFacts;
+  /** Which list the door sits in (`planVia`), so the overlay's reopened line names it. */
+  via?: PlanningEntrance;
   className?: string;
   'data-testid'?: string;
   'aria-label'?: string;
@@ -24,12 +27,13 @@ export interface PlanOverlayDoorProps {
 export function PlanOverlayDoor({
   planId,
   known,
+  via,
   className,
   'data-testid': testId,
   'aria-label': ariaLabel,
   children,
 }: PlanOverlayDoorProps) {
-  const { href, open } = useOpenPlanOverlay(planId, known);
+  const { href, open } = useOpenPlanOverlay(planId, known, via ? { via } : undefined);
   return (
     <Link
       href={href}

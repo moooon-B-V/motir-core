@@ -8964,6 +8964,48 @@
         "unknownLine": "No longer being written."
       },
       "ceiling": "Showing your {shown} newest plans being written. The other {rest} are on the <link>Plans page</link>."
+    },
+    "planningSession": {
+      "kind": "Planning session",
+      "waitingToResume": "Waiting to resume",
+      "resume": "Resume",
+      "resuming": "Resuming…",
+      "open": "Open",
+      "failedAt": "failed {when}",
+      "written": "{n} of {m} written",
+      "second": "Second attempt",
+      "stoppedAt": "Stopped at",
+      "because": "because {reason}",
+      "resumingNote": "Picking the walk up where it stopped. This row clears when it starts.",
+      "reopened": "Reopened from To resume · started by you · last active {when}",
+      "openAria": "Open the failed planning session — {sentence}",
+      "couldNot": "Could not start a resume.",
+      "stop": {
+        "lay": "Laying {title}",
+        "layTop": "Laying the project's top level",
+        "author": "Writing {title}",
+        "draft": "Drafting a new item"
+      },
+      "reason": {
+        "rate_limited": "the model was rate-limited",
+        "out_of_credits": "the organization ran out of credits",
+        "model_unavailable": "the AI provider was unavailable",
+        "token_expired": "its connection to the AI provider expired",
+        "internal": "something went wrong on our side"
+      },
+      "refusal": {
+        "credits": "Your organization is out of Motir AI credits. Add credits, then resume.",
+        "notOwner": "Only the person who started this session or a project manager can resume it.",
+        "ended": "This session ended meanwhile. Open it to see how.",
+        "notFailed": "This session is not waiting to resume any more. Open it to see where it stands.",
+        "notResumable": "The plan this session held can't be continued. Open it to see where it stands.",
+        "unavailable": "Motir AI could not be reached. Try again in a moment."
+      },
+      "left": {
+        "title": "Moved to To resume",
+        "line": "Its attempt failed, and the plan so far is kept. Resume it from To resume.",
+        "link": "Go to To resume"
+      }
     }
   },
   "approvalRecords": {
@@ -13014,6 +13056,15 @@
       },
       "consequence": "Marking done moves {key} to Done.",
       "consequenceMerges": "Marking done records it here. {key} moves to Done when its pull request merges."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Planning session",
+        "asked": "Motir AI asked:",
+        "waitReply": "Motir AI is waiting for your reply.",
+        "since": "since {when}",
+        "open": "Open the planning session — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

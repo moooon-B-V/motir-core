@@ -18,7 +18,9 @@ import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
 import { useLiveRows } from './useLiveRows';
 import { WorkbenchFixLine } from './WorkbenchFixLine';
 import { WorkbenchResumeLine } from './WorkbenchResumeLine';
+import { PlanningSessionResumeEntry } from './PlanningSessionResumeEntry';
 import type { WorkbenchRowView } from './workbenchRows';
+import type { ToResumePlanningSessionDto } from '@/lib/dto/home';
 import type { ReactNode } from 'react';
 
 // The Workbench list (Story MOTIR-2649 · MOTIR-2653, renamed and widened by
@@ -542,6 +544,9 @@ function splitWatchingGroups(rows: WorkbenchRowView[]): {
     : { moving: rows.slice(0, boundary), waiting: rows.slice(boundary) };
 }
 
+/** A stable empty default — `useLiveRows` compares its input by identity. */
+const NO_SESSIONS: ToResumePlanningSessionDto[] = [];
+
 export function WorkbenchList({
   rows,
   label,
@@ -549,6 +554,7 @@ export function WorkbenchList({
   pagination,
   empty,
   viewerId = null,
+  planningSessions = NO_SESSIONS,
 }: {
   rows: WorkbenchRowView[];
   label: string;
@@ -565,6 +571,12 @@ export function WorkbenchList({
   empty: ReactNode;
   /** The session's user — a Continue hosted `taken` refusal naming them reads *you*. */
   viewerId?: string | null;
+  /**
+   * The reader's failed planning sessions on this page of TO RESUME (Story MOTIR-7905 ·
+   * MOTIR-7917), in the read's order. They render BEFORE the gated runs, under the same
+   * pager (`pagination.total` counts both) and the same single empty state.
+   */
+  planningSessions?: ToResumePlanningSessionDto[];
 }) {
   const t = useTranslations('workbench');
   const router = useRouter();
@@ -596,11 +608,17 @@ export function WorkbenchList({
   // progress leaving the To do list is the list being correct, and holding it
   // would show a card in a tab it is no longer in with nothing to explain why.
   const live = useLiveRows(rows, `${tab}:${pagination.page}`, (row) => row.id);
+  // The sessions take the SAME held-row rule (§ 35.5): a Resumed entry stays until the next load.
+  const liveSessions = useLiveRows(
+    planningSessions,
+    `${tab}:${pagination.page}:sessions`,
+    (entry) => entry.sessionId,
+  );
 
   // These tabs hold nothing (see the note above), so `live.rows` empties exactly
   // when the server's does — the branch reads the live set anyway, so the two
   // lists answer *am I empty?* the same way.
-  if (live.rows.length === 0) return <>{empty}</>;
+  if (live.rows.length === 0 && liveSessions.rows.length === 0) return <>{empty}</>;
 
   // CONTINUE HOSTED ON A DEAD-RUN ROW (§ 31, MOTIR-6882). The page makes ONE models
   // request however many rows place the control — and NONE when no row does, so a
@@ -625,7 +643,20 @@ export function WorkbenchList({
       <div role="table" aria-label={label} className="w-full text-sm">
         {/* The column header is hidden below `md`, where there are no columns
             to head — the stacked row labels itself. */}
-        <div role="rowgroup" className="hidden md:block">
+        {liveSessions.rows.length > 0 ? (
+          <div role="rowgroup" data-testid="to-resume-sessions">
+            {liveSessions.rows.map((entry) => (
+              <PlanningSessionResumeEntry
+                key={entry.sessionId}
+                entry={entry}
+                arrived={liveSessions.arrivedIds.has(entry.sessionId)}
+                held={liveSessions.heldIds.has(entry.sessionId)}
+                onSettled={refresh}
+              />
+            ))}
+          </div>
+        ) : null}
+        <div role="rowgroup" className={live.rows.length === 0 ? 'hidden' : 'hidden md:block'}>
           <div
             role="row"
             className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
