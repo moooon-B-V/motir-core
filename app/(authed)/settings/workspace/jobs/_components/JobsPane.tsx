@@ -64,7 +64,7 @@ export function parseJobsParams(sp: JobsSearchParams, showSystemTab: boolean): P
 }
 
 /**
- * The dashboard's three reads, in ONE wave.
+ * The dashboard's reads, in ONE wave (the fourth is the System tab's own).
  *
  * `allSettledOrThrow` rather than a bare `Promise.all`: every arm opens a
  * transaction, so a rejection on one must not leave the others running
@@ -90,7 +90,7 @@ export async function JobsPane({
   const fetchLimit = JOBS_PAGE_SIZE + 1;
 
   // The DLQ badge count is always shown, regardless of the active tab.
-  const [role, dlqCount, list] = await allSettledOrThrow([
+  const [role, dlqCount, list, systemDlq] = await allSettledOrThrow([
     workspacesService.getMemberRole(userId, workspaceId),
     jobsDashboardService.countDLQ({ workspaceId, userId }),
     tab === 'dlq'
@@ -104,6 +104,11 @@ export async function JobsPane({
             limit: fetchLimit,
             offset,
           }),
+    // The System tab's second object (MOTIR-8083): the dead letters that have
+    // no workspace. `tab === 'system'` is only reachable by the platform
+    // operator — `parseJobsParams` demotes everyone else to `runs` — so this
+    // read never runs for a tenant. A tenant's other tabs pay nothing for it.
+    tab === 'system' ? jobsDashboardService.listSystemDlq() : Promise.resolve(null),
   ]);
 
   const dlq =
@@ -123,6 +128,7 @@ export async function JobsPane({
       showSystemTab={showSystemTab}
       runs={runs.slice(0, JOBS_PAGE_SIZE)}
       dlq={dlq.slice(0, JOBS_PAGE_SIZE)}
+      systemDlq={systemDlq}
     />
   );
 }

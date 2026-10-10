@@ -63,6 +63,52 @@ export const jobRunDlqRepository = {
   },
 
   /**
+   * The System tab's dead letters with NO workspace, not yet replayed
+   * (MOTIR-8083), newest failure first. `workspace_id IS NULL` is the
+   * definition of the list — a row that has a workspace belongs to that
+   * workspace's own Dead letter tab and is never returned here.
+   *
+   * The caller MUST supply a `withSystemContext` tx: only that RLS branch
+   * admits an untenanted row, for the reason `countActiveSince` gives.
+   * `take` is a safety cap, not a page — the tab has no pager (design
+   * `design/jobs/design-notes.md` § System dead letters).
+   */
+  async listSystemUnreplayed(take: number, tx: Prisma.TransactionClient): Promise<JobRunDlq[]> {
+    return tx.jobRunDlq.findMany({
+      where: { workspaceId: null, replayedAt: null },
+      orderBy: { lastFailedAt: 'desc' },
+      take,
+    });
+  },
+
+  /**
+   * The System tab's workspace-less dead letters replayed since `since`, newest
+   * failure first — the tail kept long enough to confirm a replay landed.
+   * Same system-context requirement as {@link listSystemUnreplayed}.
+   */
+  async listSystemReplayedSince(
+    since: Date,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRunDlq[]> {
+    return tx.jobRunDlq.findMany({
+      where: { workspaceId: null, replayedAt: { gte: since } },
+      orderBy: { lastFailedAt: 'desc' },
+      take,
+    });
+  },
+
+  /** How many workspace-less dead letters are still waiting to be replayed. */
+  async countSystemUnreplayed(tx: Prisma.TransactionClient): Promise<number> {
+    return tx.jobRunDlq.count({ where: { workspaceId: null, replayedAt: null } });
+  },
+
+  /** How many workspace-less dead letters were replayed since `since`. */
+  async countSystemReplayedSince(since: Date, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.jobRunDlq.count({ where: { workspaceId: null, replayedAt: { gte: since } } });
+  },
+
+  /**
    * Count of ACTIVE dead-letter entries across EVERY workspace, optionally only
    * those that failed since a moment — the operator console's "Failed jobs"
    * signal (MOTIR-1167, design Panel 8's 24-hour figure).

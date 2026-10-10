@@ -29,3 +29,32 @@ export class DlqEntryNotFoundError extends Error {
     this.name = 'DlqEntryNotFoundError';
   }
 }
+
+/**
+ * Thrown when someone other than the platform operator (`PLATFORM_ADMIN_EMAIL`)
+ * asks to replay a dead letter that has no workspace (MOTIR-8083). The System
+ * tab hides the control from everyone else, and the service re-checks, so a
+ * posted action cannot reach a system row from a tenant session.
+ */
+export class SystemReplayForbiddenError extends Error {
+  readonly code = 'SYSTEM_REPLAY_FORBIDDEN' as const;
+  constructor(userId: string) {
+    super(`User ${userId} is not the platform operator and cannot replay system dead letters`);
+    this.name = 'SystemReplayForbiddenError';
+  }
+}
+
+/**
+ * Thrown when the operator's system replay is pointed at a dead letter that
+ * BELONGS to a workspace (MOTIR-8083). That row keeps its own door, the
+ * manager-gated replay on the workspace's Dead letter tab; the system door runs
+ * under `withSystemContext`, which bypasses tenant RLS, so it takes only rows
+ * with `workspace_id IS NULL` and refuses the rest by name.
+ */
+export class SystemReplayWorkspaceRowError extends Error {
+  readonly code = 'SYSTEM_REPLAY_WORKSPACE_ROW' as const;
+  constructor(dlqId: string) {
+    super(`job_run_dlq ${dlqId} belongs to a workspace and cannot be replayed as a system row`);
+    this.name = 'SystemReplayWorkspaceRowError';
+  }
+}

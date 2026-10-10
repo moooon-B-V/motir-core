@@ -15,8 +15,14 @@ import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
 import { formatDateTime } from '@/lib/utils/datetime';
 import type { Locale } from '@/lib/i18n/locales';
-import type { EmailDeliveryState, JobRunDTO, JobRunDlqDTO, JobRunStatus } from '@/lib/dto/jobs';
-import { replayDlqAction } from '../actions';
+import type {
+  EmailDeliveryState,
+  JobRunDTO,
+  JobRunDlqDTO,
+  JobRunStatus,
+  SystemDlqListDTO,
+} from '@/lib/dto/jobs';
+import { replayDlqAction, replaySystemDlqAction } from '../actions';
 
 // Client orchestrator for the operator dashboard (Subtask 1.6.5). Receives the
 // active tab's already-fetched, serializable data from the server page and
@@ -67,6 +73,11 @@ export interface JobsDashboardProps {
   runs: JobRunDTO[];
   /** Populated for the dlq tab (empty on the runs + system tabs). */
   dlq: JobRunDlqDTO[];
+  /**
+   * The System tab's dead letters with no workspace (MOTIR-8083); null on every
+   * other tab. Optional so the two hosts that predate it keep compiling.
+   */
+  systemDlq?: SystemDlqListDTO | null;
 }
 
 function buildHref(
@@ -400,7 +411,21 @@ export function DeliveryDetail({ delivery }: { delivery: JobRunDTO['delivery'] }
   );
 }
 
-function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean }) {
+/**
+ * Which door a dead-letter table replays through (MOTIR-8083).
+ *
+ *   workspace — the workspace's own Dead letter tab: the manager-gated action,
+ *               a disabled-with-tooltip control for everyone else, and Replay
+ *               kept on a replayed row (unchanged from before).
+ *   system    — the System tab's workspace-less list: the operator action. Only
+ *               the operator ever sees this tab, so there is no disabled state;
+ *               and Replay is ABSENT on a replayed row, because a second press
+ *               can only answer already-replayed (design § Where the control is
+ *               absent — a deliberate deviation from the workspace tab).
+ */
+type DlqDoor = { kind: 'workspace'; isOwner: boolean } | { kind: 'system' };
+
+function DlqTable({ rows, door }: { rows: JobRunDlqDTO[]; door: DlqDoor }) {
   const t = useTranslations('settings');
   const locale = useLocale() as Locale;
   const router = useRouter();
@@ -412,7 +437,8 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
   function handleReplay(id: string) {
     setReplayingId(id);
     startTransition(async () => {
-      const result = await replayDlqAction(id);
+      const result =
+        door.kind === 'system' ? await replaySystemDlqAction(id) : await replayDlqAction(id);
       setReplayingId(null);
       if (result.ok) {
         // ⚠️ A SECOND CLICK IS NOT A SECOND RE-RUN (MOTIR-3730). The engine's
@@ -441,7 +467,11 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
 
   return (
     <>
-      <TableShell caption={t('jobs.dlqTableCaption')}>
+      <TableShell
+        caption={
+          door.kind === 'system' ? t('jobs.systemDlqTableCaption') : t('jobs.dlqTableCaption')
+        }
+      >
         <thead className="border-b border-(--el-border) bg-(--el-surface)">
           <tr>
             <Th>{t('jobs.col.function')}</Th>
@@ -456,6 +486,11 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
         <tbody>
           {rows.map((row) => {
             const replaying = replayingId === row.id;
+            // A replayed row on the System tab is a record, not a chore: its
+            // ink steps down to secondary and its Replay control is gone.
+            const settled = door.kind === 'system' && row.replayedAt !== null;
+            const ink = settled ? 'text-(--el-text-secondary)' : undefined;
+            const isOwner = door.kind === 'system' ? true : door.isOwner;
             const replayBtn = (
               <Button
                 variant="secondary"
@@ -473,11 +508,15 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
                 key={row.id}
                 className="border-b border-(--el-border) last:border-0 hover:bg-(--el-surface)"
               >
-                <Td className="font-mono text-xs">{row.functionId}</Td>
-                <Td className="font-mono text-xs">{row.eventName}</Td>
-                <Td className="text-right tabular-nums">{row.attempts}</Td>
-                <Td className="whitespace-nowrap">{formatDateTime(row.firstFailedAt, locale)}</Td>
-                <Td className="whitespace-nowrap">{formatDateTime(row.lastFailedAt, locale)}</Td>
+                <Td className={cn('font-mono text-xs', ink)}>{row.functionId}</Td>
+                <Td className={cn('font-mono text-xs', ink)}>{row.eventName}</Td>
+                <Td className={cn('text-right tabular-nums', ink)}>{row.attempts}</Td>
+                <Td className={cn('whitespace-nowrap', ink)}>
+                  {formatDateTime(row.firstFailedAt, locale)}
+                </Td>
+                <Td className={cn('whitespace-nowrap', ink)}>
+                  {formatDateTime(row.lastFailedAt, locale)}
+                </Td>
                 <Td className="whitespace-nowrap text-(--el-text-secondary)">
                   {row.replayedAt ? formatDateTime(row.replayedAt, locale) : '—'}
                 </Td>
@@ -486,7 +525,7 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
                     <Button variant="ghost" size="sm" onClick={() => setDetail(row)}>
                       {t('jobs.view')}
                     </Button>
-                    {isOwner ? (
+                    {settled ? null : isOwner ? (
                       replayBtn
                     ) : (
                       <Tooltip content={t('jobs.replayTooltip')} side="left">
@@ -529,6 +568,45 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
         ) : null}
       </Modal>
     </>
+  );
+}
+
+// ── System dead letters (MOTIR-8083 · design MOTIR-8084) ────────────────────
+/**
+ * The System tab's FIRST section: dead letters with no workspace, above System
+ * runs. It has its own heading, its own columns and its own action so it never
+ * reads as more runs, and it has no filter and no pager — the list is every
+ * unreplayed row plus the last seven days of replayed ones. Rendered only for
+ * the platform operator (the tab itself is not in anyone else's strip).
+ */
+function SystemDlqSection({ list }: { list: SystemDlqListDTO | null }) {
+  const t = useTranslations('settings');
+  const rows = list?.rows ?? [];
+  return (
+    <section aria-labelledby="system-dlq-heading" className="flex flex-col gap-3">
+      <div>
+        <h3
+          id="system-dlq-heading"
+          className="font-sans text-[15px] font-semibold text-(--el-text)"
+        >
+          {t('jobs.systemDlqTitle')}
+        </h3>
+        <p className="mt-0.5 font-sans text-[13px] text-(--el-text-secondary)">
+          {t('jobs.systemDlqSummary', {
+            waiting: list?.waiting ?? 0,
+            replayed: list?.replayedRecently ?? 0,
+          })}
+        </p>
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState
+          title={t('jobs.systemDlqEmptyTitle')}
+          description={t('jobs.systemDlqEmptyDesc')}
+        />
+      ) : (
+        <DlqTable rows={rows} door={{ kind: 'system' }} />
+      )}
+    </section>
   );
 }
 
@@ -583,10 +661,12 @@ export function JobsDashboard(props: JobsDashboardProps) {
     showSystemTab,
     runs,
     dlq,
+    systemDlq = null,
   } = props;
   const t = useTranslations('settings');
   const router = useRouter();
   const isDlq = activeTab === 'dlq';
+  const isSystem = activeTab === 'system';
 
   return (
     <div className="flex flex-col gap-4">
@@ -598,7 +678,10 @@ export function JobsDashboard(props: JobsDashboardProps) {
       />
 
       <div className="flex items-center justify-between gap-3">
-        {isDlq ? (
+        {isDlq || isSystem ? (
+          // On the System tab the status filter moves INTO the runs section's
+          // header (MOTIR-8083): it filters runs, and a run status means nothing
+          // for a dead letter. Refresh stays here and refreshes both.
           <div />
         ) : (
           <StatusFilter basePath={basePath} activeTab={activeTab} status={status} />
@@ -613,25 +696,56 @@ export function JobsDashboard(props: JobsDashboardProps) {
         </Button>
       </div>
 
-      {isDlq ? (
-        dlq.length === 0 ? (
-          <EmptyState title={t('jobs.dlqEmptyTitle')} description={t('jobs.dlqEmptyDesc')} />
-        ) : (
-          <DlqTable rows={dlq} isOwner={isOwner} />
-        )
-      ) : runs.length === 0 ? (
-        <EmptyState title={t('jobs.runsEmptyTitle')} description={t('jobs.runsEmptyDesc')} />
+      {isSystem ? (
+        <div className="flex flex-col gap-7">
+          <SystemDlqSection list={systemDlq} />
+          <section aria-labelledby="system-runs-heading" className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <h3
+                id="system-runs-heading"
+                className="font-sans text-[15px] font-semibold text-(--el-text)"
+              >
+                {t('jobs.systemRunsTitle')}
+              </h3>
+              <StatusFilter basePath={basePath} activeTab={activeTab} status={status} />
+            </div>
+            {runs.length === 0 ? (
+              <EmptyState title={t('jobs.runsEmptyTitle')} description={t('jobs.runsEmptyDesc')} />
+            ) : (
+              <RunsTable runs={runs} />
+            )}
+            <Pagination
+              basePath={basePath}
+              activeTab={activeTab}
+              status={status}
+              page={page}
+              hasNext={hasNext}
+            />
+          </section>
+        </div>
       ) : (
-        <RunsTable runs={runs} />
-      )}
+        <>
+          {isDlq ? (
+            dlq.length === 0 ? (
+              <EmptyState title={t('jobs.dlqEmptyTitle')} description={t('jobs.dlqEmptyDesc')} />
+            ) : (
+              <DlqTable rows={dlq} door={{ kind: 'workspace', isOwner }} />
+            )
+          ) : runs.length === 0 ? (
+            <EmptyState title={t('jobs.runsEmptyTitle')} description={t('jobs.runsEmptyDesc')} />
+          ) : (
+            <RunsTable runs={runs} />
+          )}
 
-      <Pagination
-        basePath={basePath}
-        activeTab={activeTab}
-        status={status}
-        page={page}
-        hasNext={hasNext}
-      />
+          <Pagination
+            basePath={basePath}
+            activeTab={activeTab}
+            status={status}
+            page={page}
+            hasNext={hasNext}
+          />
+        </>
+      )}
     </div>
   );
 }

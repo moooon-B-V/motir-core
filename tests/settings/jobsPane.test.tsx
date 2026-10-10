@@ -26,6 +26,7 @@ const countDLQ = vi.fn();
 const listJobRuns = vi.fn();
 const listDLQ = vi.fn();
 const listSystemRuns = vi.fn();
+const listSystemDlq = vi.fn();
 
 vi.mock('@/lib/services/workspacesService', () => ({
   workspacesService: { getMemberRole: (...a: unknown[]) => getMemberRole(...a) },
@@ -37,6 +38,7 @@ vi.mock('@/lib/services/jobsDashboardService', () => ({
     listJobRuns: (...a: unknown[]) => listJobRuns(...a),
     listDLQ: (...a: unknown[]) => listDLQ(...a),
     listSystemRuns: (...a: unknown[]) => listSystemRuns(...a),
+    listSystemDlq: (...a: unknown[]) => listSystemDlq(...a),
   },
 }));
 
@@ -61,12 +63,24 @@ import {
 const WORKSPACE_ID = 'ws1';
 const BASE = { userId: 'u1', workspaceId: WORKSPACE_ID, basePath: '/settings/organization' };
 
-function seed({ role = 'member', dlq = 0, runs = 0, dlqRows = 0, systemRuns = 0 } = {}) {
+function seed({
+  role = 'member',
+  dlq = 0,
+  runs = 0,
+  dlqRows = 0,
+  systemRuns = 0,
+  systemDlqRows = 0,
+} = {}) {
   getMemberRole.mockResolvedValue(role);
   countDLQ.mockResolvedValue(dlq);
   listJobRuns.mockResolvedValue(Array.from({ length: runs }, (_, i) => ({ id: `r${i}` })));
   listDLQ.mockResolvedValue(Array.from({ length: dlqRows }, (_, i) => ({ id: `d${i}` })));
   listSystemRuns.mockResolvedValue(Array.from({ length: systemRuns }, (_, i) => ({ id: `s${i}` })));
+  listSystemDlq.mockResolvedValue({
+    rows: Array.from({ length: systemDlqRows }, (_, i) => ({ id: `sd${i}` })),
+    waiting: systemDlqRows,
+    replayedRecently: 0,
+  });
 }
 
 async function renderPane(
@@ -163,6 +177,36 @@ describe('the pane fetches the list the TAB names', () => {
     const props = await renderPane({ tab: 'system', showSystemTab: true });
     expect(props['runs']).toHaveLength(2);
     expect(listSystemRuns).toHaveBeenCalledWith(expect.objectContaining({ limit: 21, offset: 0 }));
+  });
+});
+
+describe('the System tab ALSO reads the dead letters with no workspace (MOTIR-8083)', () => {
+  it('the system tab reads them, and hands them to the dashboard beside the runs', async () => {
+    seed({ systemRuns: 2, systemDlqRows: 3 });
+    const props = await renderPane({ tab: 'system', showSystemTab: true });
+    expect(listSystemDlq).toHaveBeenCalledTimes(1);
+    expect(props['systemDlq']).toMatchObject({ waiting: 3 });
+    expect((props['systemDlq'] as { rows: unknown[] }).rows).toHaveLength(3);
+    // The runs half is unchanged, and the pager still counts RUNS only.
+    expect(props['runs']).toHaveLength(2);
+  });
+
+  it('⚠️ no other tab reads them — a tenant never pays for, or reaches, the system list', async () => {
+    seed({ runs: 1, dlqRows: 1 });
+    for (const tab of ['runs', 'dlq'] as const) {
+      const props = await renderPane({ tab });
+      expect(props['systemDlq']).toBeNull();
+      cleanup();
+    }
+    expect(listSystemDlq).not.toHaveBeenCalled();
+  });
+
+  it('a non-operator asking for ?tab=system is demoted to runs BEFORE the pane, so the list is never read', async () => {
+    seed({ runs: 1 });
+    const { tab } = parseJobsParams({ tab: 'system' }, false);
+    await renderPane({ tab, showSystemTab: false });
+    expect(listSystemDlq).not.toHaveBeenCalled();
+    expect(listSystemRuns).not.toHaveBeenCalled();
   });
 });
 

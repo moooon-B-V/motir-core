@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "Nur Inhaber und Administratoren eines Arbeitsbereichs können dessen Sicherheitseinstellungen ändern.",
       "refused": "Das hat nicht geklappt: {reason}",
       "organizationClosing": "Diese Organisation ist zur Löschung vorgesehen und schreibgeschützt. Nur ihr Inhaber kann die Löschung abbrechen.",
-      "memberProjectsFailed": "Die Projekte dieser Person konnten nicht geladen werden."
+      "memberProjectsFailed": "Die Projekte dieser Person konnten nicht geladen werden.",
+      "systemReplayWorkspaceRow": "Dieser Dead-Letter-Eintrag gehört zu einem Workspace – führe ihn im Tab „Dead Letter“ dieses Workspace erneut aus.",
+      "systemReplayOperatorOnly": "Nur der Plattform-Betreiber kann System-Dead-Letter erneut ausführen."
     },
     "links": {
       "notFound": "Dieses Arbeitselement existiert nicht mehr.",
@@ -3044,7 +3046,13 @@
         "template": "Vorlage",
         "lastEvent": "Letztes Ereignis",
         "never": "Noch kein Ereignis vom Anbieter"
-      }
+      },
+      "systemDlqTitle": "Dead Letter ohne Workspace",
+      "systemDlqSummary": "{waiting} warten auf erneute Ausführung · {replayed} in den letzten 7 Tagen erneut ausgeführt",
+      "systemDlqTableCaption": "System-Dead-Letter",
+      "systemDlqEmptyTitle": "Keine System-Dead-Letter",
+      "systemDlqEmptyDesc": "Jeder Job ohne Workspace war erfolgreich oder wird noch wiederholt.",
+      "systemRunsTitle": "Systemläufe"
     },
     "account": {
       "eyebrow": "Kontoeinstellungen",

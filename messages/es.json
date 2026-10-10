@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "Solo los propietarios y administradores de un espacio de trabajo pueden cambiar su configuración de seguridad.",
       "refused": "No se ha podido completar: {reason}",
       "organizationClosing": "Esta organización está programada para eliminarse y es de solo lectura. Solo su propietario puede cancelar la eliminación.",
-      "memberProjectsFailed": "No se pudieron cargar sus proyectos."
+      "memberProjectsFailed": "No se pudieron cargar sus proyectos.",
+      "systemReplayWorkspaceRow": "Esa entrada de la cola de mensajes fallidos pertenece a un espacio de trabajo: vuelve a ejecutarla desde la pestaña Mensajes fallidos de ese espacio.",
+      "systemReplayOperatorOnly": "Solo el operador de la plataforma puede volver a ejecutar los mensajes fallidos del sistema."
     },
     "links": {
       "notFound": "Ese elemento de trabajo ya no existe.",
@@ -3044,7 +3046,13 @@
         "template": "Plantilla",
         "lastEvent": "Último evento",
         "never": "Aún no hay eventos del proveedor"
-      }
+      },
+      "systemDlqTitle": "Mensajes fallidos sin espacio de trabajo",
+      "systemDlqSummary": "{waiting} pendientes de volver a ejecutar · {replayed} vueltos a ejecutar en los últimos 7 días",
+      "systemDlqTableCaption": "Mensajes fallidos del sistema",
+      "systemDlqEmptyTitle": "No hay mensajes fallidos del sistema",
+      "systemDlqEmptyDesc": "Todos los trabajos sin espacio de trabajo han terminado bien o aún se están reintentando.",
+      "systemRunsTitle": "Ejecuciones del sistema"
     },
     "account": {
       "eyebrow": "Configuración de la cuenta",

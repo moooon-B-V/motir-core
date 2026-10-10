@@ -931,6 +931,27 @@ operator action; there is one surface now, and it is this one.
   calls `replayDLQ(dlqId, tx)` (`lib/jobs/dlq.ts`), which re-emits the original
   event — with a **re-shaped idempotency key** (see below) — and stamps
   `replayed_at` so the action is auditable.
+- **How to replay a dead letter with NO workspace** — every `system.*` job writes
+  its dead letters with `workspace_id` NULL, and the workspace **Dead letter** tab
+  cannot take them (it replays rows of the active workspace, as a workspace Manager).
+  The platform operator (`PLATFORM_ADMIN_EMAIL`) replays them from **System** → **Dead
+  letters with no workspace** on the jobs dashboard (`/settings/workspace/jobs?tab=system`,
+  or the same tab in the organization's _Job runs_ section). That list is every
+  unreplayed row plus the ones replayed in the last seven days; **Replay** is absent
+  on a replayed row. Under the hood `replaySystemDlqAction` calls
+  `jobsDashboardService.replaySystemDLQ`, which runs `replayDLQ(dlqId, tx)` under
+  `withSystemContext` — the same re-emit, key re-shaping and stamp as above — and
+  refuses a caller who is not the operator and a row that has a workspace (replay
+  that one from its workspace's Dead letter tab). MOTIR-8083.
+
+  ⚠️ **"A second click does nothing" holds only for a job that declares an
+  idempotency template.** The dedup is the `(job_id, idempotency_key)` unique index,
+  and a job with no template (`system.platform-meter-report` is one; `email.send`
+  is not) has a NULL key and nothing to collide on, so replaying the same row twice
+  runs it twice. For the meter report that is harmless (its receiver accepts a
+  duplicate), which is why the System tab takes **Replay** off a row once it is
+  replayed instead of relying on the dedup to absorb a second press.
+
 - **What a second click does** — nothing, and it says so. The row is already
   replayed, its key is already taken, and the dashboard toasts _"Already
   replayed"_ rather than an error; `replayed_at` keeps the time of the replay
@@ -944,8 +965,8 @@ nothing else in the system replays, discards or expires it. So every row needs
 a verdict, taken from its `failure`, and one of two dispositions (the rule
 MOTIR-5844 applied to the 1,381 rows that had accumulated by 2026-09-21):
 
-- **Replay** it — only when the failure was transient AND the run is still
-  wanted. A cron tick is almost never still wanted, because every later tick
+- **Replay** it (a system job's row: from the System tab, see above) — only when the
+  failure was transient AND the run is still wanted. A cron tick is almost never still wanted, because every later tick
   already ran; a superseded run (an index of a repository that has been indexed
   since) is not either. **Replaying `email.send` sends real mail**, late, to
   real people — decide that about the recipients, not about the row.
