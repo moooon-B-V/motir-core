@@ -7358,7 +7358,8 @@
         "stale": "Stale",
         "approved": "Approved",
         "declined": "Declined",
-        "closed": "Closed"
+        "closed": "Closed",
+        "waiting": "Waiting to resume"
       },
       "origin": {
         "mcp": "Agent plan",
@@ -7415,7 +7416,9 @@
         "approved": "Approved · {time}"
       },
       "continuedFrom": "Continued from the {when} conversation",
-      "continuedFromAria": "Open the conversation this one continues, closed {when}"
+      "continuedFromAria": "Open the conversation this one continues, closed {when}",
+      "stop": "Stopped at {where} · because {why} · {time}",
+      "stopChange": "Your last change could not be made · {time}"
     }
   },
   "planningWorkspace": {

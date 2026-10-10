@@ -7364,7 +7364,8 @@
         "stale": "Veraltet",
         "approved": "Genehmigt",
         "declined": "Abgelehnt",
-        "closed": "Geschlossen"
+        "closed": "Geschlossen",
+        "waiting": "Wartet auf Fortsetzung"
       },
       "origin": {
         "mcp": "Agentenplan",
@@ -7421,7 +7422,9 @@
         "approved": "Genehmigt · {time}"
       },
       "continuedFrom": "Fortsetzung des Gesprächs vom {when}",
-      "continuedFromAria": "Das Gespräch öffnen, das hiermit fortgesetzt wird, geschlossen {when}"
+      "continuedFromAria": "Das Gespräch öffnen, das hiermit fortgesetzt wird, geschlossen {when}",
+      "stop": "Angehalten bei {where} · weil {why} · {time}",
+      "stopChange": "Ihre letzte Änderung konnte nicht vorgenommen werden · {time}"
     }
   },
   "planningWorkspace": {

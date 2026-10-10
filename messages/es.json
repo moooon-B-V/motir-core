@@ -7364,7 +7364,8 @@
         "stale": "Desactualizado",
         "approved": "Aprobado",
         "declined": "Rechazado",
-        "closed": "Cerrado"
+        "closed": "Cerrado",
+        "waiting": "Por reanudar"
       },
       "origin": {
         "mcp": "Plan del Agente",
@@ -7421,7 +7422,9 @@
         "approved": "Aprobado · {time}"
       },
       "continuedFrom": "Continuación de la conversación de {when}",
-      "continuedFromAria": "Abrir la conversación que esta continúa, cerrada {when}"
+      "continuedFromAria": "Abrir la conversación que esta continúa, cerrada {when}",
+      "stop": "Se detuvo en {where} · porque {why} · {time}",
+      "stopChange": "No se pudo hacer tu último cambio · {time}"
     }
   },
   "planningWorkspace": {

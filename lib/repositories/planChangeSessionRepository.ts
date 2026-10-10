@@ -830,10 +830,13 @@ export const planChangeSessionRepository = {
              s."last_activity_at" AS "lastActivityAt",
              u."id" AS "starterId", u."name" AS "starterName",
              ft."body" AS "firstTurn",
-             lp."id" AS "planId", lp."status"::text AS "planStatus",
-             lp."title" AS "planTitle", lp."summary" AS "planSummary",
+             ${rowPlanSql('id')} AS "planId", ${rowPlanSql('status')}::text AS "planStatus",
+             ${rowPlanSql('title')} AS "planTitle", ${rowPlanSql('summary')} AS "planSummary",
              pc."n" AS "planCount",
              ${sessionStateSql}::text AS "state",
+             s."failed_at" AS "failedAt", s."failure_reason"::text AS "failureReason",
+             s."failure_stop_phase"::text AS "failureStopPhase",
+             s."failure_stop_title" AS "failureStopTitle",
              s."ended_at" AS "endedAt", s."end_reason"::text AS "endReason",
              eb."id" AS "endedById", eb."name" AS "endedByName",
              cf."id" AS "copiedFromId", cf."ended_at" AS "copiedFromEndedAt",
@@ -858,6 +861,7 @@ export const planChangeSessionRepository = {
         ORDER BY t."seq" ASC LIMIT 1
       ) ft ON true
       ${latestPlanJoin}
+      ${waitingPlanJoin}
       LEFT JOIN LATERAL (
         SELECT count(*)::int AS "n" FROM "plan" p WHERE p."session_id" = s."id"
       ) pc ON true
@@ -956,6 +960,7 @@ export const planChangeSessionRepository = {
       SELECT ${sessionStateSql}::text AS "state", count(*)::int AS "count"
       FROM "plan_change_session" s
       ${latestPlanJoin}
+      ${waitingPlanJoin}
       WHERE s."project_id" = ${projectId} AND s."workspace_id" = ${workspaceId}
         AND s."origin" <> 'guide'
         ${mineFilter(mine)}
@@ -967,7 +972,7 @@ export const planChangeSessionRepository = {
 
 /** A session state the list filters on — `none`, `closed` or a `PlanStatus`
  *  value (AMENDMENT 23 §1). */
-export type PlanSessionListState = 'none' | 'closed' | PlanStatus;
+export type PlanSessionListState = 'none' | 'closed' | 'waiting' | PlanStatus;
 
 /** One raw row of {@link planChangeSessionRepository.listPageByProject}. */
 export interface PlanSessionListRow {
@@ -985,6 +990,12 @@ export interface PlanSessionListRow {
   planCount: number;
   /** The session's state, END first — {@link sessionStateSql}. */
   state: string;
+  /** The failed attempt's record while the session is OPEN and failed-waiting (MOTIR-7921);
+   *  all null otherwise. Untranslated: the row's words are keyed on `failureReason`. */
+  failedAt: Date | null;
+  failureReason: string | null;
+  failureStopPhase: string | null;
+  failureStopTitle: string | null;
   endedAt: Date | null;
   endReason: string | null;
   endedById: string | null;
@@ -1072,16 +1083,56 @@ const latestPlanJoin = Prisma.sql`
   ) lp ON true`;
 
 /**
+ * The plan that WAITS for the person on a session — its most recent `planned` / `stale` plan
+ * (Story MOTIR-7905 · MOTIR-7944). Read beside {@link latestPlanJoin}'s `lp`, because on a
+ * session a failure ended before MOTIR-7905, or a restart ended, the LATEST plan is usually the
+ * declined attempt while an earlier plan still waits.
+ */
+const waitingPlanJoin = Prisma.sql`
+  LEFT JOIN LATERAL (
+    SELECT wp0."id", wp0."status", wp0."title", wp0."summary" FROM "plan" wp0
+    WHERE wp0."session_id" = s."id" AND wp0."status" IN ('planned', 'stale')
+    ORDER BY wp0."created_at" DESC, wp0."id" DESC LIMIT 1
+  ) wp ON true`;
+
+/** Does the row read the WAITING plan rather than the latest one: an ended session Motir ended
+ *  for a failure or a restart that still holds a plan awaiting a decision (MOTIR-7944). */
+const readsWaitingPlan = Prisma.sql`(
+    s."ended_at" IS NOT NULL AND s."end_reason" IN ('failed', 'restarted') AND wp."id" IS NOT NULL
+  )`;
+
+/** One column of the plan the row is KNOWN BY: the waiting plan when {@link readsWaitingPlan},
+ *  else the latest one. */
+function rowPlanSql(column: 'id' | 'status' | 'title' | 'summary'): Prisma.Sql {
+  const c = Prisma.raw(`"${column}"`);
+  return Prisma.sql`(CASE WHEN ${readsWaitingPlan} THEN wp.${c} ELSE lp.${c} END)`;
+}
+
+/**
  * A session's STATE (AMENDMENT 23 §1), END FIRST: an ended session reads
  * `declined` / `approved` when a person's decision ended it and `closed` when
  * Motir did (`failed` · `idle` · `restarted`); an OPEN one reads its latest
  * plan's status, or `none`. Over `s` and {@link latestPlanJoin}'s `lp`, and the
  * ONE expression the list, its filter and the counts all read — so a count, its
  * tab and a row's chip cannot disagree.
+ *
+ * Story MOTIR-7905 adds two reads, so a session whose attempt FAILED never reads `closed` or
+ * `generating` while it is waiting on its person:
+ *   · an OPEN failed-waiting session whose latest plan is still `generating` (or that has none
+ *     yet) reads `waiting` — Waiting to resume (MOTIR-7921). One whose plan WAITS reads that
+ *     plan's own status, which the open branch already does (MOTIR-7944);
+ *   · a session ENDED `failed` / `restarted` that still holds a plan awaiting a decision reads
+ *     that plan's status, not `closed` (MOTIR-7944). `idle` stays closed.
  */
 export const sessionStateSql = Prisma.sql`(CASE
-    WHEN s."ended_at" IS NULL THEN COALESCE(lp."status"::text, 'none')
+    WHEN s."ended_at" IS NULL THEN
+      CASE
+        WHEN s."failed_at" IS NOT NULL AND (lp."status" IS NULL OR lp."status" = 'generating')
+          THEN 'waiting'
+        ELSE COALESCE(lp."status"::text, 'none')
+      END
     WHEN s."end_reason" IN ('declined', 'approved') THEN s."end_reason"::text
+    WHEN ${readsWaitingPlan} THEN wp."status"::text
     ELSE 'closed'
   END)`;
 

@@ -7358,7 +7358,8 @@
         "stale": "오래됨",
         "approved": "승인됨",
         "declined": "거절됨",
-        "closed": "종료됨"
+        "closed": "종료됨",
+        "waiting": "재개 필요"
       },
       "origin": {
         "mcp": "에이전트 계획",
@@ -7415,7 +7416,9 @@
         "approved": "승인됨 · {time}"
       },
       "continuedFrom": "{when} 대화에서 이어짐",
-      "continuedFromAria": "이 대화가 이어받은 대화 열기({when} 종료됨)"
+      "continuedFromAria": "이 대화가 이어받은 대화 열기({when} 종료됨)",
+      "stop": "중단된 위치: {where} · 원인: {why} · {time}",
+      "stopChange": "마지막 변경을 반영하지 못했습니다 · {time}"
     }
   },
   "planningWorkspace": {

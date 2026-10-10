@@ -7361,7 +7361,8 @@
         "stale": "古い状態",
         "approved": "承認済み",
         "declined": "却下",
-        "closed": "終了"
+        "closed": "終了",
+        "waiting": "再開待ち"
       },
       "origin": {
         "mcp": "エージェントの計画",
@@ -7418,7 +7419,9 @@
         "approved": "承認済み · {time}"
       },
       "continuedFrom": "{when}の会話の続き",
-      "continuedFromAria": "この会話の元になった会話({when}に終了)を開く"
+      "continuedFromAria": "この会話の元になった会話({when}に終了)を開く",
+      "stop": "停止箇所: {where} · 原因: {why} · {time}",
+      "stopChange": "直前の変更を反映できませんでした · {time}"
     }
   },
   "planningWorkspace": {

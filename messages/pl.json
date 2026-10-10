@@ -7361,7 +7361,8 @@
         "stale": "Nieaktualny",
         "approved": "Zatwierdzony",
         "declined": "Odrzucony",
-        "closed": "Zamknięta"
+        "closed": "Zamknięta",
+        "waiting": "Do wznowienia"
       },
       "origin": {
         "mcp": "Plan agenta",
@@ -7418,7 +7419,9 @@
         "approved": "Zatwierdzony · {time}"
       },
       "continuedFrom": "Kontynuacja rozmowy z {when}",
-      "continuedFromAria": "Otwórz rozmowę, którą kontynuuje ta rozmowa, zamkniętą {when}"
+      "continuedFromAria": "Otwórz rozmowę, którą kontynuuje ta rozmowa, zamkniętą {when}",
+      "stop": "Zatrzymano na: {where} · przyczyna: {why} · {time}",
+      "stopChange": "Twoja ostatnia zmiana nie mogła zostać wprowadzona · {time}"
     }
   },
   "planningWorkspace": {

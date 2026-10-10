@@ -7361,7 +7361,8 @@
         "stale": "Verouderd",
         "approved": "Goedgekeurd",
         "declined": "Afgewezen",
-        "closed": "Gesloten"
+        "closed": "Gesloten",
+        "waiting": "Te hervatten"
       },
       "origin": {
         "mcp": "Agentplan",
@@ -7418,7 +7419,9 @@
         "approved": "Goedgekeurd · {time}"
       },
       "continuedFrom": "Voortgezet uit het gesprek van {when}",
-      "continuedFromAria": "Het gesprek openen waarop dit voortbouwt, gesloten {when}"
+      "continuedFromAria": "Het gesprek openen waarop dit voortbouwt, gesloten {when}",
+      "stop": "Gestopt bij {where} · omdat {why} · {time}",
+      "stopChange": "Je laatste wijziging kon niet worden doorgevoerd · {time}"
     }
   },
   "planningWorkspace": {

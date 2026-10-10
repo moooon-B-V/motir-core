@@ -7354,7 +7354,8 @@
         "stale": "已过时",
         "approved": "已批准",
         "declined": "已拒绝",
-        "closed": "已关闭"
+        "closed": "已关闭",
+        "waiting": "待继续"
       },
       "origin": {
         "mcp": "智能体计划",
@@ -7411,7 +7412,9 @@
         "approved": "已批准 · {time}"
       },
       "continuedFrom": "接续 {when} 的对话",
-      "continuedFromAria": "打开此对话所接续的对话（{when} 关闭）"
+      "continuedFromAria": "打开此对话所接续的对话（{when} 关闭）",
+      "stop": "停在{where} · 原因：{why} · {time}",
+      "stopChange": "你上一次的修改没能完成 · {time}"
     }
   },
   "planningWorkspace": {
