@@ -767,6 +767,36 @@ describe('a CROSS-PROJECT ref — the gate sees one workspace, not one project (
     expect(links[0]!.toId).toBe(blockerId);
   });
 
+  it('APPROVES a modify whose patch.blockedByAdd names an edge the card already has (MOTIR-8147) and leaves ONE edge', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Existing card');
+    const blocker = await seedItem(fx, 'Existing blocker');
+    await adminDb.workItemLink.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        fromId: target,
+        toId: blocker,
+        kind: 'is_blocked_by',
+        createdById: fx.ownerId,
+      },
+    });
+
+    const planId = await plannedPlan(fx, [
+      { op: 'modify', workItemId: target, patch: { blockedByAdd: [blocker] } },
+    ]);
+
+    // Before the fix the plain `create` hit the unique (fromId, toId, kind) and
+    // the whole approve rolled back with a `DuplicateLinkError`.
+    const approved = await plansService.approvePlan(planId, fx.ctx);
+    expect(approved.status).toBe('approved');
+
+    const links = await adminDb.workItemLink.findMany({
+      where: { fromId: target, kind: 'is_blocked_by' },
+    });
+    expect(links).toHaveLength(1);
+    expect(links[0]!.toId).toBe(blocker);
+  });
+
   it('REFUSES a parentRef naming a cross-project item at BOTH gates — a PLACEMENT, not a dependency', async () => {
     // The asymmetry is the product's, not this gate's: a dependency is
     // workspace-scoped by design (`work_item_link` carries no project
