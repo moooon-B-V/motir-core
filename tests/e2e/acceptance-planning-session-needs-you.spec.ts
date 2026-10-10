@@ -211,7 +211,10 @@ test('a planning session that needs you waits, and a failed attempt resumes the 
     const sent = page.waitForResponse(
       (r) => new URL(r.url()).pathname.endsWith('/ai/plan') && r.request().method() === 'POST',
     );
-    await rail(page).getByRole('button', { name: 'Send' }).click();
+    // While a question is pending the composer's button reads Answer, not Send.
+    await rail(page)
+      .getByRole('button', { name: en.planningWorkspace.conversation.answer, exact: true })
+      .click();
     expect((await sent).status()).toBe(200);
     expect((await recorded).status()).toBe(200);
     await closeOverlay(page);

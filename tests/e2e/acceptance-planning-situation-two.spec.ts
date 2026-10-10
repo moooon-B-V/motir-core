@@ -52,13 +52,14 @@ async function appendAsAi(
   job: SubmittedJob,
   proposals: unknown[],
   final = false,
+  revision = false,
 ): Promise<string[]> {
   const res = await page.request.post('/api/internal/ai/plan-proposals', {
     headers: {
       authorization: `Bearer ${E2E_CORE_CALLBACK_SECRET}`,
       'x-motir-job-token': job.readBackToken!,
     },
-    data: { jobId: job.jobId, proposals, final },
+    data: { jobId: job.jobId, proposals, final, ...(revision ? { revision: true } : {}) },
   });
   if (res.status() !== 200) throw new Error(`plan-proposals ${res.status()}: ${await res.text()}`);
   const body = (await res.json()) as { planItemIds?: string[]; ids?: string[] };
@@ -236,6 +237,8 @@ test('a failed change of a waiting plan keeps the session; a turn revises the sa
       page,
       job,
       [{ op: 'add', proposedFields: { title: 'Canvas tests', kind: 'task' } }],
+      true,
+      // The turn is a REVISION of the waiting plan, so the append says so (the plan stays `planned`).
       true,
     );
 
