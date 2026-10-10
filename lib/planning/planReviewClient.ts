@@ -1,5 +1,10 @@
 import type { PlanReviewDto } from '@/lib/dto/planReview';
-import type { PlanDto, PlanWithItemsDto, UpdateProposalInput } from '@/lib/dto/plans';
+import type {
+  PlanDto,
+  PlanNarrationPageDto,
+  PlanWithItemsDto,
+  UpdateProposalInput,
+} from '@/lib/dto/plans';
 
 // Client reads/writes of the plan-detail substrate API (Subtask 7.4.5 /
 // MOTIR-847). The plan-detail island fetches the review model (and POLLS it while
@@ -71,6 +76,29 @@ export async function fetchPlanReview(
   });
   if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
   return (await res.json()) as PlanReviewDto;
+}
+
+/**
+ * An EARLIER page of the plan's narration sentences (MOTIR-8063): up to `limit`
+ * (default and maximum the review read's window) sentences immediately before
+ * `beforeSeq`, ascending, with the page's own `earlierCount`. Gated exactly as
+ * {@link fetchPlanReview} is. The group heads are not repeated — the review
+ * read's `narration.sessions` already carries every one.
+ */
+export async function fetchPlanNarrationPage(
+  planId: string,
+  beforeSeq: number,
+  signal?: AbortSignal,
+  limit?: number,
+): Promise<PlanNarrationPageDto> {
+  const query = new URLSearchParams({ beforeSeq: String(beforeSeq) });
+  if (limit !== undefined) query.set('limit', String(limit));
+  const res = await fetch(`/api/plans/${encodeURIComponent(planId)}/narration?${query}`, {
+    headers: { Accept: 'application/json' },
+    signal,
+  });
+  if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
+  return (await res.json()) as PlanNarrationPageDto;
 }
 
 /**

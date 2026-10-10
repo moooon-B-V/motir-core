@@ -268,3 +268,76 @@ describe('the refusals, and the codes motir-ai branches on', () => {
     expect(await adminDb.planStep.count({ where: { planId } })).toBe(0);
   });
 });
+
+describe('the narration arm (Story MOTIR-8060 · MOTIR-8062)', () => {
+  it('appends a session’s sentences and returns the stored rows', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_narration_happy';
+    const { planId } = await generatingPlan(fx, jobId);
+    expect((await report(fx, jobId, { sessionKey: 's', step: 'settle' })).status).toBe(200);
+
+    const res = await report(fx, jobId, {
+      sessionKey: 's',
+      narration: ['Reading the brief.', 'Two epics, likely.'],
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      planId: string;
+      narration: { sessionKey: string; seq: number; body: string }[];
+    };
+    expect(body.planId).toBe(planId);
+    expect(body.narration.map((n) => [n.sessionKey, n.seq, n.body])).toEqual([
+      ['s', 1, 'Reading the brief.'],
+      ['s', 2, 'Two epics, likely.'],
+    ]);
+    expect(await adminDb.planNarration.count({ where: { planId } })).toBe(2);
+  });
+
+  it('400 on a malformed narration body, writing nothing', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_narration_400';
+    const { planId } = await generatingPlan(fx, jobId);
+    await report(fx, jobId, { sessionKey: 's', step: 'settle' });
+
+    for (const extra of [
+      { step: 'settle', narration: ['Both.'] },
+      {},
+      { narration: 'not an array' },
+      { narration: ['ok', 7] },
+      { narration: ['Aimed.'], target: 'planItem:x' },
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+      expect(((await res.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
+    }
+    expect(await adminDb.planNarration.count({ where: { planId } })).toBe(0);
+  });
+
+  it('422 when the store refuses — a blank sentence, a session with no step', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_narration_422';
+    const { planId } = await generatingPlan(fx, jobId);
+    await report(fx, jobId, { sessionKey: 's', step: 'settle' });
+
+    for (const body of [
+      { sessionKey: 's', narration: ['   '] },
+      { sessionKey: 'ghost', narration: ['Hi.'] },
+    ]) {
+      const res = await report(fx, jobId, body);
+      expect(res.status).toBe(422);
+      expect(((await res.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
+    }
+    expect(await adminDb.planNarration.count({ where: { planId } })).toBe(0);
+  });
+
+  it('409 once the plan is not generating', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_narration_409';
+    const { planId } = await generatingPlan(fx, jobId);
+    await report(fx, jobId, { sessionKey: 's', step: 'settle' });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await report(fx, jobId, { sessionKey: 's', narration: ['Late.'] });
+    expect(res.status).toBe(409);
+  });
+});

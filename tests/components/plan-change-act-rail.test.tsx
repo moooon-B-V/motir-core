@@ -347,6 +347,6 @@ describe('PlanChangeRail — the record sits ABOVE the surviving proposal (sheet
   });
 });
 
-// The per-call lines (MOTIR-7979, built to MOTIR-7975's design) replaced the
-// interim `call` arm this file used to pin; they are
+// The per-call lines (MOTIR-7979) replaced the interim `call` arm this file used
+// to pin, and MOTIR-8064 retired them in turn; their ABSENCE is pinned in
 // `plan-change-call-lines.test.tsx`.
