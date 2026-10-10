@@ -7637,6 +7637,11 @@
         "groupFinished": "{step} —— 已完成"
       }
     },
+    "codeUnreadable": {
+      "planBody": "我现在无法读取你的代码，因此没有更改你的计划。Motir 正在处理。",
+      "planMarker": "未写入任何内容——你的计划保持不变。",
+      "askNotice": "这次回答中我无法读取你的代码。请将此处关于代码的任何内容视为未经确认。"
+    },
     "targets": {
       "sectionLabel": "工作项",
       "sectionLabelQuery": "包含“{query}”的工作项",

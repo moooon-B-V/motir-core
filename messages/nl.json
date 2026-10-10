@@ -7644,6 +7644,11 @@
         "groupFinished": "{step} — klaar"
       }
     },
+    "codeUnreadable": {
+      "planBody": "Ik kan je code nu niet lezen, dus ik heb je plan niet gewijzigd. Motir is ermee bezig.",
+      "planMarker": "Er is niets geschreven — je plan is ongewijzigd.",
+      "askNotice": "Ik kon je code voor dit antwoord niet lezen. Beschouw alles wat hier over de code staat als onbevestigd."
+    },
     "targets": {
       "sectionLabel": "Werkitems",
       "sectionLabelQuery": "Werkitems die overeenkomen met ‘{query}’",

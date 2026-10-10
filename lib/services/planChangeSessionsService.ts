@@ -5,6 +5,7 @@ import {
   type PlanChangeTurn,
   type PlanChangeTurnConfirm,
   type PlanChangeTurnIntent,
+  type PlanChangeTurnOutage,
   type PlanChangeTurnRole,
 } from '@/generated/prisma/client';
 
@@ -38,6 +39,7 @@ import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
+import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
 import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
@@ -336,6 +338,12 @@ async function resolveCitations(
   return wanted.filter((c) => known.has(c));
 }
 
+/** The English the declined-turn row carries (MOTIR-8141): never rendered — the rail draws
+ *  `planningWorkspace.codeUnreadable.planBody` from the stored face — but every turn row
+ *  has a non-empty body, and this is the one a reader of the table meets. */
+const DECLINED_FALLBACK_BODY =
+  "I can't read your code right now, so I haven't changed your plan. Motir is on it.";
+
 interface AppendTurn {
   role: PlanChangeTurnRole;
   body: string;
@@ -355,6 +363,8 @@ interface AppendTurn {
   attachmentIds?: readonly string[];
   /** The fixed confirm core writes on an `assistant` turn (MOTIR-7649). */
   confirm?: PlanChangeTurnConfirm | null;
+  /** How a code-graph outage touched this `assistant` turn (MOTIR-8141). */
+  codeUnreadable?: PlanChangeTurnOutage | null;
   /** The planning job running when a `user` turn was typed (MOTIR-7996). */
   runJobId?: string | null;
   /** The text an `assistant` answer offered to forward (MOTIR-7996). */
@@ -426,6 +436,7 @@ async function appendWithin(
         anchorKey: turn.anchorKey ?? null,
         attachmentIds: turn.attachmentIds ? [...turn.attachmentIds] : [],
         confirm: turn.confirm ?? null,
+        codeUnreadable: turn.codeUnreadable ?? null,
         runJobId: turn.runJobId ?? null,
         forwardOffer: turn.forwardOffer ?? null,
         // An explicit literal, not the DTO itself: Prisma's JSON input wants an
@@ -1771,6 +1782,9 @@ export const planChangeSessionsService = {
       /** The exact text this answer OFFERS to forward to the running planner
        *  (MOTIR-7996) — the offered `user` turn's body. */
       forwardOffer?: string | null;
+      /** Set when the answer was given WITHOUT the code (MOTIR-8141): the stored
+       *  face its notice is drawn from. */
+      codeUnreadable?: PlanChangeTurnOutage | null;
     },
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
@@ -1789,6 +1803,7 @@ export const planChangeSessionsService = {
         citations,
         debugLanding: input.debugLanding ?? null,
         forwardOffer: input.forwardOffer ?? null,
+        codeUnreadable: input.codeUnreadable ?? null,
       },
       {},
       async (tx) =>
@@ -2298,6 +2313,36 @@ export const planChangeSessionsService = {
     if (session.lastJobId !== jobId) return toDto(session, pctx);
 
     const job = await getJob(jobId, pctx.projectId);
+
+    // THE OUTAGE FACE (Story MOTIR-8136 · MOTIR-8141). A plan-writing job that met an
+    // unreadable code graph ends SUCCESSFULLY and wrote no plan; it is NOT the failed
+    // path ("That didn't go through") and it is not silent either — the person is told
+    // plainly, on a turn that remembers it. The words are the catalogue's, drawn from
+    // the stored face (`planningWorkspace.codeUnreadable`), never from this body; the
+    // English here is only the non-empty fallback every turn row must carry. Same
+    // idempotency gate as the append below, so a replayed settle writes nothing.
+    if (readCodeUnreadable(job.result) === 'declined') {
+      return appendLocked(
+        session,
+        pctx,
+        {
+          role: 'assistant',
+          body: DECLINED_FALLBACK_BODY,
+          jobId,
+          codeUnreadable: 'declined',
+        },
+        {},
+        async (tx) =>
+          (await planChangeTurnRepository.findByJobIdAndRole(
+            session.id,
+            jobId,
+            'assistant',
+            pctx.workspaceId,
+            tx,
+          )) !== null,
+      );
+    }
+
     const utterance = readPlanningTurn(job.result);
     if (!utterance) return toDto(session, pctx); // (3)
 

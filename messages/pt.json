@@ -7647,6 +7647,11 @@
         "groupFinished": "{step} — concluído"
       }
     },
+    "codeUnreadable": {
+      "planBody": "Não consigo ler o seu código agora, por isso não alterei o seu plano. A Motir está cuidando disso.",
+      "planMarker": "Nada foi escrito — o seu plano não foi alterado.",
+      "askNotice": "Não consegui ler o seu código para esta resposta. Trate como não confirmado tudo o que for dito aqui sobre o código."
+    },
     "targets": {
       "sectionLabel": "Itens de trabalho",
       "sectionLabelQuery": "Itens de trabalho correspondentes a “{query}”",

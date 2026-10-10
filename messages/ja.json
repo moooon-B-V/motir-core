@@ -7644,6 +7644,11 @@
         "groupFinished": "{step} — 完了"
       }
     },
+    "codeUnreadable": {
+      "planBody": "現在コードを読み取れないため、プランは変更していません。Motir が対応しています。",
+      "planMarker": "何も書き込まれていません — プランは変更されていません。",
+      "askNotice": "この回答ではコードを読み取れませんでした。ここでのコードに関する内容は未確認として扱ってください。"
+    },
     "targets": {
       "sectionLabel": "作業項目",
       "sectionLabelQuery": "「{query}」に一致する作業項目",

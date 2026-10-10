@@ -26,6 +26,7 @@ import {
   InvalidTriageSubmissionKindError,
   InvalidTriageSubmissionTitleError,
 } from '@/lib/triage/errors';
+import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { StaleWorkItemError, WorkItemError, WorkItemNotFoundError } from '@/lib/workItems/errors';
 
 // LANDING a debug turn (Story MOTIR-7042 · MOTIR-7049) — the write half of the
@@ -332,7 +333,15 @@ export const debugLandingService = {
     if (!result.diagnosis.grounded) {
       const landing = landingOf(result, null);
       const session = await planChangeSessionsService.appendAnswerTurn(
-        { jobId: input.jobId, body: DEBUG_UNGROUNDED_REPLY, citations: [], debugLanding: landing },
+        {
+          jobId: input.jobId,
+          body: DEBUG_UNGROUNDED_REPLY,
+          citations: [],
+          debugLanding: landing,
+          // A report that could not be grounded BECAUSE the code could not be read
+          // carries the outage notice with its reply (MOTIR-8141).
+          codeUnreadable: readCodeUnreadable(input.result) === 'answered' ? 'answered' : null,
+        },
         ctx,
         address,
       );

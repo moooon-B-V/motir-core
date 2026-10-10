@@ -7647,6 +7647,11 @@
         "groupFinished": "{step} — terminato"
       }
     },
+    "codeUnreadable": {
+      "planBody": "Al momento non riesco a leggere il tuo codice, quindi non ho modificato il tuo piano. Motir se ne sta occupando.",
+      "planMarker": "Non è stato scritto nulla — il tuo piano è invariato.",
+      "askNotice": "Non sono riuscito a leggere il tuo codice per questa risposta. Considera non confermato tutto ciò che qui riguarda il codice."
+    },
     "targets": {
       "sectionLabel": "Elementi di lavoro",
       "sectionLabelQuery": "Elementi di lavoro corrispondenti a «{query}»",

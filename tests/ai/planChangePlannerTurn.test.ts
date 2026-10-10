@@ -172,6 +172,53 @@ describe('recordPlannerTurn — the assistant turn persists', () => {
   });
 });
 
+describe('recordPlannerTurn — an unreadable code graph (MOTIR-8141)', () => {
+  const halted = {
+    jobId: 'job-augment-1',
+    status: 'succeeded',
+    result: { codeUnreadable: { halt: 'code_unreadable', repoRef: 'acme/web', reason: 'down' } },
+    error: null,
+  };
+
+  it('files ONE declined assistant turn that remembers the outage, and writes no plan', async () => {
+    const ctx = projectCtx(fx);
+    await submittedThread(ctx);
+    getJobMock.mockResolvedValue(halted);
+
+    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
+
+    const assistant = dto.turns.filter((t) => t.role === 'assistant');
+    expect(assistant).toHaveLength(1);
+    expect(assistant[0]!.codeUnreadable).toBe('declined');
+    expect(assistant[0]!.jobId).toBe('job-augment-1');
+    expect(assistant[0]!.question).toBeNull();
+    expect(assistant[0]!.body.length).toBeGreaterThan(0);
+  });
+
+  it('is idempotent: a replayed settle writes no second turn', async () => {
+    const ctx = projectCtx(fx);
+    await submittedThread(ctx);
+    getJobMock.mockResolvedValue(halted);
+
+    await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
+    const again = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
+
+    expect(again.turns.filter((t) => t.role === 'assistant')).toHaveLength(1);
+  });
+
+  it('leaves an ordinary turn with no outage mark', async () => {
+    const ctx = projectCtx(fx);
+    await submittedThread(ctx);
+    getJobMock.mockResolvedValue(
+      jobWithTurn({ action: 'draft', message: 'a report', question: null }),
+    );
+
+    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
+
+    expect(dto.turns.find((t) => t.role === 'assistant')!.codeUnreadable).toBeNull();
+  });
+});
+
 describe('recordPlannerTurn — the SAME locked seq allocation', () => {
   it('appends on the shared row-locked path: gapless seq, bumped turnCount', async () => {
     const ctx = projectCtx(fx);
