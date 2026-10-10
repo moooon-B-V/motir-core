@@ -7506,18 +7506,14 @@
       },
       "progress": {
         "submitted": "Het gesprek naar Motir AI versturen…",
-        "searching": "Je plan lezen…",
-        "drilling": "De boom doorlopen…",
         "proposed": "{count, plural, =0 {Voorgesteld werk op het canvas plaatsen…} one {Tot nu toe # item voorgesteld…} other {Tot nu toe # items voorgesteld…}}",
         "validating": "Het voorstel toetsen aan je plan…",
         "reading": "Je verzoek lezen…",
         "redirected": "Aan het voorstel werken…",
         "redirectedDebug": "De bug opsporen…",
-        "retrieval": "Het plan lezen…",
         "laying": "Een niveau indelen…",
         "authoring": "Een werkitem schrijven…",
-        "note": "Erover nadenken…",
-        "unknown": "Bezig…"
+        "note": "Erover nadenken…"
       },
       "error": {
         "body": "Dat is niet gelukt. Je gesprek is opgeslagen — probeer het opnieuw, of formuleer de wijziging anders.",
@@ -7601,9 +7597,6 @@
         "reading": "lezen",
         "redirected": "overdracht",
         "redirectedDebug": "overdracht",
-        "retrieval": "ophalen",
-        "searching": "zoeken",
-        "drilling": "doorlopen",
         "laying": "indelen",
         "authoring": "schrijven",
         "note": "notitie",
@@ -7611,23 +7604,10 @@
         "validating": "toetsen",
         "matching": "vergelijken",
         "writing": "wegschrijven",
-        "unknown": "frame",
-        "retrievalLine": "De {family} gelezen",
-        "retrievalBlockedLine": "Geen opzoekingen meer over — gaat verder met wat het heeft.",
         "layingLine": "{target} indelen",
         "authoringLine": "{title} schrijven",
         "matchingLine": "Controleren of een werkitem dit al dekt",
-        "writingLine": "De diagnose op {key} zetten",
-        "unknownLine": "frame: {frame}",
-        "retrievalLineBare": "Gelezen uit de bronnen van het plan",
-        "family": {
-          "planTree": "planboom",
-          "codeGraph": "codegraaf",
-          "codeHealth": "codegezondheid",
-          "web": "web",
-          "lessons": "lessen",
-          "codeRead": "repository"
-        }
+        "writingLine": "De diagnose op {key} zetten"
       },
       "openerFollowUp": "Je hebt net {label} gekozen. Motir AI plant wat daarop wacht.",
       "composerPlaceholderGuide": "Vertel Motir AI hoe de stap ging…",

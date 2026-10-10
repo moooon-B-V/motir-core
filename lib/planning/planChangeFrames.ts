@@ -34,13 +34,12 @@
 // reason written down). What is forbidden is neither: a kind that falls through.
 //
 // ⚠️ WHAT THIS FILE CANNOT DO, said plainly rather than left to be discovered:
-// it does not track `motir-ai`. The list below is a SNAPSHOT of a sweep, and a
-// kind added upstream tomorrow will not appear in it. That is what the LOUD
-// default is for, and it is the only mechanism here that covers the future —
-// `narrateFrame` never returns a silent null for an unknown kind, so a new frame
-// surfaces where a developer sees it instead of vanishing. Do not read the
-// snapshot as a guarantee; read it as the set somebody has actually decided
-// about.
+// it does not track `motir-ai` by itself. The list below is a SNAPSHOT of a
+// sweep. Two things cover the future, and neither is the user's screen
+// (MOTIR-8158): `narrateFrame` draws NOTHING for a kind that is not listed and
+// logs a `console.warn` for a developer, and `tests/planning/frameKindParity.test.ts`
+// fails when the checked-in list of kinds `motir-ai` emits names one this map has
+// no disposition for. An unlisted frame used to be drawn raw as `frame: <name>`.
 //
 // ⚠️ TWO KINDS JOINED THE LIST AHEAD OF THEIR PRODUCER, NOT FROM A SWEEP
 // (Story MOTIR-7974 · MOTIR-7976): `tool_call` and `tool_call_failed`. No
@@ -108,20 +107,31 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'explanation',
   'feasibility_doc',
   'feature_catalog',
+  'gap',
   'info',
   'lay',
   'lessons_injected',
   'level_complete',
+  'model_stop',
   'neighbourhood',
   'note',
+  'onboarding_depth',
+  'onboarding_routing',
   'packed',
   'partition',
   'pass',
   'pending_plans',
   'plan_cleared',
   'planned',
+  'planning_alarm',
+  'planning_alarm_filed',
+  'planning_failure_commented',
+  'planning_failure_filed',
+  'planning_record_attached',
+  'planning_record_not_filed',
   'provenance',
   'read',
+  'reauthor_target',
   'retrieval',
   'retrieval_ready',
   'revision_landed',
@@ -129,8 +139,11 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'revisions',
   'scanner',
   'search',
+  'session_summary',
   'state',
   'status',
+  'target_already_covered',
+  'target_failed',
   'target_read',
   'target_settled',
   'token',
@@ -163,6 +176,9 @@ export type FrameDisposition =
 const NOT_AN_ACT = 'not one of the acts MOTIR-4066 sheet 3 draws on the rail';
 /** Emitted by a job kind whose frames never reach this surface. */
 const OTHER_SURFACE = 'belongs to another job kind; it does not reach the plan-change rail';
+/** A lookup or tool call: the narration says what the planner is doing instead. */
+const TOOL_CALL =
+  'a tool call — it means nothing to the person; the planner’s narration says what it is doing';
 /** Bookkeeping the run keeps for itself. */
 const BOOKKEEPING = 'internal bookkeeping — it says nothing a reader of the run would act on';
 
@@ -176,22 +192,13 @@ const BOOKKEEPING = 'internal bookkeeping — it says nothing a reader of the ru
  */
 export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> = {
   // ── THE ACTS (the story's sentence, and sheet 3's table) ──────────────────
-  search: { show: 'searching' },
-  /** ⚠️ THE FRAME THIS CARD IS FOR. Emitted on every graph lookup the planner
-   *  makes, carrying `{ tool, family }` over five families, plus a
-   *  `blocked: true` variant when the per-job retrieval budget is spent. It has
-   *  been emitted all along and rendered by nothing. */
-  retrieval: { show: 'retrieval' },
-  drill: { show: 'drilling' },
+  // No lookup is an act: see the TOOL CALLS block below.
   lay: { show: 'laying' },
   author: { show: 'authoring' },
   /** The planner's own PROSE line. The producer emits nothing at all when the
    *  text is blank (`signalNote` returns early), so "its absence is not an empty
    *  row" is guaranteed upstream as well as here. */
   note: { show: 'note' },
-  /** ONE LINE PER TOOL CALL, drawn as the call STARTS (MOTIR-7974). Added ahead
-   *  of its producer — see the header. */
-  tool_call: { show: 'call' },
 
   // ── THE OUTCOMES (narrated before this card; unchanged by it) ─────────────
   pass: { show: 'proposed' },
@@ -230,9 +237,35 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
   validate_early_ask: { quiet: OTHER_SURFACE },
   validity_reopen: { quiet: OTHER_SURFACE },
 
-  tool_call_failed: {
-    quiet: 'consumed as a mark on its tool_call act, never a line of its own',
-  },
+  // ── TOOL CALLS ARE NEVER DRAWN (MOTIR-8158) ──────────────────────────────
+  // Founder decision 2026-10-10: a lookup means nothing to the person. The
+  // planner's own narration (MOTIR-8060 / design MOTIR-8061) says what it is
+  // doing, grouped per session from the store, and a reopened rail draws only
+  // that. Drawing lookups live as well made the two views of one run disagree
+  // (154 `retrieval` rows in one run). This covers every surface `narrateFrame`
+  // serves, an ask's and a debug turn's lookups included.
+  search: { quiet: TOOL_CALL },
+  retrieval: { quiet: TOOL_CALL },
+  drill: { quiet: TOOL_CALL },
+  tool_call: { quiet: TOOL_CALL },
+  tool_call_failed: { quiet: TOOL_CALL },
+
+  // Frames motir-ai emits that core never listed. Left unlisted they were drawn
+  // raw as `frame: <name>` (MOTIR-8158).
+  model_stop: { quiet: 'per-turn stop record (MOTIR-7718) — run telemetry, not an outcome' },
+  session_summary: { quiet: 'per-session cost and context ledger — run telemetry, not an outcome' },
+  gap: { quiet: 'a lay session’s note of what it could not cover — the narration carries it' },
+  target_already_covered: { quiet: NOT_AN_ACT },
+  target_failed: { quiet: NOT_AN_ACT },
+  reauthor_target: { quiet: NOT_AN_ACT },
+  onboarding_depth: { quiet: NOT_AN_ACT },
+  onboarding_routing: { quiet: NOT_AN_ACT },
+  planning_record_not_filed: { quiet: BOOKKEEPING },
+  planning_failure_filed: { quiet: BOOKKEEPING },
+  planning_alarm_filed: { quiet: BOOKKEEPING },
+  planning_alarm: { quiet: BOOKKEEPING },
+  planning_failure_commented: { quiet: BOOKKEEPING },
+  planning_record_attached: { quiet: BOOKKEEPING },
 
   token: { quiet: BOOKKEEPING },
   packed: { quiet: BOOKKEEPING },
@@ -252,46 +285,6 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
   target_read: { quiet: NOT_AN_ACT },
   target_settled: { quiet: NOT_AN_ACT },
 };
-
-/** The closed VERB set a `tool_call` frame names (MOTIR-7974). */
-export const TOOL_CALL_VERBS = [
-  'read',
-  'search',
-  'explore',
-  'look_up',
-  'lay',
-  'write',
-  'add',
-  'update',
-  'remove',
-  'validate',
-  'settle',
-] as const;
-export type ToolCallVerb = (typeof TOOL_CALL_VERBS)[number];
-
-/**
- * The closed FAMILY set: the six retrieval families `motir-ai` offers
- * (`RETRIEVAL_FAMILIES` in `src/llm/retrievalTools.ts`, `code_read` carrying
- * `read_file` and `list_changed_files`) and the five walk families.
- */
-export const TOOL_CALL_FAMILIES = [
-  'plan_tree',
-  'code_graph',
-  'code_health',
-  'code_read',
-  'web',
-  'lessons',
-  'lay',
-  'author',
-  'item',
-  'validate',
-  'settle',
-] as const;
-export type ToolCallFamily = (typeof TOOL_CALL_FAMILIES)[number];
-
-/** What a call acts ON. `none` is a call with no specific object. */
-export const TOOL_CALL_OBJECT_KINDS = ['path', 'query', 'item', 'parent', 'none'] as const;
-export type ToolCallObjectKind = (typeof TOOL_CALL_OBJECT_KINDS)[number];
 
 /** Is this a kind somebody has decided about? */
 export function isKnownFrameKind(event: string): event is PlanChangeFrameKind {

@@ -3,16 +3,12 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
-  Ban,
-  BookOpenText,
-  CircleQuestionMark,
   CornerDownRight,
   FilePenLine,
   ListTree,
   MessageSquareText,
   PenLine,
   ScanSearch,
-  Search,
   SearchCheck,
   Send,
   ShieldCheck,
@@ -27,7 +23,6 @@ import {
   latestRowAnnouncement,
   nextAnnouncement,
   openSteps,
-  withoutCalls,
 } from '@/components/planning/planCallLines';
 import { nextHeadAnnouncement, type NarrationHeadLine } from '@/components/planning/planNarration';
 
@@ -36,8 +31,7 @@ type Tc = ReturnType<typeof useTranslations>;
 /** One glyph per act kind — the second, non-textual skim cue (sheet 3).
  *  Keyed on the KIND so the map is exhaustive by type: a new `PlanChangeProgress`
  *  member without a glyph does not compile, which is the same discipline the
- *  frame dispositions use one layer down. A `call` act is never drawn
- *  (MOTIR-8064); its entry is here only because the map is exhaustive. */
+ *  frame dispositions use one layer down. */
 const ACT_GLYPH: Record<PlanChangeProgress['kind'], typeof Send> = {
   submitted: Send,
   reading: ScanSearch,
@@ -45,37 +39,17 @@ const ACT_GLYPH: Record<PlanChangeProgress['kind'], typeof Send> = {
   redirectedDebug: CornerDownRight,
   matching: SearchCheck,
   writing: FilePenLine,
-  retrieval: BookOpenText,
-  searching: Search,
-  drilling: ListTree,
   laying: ListTree,
   authoring: PenLine,
   note: MessageSquareText,
   proposed: Sparkles,
   validating: ShieldCheck,
-  call: BookOpenText,
-  unknown: CircleQuestionMark,
 };
 
 function ActGlyph({ act }: { act: PlanChangeProgress }) {
-  // The BLOCKED lookup is the one act whose glyph is decided by its payload, not
-  // its kind: sheet 3 gives "out of lookups" the `ban` glyph so the moment the
-  // run stopped being able to read is visible at a skim.
-  const Icon = act.kind === 'retrieval' && act.blocked ? Ban : ACT_GLYPH[act.kind];
+  const Icon = ACT_GLYPH[act.kind];
   return <Icon className="size-3.5" aria-hidden="true" />;
 }
-
-/** The five retrieval families the planner reads from (`motir-ai`
- *  `retrievalTools.ts`) plus `code_read`, each with a catalog label; anything
- *  else renders as the raw family name rather than as a hole. */
-const RETRIEVAL_FAMILY_KEY: Record<string, string> = {
-  plan_tree: 'act.family.planTree',
-  code_graph: 'act.family.codeGraph',
-  code_health: 'act.family.codeHealth',
-  code_read: 'act.family.codeRead',
-  web: 'act.family.web',
-  lessons: 'act.family.lessons',
-};
 
 /** The mono LABEL column's catalog key. */
 function actLabelKey(act: PlanChangeProgress): string {
@@ -86,14 +60,6 @@ function actLabelKey(act: PlanChangeProgress): string {
  *  interpolated are the frame's own data. */
 export function actLine(act: PlanChangeProgress, tc: Tc): string {
   switch (act.kind) {
-    case 'retrieval': {
-      // The BLOCKED variant is a different sentence, not a suffix: the run has
-      // stopped being able to look things up, which is worth saying plainly.
-      if (act.blocked) return tc('act.retrievalBlockedLine');
-      if (act.family === null) return tc('act.retrievalLineBare');
-      const familyKey = RETRIEVAL_FAMILY_KEY[act.family];
-      return tc('act.retrievalLine', { family: familyKey ? tc(familyKey) : act.family });
-    }
     case 'laying':
       return tc('act.layingLine', { target: act.target ?? '' });
     case 'authoring':
@@ -103,8 +69,6 @@ export function actLine(act: PlanChangeProgress, tc: Tc): string {
     // and there is nothing to translate.
     case 'note':
       return act.text;
-    case 'unknown':
-      return tc('act.unknownLine', { frame: act.frame });
     case 'proposed':
       return tc('progress.proposed', { count: act.count });
     // The debug turn's two acts (MOTIR-7050; `debug-turn.mock.html` panel 1).
@@ -118,11 +82,9 @@ export function actLine(act: PlanChangeProgress, tc: Tc): string {
 }
 
 /** The text the running bar repeats while a run streams: the newest act the
- *  record draws, or null when there is none. A call is never repeated
- *  (MOTIR-8064), so the bar keeps its shipped one-line form. */
+ *  record draws, or null when there is none. */
 export function runningBarLine(acts: readonly PlanChangeProgress[], tc: Tc): string | null {
-  const rows = withoutCalls(acts);
-  const last = rows[rows.length - 1];
+  const last = acts[acts.length - 1];
   return last ? actLine(last, tc) : null;
 }
 
@@ -165,8 +127,8 @@ export function PlanActRecord({
   heads?: readonly NarrationHeadLine[];
 }) {
   const tc = useTranslations('planningWorkspace.conversation');
-  const said = useAnnouncer(withoutCalls(allActs), heads, tc);
-  const acts = withoutCalls(allActs);
+  const acts = allActs;
+  const said = useAnnouncer(acts, heads, tc);
   const open = openSteps(acts, streaming);
   const lastIndex = acts.length - 1;
   // The newest act that is not a step (a note, a lookup row, a debug turn's

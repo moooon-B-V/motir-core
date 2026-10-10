@@ -88,18 +88,16 @@ describe('every frame kind is ACCOUNTED FOR', () => {
   });
 });
 
-describe('AN UNKNOWN KIND IS LOUD — asserted on the ABSENCE of the silent path', () => {
-  // ⚠️ THIS IS THE ASSERTION THE CARD IS ACTUALLY ABOUT. A test that checked the
-  // known kinds render would have passed on every day `retrieval` was invisible,
-  // because the defect was never in the arms — it was in the `default: return
-  // null` beneath them.
-  it('does not return null for a frame nobody has decided about', () => {
+describe('AN UNKNOWN KIND DRAWS NOTHING, AND TELLS A DEVELOPER (MOTIR-8158)', () => {
+  // The rail used to draw an unlisted frame raw as `frame: <name>`, which meant
+  // nothing to the person. The user's screen no longer carries that; catching a
+  // new kind is `tests/planning/frameKindParity.test.ts`'s job. The console
+  // warning stays as the developer signal.
+  it('returns null for a frame nobody has decided about', () => {
     withQuietConsole(() => {
       for (const invented of ['some_future_frame', 'token_stream', 'zzz', 'retrievalX']) {
         expect(isKnownFrameKind(invented)).toBe(false);
-        const narrated = narrateFrame(invented, { x: 1 });
-        expect(narrated, `${invented} was dropped silently`).not.toBeNull();
-        expect(narrated).toEqual({ kind: 'unknown', frame: invented });
+        expect(narrateFrame(invented, { x: 1 }), `${invented} was drawn`).toBeNull();
       }
     });
   });
@@ -115,42 +113,32 @@ describe('AN UNKNOWN KIND IS LOUD — asserted on the ABSENCE of the silent path
     expect(message).toContain('planChangeFrames');
     warn.mockRestore();
   });
-
-  it('carries the RAW kind, so the loud line says WHICH frame arrived', () => {
-    withQuietConsole(() => {
-      expect(narrateFrame('a_brand_new_act', {})).toEqual({
-        kind: 'unknown',
-        frame: 'a_brand_new_act',
-      });
-    });
-  });
 });
 
-describe('`retrieval` — the frame this card exists for', () => {
-  it('narrates the FAMILY the planner looked in', () => {
-    for (const family of ['plan_tree', 'code_graph', 'code_health', 'web', 'lessons']) {
-      expect(narrateFrame('retrieval', { tool: 'get_item', family })).toEqual({
-        kind: 'retrieval',
-        family,
-        blocked: false,
-      });
+describe('LOOKUPS ARE NEVER DRAWN (MOTIR-8158)', () => {
+  it('`retrieval`, `search`, `drill` and `tool_call` narrate nothing, whatever the payload', () => {
+    for (const kind of ['retrieval', 'search', 'drill', 'tool_call', 'tool_call_failed']) {
+      for (const payload of [
+        { tool: 'get_item', family: 'plan_tree' },
+        { family: 'plan_tree', blocked: true },
+        {},
+        undefined,
+      ]) {
+        expect(narrateFrame(kind, payload), kind).toBeNull();
+      }
     }
   });
 
-  it('reads the BUDGET-EXHAUSTED variant as its own thing', () => {
-    // A different sentence, not a suffix: the run has stopped being able to look
-    // anything up, which is worth saying plainly.
-    expect(
-      narrateFrame('retrieval', { tool: 'get_item', family: 'plan_tree', blocked: true }),
-    ).toEqual({ kind: 'retrieval', family: 'plan_tree', blocked: true });
-  });
-
-  it('survives a payload with no family rather than rendering "undefined"', () => {
-    expect(narrateFrame('retrieval', {})).toEqual({
-      kind: 'retrieval',
-      family: null,
-      blocked: false,
-    });
+  it('the telemetry and bookkeeping frames motir-ai emits are quiet too', () => {
+    for (const kind of [
+      'model_stop',
+      'session_summary',
+      'gap',
+      'planning_record_not_filed',
+      'planning_failure_filed',
+    ]) {
+      expect(narrateFrame(kind, { reason: 'x' }), kind).toBeNull();
+    }
   });
 });
 
@@ -173,14 +161,6 @@ describe('`lay` and `author` name what they act on — and survive a thin payloa
     expect(narrateFrame('lay', { target: 7 })).toEqual({ kind: 'laying', target: null });
     expect(narrateFrame('author', { title: null })).toEqual({ kind: 'authoring', title: null });
     expect(narrateFrame('author', undefined)).toEqual({ kind: 'authoring', title: null });
-  });
-
-  it('`retrieval` reads `blocked` as a strict boolean — a truthy string is not a blocked lookup', () => {
-    expect(narrateFrame('retrieval', { family: 3, blocked: 'yes' })).toEqual({
-      kind: 'retrieval',
-      family: null,
-      blocked: false,
-    });
   });
 });
 
@@ -208,12 +188,8 @@ describe('the planner’s PROSE line', () => {
   });
 });
 
-describe('NO frame kind currently rendered changes its output', () => {
-  // This card's whole risk is a totality refactor quietly restyling what already
-  // worked, so the shipped six are pinned exactly as they were.
-  it('the six arms that shipped before this card are byte-identical', () => {
-    expect(narrateFrame('search', {})).toEqual({ kind: 'searching' });
-    expect(narrateFrame('drill', {})).toEqual({ kind: 'drilling' });
+describe('the frames still drawn keep their output', () => {
+  it('the outcome arms are byte-identical', () => {
     expect(narrateFrame('pass', { proposed: 4 })).toEqual({ kind: 'proposed', count: 4 });
     expect(narrateFrame('planned', { proposed: 'lots' })).toEqual({ kind: 'proposed', count: 0 });
     expect(narrateFrame('level_complete', {})).toEqual({ kind: 'proposed', count: 0 });
@@ -222,52 +198,39 @@ describe('NO frame kind currently rendered changes its output', () => {
   });
 
   it('still tolerates an absent payload', () => {
-    expect(narrateFrame('search', undefined)).toEqual({ kind: 'searching' });
+    expect(narrateFrame('pass', undefined)).toEqual({ kind: 'proposed', count: 0 });
   });
 });
 
 describe('the enumeration is a SNAPSHOT, and says so', () => {
   it('holds the kinds motir-ai emitted at the sweep', () => {
-    // ⚠️ A CROSS-REPO FIXTURE, and its limits are worth stating rather than
-    // implying. It records WHAT WAS SWEPT so a reader can re-run the grep in the
-    // header of `planChangeFrames.ts` and diff; it does NOT read `motir-ai`, so
-    // it cannot fail when that repo adds a frame tomorrow. The mechanism that
-    // covers the future is the LOUD default above — this only pins provenance.
-    //
-    // 51 swept, plus TWO added AHEAD of their producer rather than found by a
-    // sweep (MOTIR-7974 · MOTIR-7976): `tool_call` and `tool_call_failed`, the
-    // per-call contract the rail accepts before motir-ai emits it.
-    expect(PLAN_CHANGE_FRAME_KINDS).toHaveLength(53);
-    for (const ahead of ['tool_call', 'tool_call_failed']) {
-      expect(isKnownFrameKind(ahead), ahead).toBe(true);
+    // A CROSS-REPO FIXTURE: `tests/planning/frameKindParity.test.ts` holds the
+    // checked-in sweep and fails when it names a kind this map does not list.
+    // Here only a few load-bearing members are pinned.
+    for (const kind of ['retrieval', 'search', 'drill', 'lay', 'author', 'note', 'planned']) {
+      expect(isKnownFrameKind(kind), kind).toBe(true);
     }
-    for (const emitted of ['retrieval', 'search', 'drill', 'lay', 'author', 'note', 'planned']) {
-      expect(isKnownFrameKind(emitted), emitted).toBe(true);
+    for (const kind of ['model_stop', 'session_summary', 'gap', 'tool_call']) {
+      expect(isKnownFrameKind(kind), kind).toBe(true);
     }
   });
 
-  it('the SHOW set is the story’s own sentence', () => {
-    // "searching, reading code, laying a level, authoring a card, drilling …
-    // and the planner's own prose line" — MOTIR-4054's description.
+  it('the SHOW set is the outcome and prose frames — no lookup is in it', () => {
     const shown = PLAN_CHANGE_FRAME_KINDS.filter((k) => 'show' in FRAME_DISPOSITIONS[k]);
-    expect(shown).toEqual(
-      expect.arrayContaining([
-        'search',
-        'retrieval',
-        'lay',
+    expect([...shown].sort()).toEqual(
+      [
         'author',
-        'drill',
+        'lay',
+        'level_complete',
         'note',
         'pass',
         'planned',
-        'level_complete',
         'validated',
         'validation_skipped',
-        'tool_call',
-      ]),
+      ].sort(),
     );
-    // …and it is a SMALL set out of 51. A line for every kind would make the
-    // rail a log, which sheet 3 rejects in as many words.
+    // …and it is a SMALL set. A line for every kind would make the rail a log,
+    // which sheet 3 rejects in as many words.
     expect(shown.length).toBeLessThan(PLAN_CHANGE_FRAME_KINDS.length / 2);
   });
 });

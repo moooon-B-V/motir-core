@@ -430,12 +430,12 @@ describe('usePlanChangeConversation — a turn', () => {
   });
 
   it('narrates the run from the job’s REAL progress frames', async () => {
-    stream.mockImplementation(okStream([['search', { relatedCount: 3 }]]));
+    stream.mockImplementation(okStream([['pass', { proposed: 3 }]]));
     const { result } = await mounted();
 
     // Freeze the run mid-stream by asserting the frame mapping directly — the
     // narration is derived, not invented.
-    expect(narrateFrame('search', {})).toEqual({ kind: 'searching' });
+    expect(narrateFrame('search', {})).toBeNull();
     expect(narrateFrame('planned', { proposed: 2 })).toEqual({ kind: 'proposed', count: 2 });
     // ⚠️ AMENDED (MOTIR-4069): this read `narrateFrame('tokens', {})` — a kind the
     // producer never emits — and asserted null, which pinned the silent
@@ -538,8 +538,8 @@ describe('usePlanChangeConversation — the stream is not the run (MOTIR-7985)',
   }
   const status = (s: string): [string, unknown] => ['status', { jobId: 'job-1', status: s }];
   const searched = (seq: number): [string, unknown] => [
-    'search',
-    { jobId: 'job-1', seq, relatedCount: seq },
+    'pass',
+    { jobId: 'job-1', seq, proposed: seq },
   ];
 
   it('subscribes AGAIN when the stream ends while the job still runs, narrating each frame once', async () => {
@@ -558,7 +558,7 @@ describe('usePlanChangeConversation — the stream is not the run (MOTIR-7985)',
     expect(result.current.state.errorCode).toBeNull();
     expect(result.current.state.phase).toBe('review');
     // seq 1 arrived twice across the two subscriptions; the rail tells it once.
-    expect(result.current.state.acts.filter((a) => a.kind === 'searching')).toHaveLength(2);
+    expect(result.current.state.acts.filter((a) => a.kind === 'proposed')).toHaveLength(2);
   });
 
   it('a job that FAILED shows the failure, never "nothing came back"', async () => {
@@ -634,8 +634,8 @@ describe('usePlanChangeConversation — the stream is not the run (MOTIR-7985)',
       streamOf([
         ['status', null],
         ['status', { jobId: 'job-1' }],
-        ['search', { jobId: 'job-1', relatedCount: 1 }],
-        ['search', { jobId: 'job-1', relatedCount: 2 }],
+        ['pass', { jobId: 'job-1', proposed: 1 }],
+        ['pass', { jobId: 'job-1', proposed: 2 }],
       ]),
     );
     const { result } = await mounted();
@@ -646,7 +646,7 @@ describe('usePlanChangeConversation — the stream is not the run (MOTIR-7985)',
 
     // No status ever arrived, so the end is the run's end: subscribed once.
     expect(stream).toHaveBeenCalledTimes(1);
-    expect(result.current.state.acts.filter((a) => a.kind === 'searching')).toHaveLength(2);
+    expect(result.current.state.acts.filter((a) => a.kind === 'proposed')).toHaveLength(2);
   });
 
   it('an unmount during the wait before re-subscribing ends the loop', async () => {

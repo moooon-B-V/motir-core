@@ -186,10 +186,10 @@ describe('an ANSWER', () => {
     expect(result.current.state.progress).toBeNull();
   });
 
-  // MOTIR-7923: the ask job reports every lookup as a `retrieval` frame, and the
-  // rail stayed on "Reading your request…" for the whole answer because the
-  // stream was consumed with no frame handler.
-  it('narrates one act per LOOKUP while it answers, then settles as before', async () => {
+  // MOTIR-7923 wired the ask stream's frame handler; MOTIR-8158 (founder decision
+  // 2026-10-10) then made its lookups quiet: a `retrieval` frame draws no row, so
+  // the rail stays on "Reading your request…" until the answer lands.
+  it('draws NO row for a lookup while it answers, then settles as before', async () => {
     const held = deferred<void>();
     let emit!: (event: string, data: unknown) => void;
     streamAsk.mockImplementation(
@@ -214,7 +214,7 @@ describe('an ANSWER', () => {
     await waitFor(() => expect(streamAsk).toHaveBeenCalledTimes(1));
 
     act(() => {
-      // Phase bookkeeping stays quiet — only the lookups draw a line.
+      // Phase bookkeeping and lookups are all quiet.
       emit('status', { phase: 'classifying' });
       emit('retrieval_ready', { tools: 4 });
       emit('status', { phase: 'answering' });
@@ -223,23 +223,15 @@ describe('an ANSWER', () => {
     });
 
     expect(result.current.state.phase).toBe('streaming');
-    expect(result.current.state.acts).toEqual([
-      { kind: 'reading' },
-      { kind: 'retrieval', family: 'code_graph', blocked: false },
-      { kind: 'retrieval', family: 'plan_tree', blocked: false },
-    ]);
-    expect(result.current.state.progress).toEqual({
-      kind: 'retrieval',
-      family: 'plan_tree',
-      blocked: false,
-    });
+    expect(result.current.state.acts).toEqual([{ kind: 'reading' }]);
+    expect(result.current.state.progress).toEqual({ kind: 'reading' });
 
     await act(async () => {
       held.resolve();
       await sending;
     });
 
-    // The answer lands exactly as it did before the lookups were narrated.
+    // The answer lands exactly as it always did.
     expect(settleAsk).toHaveBeenCalledWith('ask-1', expect.anything(), 's1');
     expect(result.current.state.phase).toBe('idle');
     expect(result.current.state.progress).toBeNull();

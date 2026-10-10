@@ -7509,18 +7509,14 @@
       },
       "progress": {
         "submitted": "Envoi de la conversation à Motir AI…",
-        "searching": "Lecture de votre plan…",
-        "drilling": "Parcours de l'arborescence…",
         "proposed": "{count, plural, =0 {Placement du travail proposé sur le canevas…} one {# élément proposé jusqu'ici…} other {# éléments proposés jusqu'ici…}}",
         "validating": "Vérification de la proposition par rapport à votre plan…",
         "reading": "Lecture de votre message…",
         "redirected": "Travail sur la proposition…",
         "redirectedDebug": "Recherche de l'origine du bug…",
-        "retrieval": "Lecture du plan…",
         "laying": "Organisation d'un niveau…",
         "authoring": "Rédaction d'un élément de travail…",
-        "note": "Réflexion en cours…",
-        "unknown": "Traitement…"
+        "note": "Réflexion en cours…"
       },
       "error": {
         "body": "Cela n'a pas abouti. Votre conversation est enregistrée — réessayez, ou reformulez la modification.",
@@ -7604,9 +7600,6 @@
         "reading": "lecture",
         "redirected": "relais",
         "redirectedDebug": "relais",
-        "retrieval": "récupération",
-        "searching": "recherche",
-        "drilling": "exploration",
         "laying": "organisation",
         "authoring": "rédaction",
         "note": "note",
@@ -7614,23 +7607,10 @@
         "validating": "validation",
         "matching": "correspondance",
         "writing": "écriture",
-        "unknown": "trame",
-        "retrievalLine": "Lecture : {family}",
-        "retrievalBlockedLine": "Plus de consultations disponibles — poursuite avec ce qui est déjà disponible.",
         "layingLine": "Organisation de {target}",
         "authoringLine": "Rédaction de {title}",
         "matchingLine": "Vérification qu'aucun élément de travail ne couvre déjà ce point",
-        "writingLine": "Consignation du diagnostic sur {key}",
-        "unknownLine": "trame : {frame}",
-        "retrievalLineBare": "Lecture des sources du plan",
-        "family": {
-          "planTree": "arborescence du plan",
-          "codeGraph": "graphe de code",
-          "codeHealth": "santé du code",
-          "web": "web",
-          "lessons": "leçons",
-          "codeRead": "dépôt"
-        }
+        "writingLine": "Consignation du diagnostic sur {key}"
       },
       "openerFollowUp": "Vous venez de choisir {label}. Motir AI planifie ce que ce choix conditionne.",
       "composerPlaceholderGuide": "Dites à Motir AI comment s'est passée l'étape…",

@@ -71,7 +71,7 @@ function stateOf(
       turns: [changeTurn],
       refs: {},
     } as unknown as PlanChangeConversationState['session'],
-    progress: { kind: 'searching' },
+    progress: { kind: 'reading' },
     review: null,
     liveReview: null,
     liveVersion: 0,
@@ -89,7 +89,7 @@ function stateOf(
     earlier: null,
     reopened: null,
     readOnly: false,
-    acts: [{ kind: 'searching' }],
+    acts: [{ kind: 'reading' }],
     runPause,
     ...over,
   } as PlanChangeConversationState;

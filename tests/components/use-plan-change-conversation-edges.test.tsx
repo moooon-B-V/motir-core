@@ -923,7 +923,7 @@ describe('usePlanChangeConversation — dismissError', () => {
 });
 
 describe('narrateFrame — the frames the augment job really emits', () => {
-  it('⚠️ AMENDED (MOTIR-4069) — an unknown event is now LOUD, and `token` is a decision', () => {
+  it('⚠️ AMENDED (MOTIR-4069, MOTIR-8158) — an unknown event warns but draws nothing, and `token` is a decision', () => {
     // This read `expect(narrateFrame('token', …)).toBeNull()` under the title
     // "ignores an unknown event". It was not a bug that got fixed — it PINNED
     // the `default: return null` that MOTIR-4069 removes, and it was correct
@@ -943,18 +943,16 @@ describe('narrateFrame — the frames the augment job really emits', () => {
     expect(narrateFrame('token', { text: 'hi' })).toBeNull();
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(narrateFrame('genuinely_unknown_frame', {})).toEqual({
-      kind: 'unknown',
-      frame: 'genuinely_unknown_frame',
-    });
+    // MOTIR-8158: an unlisted kind draws nothing (it warns a developer instead).
+    expect(narrateFrame('genuinely_unknown_frame', {})).toBeNull();
     warn.mockRestore();
 
-    expect(narrateFrame('search', undefined)).toEqual({ kind: 'searching' });
+    expect(narrateFrame('search', undefined)).toBeNull();
   });
 
-  it('narrates the retrieval frames the engine emits before it plans', () => {
-    expect(narrateFrame('search', {})).toEqual({ kind: 'searching' });
-    expect(narrateFrame('drill', {})).toEqual({ kind: 'drilling' });
+  it('draws nothing for the lookup frames the engine emits before it plans', () => {
+    expect(narrateFrame('search', {})).toBeNull();
+    expect(narrateFrame('drill', {})).toBeNull();
   });
 
   it('defaults a non-numeric proposed count to zero rather than NaN', () => {
@@ -977,7 +975,7 @@ describe('narrateFrame — the frames the augment job really emits', () => {
 // floor. Each one below is a real thing the hook does and nothing asserted.
 
 describe('usePlanChangeConversation — the quiet arms', () => {
-  it('⚠️ AMENDED (MOTIR-4069) — a frame it has no narration for now NARRATES, loudly', async () => {
+  it('⚠️ AMENDED (MOTIR-4069) — a frame it has no narration for is NOT drawn, and warns', async () => {
     // This read "ignores a job frame it has no narration for", and its comment
     // said `narrateFrame` "returns null for anything outside the known set". That
     // was an accurate description of the code and the exact behaviour MOTIR-4069
@@ -1006,11 +1004,8 @@ describe('usePlanChangeConversation — the quiet arms', () => {
     });
 
     expect(result.current.state.phase).toBe('review');
-    // The frame is on the rail rather than dropped, and it named itself.
-    expect(result.current.state.acts).toContainEqual({
-      kind: 'unknown',
-      frame: 'some_future_frame',
-    });
+    // MOTIR-8158: the frame draws nothing, and it warned a developer.
+    expect(result.current.state.acts.some((a) => (a.kind as string) === 'unknown')).toBe(false);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -1223,9 +1218,10 @@ describe('usePlanChangeConversation — the quiet arms', () => {
 
 describe('usePlanChangeConversation — THE ACT RAIL is a record (MOTIR-4069)', () => {
   it('opens with the act that started the run, adds the hand-off, then every frame IN ORDER, and never de-duplicates', async () => {
-    // Two `retrieval` frames in a row mean the planner made two lookups; a rail
-    // that folded them into "2 lookups" would have turned a record into a
-    // summary (`design/ai-chat/plan-change-run-live.mock.html` sheet 3).
+    // Two identical frames in a row are two rows; a rail that folded them into
+    // "2 proposals" would have turned a record into a summary
+    // (`design/ai-chat/plan-change-run-live.mock.html` sheet 3). (Lookups are
+    // quiet since MOTIR-8158, so the identical frames here are `pass`es.)
     stream.mockImplementationOnce(
       async (
         _jobId: string,
@@ -1235,7 +1231,8 @@ describe('usePlanChangeConversation — THE ACT RAIL is a record (MOTIR-4069)', 
         onFrame?: (event: string, data: unknown) => void,
       ) => {
         onFrame?.('retrieval', { tool: 'get_item', family: 'plan_tree' });
-        onFrame?.('retrieval', { tool: 'get_item', family: 'plan_tree' });
+        onFrame?.('pass', { proposed: 1 });
+        onFrame?.('pass', { proposed: 1 });
         onFrame?.('token', { text: 'ignored' });
         onFrame?.('note', { act: 'author', ref: 'MOTIR-1', text: 'billing already owns this' });
         onFrame?.('planned', { proposed: 2 });
@@ -1254,8 +1251,8 @@ describe('usePlanChangeConversation — THE ACT RAIL is a record (MOTIR-4069)', 
     expect(result.current.state.acts).toEqual([
       { kind: 'reading' },
       { kind: 'redirected' },
-      { kind: 'retrieval', family: 'plan_tree', blocked: false },
-      { kind: 'retrieval', family: 'plan_tree', blocked: false },
+      { kind: 'proposed', count: 1 },
+      { kind: 'proposed', count: 1 },
       { kind: 'note', text: 'billing already owns this' },
       { kind: 'proposed', count: 2 },
     ]);

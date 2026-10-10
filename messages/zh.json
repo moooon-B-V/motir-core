@@ -7499,18 +7499,14 @@
       },
       "progress": {
         "submitted": "正在把对话发送给 Motir AI…",
-        "searching": "正在读取你的计划…",
-        "drilling": "正在梳理工作项树…",
         "proposed": "{count, plural, =0 {正在把提议的工作放到画布上…} other {已提议 # 项…}}",
         "validating": "正在对照你的计划校验提案…",
         "reading": "正在理解你的请求……",
         "redirected": "正在生成提案……",
         "redirectedDebug": "正在追查缺陷……",
-        "retrieval": "正在读取计划…",
         "laying": "正在铺开层级…",
         "authoring": "正在撰写工作项…",
-        "note": "正在思考…",
-        "unknown": "进行中…"
+        "note": "正在思考…"
       },
       "error": {
         "body": "这次没有成功。对话已保存 —— 可以重试，或换种说法。",
@@ -7594,9 +7590,6 @@
         "reading": "阅读",
         "redirected": "转交",
         "redirectedDebug": "转交",
-        "retrieval": "检索",
-        "searching": "搜索",
-        "drilling": "下钻",
         "laying": "铺层",
         "authoring": "撰写",
         "note": "说明",
@@ -7604,23 +7597,10 @@
         "validating": "校验",
         "matching": "查重",
         "writing": "写入",
-        "unknown": "帧",
-        "retrievalLine": "读取 {family}",
-        "retrievalBlockedLine": "检索额度已用尽 —— 以现有信息继续。",
         "layingLine": "正在铺开 {target}",
         "authoringLine": "正在撰写 {title}",
         "matchingLine": "正在检查是否已有工作项覆盖它",
-        "writingLine": "正在把诊断写入 {key}",
-        "unknownLine": "帧：{frame}",
-        "retrievalLineBare": "读取了计划的来源",
-        "family": {
-          "planTree": "计划树",
-          "codeGraph": "代码图谱",
-          "codeHealth": "代码健康度",
-          "web": "网页",
-          "lessons": "经验教训",
-          "codeRead": "代码仓库"
-        }
+        "writingLine": "正在把诊断写入 {key}"
       },
       "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。",
       "composerPlaceholderGuide": "告诉 Motir AI 这一步进展如何…",
