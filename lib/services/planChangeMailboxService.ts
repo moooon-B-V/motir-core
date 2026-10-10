@@ -35,14 +35,23 @@ import {
 // THE BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) — the pipe between a user
 // who is still typing and a planning job that has already read its envelope.
 //
-// WHAT THIS IS NOT: a way to interrupt a run. A planning job reads `requestJson`
-// once, at dispatch, and the obvious repair — deliver input as a signal — is the
-// wrong one, settled next door by MOTIR-3942 / MOTIR-4060 and not re-opened
-// here. A planning session is a COHERENT ACT: a card authored half under one set
-// of instructions and half under another is written from two minds, and nothing
-// downstream can tell which half came from where. So this is STORAGE THE JOB
-// CHECKS, at a phase boundary it already has, never a mechanism that preempts
-// it. A turn that arrives during an `author` sits until that author finishes.
+// WHAT THIS IS NOT: a way to interrupt a run mid-generation. A planning job reads
+// `requestJson` once, at dispatch, and the obvious repair — deliver input as a
+// signal — is the wrong one. This is STORAGE THE JOB CHECKS, never a mechanism
+// that preempts it.
+//
+// ⚠️ WHAT IS DELIVERED AND WHEN CHANGED (MOTIR-7991, AMENDMENT 4 of
+// `docs/decisions/conversation-turn-intent.md`). Not every mid-run turn lands
+// here any more: an answering session reads each one first, a QUESTION is answered
+// in the thread, and only a CHANGE (or a confirmed ambiguous turn) is forwarded
+// through `attachTurn`. A forwarded change is read at a TOOL-CALL GAP, after a
+// tool result and before the next model turn, by every running walk session, and
+// handed to every session opened later; it is no longer held until a phase
+// boundary. The planner rules it (a correction, a re-plan, or unclear about WHAT)
+// and, on a re-plan, OFFERS the person START OVER; the `restart` disposition
+// itself is unchanged. The phase-boundary read stays the carrier for STOP and for
+// START OVER. The answer to a planner's question comes back as an ordinary turn and
+// is ruled again.
 //
 // ⚠️ THE READ SHAPE IS A TWO-REPO CONTRACT AND THE CONSUMER LANDED FIRST.
 // `motir-ai` `src/llm/mailbox.ts` (MOTIR-4060, merged) already accepts
@@ -66,6 +75,10 @@ import {
 // writes on one thread) and removes the question of whether a mailbox append can
 // interleave with a transcript append. It does not; there is one lock per
 // conversation.
+//
+// THE PLANNER'S MID-RUN PAUSE (MOTIR-8007) answers through this same pipe: a START
+// OVER is the `restart` turn, a decline or a reply is a `fold` turn marked
+// `declines_pause_id` / `answers_pause_id` — see `planChangeRunPauseService`.
 //
 // SIDE-EFFECTS-OUTSIDE-TX (CLAUDE.md): the RUNNING check calls motir-ai over the
 // network. It happens BEFORE the short transaction that writes the row — a
@@ -99,6 +112,10 @@ export interface AttachTurnInput {
   disposition?: 'fold' | 'restart';
   /** Where a `restart` re-anchors the walk. Ignored on a `fold`. */
   restartTarget?: string | null;
+  /** The run pause this `fold` turn DECLINES (MOTIR-8007). At most one of the two. */
+  declinesPauseId?: string;
+  /** The run pause this `fold` turn ANSWERS (MOTIR-8007). */
+  answersPauseId?: string;
 }
 
 /** Build the two-repo contract's shape from rows. The ONE place it is built. */
@@ -119,6 +136,9 @@ function toDelivery(
         receivedAt: e.createdAt.toISOString(),
         disposition: e.disposition ?? 'fold',
         target: e.restartTarget,
+        // Present ONLY when set (MOTIR-8007), so every other turn's shape is byte-identical.
+        ...(e.declinesPauseId ? { declinesPause: e.declinesPauseId } : {}),
+        ...(e.answersPauseId ? { answersQuestion: e.answersPauseId } : {}),
       })),
     stopped,
   };
@@ -147,6 +167,8 @@ async function appendLocked(
     restartTarget?: string | null;
     idempotencyKey: string;
     authorId?: string | null;
+    declinesPauseId?: string | null;
+    answersPauseId?: string | null;
   },
 ): Promise<PlanChangeMailboxEntry> {
   return withWorkspaceContext(
@@ -183,6 +205,8 @@ async function appendLocked(
             restartTarget: entry.restartTarget ?? null,
             idempotencyKey: entry.idempotencyKey,
             authorId: entry.authorId ?? null,
+            declinesPauseId: entry.declinesPauseId ?? null,
+            answersPauseId: entry.answersPauseId ?? null,
           },
           tx,
         );
@@ -222,7 +246,7 @@ async function appendLocked(
  * different question — which conversation a PLAN belongs to — and a mid-run
  * message is addressed to a run, not to a plan.
  */
-async function findThreadForJob(jobId: string, pctx: MailboxContext) {
+export async function findThreadForJob(jobId: string, pctx: MailboxContext) {
   return withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
     planChangeSessionRepository.findByProjectAndLastJobId(
       pctx.projectId,
@@ -241,7 +265,7 @@ async function findThreadForJob(jobId: string, pctx: MailboxContext) {
  * them apart would answer a question about somebody else's job. It is the
  * no-existence-leak posture the rest of `lib/planChange/errors.ts` takes.
  */
-async function requireThreadForJob(
+export async function requireThreadForJob(
   jobId: string,
   pctx: MailboxContext,
   expectedSessionId?: string,
@@ -308,12 +332,39 @@ export const planChangeMailboxService = {
       restartTarget: input.disposition === 'restart' ? (input.restartTarget ?? null) : null,
       idempotencyKey: input.idempotencyKey,
       authorId: pctx.userId,
+      declinesPauseId: input.declinesPauseId ?? null,
+      answersPauseId: input.answersPauseId ?? null,
     });
 
     // The caller gets the mailbox AS IT NOW STANDS, not just the row it wrote —
     // which is what lets the composer show "two queued" without a second read,
     // and what makes a retry's answer identical to the original's.
     return planChangeMailboxService.peek(input.jobId, entry.sessionId, pctx);
+  },
+
+  /**
+   * The id of the entry a delivery was written as, by the caller's own idempotency
+   * key (MOTIR-7996) — or null. {@link attachTurn} answers with the mailbox as it
+   * stands, which does not say WHICH entry was this call's, so a caller that must
+   * record "this turn went down the pipe as entry X" (the ask settle's forwarded
+   * marker) reads it back by the key it supplied. A read; it writes nothing.
+   */
+  async entryIdForKey(
+    jobId: string,
+    sessionId: string,
+    idempotencyKey: string,
+    pctx: MailboxContext,
+  ): Promise<string | null> {
+    return withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+      const entry = await planChangeMailboxRepository.findByIdempotencyKey(
+        sessionId,
+        jobId,
+        idempotencyKey,
+        pctx.workspaceId,
+        tx,
+      );
+      return entry?.id ?? null;
+    });
   },
 
   /**

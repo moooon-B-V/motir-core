@@ -578,3 +578,87 @@ describe('an ask in flight when the surface goes away', () => {
     expect(hook.result.current.state.outOfCredits).toBe(false);
   });
 });
+
+describe('an UNCODED stream failure', () => {
+  it('still says something — FAILED, never a blank error', async () => {
+    streamAsk.mockImplementation(
+      async (_jobId: string, _signal: AbortSignal, onError: (code: string | null) => void) => {
+        onError(null);
+      },
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('why?');
+    });
+
+    expect(result.current.state.errorCode).toBe('FAILED');
+    expect(settleAsk).not.toHaveBeenCalled();
+  });
+});
+
+describe('a pick SEEDED at the project (MOTIR-6435) — the seed rides the first send only', () => {
+  async function seededMount() {
+    const hook = renderHook(() => usePlanChangeConversation({ seedGateId: 'gate-1' }));
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+    return hook;
+  }
+
+  it('carries the gate on the send that has no session yet', async () => {
+    const { result } = await seededMount();
+
+    await act(async () => {
+      await result.current.send('plan the follow-up');
+    });
+
+    expect(submitAsk).toHaveBeenCalledTimes(1);
+    const args = submitAsk.mock.calls[0]!;
+    expect(args[0]).toBe('plan the follow-up');
+    expect(args[3]).toBeNull();
+    expect(args[4]).toBe('gate-1');
+  });
+
+  it('a SEED_NOT_APPLICABLE refusal drops the seed, so the retry is an ordinary turn', async () => {
+    submitAsk.mockRejectedValueOnce(new PlanEditsClientError(409, 'SEED_NOT_APPLICABLE'));
+    const { result } = await seededMount();
+
+    await act(async () => {
+      await result.current.send('plan the follow-up');
+    });
+    // The send failed and says so; the seed is what the next send must not carry.
+    expect(result.current.state.errorCode).not.toBeNull();
+
+    await act(async () => {
+      await result.current.send('plan the follow-up');
+    });
+    expect(submitAsk.mock.calls[1]![4]).toBeNull();
+  });
+
+  it('any OTHER refusal keeps the seed for the next attempt', async () => {
+    submitAsk.mockRejectedValueOnce(new PlanEditsClientError(503, 'MOTIR_AI_UNAVAILABLE'));
+    const { result } = await seededMount();
+
+    await act(async () => {
+      await result.current.send('plan the follow-up');
+    });
+    await act(async () => {
+      await result.current.send('plan the follow-up');
+    });
+
+    expect(submitAsk.mock.calls[1]![4]).toBe('gate-1');
+  });
+
+  it('…and so does a failure that is not the client error at all', async () => {
+    submitAsk.mockRejectedValueOnce(new TypeError('network'));
+    const { result } = await seededMount();
+
+    await act(async () => {
+      await result.current.send('plan the follow-up');
+    });
+    await act(async () => {
+      await result.current.send('plan the follow-up');
+    });
+
+    expect(submitAsk.mock.calls[1]![4]).toBe('gate-1');
+  });
+});

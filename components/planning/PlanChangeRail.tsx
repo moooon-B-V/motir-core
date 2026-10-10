@@ -6,7 +6,6 @@ import { useFormatter, useTranslations } from 'next-intl';
 import {
   Bot,
   Check,
-  Clock,
   FilePenLine,
   History,
   Inbox,
@@ -35,6 +34,17 @@ import {
   narrationEarlierCount,
 } from '@/components/planning/planNarration';
 import { PlanningTargetKeyChip } from '@/components/planning/PlanningTargetChip';
+import {
+  AnsweredAside,
+  ForwardOffer,
+  ForwardRefusal,
+  ForwardedMarks,
+  PendingAsk,
+  ProposalRef,
+  QueuedLabel,
+} from '@/components/planning/MidRunTurn';
+import { PauseThread } from '@/components/planning/RunPause';
+import { isOpenUnclear, pauseAnchorIndex, pauseOf, pauseOwnedIds } from '@/lib/planning/runPause';
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
 import {
@@ -46,7 +56,9 @@ import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import { claimPickAutoSend } from '@/lib/planning/pickAutoSend';
 import {
   dispositionMarkerFor,
+  forwardOfferStale,
   pendingQuestion,
+  threadOwnedMailboxIds,
   type QuestionDisposition,
 } from '@/lib/planning/planChangeThread';
 import type {
@@ -59,6 +71,7 @@ import type { WorkItemRefMap, WorkItemRefSummaryDto } from '@/lib/dto/workItems'
 import type {
   PlanChangeConversationState,
   PlanChangeProgress,
+  QueuedTurn,
 } from '@/lib/hooks/usePlanChangeConversation';
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
@@ -80,6 +93,7 @@ import {
   TargetRefusal,
 } from '@/components/planning/SessionEndParts';
 import { workbenchTabHref } from '@/lib/workbench/tab';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 + 6). Changing
@@ -281,6 +295,16 @@ export interface PlanChangeRailProps {
   onCarrySend?: (text: string) => void;
   /** PLAN IT AGAIN on the stale notice (MOTIR-7945's accept; design state 10). */
   onPlanAgain?: () => void;
+  /**
+   * SELECT a proposal on the canvas from the chip an answer names it with
+   * (MOTIR-7998; design state 3b). Optional: absent, the chip is drawn as text.
+   */
+  onSelectProposal?: (planItemId: string) => void;
+  /**
+   * ANSWER the planner's mid-run pause (MOTIR-8010): *Start over* / *Keep going* on
+   * a re-plan offer. Optional: absent, the offer's buttons do nothing.
+   */
+  onAnswerRunPause?: (choice: 'start_over' | 'apply') => void;
   /** "N earlier notes" (MOTIR-8064): page earlier narration sentences in. */
   onShowEarlierNarration?: () => void;
 }
@@ -320,6 +344,8 @@ export function PlanChangeRail({
   onAnswerRestart,
   onCarrySend,
   onPlanAgain,
+  onSelectProposal,
+  onAnswerRunPause,
   onShowEarlierNarration,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
@@ -363,6 +389,47 @@ export function PlanChangeRail({
 
   const busy = state.phase === 'streaming' || state.phase === 'deciding';
   const turns = state.session?.turns ?? [];
+  // A forwarded change is a thread turn AND a mailbox entry: the thread draws it,
+  // the standalone queued render below skips it (MOTIR-7998).
+  const runPause = pauseOf(state);
+  const threadOwned = threadOwnedMailboxIds(turns, pauseOwnedIds(runPause));
+  const pauseReplyEntry = runPause?.mailboxEntryId
+    ? (state.queued.find((q) => q.id === runPause.mailboxEntryId) ?? null)
+    : null;
+  const pauseBlock = runPause ? (
+    <PauseThread
+      pause={runPause}
+      pending={Boolean(state.answeringPause)}
+      onAnswer={(choice) => onAnswerRunPause?.(choice)}
+      replyEntry={pauseReplyEntry}
+      refusalCode={state.pauseAnswerRefusal?.code ?? null}
+    />
+  ) : null;
+  const pauseAnchor = runPause ? pauseAnchorIndex(turns, runPause) : -1;
+  // THE PAUSED STATE: an unanswered pause, or a reply the run has not read yet.
+  const paused =
+    runPause !== null &&
+    (runPause.answer === null ||
+      (runPause.answer === 'replied' && pauseReplyEntry?.read === false));
+  // THE REFUSED ANSWER KEEPS ITS WORDS, once: a reply the run never read is put back
+  // in the box when the box is empty.
+  const pauseRefusal = state.pauseAnswerRefusal ?? null;
+  const [seenPauseRefusal, setSeenPauseRefusal] = useState<typeof pauseRefusal>(null);
+  if (pauseRefusal !== seenPauseRefusal) {
+    setSeenPauseRefusal(pauseRefusal);
+    if (pauseRefusal?.text && draft.trim() === '') setDraft(pauseRefusal.text);
+  }
+  const refusal = state.refusedForward ?? null;
+  const [seenRefusal, setSeenRefusal] = useState<typeof refusal>(null);
+  const [refusalRestored, setRefusalRestored] = useState(false);
+  if (refusal !== seenRefusal) {
+    // THE REFUSED CHANGE KEEPS ITS WORDS, once per refusal: the box gets them back
+    // when it is empty, and a newer draft is the person's own and is left alone.
+    setSeenRefusal(refusal);
+    const restore = refusal !== null && draft.trim() === '';
+    setRefusalRestored(restore);
+    if (restore) setDraft(refusal.text);
+  }
   const userTurns = turns.filter((turn) => turn.role === 'user');
   // AWAITING IS DERIVED FROM THE THREAD, never from local state — which is what
   // makes a question survive a reload and still be answerable hours later. The
@@ -514,7 +581,7 @@ export function PlanChangeRail({
     ) : null;
   const composerPlaceholder = heldBlocks
     ? ts('refused.placeholder', { key: held.target })
-    : question
+    : question || isOpenUnclear(runPause)
       ? tc('composerPlaceholderAnswer')
       : askingForReason
         ? tc('composerPlaceholderReplan')
@@ -762,6 +829,7 @@ export function PlanChangeRail({
           </div>
         ) : null}
 
+        {pauseAnchor < 0 ? pauseBlock : null}
         {turns.map((turn, i) => (
           <Fragment key={turn.id}>
             <Turn
@@ -782,6 +850,7 @@ export function PlanChangeRail({
                   : null
               }
               afterConfirm={i > 0 && turns[i - 1]?.confirm === 'new_session'}
+              midRun={midRunPropsFor(turn, i, turns, state, onSelectProposal)}
             />
             {/* THE COPIED DIVIDER (AMENDMENT 23 §6; MOTIR-7633 sheet 3), under the
               last turn carried over from the ended session. */}
@@ -794,6 +863,7 @@ export function PlanChangeRail({
                 {planMovedHere ? <PlanMovedLine /> : null}
               </>
             ) : null}
+            {i === pauseAnchor ? pauseBlock : null}
             {/* THE STALE ANSWER (design state 10), under the turn it answers. */}
             {staleTurnShown && turn.id === stale?.turnId ? staleNotice : null}
           </Fragment>
@@ -882,6 +952,19 @@ export function PlanChangeRail({
           loadingEarlier={state.narrationKept?.loadingEarlier ?? false}
           {...(onShowEarlierNarration ? { onShowEarlier: onShowEarlierNarration } : {})}
         />
+
+        {/* A MID-RUN QUESTION whose answer is still being written (MOTIR-7998;
+            design state 1), below the act rail it does not touch. */}
+        {state.midRunAsk ? (
+          <PendingAsk
+            text={state.midRunAsk.text}
+            inThread={
+              lastTurn?.role === 'user' &&
+              Boolean(lastTurn.runJobId) &&
+              lastTurn.body === state.midRunAsk.text
+            }
+          />
+        ) : null}
 
         {/* STOPPED — a MARKER, not an alert (MOTIR-4068).
             It uses the shipped `system`-marker line verbatim: centred,
@@ -1018,31 +1101,21 @@ export function PlanChangeRail({
             are less legible than one (`design/ai-chat/plan-change-run-live.mock.html`
             sheet 2). The pending fact is carried by a WORD, a GLYPH and a MARKER
             instead — and the queued/read distinction by all three changing. */}
-        {state.queued.map((turn) => (
-          <div key={turn.id} className="flex flex-col gap-1">
-            <Bubble
-              role="user"
-              label={
-                turn.read ? (
-                  tc('queuedRead')
-                ) : (
-                  <>
-                    <Clock className="size-3" aria-hidden="true" />
-                    {tc('queuedLabel')}
-                  </>
-                )
-              }
-            >
-              {turn.text}
-            </Bubble>
-            <p
-              className="text-center text-xs text-(--el-text-secondary)"
-              data-testid={turn.read ? 'plan-change-queued-read' : 'plan-change-queued'}
-            >
-              {turn.read ? tc('queuedReadMarker') : tc('queuedMarker')}
-            </p>
-          </div>
-        ))}
+        {state.queued
+          .filter((turn) => !threadOwned.has(turn.id))
+          .map((turn) => (
+            <div key={turn.id} className="flex flex-col gap-1">
+              <Bubble role="user" label={<QueuedLabel read={turn.read} />}>
+                {turn.text}
+              </Bubble>
+              <p
+                className="text-center text-xs text-(--el-text-secondary)"
+                data-testid={turn.read ? 'plan-change-queued-read' : 'plan-change-queued'}
+              >
+                {turn.read ? tc('queuedReadMarker') : tc('queuedMarker')}
+              </p>
+            </div>
+          ))}
 
         {/* An ASKED plan's STALE and DECIDED-FIRST refusals are said in the review block
             itself, in the design's words (MOTIR-6037; Panels 5–6), not as a failure. */}
@@ -1118,6 +1191,9 @@ export function PlanChangeRail({
       {/* The composer carries the `@` TARGET picker + the tray (MOTIR-1491) — the
           message field and the target set are one control, because the targets
           scope the turn the field sends. */}
+      {/* THE RUN HAS ENDED, so a change was not forwarded (MOTIR-7998; design
+          state 11): the reason sits in the footer, directly above the composer. */}
+      {refusal ? <ForwardRefusal refusal={refusal} restored={refusalRestored} /> : null}
       {carries ? (
         <div className="border-t border-(--el-border)" data-testid="planning-carry">
           <WaitingPlanComposerGloss />
@@ -1205,6 +1281,7 @@ export function PlanChangeRail({
                   line: runningBarLine(acts, tc) ?? tc('progress.submitted'),
                   stopping: state.stopping,
                   onStop,
+                  ...(paused && runPause ? { paused: { kind: runPause.kind } } : {}),
                 }
               : null
           }
@@ -1221,6 +1298,31 @@ export function PlanChangeRail({
       )}
     </aside>
   );
+}
+
+/** The mid-run inputs for the turn at `index` (MOTIR-7998): its matching mailbox
+ *  entry, the late revision, and the answer-side flags. */
+function midRunPropsFor(
+  turn: PlanChangeTurnDto,
+  index: number,
+  turns: readonly PlanChangeTurnDto[],
+  state: PlanChangeConversationState,
+  onSelectProposal: ((planItemId: string) => void) | undefined,
+): MidRunTurnProps {
+  const entryId = turn.forwarded?.mailboxEntryId;
+  const origin = turn.role === 'assistant' ? originatingUserTurn(turns, turn) : null;
+  return {
+    queuedEntry: entryId ? (state.queued.find((q) => q.id === entryId) ?? null) : null,
+    lateRevision: state.lateRevision ?? null,
+    revisedLate:
+      turn.revisedLate ??
+      (entryId && state.lateRevision?.entryIds?.includes(entryId)
+        ? { revisionJobId: state.lateRevision.revisionJobId }
+        : null),
+    answeredAside: Boolean(origin?.runJobId) && !origin?.forwarded && !origin?.revisedLate,
+    offerStale: Boolean(turn.forwardOffer) && forwardOfferStale(turns, index),
+    onSelectProposal,
+  };
 }
 
 /** `FAILED` / `EMPTY` / `immutable` / `SESSION_UNAVAILABLE` / any typed code →
@@ -1380,6 +1482,24 @@ interface TurnProps {
   /** This system turn sits right after a confirm — it is the Keep planning
    *  marker (A3.3), which the decision identifies by position. */
   afterConfirm: boolean;
+  /** The MID-RUN conversation's per-turn inputs (MOTIR-7998). */
+  midRun: MidRunTurnProps;
+}
+
+/** What a turn needs to draw the mid-run conversation: the mailbox entry its
+ *  forward went down as, the late revision, and the answer-side flags. */
+interface MidRunTurnProps {
+  /** The `state.queued` entry matching this turn's `forwarded.mailboxEntryId`. */
+  queuedEntry: QueuedTurn | null;
+  lateRevision: { planId: string } | null;
+  /** The turn's late revision: its own persisted mark, or — for a change the
+   *  end-of-run claim revised — the revision that carried its mailbox entry. */
+  revisedLate: PlanChangeTurnDto['revisedLate'];
+  /** This answer was given on the side — it owes the passive line. */
+  answeredAside: boolean;
+  /** This answer's forward offer has gone stale. */
+  offerStale: boolean;
+  onSelectProposal: ((planItemId: string) => void) | undefined;
 }
 
 /** The one pending question's DOM id — the composer's "See it" jump target.
@@ -1427,6 +1547,7 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
     correction,
     debugOutcome,
     restartConfirm,
+    midRun,
   }: TurnProps) {
     const tc = useTranslations('planningWorkspace.conversation');
     const tr = useTranslations('planningWorkspace.restart');
@@ -1499,7 +1620,17 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
               never a second inline treatment invented for this surface. THIS IS
               ALSO HOW AN ANSWER CITES: a citation is that chip, in the sentence
               that rests on it, and there is no trailing source list. */}
-          <MarkdownView value={turn.body} workItemRefs={workItemRefs} />
+          <MarkdownView
+            value={turn.body}
+            workItemRefs={workItemRefs}
+            renderProposalRef={(planItemId, label) => (
+              <ProposalRef
+                planItemId={planItemId}
+                label={label}
+                {...(midRun.onSelectProposal ? { onSelect: midRun.onSelectProposal } : {})}
+              />
+            )}
+          />
           {/* The size of the evidence base — a NUMBER, not a second chip list.
               An answer may rest on items its prose never names, and `citations`
               is the grounding contract; saying how many keeps that checkable
@@ -1518,7 +1649,9 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
               {tc('answeredFrom', { count: turn.citations.length })}
             </p>
           ) : null}
+          {turn.forwardOffer ? <ForwardOffer turn={turn} stale={midRun.offerStale} /> : null}
         </Bubble>
+        {midRun.answeredAside ? <AnsweredAside /> : null}
         {/* The CORRECTION (ADR §3, as amended by AMENDMENT 3) — an interactive
             line in the shipped marker vocabulary, distinguished from the passive
             markers by ink AND underline rather than by colour alone.
@@ -1550,12 +1683,18 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
   // turn number, `refine` and `answer` were internal bookkeeping shown to the
   // person. An answer to a question is still marked, by the disposition line
   // below, never by a label on the bubble.
-  user: function UserTurn({ turn, targetKeys, disposition }: TurnProps) {
+  user: function UserTurn({ turn, targetKeys, disposition, midRun }: TurnProps) {
     const tc = useTranslations('planningWorkspace.conversation');
     const tt = useTranslations('planningWorkspace.targets');
     return (
       <>
-        <Bubble role="user" testId="conversation-user-turn">
+        <Bubble
+          role="user"
+          testId="conversation-user-turn"
+          {...(turn.forwarded && midRun.queuedEntry
+            ? { label: <QueuedLabel read={midRun.queuedEntry.read} /> }
+            : {})}
+        >
           {targetKeys.length > 0 ? (
             <span className="mb-1 flex flex-wrap items-center gap-1">
               <span className="text-[10px] font-semibold tracking-wide uppercase opacity-80">
@@ -1580,6 +1719,16 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
           >
             {tc(disposition === 'answered' ? 'answeredMarker' : 'supersededMarker')}
           </p>
+        ) : null}
+        {/* A question typed mid-run is UNLABELLED (state 2); a forwarded change
+            carries its queued / read marks, a late one its revision note. */}
+        {turn.forwarded || midRun.revisedLate ? (
+          <ForwardedMarks
+            entry={midRun.queuedEntry}
+            acknowledge
+            revisedLate={midRun.revisedLate}
+            lateRevision={midRun.lateRevision}
+          />
         ) : null}
       </>
     );
@@ -1827,10 +1976,11 @@ function EarlierNotice({
   projectName: string;
 }) {
   const ts = useTranslations('planningWorkspace.session');
+  const routes = useReaderRoutes();
   const [first, ...rest] = earlier.targetKeys;
   const link = (chunks: React.ReactNode) => (
     <Link
-      href={`/plans?session=${encodeURIComponent(earlier.id)}`}
+      href={routes.view(`/plans?session=${encodeURIComponent(earlier.id)}`)}
       className="font-semibold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
       {chunks}

@@ -1,7 +1,9 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planReviewService } from '@/lib/services/planReviewService';
+import { buildProjection, projectedEdgeDisposition } from '@/lib/services/planProjectionService';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -154,5 +156,90 @@ describe('planReviewService.getPlanReview — projected edge disposition (MOTIR-
     await plansService.markPlanned(plan.id, fx.ctx);
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     expect(review.edgeCoverage).toEqual([]);
+  });
+});
+
+describe('the review projection is FOCUSED, not the whole project (MOTIR-8146)', () => {
+  it('never reads the project’s whole live item set, and loads none of the unrelated items', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await tree(fx);
+    await link(fx, t.b1.id, t.a1.id);
+    // A second epic the plan never names: its items must not be read.
+    const other = await seed(fx, 'epic', 'Unrelated');
+    const otherStory = await seed(fx, 'story', 'Unrelated story', other.id);
+    await seed(fx, 'subtask', 'Unrelated leaf', otherStory.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Wire' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: t.B.id, patch: { blockedByAdd: [t.A.id] } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const whole = vi.spyOn(workItemRepository, 'findAllByProjectForValidity');
+    const byIds = vi.spyOn(workItemRepository, 'findForValidityByIds');
+    try {
+      const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+      expect(review.edgeCoverage).toHaveLength(1);
+      expect(whole).not.toHaveBeenCalled();
+      const loaded = new Set(
+        (await Promise.all(byIds.mock.results.map((r) => r.value as Promise<{ id: string }[]>)))
+          .flat()
+          .map((row) => row.id),
+      );
+      expect(loaded.has(other.id)).toBe(false);
+      expect(loaded.has(otherStory.id)).toBe(false);
+    } finally {
+      whole.mockRestore();
+      byIds.mockRestore();
+    }
+  });
+
+  it('answers every off-level edge exactly as the whole-project projection does', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await tree(fx);
+    await link(fx, t.b1.id, t.a1.id);
+    await link(fx, t.B.id, t.A.id);
+    // A leaf blocked on a different epic's leaf: a cross-level / uncovered shape.
+    const E2 = await seed(fx, 'epic', 'Other epic');
+    const C = await seed(fx, 'story', 'Other story', E2.id);
+    const c1 = await seed(fx, 'subtask', 'Other leaf', C.id);
+    await link(fx, c1.id, t.a1.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Mixed' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Receipt', kind: 'subtask' },
+          parentRef: t.B.id,
+          blockedByRefs: [t.a1.id, c1.id],
+        },
+        { op: 'modify', workItemId: t.B.id, patch: { blockedByRemove: [t.A.id] } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const full = await buildProjection(plan.id, fx.ctx);
+    const focused = await buildProjection(plan.id, fx.ctx, { scope: 'edge_coverage' });
+    const pairs: Array<[string, string]> = [
+      [t.b1.id, t.a1.id],
+      [t.B.id, t.A.id],
+      [c1.id, t.a1.id],
+    ];
+    for (const item of focused.proposalByRef.keys()) {
+      pairs.push([item, t.a1.id], [item, c1.id]);
+    }
+    for (const [blocked, blocker] of pairs) {
+      expect(projectedEdgeDisposition(focused, blocked, blocker)).toBe(
+        projectedEdgeDisposition(full, blocked, blocker),
+      );
+    }
+    // And the answers are not all the same one, so the equality above is not vacuous.
+    const seen = new Set(pairs.map(([a, b]) => projectedEdgeDisposition(focused, a, b)));
+    expect(seen.size).toBeGreaterThan(1);
   });
 });

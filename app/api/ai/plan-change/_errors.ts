@@ -15,6 +15,11 @@ import {
   PlanChangeJobNotRunningError,
   PlanChangeFlipNotOfferedError,
   PlanChangeMailboxJobMismatchError,
+  PlanChangeRunPauseAnsweredError,
+  PlanChangeRunPauseNotFoundError,
+  PlanChangeRunPausePlanDecidedError,
+  PlanChangeRunPauseShapeError,
+  PlanChangeRunPauseTurnMismatchError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
@@ -55,6 +60,7 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
     err instanceof PlanSessionNotFoundError ||
     err instanceof PlanChangeTurnNotFoundError ||
     err instanceof PlanChangeMailboxJobMismatchError ||
+    err instanceof PlanChangeRunPauseNotFoundError ||
     err instanceof AskAnchorNotAvailableError ||
     err instanceof DebugTargetNotAvailableError
   ) {
@@ -63,6 +69,30 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   // The retired flip into a planning run (AMENDMENT 3): nothing was written.
   if (err instanceof PlanChangeFlipNotOfferedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+  }
+  // The planner's mid-run pause (MOTIR-8007): a malformed record or answer is a 400;
+  // a double answer carries the stored one; a decided plan or a foreign change turn
+  // is a conflict with the current state.
+  if (err instanceof PlanChangeRunPauseShapeError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, reason: err.reason },
+      { status: 400 },
+    );
+  }
+  if (err instanceof PlanChangeRunPauseAnsweredError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, pauseId: err.pauseId, answer: err.answer },
+      { status: 409 },
+    );
+  }
+  if (err instanceof PlanChangeRunPausePlanDecidedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, planId: err.planId, planStatus: err.planStatus },
+      { status: 409 },
+    );
+  }
+  if (err instanceof PlanChangeRunPauseTurnMismatchError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
   if (err instanceof EmptyPlanChangeTurnError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });

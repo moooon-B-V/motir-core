@@ -7547,6 +7547,48 @@
       "queuedRead": "已读",
       "queuedMarker": "已排队 —— Motir AI 写完当前这个工作项后会读到。",
       "queuedReadMarker": "已在阶段边界读取 —— 已并入本次运行。",
+      "midRun": {
+        "pause": {
+          "offerHow": "重新开始会按你的新需求重写计划。继续则把它应用到已经写好的工作项上。",
+          "groupLabel": "重新开始？",
+          "startOver": "重新开始",
+          "keepGoing": "继续并应用",
+          "chosenStartOver": "你选择了重新开始",
+          "chosenKeepGoing": "你选择了继续",
+          "applying": "正在把你的变更应用到已写好的工作项",
+          "unclearNote": "目前还没有改动任何内容。",
+          "pausedWord": "已暂停",
+          "finishingChoice": "正在完成手头的工作项，随后等待你的选择。",
+          "waitingChoice": "等待你的选择。",
+          "finishingAnswer": "正在完成手头的工作项，随后等待你的回答。",
+          "answeredQueued": "已回答 —— 规划者会在下一步读到。",
+          "refusal": {
+            "PLAN_CHANGE_JOB_NOT_RUNNING": "运行在你的回答送达之前已经结束。",
+            "generic": "你的回答没有送达运行。"
+          }
+        },
+        "answeringMarker": "正在一旁回答 —— 运行照常继续。",
+        "answeredAside": "已在一旁回答 —— 没有发送给运行中的规划。",
+        "forwardedAck": "这是一项变更，我已转交给规划者；它会在下一步读到。",
+        "queuedMarker": "已排队 —— 规划者会在下一步读到。",
+        "readMarker": "已读 —— 规划者已收到。",
+        "forwardOffer": "如果你想把它当作变更，请回复“是，转交”。",
+        "forwardStale": "未转交 —— 没有改动任何内容。",
+        "revisedAck": "这是一项变更。计划已经写完，所以我会把它作为修订应用。",
+        "revisedNote": "已作为本计划的修订应用。",
+        "revisedLink": "在时间线中查看",
+        "refusal": {
+          "finished": "这次运行已经结束。",
+          "stopped": "你停止了这次运行。",
+          "failed": "这次运行失败了。",
+          "decided": "这个计划已经被批准或拒绝。",
+          "held": "这个计划正在应用另一项变更。",
+          "noPlan": "这次运行没有产生可供修改的计划。",
+          "generic": "运行已结束，所以这条消息没有被转交。",
+          "tail": "你的消息没有发送，它还在下方的输入框中。",
+          "quoted": "你的消息没有发送：“{text}”"
+        }
+      },
       "act": {
         "submitted": "提交",
         "reading": "阅读",

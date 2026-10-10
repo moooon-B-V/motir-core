@@ -7554,6 +7554,48 @@
       "queuedRead": "gelezen",
       "queuedMarker": "In wachtrij — Motir AI leest dit zodra het werkitem dat het nu schrijft af is.",
       "queuedReadMarker": "Gelezen bij de overgang — opgenomen in deze run.",
+      "midRun": {
+        "pause": {
+          "offerHow": "‘Opnieuw beginnen’ schrijft het plan opnieuw op basis van je nieuwe vraag. ‘Doorgaan’ past die toe op de werkitems die al geschreven zijn.",
+          "groupLabel": "Opnieuw beginnen?",
+          "startOver": "Opnieuw beginnen",
+          "keepGoing": "Doorgaan en toepassen",
+          "chosenStartOver": "Je hebt gekozen om opnieuw te beginnen",
+          "chosenKeepGoing": "Je hebt gekozen om door te gaan",
+          "applying": "Je wijziging wordt toegepast op de geschreven werkitems",
+          "unclearNote": "Er is nog niets gewijzigd.",
+          "pausedWord": "gepauzeerd",
+          "finishingChoice": "Maakt eerst de werkitems af waar het aan werkt en wacht dan op je keuze.",
+          "waitingChoice": "Wacht op je keuze.",
+          "finishingAnswer": "Maakt eerst de werkitems af waar het aan werkt en wacht dan op je antwoord.",
+          "answeredQueued": "Beantwoord — de planner leest het bij de volgende stap.",
+          "refusal": {
+            "PLAN_CHANGE_JOB_NOT_RUNNING": "De run was afgelopen voordat je antwoord aankwam.",
+            "generic": "Je antwoord heeft de run niet bereikt."
+          }
+        },
+        "answeringMarker": "Antwoord terzijde — de run gaat gewoon door.",
+        "answeredAside": "Terzijde beantwoord — er is niets naar de run gestuurd.",
+        "forwardedAck": "Dat is een wijziging, dus ik heb die doorgegeven aan de planner. Die leest het bij de volgende stap.",
+        "queuedMarker": "In wachtrij — de planner leest dit bij de volgende stap.",
+        "readMarker": "Gelezen — de planner heeft het.",
+        "forwardOffer": "Wil je het als wijziging? Antwoord dan ‘ja, doorgeven’.",
+        "forwardStale": "Niet doorgegeven — er is niets gewijzigd.",
+        "revisedAck": "Dat is een wijziging. Het plan is al helemaal geschreven, dus ik pas die toe als herziening.",
+        "revisedNote": "Toegepast als herziening van dit plan.",
+        "revisedLink": "Bekijk het op de tijdlijn",
+        "refusal": {
+          "finished": "Deze run is voltooid.",
+          "stopped": "Je hebt deze run gestopt.",
+          "failed": "Deze run is mislukt.",
+          "decided": "Dit plan is al goedgekeurd of afgewezen.",
+          "held": "Er wordt al een andere wijziging op dit plan toegepast.",
+          "noPlan": "Deze run heeft geen plan opgeleverd om te wijzigen.",
+          "generic": "De run is afgelopen, dus dit is niet doorgegeven.",
+          "tail": "Je bericht is niet verzonden. Het staat in het vak hieronder.",
+          "quoted": "Je bericht is niet verzonden: ‘{text}’"
+        }
+      },
       "act": {
         "submitted": "verzenden",
         "reading": "lezen",

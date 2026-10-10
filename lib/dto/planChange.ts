@@ -44,6 +44,44 @@ export type PlanChangeTurnConfirmDto = 'new_session';
 /** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
  *  `system` submission marker and on an `assistant` turn (the job that produced
  *  it); `authorId` only on a `user` turn (and null once that user is deleted). */
+/**
+ * The planner's mid-run PAUSE (MOTIR-8007): the walk stopped on one thing and
+ * waits for the person while its job keeps running. `replan` offers START OVER;
+ * `unclear` asks a question. `reason` / `question` are the planner's words, SHOWN
+ * to the person and never sent back. At most one is open per job.
+ */
+export interface PlanChangeRunPauseDto {
+  id: string;
+  jobId: string;
+  kind: 'replan' | 'unclear';
+  /** The mailbox entry ids of the change turns the pause is about. */
+  changeTurnIds: string[];
+  reason: string | null;
+  question: string | null;
+  createdAt: string;
+  /** Null while open. */
+  answer: 'start_over' | 'apply' | 'replied' | null;
+  answeredAt: string | null;
+  /** The person's reply, verbatim, on `replied` only. */
+  replyText: string | null;
+  /** `pending` until the answer reached the run's mailbox; `refused` when the run ended first. */
+  delivery: 'pending' | 'delivered' | 'refused';
+  refusedCode: string | null;
+  /**
+   * The mailbox entry the answer wrote (a decline's `fold`, a reply's `fold`, or
+   * START OVER's `restart`), or null while none has been written. The rail ties
+   * the reply's queued → read marks to the entry with this id (MOTIR-8010).
+   */
+  mailboxEntryId: string | null;
+  /**
+   * Whether the run has READ the mailbox entry the answer wrote. Filled by the read
+   * door, so a reloaded rail (which has no live mailbox poll yet) can still draw a
+   * reply as read and the question as "planning resumed". Absent where the DTO was
+   * built from a write, which never knows it.
+   */
+  entryRead?: boolean;
+}
+
 export interface PlanChangeTurnDto {
   id: string;
   seq: number;
@@ -130,6 +168,32 @@ export interface PlanChangeTurnDto {
    * other turn. Optional for the reason {@link anchorKey} is.
    */
   confirm?: PlanChangeTurnConfirmDto | null;
+  /**
+   * The planning job that was RUNNING when this `user` turn was typed (MOTIR-7996).
+   * Present on a MID-RUN turn, which was answered by an `ask_project` job carrying
+   * the run's snapshot rather than queued for the planner. Null on every other
+   * turn. Optional for the reason {@link anchorKey} is.
+   */
+  runJobId?: string | null;
+  /**
+   * The exact text an `assistant` answer OFFERED to forward to the running planner
+   * (MOTIR-7996) — the offered `user` turn's own body. Null on every other turn.
+   * Optional for the reason {@link anchorKey} is.
+   */
+  forwardOffer?: string | null;
+  /**
+   * Set on a mid-run `user` turn that was FORWARDED to the running planner: the
+   * mailbox entry it went down as. The rail draws forwarded → queued → read from
+   * it. Null on every other turn. Optional for the reason {@link anchorKey} is.
+   */
+  forwarded?: { mailboxEntryId: string } | null;
+  /**
+   * Set on a mid-run `user` turn that was forwarded after the walk finished but
+   * before the plan was decided, and so became a REVISE_PLAN revision of the run's
+   * own plan (MOTIR-7997): the revision job. Null on every other turn. Optional for
+   * the reason {@link anchorKey} is.
+   */
+  revisedLate?: { revisionJobId: string } | null;
   authorId: string | null;
   createdAt: string;
 }
@@ -223,6 +287,11 @@ export interface PlanChangeSessionDto {
    *  copied turns keep their own `createdAt`, so they are the turns written
    *  before this session's own `createdAt`. */
   copiedFromSessionId?: string | null;
+  /**
+   * The planner's latest mid-run PAUSE on the session's current job (MOTIR-8007),
+   * or null. Optional for the reason {@link PlanChangeTurnDto.anchorKey} is.
+   */
+  runPause?: PlanChangeRunPauseDto | null;
   /** The resume answered with the caller's OWN open session of ANOTHER scope that
    *  holds this card — the take-back (AMENDMENT 23 §3). Set by the resume read only. */
   takenBack?: boolean;

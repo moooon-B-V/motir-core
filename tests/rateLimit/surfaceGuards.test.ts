@@ -781,6 +781,9 @@ describe('the routes are actually WIRED to the guards', () => {
     // target is a PLAN id rather than a work-item key, which changes nothing
     // about what it costs: it dispatches a model job.
     'app/api/ai/revise/route.ts',
+    // A change forwarded after the walk finished becomes ONE revision job, so it
+    // spends provider money like the revise door it reuses (MOTIR-7997).
+    'app/api/ai/plan-change/session/late-changes/route.ts',
   ];
 
   // Each of these submits NO model job. The reason is in the route's own header
@@ -818,6 +821,9 @@ describe('the routes are actually WIRED to the guards', () => {
     'app/api/ai/plan-change/session/restart/confirm/route.ts',
     'app/api/ai/plan-change/session/restart/route.ts',
     'app/api/ai/plan-change/session/route.ts',
+    // The planner's mid-run PAUSE: reads and answers one row, and the answer
+    // is a mailbox turn on a job already running — no model job (MOTIR-8007).
+    'app/api/ai/plan-change/session/run-pause/route.ts',
     'app/api/ai/plan-change/session/turns/route.ts',
     'app/api/ai/plan/generate/[jobId]/stream/route.ts',
     'app/api/ai/plan/sprint/[jobId]/review/route.ts',

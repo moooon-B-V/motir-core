@@ -5,6 +5,7 @@ import type {
   CopyableSessionDto,
   DebugLandingDto,
   EarlierSessionDto,
+  PlanChangeRunPauseDto,
   PlanChangeSessionDto,
   PlanTargetHeldByDto,
 } from '@/lib/dto/planChange';
@@ -26,6 +27,8 @@ import {
   resubmitContextualPlan,
   resumeContextualSession,
   settleAskJob,
+  submitMidRunAskTurn,
+  submitLateChanges,
   startCopiedSession,
   requestRestartConfirm,
   answerRestart,
@@ -41,6 +44,8 @@ import {
   type AskSubmitResponse,
 } from '@/lib/planning/planChangeClient';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
+import { isOpenUnclear, pauseOf, MAILBOX_POLL_MS } from '@/lib/planning/runPause';
+import { useRunPause } from '@/lib/hooks/useRunPause';
 import { carriesWaitingPlan } from '@/lib/planning/sessionCarry';
 import {
   PlanAgainNotAvailableClientError,
@@ -338,6 +343,58 @@ export interface PlanChangeConversationState {
    */
   queued: QueuedTurn[];
   /**
+   * A change the person typed mid-run that the answering session read as a CHANGE
+   * but could not forward, because the run had ENDED (MOTIR-7996). The turn is
+   * still on the thread; `text` is the words to hand back to the composer and
+   * `code` is why (`PLAN_CHANGE_JOB_NOT_RUNNING`). The rail draws it and puts the
+   * text back (the rail-rendering work item); this state only carries it. Null
+   * otherwise, and cleared by the next mid-run send. OPTIONAL (absent reads as null)
+   * so a state built by hand — every rail test — needs no change.
+   */
+  refusedForward?: { text: string; code: string } | null;
+  /**
+   * A change the person forwarded after the walk finished but before the plan was
+   * decided, now applied as ONE revision of the plan (MOTIR-7997): `planId` is the
+   * plan, `revisionJobId` the REVISE_PLAN job (on the plan's timeline), `count` the
+   * forwarded changes it carries. Set by the late-changes call at the end of a run
+   * and by the settle's `revised_late` outcome. The rail draws it (the rail-rendering
+   * work item); this state only carries it. Null otherwise. OPTIONAL (absent reads as
+   * null) so a state built by hand — every rail test — needs no change.
+   */
+  lateRevision?: {
+    planId: string;
+    revisionJobId: string;
+    count: number;
+    /** The mailbox entries the revision carried, when the end-of-run claim made it:
+     *  the persisted turns are not marked `revisedLate` on that path, so the rail
+     *  recognises the stranded turns by these ids. Absent on the settle path. */
+    entryIds?: string[];
+  } | null;
+  /**
+   * A QUESTION the person typed while a run works, whose answer is still being
+   * written (MOTIR-7998). Set when the mid-run send starts and cleared when that
+   * ask settles or fails; it never touches `jobId`, `phase`, `stopping` or the
+   * run's abort controller. The rail draws the question and the answering cue from
+   * it. OPTIONAL (absent reads as null) so a state built by hand needs no change.
+   */
+  midRunAsk?: { text: string } | null;
+  /**
+   * The planner's latest mid-run PAUSE on this run (MOTIR-8010), as the poll last
+   * read it; absent until it has read one, when the session DTO's own `runPause`
+   * stands in (`pauseOf`). An unanswered pause on the running job IS the paused
+   * state. OPTIONAL (absent reads as unset) so a state built by hand needs no change.
+   */
+  runPause?: PlanChangeRunPauseDto | null;
+  /** An answer to the pause is in flight — both controls read disabled. */
+  answeringPause?: boolean;
+  /** The pause's answer was REFUSED because the run ended first (MOTIR-8010): why,
+   *  which choice, and the reply's text to hand back to the composer. */
+  pauseAnswerRefusal?: {
+    code: string;
+    choice: 'start_over' | 'apply' | 'reply';
+    text?: string;
+  } | null;
+  /**
    * The run ENDED because the user ended it.
    *
    * ⚠️ THIS IS NOT AN ERROR, and the code below goes out of its way not to record
@@ -513,6 +570,8 @@ const INITIAL: PlanChangeConversationState = {
   stopping: false,
   stopped: false,
   queued: [],
+  refusedForward: null,
+  lateRevision: null,
   earlier: null,
   reopened: null,
   readOnly: false,
@@ -531,7 +590,6 @@ const OUT_OF_CREDITS_CODES = new Set(['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits
  * about how quickly the surface stops saying QUEUED, not about catching the
  * boundary. It only ticks while a run is streaming AND something is unread.
  */
-const MAILBOX_POLL_MS = 3000;
 
 /**
  * How often an open surface re-reads a plan whose gate is AWAITING, so a revision
@@ -1035,15 +1093,26 @@ export function usePlanChangeConversation({
     anchorRef.current = anchorId;
   });
 
+  // The side ASKS a mid-run turn opens (MOTIR-7996), each on its OWN controller so
+  // the planning run's `abortRef` — and its Stop — are never touched by one.
+  const midRunAbortsRef = useRef<Set<AbortController>>(new Set());
+
+  // The planner's mid-run PAUSE (MOTIR-8010): polled while a run streams, and
+  // answered by the offer's controls or by the composer's next turn.
+  const { answerRunPause } = useRunPause({ state, stateRef, setState, mountedRef });
+
   useEffect(() => {
     mountedRef.current = true;
     const live = new AbortController();
     liveAbortRef.current = live;
+    const midRunAborts = midRunAbortsRef.current;
     return () => {
       mountedRef.current = false;
       abortRef.current?.abort();
       abortRef.current = null;
       live.abort();
+      for (const c of midRunAborts) c.abort();
+      midRunAborts.clear();
     };
   }, []);
 
@@ -1576,6 +1645,53 @@ export function usePlanChangeConversation({
     [settleEnd, adoptStalePlan, followPlan],
   );
 
+  /**
+   * The late-change claim (MOTIR-7997), made ONCE when a planning run's stream
+   * ends. It fires only when the mailbox state this hook already holds still lists
+   * a forwarded turn the run was never seen to read; otherwise nothing is sent.
+   *
+   *  * `revised` → the stranded changes are now ONE revision: `queued` clears and
+   *    `lateRevision` is set.
+   *  * `refused` → nothing was revised: `refusedForward` carries the joined texts
+   *    and the reason, for the composer to take back.
+   *  * `none` → nothing was stranded (the run read them after the last poll): the
+   *    queued turns are marked read.
+   *
+   * A failed call is not a finding: the turns stay queued and the thread keeps
+   * them — the person's words are never removed from the record.
+   */
+  const claimLateChanges = useCallback(async (runJobId: string, signal: AbortSignal) => {
+    const sessionId = stateRef.current.session?.id;
+    if (!sessionId || !stateRef.current.queued.some((t) => !t.read)) return;
+    const strandedIds = stateRef.current.queued.filter((t) => !t.read).map((t) => t.id);
+    try {
+      const answer = await submitLateChanges(sessionId, runJobId, signal);
+      if (!mountedRef.current) return;
+      if (answer.outcome === 'revised') {
+        setState((s) => ({
+          ...s,
+          queued: [],
+          lateRevision: {
+            planId: answer.planId,
+            revisionJobId: answer.revisionJobId,
+            count: answer.texts.length,
+            entryIds: strandedIds,
+          },
+        }));
+      } else if (answer.outcome === 'refused') {
+        setState((s) => ({
+          ...s,
+          queued: [],
+          refusedForward: { text: answer.texts.join('\n\n'), code: answer.code },
+        }));
+      } else {
+        setState((s) => ({ ...s, queued: s.queued.map((t) => ({ ...t, read: true })) }));
+      }
+    } catch {
+      /* the turns stay queued; the next end-of-run (or a reload) asks again. */
+    }
+  }, []);
+
   const finishPlanRun = useCallback(
     async (
       jobId: string,
@@ -1664,6 +1780,20 @@ export function usePlanChangeConversation({
         if (jobStatus === null || TERMINAL_JOB_STATUSES.has(jobStatus)) break;
         await pauseBeforeResubscribe(attempt, controller.signal);
         if (controller.signal.aborted || !mountedRef.current) break;
+      }
+      // ⚠️ THE WALK IS OVER (MOTIR-7997): a change the person forwarded that the run
+      // never read — it was accepted while the job was still validating and closing
+      // the plan — is stranded in the mailbox. Ask the server once to claim it and
+      // submit it as ONE revision of this plan, or hand it back with the reason.
+      // Only an unread forwarded turn triggers it, so an ordinary run (nobody typed
+      // anything) makes no request, and only a run whose end the stream actually
+      // reported (never an aborted or unmounted one).
+      if (
+        (failed || (jobStatus !== null && TERMINAL_JOB_STATUSES.has(jobStatus))) &&
+        mountedRef.current &&
+        !controller.signal.aborted
+      ) {
+        await claimLateChanges(jobId, controller.signal);
       }
       if (!failed && jobStatus === 'failed') {
         // The job FAILED and no reason arrived with it (the relay sends one when
@@ -1760,7 +1890,7 @@ export function usePlanChangeConversation({
         stoppingRef.current = false;
       }
     },
-    [readProposalOnce, settleEnd],
+    [readProposalOnce, settleEnd, claimLateChanges],
   );
 
   /** Submit the thread's ACCUMULATED intent, then stream + settle the job. Shared
@@ -2431,6 +2561,113 @@ export function usePlanChangeConversation({
       if (stateRef.current.phase === 'streaming') {
         const jobId = stateRef.current.jobId;
         if (!jobId) return;
+        // ⚠️ A PLANNING RUN IS WORKING (MOTIR-7996; ADR AMENDMENT 4) → THE ANSWERING
+        // SESSION, NOT THE MAILBOX. The turn is read before it can reach the walk:
+        // a question is answered on the thread, an unsure turn is answered with an
+        // offer to forward, and only a change is forwarded (by the settle).
+        //
+        // It applies only when the running job IS a planning run (`planId` set); an
+        // ask streaming on its own keeps the path below. And it NEVER touches
+        // `jobId`, `phase`, `stopping` or the run's `abortRef`: the planning run and
+        // its Stop are unaffected, the ask streams and settles on its own controller.
+        // …EXCEPT while the planner's `unclear` question is open (MOTIR-8010): the
+        // turn IS its answer, sent to the pause door — never given a verdict by the
+        // answering session, never a second run, and `midRunAsk` is not set.
+        if (isOpenUnclear(pauseOf(stateRef.current))) {
+          await answerRunPause('reply', body);
+          return;
+        }
+        const midRunPlanId = stateRef.current.planId;
+        const midRunSessionId = stateRef.current.session?.id;
+        if (midRunPlanId && midRunSessionId) {
+          const controller = new AbortController();
+          midRunAbortsRef.current.add(controller);
+          // A session copy from the server is adopted only if it is not OLDER than
+          // what the rail holds (turns only grow), so a slow settle cannot roll the
+          // thread back over a newer write.
+          const adopt = (
+            s: PlanChangeConversationState,
+            incoming: PlanChangeSessionDto,
+          ): PlanChangeSessionDto =>
+            s.session && s.session.id === incoming.id && s.session.turnCount > incoming.turnCount
+              ? s.session
+              : incoming;
+          setState((s) => ({
+            ...s,
+            refusedForward: null,
+            lateRevision: null,
+            midRunAsk: { text: body },
+          }));
+          try {
+            const submitted = await submitMidRunAskTurn(
+              midRunSessionId,
+              jobId,
+              midRunPlanId,
+              body,
+              controller.signal,
+            );
+            if (!mountedRef.current) return;
+            setState((s) => ({ ...s, session: adopt(s, submitted.session) }));
+            let failed = false;
+            await streamAskJob(
+              submitted.jobId,
+              controller.signal,
+              (code) => {
+                failed = true;
+                if (!mountedRef.current) return;
+                const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
+                // The RUN's phase is not this ask's to change; only the error shows.
+                setState((s) => ({
+                  ...s,
+                  errorCode: gated ? s.errorCode : (code ?? 'FAILED'),
+                  outOfCredits: gated || s.outOfCredits,
+                }));
+              },
+              () => {},
+            );
+            if (failed || !mountedRef.current) return;
+            const settled = await settleAskJob(submitted.jobId, controller.signal, midRunSessionId);
+            if (!mountedRef.current) return;
+            if (settled.outcome === 'forwarded') {
+              const delivery = settled.delivery;
+              setState((s) => ({
+                ...s,
+                session: adopt(s, settled.session),
+                // The whole pending set, as the mailbox door answered it; the shipped
+                // poll reports each one read.
+                queued: delivery.turns.map((t) => ({ id: t.id, text: t.text, read: false })),
+              }));
+            } else if (settled.outcome === 'revised_late') {
+              setState((s) => ({
+                ...s,
+                session: adopt(s, settled.session),
+                lateRevision: {
+                  planId: settled.planId,
+                  revisionJobId: settled.revisionJobId,
+                  count: 1,
+                },
+              }));
+            } else if (settled.outcome === 'forward_refused') {
+              setState((s) => ({
+                ...s,
+                session: adopt(s, settled.session),
+                refusedForward: { text: settled.text, code: settled.code },
+              }));
+            } else {
+              setState((s) => ({ ...s, session: adopt(s, settled.session) }));
+            }
+          } catch (err) {
+            if (err instanceof DOMException && err.name === 'AbortError') return;
+            if (!mountedRef.current) return;
+            const code = err instanceof PlanEditsClientError ? err.code : null;
+            setState((s) => ({ ...s, errorCode: code ?? 'MAILBOX_FAILED' }));
+          } finally {
+            midRunAbortsRef.current.delete(controller);
+            // The answer is no longer being written — settled, failed or aborted.
+            if (mountedRef.current) setState((s) => ({ ...s, midRunAsk: null }));
+          }
+          return;
+        }
         // Per SEND, never per render: a retry of this click must deliver once,
         // and the next sentence must not be swallowed as a replay of this one.
         const idempotencyKey = `turn:${jobId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
@@ -2583,7 +2820,7 @@ export function usePlanChangeConversation({
         askAnchor,
       );
     },
-    [run, runAsk, carrySend],
+    [run, runAsk, carrySend, answerRunPause],
   );
 
   /** Re-send the accumulated intent after a failure — no new turn, so the
@@ -3118,6 +3355,7 @@ export function usePlanChangeConversation({
     requestRestart,
     answerRestartConfirm,
     planAgain,
+    answerRunPause,
     showEarlierNarration,
   };
 }
