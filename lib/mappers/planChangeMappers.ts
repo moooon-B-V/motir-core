@@ -102,6 +102,7 @@ export function toPlanChangeSessionDto(
   turns: PlanChangeTurn[],
   workItemRefs: WorkItemRefMap = {},
   runPause: PlanChangeRunPause | null = null,
+  runPauseEntryRead?: boolean,
 ): PlanChangeSessionDto {
   return {
     id: row.id,
@@ -121,6 +122,6 @@ export function toPlanChangeSessionDto(
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
     endReason: row.endReason ?? null,
     copiedFromSessionId: row.copiedFromSessionId ?? null,
-    runPause: runPause ? toPlanChangeRunPauseDto(runPause) : null,
+    runPause: runPause ? toPlanChangeRunPauseDto(runPause, runPauseEntryRead) : null,
   };
 }

@@ -357,6 +357,9 @@ describe('answering an unclear pause', () => {
       // The boundary read above consumed the entry: the run has read the answer.
       entryRead: true,
     });
+    // …and the session a reloaded rail resumes carries the same fact.
+    const resumed = await planChangeSessionsService.getById(ctx, sessionId);
+    expect(resumed.runPause).toMatchObject({ answer: 'replied', entryRead: true });
     expect(submitJobMock).not.toHaveBeenCalled();
   });
 

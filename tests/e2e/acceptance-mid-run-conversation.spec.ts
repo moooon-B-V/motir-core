@@ -477,9 +477,8 @@ test('B. a change is forwarded, read and lands on the canvas; a late one becomes
     // …and the revision is on the plan's timeline.
     await byId(page, 'plan-change-revision-link').click();
     await page.waitForURL(new RegExp(`/plans/${started.planId}`));
-    await expect(
-      page.getByRole('main').getByText(en.planReview.event_revision_started).first(),
-    ).toBeVisible({ timeout: FIRST_PAINT_MS });
+    // The plan is still undecided: its timeline rows are drawn once it is decided
+    // (MOTIR-7883), so the revision is read from the plan's own revision rows.
     expect(
       await adminDb.planRevision.count({
         where: { planId: started.planId, changeKind: 'revision_started' },

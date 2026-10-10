@@ -32,6 +32,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
+import { planChangeMailboxRepository } from '@/lib/repositories/planChangeMailboxRepository';
 import { planChangeRunPauseRepository } from '@/lib/repositories/planChangeRunPauseRepository';
 import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
@@ -218,7 +219,25 @@ async function toDto(
           ),
         )
     : null;
-  const dto = toPlanChangeSessionDto(row, turns, workItemRefs, runPause);
+  // Whether the run has READ the answer's mailbox entry: a reloaded rail has no live
+  // mailbox poll yet, and this is what lets it say "planning resumed" (MOTIR-7990).
+  const answerEntryId = runPause?.mailboxEntryId ?? null;
+  const readAnswerEntry = async (t: Prisma.TransactionClient): Promise<boolean> => {
+    const [entry] = await planChangeMailboxRepository.findTurnsByIds(
+      [answerEntryId!],
+      row.id,
+      row.lastJobId!,
+      pctx.workspaceId,
+      t,
+    );
+    return entry ? entry.consumedAt !== null : false;
+  };
+  const entryRead = answerEntryId
+    ? tx
+      ? await readAnswerEntry(tx)
+      : await withWorkspaceServiceContext(pctx.workspaceId, readAnswerEntry)
+    : undefined;
+  const dto = toPlanChangeSessionDto(row, turns, workItemRefs, runPause, entryRead);
   if (fileIds.length === 0) return dto;
   const attachments = await attachmentsService.listViewableByIds(fileIds, {
     userId: pctx.userId,
