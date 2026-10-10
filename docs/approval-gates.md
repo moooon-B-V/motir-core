@@ -204,6 +204,17 @@ the same session on the same plan from the next unfinished level or card, withou
 redoing what is done. The cards it holds stay at Planning meanwhile. A person
 still ends a session by starting something new, declining or approving.
 
+The same holds when you asked for a **change to a plan that was waiting for your
+approval** and that change fails. The plan is still there and you can still
+approve or decline it. The conversation waits in **To resume**, naming the plan
+and what went wrong. Opening it shows the plan with Approve and Decline and a
+place to type; typing continues the same conversation and clears the entry. The
+plan keeps its own row in **Waiting on you** as before.
+
+Conversations that ended after a failure like this before the change also appear
+in **To resume**. They cannot be resumed, but typing there starts a new
+conversation that carries the plan with it.
+
 The decision behind both is MOTIR-7906; the record is
 [`docs/decisions/approval-gates.md`](./decisions/approval-gates.md), §1's
 `planning-session` amendment.

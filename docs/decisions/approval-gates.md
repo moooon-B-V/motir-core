@@ -193,6 +193,13 @@
   turn or the session's end. §1's MOTIR-7906 amendment states it; additive, nothing
   struck. A plan awaiting approval stays on `plan_approval` (§11).
 
+- **AMENDED 2026-10-10 (MOTIR-7937, for Story MOTIR-7905, decided by MOTIR-7906), at
+  _Deliberately NOT decided here_ — a failure beside a waiting plan is NOT a gate.** A
+  session whose later run failed beside a `planned` / `stale` plan lists in To resume; it
+  raises no `planning-session` gate, and the waiting plan's own gate stays `plan_approval`.
+  Additive, nothing struck. `agent-authored-plans.md` AMENDMENT 23's 2026-10-10
+  sub-amendment is its other half.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -6492,7 +6499,9 @@ decision` + `executor: human` — is decided in §1's MOTIR-5952 amendment.**
   that sits beside a failed attempt in the same session — stays on `plan_approval` (§11)
   and keeps its row in Waiting on you. The `planning-session` gate is about the SESSION
   needing its person; it never replaces or doubles a plan's own question, and the two
-  open the same overlay.
+  open the same overlay. **AMENDED (MOTIR-7937, 2026-10-10):** a failure beside a waiting
+  plan (situation 2) is not a gate either — it lists in To resume, and the waiting plan's
+  own gate is still `plan_approval`.
 - **Re-homing the ACCEPTANCE gate.** `AcceptancePanel` is the language §1
   generalises from and is deliberately left where it is; folding it onto the
   Approvals tab is its own story.
