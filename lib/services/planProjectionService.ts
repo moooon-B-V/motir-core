@@ -2,12 +2,16 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { plansService, TEMP_REF_PREFIX } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import {
+  workItemRepository,
+  type WorkItemValidityRow,
+} from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PlanItemDto, PlanItemPatch, PlanItemProposedFields } from '@/lib/dto/plans';
 import { DEFAULT_PROPOSED_KIND } from '@/lib/plans/validateProposals';
+import { isWorkItemRef } from '@/lib/plans/refs';
 import { edgeDisposition, type EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { WorkItem } from '@/generated/prisma/client';
 
@@ -69,6 +73,12 @@ import type { WorkItem } from '@/generated/prisma/client';
 // `get_work_item` aggregate reads the same children on the same card, so this is
 // the shape's cost rather than the projection's. A card with a normal child
 // count pays the projection build and little else.
+//
+// MOTIR-8146: the plan REVIEW's read no longer pays this. It asks only for off-level
+// edge dispositions, so `buildProjection(…, { scope: 'edge_coverage' })` loads the
+// nodes the plan names, the children of its `modify` targets, their blockers and
+// every ancestor chain — a cost that scales with the plan, not the project. The
+// default scope is unchanged and is still what every validity walk gets.
 //
 // ⚠️ READ-ONLY, and that is a contract rather than a happy accident: every load
 // below is a read, the plan is fetched through `plansService.getPlan` (which
@@ -163,6 +173,129 @@ function removeEdge(blockedBy: Map<string, Set<string>>, fromId: string, toId: s
   blockedBy.get(fromId)?.delete(toId);
 }
 
+/** How much of the live tree {@link buildProjection} loads. See its `scope` option. */
+export type ProjectionScope = 'project' | 'edge_coverage';
+
+type LiveEdges = Awaited<ReturnType<typeof workItemLinkRepository.findBlockerEdgesForItems>>;
+
+/** The default load: the project's whole live node set and every blocker edge among it. */
+async function loadWholeLiveGraph(
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<{ liveItems: WorkItemValidityRow[]; liveEdges: LiveEdges }> {
+  const liveItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findAllByProjectForValidity(projectId, ctx.workspaceId, tx),
+  );
+  const liveEdges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemLinkRepository.findBlockerEdgesForItems(
+      liveItems.map((it) => it.id),
+      undefined,
+      tx,
+    ),
+  );
+  return { liveItems, liveEdges };
+}
+
+/**
+ * The FOCUSED load behind `scope: 'edge_coverage'` (MOTIR-8146), in ONE bound
+ * transaction. What the review's disposition reads, and so what is loaded:
+ *
+ *  - the real items the plan names (targets, parents, blockers) and the live
+ *    children of every `modify` target — the child edges a parent's `blocked_by`
+ *    change re-covers or uncovers;
+ *  - the `blocked_by` edges out of those, whose blockers are the far ends;
+ *  - every ancestor of every one of those ends (the level rule walks the chain),
+ *    and the edges out of those ancestors (`parentBlockedBy` asks whether one
+ *    parent is directly blocked by the other).
+ *
+ * The ancestor edges' own blockers are NOT closed over: they are never an end of a
+ * pair the review asks about, and closing over them would walk the project's
+ * dependency graph transitively. Depth is bounded by the tree's four levels, so the
+ * ancestor loop is at most a few reads.
+ */
+async function loadFocusedLiveGraph(
+  plan: { items: PlanItemDto[] },
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<{ liveItems: WorkItemValidityRow[]; liveEdges: LiveEdges }> {
+  const named = new Set<string>();
+  const modifyTargets = new Set<string>();
+  const note = (ref: string | null | undefined) => {
+    if (ref && isWorkItemRef(ref)) named.add(ref);
+  };
+  for (const item of plan.items) {
+    note(item.workItemId);
+    if (item.op === 'modify' && item.workItemId) modifyTargets.add(item.workItemId);
+    note(item.parentRef);
+    item.blockedByRefs.forEach(note);
+    note(item.patch?.parentRef);
+    item.patch?.blockedByAdd?.forEach(note);
+    item.patch?.blockedByRemove?.forEach(note);
+  }
+
+  return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+    const rows = new Map<string, WorkItemValidityRow>();
+    const keep = (found: WorkItemValidityRow[]) => {
+      for (const r of found) rows.set(r.id, r);
+    };
+    keep(await workItemRepository.findForValidityByIds([...named], ctx.workspaceId, tx));
+    keep(
+      await workItemRepository.findForValidityByParentIds(
+        [...modifyTargets],
+        projectId,
+        ctx.workspaceId,
+        tx,
+      ),
+    );
+
+    // The pair ENDS: every item loaded so far, and the blockers of the edges out of them.
+    const edges = await workItemLinkRepository.findBlockerEdgesForItems(
+      [...rows.keys()],
+      undefined,
+      tx,
+    );
+    const parentOf = new Map<string, string | null>();
+    for (const r of rows.values()) parentOf.set(r.id, r.parentId);
+    for (const e of edges) {
+      if (!parentOf.has(e.blockerId) && e.blockerProjectId === projectId) {
+        parentOf.set(e.blockerId, e.blockerParentId);
+      }
+    }
+
+    // Close over the ancestors of every end, one level per read. A parent the read
+    // does not return (archived, or in another workspace) is remembered as tried, so
+    // the chain ends there exactly as `chainOf` ends it on a node the projection
+    // does not hold.
+    const tried = new Set<string>();
+    const ancestorIds: string[] = [];
+    for (;;) {
+      const missing = new Set<string>();
+      for (const parentId of parentOf.values()) {
+        if (parentId && !rows.has(parentId) && !tried.has(parentId)) missing.add(parentId);
+      }
+      if (missing.size === 0) break;
+      for (const id of missing) tried.add(id);
+      for (const r of await workItemRepository.findForValidityByIds(
+        [...missing],
+        ctx.workspaceId,
+        tx,
+      )) {
+        rows.set(r.id, r);
+        ancestorIds.push(r.id);
+        parentOf.set(r.id, r.parentId);
+      }
+    }
+
+    // `findBlockerEdgesForItems` answers `[]` for no ids without a query.
+    const ancestorEdges = await workItemLinkRepository.findBlockerEdgesForItems(
+      ancestorIds,
+      undefined,
+      tx,
+    );
+    return { liveItems: [...rows.values()], liveEdges: [...edges, ...ancestorEdges] };
+  });
+}
+
 /**
  * Build the virtual graph = the project's live tree ⊕ the plan's PlanItem delta.
  * Pure in-memory over read-only repository loads — NOTHING is persisted. The plan
@@ -172,7 +305,21 @@ function removeEdge(blockedBy: Map<string, Set<string>>, fromId: string, toId: s
 export async function buildProjection(
   planId: string,
   ctx: ServiceContext,
-  opts: { caller?: 'actor' | 'system' } = {},
+  opts: {
+    caller?: 'actor' | 'system';
+    /**
+     * HOW MUCH OF THE LIVE TREE to load (MOTIR-8146). `project` (the default) is the
+     * project's whole live node set — what every validity walk and projected read
+     * needs, because each can reach any node. `edge_coverage` loads only what the
+     * plan REVIEW's off-level edge dispositions read: the nodes the plan names, the
+     * children of its `modify` targets, those nodes' blockers, and every ancestor
+     * chain — so the cost scales with the plan, not the project. A projection built
+     * that way answers {@link projectedEdgeDisposition} and the `childrenByParent` /
+     * `blockedBy` walks the review makes from the nodes the plan names, and NOTHING
+     * ELSE: a validity walk over it would be answering about a partial tree.
+     */
+    scope?: ProjectionScope;
+  } = {},
 ): Promise<Projection> {
   // An ACTOR's read of what a plan proposes (`validate_plan`, `get_work_item` /
   // `search_work_items` / `validate_work_item` / `validate_sprint` with `planId`)
@@ -191,9 +338,10 @@ export async function buildProjection(
   // these returned nothing, and a validity check over an empty set does not
   // report "I could not tell" — every rule is satisfied by an absence, so a plan
   // with real problems was pronounced healthy.
-  const liveItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    workItemRepository.findAllByProjectForValidity(projectId, ctx.workspaceId, tx),
-  );
+  const focused = opts.scope === 'edge_coverage';
+  const { liveItems, liveEdges } = focused
+    ? await loadFocusedLiveGraph(plan, projectId, ctx)
+    : await loadWholeLiveGraph(projectId, ctx);
   const initialStatus =
     (await workflowsService.getInitialStatusKey(projectId, ctx.workspaceId)) ?? '';
 
@@ -214,13 +362,6 @@ export async function buildProjection(
   // cross-project (a block can span projects) — carry it in as a node from the
   // edge's own fields so its done-ness/membership is judged against its OWN project.
   const blockedBy = new Map<string, Set<string>>();
-  const liveEdges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    workItemLinkRepository.findBlockerEdgesForItems(
-      liveItems.map((it) => it.id),
-      undefined,
-      tx,
-    ),
-  );
   for (const e of liveEdges) {
     if (!nodes.has(e.blockerId)) {
       nodes.set(e.blockerId, {
@@ -228,7 +369,11 @@ export async function buildProjection(
         identifier: e.blockerKey,
         status: e.blockerStatus,
         projectId: e.blockerProjectId,
-        parentId: null,
+        // The whole-project load has every in-project blocker as a node already, so
+        // only a cross-project one lands here (parent unknown → null, the permissive
+        // answer). The focused load did not read the whole project, so an in-project
+        // blocker lands here too and its own parent is what the edge row carries.
+        parentId: focused && e.blockerProjectId === projectId ? e.blockerParentId : null,
         sprintId: e.blockerSprintId,
         kind: e.blockerKind,
       });

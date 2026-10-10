@@ -42,6 +42,27 @@ import { quickSearchNumber } from '@/lib/workItems/quickSearch';
  * (MOTIR-4296). Callers above this layer build their write payload against this
  * alias; `Prisma.WorkItemUncheckedCreateInput` itself is named only here.
  */
+/** The lean columns the plan-validity projection reads (MOTIR-1386 / MOTIR-8146). */
+export interface WorkItemValidityRow {
+  id: string;
+  identifier: string;
+  status: string;
+  parentId: string | null;
+  sprintId: string | null;
+  projectId: string;
+  kind: string;
+}
+
+const VALIDITY_SELECT = {
+  id: true,
+  identifier: true,
+  status: true,
+  parentId: true,
+  sprintId: true,
+  projectId: true,
+  kind: true,
+} as const;
+
 export type WorkItemCreateInput = Prisma.WorkItemUncheckedCreateInput;
 
 /**
@@ -2934,6 +2955,54 @@ export const workItemRepository = {
         projectId: true,
         kind: true,
       },
+    });
+  },
+
+  /**
+   * The lean validity columns of the NAMED work items — the FOCUSED twin of
+   * {@link findAllByProjectForValidity} (MOTIR-8146). The plan review's
+   * `edgeCoverage` asks about a handful of edges, so it loads the ids the plan
+   * touches (plus their ancestors) instead of the project's whole live set.
+   * Same exclusions as the whole-project read (`archivedAt` / `triagedAt`) and the
+   * same `workspaceId` gate; NOT project-scoped, because a plan's ref may name a
+   * cross-project blocker. `[]` for an empty list without a query.
+   */
+  async findForValidityByIds(
+    ids: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemValidityRow[]> {
+    if (ids.length === 0) return [];
+    const client = tx ?? dbRead;
+    return client.workItem.findMany({
+      where: { id: { in: ids }, workspaceId, archivedAt: null, triagedAt: null },
+      select: VALIDITY_SELECT,
+    });
+  },
+
+  /**
+   * The lean validity columns of every live CHILD of the named parents, in one
+   * project (MOTIR-8146) — what the plan review reads to find the child edges a
+   * `modify` of a parent's `blocked_by` re-covers or uncovers. Same exclusions and
+   * `workspaceId` gate as {@link findAllByProjectForValidity}.
+   */
+  async findForValidityByParentIds(
+    parentIds: string[],
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemValidityRow[]> {
+    if (parentIds.length === 0) return [];
+    const client = tx ?? dbRead;
+    return client.workItem.findMany({
+      where: {
+        parentId: { in: parentIds },
+        projectId,
+        workspaceId,
+        archivedAt: null,
+        triagedAt: null,
+      },
+      select: VALIDITY_SELECT,
     });
   },
 
