@@ -367,9 +367,14 @@ export async function recordFailureWithin(
   if (plan?.status !== 'generating' && plan?.status !== 'planned' && plan?.status !== 'stale') {
     return 'plan_not_generating';
   }
-  return (await planChangeSessionRepository.markFailed(sessionId, record, tx))
-    ? 'recorded'
-    : 'ended';
+  if (!(await planChangeSessionRepository.markFailed(sessionId, record, tx))) return 'ended';
+  // The failure write nulls the awaiting-person marker (a session never waits for both), so the
+  // planning-session gate that marker raised would be left `awaiting` with nothing behind it:
+  // withdraw it, so the wait that turned into a failure leaves Waiting on you for good and the
+  // session lives in To resume alone (Story MOTIR-7905 · MOTIR-7919). `session_ended` is the
+  // nearest withdraw cause — the WAIT the gate named is over; the session itself stays open.
+  await clearPlanningSessionGate(tx, { sessionId, cause: 'session_ended' });
+  return 'recorded';
 }
 
 /** What a settled failure came to. */

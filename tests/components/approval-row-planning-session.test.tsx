@@ -94,6 +94,12 @@ describe('the LEADING LINE — § 29’s three forms, reused and not re-worded',
     expect(screen.getByText(rowMsgs.kind)).toBeTruthy();
   });
 
+  it('the title’s quick-view door is not the row door (it peeks the target)', () => {
+    renderWithIntl(<ApprovalRow record={{ section: 'awaiting', row: waiting() }} />);
+    fireEvent.click(screen.getByRole('link', { name: 'Export a report' }));
+    expect(shallowPush).not.toHaveBeenCalledWith(expect.stringContaining('planSession'));
+  });
+
   it('named: no resolvable target, a plan title → *Plan — {title}*, plain text', () => {
     renderWithIntl(
       <ApprovalRow

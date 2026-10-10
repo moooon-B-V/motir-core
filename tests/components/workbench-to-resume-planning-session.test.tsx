@@ -162,6 +162,12 @@ describe('the entry — what it shows', () => {
     expect(within(row).getByText('Open')).toBeTruthy();
   });
 
+  it('the title’s quick-view door does not open the overlay', () => {
+    mount([session()]);
+    fireEvent.click(within(entryOf()).getByRole('link', { name: 'Export a report' }));
+    expect(shallowPush).not.toHaveBeenCalledWith(expect.stringContaining('planSession'));
+  });
+
   it('omits *N of M written* when progress is null', () => {
     mount([session({ progress: null })]);
     expect(within(entryOf()).queryByText(/written/)).toBeNull();

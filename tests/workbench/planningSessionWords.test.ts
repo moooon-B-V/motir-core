@@ -120,3 +120,12 @@ describe('situation 2 (MOTIR-7940)', () => {
       expect(text).not.toMatch(/generating|planned|stale|session/i);
   });
 });
+
+describe('the exhaustive switches fail loudly on a form this build does not know', () => {
+  it('entryControlsOf and the form body return the unknown value rather than a Resume', async () => {
+    const { PlanningSessionFormBody } =
+      await import('../../app/(authed)/workbench/_components/PlanningSessionResumeForms');
+    expect(entryControlsOf('mystery' as never)).toBe('mystery');
+    expect(PlanningSessionFormBody({ entry: { form: 'mystery' } as never })).toBe('mystery');
+  });
+});

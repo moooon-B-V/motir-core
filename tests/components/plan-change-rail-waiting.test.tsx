@@ -302,3 +302,42 @@ describe('zh', () => {
     expect(block.textContent).not.toMatch(/Resume|Writing|because|stopped/);
   });
 });
+
+describe('the waiting parts on their own (branches the rail’s sheets do not reach)', () => {
+  it('a stop with no title reads the top-level phrase, and a viewer with no named starter gets the anonymous sentence', async () => {
+    const { FailedWaitingNotice, AlsoWaitingPlan } =
+      await import('@/components/planning/SessionWaitingParts');
+    renderWithIntl(
+      <FailedWaitingNotice
+        failure={{ ...FAILURE, stopPhase: 'lay', stopTitle: null }}
+        failedAgain={false}
+        resuming={false}
+        resumeError={null}
+        canResume={false}
+        starterName={null}
+        onResume={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Laying the project's top level")).toBeTruthy();
+    expect(screen.getByTestId('planning-resume-not-yours').textContent).toBe(tw.onlyStarterAnon);
+    cleanup();
+    // …and the waiting-plan link: nothing without one, an ellipsis for an untitled one.
+    const base = { id: 's1', targetKeys: [] } as never;
+    const none = renderWithIntl(
+      <AlsoWaitingPlan session={{ ...(base as object), waitingPlan: null } as never} />,
+    );
+    expect(none.container.textContent).toBe('');
+    cleanup();
+    renderWithIntl(
+      <AlsoWaitingPlan
+        session={
+          {
+            ...(base as object),
+            waitingPlan: { planId: 'p', title: null, status: 'stale' },
+          } as never
+        }
+      />,
+    );
+    expect(screen.getByRole('link').textContent).toBe('…');
+  });
+});
