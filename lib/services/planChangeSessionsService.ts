@@ -2480,7 +2480,13 @@ export const planChangeSessionsService = {
       session,
       pctx,
       { role: 'system', body: intent, jobId },
-      { lastJobId: jobId, lastSubmittedAt: new Date() },
+      {
+        lastJobId: jobId,
+        lastSubmittedAt: new Date(),
+        // A turn that bound on a failed session (Plan it again on its stale plan) clears the
+        // record in the same update (MOTIR-7938), as the revise bind does.
+        ...(clearFailure ? CLEARED_FAILURE_COLUMNS : {}),
+      },
     );
     // HEARTBEAT (MOTIR-2787). Submitting is the thread proving it is alive, so it
     // pushes the target lease out by a fresh window. Without this a conversation
