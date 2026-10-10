@@ -5186,7 +5186,7 @@ export const plansService = {
   async markPlanned(
     planId: string,
     ctx: ServiceContext,
-    opts: { productName?: string | null } = {},
+    opts: { productName?: string | null; summary?: string | null } = {},
   ): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -5202,6 +5202,18 @@ export const plansService = {
       typeof opts.productName === 'string' && opts.productName.trim().length > 0
         ? opts.productName.trim()
         : null;
+
+    // The planner's BRIEFING (Story MOTIR-8149 · Subtask MOTIR-8157), written as
+    // the plan's `summary` in the SAME write as the status change below — so the
+    // briefing is on the plan the moment it enters the review queue, and a
+    // rejected write rolls the close back with it rather than leaving a plan
+    // half-closed. The rule is `correctPlanBrief`'s (`normalizeSelfReported`): a
+    // trimmed, non-empty string, else NOTHING — absent or blank leaves the plan's
+    // existing summary untouched, which is what keeps an older caller
+    // byte-identical. NOT `correctPlanBrief` itself: that door writes a
+    // `brief_edited` row, and this is the planner's own first write, recorded by
+    // the close.
+    const summary = normalizeSelfReported(opts.summary);
 
     // The project's TERMINAL statuses, for the close-time gate below. Resolved
     // OUT HERE because `getTerminalStatusKeys` opens its OWN workspace context
@@ -5300,6 +5312,7 @@ export const plansService = {
               decidedById: null,
               decisionReason: 'discarded',
               ...(productName != null ? { productName } : {}),
+              ...(summary != null ? { summary } : {}),
             },
             tx,
           );
@@ -5325,6 +5338,7 @@ export const plansService = {
             status: 'planned',
             plannedAt: new Date(),
             ...(productName != null ? { productName } : {}),
+            ...(summary != null ? { summary } : {}),
           },
           tx,
         );

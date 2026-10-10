@@ -144,6 +144,14 @@ export async function POST(req: Request): Promise<Response> {
   // (absent/null/non-string) is "no name" — the consumer keeps the placeholder.
   const rawProductName = (body as { productName?: unknown })?.productName;
   const productName = typeof rawProductName === 'string' ? rawProductName : null;
+  // The planner's BRIEFING (Story MOTIR-8149 · Subtask MOTIR-8157) rides the
+  // final append the same way: a string is the plan's `summary`, anything else
+  // is "no summary" and the plan's summary is left exactly as it was. It is
+  // passed on ONLY for the final append of a generation — a non-final append,
+  // or any revision append, carries it nowhere, because a revision does not
+  // close a plan and so has no briefing of its own to write here.
+  const rawSummary = (body as { summary?: unknown })?.summary;
+  const summary = typeof rawSummary === 'string' ? rawSummary : null;
   // ── THE REVISION PASS (Story MOTIR-3595 · Subtask MOTIR-3598) ──────────────
   // `revision: true` says WHICH PASS this append belongs to, and it changes two
   // things and nothing else: the status gate becomes the editable pair rather
@@ -177,7 +185,13 @@ export async function POST(req: Request): Promise<Response> {
       jobId,
       rawProposals as ProposalInput[],
       auth.ctx,
-      { final, productName, revision, ...(actor ? { actor } : {}) },
+      {
+        final,
+        productName,
+        revision,
+        ...(final && !revision && summary !== null ? { summary } : {}),
+        ...(actor ? { actor } : {}),
+      },
     );
     return NextResponse.json(result);
   } catch (err) {

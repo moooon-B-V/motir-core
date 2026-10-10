@@ -480,6 +480,8 @@ export const aiGenerationService = {
     opts: {
       final?: boolean;
       productName?: string | null;
+      /** The planner's briefing (MOTIR-8157) — written on the generation's close only. */
+      summary?: string | null;
       revision?: boolean;
       actor?: PlanRevisionAgentActor;
     } = {},
@@ -534,8 +536,13 @@ export const aiGenerationService = {
       // over a plan that received no proposals DISCARDS it, so a hardcoded
       // `true` here would tell the producer its output reached a reviewer when
       // it never will.
+      //
+      // The briefing (`summary`, MOTIR-8157) rides the same close: written in the
+      // write that moves the plan out of `generating`, so it is on the plan the
+      // moment a reviewer can see it, and a refused write leaves it `generating`.
       const closed = await plansService.markPlanned(plan.id, ctx, {
         productName: opts.productName ?? null,
+        summary: opts.summary ?? null,
       });
       planned = closed.status === 'planned';
     }
