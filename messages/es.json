@@ -7549,6 +7549,48 @@
       "queuedRead": "leído",
       "queuedMarker": "En cola: Motir AI lo leerá cuando termine el elemento de trabajo que está escribiendo.",
       "queuedReadMarker": "Leído en el límite: incorporado a esta Ejecución.",
+      "midRun": {
+        "pause": {
+          "offerHow": "Con “Empezar de nuevo”, el plan se vuelve a escribir a partir de tu nueva petición. Con “Seguir”, se aplica a los elementos de trabajo ya escritos.",
+          "groupLabel": "¿Empezar de nuevo?",
+          "startOver": "Empezar de nuevo",
+          "keepGoing": "Seguir y aplicarlo",
+          "chosenStartOver": "Elegiste empezar de nuevo",
+          "chosenKeepGoing": "Elegiste seguir",
+          "applying": "Aplicando tu cambio a los elementos de trabajo escritos",
+          "unclearNote": "Todavía no se ha cambiado nada.",
+          "pausedWord": "en pausa",
+          "finishingChoice": "Terminando los elementos de trabajo que tiene en curso; después esperará tu elección.",
+          "waitingChoice": "Esperando tu elección.",
+          "finishingAnswer": "Terminando los elementos de trabajo que tiene en curso; después esperará tu respuesta.",
+          "answeredQueued": "Respondido: el planificador lo leerá en su próximo paso.",
+          "refusal": {
+            "PLAN_CHANGE_JOB_NOT_RUNNING": "La ejecución terminó antes de que le llegara tu respuesta.",
+            "generic": "Tu respuesta no llegó a la ejecución."
+          }
+        },
+        "answeringMarker": "Respondiendo aparte: la ejecución continúa.",
+        "answeredAside": "Respondido aparte: no se envió nada a la ejecución.",
+        "forwardedAck": "Eso es un cambio, así que se lo pasé al planificador. Lo leerá en su próximo paso.",
+        "queuedMarker": "En cola: el planificador lo leerá en su próximo paso.",
+        "readMarker": "Leído: el planificador ya lo tiene.",
+        "forwardOffer": "Si lo quieres como cambio, responde “sí, pásalo”.",
+        "forwardStale": "No se pasó: no se cambió nada.",
+        "revisedAck": "Eso es un cambio. El plan ya terminó de escribirse, así que lo aplicaré como revisión.",
+        "revisedNote": "Aplicado como revisión de este plan.",
+        "revisedLink": "Verlo en la cronología",
+        "refusal": {
+          "finished": "Esta ejecución ha terminado.",
+          "stopped": "Detuviste esta ejecución.",
+          "failed": "Esta ejecución falló.",
+          "decided": "Este plan ya se aprobó o se rechazó.",
+          "held": "Ya se está aplicando otro cambio a este plan.",
+          "noPlan": "Esta ejecución no generó ningún plan que cambiar.",
+          "generic": "La ejecución terminó, así que esto no se pasó al planificador.",
+          "tail": "Tu mensaje no se envió. Está en el cuadro de abajo.",
+          "quoted": "Tu mensaje no se envió: “{text}”"
+        }
+      },
       "act": {
         "submitted": "enviar",
         "reading": "leyendo",

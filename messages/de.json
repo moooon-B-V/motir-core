@@ -7549,6 +7549,48 @@
       "queuedRead": "gelesen",
       "queuedMarker": "Eingereiht – Motir AI liest dies, wenn es das Arbeitselement fertiggestellt hat, das es gerade schreibt.",
       "queuedReadMarker": "An der Grenze gelesen – in diesen Lauf übernommen.",
+      "midRun": {
+        "pause": {
+          "offerHow": "Mit „Neu beginnen“ wird der Plan anhand Ihrer neuen Anfrage neu geschrieben. Mit „Weitermachen“ wird sie auf die bereits geschriebenen Arbeitselemente angewendet.",
+          "groupLabel": "Neu beginnen?",
+          "startOver": "Neu beginnen",
+          "keepGoing": "Weitermachen und anwenden",
+          "chosenStartOver": "Sie haben sich für einen Neubeginn entschieden",
+          "chosenKeepGoing": "Sie haben sich fürs Weitermachen entschieden",
+          "applying": "Ihre Änderung wird auf die geschriebenen Arbeitselemente angewendet",
+          "unclearNote": "Bisher wurde nichts geändert.",
+          "pausedWord": "pausiert",
+          "finishingChoice": "Stellt die Arbeitselemente fertig, die gerade in Arbeit sind, und wartet dann auf Ihre Entscheidung.",
+          "waitingChoice": "Wartet auf Ihre Entscheidung.",
+          "finishingAnswer": "Stellt die Arbeitselemente fertig, die gerade in Arbeit sind, und wartet dann auf Ihre Antwort.",
+          "answeredQueued": "Beantwortet – der Planer liest es bei seinem nächsten Schritt.",
+          "refusal": {
+            "PLAN_CHANGE_JOB_NOT_RUNNING": "Der Lauf war beendet, bevor Ihre Antwort ihn erreicht hat.",
+            "generic": "Ihre Antwort hat den Lauf nicht erreicht."
+          }
+        },
+        "answeringMarker": "Antwort nebenbei – der Lauf geht weiter.",
+        "answeredAside": "Nebenbei beantwortet – an den Lauf wurde nichts gesendet.",
+        "forwardedAck": "Das ist eine Änderung, deshalb habe ich sie an den Planer weitergegeben. Er liest sie bei seinem nächsten Schritt.",
+        "queuedMarker": "Eingereiht – der Planer liest dies bei seinem nächsten Schritt.",
+        "readMarker": "Gelesen – der Planer hat es erhalten.",
+        "forwardOffer": "Wenn Sie es als Änderung möchten, antworten Sie mit „ja, weitergeben“.",
+        "forwardStale": "Nicht weitergegeben – es wurde nichts geändert.",
+        "revisedAck": "Das ist eine Änderung. Der Plan ist fertig geschrieben, deshalb wende ich sie als Überarbeitung an.",
+        "revisedNote": "Als Überarbeitung dieses Plans angewendet.",
+        "revisedLink": "In der Zeitachse ansehen",
+        "refusal": {
+          "finished": "Dieser Lauf ist abgeschlossen.",
+          "stopped": "Sie haben diesen Lauf gestoppt.",
+          "failed": "Dieser Lauf ist fehlgeschlagen.",
+          "decided": "Dieser Plan wurde bereits genehmigt oder abgelehnt.",
+          "held": "Auf diesen Plan wird bereits eine andere Änderung angewendet.",
+          "noPlan": "Dieser Lauf hat keinen Plan erzeugt, der sich ändern ließe.",
+          "generic": "Der Lauf ist beendet, deshalb wurde dies nicht weitergegeben.",
+          "tail": "Ihre Nachricht wurde nicht gesendet. Sie steht im Feld unten.",
+          "quoted": "Ihre Nachricht wurde nicht gesendet: „{text}“"
+        }
+      },
       "act": {
         "submitted": "senden",
         "reading": "lesen",

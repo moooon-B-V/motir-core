@@ -7549,6 +7549,48 @@
       "queuedRead": "letto",
       "queuedMarker": "In coda: Motir AI lo leggerà quando avrà finito l’elemento di lavoro che sta scrivendo.",
       "queuedReadMarker": "Letto al passaggio successivo: integrato in questa esecuzione.",
+      "midRun": {
+        "pause": {
+          "offerHow": "«Ricomincia» riscrive il piano a partire dalla tua nuova richiesta. «Continua» la applica agli elementi di lavoro già scritti.",
+          "groupLabel": "Ricominciare?",
+          "startOver": "Ricomincia",
+          "keepGoing": "Continua e applica",
+          "chosenStartOver": "Hai scelto di ricominciare",
+          "chosenKeepGoing": "Hai scelto di continuare",
+          "applying": "Applicazione della modifica agli elementi di lavoro scritti",
+          "unclearNote": "Non è stato ancora modificato nulla.",
+          "pausedWord": "in pausa",
+          "finishingChoice": "Sta completando gli elementi di lavoro in corso, poi attenderà la tua scelta.",
+          "waitingChoice": "In attesa della tua scelta.",
+          "finishingAnswer": "Sta completando gli elementi di lavoro in corso, poi attenderà la tua risposta.",
+          "answeredQueued": "Risposta inviata: il pianificatore la leggerà al prossimo passaggio.",
+          "refusal": {
+            "PLAN_CHANGE_JOB_NOT_RUNNING": "L’esecuzione è terminata prima che la tua risposta la raggiungesse.",
+            "generic": "La tua risposta non ha raggiunto l’esecuzione."
+          }
+        },
+        "answeringMarker": "Risposta a margine: l’esecuzione prosegue.",
+        "answeredAside": "Risposta data a margine: non è stato inviato nulla all’esecuzione.",
+        "forwardedAck": "Si tratta di una modifica, quindi l’ho passata al pianificatore. La leggerà al prossimo passaggio.",
+        "queuedMarker": "In coda: il pianificatore lo leggerà al prossimo passaggio.",
+        "readMarker": "Letto: il pianificatore l’ha ricevuto.",
+        "forwardOffer": "Se vuoi trattarlo come una modifica, rispondi «sì, inoltralo».",
+        "forwardStale": "Non inoltrato: non è stato modificato nulla.",
+        "revisedAck": "Si tratta di una modifica. Il piano è già stato scritto, quindi la applicherò come revisione.",
+        "revisedNote": "Applicata come revisione di questo piano.",
+        "revisedLink": "Vedila nella cronologia",
+        "refusal": {
+          "finished": "Questa esecuzione è terminata.",
+          "stopped": "Hai interrotto questa esecuzione.",
+          "failed": "Questa esecuzione non è riuscita.",
+          "decided": "Questo piano è già stato approvato o rifiutato.",
+          "held": "A questo piano si sta già applicando un’altra modifica.",
+          "noPlan": "Questa esecuzione non ha prodotto un piano da modificare.",
+          "generic": "L’esecuzione è terminata, quindi questo messaggio non è stato inoltrato.",
+          "tail": "Il tuo messaggio non è stato inviato. È nella casella qui sotto.",
+          "quoted": "Il tuo messaggio non è stato inviato: «{text}»"
+        }
+      },
       "act": {
         "submitted": "invio",
         "reading": "lettura",
