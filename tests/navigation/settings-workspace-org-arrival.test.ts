@@ -100,6 +100,12 @@ describe('⚠️ row 14 is a DECIDER — the route the boundary decision was mea
 
 describe('the reads (MOTIR-3448)', () => {
   it('row 11 · jobs reads the role, the DLQ count and the list in ONE wave', () => {
+    // ⚠️ THE WAVE GREW A FOURTH READ, AND STILL IS ONE WAVE (MOTIR-8083). On the
+    // System tab alone the pane also reads the workspace-less dead letters; it is
+    // the 4th element of the SAME `allSettledOrThrow([...])`, not a second await
+    // after it, and it is `Promise.resolve(null)` on every other tab — so a
+    // tenant's tabs pay nothing for it. The claim this case guards, one wave and
+    // no serial read, is unchanged; only the tuple's width moved.
     // The asset expected TWO waves, with the role preceding the others because
     // "the role selects which list is fetched". Measured: it does not — the tab
     // is narrowed by `showSystemTab`, an env var compared against the session
@@ -116,7 +122,7 @@ describe('the reads (MOTIR-3448)', () => {
     // count and the list in ONE wave — is exactly as true and exactly as worth
     // guarding at its new address, and it now covers both doors at once.
     const src = code(`${S}/workspace/jobs/_components/JobsPane.tsx`);
-    expect(src).toMatch(/const \[role, dlqCount, list\] = await allSettledOrThrow\(\[/);
+    expect(src).toMatch(/const \[role, dlqCount, list, systemDlq\] = await allSettledOrThrow\(\[/);
     expect(src).toMatch(/workspacesService\.getMemberRole\(userId, workspaceId\)/);
     expect(src).toMatch(/jobsDashboardService\.countDLQ\(/);
     // The tab is still chosen ABOVE the wave — by `parseJobsParams`, in the HOST,
@@ -131,6 +137,11 @@ describe('the reads (MOTIR-3448)', () => {
     // …and all three sit inside the wave, so none is a second, earlier read.
     const wave = src.slice(src.indexOf('allSettledOrThrow(['), src.indexOf('const dlq ='));
     expect(wave.match(/jobsDashboardService\.list\w+\(\{/g) ?? []).toHaveLength(3);
+    // The System tab's dead-letter read is the wave's 4th arm: inside it, gated to
+    // the one tab that draws it, and a resolved null everywhere else.
+    expect(wave).toMatch(
+      /tab === 'system' \? jobsDashboardService\.listSystemDlq\(\) : Promise\.resolve\(null\)/,
+    );
   });
 
   it('row 13 · organization has ONE pane read — its AI-access arm left with the card', () => {
