@@ -76,6 +76,10 @@ import {
 // interleave with a transcript append. It does not; there is one lock per
 // conversation.
 //
+// THE PLANNER'S MID-RUN PAUSE (MOTIR-8007) answers through this same pipe: a START
+// OVER is the `restart` turn, a decline or a reply is a `fold` turn marked
+// `declines_pause_id` / `answers_pause_id` — see `planChangeRunPauseService`.
+//
 // SIDE-EFFECTS-OUTSIDE-TX (CLAUDE.md): the RUNNING check calls motir-ai over the
 // network. It happens BEFORE the short transaction that writes the row — a
 // conversation row is never locked across a motir-ai round-trip.
@@ -108,6 +112,10 @@ export interface AttachTurnInput {
   disposition?: 'fold' | 'restart';
   /** Where a `restart` re-anchors the walk. Ignored on a `fold`. */
   restartTarget?: string | null;
+  /** The run pause this `fold` turn DECLINES (MOTIR-8007). At most one of the two. */
+  declinesPauseId?: string;
+  /** The run pause this `fold` turn ANSWERS (MOTIR-8007). */
+  answersPauseId?: string;
 }
 
 /** Build the two-repo contract's shape from rows. The ONE place it is built. */
@@ -128,6 +136,9 @@ function toDelivery(
         receivedAt: e.createdAt.toISOString(),
         disposition: e.disposition ?? 'fold',
         target: e.restartTarget,
+        // Present ONLY when set (MOTIR-8007), so every other turn's shape is byte-identical.
+        ...(e.declinesPauseId ? { declinesPause: e.declinesPauseId } : {}),
+        ...(e.answersPauseId ? { answersQuestion: e.answersPauseId } : {}),
       })),
     stopped,
   };
@@ -156,6 +167,8 @@ async function appendLocked(
     restartTarget?: string | null;
     idempotencyKey: string;
     authorId?: string | null;
+    declinesPauseId?: string | null;
+    answersPauseId?: string | null;
   },
 ): Promise<PlanChangeMailboxEntry> {
   return withWorkspaceContext(
@@ -192,6 +205,8 @@ async function appendLocked(
             restartTarget: entry.restartTarget ?? null,
             idempotencyKey: entry.idempotencyKey,
             authorId: entry.authorId ?? null,
+            declinesPauseId: entry.declinesPauseId ?? null,
+            answersPauseId: entry.answersPauseId ?? null,
           },
           tx,
         );
@@ -231,7 +246,7 @@ async function appendLocked(
  * different question — which conversation a PLAN belongs to — and a mid-run
  * message is addressed to a run, not to a plan.
  */
-async function findThreadForJob(jobId: string, pctx: MailboxContext) {
+export async function findThreadForJob(jobId: string, pctx: MailboxContext) {
   return withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
     planChangeSessionRepository.findByProjectAndLastJobId(
       pctx.projectId,
@@ -250,7 +265,7 @@ async function findThreadForJob(jobId: string, pctx: MailboxContext) {
  * them apart would answer a question about somebody else's job. It is the
  * no-existence-leak posture the rest of `lib/planChange/errors.ts` takes.
  */
-async function requireThreadForJob(
+export async function requireThreadForJob(
   jobId: string,
   pctx: MailboxContext,
   expectedSessionId?: string,
@@ -317,6 +332,8 @@ export const planChangeMailboxService = {
       restartTarget: input.disposition === 'restart' ? (input.restartTarget ?? null) : null,
       idempotencyKey: input.idempotencyKey,
       authorId: pctx.userId,
+      declinesPauseId: input.declinesPauseId ?? null,
+      answersPauseId: input.answersPauseId ?? null,
     });
 
     // The caller gets the mailbox AS IT NOW STANDS, not just the row it wrote —

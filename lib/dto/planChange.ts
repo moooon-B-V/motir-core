@@ -44,6 +44,31 @@ export type PlanChangeTurnConfirmDto = 'new_session';
 /** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
  *  `system` submission marker and on an `assistant` turn (the job that produced
  *  it); `authorId` only on a `user` turn (and null once that user is deleted). */
+/**
+ * The planner's mid-run PAUSE (MOTIR-8007): the walk stopped on one thing and
+ * waits for the person while its job keeps running. `replan` offers START OVER;
+ * `unclear` asks a question. `reason` / `question` are the planner's words, SHOWN
+ * to the person and never sent back. At most one is open per job.
+ */
+export interface PlanChangeRunPauseDto {
+  id: string;
+  jobId: string;
+  kind: 'replan' | 'unclear';
+  /** The mailbox entry ids of the change turns the pause is about. */
+  changeTurnIds: string[];
+  reason: string | null;
+  question: string | null;
+  createdAt: string;
+  /** Null while open. */
+  answer: 'start_over' | 'apply' | 'replied' | null;
+  answeredAt: string | null;
+  /** The person's reply, verbatim, on `replied` only. */
+  replyText: string | null;
+  /** `pending` until the answer reached the run's mailbox; `refused` when the run ended first. */
+  delivery: 'pending' | 'delivered' | 'refused';
+  refusedCode: string | null;
+}
+
 export interface PlanChangeTurnDto {
   id: string;
   seq: number;
@@ -249,6 +274,11 @@ export interface PlanChangeSessionDto {
    *  copied turns keep their own `createdAt`, so they are the turns written
    *  before this session's own `createdAt`. */
   copiedFromSessionId?: string | null;
+  /**
+   * The planner's latest mid-run PAUSE on the session's current job (MOTIR-8007),
+   * or null. Optional for the reason {@link PlanChangeTurnDto.anchorKey} is.
+   */
+  runPause?: PlanChangeRunPauseDto | null;
   /** The resume answered with the caller's OWN open session of ANOTHER scope that
    *  holds this card — the take-back (AMENDMENT 23 §3). Set by the resume read only. */
   takenBack?: boolean;

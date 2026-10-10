@@ -32,6 +32,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
+import { planChangeRunPauseRepository } from '@/lib/repositories/planChangeRunPauseRepository';
 import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
@@ -198,7 +199,26 @@ async function toDto(
   );
   // A guide thread's files (MOTIR-7486), resolved once as the caller may see them.
   const fileIds = turns.flatMap((t) => t.attachmentIds);
-  const dto = toPlanChangeSessionDto(row, turns, workItemRefs);
+  // The planner's latest mid-run pause on the CURRENT run (MOTIR-8007). One indexed
+  // read, and only for a session that has a run.
+  const runPause = row.lastJobId
+    ? tx
+      ? await planChangeRunPauseRepository.findLatestForSession(
+          row.id,
+          row.lastJobId,
+          pctx.workspaceId,
+          tx,
+        )
+      : await withWorkspaceServiceContext(pctx.workspaceId, (t) =>
+          planChangeRunPauseRepository.findLatestForSession(
+            row.id,
+            row.lastJobId!,
+            pctx.workspaceId,
+            t,
+          ),
+        )
+    : null;
+  const dto = toPlanChangeSessionDto(row, turns, workItemRefs, runPause);
   if (fileIds.length === 0) return dto;
   const attachments = await attachmentsService.listViewableByIds(fileIds, {
     userId: pctx.userId,

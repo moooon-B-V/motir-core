@@ -10,6 +10,7 @@ export type { StalePlanFinishedCard } from '@/lib/planning/planSessionClientErro
 import type {
   CopyableSessionDto,
   DebugLandingDto,
+  PlanChangeRunPauseDto,
   EarlierSessionDto,
   PlanChangeSessionDto,
   PlanSessionRestartResultDto,
@@ -494,6 +495,51 @@ export async function submitAskTurn(
       ...(seedGateId && !sessionId ? { seedGateId } : {}),
       ...(anchorKey ? { anchorKey } : {}),
     },
+    signal,
+  );
+}
+
+/** The planner's mid-run pause, as the rail reads it (MOTIR-8007). */
+export type RunPauseResponse = PlanChangeRunPauseDto;
+
+export type AnswerRunPauseResponse =
+  | { outcome: 'answered'; pause: PlanChangeRunPauseDto; delivery: MailboxDeliveryResponse }
+  | {
+      outcome: 'refused';
+      code: string;
+      jobStatus: string;
+      choice: 'start_over' | 'apply' | 'reply';
+      text?: string;
+      pause: PlanChangeRunPauseDto;
+    };
+
+/** The session's latest pause on this run, or `null` — the rail polls it while the
+ *  run is paused (MOTIR-8007). */
+export async function readRunPause(
+  sessionId: string,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<RunPauseResponse | null> {
+  return get<RunPauseResponse | null>(
+    `/api/ai/plan-change/session/run-pause?sessionId=${encodeURIComponent(sessionId)}&jobId=${encodeURIComponent(jobId)}`,
+    signal,
+  );
+}
+
+/** Answer the planner's pause: START OVER or apply-to-written on a replan, a typed
+ *  reply on an unclear one (MOTIR-8007). A run that ended first answers `refused`
+ *  with the choice (and reply text) to hand back. */
+export async function answerRunPause(
+  sessionId: string,
+  jobId: string,
+  pauseId: string,
+  choice: 'start_over' | 'apply' | 'reply',
+  text?: string,
+  signal?: AbortSignal,
+): Promise<AnswerRunPauseResponse> {
+  return post<AnswerRunPauseResponse>(
+    '/api/ai/plan-change/session/run-pause',
+    { sessionId, jobId, pauseId, choice, ...(text !== undefined ? { text } : {}) },
     signal,
   );
 }

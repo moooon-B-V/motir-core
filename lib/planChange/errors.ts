@@ -541,3 +541,60 @@ export class GuideTurnFilesRefusedError extends Error {
     this.name = 'GuideTurnFilesRefusedError';
   }
 }
+
+// ── THE PLANNER'S MID-RUN PAUSE (Story MOTIR-7990 · MOTIR-8007) ──────────────────
+
+/** A pause addressed by id that is not on this session and job (or does not exist).
+ *  One error for both, the no-existence-leak posture. → 404 */
+export class PlanChangeRunPauseNotFoundError extends Error {
+  readonly code = 'PLAN_CHANGE_RUN_PAUSE_NOT_FOUND' as const;
+  constructor(readonly pauseId: string) {
+    super(`No run pause ${pauseId} exists on this conversation's run.`);
+    this.name = 'PlanChangeRunPauseNotFoundError';
+  }
+}
+
+/** A pause recorded or answered with the wrong shape: a kind without its own text
+ *  field, or a choice that does not fit the pause's kind. Nothing was written. → 400 */
+export class PlanChangeRunPauseShapeError extends Error {
+  readonly code = 'PLAN_CHANGE_RUN_PAUSE_SHAPE' as const;
+  constructor(readonly reason: string) {
+    super(`The run pause request is malformed: ${reason}`);
+    this.name = 'PlanChangeRunPauseShapeError';
+  }
+}
+
+/** The pause was already answered, and not with this choice. Carries the stored
+ *  answer so the surface can show what stands. → 409 */
+export class PlanChangeRunPauseAnsweredError extends Error {
+  readonly code = 'PLAN_CHANGE_RUN_PAUSE_ANSWERED' as const;
+  constructor(
+    readonly pauseId: string,
+    readonly answer: string,
+  ) {
+    super(`Run pause ${pauseId} was already answered (${answer}).`);
+    this.name = 'PlanChangeRunPauseAnsweredError';
+  }
+}
+
+/** The planner tried to pause a run whose plan was already decided. → 409 */
+export class PlanChangeRunPausePlanDecidedError extends Error {
+  readonly code = 'PLAN_CHANGE_RUN_PAUSE_PLAN_DECIDED' as const;
+  constructor(
+    readonly planId: string,
+    readonly planStatus: string,
+  ) {
+    super(`Plan ${planId} is ${planStatus}: there is nothing left to pause on.`);
+    this.name = 'PlanChangeRunPausePlanDecidedError';
+  }
+}
+
+/** A pause named a change turn that is not a mailbox entry of THIS session and
+ *  job. → 409 */
+export class PlanChangeRunPauseTurnMismatchError extends Error {
+  readonly code = 'PLAN_CHANGE_RUN_PAUSE_TURN_MISMATCH' as const;
+  constructor(readonly turnId: string) {
+    super(`Change turn ${turnId} is not on this run's mailbox.`);
+    this.name = 'PlanChangeRunPauseTurnMismatchError';
+  }
+}
