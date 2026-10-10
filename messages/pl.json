@@ -9007,7 +9007,28 @@
       "left": {
         "title": "Przeniesiono do „Do wznowienia”",
         "line": "Próba się nie powiodła, a dotychczasowy plan został zachowany. Wznów go z „Do wznowienia”.",
-        "link": "Przejdź do „Do wznowienia”"
+        "link": "Przejdź do „Do wznowienia”",
+        "turn": "Poprawiono w tej samej rozmowie — ten wpis zniknie.",
+        "carry": "Przeniesiono do nowej rozmowy — ten wpis zniknie.",
+        "decided": "Rozstrzygnięto — ten wpis zniknie.",
+        "again": "Planowanie od nowa tutaj — ten wpis zniknie."
+      },
+      "form": {
+        "b": {
+          "badChange": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona",
+          "stateWaiting": "Czeka na Twoje zatwierdzenie",
+          "stateStale": "Nieaktualny",
+          "nextReply": "Plan nadal czeka. Odpowiedz, aby kontynuować.",
+          "nextAgain": "Praca, którą zmienia, została zakończona. Zaplanuj go ponownie, aby kontynuować."
+        },
+        "c": {
+          "ended": "Rozmowa zakończyła się {when}",
+          "gloss": "Twoja następna wiadomość przeniesie plan do nowej rozmowy.",
+          "chip": "Rozmowa zakończona"
+        },
+        "walk": {
+          "alsoWaiting": "Czeka też na Twoje zatwierdzenie:"
+        }
       }
     }
   },

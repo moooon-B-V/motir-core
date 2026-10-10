@@ -16,12 +16,12 @@ import { useRelativeLabel } from '@/components/approvals/useRelativeLabel';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { ToResumePlanningSessionDto } from '@/lib/dto/home';
 import {
+  entryControlsOf,
   refusalEndsWaiting,
-  resumeReasonKeyOf,
   resumeRefusalKeyOf,
-  stopPhraseKeyOf,
   type ResumeRefusalKey,
 } from './planningSessionWords';
+import { PlanningSessionFormBody, useLeftLine } from './PlanningSessionResumeForms';
 
 // ONE FAILED PLANNING SESSION, as a To resume entry (Story MOTIR-7905 · MOTIR-7917;
 // design `design/workbench/design-notes.md` § 37.2, mock
@@ -46,10 +46,10 @@ import {
 //     error: it reads as resuming. `ended` / `notFailed` hold the row and ask the list to
 //     re-read.
 //
-// ⚠️ THE OTHER TWO FORMS (a failure beside a waiting plan; a session that ended `failed`
-// before this story) are MOTIR-7940's. They arrive through this same read, so until that
-// card they render the entry's frame with Open only — never silently dropped, never a
-// Resume the server would refuse.
+// ⚠️ THREE FORMS, ONE FRAME (MOTIR-7940). The body under the frame is
+// `PlanningSessionResumeForms.tsx`'s, switched on the SERVER's `form`; a failure beside a
+// waiting plan and a session that ended `failed` before this story offer Open only — a Resume
+// on either would be refused.
 
 export function PlanningSessionResumeEntry({
   entry,
@@ -80,7 +80,7 @@ export function PlanningSessionResumeEntry({
   const [refusal, setRefusal] = useState<Exclude<ResumeRefusalKey, 'alreadyStarted'> | null>(null);
   const inFlight = useRef(false);
 
-  const canResume = entry.form === 'failed_walk';
+  const canResume = entryControlsOf(entry.form).resume;
   const resuming = failedAt !== null && resumedFor === failedAt;
   const failedAgain =
     failedAt !== null && firstSeenFailedAt !== null && failedAt > firstSeenFailedAt;
@@ -144,8 +144,12 @@ export function PlanningSessionResumeEntry({
   });
   const keys = entry.targets.map((target) => target.key);
 
+  // Form A opens its `generating` plan; B and C open the plan that WAITS, at its own state.
   const known = {
-    planStatus: 'generating' as const,
+    planStatus:
+      entry.form === 'failed_walk'
+        ? ('generating' as const)
+        : (entry.waitingPlan?.status ?? ('planned' as const)),
     sessionId: entry.sessionId,
     anchorKey: entry.targets[0]?.key ?? null,
   };
@@ -153,10 +157,7 @@ export function PlanningSessionResumeEntry({
   // its id stands in: with `known` supplied the door never reads it as a plan.
   const doorPlanId = entry.planId ?? entry.sessionId;
 
-  const stop = failure ? stopPhraseKeyOf(failure) : null;
-  const stopText = failure && stop ? t(`stop.${stop}`, { title: failure.stopTitle ?? '' }) : null;
-  const reasonText = failure ? t(`reason.${resumeReasonKeyOf(failure.reason)}`) : null;
-  const progress = entry.progress;
+  const leftLine = useLeftLine(entry, held && !resuming);
 
   return (
     <div
@@ -197,8 +198,13 @@ export function PlanningSessionResumeEntry({
           ) : null}
           {arrived ? <Pill tone="neutral">{tWorkbench('live.new')}</Pill> : null}
           {failedAgain && !resuming ? <Pill tone="neutral">{t('second')}</Pill> : null}
-          <Pill tone="awaiting">{resuming ? t('resuming') : t('waitingToResume')}</Pill>
-          {failedAt ? (
+          {entry.form === 'ended_with_waiting_plan' ? (
+            // CALM, not Closed's warning peach: the plan is waiting, not lost (design § 38).
+            <Pill tone="neutral">{t('form.c.chip')}</Pill>
+          ) : (
+            <Pill tone="awaiting">{resuming ? t('resuming') : t('waitingToResume')}</Pill>
+          )}
+          {failedAt && entry.form === 'failed_walk' ? (
             <span
               className="shrink-0 text-xs text-(--el-text-secondary)"
               title={new Date(failedAt).toLocaleString(locale)}
@@ -233,27 +239,13 @@ export function PlanningSessionResumeEntry({
         </div>
       </div>
 
-      {stopText && reasonText ? (
-        <div role="cell" className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-xs">
-          <span className="text-(--el-text-secondary)">{t('stoppedAt')}</span>
-          <span className="font-medium text-(--el-text)">{stopText}</span>
-          <span aria-hidden className="text-(--el-text-secondary)">
-            ·
-          </span>
-          <span className="text-(--el-text-secondary)">{t('because', { reason: reasonText })}</span>
-          {progress ? (
-            <>
-              <span aria-hidden className="text-(--el-text-secondary)">
-                ·
-              </span>
-              <span className="text-(--el-text-secondary)">
-                {t('written', { n: progress.authored, m: progress.proposed })}
-              </span>
-            </>
-          ) : null}
-        </div>
-      ) : null}
+      <PlanningSessionFormBody entry={entry} />
 
+      {leftLine !== null ? (
+        <p role="status" className="text-xs text-(--el-text-secondary)">
+          {t(`left.${leftLine}`)}
+        </p>
+      ) : null}
       {resuming ? (
         <p role="status" className="text-xs text-(--el-text-secondary)">
           {t('resumingNote')}

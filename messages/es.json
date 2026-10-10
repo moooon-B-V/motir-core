@@ -9010,7 +9010,28 @@
       "left": {
         "title": "Movido a «Por reanudar»",
         "line": "Su intento falló y el plan hecho hasta ahora se conserva. Reanúdalo desde «Por reanudar».",
-        "link": "Ir a «Por reanudar»"
+        "link": "Ir a «Por reanudar»",
+        "turn": "Revisado en la misma conversación — esta entrada desaparece.",
+        "carry": "Llevado a una conversación nueva — esta entrada desaparece.",
+        "decided": "Decidido — esta entrada desaparece.",
+        "again": "Replanificando aquí — esta entrada desaparece."
+      },
+      "form": {
+        "b": {
+          "badChange": "No se pudo hacer tu último cambio en este plan",
+          "stateWaiting": "Esperando tu aprobación",
+          "stateStale": "Desactualizado",
+          "nextReply": "El plan sigue esperando. Responde para continuar.",
+          "nextAgain": "El trabajo que modifica ha terminado. Vuelve a planificarlo para continuar."
+        },
+        "c": {
+          "ended": "La conversación terminó {when}",
+          "gloss": "Tu próximo mensaje lleva el plan a una conversación nueva.",
+          "chip": "Conversación terminada"
+        },
+        "walk": {
+          "alsoWaiting": "También esperando tu aprobación:"
+        }
       }
     }
   },

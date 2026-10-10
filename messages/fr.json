@@ -9010,7 +9010,28 @@
       "left": {
         "title": "Déplacé vers « À reprendre »",
         "line": "Sa tentative a échoué, et le plan réalisé jusqu’ici est conservé. Reprenez-le depuis « À reprendre ».",
-        "link": "Aller à « À reprendre »"
+        "link": "Aller à « À reprendre »",
+        "turn": "Révisé dans la même conversation — cette entrée disparaît.",
+        "carry": "Reporté dans une nouvelle conversation — cette entrée disparaît.",
+        "decided": "Décidé — cette entrée disparaît.",
+        "again": "Replanification ici — cette entrée disparaît."
+      },
+      "form": {
+        "b": {
+          "badChange": "Votre dernière modification de ce plan n’a pas pu être effectuée",
+          "stateWaiting": "En attente de votre approbation",
+          "stateStale": "Obsolète",
+          "nextReply": "Le plan attend toujours. Répondez pour continuer.",
+          "nextAgain": "Le travail qu’il modifie est terminé. Planifiez-le à nouveau pour continuer."
+        },
+        "c": {
+          "ended": "La conversation s’est terminée {when}",
+          "gloss": "Votre prochain message reporte le plan dans une nouvelle conversation.",
+          "chip": "Conversation terminée"
+        },
+        "walk": {
+          "alsoWaiting": "Également en attente de votre approbation :"
+        }
       }
     }
   },

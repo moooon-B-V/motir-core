@@ -100,3 +100,58 @@ export function resumeRefusalKeyOf(
 export function refusalEndsWaiting(key: ResumeRefusalKey): boolean {
   return key === 'ended' || key === 'notFailed';
 }
+
+// ── Situation 2 (Story MOTIR-7905 · MOTIR-7940; design § 38) ───────────────────────────────
+
+/** The three forms an entry takes, by the server's `ToResumeForm`. */
+export type ResumeEntryForm =
+  | 'failed_walk'
+  | 'failed_beside_waiting_plan'
+  | 'ended_with_waiting_plan';
+
+/**
+ * What an entry offers. **Resume only on a failed walk**: a failure beside a waiting plan is
+ * continued by the next turn in the overlay, and a session that ended is carried into a new
+ * conversation by its next message — a Resume on either would be refused by the server.
+ */
+export function entryControlsOf(form: ResumeEntryForm): { resume: boolean; open: true } {
+  switch (form) {
+    case 'failed_walk':
+      return { resume: true, open: true };
+    case 'failed_beside_waiting_plan':
+    case 'ended_with_waiting_plan':
+      return { resume: false, open: true };
+    default: {
+      const unreachable: never = form;
+      return unreachable;
+    }
+  }
+}
+
+/** The waiting plan's state in words (`workbench.planningSession.form.b.*`) — TOTAL. */
+export function waitingPlanStateKeyOf(status: 'planned' | 'stale'): 'stateWaiting' | 'stateStale' {
+  return status === 'stale' ? 'stateStale' : 'stateWaiting';
+}
+
+/** The next step on a form-B entry's own line: reply to carry on, or plan it again. */
+export function nextStepKeyOf(status: 'planned' | 'stale'): 'nextReply' | 'nextAgain' {
+  return status === 'stale' ? 'nextAgain' : 'nextReply';
+}
+
+/** The held line's key (`workbench.planningSession.left.*`) for an entry that left. */
+export type LeftLineKey = 'turn' | 'carry' | 'decided' | 'again';
+
+/**
+ * Why a form-B / C entry left the read. Form A's held line is *Resuming*, never this, so it
+ * answers `null`. `decided` is what a read of the plan found; the rest are inferred.
+ */
+export function leftLineKeyOf(
+  form: ResumeEntryForm,
+  status: 'planned' | 'stale' | null,
+  decided: boolean,
+): LeftLineKey | null {
+  if (form === 'failed_walk') return null;
+  if (decided) return 'decided';
+  if (form === 'ended_with_waiting_plan') return 'carry';
+  return status === 'stale' ? 'again' : 'turn';
+}

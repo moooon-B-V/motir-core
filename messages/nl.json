@@ -9007,7 +9007,28 @@
       "left": {
         "title": "Verplaatst naar ‘Te hervatten’",
         "line": "De poging is mislukt en het plan tot nu toe is bewaard. Hervat het vanuit ‘Te hervatten’.",
-        "link": "Naar ‘Te hervatten’"
+        "link": "Naar ‘Te hervatten’",
+        "turn": "In hetzelfde gesprek herzien — deze regel verdwijnt.",
+        "carry": "Meegenomen naar een nieuw gesprek — deze regel verdwijnt.",
+        "decided": "Besloten — deze regel verdwijnt.",
+        "again": "Hier opnieuw gepland — deze regel verdwijnt."
+      },
+      "form": {
+        "b": {
+          "badChange": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd",
+          "stateWaiting": "Wacht op je goedkeuring",
+          "stateStale": "Verouderd",
+          "nextReply": "Het plan wacht nog. Reageer om verder te gaan.",
+          "nextAgain": "Het werk dat het wijzigt is afgerond. Plan het opnieuw om verder te gaan."
+        },
+        "c": {
+          "ended": "Het gesprek eindigde {when}",
+          "gloss": "Je volgende bericht neemt het plan mee naar een nieuw gesprek.",
+          "chip": "Gesprek beëindigd"
+        },
+        "walk": {
+          "alsoWaiting": "Wacht ook op je goedkeuring:"
+        }
       }
     }
   },

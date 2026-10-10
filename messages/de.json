@@ -9010,7 +9010,28 @@
       "left": {
         "title": "Nach „Fortzusetzen“ verschoben",
         "line": "Der Versuch ist fehlgeschlagen, der bisherige Plan bleibt erhalten. Setzen Sie ihn unter „Fortzusetzen“ fort.",
-        "link": "Zu „Fortzusetzen“"
+        "link": "Zu „Fortzusetzen“",
+        "turn": "In derselben Unterhaltung überarbeitet — dieser Eintrag verschwindet.",
+        "carry": "In eine neue Unterhaltung übertragen — dieser Eintrag verschwindet.",
+        "decided": "Entschieden — dieser Eintrag verschwindet.",
+        "again": "Wird hier neu geplant — dieser Eintrag verschwindet."
+      },
+      "form": {
+        "b": {
+          "badChange": "Ihre letzte Änderung an diesem Plan konnte nicht vorgenommen werden",
+          "stateWaiting": "Wartet auf Ihre Genehmigung",
+          "stateStale": "Veraltet",
+          "nextReply": "Der Plan wartet weiterhin. Antworten Sie, um fortzufahren.",
+          "nextAgain": "Die Arbeit, die er ändert, ist abgeschlossen. Planen Sie ihn neu, um fortzufahren."
+        },
+        "c": {
+          "ended": "Die Unterhaltung endete {when}",
+          "gloss": "Ihre nächste Nachricht überträgt den Plan in eine neue Unterhaltung.",
+          "chip": "Unterhaltung beendet"
+        },
+        "walk": {
+          "alsoWaiting": "Wartet außerdem auf Ihre Genehmigung:"
+        }
       }
     }
   },

@@ -9004,7 +9004,28 @@
       "left": {
         "title": "Moved to To resume",
         "line": "Its attempt failed, and the plan so far is kept. Resume it from To resume.",
-        "link": "Go to To resume"
+        "link": "Go to To resume",
+        "turn": "Revised in the same conversation — this entry is gone.",
+        "carry": "Carried into a new conversation — this entry is gone.",
+        "decided": "Decided — this entry is gone.",
+        "again": "Planning it again here — this entry is gone."
+      },
+      "form": {
+        "b": {
+          "badChange": "Your last change to this plan could not be made",
+          "stateWaiting": "Waiting for your approval",
+          "stateStale": "Out of date",
+          "nextReply": "The plan is still waiting. Reply to carry on.",
+          "nextAgain": "The work it changes has finished. Plan it again to carry on."
+        },
+        "c": {
+          "ended": "The conversation ended {when}",
+          "gloss": "Your next message carries the plan into a new conversation.",
+          "chip": "Conversation ended"
+        },
+        "walk": {
+          "alsoWaiting": "Also waiting for your approval:"
+        }
       }
     }
   },

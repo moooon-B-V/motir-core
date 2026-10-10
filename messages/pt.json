@@ -9010,7 +9010,28 @@
       "left": {
         "title": "Movido para “A retomar”",
         "line": "A tentativa falhou e o plano feito até aqui foi mantido. Retome-o em “A retomar”.",
-        "link": "Ir para “A retomar”"
+        "link": "Ir para “A retomar”",
+        "turn": "Revisado na mesma conversa — esta entrada vai sumir.",
+        "carry": "Levado para uma nova conversa — esta entrada vai sumir.",
+        "decided": "Decidido — esta entrada vai sumir.",
+        "again": "Replanejando aqui — esta entrada vai sumir."
+      },
+      "form": {
+        "b": {
+          "badChange": "Sua última alteração neste plano não pôde ser feita",
+          "stateWaiting": "Aguardando sua aprovação",
+          "stateStale": "Desatualizado",
+          "nextReply": "O plano continua aguardando. Responda para continuar.",
+          "nextAgain": "O trabalho que ele altera foi concluído. Planeje-o de novo para continuar."
+        },
+        "c": {
+          "ended": "A conversa terminou {when}",
+          "gloss": "Sua próxima mensagem leva o plano para uma nova conversa.",
+          "chip": "Conversa encerrada"
+        },
+        "walk": {
+          "alsoWaiting": "Também aguardando sua aprovação:"
+        }
       }
     }
   },

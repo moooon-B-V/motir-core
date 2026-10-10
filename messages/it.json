@@ -9010,7 +9010,28 @@
       "left": {
         "title": "Spostato in «Da riprendere»",
         "line": "Il tentativo non è riuscito e il piano scritto finora è conservato. Riprendilo da «Da riprendere».",
-        "link": "Vai a «Da riprendere»"
+        "link": "Vai a «Da riprendere»",
+        "turn": "Rivisto nella stessa conversazione — questa voce scompare.",
+        "carry": "Portato in una nuova conversazione — questa voce scompare.",
+        "decided": "Deciso — questa voce scompare.",
+        "again": "Ripianificazione qui — questa voce scompare."
+      },
+      "form": {
+        "b": {
+          "badChange": "Non è stato possibile applicare la tua ultima modifica a questo piano",
+          "stateWaiting": "In attesa della tua approvazione",
+          "stateStale": "Non aggiornato",
+          "nextReply": "Il piano è ancora in attesa. Rispondi per proseguire.",
+          "nextAgain": "Il lavoro che modifica è terminato. Pianificalo di nuovo per proseguire."
+        },
+        "c": {
+          "ended": "La conversazione è terminata {when}",
+          "gloss": "Il tuo prossimo messaggio porta il piano in una nuova conversazione.",
+          "chip": "Conversazione terminata"
+        },
+        "walk": {
+          "alsoWaiting": "Anche in attesa della tua approvazione:"
+        }
       }
     }
   },
