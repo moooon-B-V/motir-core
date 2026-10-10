@@ -3504,7 +3504,13 @@ async function applyModify(
   const linkAdded: Array<{ toId: string; kind: string }> = [];
   for (const ref of patch.blockedByAdd ?? []) {
     const toId = resolveRef(ref);
-    await workItemLinkRepository.create(
+    // `createIfAbsent`, not `create` (MOTIR-8147): naming an edge the card already
+    // has is a statement of the wanted end state, and the unique
+    // `(fromId, toId, kind)` would otherwise abort the WHOLE approve with a
+    // `DuplicateLinkError` nothing catches. Same no-op the `add` path's edges and
+    // the `supersedes` edges below already give a repeat. Only an edge actually
+    // inserted is recorded in the revision diff.
+    const created = await workItemLinkRepository.createIfAbsent(
       {
         workspaceId: ctx.workspaceId,
         fromId: item.workItemId,
@@ -3514,7 +3520,7 @@ async function applyModify(
       },
       tx,
     );
-    linkAdded.push({ toId, kind: 'is_blocked_by' });
+    if (created) linkAdded.push({ toId, kind: 'is_blocked_by' });
   }
   const linkRemoved: Array<{ toId: string; kind: string }> = [];
   for (const ref of patch.blockedByRemove ?? []) {
