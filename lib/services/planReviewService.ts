@@ -1805,7 +1805,9 @@ export const planReviewService = {
     // will, and the canvas keeps the roadmap read's own dispositions for it.
     let edgeCoverage: PlanEdgeCoverageDto[] = [];
     if (plan.status === 'generating' || plan.status === 'planned') {
-      const proj = await buildProjection(planId, ctx);
+      // FOCUSED (MOTIR-8146): only the nodes this plan names, their ancestors and
+      // the edges between them are read — not the project's whole live item set.
+      const proj = await buildProjection(planId, ctx, { scope: 'edge_coverage' });
       const projIdOf = (nodeId: string): string => {
         const proposal = itemByNodeId.get(nodeId);
         return proposal && proposal.op === 'add' && proposal.nodeId === proposal.planItemId
