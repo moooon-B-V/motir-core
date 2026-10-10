@@ -233,14 +233,15 @@ describe('Motir’s own organisations are never scheduled (§5)', () => {
   it('the sweep deletes none of their agents — an org classified internal after its lapse keeps them, and its schedule is cleared', async () => {
     await twoAgents();
     await push(false);
-    // The lapse is stamped with the REAL clock (`new Date()` in `setAiIncludedSeat`) while the
-    // harness clock is virtual, so a fixed jump is a date bomb: step past the deletion date.
-    const deletesOn = deletionDateFor((await org()).aiPlanLapsedAt!);
     await adminDb.organization.update({
       where: { id: fx().workspace.organizationId },
       data: { internalBilling: true },
     });
-    clock.advance(deletesOn.getTime() - clock.now().getTime() + DAY_MS);
+    // Past the DATE, not "40 days on": the lapse date is cut from the REAL clock and
+    // the harness clock is pinned in September, so a fixed advance goes stale as the
+    // real date moves (it did on 2026-10-10 — the date moved past the pinned clock + 40d).
+    const deletesOn = deletionDateFor((await org()).aiPlanLapsedAt!);
+    clock.advance(deletesOn.getTime() - clock.now().getTime() + MIN);
     expect((await sweeper.sweepPlanLapse()).deleted).toBe(0);
     expect(await live()).toHaveLength(2);
     expect((await live()).every((r) => r.scheduledDeletionAt === null)).toBe(true);

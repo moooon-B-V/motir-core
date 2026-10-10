@@ -17,6 +17,7 @@ import type {
   CorrectPlanBriefKey,
 } from '@/lib/dto/plans';
 import { PLAN_ITEM_REASON_MAX } from '@/lib/dto/plans';
+import { PLAN_NARRATION_BATCH_MAX, PLAN_NARRATION_SENTENCE_MAX } from '@/lib/plans/planNarration';
 import {
   TODO_COMMAND_MAX_LENGTH,
   TODO_NOTES_MAX_LENGTH,
@@ -1178,11 +1179,26 @@ const reportPlanStepInputSchema = {
     ),
   step: z
     .enum(PLAN_STEP_VALUES)
+    .optional()
     .describe(
       'The step the session is starting: `settle` (settling the brief — never a target), ' +
         '`lay` (laying the children of `target`, or the project’s top level with no target), ' +
         '`author` (writing `target`, or an item not on the plan yet with no target), or `end` ' +
-        '(the session finished — clears its step; never a target).',
+        '(the session finished — clears its step; never a target). A step report also records ' +
+        'the words a person reads at the head of that session’s narration. Send exactly one ' +
+        'of `step` or `narration`.',
+    ),
+  narration: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Instead of `step`: one or more plain-language sentences saying what the session is ' +
+        'doing and why, appended in order to the plan’s kept narration under `sessionKey` ' +
+        `(at most ${PLAN_NARRATION_BATCH_MAX} per call; whitespace is collapsed and a sentence ` +
+        `longer than ${PLAN_NARRATION_SENTENCE_MAX} characters is cut with an ellipsis). ` +
+        'Refused with PLAN_STEP_INVALID when sent with `step` or `target`, when a sentence is ' +
+        'empty, or when the session has not reported `settle`, `lay` or `author` yet. Nothing ' +
+        'is recorded on a refusal.',
     ),
   target: z
     .string()
@@ -1200,8 +1216,9 @@ const reportPlanStepInputSchema = {
 interface ReportPlanStepArgs {
   planId: string;
   sessionKey: string;
-  step: PlanStepValue;
+  step?: PlanStepValue;
   target?: string;
+  narration?: string[];
 }
 
 interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
@@ -1937,15 +1954,34 @@ export async function runReportPlanStep(
     }
   }
 
-  const stored = await plansService.reportPlanStep(
+  const result = await plansService.reportPlanStep(
     args.planId,
-    { sessionKey: args.sessionKey, step: args.step, targetRef },
+    {
+      sessionKey: args.sessionKey,
+      targetRef,
+      ...(args.step !== undefined ? { step: args.step } : {}),
+      ...(args.narration !== undefined ? { narration: args.narration } : {}),
+    },
     ctx,
   );
+  if (result.kind === 'narration') {
+    const n = result.narration.length;
+    const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
+      planId: args.planId,
+      sessionKey: args.sessionKey,
+      narration: result.narration.map((row) => ({ seq: row.seq, body: row.body })),
+    });
+    return toolOk(
+      `Recorded ${n} narration sentence${n === 1 ? '' : 's'} for session ` +
+        `\`${args.sessionKey}\` on plan ${args.planId}.`,
+      payload,
+    );
+  }
+  const stored = result.kind === 'step' ? result.step : null;
   const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
     planId: args.planId,
     sessionKey: stored?.sessionKey ?? args.sessionKey,
-    step: args.step,
+    step: args.step ?? null,
     targetRef: stored?.targetRef ?? null,
     startedAt: stored?.startedAt ?? null,
   });
@@ -2367,7 +2403,10 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         '`target` is otherwise a `planItem:<id>` ref naming an `add` on this plan, or a ' +
         'committed work item by key or id. The server sets the time. Legal only while the ' +
         'plan is `generating`: once it is `planned`, `approved` or `declined` the call is ' +
-        'refused with PLAN_NOT_GENERATING and nothing changes. IT IS ADVISORY: every refusal ' +
+        'refused with PLAN_NOT_GENERATING and nothing changes. Between steps, send ' +
+        '`narration` (instead of `step`) with a few plain sentences on what the session is ' +
+        'doing and why: a person reads them in the plan’s chat panel, and they are kept. ' +
+        'IT IS ADVISORY: every refusal ' +
         'comes back as a code and a sentence, and a refused report should NOT stop you ' +
         'planning — carry on with the plan. It changes nothing about the plan’s proposals. ' +
         `Same grant as \`${ADD_PLAN_ITEMS_TOOL_NAME}\`. Costs nothing and starts no job.`,

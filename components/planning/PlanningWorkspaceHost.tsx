@@ -470,6 +470,7 @@ function PlanWorkspaceHost({
     requestRestart,
     answerRestartConfirm,
     planAgain,
+    showEarlierNarration,
   } = usePlanChangeConversation({
     onApproved,
     anchorId,
@@ -1093,6 +1094,7 @@ function PlanWorkspaceHost({
           // its swap re-keys the address through `onRestarted`, the restart's path.
           onCarrySend={(text) => void send(text)}
           onPlanAgain={() => void planAgain()}
+          onShowEarlierNarration={() => void showEarlierNarration()}
           gateView={gateView}
           declining={declineFrom === 'rail'}
           onRequestDecline={() => setDeclineFrom('rail')}

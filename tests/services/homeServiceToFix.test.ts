@@ -12,6 +12,7 @@ import {
   type WorkItemFixture,
 } from '../fixtures';
 import { setProjectAccess } from '@/tests/helpers/projectAccess';
+import { homePageItems } from '../helpers/homePage';
 
 // The Workbench's TO FIX read (Story MOTIR-6588 · MOTIR-6604), over real Postgres.
 //
@@ -73,7 +74,10 @@ async function card(
   return item;
 }
 
-const ids = (page: { items: { id: string }[] }) => page.items.map((r) => r.id).sort();
+const ids = (page: Parameters<typeof homePageItems>[0]) =>
+  homePageItems(page)
+    .map((r) => r.id)
+    .sort();
 
 describe('To fix and In progress PARTITION the in-progress set', () => {
   it('every in-progress card is on exactly one of the two, over a mixed set', async () => {
@@ -106,7 +110,9 @@ describe('To fix and In progress PARTITION the in-progress set', () => {
       fixReason: 'ci_failed',
       fixDetail: DETAIL,
     });
-    expect(inProgress.items.every((r) => r.fixReason === null && r.fixDetail === null)).toBe(true);
+    expect(
+      homePageItems(inProgress).every((r) => r.fixReason === null && r.fixDetail === null),
+    ).toBe(true);
   });
 
   it('the counts equal the lists, and My work still counts everything unfinished', async () => {

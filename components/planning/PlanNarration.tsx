@@ -1,0 +1,360 @@
+'use client';
+
+import { useId, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  CircleCheck,
+} from 'lucide-react';
+import { Spinner } from '@/components/ui/Spinner';
+import type { PlanNarrationSessionDto, PlanStepKindDto } from '@/lib/dto/plans';
+import type { NarrationGroup, NarrationHeadLine } from '@/components/planning/planNarration';
+
+type Tc = ReturnType<typeof useTranslations>;
+
+/**
+ * THE PLANNER'S NARRATION in the chat panel (Story MOTIR-8060 · MOTIR-8064),
+ * drawn to `design/ai-chat/design-notes.md` § "⭐ Planner narration in the chat
+ * panel" (MOTIR-8061) and `plan-change-run-live--narration.mock.html`.
+ *
+ * The planner's own sentences, one group per session under a head naming that
+ * session's stored step words — live or finished, on reopen, after the plan ends
+ * and for a Visitor — with one control that folds them all. Built only from the
+ * stored read (`groupNarration` over `review.narration`), never from stream
+ * frames, so there is nothing in memory to lose when the overlay closes.
+ *
+ * ⚠️ QUIET IN THE LOG. The transcript is `role="log"`, which is implicitly
+ * polite, so this block carries `aria-live="off"`: a sentence is never spoken as
+ * it lands. The act record's announcer stays the one live region, and says the
+ * head lines instead.
+ *
+ * ⚠️ AS WRITTEN. A sentence and a target title are shown as stored, never through
+ * `t()`, and carry `dir="auto"` with no `lang` (no field says which language a
+ * sentence is in, and a wrong `lang` is worse than none).
+ */
+
+/** The per-browser collapse-all memory: global, not per plan (MOTIR-8061 panel 3). */
+export const PLANNER_NOTES_STORAGE_KEY = 'motir:planning:planner-notes';
+
+type Remembered = 'collapsed' | 'expanded';
+
+function readRemembered(): boolean {
+  try {
+    return window.localStorage.getItem(PLANNER_NOTES_STORAGE_KEY) === 'collapsed';
+  } catch {
+    return false;
+  }
+}
+
+/** Another tab's choice is not followed live; the next mount reads it. */
+function subscribeNever(): () => void {
+  return () => {};
+}
+
+function writeRemembered(value: Remembered): void {
+  try {
+    window.localStorage.setItem(PLANNER_NOTES_STORAGE_KEY, value);
+  } catch {
+    /* storage unavailable: the choice holds for this view only */
+  }
+}
+
+const KIND_LABEL: Record<PlanStepKindDto, string> = {
+  settle: 'narration.kindSettle',
+  lay: 'act.laying',
+  author: 'act.authoring',
+};
+
+/** A marker no catalogue line contains, used to split a line around its title. */
+const TITLE_SLOT = '\u0001';
+
+/** A head's line split around the stored title: `[before, title, after]`, the
+ *  title `null` for a settle head. Shipped act-line wording (MOTIR-8061 §One
+ *  group per session), so one catalogue line serves live and finished. */
+function headParts(session: PlanNarrationSessionDto, tc: Tc): [string, string | null, string] {
+  if (session.stepKind === 'settle') return [tc('narration.settleLine'), null, ''];
+  const line =
+    session.stepKind === 'lay'
+      ? tc('act.layingLine', { target: TITLE_SLOT })
+      : tc('act.authoringLine', { title: TITLE_SLOT });
+  const [before = '', after = ''] = line.split(TITLE_SLOT);
+  return [before, session.targetTitle ?? '', after];
+}
+
+/** A head's line as one plain string — the announcer's and the list's name. */
+export function narrationHeadLine(session: PlanNarrationSessionDto, tc: Tc): string {
+  const [before, title, after] = headParts(session, tc);
+  return `${before}${title ?? ''}${after}`.trim();
+}
+
+/** The group heads in words, for the act record's announcer. */
+export function narrationHeadLines(groups: readonly NarrationGroup[], tc: Tc): NarrationHeadLine[] {
+  return groups.flatMap((group) =>
+    group.session
+      ? [
+          {
+            sessionKey: group.sessionKey,
+            line: narrationHeadLine(group.session, tc),
+            live: group.live,
+          },
+        ]
+      : [],
+  );
+}
+
+const DISCLOSURE_CLASS =
+  'inline-flex shrink-0 items-center gap-0.5 rounded-(--radius-control) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-[11px] font-medium text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
+
+export interface PlanNarrationProps {
+  groups: readonly NarrationGroup[];
+  /** The plan's total sentence count: the read's window plus its `earlierCount`. */
+  total: number;
+  /** Sentences before the earliest one in hand. */
+  earlierCount: number;
+  loadingEarlier?: boolean;
+  onShowEarlier?: () => void;
+}
+
+export function PlanNarration({
+  groups,
+  total,
+  earlierCount,
+  loadingEarlier = false,
+  onShowEarlier,
+}: PlanNarrationProps) {
+  const tc = useTranslations('planningWorkspace.conversation');
+  const baseId = useId();
+  const fold = useFoldState();
+  if (groups.length === 0) return null;
+  const listId = (i: number) => `${baseId}-notes-${i}`;
+  const foldable = groups.flatMap((g, i) => (g.messages.length > 0 ? [{ g, i }] : []));
+  const allOpen = foldable.every(({ g }) => !fold.isFolded(g.sessionKey));
+
+  return (
+    <div data-testid="plan-narration" aria-live="off" className="flex flex-col gap-1.5">
+      {total > 0 ? (
+        <div
+          data-testid="plan-narration-bar"
+          className="sticky top-0 z-10 -mx-4 flex items-center gap-2 bg-(--el-surface) px-4 py-1"
+        >
+          <span className="font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+            {tc('narration.label')}
+          </span>
+          <button
+            type="button"
+            aria-expanded={allOpen}
+            aria-controls={foldable.map(({ i }) => listId(i)).join(' ')}
+            data-testid="plan-narration-toggle-all"
+            onClick={() => fold.setAll(allOpen)}
+            className={`ml-auto ${DISCLOSURE_CLASS}`}
+          >
+            {allOpen ? (
+              <ChevronsDownUp className="size-3" aria-hidden="true" />
+            ) : (
+              <ChevronsUpDown className="size-3" aria-hidden="true" />
+            )}
+            {tc(allOpen ? 'narration.hideAll' : 'narration.showAll', { count: total })}
+          </button>
+        </div>
+      ) : null}
+      {earlierCount > 0 && onShowEarlier ? (
+        <button
+          type="button"
+          data-testid="plan-narration-earlier"
+          disabled={loadingEarlier}
+          onClick={onShowEarlier}
+          className={`self-start ${DISCLOSURE_CLASS}`}
+        >
+          <ChevronUp className="size-3" aria-hidden="true" />
+          {tc('narration.earlier', { count: earlierCount })}
+        </button>
+      ) : null}
+      <ol
+        data-testid="plan-narration-groups"
+        className="flex flex-col gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+      >
+        {groups.map((group, i) => (
+          <NarrationGroupRow
+            key={group.sessionKey}
+            group={group}
+            listId={listId(i)}
+            folded={fold.isFolded(group.sessionKey)}
+            onToggle={() => fold.toggle(group.sessionKey)}
+            tc={tc}
+          />
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/**
+ * The fold: every group follows the remembered all-state, except the ones the
+ * reader toggled on their own. A press on the all-control clears those, so a
+ * later Hide folds a group that was opened alone. Only the all-control is
+ * remembered; a single group's disclosure is view state.
+ */
+function useFoldState() {
+  // The remembered choice is read through `useSyncExternalStore`, whose server
+  // snapshot is "expanded": the server has no storage, so a render-time read
+  // would hydrate one tree over another. A press in this view wins over it.
+  const remembered = useSyncExternalStore(subscribeNever, readRemembered, () => false);
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(() => new Set());
+  const allFolded = chosen ?? remembered;
+  return {
+    isFolded: (key: string) => allFolded !== toggled.has(key),
+    toggle: (key: string) =>
+      setToggled((set) => {
+        const next = new Set(set);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      }),
+    setAll: (fold: boolean) => {
+      setChosen(fold);
+      setToggled(new Set());
+      writeRemembered(fold ? 'collapsed' : 'expanded');
+    },
+  };
+}
+
+function NarrationGroupRow({
+  group,
+  listId,
+  folded,
+  onToggle,
+  tc,
+}: {
+  group: NarrationGroup;
+  listId: string;
+  folded: boolean;
+  onToggle: () => void;
+  tc: Tc;
+}) {
+  const state = group.session === null ? 'unattributed' : group.live ? 'live' : 'finished';
+  const name = group.session
+    ? tc(group.live ? 'narration.groupLive' : 'narration.groupFinished', {
+        step: narrationHeadLine(group.session, tc),
+      })
+    : undefined;
+  const hasMessages = group.messages.length > 0;
+  return (
+    <li
+      data-testid="plan-narration-group"
+      data-session={state}
+      data-session-key={group.sessionKey}
+      className={`flex flex-col gap-1 text-xs ${
+        group.live ? 'text-(--el-text)' : 'text-(--el-text-secondary)'
+      }`}
+    >
+      {group.session ? (
+        <NarrationHead
+          session={group.session}
+          live={group.live}
+          disclosure={
+            hasMessages ? (
+              <button
+                type="button"
+                aria-expanded={!folded}
+                aria-controls={listId}
+                data-testid="plan-narration-group-toggle"
+                onClick={onToggle}
+                className={`-my-px ml-auto ${DISCLOSURE_CLASS}`}
+              >
+                {folded ? (
+                  <ChevronRight className="size-3" aria-hidden="true" />
+                ) : (
+                  <ChevronDown className="size-3" aria-hidden="true" />
+                )}
+                {tc('narration.groupCount', { count: group.messages.length })}
+              </button>
+            ) : null
+          }
+          tc={tc}
+        />
+      ) : null}
+      {hasMessages ? (
+        <ol
+          id={listId}
+          hidden={folded}
+          aria-label={name}
+          data-testid="plan-narration-messages"
+          className="ml-5.5 flex flex-col gap-1 border-l border-(--el-border-strong) pl-2.5"
+        >
+          {group.messages.map((message, i) => (
+            <li
+              key={message.seq}
+              dir="auto"
+              data-testid="plan-narration-message"
+              data-seq={message.seq}
+              className={`leading-relaxed wrap-anywhere ${
+                group.live && i === group.messages.length - 1
+                  ? 'text-(--el-text)'
+                  : 'text-(--el-text-secondary)'
+              }`}
+            >
+              {message.body}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </li>
+  );
+}
+
+/** The group head: the shipped act row's three columns, from the stored step
+ *  words. Live: the spinner and `--el-text`. Finished: `circle-check` and the
+ *  word "· done" — the step words stay, never a generic finished label. */
+function NarrationHead({
+  session,
+  live,
+  disclosure,
+  tc,
+}: {
+  session: PlanNarrationSessionDto;
+  live: boolean;
+  disclosure: ReactNode;
+  tc: Tc;
+}) {
+  const [before, title, after] = headParts(session, tc);
+  return (
+    <div className="flex items-start gap-2" data-testid="plan-narration-head">
+      {live ? (
+        <Spinner size="sm" aria-hidden="true" />
+      ) : (
+        <span className="mt-px shrink-0 text-(--el-text-secondary)">
+          <CircleCheck className="size-3.5" aria-hidden="true" />
+        </span>
+      )}
+      <span
+        className="mt-px w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+        data-kind={session.stepKind}
+      >
+        {tc(KIND_LABEL[session.stepKind])}
+      </span>
+      <span className="min-w-0 flex-1 wrap-anywhere" data-testid="plan-narration-head-line">
+        {before}
+        {title !== null ? (
+          <span dir="auto" data-testid="plan-narration-head-title">
+            {title}
+          </span>
+        ) : null}
+        {after}
+        {live ? null : (
+          <>
+            {' '}
+            <span data-testid="plan-narration-done" className="text-(--el-text-secondary)">
+              {tc('narration.done')}
+            </span>
+          </>
+        )}
+      </span>
+      {disclosure}
+    </div>
+  );
+}
