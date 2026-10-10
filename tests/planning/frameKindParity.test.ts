@@ -3,7 +3,6 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
-import emitted from '../fixtures/plan-change/motir-ai-frame-kinds.json';
 
 // PARITY WITH motir-ai (MOTIR-8158). An unlisted frame kind used to be drawn raw
 // on the rail as `frame: <name>`; it now draws nothing, which would make a NEW
@@ -14,6 +13,9 @@ import emitted from '../fixtures/plan-change/motir-ai-frame-kinds.json';
 // motir-ai-frame-kinds.json`, its header says how to refresh it). When a motir-ai
 // checkout sits beside this one (or `MOTIR_AI_CHECKOUT` names one) the second
 // test also sweeps it live, so drift is caught before the copy is refreshed.
+
+const KINDS_FILE = path.resolve(__dirname, '../fixtures/plan-change/motir-ai-frame-kinds.json');
+const emitted = JSON.parse(readFileSync(KINDS_FILE, 'utf8')) as { kinds: string[] };
 
 describe('every frame kind motir-ai emits has a disposition in core', () => {
   it('the checked-in list of emitted kinds is all accounted for', () => {
@@ -69,12 +71,7 @@ describe('every frame kind motir-ai emits has a disposition in core', () => {
 // The fixture is read as JSON; make a stray edit that empties it loud.
 describe('the checked-in list', () => {
   it('is non-empty, sorted and duplicate-free', () => {
-    const raw = JSON.parse(
-      readFileSync(
-        path.resolve(__dirname, '../fixtures/plan-change/motir-ai-frame-kinds.json'),
-        'utf8',
-      ),
-    ) as { kinds: string[] };
+    const raw = emitted;
     expect(raw.kinds.length).toBeGreaterThan(40);
     expect(raw.kinds).toEqual([...new Set(raw.kinds)].sort());
   });
