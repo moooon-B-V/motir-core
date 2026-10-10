@@ -26,6 +26,7 @@ import {
   toSeedAncestors,
 } from '@/lib/planning/refusalSeed';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import {
   clearWithin as clearPlanningSessionGate,
@@ -56,6 +57,7 @@ import {
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
   GuideSessionNotPlannableError,
+  PlanSessionAwaitingResumeError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
@@ -1961,6 +1963,15 @@ export const planChangeSessionsService = {
     // A guide conversation never plans (AMENDMENT 2, A2.2): refused before its
     // turns are read, so no plan-edit job is ever submitted for one.
     if (session.origin === 'guide') throw new GuideSessionNotPlannableError(session.id);
+    // A FAILED-WAITING session submits nothing new (Story MOTIR-7905 · MOTIR-7916): the
+    // ordinary submit would open a SECOND plan beside the one the session holds and make the
+    // failure record name a job that is no longer the session's attempt. The ways on are Resume
+    // (`planSessionResumeService`) or ending the session. A PRE-check, not a re-check under the
+    // lock: the one window left needs the running attempt to fail in the same instant a person
+    // submits, and closing it would orphan an already-opened plan.
+    if (sessionWaitingState(session) === 'failed') {
+      throw new PlanSessionAwaitingResumeError(session.id);
+    }
     const turns = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
       planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId, tx),
     );

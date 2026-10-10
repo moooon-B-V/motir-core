@@ -236,6 +236,35 @@ export async function submitPlanChange(
   );
 }
 
+/**
+ * RESUME a failed hosted planning session (Story MOTIR-7905 · MOTIR-7916): the owner's own
+ * failed-waiting session continues on the SAME plan in the SAME session. Returns the new job to
+ * stream (through the relay that session already uses), the plan, and the session as it now
+ * stands. One door for both Resume buttons — the To resume entry and the overlay.
+ *
+ * A refusal rejects with the shared client error, whose `code` is the typed one
+ * (`NOT_SESSION_OWNER`, `SESSION_NOT_FAILED`, `PLAN_NOT_RESUMABLE`, `RESUME_ALREADY_STARTED`, …).
+ * On `RESUME_ALREADY_STARTED` the body carries the WINNING attempt's `jobId`
+ * ({@link resumeAlreadyStartedJobId}), so a double-click streams the one that is running.
+ */
+export async function resumePlanSession(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<PlanChangeSubmitResponse> {
+  return post<PlanChangeSubmitResponse>(
+    '/api/ai/plan-change/session/resume',
+    { sessionId },
+    signal,
+  );
+}
+
+/** The job a `RESUME_ALREADY_STARTED` refusal names, or null for any other error. */
+export function resumeAlreadyStartedJobId(err: unknown): string | null {
+  if (!(err instanceof PlanEditsClientError) || err.code !== 'RESUME_ALREADY_STARTED') return null;
+  const jobId = (err.body as { jobId?: unknown } | null)?.jobId;
+  return typeof jobId === 'string' && jobId.length > 0 ? jobId : null;
+}
+
 // ─── The BOUNDARY MAILBOX — reaching a run that is already going ─────────────
 //
 // The submit door above STARTS a run. These reach one already in flight, through

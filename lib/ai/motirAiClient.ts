@@ -294,6 +294,7 @@ export async function submitJob(
   tenant: Tenant,
   context: JobContextBag,
   actor: RequestActor,
+  opts: { resume?: { planId: string; fromJobId: string } } = {},
 ): Promise<{ jobId: string }> {
   const { url, serviceToken } = config();
   // THE PER-ORG KILL-SWITCHES (MOTIR-750), read here because every new planning
@@ -317,6 +318,8 @@ export async function submitJob(
     tenant: sentTenant,
     context,
     readBackToken,
+    // Only when resuming a failed walk (MOTIR-7916): absent ⇒ the body is byte-identical to today.
+    ...(opts.resume ? { resume: opts.resume } : {}),
   };
 
   const res = await aiFetch(`${url}/v1/jobs`, {

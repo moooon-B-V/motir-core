@@ -535,6 +535,23 @@ export const planChangeSessionRepository = {
     return result.count > 0;
   },
 
+  /**
+   * The session's NEW ATTEMPT bound (MOTIR-7916): `lastJobId` / `lastSubmittedAt`, on an OPEN
+   * session only. Beside {@link clearFailure}, in the same transaction. Returns whether a row
+   * moved — `false` on an ended session.
+   */
+  async recordResumedAttempt(
+    id: string,
+    attempt: { jobId: string; at: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.planChangeSession.updateMany({
+      where: { id, endedAt: null },
+      data: { lastJobId: attempt.jobId, lastSubmittedAt: attempt.at },
+    });
+    return result.count > 0;
+  },
+
   /** Null the seven failure columns — a resume's new attempt has bound. */
   async clearFailure(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
     const result = await tx.planChangeSession.updateMany({

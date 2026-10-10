@@ -155,6 +155,32 @@ describe('submitJob', () => {
   });
 });
 
+describe('submitJob — resume (MOTIR-7916)', () => {
+  it('puts `resume` on the envelope when given, and leaves the body byte-identical when not', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => jsonResponse({ jobId: 'j', status: 'queued' }, 202));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await submitJob('plan', tenant, { prompt: 'x' }, actor);
+    await submitJob('plan', tenant, { prompt: 'x' }, actor, {
+      resume: { planId: 'plan-1', fromJobId: 'job-1' },
+    });
+
+    const plain = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    const resumed = JSON.parse(fetchMock.mock.calls[1]![1].body as string);
+    expect(plain).not.toHaveProperty('resume');
+    expect(Object.keys(plain)).toEqual([
+      'envelopeVersion',
+      'jobKind',
+      'tenant',
+      'context',
+      'readBackToken',
+    ]);
+    expect(resumed.resume).toEqual({ planId: 'plan-1', fromJobId: 'job-1' });
+  });
+});
+
 describe('getJob', () => {
   it('returns a succeeded view with the result and no error', async () => {
     // The WIRE body motir-ai actually sends — `planDelta` included. Core dropped

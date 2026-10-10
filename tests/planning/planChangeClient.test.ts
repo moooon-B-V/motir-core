@@ -17,6 +17,8 @@ import {
   submitAskTurn,
   submitContextualPlan,
   submitPlanChange,
+  resumePlanSession,
+  resumeAlreadyStartedJobId,
 } from '@/lib/planning/planChangeClient';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 
@@ -705,5 +707,42 @@ describe('planChangeClient — Plan something new (Story MOTIR-7631 · MOTIR-765
   it('a refused answer is the typed client error', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ code: 'PLAN_SESSION_ENDED' }, 409));
     await expect(answerRestart('s1', 'confirm')).rejects.toBeInstanceOf(PlanEditsClientError);
+  });
+});
+
+describe('resumePlanSession (MOTIR-7916)', () => {
+  it('posts { sessionId } to the resume door and returns { jobId, planId, session }', async () => {
+    const result = { jobId: 'job-2', planId: 'plan-1', session: { id: 's1' } };
+    fetchMock.mockResolvedValue(jsonResponse(result));
+
+    await expect(resumePlanSession('s1')).resolves.toEqual(result);
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/resume');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ sessionId: 's1' });
+  });
+
+  it('surfaces the code, and on RESUME_ALREADY_STARTED the winning jobId', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ code: 'RESUME_ALREADY_STARTED', error: 'already', jobId: 'job-winner' }, 409),
+    );
+
+    const err = await resumePlanSession('s1').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(PlanEditsClientError);
+    expect((err as PlanEditsClientError).status).toBe(409);
+    expect((err as PlanEditsClientError).code).toBe('RESUME_ALREADY_STARTED');
+    expect(resumeAlreadyStartedJobId(err)).toBe('job-winner');
+  });
+
+  it('reads no job from any other refusal', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ code: 'NOT_SESSION_OWNER', error: 'no' }, 403));
+
+    const err = await resumePlanSession('s1').catch((e: unknown) => e);
+
+    expect((err as PlanEditsClientError).code).toBe('NOT_SESSION_OWNER');
+    expect(resumeAlreadyStartedJobId(err)).toBeNull();
+    expect(resumeAlreadyStartedJobId(new Error('x'))).toBeNull();
   });
 });

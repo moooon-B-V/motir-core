@@ -376,6 +376,69 @@ export class PlanningSeedNotFoundError extends Error {
 }
 
 /**
+ * Resume asked by someone who is NOT the session's owner (Story MOTIR-7905 · MOTIR-7916).
+ * The decision routes everything about a waiting session to its owner, so only the owner
+ * resumes it; a member who can see it gets this rather than a 404, because the design draws
+ * a "no longer the owner" refusal. → 403.
+ */
+export class NotSessionOwnerError extends Error {
+  readonly code = 'NOT_SESSION_OWNER' as const;
+  constructor(readonly sessionId: string) {
+    super(`Only the owner of planning session ${sessionId} can resume it.`);
+    this.name = 'NotSessionOwnerError';
+  }
+}
+
+/** Resume asked of an open session that is NOT failed-waiting (MOTIR-7916). → 409. */
+export class SessionNotFailedError extends Error {
+  readonly code = 'SESSION_NOT_FAILED' as const;
+  constructor(readonly sessionId: string) {
+    super(`Planning session ${sessionId} has no failed attempt to resume.`);
+    this.name = 'SessionNotFailedError';
+  }
+}
+
+/**
+ * A concurrent Resume already started the new attempt (MOTIR-7916). Carries the WINNING
+ * job's id, so a double-click streams the one attempt that is running. → 409.
+ */
+export class ResumeAlreadyStartedError extends Error {
+  readonly code = 'RESUME_ALREADY_STARTED' as const;
+  constructor(
+    readonly sessionId: string,
+    readonly jobId: string | null,
+  ) {
+    super(`Planning session ${sessionId} was already resumed.`);
+    this.name = 'ResumeAlreadyStartedError';
+  }
+}
+
+/**
+ * The session's latest plan is not the one the failure belongs to, or is no longer
+ * `generating` (MOTIR-7916): there is nothing for a resume to continue. → 409.
+ */
+export class PlanNotResumableError extends Error {
+  readonly code = 'PLAN_NOT_RESUMABLE' as const;
+  constructor(readonly sessionId: string) {
+    super(`Planning session ${sessionId} has no plan that can be resumed.`);
+    this.name = 'PlanNotResumableError';
+  }
+}
+
+/**
+ * An ordinary planning submit on a failed-waiting session (MOTIR-7916): it would open a
+ * second plan beside the one the session holds, so the only ways on are Resume or ending the
+ * session. → 409 `SESSION_AWAITING_RESUME`.
+ */
+export class PlanSessionAwaitingResumeError extends Error {
+  readonly code = 'SESSION_AWAITING_RESUME' as const;
+  constructor(readonly sessionId: string) {
+    super(`Planning session ${sessionId} is waiting to resume; resume it or start a new one.`);
+    this.name = 'PlanSessionAwaitingResumeError';
+  }
+}
+
+/**
  * A guide turn on a card that is not MANUAL (Story MOTIR-7459 · MOTIR-7464; ADR
  * `conversation-turn-intent.md` AMENDMENT 2, A2.7). The predicate is
  * `isManualReadyItem` — `executor: human` or `type: manual` — and the turn is

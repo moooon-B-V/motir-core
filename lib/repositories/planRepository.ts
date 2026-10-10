@@ -133,6 +133,37 @@ export const planRepository = {
     });
   },
 
+  /**
+   * A session's LATEST plan with what a RESUME checks (MOTIR-7916): its id, status and the
+   * job that wrote it. Read cheaply before a job is spent and again under the locks before
+   * the bind.
+   */
+  async findLatestForResume(sessionId: string, tx: Prisma.TransactionClient) {
+    return tx.plan.findFirst({
+      where: { sessionId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { id: true, status: true, sourceJobId: true, projectId: true },
+    });
+  },
+
+  /**
+   * RE-POINT a `generating` plan at the job that now writes it (MOTIR-7916): the bind a resume
+   * makes. ONE conditional `updateMany` on `status = 'generating'`, so a plan that was decided
+   * or declined meanwhile is left alone and the caller learns it from the return. Also stamps
+   * `lastActivityAt`, so the resumed plan does not read as stalled before its first signal.
+   */
+  async repointSourceJob(
+    planId: string,
+    jobId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.plan.updateMany({
+      where: { id: planId, status: 'generating' },
+      data: { sourceJobId: jobId, lastActivityAt: new Date() },
+    });
+    return result.count > 0;
+  },
+
   /** The id of a session's LATEST plan — "is this plan the conversation's current
    *  one?" (AMENDMENT 17 §5), the question `lastJobId` used to answer only for
    *  the latest submit. `tx` required: it guards a following release. */
