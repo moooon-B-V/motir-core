@@ -910,6 +910,21 @@ export function targetHeldFrom(err: unknown): PlanTargetHeldByDto | null {
   };
 }
 
+/**
+ * The two refusals of a TURN on a session that waits (Story MOTIR-7905 · MOTIR-7941) that the
+ * rail words in place instead of as the generic failure: a revision already runs on the plan
+ * (`PLAN_REVISION_IN_FLIGHT`), or the session holds a failed walk that only Resume continues
+ * (`SESSION_AWAITING_RESUME`). Neither is retryable by pressing Try again, and the draft is kept.
+ */
+export function refusalCodeOf(
+  err: unknown,
+): 'PLAN_REVISION_IN_FLIGHT' | 'SESSION_AWAITING_RESUME' | null {
+  if (!(err instanceof PlanEditsClientError)) return null;
+  return err.code === 'PLAN_REVISION_IN_FLIGHT' || err.code === 'SESSION_AWAITING_RESUME'
+    ? err.code
+    : null;
+}
+
 /** Whether a thread has ENDED (AMENDMENT 23 §1) — read from the server's row. */
 export function sessionEnded(session: PlanChangeSessionDto | null | undefined): boolean {
   return Boolean(session?.endedAt);
@@ -1498,7 +1513,7 @@ export function usePlanChangeConversation({
         progress: null,
         // A refused correction must not leave its `reading` line behind (MOTIR-7924).
         acts: withoutReading(s.acts),
-        errorCode: gated || held ? null : 'FAILED',
+        errorCode: gated || held ? null : (refusalCodeOf(err) ?? 'FAILED'),
         outOfCredits: gated,
         ...(held ? { targetHeld: held } : {}),
       }));

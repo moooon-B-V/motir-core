@@ -280,7 +280,7 @@ export const planRepository = {
   async listUndecidedBySession(sessionId: string, tx: Prisma.TransactionClient) {
     return tx.plan.findMany({
       where: { sessionId, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
-      select: { id: true, status: true, sourceJobId: true, createdAt: true },
+      select: { id: true, status: true, title: true, sourceJobId: true, createdAt: true },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },

@@ -7522,7 +7522,9 @@
         "notDecidable": "Nie można jeszcze zdecydować o tym planie — nikt nie został poproszony o jego zatwierdzenie. Nic nie zostało zmienione.",
         "discard": "Odrzucenie się nie powiodło. Propozycja nadal czeka na kanwie — spróbuj ponownie albo ją zatwierdź.",
         "askSilent": "Nic nie wróciło. Spróbuj zapytać inaczej.",
-        "failedClosed": "Ta próba się nie powiodła, więc sesja została zamknięta. Elementy robocze, które w niej były, wróciły na swoje miejsce."
+        "failedClosed": "Ta próba się nie powiodła, więc sesja została zamknięta. Elementy robocze, które w niej były, wróciły na swoje miejsce.",
+        "revisionInFlight": "Motir AI już poprawia ten plan. Twoja wiadomość została zachowana — wyślij ją ponownie, gdy pojawi się nowa wersja.",
+        "awaitingResume": "Ta sesja czeka na wznowienie i nie może jeszcze przyjąć wiadomości. Najpierw ją wznów — Twoja wiadomość została zachowana."
       },
       "answeredFrom": "{count, plural, =0 {Odpowiedź bez powoływania się na źródła} one {Odpowiedź na podstawie # elementu roboczego} few {Odpowiedź na podstawie # elementów roboczych} many {Odpowiedź na podstawie # elementów roboczych} other {Odpowiedź na podstawie # elementu roboczego}}",
       "correctToAsk": "Zamiast tego odpowiedz na to",
@@ -7965,9 +7967,11 @@
     "waiting": {
       "failedHead": "Ta próba została zatrzymana",
       "kept": "Dotychczasowy plan został zachowany, a powiązane elementy robocze pozostają w stanie „Planowanie”.",
-      "holdReason": "Wznów, aby kontynuować — gdy próba jest zatrzymana, nie można wysłać wiadomości.",
+      "holdReason": "Najpierw wznów nieudaną próbę. Wysyłanie jest wstrzymane, dopóki czeka.",
       "onlyStarter": "Tylko {name} lub kierownik projektu może to wznowić.",
-      "onlyStarterAnon": "Tylko osoba, która to rozpoczęła, lub kierownik projektu może to wznowić."
+      "onlyStarterAnon": "Tylko osoba, która to rozpoczęła, lub kierownik projektu może to wznowić.",
+      "failureLine": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona · {when}",
+      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona · {when}"
     }
   },
   "codeHealth": {

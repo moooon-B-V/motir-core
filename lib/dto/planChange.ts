@@ -233,6 +233,18 @@ export interface PlanChangeSessionDto {
    * thread is unchanged (the `endedAt?` precedent).
    */
   failure?: PlanSessionFailureDto | null;
+  /**
+   * WHICH failed-waiting shape this is, set only while {@link failure} is (Story MOTIR-7905 ·
+   * MOTIR-7941): `'resume'` — a half-written walk that only Resume continues; `'reply'` — a
+   * plan waits for the person and the NEXT TURN continues the session. Derived by the same
+   * classifier the submit door refuses by; never re-derived in the client.
+   */
+  failedWaiting?: 'resume' | 'reply' | null;
+  /**
+   * The plan that WAITS for the person beside a failure — the session's most recent undecided
+   * `planned` / `stale` plan — or null. Set only while {@link failure} is.
+   */
+  waitingPlan?: { planId: string; title: string | null; status: 'planned' | 'stale' } | null;
   /** The conversation is waiting on its OWNER's next turn (MOTIR-7908); never set
    *  together with {@link failure}. */
   awaitingPerson?: PlanSessionAwaitingPersonDto | null;

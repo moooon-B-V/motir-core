@@ -7525,7 +7525,9 @@
         "notDecidable": "Ce plan ne peut pas encore faire l'objet d'une décision — personne n'a été invité à l'approuver. Rien n'a été modifié.",
         "discard": "La suppression n'a pas abouti. La proposition attend toujours sur le canevas — réessayez, ou approuvez-la.",
         "askSilent": "Aucune réponse n'est revenue. Essayez de formuler la question autrement.",
-        "failedClosed": "Cette tentative n'a pas abouti, cette session a donc été fermée. Les éléments de travail qu'elle contenait sont revenus à leur état précédent."
+        "failedClosed": "Cette tentative n'a pas abouti, cette session a donc été fermée. Les éléments de travail qu'elle contenait sont revenus à leur état précédent.",
+        "revisionInFlight": "Motir AI révise déjà ce plan. Votre message est conservé — renvoyez-le une fois la nouvelle version prête.",
+        "awaitingResume": "Cette session attend d’être reprise et ne peut pas encore recevoir de message. Reprenez-la d’abord — votre message est conservé."
       },
       "answeredFrom": "{count, plural, =0 {Répondu sans rien citer} one {Répondu à partir de # élément de travail} other {Répondu à partir de # éléments de travail}}",
       "correctToAsk": "Répondre plutôt à cette question",
@@ -7968,9 +7970,11 @@
     "waiting": {
       "failedHead": "Cette tentative s’est arrêtée",
       "kept": "Le plan réalisé jusqu’ici est conservé et les éléments de travail concernés restent « En planification ».",
-      "holdReason": "Reprenez pour continuer — aucun message ne peut être envoyé tant que la tentative est arrêtée.",
+      "holdReason": "Reprenez d’abord la tentative en échec. L’envoi est suspendu tant qu’elle attend.",
       "onlyStarter": "Seul·e {name} ou un responsable de projet peut la reprendre.",
-      "onlyStarterAnon": "Seule la personne qui l’a démarrée ou un responsable de projet peut la reprendre."
+      "onlyStarterAnon": "Seule la personne qui l’a démarrée ou un responsable de projet peut la reprendre.",
+      "failureLine": "Votre dernière modification de ce plan n’a pas pu être effectuée · {when}",
+      "failureLineAgain": "Votre dernière modification n’a de nouveau pas pu être effectuée · {when}"
     }
   },
   "codeHealth": {

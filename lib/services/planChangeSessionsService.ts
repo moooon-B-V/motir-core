@@ -156,25 +156,44 @@ export function buildAccumulatedIntent(
   );
 }
 
-/** Whether a FAILED-WAITING session's way on is Resume (a resumable failed walk, or a shape
- *  with no other exit) rather than a plain turn — `classifyFailedWaitingTurn`'s `refuse_resume`. */
-async function failedWalkResumable(
+/**
+ * What a FAILED-WAITING session's overlay needs beyond the failure itself (Story MOTIR-7905 ·
+ * MOTIR-7918 / MOTIR-7941): whether its way on is **Resume** — the SAME classifier the submit
+ * door refuses by (`classifyFailedWaitingTurn`'s `refuse_resume`), so the screen and the server
+ * cannot disagree — and the plan that WAITS for the person beside it, if any (the session's most
+ * recent undecided `planned` / `stale` plan).
+ */
+async function failedWaitingShape(
   row: PlanChangeSession,
   pctx: ProjectContext,
   tx?: Prisma.TransactionClient,
-): Promise<boolean> {
+): Promise<{
+  resumable: boolean;
+  waitingPlan: { planId: string; title: string | null; status: 'planned' | 'stale' } | null;
+}> {
   const plans = tx
     ? await planRepository.listUndecidedBySession(row.id, tx)
     : await withWorkspaceServiceContext(pctx.workspaceId, (t) =>
         planRepository.listUndecidedBySession(row.id, t),
       );
-  return (
+  const resumable =
     classifyFailedWaitingTurn({
       waiting: sessionWaitingState(row),
       failedJobId: row.failedJobId,
       plans: plans.map((p) => ({ ...p, status: undecidedStatus(p.status) })),
-    }) === 'refuse_resume'
-  );
+    }) === 'refuse_resume';
+  // Newest first (the repository orders it): the first `planned` / `stale` one waits.
+  const waiting = plans.find((p) => p.status === 'planned' || p.status === 'stale');
+  return {
+    resumable,
+    waitingPlan: waiting
+      ? {
+          planId: waiting.id,
+          title: waiting.title,
+          status: waiting.status === 'stale' ? 'stale' : 'planned',
+        }
+      : null,
+  };
 }
 
 /** Read a session's thread and map both to the DTO. `tx` joins a surrounding
@@ -231,8 +250,14 @@ async function toDto(
   // that waits for the person (situation 2) — the one fact the overlay needs to choose between
   // Resume + a held composer and the decide door + an open one (MOTIR-7918 / MOTIR-7941). The
   // SAME classifier the submit door refuses by, so the screen and the server cannot disagree.
-  const dto = base.failure
-    ? { ...base, failure: { ...base.failure, resumable: await failedWalkResumable(row, pctx, tx) } }
+  const shape = base.failure ? await failedWaitingShape(row, pctx, tx) : null;
+  const dto = shape
+    ? {
+        ...base,
+        failure: { ...base.failure!, resumable: shape.resumable },
+        failedWaiting: shape.resumable ? ('resume' as const) : ('reply' as const),
+        waitingPlan: shape.waitingPlan,
+      }
     : base;
   if (fileIds.length === 0) return dto;
   const attachments = await attachmentsService.listViewableByIds(fileIds, {

@@ -7519,7 +7519,9 @@
         "notDecidable": "This plan can’t be decided yet — nobody has been asked to approve it. Nothing was changed.",
         "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it.",
         "askSilent": "Nothing came back. Try asking that a different way.",
-        "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were."
+        "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were.",
+        "revisionInFlight": "Motir AI is already revising this plan. Your message is kept — send it again once the new version lands.",
+        "awaitingResume": "This session is waiting to be resumed, so it can't take a message yet. Resume it first — your message is kept."
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
       "correctToAsk": "Answer this instead",
@@ -7962,9 +7964,11 @@
     "waiting": {
       "failedHead": "This attempt stopped",
       "kept": "The plan so far is kept, and the work items it covers stay at Planning.",
-      "holdReason": "Resume to carry on — no message can be sent while the attempt is stopped.",
+      "holdReason": "Resume the failed attempt first. Sending is paused while it waits.",
       "onlyStarter": "Only {name} or a project manager can resume this.",
-      "onlyStarterAnon": "Only the person who started this or a project manager can resume it."
+      "onlyStarterAnon": "Only the person who started this or a project manager can resume it.",
+      "failureLine": "Your last change to this plan could not be made · {when}",
+      "failureLineAgain": "Your last change could not be made again · {when}"
     }
   },
   "codeHealth": {

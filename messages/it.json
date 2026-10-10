@@ -7525,7 +7525,9 @@
         "notDecidable": "Non è ancora possibile decidere su questo piano: a nessuno è stato chiesto di approvarlo. Non è stato modificato nulla.",
         "discard": "Lo scarto non è andato a buon fine. La proposta è ancora in attesa sul canvas: riprova oppure approvala.",
         "askSilent": "Non è arrivata alcuna risposta. Prova a formulare la domanda in un altro modo.",
-        "failedClosed": "Il tentativo non è andato a buon fine, quindi questa sessione è stata chiusa. Gli elementi di lavoro che conteneva sono tornati dov’erano."
+        "failedClosed": "Il tentativo non è andato a buon fine, quindi questa sessione è stata chiusa. Gli elementi di lavoro che conteneva sono tornati dov’erano.",
+        "revisionInFlight": "Motir AI sta già rivedendo questo piano. Il tuo messaggio è conservato: invialo di nuovo quando arriva la nuova versione.",
+        "awaitingResume": "Questa sessione attende di essere ripresa e non può ancora ricevere messaggi. Riprendila prima: il tuo messaggio è conservato."
       },
       "answeredFrom": "{count, plural, =0 {Risposta data senza citare nulla} one {Risposta basata su # elemento di lavoro} other {Risposta basata su # elementi di lavoro}}",
       "correctToAsk": "Rispondi invece a questo",
@@ -7968,9 +7970,11 @@
     "waiting": {
       "failedHead": "Questo tentativo si è interrotto",
       "kept": "Il piano scritto finora è conservato e gli elementi di lavoro coinvolti restano «In pianificazione».",
-      "holdReason": "Riprendi per proseguire: finché il tentativo è interrotto non si può inviare alcun messaggio.",
+      "holdReason": "Riprendi prima il tentativo non riuscito. L’invio è sospeso finché è in attesa.",
       "onlyStarter": "Solo {name} o un responsabile del progetto può riprenderlo.",
-      "onlyStarterAnon": "Solo la persona che l’ha avviato o un responsabile del progetto può riprenderlo."
+      "onlyStarterAnon": "Solo la persona che l’ha avviato o un responsabile del progetto può riprenderlo.",
+      "failureLine": "Non è stato possibile applicare la tua ultima modifica a questo piano · {when}",
+      "failureLineAgain": "La tua ultima modifica non è stata applicata di nuovo · {when}"
     }
   },
   "codeHealth": {

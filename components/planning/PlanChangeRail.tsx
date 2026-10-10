@@ -74,7 +74,11 @@ import {
   WaitingPlanStillWaits,
   TargetRefusal,
 } from '@/components/planning/SessionEndParts';
-import { FailedWaitingNotice } from '@/components/planning/SessionWaitingParts';
+import {
+  AlsoWaitingPlan,
+  FailedWaitingNotice,
+  WaitingPlanFailureLine,
+} from '@/components/planning/SessionWaitingParts';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
@@ -1134,10 +1138,19 @@ export function PlanChangeRail({
             onResume={() => onResume?.()}
           />
         ) : null}
+        {/* …beside a plan that WAITS (design panel 6): the walk is Resume's, the plan stays reachable. */}
+        {awaitsResume && state.session?.waitingPlan ? (
+          <AlsoWaitingPlan session={state.session} />
+        ) : null}
+        {/* A failure beside a waiting plan (situation 2; MOTIR-7941): ONE current failure line, an
+            open composer, no Resume — the next turn continues the session. */}
+        {failure && !awaitsResume ? (
+          <WaitingPlanFailureLine failure={failure} again={failedAgain} />
+        ) : null}
 
         {state.errorCode &&
         !ended &&
-        !awaitsResume &&
+        (failure === null || isTurnRefusal(state.errorCode)) &&
         state.errorCode !== 'timedOut' &&
         !(gated && (state.errorCode === 'stale' || state.errorCode === 'decided')) ? (
           <div className="flex flex-col items-start gap-2">
@@ -1147,15 +1160,17 @@ export function PlanChangeRail({
             >
               {tc(errorKey(state.errorCode))}
             </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<RefreshCw className="size-4" aria-hidden="true" />}
-              onClick={onRetry}
-              disabled={busy || userTurns.length === 0}
-            >
-              {tc('retry')}
-            </Button>
+            {isTurnRefusal(state.errorCode) ? null : (
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<RefreshCw className="size-4" aria-hidden="true" />}
+                onClick={onRetry}
+                disabled={busy || userTurns.length === 0}
+              >
+                {tc('retry')}
+              </Button>
+            )}
           </div>
         ) : null}
 
@@ -1275,6 +1290,11 @@ export function PlanChangeRail({
   );
 }
 
+/** The two refusals of a TURN on a session that waits — said in place, never retried. */
+function isTurnRefusal(code: string): boolean {
+  return code === 'PLAN_REVISION_IN_FLIGHT' || code === 'SESSION_AWAITING_RESUME';
+}
+
 /** `FAILED` / `EMPTY` / `immutable` / `SESSION_UNAVAILABLE` / any typed code →
  *  the copy that explains it. Anything unrecognized falls back to the generic,
  *  recoverable failure line — never a raw code on screen. */
@@ -1300,6 +1320,12 @@ function errorKey(code: string): string {
       return 'error.notDecidable';
     case 'SESSION_UNAVAILABLE':
       return 'error.session';
+    // A turn on a session that waits (MOTIR-7941): a revision already runs, or the session holds
+    // a failed walk that only Resume continues. Said in place; the draft is kept.
+    case 'PLAN_REVISION_IN_FLIGHT':
+      return 'error.revisionInFlight';
+    case 'SESSION_AWAITING_RESUME':
+      return 'error.awaitingResume';
     // The ask job ran and produced nothing at all. NOT the honest "I could not
     // find that" — that is prose the handler returns, and it lands as an ordinary
     // answer bubble with no citations. This is the empty case, and core writes

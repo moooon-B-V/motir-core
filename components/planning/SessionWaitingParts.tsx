@@ -1,11 +1,12 @@
 'use client';
 
 import { useFormatter, useTranslations } from 'next-intl';
-import { Hourglass } from 'lucide-react';
+import { Hourglass, TriangleAlert } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
-import type { PlanSessionFailureDto } from '@/lib/dto/planChange';
+import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
+import type { PlanChangeSessionDto, PlanSessionFailureDto } from '@/lib/dto/planChange';
 import {
   refusalEndsWaiting,
   resumeReasonKeyOf,
@@ -116,5 +117,65 @@ export function FailedWaitingNotice({
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * THE ONE CURRENT FAILURE LINE of an OPEN session whose plan WAITS (situation 2; Story
+ * MOTIR-7905 · MOTIR-7941; design `planning-workspace--failed-with-waiting-plan.mock.html`
+ * panels 5a / 5e / 8a): *Your last change to this plan could not be made · {when}*, in the
+ * warning role MOTIR-7633 kept (no danger ink). No Resume, no Try again, no Closed marker — the
+ * session is OPEN and the next turn continues it.
+ *
+ * Only the CURRENT failure is drawn: the session stores one failure record, a later turn clears
+ * it and a newer failure overwrites it, so an earlier one is never redrawn after a reload.
+ */
+export function WaitingPlanFailureLine({
+  failure,
+  again,
+}: {
+  failure: PlanSessionFailureDto;
+  again: boolean;
+}) {
+  const tw = useTranslations('planningWorkspace.waiting');
+  const format = useFormatter();
+  const when = format.relativeTime(new Date(failure.failedAt));
+  return (
+    <p
+      role="status"
+      data-testid="planning-failure-line"
+      data-again={again ? 'true' : undefined}
+      className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+    >
+      <TriangleAlert className="mt-0.5 size-4 flex-none text-(--el-icon-muted)" aria-hidden />
+      <span>{again ? tw('failureLineAgain', { when }) : tw('failureLine', { when })}</span>
+    </p>
+  );
+}
+
+/**
+ * A plan that WAITS beside a failed walk (design panel 6): the walk is what Resume continues, and
+ * the plan that was already waiting for approval stays reachable — a door to it through the one
+ * plan-overlay door, never an address built here.
+ */
+export function AlsoWaitingPlan({ session }: { session: PlanChangeSessionDto }) {
+  const t = useTranslations('workbench.planningSession.form.walk');
+  const plan = session.waitingPlan;
+  if (!plan) return null;
+  return (
+    <p className="text-xs text-(--el-text-secondary)" data-testid="planning-also-waiting">
+      {t('alsoWaiting')}{' '}
+      <PlanOverlayDoor
+        planId={plan.planId}
+        known={{
+          planStatus: plan.status,
+          sessionId: session.id,
+          anchorKey: session.targetKeys[0] ?? null,
+        }}
+        className="font-medium text-(--el-link) hover:underline focus-visible:underline focus-visible:outline-none"
+      >
+        {plan.title ?? '…'}
+      </PlanOverlayDoor>
+    </p>
   );
 }

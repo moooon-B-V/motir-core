@@ -102,6 +102,7 @@ import {
   sessionEnded,
   sessionFailed,
   sessionAwaitsResume,
+  refusalCodeOf,
   SESSION_END_REREAD_MS,
 } from '@/lib/hooks/usePlanChangeConversation';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
@@ -713,5 +714,27 @@ describe('Resume', () => {
       await result.current.resume();
     });
     expect(resumeSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('a TURN refused by a session that waits (MOTIR-7941)', () => {
+  it('reads the two refusals by their code, and nothing else', () => {
+    expect(refusalCodeOf(new PlanEditsClientError(409, 'PLAN_REVISION_IN_FLIGHT'))).toBe(
+      'PLAN_REVISION_IN_FLIGHT',
+    );
+    expect(refusalCodeOf(new PlanEditsClientError(409, 'SESSION_AWAITING_RESUME'))).toBe(
+      'SESSION_AWAITING_RESUME',
+    );
+    expect(refusalCodeOf(new PlanEditsClientError(409, 'PLAN_SESSION_ENDED'))).toBeNull();
+    expect(refusalCodeOf(new Error('boom'))).toBeNull();
+  });
+
+  it('a refused send holds the code as the rail’s error (not the generic FAILED)', async () => {
+    submitAsk.mockRejectedValue(new PlanEditsClientError(409, 'SESSION_AWAITING_RESUME'));
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Change it.');
+    });
+    expect(result.current.state.errorCode).toBe('SESSION_AWAITING_RESUME');
   });
 });

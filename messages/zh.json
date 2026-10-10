@@ -7515,7 +7515,9 @@
         "notDecidable": "这份计划暂时还不能决定 —— 还没有人被请求批准它。没有任何改动。",
         "discard": "放弃没有成功。提案仍在画布上等待处理 —— 可以重试，或直接批准。",
         "askSilent": "没有得到任何回复。换一种方式提问试试。",
-        "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的工作项已恢复原状。"
+        "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的工作项已恢复原状。",
+        "revisionInFlight": "Motir AI 正在修订这个计划。你的消息已保留——新版本完成后请再发送一次。",
+        "awaitingResume": "此会话正在等待继续，暂时无法接收消息。请先继续它——你的消息已保留。"
       },
       "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
       "correctToAsk": "改为回答这个问题",
@@ -7958,9 +7960,11 @@
     "waiting": {
       "failedHead": "这次尝试停下了",
       "kept": "已写的计划得到保留，它涉及的工作项仍处于规划中。",
-      "holdReason": "继续即可接着写——尝试停下期间无法发送消息。",
+      "holdReason": "请先继续这次失败的尝试。在它等待期间，发送已暂停。",
       "onlyStarter": "只有 {name} 或项目管理员可以继续它。",
-      "onlyStarterAnon": "只有发起者或项目管理员可以继续它。"
+      "onlyStarterAnon": "只有发起者或项目管理员可以继续它。",
+      "failureLine": "你上一次对这个计划的修改没能完成 · {when}",
+      "failureLineAgain": "你上一次的修改再次没能完成 · {when}"
     }
   },
   "codeHealth": {

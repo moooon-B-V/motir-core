@@ -7525,7 +7525,9 @@
         "notDecidable": "Este plan aún no se puede decidir: no se ha pedido a nadie que lo apruebe. No se cambió nada.",
         "discard": "No se pudo descartar. La propuesta sigue esperando en el lienzo: vuelve a intentarlo o apruébala.",
         "askSilent": "No volvió nada. Intenta preguntarlo de otra manera.",
-        "failedClosed": "Ese intento no se completó, así que esta sesión se cerró. Los elementos de trabajo que tenía volvieron a donde estaban."
+        "failedClosed": "Ese intento no se completó, así que esta sesión se cerró. Los elementos de trabajo que tenía volvieron a donde estaban.",
+        "revisionInFlight": "Motir AI ya está revisando este plan. Tu mensaje se conserva: vuelve a enviarlo cuando llegue la nueva versión.",
+        "awaitingResume": "Esta sesión espera a ser reanudada y todavía no puede recibir mensajes. Reanúdala primero: tu mensaje se conserva."
       },
       "answeredFrom": "{count, plural, =0 {Respondido sin citar nada} one {Respondido a partir de # elemento de trabajo} other {Respondido a partir de # elementos de trabajo}}",
       "correctToAsk": "Responder esto en su lugar",
@@ -7968,9 +7970,11 @@
     "waiting": {
       "failedHead": "Este intento se detuvo",
       "kept": "El plan hecho hasta ahora se conserva y los elementos de trabajo afectados siguen «En planificación».",
-      "holdReason": "Reanuda para continuar: no se puede enviar ningún mensaje mientras el intento esté detenido.",
+      "holdReason": "Reanuda primero el intento fallido. El envío está en pausa mientras espera.",
       "onlyStarter": "Solo {name} o un responsable del proyecto puede reanudarlo.",
-      "onlyStarterAnon": "Solo la persona que lo inició o un responsable del proyecto puede reanudarlo."
+      "onlyStarterAnon": "Solo la persona que lo inició o un responsable del proyecto puede reanudarlo.",
+      "failureLine": "No se pudo hacer tu último cambio en este plan · {when}",
+      "failureLineAgain": "Tu último cambio no se pudo hacer de nuevo · {when}"
     }
   },
   "codeHealth": {
