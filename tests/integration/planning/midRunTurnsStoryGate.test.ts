@@ -84,6 +84,8 @@ const { POST: settleRoute } = await import('@/app/api/ai/ask/settle/route');
 const { POST: lateChanges } = await import('@/app/api/ai/plan-change/session/late-changes/route');
 const { __resetSharedRateLimitStoreForTest } = await import('@/lib/rateLimit/store');
 const { pinSharedRateLimitStoreDeadline } = await import('../../helpers/rateLimitStore');
+const { ALIGNED_HEADROOM_MS, ALIGNED_WINDOW_MS, waitForWindowBoundary, waitForWindowHeadroom } =
+  await import('../../helpers/rateLimitWindow');
 const { POST: mailboxRoute } = await import('@/app/api/ai/plan-change/session/mailbox/route');
 const { GET: readPauseRoute, POST: answerPauseRoute } =
   await import('@/app/api/ai/plan-change/session/run-pause/route');
@@ -1404,8 +1406,14 @@ describe('a late change that cannot be revised in still hands the words back', (
     );
     setJob('succeeded');
     const prior = process.env['MOTIR_AI_GENERATE_RATE_LIMIT'];
+    const priorWindow = process.env['MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS'];
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS'] = String(ALIGNED_WINDOW_MS);
     try {
+      // The refusal depends on the call before it, so both must land in one
+      // epoch-aligned window (MOTIR-2648 / MOTIR-3016).
+      await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+      await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
       // The one call the ceiling allows is spent on a different, harmless request.
       const spend = await lateChanges(
         req('/api/ai/plan-change/session/late-changes', 'POST', { sessionId }),
@@ -1423,6 +1431,8 @@ describe('a late change that cannot be revised in still hands the words back', (
     } finally {
       if (prior === undefined) delete process.env['MOTIR_AI_GENERATE_RATE_LIMIT'];
       else process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = prior;
+      if (priorWindow === undefined) delete process.env['MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS'];
+      else process.env['MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS'] = priorWindow;
     }
   });
 });
