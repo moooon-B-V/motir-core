@@ -8744,6 +8744,13 @@
       "reconnecting": "正在重新连接…",
       "cleared": "已解除"
     },
+    "group": {
+      "expand": "展开 {key}",
+      "collapse": "收起 {key}",
+      "count": "{count, plural, other {此标签页中有 # 个工作项}}",
+      "context": "不在此标签页",
+      "members": "{key} 下的工作项"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "在合并队列中失败 · <d>{detail}</d>",

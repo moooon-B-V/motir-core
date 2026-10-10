@@ -396,6 +396,55 @@ export function groupRank(a: ReadyGroupPosition, b: ReadyGroupPosition): number 
   return a.headKey - b.headKey;
 }
 
+/** One group {@link groupByContainer} returns: its head, its members in order, its rank. */
+export interface ContainerGroup<T> {
+  headId: string;
+  headKey: number;
+  members: T[];
+  position: ReadyGroupPosition;
+}
+
+/**
+ * GROUP rows by `container ?? self` and put the groups in {@link groupRank} order, the
+ * members of each in {@link compareReadyPosition} order — the ONE grouping step `/ready`'s
+ * lanes and the Workbench's grouped tabs (Story MOTIR-8012 · MOTIR-8015) share, so the two
+ * surfaces cannot disagree about what a group is or where it sits. `headOf` names the
+ * group an entry belongs to (its runnable container, or the entry itself); `positionOf`
+ * is the entry's `(kind, priority, key)`. The input's order does not matter.
+ */
+export function groupByContainer<T>(
+  entries: readonly T[],
+  headOf: (entry: T) => { id: string; key: number },
+  positionOf: (entry: T) => ReadyCursor,
+): ContainerGroup<T>[] {
+  const byHead = new Map<string, { headId: string; headKey: number; members: T[] }>();
+  for (const entry of entries) {
+    const head = headOf(entry);
+    let group = byHead.get(head.id);
+    if (!group) {
+      group = { headId: head.id, headKey: head.key, members: [] };
+      byHead.set(head.id, group);
+    }
+    group.members.push(entry);
+  }
+  const groups = [...byHead.values()].map((group) => {
+    const members = [...group.members].sort((a, b) =>
+      compareReadyPosition(positionOf(a), positionOf(b)),
+    );
+    const best = positionOf(members[0]!);
+    return {
+      ...group,
+      members,
+      position: {
+        best: { kind: best.kind, priority: best.priority, key: best.key },
+        headKey: group.headKey,
+      },
+    };
+  });
+  groups.sort((a, b) => groupRank(a.position, b.position));
+  return groups;
+}
+
 /**
  * A LANE cursor: which lane it pages, the group the previous page ended in and
  * — for the two row lanes — the member it ended on. A `container`-lane row IS a

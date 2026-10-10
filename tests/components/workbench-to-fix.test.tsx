@@ -108,6 +108,8 @@ function stuck(
     resumeState: null,
     resumeRunId: null,
     resumeMembers: [],
+    groupHead: null,
+    groupMembers: [],
     canFixHosted: false,
     repairRun: null,
   };

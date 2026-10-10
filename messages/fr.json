@@ -8754,6 +8754,13 @@
       "reconnecting": "Reconnexion…",
       "cleared": "Résolu"
     },
+    "group": {
+      "expand": "Développer {key}",
+      "collapse": "Réduire {key}",
+      "count": "{count, plural, one {# élément de travail dans cet onglet} other {# éléments de travail dans cet onglet}}",
+      "context": "Pas dans cet onglet",
+      "members": "Éléments de travail sous {key}"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "Échec dans la file de fusion · <d>{detail}</d>",

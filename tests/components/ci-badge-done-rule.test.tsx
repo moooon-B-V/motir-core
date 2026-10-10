@@ -154,6 +154,8 @@ function workbenchRow(status: string): HomeWorkItemRowDto {
     resumeState: null,
     resumeRunId: null,
     resumeMembers: [],
+    groupHead: null,
+    groupMembers: [],
   };
 }
 

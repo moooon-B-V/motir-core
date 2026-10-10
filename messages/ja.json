@@ -8751,6 +8751,13 @@
       "reconnecting": "再接続しています…",
       "cleared": "解消済み"
     },
+    "group": {
+      "expand": "{key} を展開",
+      "collapse": "{key} を折りたたむ",
+      "count": "{count, plural, other {このタブの作業項目 # 件}}",
+      "context": "このタブにはありません",
+      "members": "{key} の作業項目"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "マージキューで失敗 · <d>{detail}</d>",

@@ -103,6 +103,8 @@ function card(identifier: string, over: Partial<HomeWorkItemRowDto> = {}): HomeW
     resumeState: 'waiting_on_gate',
     resumeRunId: 'run_1',
     resumeMembers: [],
+    groupHead: null,
+    groupMembers: [],
     canFixHosted: false,
     repairRun: null,
     ...over,

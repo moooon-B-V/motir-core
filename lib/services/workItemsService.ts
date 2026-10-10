@@ -242,6 +242,7 @@ import {
   compareReadyPosition,
   decodeReadyLaneCursor,
   encodeReadyLaneCursor,
+  groupByContainer,
   groupRank,
   isBugWork,
   isRunnableContainer,
@@ -8481,34 +8482,17 @@ interface ReadyLaneGroup {
  * input's order does not matter; the output's is the lane's contract.
  */
 function groupLaneRows(rows: ReadyLaneRow[]): ReadyLaneGroup[] {
-  const byHead = new Map<string, ReadyLaneGroup>();
-  for (const entry of rows) {
-    const headId = entry.container?.id ?? entry.row.id;
-    let group = byHead.get(headId);
-    if (!group) {
-      group = {
-        container: entry.container,
-        members: [],
-        position: {
-          best: entry.row,
-          headKey: entry.container?.key ?? entry.row.key,
-        },
-      };
-      byHead.set(headId, group);
-    }
-    group.members.push(entry);
-  }
-  const groups = [...byHead.values()];
-  for (const group of groups) {
-    group.members.sort((a, b) => compareReadyRows(a.row, b.row));
-    const best = group.members[0]!.row;
-    group.position = {
-      best: { kind: best.kind, priority: best.priority, key: best.key },
-      headKey: group.position.headKey,
-    };
-  }
-  groups.sort((a, b) => groupRank(a.position, b.position));
-  return groups;
+  // The grouping itself is `groupByContainer`'s, shared with the Workbench's grouped
+  // tabs (MOTIR-8015), so the two surfaces order groups and members identically.
+  return groupByContainer(
+    rows,
+    (entry) => entry.container ?? entry.row,
+    (entry) => entry.row,
+  ).map((group) => ({
+    container: group.members[0]!.container,
+    members: group.members,
+    position: group.position,
+  }));
 }
 
 /**

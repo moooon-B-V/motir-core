@@ -102,6 +102,8 @@ function dto(over: Partial<HomeWorkItemRowDto> & { identifier: string }): HomeWo
     resumeState: null,
     resumeRunId: null,
     resumeMembers: [],
+    groupHead: null,
+    groupMembers: [],
     canFixHosted: false,
     repairRun: null,
     ...over,
@@ -297,6 +299,35 @@ describe('toWorkbenchRowViews — the role fallback', () => {
       false,
     );
     expect(row?.role).toBe('assigned');
+  });
+});
+
+describe('toWorkbenchRowViews — the grouped tabs (MOTIR-8015 · MOTIR-8016)', () => {
+  it('keeps a context head with no role, its members nested under it in the order sent', () => {
+    const members = ['S-2', 'S-3', 'S-4'].map((identifier) => dto({ identifier, kind: 'subtask' }));
+    const rows = toWorkbenchRowViews(
+      [
+        dto({
+          identifier: 'S-1',
+          kind: 'story',
+          viewerIsAssignee: false,
+          viewerIsReporter: false,
+          groupHead: 'context',
+          groupMembers: members,
+        }),
+      ],
+      WORKFLOW,
+      MEMBERS,
+      false,
+    );
+    expect(rows.map((r) => [r.identifier, r.role, r.groupHead])).toEqual([
+      ['S-1', 'none', 'context'],
+    ]);
+    expect(rows[0]!.groupMembers.map((r) => [r.identifier, r.role, r.groupHead])).toEqual([
+      ['S-2', 'both', null],
+      ['S-3', 'both', null],
+      ['S-4', 'both', null],
+    ]);
   });
 });
 

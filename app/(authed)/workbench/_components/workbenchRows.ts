@@ -93,6 +93,15 @@ export interface WorkbenchRowView {
    * every other tab, and on a To resume row the read could not describe.
    */
   resume: WorkbenchResumeView | null;
+  /**
+   * TO DO, IN PROGRESS AND RECENTLY FINISHED ONLY (MOTIR-8016; § 36): this row heads a
+   * group of the tab's items under a runnable container — `'member'` when the container is
+   * itself on the tab, `'context'` when it is drawn only to name its members. `null` on a
+   * standalone row and on every other tab.
+   */
+  groupHead: 'member' | 'context' | null;
+  /** The tab's items under this head, in the service's order, the head excluded (§ 36.3). */
+  groupMembers: WorkbenchRowView[];
 }
 
 /** One held gate, as the gate list draws it. */
@@ -132,6 +141,9 @@ function resolveRole(row: HomeWorkItemRowDto, isWatchingTab: boolean): Workbench
   if (row.fixGroupKind !== null) return 'none';
   // The same for a To resume entry's head (MOTIR-7712): only that read sets `resumeRun`.
   if (row.resumeRun !== undefined) return 'none';
+  // A grouped work tab's CONTEXT head (MOTIR-8015; § 36.2): not on the tab, and here only
+  // to name its members' container — the reader may hold neither role on it.
+  if (row.groupHead === 'context') return 'none';
   // Only reachable on the Watching tab — every WORK read's predicate IS
   // assignee-or-reporter, so a row there always matched one of the two above.
   return isWatchingTab ? 'watching' : 'assigned';
@@ -186,7 +198,53 @@ export function toWorkbenchRowViews(
       fixGroupKind: row.fixGroupKind,
       members: [...row.fixMembers, ...row.resumeMembers].map((m) => view(m, true)),
       resume: isMember ? null : resumeOf(row),
+      groupHead: row.groupHead,
+      // One level only: the service never nests a group inside a group.
+      groupMembers: row.groupMembers.map((m) => view(m, false)),
     };
   };
   return rows.map((row) => view(row, false));
+}
+
+/** One rendered line of a grouped work tab: a group row, or an item row. */
+export type WorkbenchGroupDisplayRow =
+  | { type: 'group'; head: WorkbenchRowView; open: boolean }
+  | { type: 'row'; row: WorkbenchRowView; child: boolean };
+
+/**
+ * A grouped page (§ 36) as the lines it draws: each head as a group row followed, when
+ * open, by its members; a standalone row as itself. `laneDisplayRows`' shape on `/ready`,
+ * with one difference — the service sends WHOLE groups already nested, so this walks the
+ * nesting rather than regrouping by id.
+ *
+ * ⚠️ IT NEVER RE-SORTS. The service ranked the groups and their members across the whole
+ * tab before it cut the page; re-sorting one page on the client is what makes a page
+ * boundary inexact (the note `splitWatchingGroups` carries).
+ */
+export function workbenchGroupDisplayRows(
+  rows: readonly WorkbenchRowView[],
+  expanded: ReadonlySet<string>,
+): WorkbenchGroupDisplayRow[] {
+  const out: WorkbenchGroupDisplayRow[] = [];
+  for (const row of rows) {
+    if (row.groupHead === null) {
+      out.push({ type: 'row', row, child: false });
+      continue;
+    }
+    const open = expanded.has(row.id);
+    out.push({ type: 'group', head: row, open });
+    if (open)
+      for (const member of row.groupMembers) out.push({ type: 'row', row: member, child: true });
+  }
+  return out;
+}
+
+/**
+ * The groups a page opens on first paint (§ 36.5): none, except when the page holds
+ * exactly ONE group, which opens so the reader is not made to click into the only thing
+ * there is.
+ */
+export function initiallyExpandedGroups(rows: readonly WorkbenchRowView[]): Set<string> {
+  const heads = rows.filter((row) => row.groupHead !== null);
+  return new Set(heads.length === 1 ? [heads[0]!.id] : []);
 }

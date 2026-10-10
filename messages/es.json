@@ -8754,6 +8754,13 @@
       "reconnecting": "Reconectando…",
       "cleared": "Resuelto"
     },
+    "group": {
+      "expand": "Expandir {key}",
+      "collapse": "Contraer {key}",
+      "count": "{count, plural, one {# elemento de trabajo en esta pestaña} other {# elementos de trabajo en esta pestaña}}",
+      "context": "No está en esta pestaña",
+      "members": "Elementos de trabajo de {key}"
+    },
     "toFix": {
       "reason": {
         "queueFailed": "Falló en la cola de fusión · <d>{detail}</d>",
