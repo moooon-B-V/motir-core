@@ -866,6 +866,14 @@ test('unchanged: a failed session with no waiting plan still offers Start a new 
   await openFromCard(page, seed.storyKey);
   expect((await sendTurn(page, 'Split this story in two.')).status()).toBe(200);
   const failed = (await latestPlanningSession(email)).id;
+  // MOTIR-7905: a failed hosted attempt now KEEPS its session (it waits in To resume), so the
+  // Closed form this case pins belongs to a session that ended `failed` BEFORE the story. That
+  // historic end is seeded through the end door, then the session's address is reopened.
+  await expect.poll(async () => (await sessionRow(failed)).failedAt).not.toBeNull();
+  await planSessionEndService.endSession(failed, 'failed', {
+    workspaceId: (await sessionRow(failed)).workspaceId,
+  });
+  await page.reload();
   await expect(endMarker(page)).toHaveAttribute('data-end-reason', 'failed');
   expect((await sessionRow(failed)).endReason).toBe('failed');
   expect(
