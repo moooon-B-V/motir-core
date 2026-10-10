@@ -1,0 +1,1403 @@
+<!doctype html>
+<!--
+  design/code-context/planning-turn-code-unreadable.mock.html — MOTIR-8137 (story MOTIR-8136)
+
+  DELTA on `design/code-context/code-context.mock.html` (MOTIR-1764) panel E (the
+  MISSING-context state) and on the plan-change rail. Only what changes is drawn: the
+  OUTAGE state — the project's code is connected and indexed and Motir cannot read it
+  right now — on the two kinds of planning turn that meet it. It is not an edit of the
+  older mock; that stays as the record of its moment.
+
+  Read before drawing, and mirrored here:
+    - components/planning/PlanChangeRail.tsx — TURN_RENDERERS and the assistant Bubble
+      (avatar, `--el-chat-bubble-ai`, `--radius-card`, 13px body), the passive marker
+      line (`text-center text-xs text-(--el-text-secondary)`), EarlierNotice (the
+      information notice: `--el-notice-info-bg` on `--el-text-strong`, `--radius-control`,
+      `--spacing-control-x/y`), and the rail's Try again (secondary sm Button + RefreshCw,
+      `onRetry`) — which this reuses unchanged.
+    - design/code-context/code-context.mock.html panel E — the `.blind` warning box,
+      reproduced in panel 5 to show the two states never meet.
+    - design/ai-chat/plan-change-conversation.mock.html — the conversation the turns sit in.
+    - messages/en.json `planningWorkspace.conversation` — `retry` ("Try again") and the
+      rose failure line (`error.body`) this state deliberately does NOT use.
+
+  TOKENS ARE EXTRACTED, NOT TYPED: the three blocks below are the declarations of
+  packages/design-system/theme.css's @theme, [data-theme='dark'] and
+  :root,[data-appearance-scope] blocks, comments stripped.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Planning turn — the code can’t be read right now</title>
+    <style>
+      /* ── Tier 0 (light) — extracted from packages/design-system/theme.css @theme ── */
+      :root {
+        --orb-lit-mix: 26%;
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --width-rail-chrome: 20px;
+        --spacing-rail-inset: 0px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── Tier 0 (dark) — theme.css [data-theme='dark'] ── */
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      /* ── Tier 3 (--el-*) — theme.css :root,[data-appearance-scope] ── */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 30px 26px 44px;
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── board chrome ─────────────────────────────────────────────── */
+      .board {
+        max-width: 1140px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .boardhead h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+        color: var(--el-text-strong);
+      }
+      .boardhead p {
+        margin: 0;
+        max-width: 92ch;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .boardhead p + p {
+        margin-top: 8px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-label {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .panel-label .n {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .panel-label h2 {
+        margin: 0;
+        font-size: 15px;
+        color: var(--el-text-strong);
+      }
+      .panel-label .cap {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .panel-body {
+        padding: 18px;
+      }
+      .cols {
+        display: grid;
+        gap: 22px;
+        align-items: start;
+      }
+      .c2 {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      .c3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .sub {
+        margin: 0 0 8px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .note {
+        margin: 10px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 0 4px;
+        border-radius: var(--radius-kbd);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      table.spec th {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--el-border);
+        text-align: left;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      table.spec td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: top;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .ic {
+        display: block;
+        width: 14px;
+        height: 14px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .glyph {
+        display: block;
+      }
+
+      /* ── the rail (PlanChangeRail): its turns column, composed from the shipped classes ── */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 352px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .rail.narrow {
+        max-width: 264px;
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .railhead .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: var(--el-success);
+      }
+      .railhead .lbl {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .turns {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+      }
+      .turn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .turn.user {
+        flex-direction: row-reverse;
+      }
+      .av {
+        display: inline-flex;
+        flex: none;
+        width: 28px;
+        height: 28px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .av.me {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .bub {
+        min-width: 0;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-chat-bubble-ai);
+        color: var(--el-text);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .bub.me {
+        background: var(--el-chat-bubble-user);
+        color: var(--el-accent-text);
+        overflow-wrap: anywhere;
+      }
+      .bub p {
+        margin: 0;
+      }
+      .bub p + p {
+        margin-top: 6px;
+      }
+      .marker {
+        margin: 0;
+        text-align: center;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .foot {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── THE OUTAGE NOTICE — the shipped information notice (EarlierNotice), unchanged ── */
+      .notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        background: var(--el-notice-info-bg);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .notice .ic {
+        margin-top: 2px;
+        width: 14px;
+        height: 14px;
+      }
+      .bub .notice {
+        margin-bottom: 8px;
+      }
+
+      /* ── Try again — the shipped secondary small Button with its RefreshCw ── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .btn.is-focus {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      .btn .ic {
+        width: 14px;
+        height: 14px;
+      }
+      .actions {
+        padding-left: 36px;
+      }
+
+      /* ── the shipped in-flight line (the carry-moving list) ── */
+      .moving {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: 0 0 0 36px;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      .spin {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent-on-surface);
+        border-radius: 9999px;
+      }
+
+      /* ── the plan canvas beside the rail: what "unchanged" looks like ── */
+      .canvas {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .node {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        font-size: 12.5px;
+        color: var(--el-text);
+      }
+      .node .k {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-identifier);
+      }
+      .node.child {
+        margin-left: 22px;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── state E, as MOTIR-1764 shipped it (design/code-context/code-context.mock.html panel E) ── */
+      .blind {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-warning);
+        background: var(--el-warning-surface);
+        padding: 12px 14px;
+      }
+      .blindTitle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-warning-text);
+      }
+      .blindBody {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-warning-text);
+      }
+      .linkq {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: fit-content;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-warning-text);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .absent {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g id="i-info">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g id="i-refresh">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </g>
+        <g id="i-eye-off">
+          <path
+            d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"
+          />
+          <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+          <path
+            d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"
+          />
+          <path d="m2 2 20 20" />
+        </g>
+        <g id="i-link">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </g>
+        <path
+          id="i-mark"
+          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+          fill="currentColor"
+        />
+      </defs>
+    </svg>
+
+    <div class="board">
+      <header class="boardhead">
+        <h1>Planning turn — “I can’t read your code right now”</h1>
+        <p>
+          <b>MOTIR-8137 · story MOTIR-8136.</b> A <b>delta</b> on
+          <code>design/code-context/code-context.mock.html</code> (MOTIR-1764), which drew the
+          <i>missing</i>-context state (its panel E: no repository connected or indexed, a standing
+          condition the person can fix). This draws the <i>outage</i> state: the project’s code is
+          connected and indexed, and Motir cannot read it right now. Nothing here edits MOTIR-1764’s
+          states, the Code page or the audit’s “not measured” face.
+        </p>
+        <p>
+          It composes the plan-change rail that ships — <code>TURN_RENDERERS</code> in
+          <code>components/planning/PlanChangeRail.tsx</code>, its assistant <code>Bubble</code>,
+          the passive marker line, the information notice <code>EarlierNotice</code> and the
+          secondary <b>Try again</b> button the rail already offers on a failed turn.
+          <b>No component is added.</b> Two kinds of turn meet the outage and each gets one face;
+          the notice lives on the turn and is never a page-level banner.
+        </p>
+      </header>
+
+      <!-- ───────────── 1 ───────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">1</span>
+          <h2>Plan-writing turn — the outage face</h2>
+          <span class="cap">generate · expand · replan · augment · plan edit</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="sub">The rail — the turn has ended</div>
+              <div class="rail" data-surface="rail">
+                <div class="railhead">
+                  <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span>
+                </div>
+                <div class="turns">
+                  <div class="turn user">
+                    <span class="av me" aria-hidden="true">·</span>
+                    <div class="bub me">Add a story for exporting a project’s plan to CSV.</div>
+                  </div>
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <div class="notice" role="status">
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-info" />
+                        </svg>
+                        <span
+                          >I can’t read your code right now, so I haven’t changed your plan. Motir
+                          is on it.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <p class="marker">Nothing was written — your plan is unchanged.</p>
+                  <div class="actions">
+                    <span class="btn"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-refresh" /></svg
+                      >Try again</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="sub">The canvas beside it — what “unchanged” looks like</div>
+              <div class="canvas">
+                <div class="node">
+                  <span class="k">MOTIR-12</span>Reports<span class="tag" style="margin-left: auto"
+                    >epic</span
+                  >
+                </div>
+                <div class="node child"><span class="k">MOTIR-31</span>Plan summary report</div>
+                <div class="node child"><span class="k">MOTIR-32</span>Burn-down chart</div>
+                <p class="absent">
+                  No proposal tree, no “plan ready” bar, no approve control: the canvas shows the
+                  plan as it was.
+                </p>
+              </div>
+              <p class="note">
+                <b>The turn did not fail; it declined to write blind.</b> So it takes the
+                <b>information</b> register (<code>--el-notice-info-bg</code> on
+                <code>--el-text-strong</code>, the tint <code>EarlierNotice</code> uses), never the
+                rose failure treatment (<code>--el-tint-rose</code>, “That didn’t go through”) the
+                rail draws when a turn really breaks. A reader should not conclude something broke
+                on their side.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───────────── 2 ───────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">2</span>
+          <h2>Question turn — the answer, with the notice attached</h2>
+          <span class="cap">ask_project · debug_bug</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="sub">A short answer</div>
+              <div class="rail">
+                <div class="turns">
+                  <div class="turn user">
+                    <span class="av me" aria-hidden="true">·</span>
+                    <div class="bub me">What happens when a card is already taken?</div>
+                  </div>
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <div class="notice" role="status">
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-info" />
+                        </svg>
+                        <span
+                          >I couldn’t read your code for this answer. Treat anything about the code
+                          here as unconfirmed.</span
+                        >
+                      </div>
+                      <p>Claiming it again is refused and names who holds it.</p>
+                      <div class="foot">Answered from 1 work item</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="sub">A long answer — the notice is not lost</div>
+              <div class="rail">
+                <div class="turns">
+                  <div class="turn user">
+                    <span class="av me" aria-hidden="true">·</span>
+                    <div class="bub me">Walk me through how exports are queued and retried.</div>
+                  </div>
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <div class="notice" role="status">
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-info" />
+                        </svg>
+                        <span
+                          >I couldn’t read your code for this answer. Treat anything about the code
+                          here as unconfirmed.</span
+                        >
+                      </div>
+                      <p>
+                        The plan says exports are built in a background job and retried when the
+                        provider refuses. The export story records a retry limit and a dead-letter
+                        step; the stages after the first retry are described only in the plan.
+                      </p>
+                      <p>
+                        What the work items do not say, and I could not check in the code: the exact
+                        backoff, whether a half-built file is cleaned up, and which errors count as
+                        retryable.
+                      </p>
+                      <p>
+                        If you need those, ask again once I can read the code, or open the export
+                        service yourself.
+                      </p>
+                      <div class="foot">Answered from 3 work items</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="note">
+            <b>The notice is the bubble’s first child, not a banner above the rail.</b> It travels
+            with the answer — scrolled, copied, or read back from history — and it sits above the
+            answer, where it is read first. The answer is delivered, so this is not the failure
+            treatment either. <b>No per-claim marking is drawn:</b> the guarantee is that the answer
+            states no unread code fact as verified, and the notice covers the rest.
+          </p>
+        </div>
+      </section>
+
+      <!-- ───────────── 3 ───────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">3</span>
+          <h2>Both faces while the outage is ongoing — a second turn is asked</h2>
+          <span class="cap">the one decision this card records</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="rail">
+                <div class="turns">
+                  <div class="turn user">
+                    <span class="av me" aria-hidden="true">·</span>
+                    <div class="bub me">Where is the export queue drained?</div>
+                  </div>
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <div class="notice" role="status">
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-info" />
+                        </svg>
+                        <span
+                          >I couldn’t read your code for this answer. Treat anything about the code
+                          here as unconfirmed.</span
+                        >
+                      </div>
+                      <p>
+                        The plan puts the drain in the export worker, but I can’t confirm where.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="turn user">
+                    <span class="av me" aria-hidden="true">·</span>
+                    <div class="bub me">Then add a story for draining it on a schedule.</div>
+                  </div>
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <div class="notice" role="status">
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-info" />
+                        </svg>
+                        <span
+                          >I can’t read your code right now, so I haven’t changed your plan. Motir
+                          is on it.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <p class="marker">Nothing was written — your plan is unchanged.</p>
+                  <div class="actions">
+                    <span class="btn"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-refresh" /></svg
+                      >Try again</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="sub">The decision: no sticky page-level banner</div>
+              <p class="note" style="margin-top: 0">
+                Each turn carries <b>its own</b> state, so the second turn gets its own notice. No
+                banner is pinned to the rail head or the page while the outage lasts. A banner would
+                outlive the outage — it would still be there, or have to be dismissed, after the
+                code is readable again — and would teach people to read past it. The rail head and
+                the composer look exactly as they do on a healthy day.
+              </p>
+              <p class="note">
+                Two turns in the same outage say the same thing twice. That is the point: the
+                statement belongs to the turn it is true of, and a person scrolling back sees which
+                turns could not read the code.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───────────── 4 ───────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">4</span>
+          <h2>Recovery — the next turn is an ordinary turn</h2>
+          <span class="cap">no leftover outage state</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="rail">
+                <div class="turns">
+                  <div class="turn user">
+                    <span class="av me" aria-hidden="true">·</span>
+                    <div class="bub me">Then add a story for draining it on a schedule.</div>
+                  </div>
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <div class="notice" role="status">
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-info" />
+                        </svg>
+                        <span
+                          >I can’t read your code right now, so I haven’t changed your plan. Motir
+                          is on it.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <p class="marker">Nothing was written — your plan is unchanged.</p>
+                  <div class="turn user">
+                    <span class="av me" aria-hidden="true">·</span>
+                    <div class="bub me">Try that again.</div>
+                  </div>
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <p>
+                        Done — I read <code>lib/exports/drain.ts</code> and proposed one story for
+                        the scheduled drain.
+                      </p>
+                      <div class="foot">Answered from 2 work items</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="note" style="margin-top: 0">
+                The turn after the graph returns renders as an <b>ordinary</b> turn: no outage
+                chrome, no “back online” banner, nothing to dismiss. The earlier outage turn
+                <b>keeps its notice and its marker</b> in the history — a record of what that turn
+                could and could not do. <b>Nothing is cleared retroactively</b>; the transcript does
+                not rewrite itself, the same rule the rail already applies to a superseded question.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───────────── 5 ───────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">5</span>
+          <h2>Not the same as MOTIR-1764’s state E</h2>
+          <span class="cap">missing context vs an outage</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c3">
+            <div>
+              <div class="sub">State E — code context is missing</div>
+              <div class="blind">
+                <div class="blindTitle">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-eye-off" /></svg
+                  >Planning without code context
+                </div>
+                <p class="blindBody">
+                  Motir has not read this project’s code. Plans will be written from the work items
+                  alone.
+                </p>
+                <span class="linkq"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-link" /></svg
+                  >Connect a repository</span
+                >
+              </div>
+              <p class="note">
+                A standing condition the person <b>can fix</b>: warning register, and a remedy that
+                leads to the Code page.
+              </p>
+            </div>
+            <div>
+              <div class="sub">State 1 — plan-writing, outage</div>
+              <div class="notice" role="status">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                <span
+                  >I can’t read your code right now, so I haven’t changed your plan. Motir is on
+                  it.</span
+                >
+              </div>
+              <p class="note">
+                A transient condition the person <b>cannot fix</b>; Motir is on it. Information
+                register; the only action is <b>Try again</b>, and <b>no link to the Code page</b>.
+              </p>
+            </div>
+            <div>
+              <div class="sub">State 2 — question, outage</div>
+              <div class="notice" role="status">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                <span
+                  >I couldn’t read your code for this answer. Treat anything about the code here as
+                  unconfirmed.</span
+                >
+              </div>
+              <p class="note">
+                The two never appear together: state E needs a project with no indexed repository,
+                the outage needs one that has it. If code context is missing the planner still plans
+                (from work items); during an outage it declines to.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───────────── 6 ───────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">6</span>
+          <h2>In flight — nothing is warned until the turn ends</h2>
+          <span class="cap">no intermediate state</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="sub">While it runs — exactly as today</div>
+              <div class="rail">
+                <div class="turns">
+                  <div class="turn user">
+                    <span class="av me" aria-hidden="true">·</span>
+                    <div class="bub me">Add a story for exporting a project’s plan to CSV.</div>
+                  </div>
+                  <div class="moving" aria-live="polite">
+                    <span class="spin" aria-hidden="true"></span>
+                    <span>Reading it as a plan change — working on the proposal</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="sub">When the turn ends — panel 1’s face replaces the line</div>
+              <div class="rail">
+                <div class="turns">
+                  <div class="turn user">
+                    <span class="av me" aria-hidden="true">·</span>
+                    <div class="bub me">Add a story for exporting a project’s plan to CSV.</div>
+                  </div>
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <div class="notice" role="status">
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-info" />
+                        </svg>
+                        <span
+                          >I can’t read your code right now, so I haven’t changed your plan. Motir
+                          is on it.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <p class="marker">Nothing was written — your plan is unchanged.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="note">
+            There is no “reading code…” warning mid-turn. The planner may have read nothing yet, and
+            a warning that sometimes turns out not to apply is the nagging this surface avoids.
+          </p>
+        </div>
+      </section>
+
+      <!-- ───────────── 7 ───────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">7</span>
+          <h2>Narrow rail, keyboard and screen reader</h2>
+          <span class="cap">≥ AA in both themes</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="sub">The narrow layout — wraps, never truncates; Try again focused</div>
+              <div class="rail narrow">
+                <div class="turns">
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <div class="notice" role="status">
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-info" />
+                        </svg>
+                        <span
+                          >I can’t read your code right now, so I haven’t changed your plan. Motir
+                          is on it.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <p class="marker">Nothing was written — your plan is unchanged.</p>
+                  <div class="actions">
+                    <span class="btn is-focus"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-refresh" /></svg
+                      >Try again</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <table class="spec">
+                <thead>
+                  <tr>
+                    <th>Element</th>
+                    <th>Behaviour</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>The notice</td>
+                    <td>
+                      <code>role="status"</code> — a polite live region, announced once when the
+                      turn is appended. A reloaded thread draws it without announcing it.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>The glyph</td>
+                    <td>
+                      <code>aria-hidden</code>; the words carry the meaning, never the colour.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Try again</td>
+                    <td>
+                      A real button in the tab order, after the turn; the shipped focus ring
+                      (<code>--focus-ring-color</code>). Disabled while a re-submit runs, as the
+                      shipped one is.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Wrapping</td>
+                    <td>
+                      The text wraps inside the bubble; nothing is truncated or clipped at the
+                      rail’s narrow layout.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Ink</td>
+                    <td>
+                      <code>--el-text-strong</code> on <code>--el-notice-info-bg</code>; captions on
+                      <code>--el-text-secondary</code> — never the faint or muted greys on a tint.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
