@@ -26,6 +26,18 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 // overwrite a later snapshot. A failed or aborted tick keeps the last snapshot
 // and simply retries on the next.
 //
+// ⚠️ NO READ STARTS BEHIND ANOTHER (MOTIR-8102). The interval is a cadence, not
+// a promise: a tick that finds a read still out does NOT issue a second one. The
+// review read is the heaviest the planning surface makes (the whole plan, every
+// proposal's body, the narration window), so on a long plan it can outlast
+// {@link POLL_MS}; issuing a fresh read every interval anyway queued a second,
+// then a third, each as slow as the first, and the page slowed itself down. A read
+// still out after {@link STALL_MS} is a stalled one, not a slow one: it is aborted
+// (and counted as a failure, so `failing` reports it) and the next tick reads
+// again, so one hung request can never freeze the poll. `refresh()` is the
+// deliberate exception — an explicit nudge reads NOW even over a read in flight;
+// the sequence guard above still drops whichever answer is older.
+//
 // It stops — and aborts what is in flight — when a snapshot's status is no
 // longer `generating`, when `planId` changes, or on unmount. A `null` planId is
 // "nothing to watch".
@@ -36,6 +48,9 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 
 /** The generating-plan poll cadence. */
 export const POLL_MS = 2500;
+
+/** A read still out after this long is abandoned so the poll can read again (MOTIR-8102). */
+export const STALL_MS = 15_000;
 
 /** Consecutive failed reads after which the poll reports `failing`. */
 export const FAILING_AFTER = 3;
@@ -82,7 +97,7 @@ export function useGeneratingPlanPoll(
   useEffect(() => {
     onSnapshotRef.current = opts.onSnapshot;
   });
-  const tickRef = useRef<(() => void) | null>(null);
+  const tickRef = useRef<((force?: boolean) => void) | null>(null);
 
   useEffect(() => {
     if (!planId) return;
@@ -90,21 +105,35 @@ export function useGeneratingPlanPoll(
     let issued = 0;
     let applied = 0;
     let failures = 0;
-    const inFlight = new Set<AbortController>();
+    // Each read's controller, with when it started: a tick skips while one is out.
+    const inFlight = new Map<AbortController, number>();
 
     const stop = () => {
       stopped = true;
       clearInterval(handle);
-      for (const ctrl of inFlight) ctrl.abort();
+      for (const ctrl of inFlight.keys()) ctrl.abort();
       inFlight.clear();
       if (tickRef.current === tick) tickRef.current = null;
     };
 
-    const tick = () => {
+    // `force` is an explicit `refresh()`: it reads even over one in flight.
+    const tick = (force = false) => {
       if (stopped) return;
+      if (!force) {
+        // A read out past the stall bound is abandoned, so a hung request cannot freeze the cadence.
+        const now = Date.now();
+        for (const [out, startedAt] of inFlight) {
+          if (now - startedAt >= STALL_MS) {
+            out.abort();
+            inFlight.delete(out);
+          }
+        }
+        // Still a read out: do not start another behind it (MOTIR-8102).
+        if (inFlight.size > 0) return;
+      }
       const seq = ++issued;
       const ctrl = new AbortController();
-      inFlight.add(ctrl);
+      inFlight.set(ctrl, Date.now());
       void fetchPlanReview(planId, ctrl.signal)
         .then((review) => {
           // Dropped: the poll stopped, or a LATER read has already been applied.
@@ -130,13 +159,13 @@ export function useGeneratingPlanPoll(
     };
 
     tickRef.current = tick;
-    const handle = setInterval(tick, POLL_MS);
+    const handle = setInterval(() => tick(), POLL_MS);
     if (immediate) tick();
     return stop;
   }, [planId, immediate]);
 
   const refresh = useCallback(() => {
-    tickRef.current?.();
+    tickRef.current?.(true);
   }, []);
 
   const current = planId && snapshot && snapshot.planId === planId ? snapshot.review : null;
