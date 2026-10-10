@@ -121,6 +121,21 @@ export interface PlanJobOutcome {
    * so the run records no narration.
    */
   turn?: { message: string; question?: string | null };
+  /**
+   * Where a FAILED run stopped (Story MOTIR-7905 · MOTIR-7920), carried on the settled
+   * `error` exactly as motir-ai's `Problem.walkStop` is, and announced by a `walk_position`
+   * progress frame before the terminal `status: failed` frame. Absent ⇒ the failure names no
+   * stop point, as before.
+   */
+  walkStop?: {
+    phase: 'lay' | 'author';
+    target: string | null;
+    targetTitle?: string | null;
+    depth: number;
+    planId?: string | null;
+    reasonCode: string;
+    detail?: string;
+  };
 }
 
 /** One recorded `POST /v1/jobs` (diagnostic; the spec owns the fixture file). */
@@ -136,6 +151,11 @@ export interface SubmittedJob {
    * `POST /api/internal/ai/log-bug` — exactly as motir-ai would for that job.
    */
   readBackToken?: string;
+  /**
+   * The `resume` a `plan` submit carried (MOTIR-7910/7920) — how a spec proves a Resume press
+   * was sent, and for the SAME plan.
+   */
+  resume?: { planId: string; fromJobId: string };
 }
 
 export interface AiJobsFixture {
@@ -210,11 +230,13 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
   if (!p) return index;
   try {
     const token = kind === 'plan' && !refused ? readBackTokenOf(rawBody) : null;
+    const resume = kind === 'plan' && !refused ? resumeOf(rawBody) : null;
     const entry: SubmittedJob = {
       kind,
       hasCode: submitCarriesCode(rawBody),
       ...(refused ? { refused } : { jobId: jobIdFor(kind, index) }),
       ...(token ? { readBackToken: token } : {}),
+      ...(resume ? { resume } : {}),
     };
     f.submitted = [...(f.submitted ?? []), entry];
     writeFixtureFileSync(p, JSON.stringify(f, null, 2));
@@ -236,6 +258,19 @@ function readBackTokenOf(rawBody: string): string | null {
   try {
     const token = (JSON.parse(rawBody) as { readBackToken?: unknown }).readBackToken;
     return typeof token === 'string' && token !== '' ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The `resume` a submit body carried, or null. */
+function resumeOf(rawBody: string): { planId: string; fromJobId: string } | null {
+  try {
+    const r = (JSON.parse(rawBody) as { resume?: { planId?: unknown; fromJobId?: unknown } })
+      .resume;
+    return typeof r?.planId === 'string' && typeof r.fromJobId === 'string'
+      ? { planId: r.planId, fromJobId: r.fromJobId }
+      : null;
   } catch {
     return null;
   }
@@ -417,8 +452,17 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       const id = decodeURIComponent(req.path.split('?')[0]!.split('/').slice(-2)[0]!);
       // A planning run the fixture declared FAILED ends the way motir-ai ends a
       // dead run: a terminal `status: failed` frame, then the close.
+      const stop = planRunFails(id) ? planOutcomeAt(kindOf(id).index).walkStop : undefined;
+      const position = stop
+        ? `event: walk_position\ndata: ${JSON.stringify({
+            phase: stop.phase,
+            target: stop.target,
+            targetTitle: stop.targetTitle ?? null,
+            depth: stop.depth,
+          })}\n\n`
+        : '';
       const data = planRunFails(id)
-        ? `event: search\ndata: {}\n\nevent: status\ndata: {"status":"failed"}\n\nevent: done\ndata: {}\n\n`
+        ? `event: search\ndata: {}\n\n${position}event: status\ndata: {"status":"failed"}\n\nevent: done\ndata: {}\n\n`
         : `event: search\ndata: {}\n\nevent: done\ndata: {}\n\n`;
       return {
         statusCode: 200,
@@ -453,6 +497,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
             status: 502,
             code: 'ai_job_failed',
             detail: 'The fixture declared this planning run failed.',
+            ...(planOutcomeAt(index).walkStop ? { walkStop: planOutcomeAt(index).walkStop } : {}),
           },
         };
         return { statusCode: 200, data, responseOptions: json };
