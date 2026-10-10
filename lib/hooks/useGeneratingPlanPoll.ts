@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchPlanReview } from '@/lib/planning/planReviewClient';
+import { fetchPlanReview, fetchPlanReviewSince } from '@/lib/planning/planReviewClient';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 
 // THE generating-plan poll (Subtask MOTIR-6295) — the ONE place a `generating`
@@ -38,6 +38,16 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 // deliberate exception — an explicit nudge reads NOW even over a read in flight;
 // the sequence guard above still drops whichever answer is older.
 //
+// ⚠️ AN UNCHANGED PLAN IS ANSWERED IN A FEW BYTES (MOTIR-8127). Every full response carries the
+// plan's `reviewVersion`; the next tick sends it back as `?since=`, and while nothing the review
+// shows has moved the server answers `{ unchanged: true }` instead of re-reading and re-sending the
+// whole plan. An unchanged answer keeps the snapshot (the clock reading stays right: the progress
+// line advances `observedAt` by how long the client has held it) and does NOT fire `onSnapshot` or
+// bump `version`. Two reads are always FULL: a forced `refresh()`, and every
+// {@link FULL_READ_EVERY}th poll — the version covers what the plan's own tables hold, and not a
+// committed card a `modify`/`remove` proposal points at being renamed or moved, so that backstop
+// bounds how long the snapshot can disagree with it.
+//
 // It stops — and aborts what is in flight — when a snapshot's status is no
 // longer `generating`, when `planId` changes, or on unmount. A `null` planId is
 // "nothing to watch".
@@ -51,6 +61,9 @@ export const POLL_MS = 2500;
 
 /** A read still out after this long is abandoned so the poll can read again (MOTIR-8102). */
 export const STALL_MS = 15_000;
+
+/** Every Nth poll is a FULL read even when the version says unchanged (MOTIR-8127). */
+export const FULL_READ_EVERY = 8;
 
 /** Consecutive failed reads after which the poll reports `failing`. */
 export const FAILING_AFTER = 3;
@@ -105,6 +118,9 @@ export function useGeneratingPlanPoll(
     let issued = 0;
     let applied = 0;
     let failures = 0;
+    // The version of the last FULL snapshot applied, and how many unchanged answers followed it.
+    let heldVersion: string | null = null;
+    let unchangedRun = 0;
     // Each read's controller, with when it started: a tick skips while one is out.
     const inFlight = new Map<AbortController, number>();
 
@@ -134,13 +150,28 @@ export function useGeneratingPlanPoll(
       const seq = ++issued;
       const ctrl = new AbortController();
       inFlight.set(ctrl, Date.now());
-      void fetchPlanReview(planId, ctrl.signal)
-        .then((review) => {
+      // A forced read, a first read and the periodic backstop are FULL; the rest ask "changed since?".
+      const since =
+        !force && heldVersion && unchangedRun < FULL_READ_EVERY - 1 ? heldVersion : null;
+      void (
+        since
+          ? fetchPlanReviewSince(planId, since, ctrl.signal)
+          : fetchPlanReview(planId, ctrl.signal)
+      )
+        .then((answer) => {
           // Dropped: the poll stopped, or a LATER read has already been applied.
           if (stopped || seq <= applied) return;
           applied = seq;
           failures = 0;
           setFailingFor(null);
+          if ('unchanged' in answer) {
+            // Nothing moved: the snapshot, `version` and `onSnapshot` all stand.
+            unchangedRun += 1;
+            return;
+          }
+          const review = answer;
+          heldVersion = review.reviewVersion ?? null;
+          unchangedRun = 0;
           setSnapshot({ planId, review });
           setVersion((v) => v + 1);
           onSnapshotRef.current?.(review);

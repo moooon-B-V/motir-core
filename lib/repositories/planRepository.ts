@@ -534,6 +534,59 @@ export const planRepository = {
   },
 
   /**
+   * Everything the plan REVIEW shows that can change while a plan is being written, as ONE
+   * text line, read in ONE statement (MOTIR-8127). `getPlanReviewIfChanged` hashes it into the
+   * token a poll sends back, so an unchanged plan is answered without the heavy review read.
+   *
+   * ⚠️ THE PARTS ARE READ FROM THE TABLES THE REVIEW READS, not from `lastActivityAt` alone: that
+   * stamp has six writers and a plan's status, closing, gate and revision trail move WITHOUT it
+   * (`markPlanned`, a decline, a lease release). A part here cannot be forgotten by a new write
+   * door, because the door writes the table. What no part can see is a LIVE work item a
+   * `modify`/`remove` proposal points at changing underneath it — that is why the client still
+   * forces a full read every few ticks.
+   *
+   * Bound `tx` is REQUIRED for the reason `planStepRepository` gives: `plan_revision`,
+   * `plan_step` and `plan_narration` carry no `workspace_id`, their policies join to `plan`, and
+   * an unbound read matches nothing — which would read as "nothing changed".
+   */
+  async readReviewFingerprint(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ status: PlanStatus; parts: string } | null> {
+    const rows = await tx.$queryRaw<Array<{ status: PlanStatus; parts: string }>>`
+      SELECT p."status"::text AS "status",
+        concat_ws('|',
+          p."status"::text,
+          coalesce(md5(p."title"), '-'),
+          coalesce(md5(p."summary"), '-'),
+          coalesce(md5(p."product_name"), '-'),
+          p."last_activity_at"::text,
+          coalesce(p."planned_at"::text, '-'),
+          coalesce(p."decided_at"::text, '-'),
+          coalesce(p."decision_reason"::text, '-'),
+          coalesce(p."session_id", '-'),
+          (SELECT count(*) FROM "plan_item" i WHERE i."plan_id" = p."id")::text,
+          (SELECT count(*) FROM "plan_revision" r WHERE r."plan_id" = p."id")::text,
+          coalesce((SELECT max(r."changed_at") FROM "plan_revision" r WHERE r."plan_id" = p."id")::text, '-'),
+          (SELECT count(*) FROM "plan_step" s WHERE s."plan_id" = p."id")::text,
+          coalesce((SELECT max(s."started_at") FROM "plan_step" s WHERE s."plan_id" = p."id")::text, '-'),
+          (SELECT count(*) FROM "plan_narration" n WHERE n."plan_id" = p."id")::text,
+          coalesce((SELECT max(n."seq") FROM "plan_narration" n WHERE n."plan_id" = p."id")::text, '-'),
+          (SELECT count(*) FROM "plan_narration_session" ns WHERE ns."plan_id" = p."id")::text,
+          coalesce((SELECT max(ns."updated_at") FROM "plan_narration_session" ns WHERE ns."plan_id" = p."id")::text, '-'),
+          (SELECT count(*) FROM "approval_gate" g
+             WHERE g."work_item_id" IS NULL AND g."kind" = 'plan_approval' AND g."subject_id" = p."id")::text,
+          coalesce((SELECT max(g."updated_at") FROM "approval_gate" g
+             WHERE g."work_item_id" IS NULL AND g."kind" = 'plan_approval' AND g."subject_id" = p."id")::text, '-'),
+          coalesce((SELECT cs."turn_count" FROM "plan_change_session" cs WHERE cs."id" = p."session_id")::text, '-')
+        ) AS "parts"
+      FROM "plan" p
+      WHERE p."id" = ${id}
+    `;
+    return rows[0] ?? null;
+  },
+
+  /**
    * ONE OFFSET WINDOW of the reader's plans being written (Story MOTIR-7820 ·
    * MOTIR-7828), newest first with `id` as the tiebreak so pages are stable.
    * {@link generatingRequestedByWhere} is the predicate; an empty project scope

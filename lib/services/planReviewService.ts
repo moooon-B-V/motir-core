@@ -1,4 +1,5 @@
-import type { WorkItem } from '@/generated/prisma/client';
+import { createHash } from 'node:crypto';
+import type { PlanStatus, WorkItem } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -72,6 +73,7 @@ import type {
   PlanPlacementSideDto,
   PlanRefChipDto,
   PlanReviewDto,
+  PlanReviewUnchangedDto,
   PlanConversationDto,
   PlanReviewGateDto,
   PlanReviewItemDto,
@@ -696,6 +698,36 @@ async function visitorPlanReader(
  * scope. Shared so the paged narration read can never become a side door into a
  * plan the review read would refuse — every refusal is the same not-found.
  */
+async function readerContextOf(
+  planId: string,
+  reader: ServiceContext | VisitorReadContext,
+): Promise<ServiceContext> {
+  return isVisitorContext(reader) ? visitorPlanReader(planId, reader) : reader;
+}
+
+/**
+ * The plan's REVIEW VERSION (MOTIR-8127): its status and a token over everything the review shows
+ * that can move while the plan is written (`planRepository.readReviewFingerprint`). One small
+ * statement. `null` only for a plan that vanished between the admit and this read.
+ */
+async function readReviewVersion(
+  planId: string,
+  ctx: ServiceContext,
+): Promise<{ status: PlanStatus; token: string } | null> {
+  const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    planRepository.readReviewFingerprint(planId, tx),
+  );
+  if (!row) return null;
+  return { status: row.status, token: REVIEW_VERSION_PREFIX + hashParts(row.parts) };
+}
+
+/** Versions a later change to the fingerprint's parts is `rv2.`, never a silent edit. */
+const REVIEW_VERSION_PREFIX = 'rv1.';
+
+function hashParts(parts: string): string {
+  return createHash('sha256').update(parts).digest('hex').slice(0, 32);
+}
+
 async function resolvePlanReader(
   planId: string,
   reader: ServiceContext | VisitorReadContext,
@@ -813,6 +845,33 @@ export const planReviewService = {
     };
   },
 
+  /**
+   * The poll's read (MOTIR-8127): the review when anything it shows has moved, and
+   * {@link PlanReviewUnchangedDto} — a few bytes — when it has not.
+   *
+   * ⚠️ UNCHANGED IS ANSWERED ONLY FOR A `generating` PLAN, only after the reader has been ADMITTED
+   * (an unadmitted reader gets the same refusal a full read gives, never a token comparison), and
+   * only when the token the client holds equals the plan's CURRENT one AND that token was minted
+   * for a `generating` plan. Anything else — no token, a stale one, a plan that has since been
+   * planned, declined or approved — falls through to the full read, so the poll can only ever
+   * learn LESS cheaply, never be told a settled plan is unchanged.
+   */
+  async getPlanReviewIfChanged(
+    planId: string,
+    reader: ServiceContext | VisitorReadContext,
+    since: string | null,
+  ): Promise<PlanReviewDto | PlanReviewUnchangedDto> {
+    if (since) {
+      const ctx = await readerContextOf(planId, reader);
+      await plansService.admitPlanReader(planId, ctx);
+      const version = await readReviewVersion(planId, ctx);
+      if (version && version.status === 'generating' && version.token === since) {
+        return { unchanged: true, reviewVersion: version.token };
+      }
+    }
+    return planReviewService.getPlanReview(planId, reader);
+  },
+
   async getPlanReview(
     planId: string,
     reader: ServiceContext | VisitorReadContext,
@@ -825,7 +884,13 @@ export const planReviewService = {
     // placements), so it admits by the Plans room's scope: a plan outside the
     // reader's view is the same not-found as an unknown id (MOTIR-6330). The
     // resolution is shared with the narration page read (MOTIR-8063).
-    const { ctx, plan } = await resolvePlanReader(planId, reader);
+    // The admit, then the version token, THEN the item read (MOTIR-8127): the token is taken before
+    // the review's own reads so a write that lands between them leaves the token OLDER than the
+    // data, and the next poll reads in full once instead of ever skipping a change.
+    const ctx = await readerContextOf(planId, reader);
+    const admitted = await plansService.admitPlanReader(planId, ctx);
+    const version = await readReviewVersion(planId, ctx);
+    const plan = await plansService.loadAdmittedPlanWithItems(admitted, ctx);
     // Only an undecided plan can be stale. `getPlanForReader` above has ALREADY admitted the reader and read
     // the plan with every item, so for any other status the all-clear verdict is built from those items
     // instead of asking `computePlanStaleness` to re-read the plan, re-run the browse check and re-read every
@@ -842,27 +907,52 @@ export const planReviewService = {
     // ⚠️ BOUND, not the `db` singleton: `plan_revision` carries no `workspace_id`
     // and its policy joins to the parent `plan`, so an unbound read returns an
     // EMPTY trail rather than an error — a plan's whole history silently gone.
-    const revisions = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      planRevisionRepository.listByPlan(planId, tx),
-    );
     // The plan's LIVE-PROGRESS facts (Story MOTIR-7820 · MOTIR-7822): when it last
     // did anything, and the step each running planner session is on. Bound for
     // the same reason as the trail — `plan_step`'s policy joins to `plan`, so an
     // unbound read is an empty set, which reads as "nobody is working on it".
     // The steps are read only while the plan is `generating`: a session that
     // never cleared must not outlive its plan on any surface.
-    const { lastActivityAt, inFlightSteps } = await withWorkspaceServiceContext(
-      ctx.workspaceId,
-      async (tx) => {
+    //
+    // THE PLAN'S CONVERSATION (MOTIR-6037) — the decision surfaces say whether there is
+    // one to return to. The gate row's own read, so the two agree on what "has a
+    // conversation" means.
+    //
+    // THE PLANNER'S NARRATION (MOTIR-8063) — every session's step words and the
+    // newest window of sentences, at EVERY status: unlike `inFlightSteps` it is
+    // kept history. Bound for the trail's reason — both policies join to `plan`.
+    //
+    // ⚠️ ONE TRANSACTION FOR THE FOUR INDEPENDENT READS (MOTIR-8127). They used to open one each,
+    // and every `withWorkspaceServiceContext` is a BEGIN, a `set_config` and a COMMIT around its
+    // statements: three round trips of overhead apiece, paid on every tick of the poll. None of them
+    // reads what another wrote, so they share the one.
+    const { revisions, lastActivityAt, inFlightSteps, conversation, narration } =
+      await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+        const trail = await planRevisionRepository.listByPlan(planId, tx);
         const row = await planRepository.findById(planId, ctx.workspaceId, tx);
         const steps =
           plan.status === 'generating' ? await planStepRepository.listByPlan(planId, tx) : [];
+        const conversation = await readPlanConversation(planId, tx);
+        const sessions = await planNarrationRepository.listSessionsByPlan(planId, tx);
+        const rows = await planNarrationRepository.listLatestByPlan(
+          planId,
+          PLAN_NARRATION_READ_WINDOW,
+          tx,
+        );
+        const entries = rows.map(toPlanNarrationDto);
+        const narration: PlanNarrationReadDto = {
+          sessions: sessions.map(toPlanNarrationSessionDto),
+          entries,
+          earlierCount: earlierCountOf(entries),
+        };
         return {
+          revisions: trail,
           lastActivityAt: (row?.lastActivityAt ?? new Date(plan.createdAt)).toISOString(),
           inFlightSteps: steps.map(toPlanStepDto),
+          conversation,
+          narration,
         };
-      },
-    );
+      });
 
     // ── THE REVISION, read off the SAME trail (Subtask MOTIR-3601) ────────────
     // The lease IS a `revision_started` with no `revision_ended` after it, inside
@@ -873,32 +963,6 @@ export const planReviewService = {
     // THE PLAN'S QUESTION (MOTIR-6038) — its gate and the stamp a press hands back, read
     // on every poll so a reader's stamp follows the version they are looking at.
     const gate = await readPlanGate(planId, ctx);
-    // THE PLAN'S CONVERSATION (MOTIR-6037) — the decision surfaces say whether there is
-    // one to return to. The gate row's own read, so the two agree on what "has a
-    // conversation" means.
-    const conversation = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      readPlanConversation(planId, tx),
-    );
-    // THE PLANNER'S NARRATION (MOTIR-8063) — every session's step words and the
-    // newest window of sentences, at EVERY status: unlike `inFlightSteps` it is
-    // kept history. Bound for the trail's reason — both policies join to `plan`.
-    const narration: PlanNarrationReadDto = await withWorkspaceServiceContext(
-      ctx.workspaceId,
-      async (tx) => {
-        const sessions = await planNarrationRepository.listSessionsByPlan(planId, tx);
-        const rows = await planNarrationRepository.listLatestByPlan(
-          planId,
-          PLAN_NARRATION_READ_WINDOW,
-          tx,
-        );
-        const entries = rows.map(toPlanNarrationDto);
-        return {
-          sessions: sessions.map(toPlanNarrationSessionDto),
-          entries,
-          earlierCount: earlierCountOf(entries),
-        };
-      },
-    );
     const revisionStartedAt = lastRevisionStartAt(revisions);
     // WHICH proposals the latest revision touched. Every trail row written at or
     // after that start names its `planItemId`, so the set falls out of rows this
@@ -959,119 +1023,133 @@ export const planReviewService = {
     // `done` (`buildWorkItemLevel`), and the level builder cannot look that up —
     // the blocker may be a card this same plan is relocating, in which case it is
     // not in the roadmap read for this level either.
-    const committedEdgeRows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemLinkRepository.findBlockerEdgesForItems(targetIds, ctx.workspaceId, tx),
-    );
-    const committedBlockersByItemId = new Map<string, PlanCommittedBlockerDto[]>();
-    for (const row of committedEdgeRows) {
-      const list = committedBlockersByItemId.get(row.fromId) ?? [];
-      list.push({ nodeId: row.blockerId, isDone: row.blockerStatus === 'done' });
-      committedBlockersByItemId.set(row.fromId, list);
-    }
+    //
+    // ⚠️ THE EDGE READ, THE TARGET READ AND THE ANCESTOR WALK SHARE ONE TRANSACTION (MOTIR-8127).
+    // They are one dependent chain — the edges name blockers the target read must include, and the
+    // target read's parents seed the walk — with only pure id arithmetic between them, and they
+    // used to open a transaction EACH (the walk one per tree level). Every one is a BEGIN, a
+    // `set_config` and a COMMIT paid on every tick of the poll.
+    const { committedBlockersByItemId, targetById, ancestorById } =
+      await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+        const committedEdgeRows = await workItemLinkRepository.findBlockerEdgesForItems(
+          targetIds,
+          ctx.workspaceId,
+          tx,
+        );
+        const committedBlockersByItemId = new Map<string, PlanCommittedBlockerDto[]>();
+        for (const row of committedEdgeRows) {
+          const list = committedBlockersByItemId.get(row.fromId) ?? [];
+          list.push({ nodeId: row.blockerId, isDone: row.blockerStatus === 'done' });
+          committedBlockersByItemId.set(row.fromId, list);
+        }
 
-    // …AND every BLOCKER the plan names (bug MOTIR-5387) — a proposal's own
-    // (`blockedByRefs`, `patch.blockedByAdd`) and the ones its target already
-    // carries — so the canvas can NAME one that sits on another level. The
-    // roadmap draws such a blocker as a ghost anchor naming it; the edge carriers
-    // name ids only, so before approve there was nothing to put on the anchor and
-    // the canvas drew no edge at all. They join the SAME batched row read as the
-    // targets, which is why the edge read above now runs first: one more id list,
-    // not one more query. A `planItem:` ref is a proposal, named from the review
-    // model itself once it is built.
-    const blockerIds = [
-      ...committedEdgeRows.map((r) => r.blockerId),
-      ...plan.items.flatMap((i) => [...i.blockedByRefs, ...(i.patch?.blockedByAdd ?? [])]),
-    ].filter((ref) => !ref.startsWith(TEMP_REF_PREFIX));
-    // …AND every card a MARK carrier names (Story MOTIR-6577 · MOTIR-6632) — the
-    // `supersedes` refs on an `add` and on a `modify`'s patch — so each chip can
-    // carry its key, title and kind. The SAME collection `get_plan` reads
-    // (`markRefIdsOf`), joined to the SAME batched read: one more id list, not one
-    // more query. A marked target's CURRENT mark is on its own row, already here.
-    const lookupIds = Array.from(
-      new Set([
-        ...targetIds,
-        ...committedParentIds,
-        ...reparentIds,
-        ...blockerIds,
-        ...markRefIdsOf(plan),
-      ]),
-    );
-    const targets = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRepository.findByIdsInWorkspace(lookupIds, ctx.workspaceId, tx),
-    );
-    const targetById = new Map(targets.map((t) => [t.id, t]));
+        // …AND every BLOCKER the plan names (bug MOTIR-5387) — a proposal's own
+        // (`blockedByRefs`, `patch.blockedByAdd`) and the ones its target already
+        // carries — so the canvas can NAME one that sits on another level. The
+        // roadmap draws such a blocker as a ghost anchor naming it; the edge carriers
+        // name ids only, so before approve there was nothing to put on the anchor and
+        // the canvas drew no edge at all. They join the SAME batched row read as the
+        // targets, which is why the edge read above now runs first: one more id list,
+        // not one more query. A `planItem:` ref is a proposal, named from the review
+        // model itself once it is built.
+        const blockerIds = [
+          ...committedEdgeRows.map((r) => r.blockerId),
+          ...plan.items.flatMap((i) => [...i.blockedByRefs, ...(i.patch?.blockedByAdd ?? [])]),
+        ].filter((ref) => !ref.startsWith(TEMP_REF_PREFIX));
+        // …AND every card a MARK carrier names (Story MOTIR-6577 · MOTIR-6632) — the
+        // `supersedes` refs on an `add` and on a `modify`'s patch — so each chip can
+        // carry its key, title and kind. The SAME collection `get_plan` reads
+        // (`markRefIdsOf`), joined to the SAME batched read: one more id list, not one
+        // more query. A marked target's CURRENT mark is on its own row, already here.
+        const lookupIds = Array.from(
+          new Set([
+            ...targetIds,
+            ...committedParentIds,
+            ...reparentIds,
+            ...blockerIds,
+            ...markRefIdsOf(plan),
+          ]),
+        );
+        const targets = await workItemRepository.findByIdsInWorkspace(
+          lookupIds,
+          ctx.workspaceId,
+          tx,
+        );
+        const targetById = new Map(targets.map((t) => [t.id, t]));
 
-    // …AND the LIVE PARENT of every proposal that names a TARGET instead of a
-    // parent (bug MOTIR-3191).
-    //
-    // A `modify` / `remove` carries NO `parentRef` and cannot: its parent is
-    // whatever the live card already has, and the contract deliberately forbids a
-    // proposal from re-parenting anything (`docs/decisions/agent-authored-plans.md`).
-    // Reading placement off `parentRef` ALONE therefore gave it a null parent —
-    // which every consumer reads as *a root*. So an amendment to a subtask five
-    // levels down drew at the PROJECT ROOT, beside the `add`s the plan rules
-    // reserve that level for, and a reviewer applying the root-is-for-epics rule
-    // to what the surface showed was correct to decline it. The parent is not
-    // absent; it is on the TARGET, one field away.
-    const targetParentIds = plan.items
-      .map((i) => (i.workItemId ? (targetById.get(i.workItemId)?.parentId ?? null) : null))
-      .filter((id): id is string => id !== null);
+        // …AND the LIVE PARENT of every proposal that names a TARGET instead of a
+        // parent (bug MOTIR-3191).
+        //
+        // A `modify` / `remove` carries NO `parentRef` and cannot: its parent is
+        // whatever the live card already has, and the contract deliberately forbids a
+        // proposal from re-parenting anything (`docs/decisions/agent-authored-plans.md`).
+        // Reading placement off `parentRef` ALONE therefore gave it a null parent —
+        // which every consumer reads as *a root*. So an amendment to a subtask five
+        // levels down drew at the PROJECT ROOT, beside the `add`s the plan rules
+        // reserve that level for, and a reviewer applying the root-is-for-epics rule
+        // to what the surface showed was correct to decline it. The parent is not
+        // absent; it is on the TARGET, one field away.
+        const targetParentIds = plan.items
+          .map((i) => (i.workItemId ? (targetById.get(i.workItemId)?.parentId ?? null) : null))
+          .filter((id): id is string => id !== null);
 
-    // …AND the committed parents' OWN ancestors (bug MOTIR-3152), because the
-    // breadcrumb the canvas opens with is the whole CHAIN down to the level, not
-    // its last link. The read above resolves the parent; walking UP from it is a
-    // second question and needs a second read.
-    //
-    // ONE batched read PER TREE LEVEL, not one per item: the ids of each round's
-    // parents are collected and fetched together, and the loop stops when a round
-    // adds nothing new. The tree is depth-capped (Story 1.4), so a plan of thirty
-    // proposals under one parent still costs at most a handful of round trips —
-    // the same "never an N+1" property the target read above has.
-    //
-    // A `findAncestors` per parent would be the obvious alternative and is the
-    // one this deliberately avoids: it is one query PER PARENT, and a plan may
-    // legitimately propose under many.
-    //
-    // The frontier is seeded with every id that must END UP in `ancestorById`:
-    // the committed parents' own parents (their rows came back in round 1),
-    // — MOTIR-3191 — the inherited parents themselves, which did not, and
-    // — bug MOTIR-5272 — the RE-PARENT DESTINATIONS' own parents, which are the
-    // third carrier and were the one this seeding never named.
-    //
-    // ⚠️ ALL THREE CARRIERS, because `lookupIds` has three and this list had two.
-    // `reparentIds` (a `modify`'s `patch.parentRef`, MOTIR-3859) rode the batched
-    // ROW read and nothing else, so a proposed MOVE resolved its destination and
-    // then walked the chain the card is LEAVING — `targetParentIds` is the
-    // target's CURRENT parent. `trailFor` therefore broke at the destination's
-    // own parent and returned the destination alone, and the breadcrumb drew
-    // `Roadmap › <destination>` with every ancestor above it missing: the exact
-    // shape `PlanReviewCanvas.trailTo` uses to mean *an archived ancestor*.
-    // Every earlier re-parent test moved a card onto a ROOT epic, where a
-    // one-element trail is correct, which is why this held for so long.
-    const ancestorById = new Map(targets.map((t) => [t.id, t]));
-    let frontier = Array.from(
-      new Set([
-        ...committedParentIds
-          .map((id) => targetById.get(id)?.parentId)
-          .filter((id): id is string => !!id),
-        ...reparentIds.map((id) => targetById.get(id)?.parentId).filter((id): id is string => !!id),
-        ...targetParentIds,
-      ]),
-    );
-    // A hard bound as well as the natural one: a cycle in `parentId` is not
-    // representable through the API, but this loop must terminate on a corrupt
-    // row rather than hang the plan page.
-    for (let depth = 0; depth < 16 && frontier.length > 0; depth++) {
-      const unseen = frontier.filter((id) => !ancestorById.has(id));
-      if (unseen.length === 0) break;
-      const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-        workItemRepository.findByIdsInWorkspace(unseen, ctx.workspaceId, tx),
-      );
-      for (const row of rows) ancestorById.set(row.id, row);
-      frontier = Array.from(
-        new Set(rows.map((r) => r.parentId).filter((id): id is string => !!id)),
-      );
-    }
+        // …AND the committed parents' OWN ancestors (bug MOTIR-3152), because the
+        // breadcrumb the canvas opens with is the whole CHAIN down to the level, not
+        // its last link. The read above resolves the parent; walking UP from it is a
+        // second question and needs a second read.
+        //
+        // ONE batched read PER TREE LEVEL, not one per item: the ids of each round's
+        // parents are collected and fetched together, and the loop stops when a round
+        // adds nothing new. The tree is depth-capped (Story 1.4), so a plan of thirty
+        // proposals under one parent still costs at most a handful of round trips —
+        // the same "never an N+1" property the target read above has.
+        //
+        // A `findAncestors` per parent would be the obvious alternative and is the
+        // one this deliberately avoids: it is one query PER PARENT, and a plan may
+        // legitimately propose under many.
+        //
+        // The frontier is seeded with every id that must END UP in `ancestorById`:
+        // the committed parents' own parents (their rows came back in round 1),
+        // — MOTIR-3191 — the inherited parents themselves, which did not, and
+        // — bug MOTIR-5272 — the RE-PARENT DESTINATIONS' own parents, which are the
+        // third carrier and were the one this seeding never named.
+        //
+        // ⚠️ ALL THREE CARRIERS, because `lookupIds` has three and this list had two.
+        // `reparentIds` (a `modify`'s `patch.parentRef`, MOTIR-3859) rode the batched
+        // ROW read and nothing else, so a proposed MOVE resolved its destination and
+        // then walked the chain the card is LEAVING — `targetParentIds` is the
+        // target's CURRENT parent. `trailFor` therefore broke at the destination's
+        // own parent and returned the destination alone, and the breadcrumb drew
+        // `Roadmap › <destination>` with every ancestor above it missing: the exact
+        // shape `PlanReviewCanvas.trailTo` uses to mean *an archived ancestor*.
+        // Every earlier re-parent test moved a card onto a ROOT epic, where a
+        // one-element trail is correct, which is why this held for so long.
+        const ancestorById = new Map(targets.map((t) => [t.id, t]));
+        let frontier = Array.from(
+          new Set([
+            ...committedParentIds
+              .map((id) => targetById.get(id)?.parentId)
+              .filter((id): id is string => !!id),
+            ...reparentIds
+              .map((id) => targetById.get(id)?.parentId)
+              .filter((id): id is string => !!id),
+            ...targetParentIds,
+          ]),
+        );
+        // A hard bound as well as the natural one: a cycle in `parentId` is not
+        // representable through the API, but this loop must terminate on a corrupt
+        // row rather than hang the plan page.
+        for (let depth = 0; depth < 16 && frontier.length > 0; depth++) {
+          const unseen = frontier.filter((id) => !ancestorById.has(id));
+          if (unseen.length === 0) break;
+          const rows = await workItemRepository.findByIdsInWorkspace(unseen, ctx.workspaceId, tx);
+          for (const row of rows) ancestorById.set(row.id, row);
+          frontier = Array.from(
+            new Set(rows.map((r) => r.parentId).filter((id): id is string => !!id)),
+          );
+        }
+        return { committedBlockersByItemId, targetById, ancestorById };
+      });
 
     /**
      * The committed ancestor path down to `parentId`, ROOT FIRST and the parent
@@ -1805,7 +1883,9 @@ export const planReviewService = {
     // will, and the canvas keeps the roadmap read's own dispositions for it.
     let edgeCoverage: PlanEdgeCoverageDto[] = [];
     if (plan.status === 'generating' || plan.status === 'planned') {
-      const proj = await buildProjection(planId, ctx);
+      // The plan this read already admitted and loaded, handed over so the projection does not admit
+      // the reader and read every proposal a second time on each tick (MOTIR-8127).
+      const proj = await buildProjection(planId, ctx, { plan });
       const projIdOf = (nodeId: string): string => {
         const proposal = itemByNodeId.get(nodeId);
         return proposal && proposal.op === 'add' && proposal.nodeId === proposal.planItemId
@@ -2017,6 +2097,8 @@ export const planReviewService = {
           }
         : null,
       lastActivityAt,
+      // Only a `generating` plan is polled, so only it is handed a token to poll with.
+      ...(version?.status === 'generating' ? { reviewVersion: version.token } : {}),
       inFlightSteps,
       progress,
       gate,

@@ -6,7 +6,12 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { PlanItemDto, PlanItemPatch, PlanItemProposedFields } from '@/lib/dto/plans';
+import type {
+  PlanItemDto,
+  PlanItemPatch,
+  PlanItemProposedFields,
+  PlanWithItemsDto,
+} from '@/lib/dto/plans';
 import { DEFAULT_PROPOSED_KIND } from '@/lib/plans/validateProposals';
 import { edgeDisposition, type EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { WorkItem } from '@/generated/prisma/client';
@@ -172,7 +177,16 @@ function removeEdge(blockedBy: Map<string, Set<string>>, fromId: string, toId: s
 export async function buildProjection(
   planId: string,
   ctx: ServiceContext,
-  opts: { caller?: 'actor' | 'system' } = {},
+  opts: {
+    caller?: 'actor' | 'system';
+    /**
+     * The plan with its items, ALREADY READ AND ADMITTED for `ctx` by the caller (MOTIR-8127). The
+     * review read has just admitted the reader and read every proposal; re-doing both here cost
+     * three transactions and a second full item read on every poll of a `generating` plan. Only a
+     * caller that passed the reader gate itself may hand one in — it replaces the gate below.
+     */
+    plan?: PlanWithItemsDto;
+  } = {},
 ): Promise<Projection> {
   // An ACTOR's read of what a plan proposes (`validate_plan`, `get_work_item` /
   // `search_work_items` / `validate_work_item` / `validate_sprint` with `planId`)
@@ -181,9 +195,10 @@ export async function buildProjection(
   // internal `validate-plan-forest` route, validating a plan its own job wrote —
   // passes `caller: 'system'` and keeps the browse floor alone.
   const plan =
-    opts.caller === 'system'
+    opts.plan ??
+    (opts.caller === 'system'
       ? await plansService.getPlan(planId, ctx)
-      : await plansService.getPlanForReader(planId, ctx);
+      : await plansService.getPlanForReader(planId, ctx));
   const projectId = plan.projectId;
 
   // The project's live node set + the initial status an `add` would be created in.

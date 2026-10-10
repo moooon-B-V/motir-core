@@ -1,4 +1,4 @@
-import type { PlanReviewDto } from '@/lib/dto/planReview';
+import type { PlanReviewDto, PlanReviewUnchangedDto } from '@/lib/dto/planReview';
 import type {
   PlanDto,
   PlanNarrationPageDto,
@@ -76,6 +76,27 @@ export async function fetchPlanReview(
   });
   if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
   return (await res.json()) as PlanReviewDto;
+}
+
+/**
+ * The generating-plan poll's read (MOTIR-8127): the review model, or — when `since` is the
+ * `reviewVersion` of the snapshot the caller already holds and nothing the review shows has moved
+ * — {@link PlanReviewUnchangedDto}, a few bytes. Throws `PlanRequestError` on a non-2xx.
+ */
+export async function fetchPlanReviewSince(
+  planId: string,
+  since: string,
+  signal?: AbortSignal,
+): Promise<PlanReviewDto | PlanReviewUnchangedDto> {
+  const res = await fetch(
+    `/api/plans/${encodeURIComponent(planId)}?since=${encodeURIComponent(since)}`,
+    {
+      headers: { Accept: 'application/json' },
+      signal,
+    },
+  );
+  if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
+  return (await res.json()) as PlanReviewDto | PlanReviewUnchangedDto;
 }
 
 /**
