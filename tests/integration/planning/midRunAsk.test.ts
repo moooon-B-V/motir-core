@@ -35,7 +35,8 @@ vi.mock('@/lib/services/planReviewService', () => ({
 const { aiAskService } = await import('@/lib/services/aiAskService');
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
 const { planChangeMailboxService } = await import('@/lib/services/planChangeMailboxService');
-const { PlanChangeMailboxJobMismatchError } = await import('@/lib/planChange/errors');
+const { PlanChangeMailboxJobMismatchError, EmptyPlanChangeTurnError } =
+  await import('@/lib/planChange/errors');
 
 let fx: WorkItemFixture;
 let ctx: ProjectContext;
@@ -431,5 +432,110 @@ describe('settle — the mid-run arm', () => {
     const turn = (await thread()).find((t) => t.id === turnId)!;
     expect(turn).toMatchObject({ role: 'user', body: 'add a reporting epic', intent: 'ask' });
     expect(turn.forwarded ?? null).toBeNull();
+  });
+  it('refuses a forward when the conversation has MOVED ON to another run — superseded, the words kept', async () => {
+    const { jobId, turnId } = await submitMidRun('add a reporting epic');
+    settleWith(jobId, { intent: 'plan_change', forward: { text: 'add a reporting epic' } });
+    // The thread started another run after this turn was typed: the run it was
+    // addressed at is no longer the conversation's, so the mailbox door refuses.
+    await adminDb.planChangeSession.update({
+      where: { id: sessionId },
+      data: { lastJobId: 'job-run-2' },
+    });
+
+    const settled = await aiAskService.settle(jobId, ctx, { sessionId });
+
+    expect(settled).toMatchObject({
+      outcome: 'forward_refused',
+      code: 'PLAN_CHANGE_MAILBOX_JOB_MISMATCH',
+      jobStatus: 'superseded',
+      text: 'add a reporting epic',
+    });
+    expect(await adminDb.planChangeMailboxEntry.count({ where: { sessionId } })).toBe(0);
+    const turn = (await thread()).find((t) => t.id === turnId)!;
+    expect(turn).toMatchObject({ role: 'user', intent: 'ask' });
+    expect(turn.forwarded ?? null).toBeNull();
+  });
+
+  it('does not swallow an UNEXPECTED mailbox failure as a refusal', async () => {
+    const { jobId } = await submitMidRun('add a reporting epic');
+    settleWith(jobId, { intent: 'plan_change', forward: { text: 'add a reporting epic' } });
+    const attach = vi
+      .spyOn(planChangeMailboxService, 'attachTurn')
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    await expect(aiAskService.settle(jobId, ctx, { sessionId })).rejects.toThrow(
+      'connection reset',
+    );
+    expect(await adminDb.planChangeMailboxEntry.count({ where: { sessionId } })).toBe(0);
+    attach.mockRestore();
+  });
+  it('settles silent for an ask verdict that carries no answer, and for an unreadable result', async () => {
+    const first = await submitMidRun('how far along?');
+    settleWith(first.jobId, { intent: 'ask', answer: null, citations: [] });
+    expect((await aiAskService.settle(first.jobId, ctx, { sessionId })).outcome).toBe('silent');
+
+    const second = await submitMidRun('and now?');
+    jobs.set(second.jobId, {
+      jobId: second.jobId,
+      status: 'succeeded',
+      result: { somethingElse: true },
+      error: null,
+    });
+    expect((await aiAskService.settle(second.jobId, ctx, { sessionId })).outcome).toBe('silent');
+
+    // Nothing was answered and nothing forwarded.
+    expect((await thread()).filter((t) => t.role === 'assistant')).toHaveLength(0);
+    expect(await adminDb.planChangeMailboxEntry.count({ where: { sessionId } })).toBe(0);
+  });
+});
+
+describe('the pending offer the next mid-run turn carries', () => {
+  it('carries NO offer when the latest answer made none', async () => {
+    const first = await submitMidRun('how far along?');
+    settleWith(first.jobId, { intent: 'ask', answer: 'Two of five.', citations: [] });
+    await aiAskService.settle(first.jobId, ctx, { sessionId });
+
+    await submitMidRun('and the checkout story?');
+
+    const context = submitJobMock.mock.calls[1]![2] as { run: Record<string, unknown> };
+    expect(context.run).not.toHaveProperty('pendingOffer');
+  });
+
+  it('keeps the offer standing across a later turn that forwarded nothing', async () => {
+    const first = await submitMidRun('maybe checkout first?');
+    settleWith(first.jobId, {
+      intent: 'ask',
+      answer: 'Forward it?',
+      citations: [],
+      offerForward: { text: 'maybe checkout first?' },
+    });
+    await aiAskService.settle(first.jobId, ctx, { sessionId });
+    // A turn typed after the offer, still unsettled — it forwarded nothing, so the
+    // offer is still the one standing when the person speaks again.
+    await submitMidRun('hold on');
+
+    await submitMidRun('yes, do it');
+
+    const context = submitJobMock.mock.calls[2]![2] as { run: Record<string, unknown> };
+    expect(context.run.pendingOffer).toEqual({ turnText: 'maybe checkout first?' });
+  });
+});
+
+describe('blank turns are refused before any write', () => {
+  it('a blank MID-RUN turn appends nothing and submits no job', async () => {
+    await expect(
+      aiAskService.submitMidRunTurn('   ', ctx, { sessionId, runJobId: RUN_JOB, planId: PLAN_ID }),
+    ).rejects.toBeInstanceOf(EmptyPlanChangeTurnError);
+    expect(await thread()).toHaveLength(0);
+    expect(submitJobMock).not.toHaveBeenCalled();
+  });
+
+  it('…and so is a blank turn through the ordinary ask door on the same thread', async () => {
+    await expect(aiAskService.submitTurn(' \n ', ctx, { sessionId })).rejects.toBeInstanceOf(
+      EmptyPlanChangeTurnError,
+    );
+    expect(await thread()).toHaveLength(0);
+    expect(submitJobMock).not.toHaveBeenCalled();
   });
 });

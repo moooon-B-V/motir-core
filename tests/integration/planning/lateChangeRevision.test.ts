@@ -200,6 +200,29 @@ describe('a forward REFUSED because the run already ended', () => {
     expect(await revisionStarts()).toHaveLength(1);
   });
 
+  it('a replayed settle whose revision no longer names a plan does not answer revised_late from stale state', async () => {
+    const jobId = await settledForward('add a reporting epic');
+    setRun('succeeded');
+    submitJobMock.mockResolvedValueOnce({ jobId: 'job-rev-1' });
+    await aiAskService.settle(jobId, ctx, { sessionId });
+    submitJobMock.mockClear();
+    // The revision job no longer resolves to a plan: the marker alone is no answer.
+    const find = vi.spyOn(plansService, 'findPlanIdForJob').mockResolvedValueOnce(null);
+
+    const again = await aiAskService.settle(jobId, ctx, { sessionId });
+
+    expect(find).toHaveBeenCalledWith('job-rev-1', ctx);
+    // It is re-derived instead: the revision it started still holds the plan, so
+    // the forward is refused with the words kept — and no second revision starts.
+    expect(again).toMatchObject({
+      outcome: 'forward_refused',
+      code: 'PLAN_REVISION_IN_FLIGHT',
+      text: 'add a reporting epic',
+    });
+    expect(submitJobMock).not.toHaveBeenCalled();
+    find.mockRestore();
+  });
+
   it('a decided plan is refused PLAN_CHANGE_PLAN_DECIDED with the text, and nothing is submitted', async () => {
     for (const status of ['approved', 'declined'] as const) {
       await adminDb.plan.update({ where: { id: planId }, data: { status } });

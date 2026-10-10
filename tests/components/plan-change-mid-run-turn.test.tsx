@@ -42,6 +42,8 @@ const peekMailbox = vi.fn();
 const stopRun = vi.fn();
 const streamContextual = vi.fn();
 const readPending = vi.fn();
+const readRunPause = vi.fn();
+const answerRunPause = vi.fn();
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
   // The resume read answers `{ session, earlier }` (MOTIR-6024); these cases
@@ -62,6 +64,8 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   rerunAskTurn: vi.fn(),
   submitMidRunAskTurn: (...a: unknown[]) => submitMidRunAskTurn(...a),
   settleAskJob: (...a: unknown[]) => settleAskJob(...a),
+  readRunPause: (...a: unknown[]) => readRunPause(...a),
+  answerRunPause: (...a: unknown[]) => answerRunPause(...a),
 }));
 
 vi.mock('@/lib/planning/planEditsClient', () => ({
@@ -174,6 +178,7 @@ beforeEach(() => {
   streamAskJob.mockResolvedValue(undefined);
   settleAskJob.mockResolvedValue(forwarded(['m1', 'Also drop the narration card.']));
   peekMailbox.mockResolvedValue({ turns: [], stopped: false });
+  readRunPause.mockResolvedValue(null);
 });
 
 describe('THE BRANCH — one control, two destinations, chosen by the phase', () => {
@@ -606,5 +611,460 @@ describe('A REFUSAL IS LEGIBLE', () => {
       release();
       await promise;
     });
+  });
+});
+
+// ── The rest of the mid-run send's branches (MOTIR-7990's coverage floor) ─────
+//
+// Each case below is an outcome the rail draws differently, and every one of them
+// is silent when it goes wrong: a failed ask stream that still settles, a stale
+// settle that rolls the thread back, a reply to the planner's question that is
+// given a verdict instead, and a send after the rail unmounted that writes state.
+
+/** An `unclear` pause the planner posted on `job-1`, unanswered. */
+const OPEN_UNCLEAR = {
+  id: 'pause-1',
+  jobId: 'job-1',
+  kind: 'unclear' as const,
+  changeTurnIds: [],
+  reason: null,
+  question: 'Which billing card do you mean?',
+  createdAt: 'x',
+  answer: null,
+  answeredAt: null,
+  replyText: null,
+  delivery: 'pending' as const,
+  refusedCode: null,
+  mailboxEntryId: null,
+};
+
+describe('the mid-run ask — the outcomes the rail draws', () => {
+  it('a turn typed while the planner’s UNCLEAR question is open is its ANSWER — the pause door, never a verdict', async () => {
+    submitContextualPlan.mockResolvedValue({
+      jobId: 'job-1',
+      planId: 'plan-1',
+      session: { ...SESSION, runPause: OPEN_UNCLEAR },
+    });
+    answerRunPause.mockResolvedValue({
+      outcome: 'answered',
+      pause: { ...OPEN_UNCLEAR, answer: 'replied', replyText: 'The billing one.' },
+      delivery: {
+        turns: [
+          {
+            id: 'm9',
+            text: 'The billing one.',
+            receivedAt: 'x',
+            disposition: 'fold',
+            target: null,
+          },
+        ],
+        stopped: false,
+      },
+    });
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+
+    await act(async () => {
+      await hook.result.current.send('The billing one.', TARGETS);
+    });
+
+    expect(answerRunPause).toHaveBeenCalledWith(
+      's1',
+      'job-1',
+      'pause-1',
+      'reply',
+      'The billing one.',
+    );
+    // Not the answering session, and no ask record is drawn for it.
+    expect(submitMidRunAskTurn).not.toHaveBeenCalled();
+    expect(hook.result.current.state.midRunAsk ?? null).toBeNull();
+    expect(hook.result.current.state.queued).toEqual([
+      { id: 'm9', text: 'The billing one.', read: false },
+    ]);
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('a change revised into the FINISHED run’s plan sets lateRevision (MOTIR-7997)', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    settleAskJob.mockResolvedValue({
+      outcome: 'revised_late',
+      planId: 'plan-1',
+      revisionJobId: 'rev-1',
+      text: 'Also drop it.',
+      session: SESSION,
+    });
+
+    await act(async () => {
+      await hook.result.current.send('Also drop it.', TARGETS);
+    });
+
+    expect(hook.result.current.state.lateRevision).toEqual({
+      planId: 'plan-1',
+      revisionJobId: 'rev-1',
+      count: 1,
+    });
+    expect(hook.result.current.state.midRunAsk ?? null).toBeNull();
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('⚠️ a FAILED ask stream shows its code and is never settled — the run’s phase is untouched', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    streamAskJob.mockImplementation(async (_job, _signal, onError: (c: string | null) => void) => {
+      onError('ASK_FAILED');
+    });
+
+    await act(async () => {
+      await hook.result.current.send('How far along?', TARGETS);
+    });
+
+    expect(hook.result.current.state.errorCode).toBe('ASK_FAILED');
+    expect(settleAskJob).not.toHaveBeenCalled();
+    expect(hook.result.current.state.phase).toBe('streaming');
+    expect(hook.result.current.state.jobId).toBe('job-1');
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('an UNCODED stream failure still says something — FAILED', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    streamAskJob.mockImplementation(async (_job, _signal, onError: (c: string | null) => void) => {
+      onError(null);
+    });
+
+    await act(async () => {
+      await hook.result.current.send('How far along?', TARGETS);
+    });
+
+    expect(hook.result.current.state.errorCode).toBe('FAILED');
+    expect(settleAskJob).not.toHaveBeenCalled();
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('an OUT-OF-CREDITS stream failure is the credit gate, not an error banner', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    streamAskJob.mockImplementation(async (_job, _signal, onError: (c: string | null) => void) => {
+      onError('MOTIR_AI_OUT_OF_CREDITS');
+    });
+
+    await act(async () => {
+      await hook.result.current.send('How far along?', TARGETS);
+    });
+
+    expect(hook.result.current.state.outOfCredits).toBe(true);
+    expect(hook.result.current.state.errorCode).toBeNull();
+    expect(settleAskJob).not.toHaveBeenCalled();
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('⚠️ a slow settle carrying an OLDER session never rolls the thread back — a newer one is adopted', async () => {
+    const held = { ...SESSION, turnCount: 5 };
+    submitContextualPlan.mockResolvedValue({ jobId: 'job-1', planId: 'plan-1', session: held });
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    // Turns only grow: the ask's copy of the thread is behind the rail's.
+    submitMidRunAskTurn.mockResolvedValue({ jobId: 'ask-1', turnId: 't1', session: SESSION });
+    settleAskJob.mockResolvedValue({ outcome: 'answered', session: SESSION });
+
+    await act(async () => {
+      await hook.result.current.send('How far along?', TARGETS);
+    });
+    expect(hook.result.current.state.session?.turnCount).toBe(5);
+
+    // A copy AHEAD of the rail's is the newer write, and replaces it.
+    settleAskJob.mockResolvedValue({ outcome: 'answered', session: { ...SESSION, turnCount: 7 } });
+    await act(async () => {
+      await hook.result.current.send('And now?', TARGETS);
+    });
+    expect(hook.result.current.state.session?.turnCount).toBe(7);
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('a send made before the run has its job id goes nowhere — it cannot be addressed', async () => {
+    // Busy from the click: the submit is in flight, the phase is `streaming`, and
+    // there is no job to address the turn at yet.
+    let resolveSubmit!: (v: unknown) => void;
+    submitContextualPlan.mockImplementation(
+      () =>
+        new Promise((r) => {
+          resolveSubmit = r;
+        }),
+    );
+    const hook = await mounted();
+    let first!: Promise<void>;
+    await act(async () => {
+      first = hook.result.current.send('Add a stop control.', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('streaming'));
+    expect(hook.result.current.state.jobId).toBeNull();
+
+    await act(async () => {
+      await hook.result.current.send('Also this.', TARGETS);
+    });
+    expect(submitMidRunAskTurn).not.toHaveBeenCalled();
+    expect(attachMidRunTurn).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSubmit({ jobId: 'job-1', planId: 'plan-1', session: SESSION });
+      await first;
+    });
+  });
+});
+
+describe('the mid-run ask after the rail UNMOUNTED writes nothing', () => {
+  it('after the ask submit resolves — the ask is never streamed', async () => {
+    let open!: () => void;
+    submitMidRunAskTurn.mockImplementation(
+      () =>
+        new Promise((r) => {
+          open = () => r({ jobId: 'ask-1', turnId: 't1', session: SESSION });
+        }),
+    );
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    let sent!: Promise<void>;
+    await act(async () => {
+      sent = hook.result.current.send('How far along?', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(submitMidRunAskTurn).toHaveBeenCalled());
+    hook.unmount();
+    await act(async () => {
+      open();
+      await sent;
+      release();
+      await promise;
+    });
+    expect(streamAskJob).not.toHaveBeenCalled();
+  });
+
+  it('after the ask stream fails', async () => {
+    let fail!: () => void;
+    streamAskJob.mockImplementation(
+      (_job, _signal, onError: (c: string | null) => void) =>
+        new Promise<void>((r) => {
+          fail = () => {
+            onError('ASK_FAILED');
+            r();
+          };
+        }),
+    );
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    let sent!: Promise<void>;
+    await act(async () => {
+      sent = hook.result.current.send('How far along?', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(streamAskJob).toHaveBeenCalled());
+    hook.unmount();
+    await act(async () => {
+      fail();
+      await sent;
+      release();
+      await promise;
+    });
+    expect(settleAskJob).not.toHaveBeenCalled();
+  });
+
+  it('after the ask stream ends cleanly — the settle is never asked', async () => {
+    let end!: () => void;
+    streamAskJob.mockImplementation(
+      () =>
+        new Promise<void>((r) => {
+          end = r;
+        }),
+    );
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    let sent!: Promise<void>;
+    await act(async () => {
+      sent = hook.result.current.send('How far along?', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(streamAskJob).toHaveBeenCalled());
+    hook.unmount();
+    await act(async () => {
+      end();
+      await sent;
+      release();
+      await promise;
+    });
+    expect(settleAskJob).not.toHaveBeenCalled();
+  });
+
+  it('after the settle resolves, and after the submit rejects', async () => {
+    let settle!: () => void;
+    settleAskJob.mockImplementation(
+      () =>
+        new Promise((r) => {
+          settle = () => r({ outcome: 'answered', session: SESSION });
+        }),
+    );
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    let sent!: Promise<void>;
+    await act(async () => {
+      sent = hook.result.current.send('How far along?', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(settleAskJob).toHaveBeenCalled());
+    hook.unmount();
+    await act(async () => {
+      settle();
+      await sent;
+      release();
+      await promise;
+    });
+
+    let reject!: () => void;
+    submitMidRunAskTurn.mockImplementation(
+      () =>
+        new Promise((_r, rej) => {
+          reject = () => rej(new Error('network'));
+        }),
+    );
+    const second = await mounted();
+    const run2 = await running(second);
+    let sent2!: Promise<void>;
+    await act(async () => {
+      sent2 = second.result.current.send('How far along?', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(submitMidRunAskTurn).toHaveBeenCalled());
+    second.unmount();
+    await act(async () => {
+      reject();
+      await sent2;
+      run2.release();
+      await run2.promise;
+    });
+  });
+});
+
+describe('a run with NO plan id still queues to the MAILBOX (the pre-AMENDMENT-4 door)', () => {
+  // A streaming job that is not a planning run (no `planId`) has no answering
+  // session to route through, so the turn is attached to the job's mailbox as it
+  // always was — never dropped, never a second job.
+  beforeEach(() => {
+    submitContextualPlan.mockResolvedValue({ jobId: 'job-1', session: SESSION });
+  });
+
+  it('attaches the turn, keyed per send, and records the pending set', async () => {
+    attachMidRunTurn.mockResolvedValue({
+      turns: [{ id: 'm1', text: 'Also this.', receivedAt: 'x', disposition: 'fold', target: null }],
+      stopped: false,
+    });
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    expect(hook.result.current.state.planId).toBeNull();
+
+    await act(async () => {
+      await hook.result.current.send('Also this.', TARGETS);
+    });
+
+    expect(submitMidRunAskTurn).not.toHaveBeenCalled();
+    expect(attachMidRunTurn).toHaveBeenCalledWith(
+      's1',
+      'job-1',
+      'Also this.',
+      expect.stringMatching(/^turn:job-1:/),
+    );
+    expect(hook.result.current.state.queued).toEqual([
+      { id: 'm1', text: 'Also this.', read: false },
+    ]);
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('surfaces the door’s typed code, says MAILBOX_FAILED for an untyped one, and ignores an abort', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+
+    attachMidRunTurn.mockRejectedValueOnce(
+      new PlanEditsClientError(409, 'PLAN_CHANGE_JOB_NOT_RUNNING'),
+    );
+    await act(async () => {
+      await hook.result.current.send('Too late.', TARGETS);
+    });
+    expect(hook.result.current.state.errorCode).toBe('PLAN_CHANGE_JOB_NOT_RUNNING');
+
+    attachMidRunTurn.mockRejectedValueOnce(new Error('network'));
+    await act(async () => {
+      await hook.result.current.send('Again.', TARGETS);
+    });
+    expect(hook.result.current.state.errorCode).toBe('MAILBOX_FAILED');
+
+    attachMidRunTurn.mockRejectedValueOnce(new DOMException('gone', 'AbortError'));
+    await act(async () => {
+      await hook.result.current.send('Once more.', TARGETS);
+    });
+    // The abort changed nothing — the last error stands, nothing was queued.
+    expect(hook.result.current.state.errorCode).toBe('MAILBOX_FAILED');
+    expect(hook.result.current.state.queued).toEqual([]);
+    expect(hook.result.current.state.phase).toBe('streaming');
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('writes nothing once the rail has unmounted — on success or on failure', async () => {
+    let answer!: (ok: boolean) => void;
+    attachMidRunTurn.mockImplementation(
+      () =>
+        new Promise((res, rej) => {
+          answer = (ok) => (ok ? res({ turns: [], stopped: false }) : rej(new Error('network')));
+        }),
+    );
+    for (const ok of [true, false]) {
+      const hook = await mounted();
+      const { release, promise } = await running(hook);
+      let sent!: Promise<void>;
+      await act(async () => {
+        sent = hook.result.current.send('Also this.', TARGETS);
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(attachMidRunTurn).toHaveBeenCalled());
+      hook.unmount();
+      await act(async () => {
+        answer(ok);
+        await sent;
+        release();
+        await promise;
+      });
+      attachMidRunTurn.mockClear();
+    }
   });
 });

@@ -260,6 +260,51 @@ describe('the late-change claim at the end of a planning run', () => {
   });
 });
 
+describe('the late-change claim after the rail unmounted', () => {
+  it('writes nothing when the answer lands after unmount', async () => {
+    let answer!: () => void;
+    submitLateChanges.mockImplementation(
+      () =>
+        new Promise((r) => {
+          answer = () =>
+            r({
+              outcome: 'revised',
+              planId: 'plan-1',
+              revisionJobId: 'job-rev-1',
+              texts: ['A late change.'],
+            });
+        }),
+    );
+    const hook = await mounted();
+    const release = heldStream('succeeded');
+    let promise!: Promise<void>;
+    await act(async () => {
+      promise = hook.result.current.send('Add a stop control.', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('streaming'));
+    settleAskJob.mockResolvedValue(forwarded(['m1', 'A late change.']));
+    await act(async () => {
+      await hook.result.current.send('A late change.', TARGETS);
+    });
+    await act(async () => {
+      release();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(submitLateChanges).toHaveBeenCalledTimes(1));
+    const before = hook.result.current.state;
+
+    hook.unmount();
+    await act(async () => {
+      answer();
+      await promise;
+    });
+
+    // The last render is the one before the unmount: no revision was drawn.
+    expect(hook.result.current.state.lateRevision ?? null).toBe(before.lateRevision ?? null);
+  });
+});
+
 describe('the settle outcome revised_late', () => {
   it('sets lateRevision from the settle, with no queue and no refusal', async () => {
     const hook = await mounted();
