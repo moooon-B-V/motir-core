@@ -6,8 +6,14 @@ import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/contex
 import { replayDLQ as replayDlqInTx, type ReplayDLQResult } from '@/lib/jobs/dlq';
 import { readReachRole } from '@/lib/workspaces/membershipGate';
 import { isWorkspaceManager } from '@/lib/projects/roles';
-import { ReplayForbiddenError, DlqEntryNotFoundError } from '@/lib/jobs/errors';
-import type { JobRunDTO, JobRunDlqDTO, JobRunStatus } from '@/lib/dto/jobs';
+import {
+  ReplayForbiddenError,
+  DlqEntryNotFoundError,
+  SystemReplayForbiddenError,
+  SystemReplayWorkspaceRowError,
+} from '@/lib/jobs/errors';
+import { isPlatformOperator } from '@/lib/jobs/platformOperator';
+import type { JobRunDTO, JobRunDlqDTO, JobRunStatus, SystemDlqListDTO } from '@/lib/dto/jobs';
 
 // Read + replay surface for the operator dashboard (Story 1.6 · Subtask 1.6.5).
 // The COUNTERPART to jobRunsService: that service is the trusted WRITER (it runs
@@ -33,6 +39,21 @@ export interface ListRunsInput {
   limit: number;
   offset: number;
 }
+
+/**
+ * How long a REPLAYED system dead letter stays on the System tab — long enough
+ * to confirm the replay landed, short enough that the list stays a queue
+ * (`design/jobs/design-notes.md` § System dead letters, MOTIR-8084).
+ */
+export const SYSTEM_DLQ_REPLAYED_WINDOW_DAYS = 7;
+
+/**
+ * A safety cap on each half of the System tab's dead-letter list. The tab has no
+ * pager by design (the standing-depth filer keeps the unreplayed set small), so
+ * this only bounds a pathological outage; the summary counts are the TRUE counts
+ * and stay honest past it.
+ */
+export const SYSTEM_DLQ_LIST_CAP = 200;
 
 export interface ListDlqInput {
   workspaceId: string;
@@ -140,6 +161,85 @@ export const jobsDashboardService = {
       // a password reset carries a null workspace on both the run and its
       // delivery row, so only this binding's RLS branch admits either.
       return withDeliveries(rows, tx);
+    });
+  },
+
+  /**
+   * The dead letters with NO workspace — what every `system.*` job writes when
+   * it exhausts its retries (MOTIR-8083). Not yet replayed first, then those
+   * replayed within {@link SYSTEM_DLQ_REPLAYED_WINDOW_DAYS}; each group newest
+   * failure first. Runs under withSystemContext (the only RLS branch that admits
+   * an untenanted row), so, like {@link listSystemRuns}, the CALLER must have
+   * verified the requester is the platform operator before calling this.
+   */
+  async listSystemDlq(now: Date = new Date()): Promise<SystemDlqListDTO> {
+    const since = new Date(now.getTime() - SYSTEM_DLQ_REPLAYED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    return withSystemContext(async (tx) => {
+      const [unreplayed, replayed, waiting, replayedRecently] = await Promise.all([
+        jobRunDlqRepository.listSystemUnreplayed(SYSTEM_DLQ_LIST_CAP, tx),
+        jobRunDlqRepository.listSystemReplayedSince(since, SYSTEM_DLQ_LIST_CAP, tx),
+        jobRunDlqRepository.countSystemUnreplayed(tx),
+        jobRunDlqRepository.countSystemReplayedSince(since, tx),
+      ]);
+      return {
+        rows: [...unreplayed, ...replayed].map(toJobRunDlqDTO),
+        waiting,
+        replayedRecently,
+      };
+    });
+  },
+
+  /**
+   * The OPERATOR's replay of a dead letter that has no workspace (MOTIR-8083) —
+   * the door `replayDLQ` below structurally cannot be, because that one runs in
+   * the caller's workspace and asks for a row of that workspace.
+   *
+   * ⚠️ THIS RUNS UNDER `withSystemContext`, WHICH BYPASSES TENANT RLS, so its two
+   * refusals are the whole of its safety and both are enforced HERE, not in the
+   * Server Action or the UI (the hidden button is a hint, not the gate):
+   *   1. the caller must be the platform operator (`PLATFORM_ADMIN_EMAIL`) —
+   *      the same comparison that shows them the System tab;
+   *   2. the row must have `workspace_id IS NULL`. A workspace's row keeps its
+   *      manager-gated door; letting the operator door take it would make this
+   *      a way to replay ANY tenant's dead letter by id.
+   * An unknown id answers the same not-found the workspace door does.
+   *
+   * ONE transaction, the replay + the `replayedAt` stamp together, delegating the
+   * re-emit to lib/jobs/dlq.ts so the `:replay:<dlqId>` key, the
+   * stamp-only-after-publish ordering and the already-replayed outcome (MOTIR-3730)
+   * are the ones the workspace door has.
+   */
+  async replaySystemDLQ(input: {
+    dlqId: string;
+    userId: string;
+    userEmail: string;
+  }): Promise<ReplayDLQResult> {
+    if (!isPlatformOperator(input.userEmail)) {
+      throw new SystemReplayForbiddenError(input.userId);
+    }
+    return withSystemContext(async (tx) => {
+      const entry = await jobRunDlqRepository.findById(input.dlqId, tx);
+      if (!entry) throw new DlqEntryNotFoundError(input.dlqId);
+      if (entry.workspaceId !== null) throw new SystemReplayWorkspaceRowError(input.dlqId);
+
+      const result = await replayDlqInTx(input.dlqId, tx);
+
+      // The same warn-level audit line the workspace door writes; `workspaceId:
+      // null` is what tells the two doors apart in the log.
+      console.warn(
+        '[jobs.replay]',
+        JSON.stringify({
+          dlqId: input.dlqId,
+          workspaceId: null,
+          actorUserId: input.userId,
+          functionId: entry.functionId,
+          eventName: entry.eventName,
+          door: 'system',
+          outcome: result.outcome,
+        }),
+      );
+
+      return result;
     });
   },
 

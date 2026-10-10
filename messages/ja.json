@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "ワークスペースのセキュリティ設定を変更できるのは、そのワークスペースのオーナーと管理者だけです。",
       "refused": "処理できませんでした: {reason}",
       "organizationClosing": "この組織は削除が予定されているため、閲覧のみになっています。削除を取り消せるのはオーナーだけです。",
-      "memberProjectsFailed": "このメンバーのプロジェクトを読み込めませんでした。"
+      "memberProjectsFailed": "このメンバーのプロジェクトを読み込めませんでした。",
+      "systemReplayWorkspaceRow": "そのデッドレターはワークスペースに属しています。そのワークスペースの「デッドレター」タブから再実行してください。",
+      "systemReplayOperatorOnly": "システムのデッドレターを再実行できるのはプラットフォーム運用者のみです。"
     },
     "links": {
       "notFound": "その作業項目は存在しなくなりました。",
@@ -3044,7 +3046,13 @@
         "template": "テンプレート",
         "lastEvent": "最終イベント",
         "never": "プロバイダーからのイベントはまだありません"
-      }
+      },
+      "systemDlqTitle": "ワークスペースのないデッドレター",
+      "systemDlqSummary": "{waiting} 件が再実行待ち · 過去 7 日間に {replayed} 件を再実行",
+      "systemDlqTableCaption": "システムのデッドレター",
+      "systemDlqEmptyTitle": "システムのデッドレターはありません",
+      "systemDlqEmptyDesc": "ワークスペースのないジョブはすべて成功したか、まだ再試行中です。",
+      "systemRunsTitle": "システム実行"
     },
     "account": {
       "eyebrow": "アカウント設定",

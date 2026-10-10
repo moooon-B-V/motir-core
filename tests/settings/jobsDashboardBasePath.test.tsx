@@ -29,6 +29,7 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/app/(authed)/settings/workspace/jobs/actions', () => ({
   replayDlqAction: vi.fn(),
+  replaySystemDlqAction: vi.fn(),
 }));
 
 import { JobsDashboard } from '@/app/(authed)/settings/workspace/jobs/_components/JobsDashboard';

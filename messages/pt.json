@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "Somente proprietários e administradores de um espaço de trabalho podem alterar as configurações de segurança dele.",
       "refused": "Não foi possível concluir: {reason}",
       "organizationClosing": "Esta organização está programada para exclusão e é somente leitura. Somente o Proprietário dela pode cancelar a exclusão.",
-      "memberProjectsFailed": "Não foi possível carregar os projetos dessa pessoa."
+      "memberProjectsFailed": "Não foi possível carregar os projetos dessa pessoa.",
+      "systemReplayWorkspaceRow": "Essa entrada de dead-letter pertence a um workspace — reprocesse-a na aba Dead-letter desse workspace.",
+      "systemReplayOperatorOnly": "Somente o operador da plataforma pode reprocessar dead-letters do sistema."
     },
     "links": {
       "notFound": "Esse item de trabalho não existe mais.",
@@ -3044,7 +3046,13 @@
         "template": "Modelo",
         "lastEvent": "Último evento",
         "never": "Ainda não há evento do provedor"
-      }
+      },
+      "systemDlqTitle": "Dead-letters sem workspace",
+      "systemDlqSummary": "{waiting} aguardando reprocessamento · {replayed} reprocessadas nos últimos 7 dias",
+      "systemDlqTableCaption": "Dead-letters do sistema",
+      "systemDlqEmptyTitle": "Nenhuma dead-letter do sistema",
+      "systemDlqEmptyDesc": "Todo job sem workspace foi concluído com sucesso ou ainda está sendo repetido.",
+      "systemRunsTitle": "Execuções do sistema"
     },
     "account": {
       "eyebrow": "Configurações da conta",

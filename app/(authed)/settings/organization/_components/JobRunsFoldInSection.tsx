@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { isPlatformOperator } from '@/lib/jobs/platformOperator';
 import {
   JobsPane,
   parseJobsParams,
@@ -73,8 +74,7 @@ export async function JobRunsFoldInSection({
   // The pre-Epic-6 platform-admin escape hatch (Subtask 1.6.3), read exactly as
   // the standalone route reads it so the two doors cannot disagree about who
   // sees the System tab.
-  const adminEmail = process.env['PLATFORM_ADMIN_EMAIL'];
-  const showSystemTab = Boolean(adminEmail) && actorEmail === adminEmail;
+  const showSystemTab = isPlatformOperator(actorEmail);
 
   const params = parseJobsParams(searchParams, showSystemTab);
 

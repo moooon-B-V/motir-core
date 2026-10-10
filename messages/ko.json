@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "워크스페이스의 소유자와 관리자만 보안 설정을 변경할 수 있습니다.",
       "refused": "처리되지 않았습니다: {reason}",
       "organizationClosing": "이 조직은 삭제가 예약되어 읽기 전용 상태입니다. 소유자만 삭제를 취소할 수 있습니다.",
-      "memberProjectsFailed": "해당 멤버의 프로젝트를 불러오지 못했습니다."
+      "memberProjectsFailed": "해당 멤버의 프로젝트를 불러오지 못했습니다.",
+      "systemReplayWorkspaceRow": "해당 데드 레터는 워크스페이스에 속해 있습니다. 그 워크스페이스의 데드 레터 탭에서 재실행하세요.",
+      "systemReplayOperatorOnly": "시스템 데드 레터는 플랫폼 운영자만 재실행할 수 있습니다."
     },
     "links": {
       "notFound": "해당 작업 항목이 더 이상 존재하지 않습니다.",
@@ -3044,7 +3046,13 @@
         "template": "템플릿",
         "lastEvent": "마지막 이벤트",
         "never": "아직 공급자 이벤트 없음"
-      }
+      },
+      "systemDlqTitle": "워크스페이스가 없는 데드 레터",
+      "systemDlqSummary": "재실행 대기 {waiting}건 · 최근 7일간 재실행 {replayed}건",
+      "systemDlqTableCaption": "시스템 데드 레터",
+      "systemDlqEmptyTitle": "시스템 데드 레터가 없습니다",
+      "systemDlqEmptyDesc": "워크스페이스가 없는 모든 작업이 성공했거나 아직 재시도 중입니다.",
+      "systemRunsTitle": "시스템 실행"
     },
     "account": {
       "eyebrow": "계정 설정",

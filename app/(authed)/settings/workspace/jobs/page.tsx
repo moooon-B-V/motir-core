@@ -6,6 +6,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { resolveWorkspaceTierDisclosure } from '@/lib/workspaces/tierDisclosure.server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
+import { isPlatformOperator } from '@/lib/jobs/platformOperator';
 import { JobsPane, parseJobsParams } from './_components/JobsPane';
 
 // Operator dashboard — server component (Subtask 1.6.5). Reads the active
@@ -70,8 +71,7 @@ export default async function WorkspaceJobsPage({ searchParams }: JobsPageProps)
   // is visible only when the request user's email matches PLATFORM_ADMIN_EMAIL.
   // Tracked for replacement with real platform-admin roles in Epic 6
   // (PRODECT_FINDINGS #36).
-  const adminEmail = process.env['PLATFORM_ADMIN_EMAIL'];
-  const showSystemTab = Boolean(adminEmail) && session.user.email === adminEmail;
+  const showSystemTab = isPlatformOperator(session.user.email);
 
   // ⚠️ PARSED BY THE SHARED PANE, not here (Story MOTIR-4843 · MOTIR-4849).
   // This surface has TWO doors now — this route above the workspace-tier reveal

@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings.",
       "refused": "That didn’t go through: {reason}",
       "organizationClosing": "This organization is scheduled for deletion and is read-only. Only its Owner can cancel the deletion.",
-      "memberProjectsFailed": "Couldn’t load their projects."
+      "memberProjectsFailed": "Couldn’t load their projects.",
+      "systemReplayWorkspaceRow": "That dead letter belongs to a workspace — replay it from that workspace's Dead letter tab.",
+      "systemReplayOperatorOnly": "Only the platform operator can replay system dead letters."
     },
     "links": {
       "notFound": "That work item no longer exists.",
@@ -3044,7 +3046,13 @@
         "template": "Template",
         "lastEvent": "Last event",
         "never": "No provider event yet"
-      }
+      },
+      "systemDlqTitle": "Dead letters with no workspace",
+      "systemDlqSummary": "{waiting} waiting to be replayed · {replayed} replayed in the last 7 days",
+      "systemDlqTableCaption": "System dead letters",
+      "systemDlqEmptyTitle": "No system dead letters",
+      "systemDlqEmptyDesc": "Every job without a workspace has succeeded or is still retrying.",
+      "systemRunsTitle": "System runs"
     },
     "account": {
       "eyebrow": "Account settings",
