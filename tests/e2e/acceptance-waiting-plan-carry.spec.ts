@@ -873,7 +873,11 @@ test('unchanged: a failed session with no waiting plan still offers Start a new 
   await planSessionEndService.endSession(failed, 'failed', {
     workspaceId: (await sessionRow(failed)).workspaceId,
   });
-  await page.reload();
+  // An ENDED session is reopened by no door but its own address (`planSession=`), so a plain
+  // reload would open an empty rail.
+  const address = new URL(page.url());
+  address.searchParams.set('planSession', failed);
+  await page.goto(address.pathname + address.search);
   await expect(endMarker(page)).toHaveAttribute('data-end-reason', 'failed');
   expect((await sessionRow(failed)).endReason).toBe('failed');
   expect(
