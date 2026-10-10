@@ -350,7 +350,7 @@ const H3 = 'I have what I need for this card.';
 const A1 = 'Looking at where the cookie is issued.';
 const B1 = 'Checking how long an idle session lives today.';
 const A2 = 'The cookie is set in two places; one card covers both.';
-const B2 = '空闲会话目前不会在服务器端过期。';
+const B2 = 'Idle sessions do not expire on the server today.';
 const A3 = 'Writing the acceptance criteria for the rotation.';
 const A4 = 'Done with the rotation card.';
 const B3 = 'Adding the server-side expiry as its own card.';
@@ -533,7 +533,7 @@ test('the planner says what it is doing in its own words — per session under i
       await expectHead(r, z, HEAD_A, false);
       await expectHead(r, z, HEAD_B, true);
       await expectSaid(r, HEAD_A, [A1, A2, A3, A4]);
-      // An English and a Chinese sentence, both verbatim.
+      // The planner's English sentences stay as written under the 中文 labels.
       await expectSaid(r, HEAD_B, [B1, B2, B3, B4]);
       for (const m of await messages(groups(r)).all()) {
         await expect(m).toHaveAttribute('dir', 'auto');
