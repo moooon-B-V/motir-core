@@ -1,5 +1,6 @@
 import { Prisma, type Plan, type PlanStatus } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
+import { FAILED_WAITING_WHERE } from '@/lib/planChange/sessionWaitingState';
 
 /** A plan the abandoned-plan sweep may act on — every `generating` plan past the
  *  grace, carrying the proposal COUNT read in the same statement.
@@ -61,6 +62,13 @@ function generatingRequestedByWhere(scope: GeneratingRequestedByScope): Prisma.P
     projectId: { in: [...scope.projectIds] },
     createdById: scope.userId,
     status: 'generating',
+    // A plan whose SESSION is failed and waiting to resume is NOT being written (MOTIR-7914):
+    // the failure path leaves it `generating` on purpose, and without this carve-out it would
+    // sit here and turn *stalled* — a claim that is false, because it waits for the person to
+    // press Resume. It lives on To resume instead. The definition is imported, never re-spelled
+    // (`lib/planChange/sessionWaitingState.ts`); a plan with NO session (an MCP plan) and a plan
+    // whose session is open and not failed both stay in the set.
+    NOT: { session: { is: { ...FAILED_WAITING_WHERE } } },
   };
 }
 

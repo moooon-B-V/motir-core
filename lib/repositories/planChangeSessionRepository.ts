@@ -626,13 +626,49 @@ export const planChangeSessionRepository = {
         failureStopPhase: true,
         failureStopRef: true,
         failureStopTitle: true,
-        plans: { select: { id: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1 },
+        // The newest plan, with what the To resume entry names and the progress read
+        // needs (MOTIR-7914) — one join, no per-row read.
+        plans: {
+          select: {
+            id: true,
+            projectId: true,
+            status: true,
+            title: true,
+            createdAt: true,
+            lastActivityAt: true,
+            authorSource: true,
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+        },
       },
       orderBy: [{ failedAt: 'desc' }, { id: 'desc' }],
       skip: args.skip,
       take: args.take,
     });
-    return rows.map(({ plans, ...row }) => ({ ...row, latestPlanId: plans[0]?.id ?? null }));
+    return rows.map(({ plans, ...row }) => ({
+      ...row,
+      latestPlanId: plans[0]?.id ?? null,
+      latestPlan: plans[0] ?? null,
+    }));
+  },
+
+  /**
+   * The To resume tab's WATERMARK share for the owner's failed sessions (MOTIR-7914): how
+   * many, and the newest `failedAt`, in ONE aggregate over the same predicate as
+   * {@link listFailedOpenForOwner}. Without it a new failure would move the badge and not the
+   * tab's change detector.
+   */
+  async watermarkFailedOpenForOwner(
+    args: { userId: string; workspaceId: string; projectIds: readonly string[] },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ count: number; latest: Date | null }> {
+    const row = await tx.planChangeSession.aggregate({
+      where: failedOpenForOwnerWhere(args),
+      _count: { _all: true },
+      _max: { failedAt: true },
+    });
+    return { count: row._count._all, latest: row._max.failedAt ?? null };
   },
 
   /** A count over the same predicate as {@link listFailedOpenForOwner}. */

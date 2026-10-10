@@ -75,73 +75,94 @@ async function readTabs(
 ): Promise<Record<WorkbenchTabKey, WorkbenchTabWatermarkDto>> {
   return withWorkspaceContext(ctx, async (tx) => {
     const projectScopes = await resolveActiveProjectScope(ctx, tx);
-    const [toDo, inProgress, toFix, toResume, recentlyFinished, approvals, watching] =
-      await Promise.all([
-        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_TODO },
-          tx,
-        ),
-        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_IN_PROGRESS },
-          tx,
-        ),
-        // TO FIX (MOTIR-6604) — the other half of In progress's category. A card whose
-        // `fixReason` is recomputed moves between the two, and both readings see it.
-        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_TO_FIX },
-          tx,
-        ),
-        // TO RESUME (MOTIR-7707) — the third slice of the category, read the same way.
-        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_TO_RESUME },
-          tx,
-        ),
-        // The finished window is part of the PREDICATE here, exactly as it is in
-        // the list and the count — a reading taken without it would be a
-        // freshness for a different set, and the tab would nudge on work that
-        // finished in June.
-        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
-          tx,
-        ),
-        // ⚠️ THE GATE'S OWN PREDICATE, and deliberately NOT the membership `OR`
-        // above it. A decision queue routes to exactly one recipient
-        // (`assigneeId ?? reporterId`, `docs/decisions/approval-gates.md` §2), and
-        // the scope is built here the same way `homeService.tabCounts` builds it
-        // for the badge — the browsable project ids, which are `[]` for a reader
-        // who may not browse their active project, and the reader.
-        (async () => {
-          const projectIds = projectScopes.map((scope) => scope.projectId);
-          return approvalGateRepository.watermarkAwaitingRoutedTo(
-            {
+    const [
+      toDo,
+      inProgress,
+      toFix,
+      toResume,
+      recentlyFinished,
+      approvals,
+      watching,
+      failedSessions,
+    ] = await Promise.all([
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_TODO },
+        tx,
+      ),
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_IN_PROGRESS },
+        tx,
+      ),
+      // TO FIX (MOTIR-6604) — the other half of In progress's category. A card whose
+      // `fixReason` is recomputed moves between the two, and both readings see it.
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_TO_FIX },
+        tx,
+      ),
+      // TO RESUME (MOTIR-7707) — the third slice of the category, read the same way…
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_TO_RESUME },
+        tx,
+      ),
+      // The finished window is part of the PREDICATE here, exactly as it is in
+      // the list and the count — a reading taken without it would be a
+      // freshness for a different set, and the tab would nudge on work that
+      // finished in June.
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
+        tx,
+      ),
+      // ⚠️ THE GATE'S OWN PREDICATE, and deliberately NOT the membership `OR`
+      // above it. A decision queue routes to exactly one recipient
+      // (`assigneeId ?? reporterId`, `docs/decisions/approval-gates.md` §2), and
+      // the scope is built here the same way `homeService.tabCounts` builds it
+      // for the badge — the browsable project ids, which are `[]` for a reader
+      // who may not browse their active project, and the reader.
+      (async () => {
+        const projectIds = projectScopes.map((scope) => scope.projectId);
+        return approvalGateRepository.watermarkAwaitingRoutedTo(
+          {
+            projectIds,
+            userId: ctx.userId,
+            // The planning-session liveness set (MOTIR-7913), as the list reads it.
+            awaitingSessionIds: await planChangeSessionRepository.listAwaitingPersonIdsInProjects(
               projectIds,
-              userId: ctx.userId,
-              // The planning-session liveness set (MOTIR-7913), as the list reads it.
-              awaitingSessionIds: await planChangeSessionRepository.listAwaitingPersonIdsInProjects(
-                projectIds,
-                tx,
-              ),
-            },
-            tx,
-          );
-        })(),
-        watcherRepository.watermarkByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
-      ]);
+              tx,
+            ),
+          },
+          tx,
+        );
+      })(),
+      watcherRepository.watermarkByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
+      // …and the reader's FAILED PLANNING SESSIONS, which To resume now lists and counts
+      // (MOTIR-7914): one aggregate over the list's own predicate, merged into the tab's pair
+      // below so a new failure moves the tab's change detector as it moves the badge.
+      planChangeSessionRepository.watermarkFailedOpenForOwner(
+        {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+          projectIds: projectScopes.map((scope) => scope.projectId),
+        },
+        tx,
+      ),
+    ]);
+    const latestOf = (a: Date | null, b: Date | null): Date | null =>
+      a && b ? (a > b ? a : b) : (a ?? b);
     const pair = (reading: { count: number; latest: Date | null }): WorkbenchTabWatermarkDto => ({
       count: reading.count,
       latest: reading.latest?.toISOString() ?? null,
@@ -150,7 +171,10 @@ async function readTabs(
       toDo: pair(toDo),
       inProgress: pair(inProgress),
       toFix: pair(toFix),
-      toResume: pair(toResume),
+      toResume: pair({
+        count: toResume.count + failedSessions.count,
+        latest: latestOf(toResume.latest, failedSessions.latest),
+      }),
       recentlyFinished: pair(recentlyFinished),
       approvals: pair(approvals),
       watching: pair(watching),

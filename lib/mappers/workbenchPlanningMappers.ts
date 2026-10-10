@@ -1,5 +1,5 @@
 import type { GeneratingPlanRow } from '@/lib/repositories/planRepository';
-import type { WorkbenchPlanningRowDto } from '@/lib/dto/home';
+import type { ToResumePlanningSessionDto, WorkbenchPlanningRowDto } from '@/lib/dto/home';
 import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
 
 // The Workbench Planning tab's row mapper (Story MOTIR-7820 · MOTIR-7828) — a
@@ -32,6 +32,44 @@ export function toWorkbenchPlanningRowDto(
       origin: row.origin,
     },
     createdAt: row.createdAt.toISOString(),
+    progress,
+  };
+}
+
+/**
+ * One failed planning session of the reader's, as a To resume entry (MOTIR-7914). The
+ * naming is {@link toWorkbenchPlanningRowDto}'s — `targets` is composed the same way —
+ * and `failure` is carried as stored: the reason stays the stable code (the render
+ * translates it), the stop point stays the ref and title the walk reported.
+ */
+export function toToResumePlanningSessionDto(
+  row: {
+    id: string;
+    targetKeys: readonly string[];
+    failedAt: Date | null;
+    failureReason: string | null;
+    failureStopPhase: 'lay' | 'author' | null;
+    failureStopRef: string | null;
+    failureStopTitle: string | null;
+    latestPlan: { id: string; title: string | null } | null;
+  },
+  projectName: string,
+  targetTitles: ReadonlyMap<string, string>,
+  progress: PlanProgressSnapshot | null,
+): ToResumePlanningSessionDto {
+  return {
+    sessionId: row.id,
+    planId: row.latestPlan?.id ?? null,
+    title: row.latestPlan?.title ?? null,
+    projectName,
+    targets: row.targetKeys.map((key) => ({ key, title: targetTitles.get(key) ?? null })),
+    failure: {
+      failedAt: (row.failedAt ?? new Date(0)).toISOString(),
+      reason: row.failureReason ?? 'internal',
+      stopPhase: row.failureStopPhase,
+      stopRef: row.failureStopRef,
+      stopTitle: row.failureStopTitle,
+    },
     progress,
   };
 }

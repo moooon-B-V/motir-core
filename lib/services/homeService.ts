@@ -18,6 +18,8 @@ import { planRepository } from '@/lib/repositories/planRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { toGateResumeAttemptDto, toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
+import { toToResumePlanningSessionDto } from '@/lib/mappers/workbenchPlanningMappers';
+import { planProgressService } from '@/lib/services/planProgressService';
 import type {
   GateResumeAttemptDto,
   HomePageDto,
@@ -301,6 +303,34 @@ function toPage(
   };
 }
 
+/**
+ * The To resume entries for one page of the reader's failed planning sessions
+ * (MOTIR-7914): the target titles in ONE read for the page, the progress in ONE
+ * `snapshotsForPlans` call over the sessions' plans. A session whose plan has no snapshot
+ * keeps its entry with `progress: null` — the plan is still the person's work.
+ */
+async function toResumeSessionEntries(
+  rows: Awaited<ReturnType<typeof planChangeSessionRepository.listFailedOpenForOwner>>,
+  ctx: HomeActorContext,
+  tx: Prisma.TransactionClient,
+) {
+  if (rows.length === 0) return [];
+  const keys = Array.from(new Set(rows.flatMap((row) => row.targetKeys)));
+  const titleRows = await workItemRepository.findByIdentifiers(ctx.projectId, keys, tx);
+  const titles = new Map(titleRows.map((item) => [item.identifier, item.title]));
+  const projects = new Map(
+    (await projectRepository.findManyByIds([...new Set(rows.map((r) => r.projectId))], tx)).map(
+      (project) => [project.id, project.name],
+    ),
+  );
+  // PROGRESS IS FILLED IN AFTER THE TRANSACTION (see `listToResume`): `snapshotsForPlans` opens
+  // its own context, and a second pooled connection taken while this one is held is the
+  // deadlock shape `workItemsService` warns about.
+  return rows.map((row) =>
+    toToResumePlanningSessionDto(row, projects.get(row.projectId) ?? '', titles, null),
+  );
+}
+
 export const homeService = {
   /**
    * THE MEMBERSHIP PREDICATE, in one place — every item in the ACTIVE PROJECT
@@ -488,7 +518,7 @@ export const homeService = {
    */
   async listToResume(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
     const pageSize = clampLimit(options.limit);
-    const page = await withWorkspaceContext(ctx, async (tx): Promise<HomePageDto> => {
+    const read = await withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await resolveActiveProjectScope(ctx, tx);
       const keyed = await workItemRepository.listToResumeRunKeysByAssigneeOrReporterInWorkspace(
         ctx.userId,
@@ -498,8 +528,29 @@ export const homeService = {
       );
       const projectIds = projectScopes.map((scope) => scope.projectId);
       const { order, scopeOf } = await resumableRunOrder(ctx.workspaceId, projectIds, keyed, tx);
-      const window = windowFor(order.length, options.page, pageSize);
-      const pageRuns = order.slice(window.skip, window.skip + pageSize);
+      // THE READER'S FAILED PLANNING SESSIONS (Story MOTIR-7905 · MOTIR-7914) are the FIRST
+      // segment of the one order — a failed plan is the newest thing a person was actively
+      // doing — and the gated runs follow in their own order. `total` counts both, so the
+      // shipped pager reads one number (the split `listWatching` uses across its two bands).
+      // Counted and listed through the data card's ONE predicate, `FAILED_WAITING_WHERE`.
+      const sessionScope = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectIds };
+      const sessionCount = await planChangeSessionRepository.countFailedOpenForOwner(
+        sessionScope,
+        tx,
+      );
+      const window = windowFor(sessionCount + order.length, options.page, pageSize);
+      const sessionSkip = Math.min(window.skip, sessionCount);
+      const sessionTake = Math.min(pageSize, sessionCount - sessionSkip);
+      const runSkip = Math.max(0, window.skip - sessionCount);
+      const pageRuns = order.slice(runSkip, runSkip + (pageSize - sessionTake));
+      const sessionRows =
+        sessionTake > 0
+          ? await planChangeSessionRepository.listFailedOpenForOwner(
+              { ...sessionScope, skip: sessionSkip, take: sessionTake },
+              tx,
+            )
+          : [];
+      const planningSessions = await toResumeSessionEntries(sessionRows, ctx, tx);
       const [members, attempts] = await Promise.all([
         workItemRepository.findResumeMembers(ctx.workspaceId, projectIds, pageRuns, tx),
         gateResumeRepository.listByRunIds(pageRuns, tx),
@@ -527,13 +578,32 @@ export const homeService = {
           resumeRun: await describeResumeRun(runId, entry.id, tx),
         });
       }
-      return {
+      const base: HomePageDto = {
         items,
-        total: order.length,
+        ...(sessionCount > 0 ? { planningSessions } : {}),
+        total: sessionCount + order.length,
         page: window.page,
         pageSize,
       };
+      return {
+        base,
+        progressPlans: sessionRows.flatMap((row) => (row.latestPlan ? [row.latestPlan] : [])),
+      };
     });
+    // THE SESSIONS' PROGRESS — ONE `snapshotsForPlans` call over the page's plans, OUTSIDE the
+    // transaction (it opens its own context). A missing snapshot leaves `progress: null`; the
+    // entry is never dropped.
+    let page = read.base;
+    if (page.planningSessions && read.progressPlans.length > 0) {
+      const snapshots = await planProgressService.snapshotsForPlans(read.progressPlans, ctx);
+      page = {
+        ...page,
+        planningSessions: page.planningSessions.map((entry) => ({
+          ...entry,
+          progress: entry.planId ? (snapshots.get(entry.planId) ?? null) : null,
+        })),
+      };
+    }
     // THE CONTINUE DOOR (§ 35.5) — on an entry the approval released that did not resume
     // by itself (*Ready to resume*, *Could not resume*), offered only where the reader may
     // edit the card: To fix's rule, decided once per distinct project.
@@ -738,14 +808,25 @@ export const homeService = {
         ),
       ]);
       const toFix = orderedFixGroupKeys(toFixCards).length;
-      const toResume = (
-        await resumableRunOrder(
-          ctx.workspaceId,
-          projectScopes.map((scope) => scope.projectId),
-          toResumeCards,
+      // …PLUS the reader's failed planning sessions (MOTIR-7914), counted by the same
+      // predicate `listToResume` pages, so the badge equals the list's `total`.
+      const toResume =
+        (
+          await resumableRunOrder(
+            ctx.workspaceId,
+            projectScopes.map((scope) => scope.projectId),
+            toResumeCards,
+            tx,
+          )
+        ).order.length +
+        (await planChangeSessionRepository.countFailedOpenForOwner(
+          {
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+            projectIds: projectScopes.map((scope) => scope.projectId),
+          },
           tx,
-        )
-      ).order.length;
+        ));
       return {
         toDo,
         inProgress,

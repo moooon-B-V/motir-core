@@ -180,12 +180,51 @@ export interface HomeWorkItemRowDto {
  */
 export interface HomePageDto {
   items: HomeWorkItemRowDto[];
+  /**
+   * The reader's FAILED planning sessions that fall in this window (Story MOTIR-7905 ·
+   * MOTIR-7914). Only `listToResume` fills it, and only when the reader has any; every
+   * other tab's page leaves the key absent. A session is not a work item, so it does not
+   * ride `items` — it is windowed WITH the gated runs, ahead of them, so the one `total`
+   * and the shipped pager are unchanged.
+   */
+  planningSessions?: ToResumePlanningSessionDto[];
   /** The size of the whole SET this page is a window on — the pager's denominator. */
   total: number;
   /** The 1-based page actually served, after clamping. */
   page: number;
   /** The window size — `HOME_PAGE_SIZE` unless the caller narrowed it. */
   pageSize: number;
+}
+
+/**
+ * ONE failed hosted planning session waiting for its owner to Resume it — an entry of the
+ * Workbench's To resume tab (Story MOTIR-7905 · MOTIR-7914). The naming fields are the
+ * shape {@link WorkbenchPlanningRowDto} carries, so the entry composes § 29's plan-naming
+ * forms from the same fields; `failure` is exactly what the session stored, untranslated.
+ */
+export interface ToResumePlanningSessionDto {
+  sessionId: string;
+  /** The session's newest plan — the one Resume continues — or null when none was written. */
+  planId: string | null;
+  /** `Plan.title`, as written, or null. */
+  title: string | null;
+  /** The project's name — the leading line's last fallback. */
+  projectName: string;
+  /** The session's `targetKeys` in stored order, each with the target's title
+   *  (null when the key no longer resolves in the project). */
+  targets: { key: string; title: string | null }[];
+  failure: {
+    /** ISO-8601. */
+    failedAt: string;
+    /** The stable reason code as stored (`rate_limited`, `out_of_credits`, …). */
+    reason: string;
+    stopPhase: 'lay' | 'author' | null;
+    stopRef: string | null;
+    stopTitle: string | null;
+  };
+  /** The ONE progress derivation's snapshot (design: *N of M written*); null when the plan
+   *  has none to give — the entry is NOT dropped, the plan is still the person's work. */
+  progress: PlanProgressSnapshot | null;
 }
 
 /**
@@ -262,7 +301,8 @@ export interface HomeTabCountsDto {
    *  (MOTIR-6604). Counted with the list's own slice, so it equals `listToFix().total`. */
   toFix: number;
   /** Waiting on an approval gate — one per gated RUN whose cards wait To resume
-   *  (MOTIR-7707), the same number `listToResume().total` returns. Carved out of In progress. */
+   *  (MOTIR-7707), PLUS one per failed planning session of the reader's (MOTIR-7914): the same
+   *  number `listToResume().total` returns. Carved out of In progress. */
   toResume: number;
   /** Finished inside the rolling window (`HOME_FINISHED_WINDOW_DAYS`). */
   recentlyFinished: number;
