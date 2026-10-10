@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "Somente proprietários e administradores de um espaço de trabalho podem alterar as configurações de segurança dele.",
       "refused": "Não foi possível concluir: {reason}",
       "organizationClosing": "Esta organização está programada para exclusão e é somente leitura. Somente o Proprietário dela pode cancelar a exclusão.",
-      "memberProjectsFailed": "Não foi possível carregar os projetos dessa pessoa."
+      "memberProjectsFailed": "Não foi possível carregar os projetos dessa pessoa.",
+      "systemReplayWorkspaceRow": "Essa entrada de dead-letter pertence a um workspace — reprocesse-a na aba Dead-letter desse workspace.",
+      "systemReplayOperatorOnly": "Somente o operador da plataforma pode reprocessar dead-letters do sistema."
     },
     "links": {
       "notFound": "Esse item de trabalho não existe mais.",
@@ -3044,7 +3046,13 @@
         "template": "Modelo",
         "lastEvent": "Último evento",
         "never": "Ainda não há evento do provedor"
-      }
+      },
+      "systemDlqTitle": "Dead-letters sem workspace",
+      "systemDlqSummary": "{waiting} aguardando reprocessamento · {replayed} reprocessadas nos últimos 7 dias",
+      "systemDlqTableCaption": "Dead-letters do sistema",
+      "systemDlqEmptyTitle": "Nenhuma dead-letter do sistema",
+      "systemDlqEmptyDesc": "Todo job sem workspace foi concluído com sucesso ou ainda está sendo repetido.",
+      "systemRunsTitle": "Execuções do sistema"
     },
     "account": {
       "eyebrow": "Configurações da conta",
@@ -7554,6 +7562,48 @@
       "queuedRead": "lida",
       "queuedMarker": "Na fila — o Motir AI lê isto quando terminar o item de trabalho que está escrevendo.",
       "queuedReadMarker": "Lida no intervalo — incorporada a esta execução.",
+      "midRun": {
+        "pause": {
+          "offerHow": "“Recomeçar” escreve o plano de novo a partir do seu novo pedido. “Continuar” aplica o pedido aos itens de trabalho já escritos.",
+          "groupLabel": "Recomeçar?",
+          "startOver": "Recomeçar",
+          "keepGoing": "Continuar e aplicar",
+          "chosenStartOver": "Você escolheu recomeçar",
+          "chosenKeepGoing": "Você escolheu continuar",
+          "applying": "Aplicando sua alteração aos itens de trabalho escritos",
+          "unclearNote": "Nada foi alterado ainda.",
+          "pausedWord": "pausado",
+          "finishingChoice": "Concluindo os itens de trabalho em andamento; depois aguardará sua escolha.",
+          "waitingChoice": "Aguardando sua escolha.",
+          "finishingAnswer": "Concluindo os itens de trabalho em andamento; depois aguardará sua resposta.",
+          "answeredQueued": "Respondido — o planejador lê isso na próxima etapa.",
+          "refusal": {
+            "PLAN_CHANGE_JOB_NOT_RUNNING": "A execução terminou antes que sua resposta chegasse.",
+            "generic": "Sua resposta não chegou à execução."
+          }
+        },
+        "answeringMarker": "Respondendo à parte — a execução continua.",
+        "answeredAside": "Respondido à parte — nada foi enviado à execução.",
+        "forwardedAck": "Isso é uma alteração, então encaminhei ao planejador. Ele lê isso na próxima etapa.",
+        "queuedMarker": "Na fila — o planejador lê isto na próxima etapa.",
+        "readMarker": "Lido — o planejador já recebeu.",
+        "forwardOffer": "Se quiser tratar isso como alteração, responda “sim, encaminhar”.",
+        "forwardStale": "Não encaminhado — nada foi alterado.",
+        "revisedAck": "Isso é uma alteração. O plano já terminou de ser escrito, então vou aplicá-la como revisão.",
+        "revisedNote": "Aplicado como revisão deste plano.",
+        "revisedLink": "Ver na linha do tempo",
+        "refusal": {
+          "finished": "Esta execução foi concluída.",
+          "stopped": "Você interrompeu esta execução.",
+          "failed": "Esta execução falhou.",
+          "decided": "Este plano já foi aprovado ou recusado.",
+          "held": "Outra alteração já está sendo aplicada a este plano.",
+          "noPlan": "Esta execução não gerou um plano para alterar.",
+          "generic": "A execução terminou, então isto não foi encaminhado.",
+          "tail": "Sua mensagem não foi enviada. Ela está na caixa abaixo.",
+          "quoted": "Sua mensagem não foi enviada: “{text}”"
+        }
+      },
       "act": {
         "submitted": "envio",
         "reading": "leitura",

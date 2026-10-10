@@ -323,3 +323,77 @@ describe('the edges', () => {
     expect(onRestarted).not.toHaveBeenCalled();
   });
 });
+
+describe('nothing is written once the overlay has gone (unmount mid-call)', () => {
+  /** Mount, start `call`, unmount while it is in flight, then settle it. */
+  async function unmountDuring(
+    call: (h: Awaited<ReturnType<typeof mounted>>) => Promise<void>,
+    settle: () => void,
+  ) {
+    const onRestarted = vi.fn();
+    const hook = await mounted({ onRestarted });
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = call(hook);
+      await Promise.resolve();
+    });
+    hook.unmount();
+    settle();
+    await act(async () => {
+      await pending;
+    });
+    return onRestarted;
+  }
+
+  it('the raise, landing or refused', async () => {
+    for (const ok of [true, false]) {
+      let done!: () => void;
+      requestConfirm.mockReturnValueOnce(
+        new Promise((res, rej) => {
+          done = () => (ok ? res(WITH_CONFIRM) : rej(new Error('network')));
+        }),
+      );
+      await unmountDuring(
+        (h) => h.result.current.requestRestart(),
+        () => done(),
+      );
+      expect(requestConfirm).toHaveBeenCalled();
+      requestConfirm.mockClear();
+    }
+  });
+
+  it('a Confirm, landing or refused, tells the host nothing', async () => {
+    for (const ok of [true, false]) {
+      open.mockResolvedValue(WITH_CONFIRM);
+      let done!: () => void;
+      answer.mockReturnValueOnce(
+        new Promise((res, rej) => {
+          done = () =>
+            ok ? res({ session: FRESH, endedSessionId: 's1' }) : rej(new Error('network'));
+        }),
+      );
+      const onRestarted = await unmountDuring(
+        (h) => h.result.current.answerRestartConfirm('confirm'),
+        () => done(),
+      );
+      expect(answer).toHaveBeenCalledWith('s1', 'confirm');
+      expect(onRestarted).not.toHaveBeenCalled();
+      answer.mockClear();
+    }
+  });
+
+  it('a Keep planning that lands after unmount', async () => {
+    open.mockResolvedValue(WITH_CONFIRM);
+    let done!: () => void;
+    answer.mockReturnValueOnce(
+      new Promise((res) => {
+        done = () => res(KEPT);
+      }),
+    );
+    await unmountDuring(
+      (h) => h.result.current.answerRestartConfirm('keep'),
+      () => done(),
+    );
+    expect(answer).toHaveBeenCalledWith('s1', 'keep');
+  });
+});

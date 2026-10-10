@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   answerRestart,
+  answerRunPause,
   attachMidRunTurn,
   findResumableSession,
   getPlanChangeSession,
   startPlanChangeSession,
   appendPlanChangeTurn,
   peekMailbox,
+  readRunPause,
   stopPlanChangeRun,
   recordPlannerTurn,
   requestRestartConfirm,
@@ -16,6 +18,8 @@ import {
   settleAskJob,
   submitAskTurn,
   submitContextualPlan,
+  submitLateChanges,
+  submitMidRunAskTurn,
   submitPlanChange,
   resumePlanSession,
   resumeAlreadyStartedJobId,
@@ -744,5 +748,125 @@ describe('resumePlanSession (MOTIR-7916)', () => {
     expect((err as PlanEditsClientError).code).toBe('NOT_SESSION_OWNER');
     expect(resumeAlreadyStartedJobId(err)).toBeNull();
     expect(resumeAlreadyStartedJobId(new Error('x'))).toBeNull();
+  });
+});
+
+describe('planChangeClient — talking to the planner mid-run (Story MOTIR-7990)', () => {
+  const PAUSE = {
+    id: 'pause-1',
+    jobId: 'job-1',
+    kind: 'replan',
+    question: 'Start over or apply to what is written?',
+    status: 'open',
+  };
+
+  it('sends a turn typed WHILE a run plans to the ASK door, with the run and its plan (MOTIR-7996)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'ask-1', sessionId: 's1' }));
+
+    await expect(submitMidRunAskTurn('s1', 'job-1', 'plan-1', 'Is it on track?')).resolves.toEqual({
+      jobId: 'ask-1',
+      sessionId: 's1',
+    });
+
+    const [url, init] = lastCall();
+    // NOT the mailbox: the answering session hears it first.
+    expect(url).toBe('/api/ai/ask');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      body: 'Is it on track?',
+      sessionId: 's1',
+      runJobId: 'job-1',
+      planId: 'plan-1',
+    });
+  });
+
+  it('turns a finished run’s stranded changes into ONE late revision (MOTIR-7997)', async () => {
+    const revised = { outcome: 'revised', planId: 'plan-1', revisionJobId: 'rev-1', texts: ['x'] };
+    fetchMock.mockResolvedValue(jsonResponse(revised));
+
+    await expect(submitLateChanges('s1', 'job-1')).resolves.toEqual(revised);
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/late-changes');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ sessionId: 's1', runJobId: 'job-1' });
+  });
+
+  it('READS the run’s pause as a GET keyed on session and job, encoded (MOTIR-8007)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(PAUSE));
+
+    await expect(readRunPause('s 1', 'job/1')).resolves.toEqual(PAUSE);
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/run-pause?sessionId=s%201&jobId=job%2F1');
+    expect(init.method).toBeUndefined();
+    expect(init.body).toBeUndefined();
+  });
+
+  it('reads NO pause as null, not an error', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(null));
+    await expect(readRunPause('s1', 'job-1')).resolves.toBeNull();
+  });
+
+  it('answers a replan pause with a CHOICE alone — no text key at all', async () => {
+    const answered = { outcome: 'answered', pause: PAUSE, delivery: { turns: [], stopped: false } };
+    fetchMock.mockResolvedValue(jsonResponse(answered));
+
+    await expect(answerRunPause('s1', 'job-1', 'pause-1', 'start_over')).resolves.toEqual(answered);
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/run-pause');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      sessionId: 's1',
+      jobId: 'job-1',
+      pauseId: 'pause-1',
+      choice: 'start_over',
+    });
+  });
+
+  it('answers an unclear pause with the typed REPLY text', async () => {
+    const refused = {
+      outcome: 'refused',
+      code: 'PLAN_CHANGE_JOB_NOT_RUNNING',
+      jobStatus: 'succeeded',
+      choice: 'reply',
+      text: 'The billing one.',
+      pause: PAUSE,
+    };
+    fetchMock.mockResolvedValue(jsonResponse(refused));
+
+    await expect(
+      answerRunPause('s1', 'job-1', 'pause-1', 'reply', 'The billing one.'),
+    ).resolves.toEqual(refused);
+
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      sessionId: 's1',
+      jobId: 'job-1',
+      pauseId: 'pause-1',
+      choice: 'reply',
+      text: 'The billing one.',
+    });
+  });
+
+  it('forwards the abort signal on every mid-run door, and fails with the ONE error type', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(PAUSE));
+    const controller = new AbortController();
+
+    await submitMidRunAskTurn('s1', 'job-1', 'plan-1', 'x', controller.signal);
+    expect(lastCall()[1].signal).toBe(controller.signal);
+    await submitLateChanges('s1', 'job-1', controller.signal);
+    expect(lastCall()[1].signal).toBe(controller.signal);
+    await readRunPause('s1', 'job-1', controller.signal);
+    expect(lastCall()[1].signal).toBe(controller.signal);
+    await answerRunPause('s1', 'job-1', 'pause-1', 'apply', undefined, controller.signal);
+    expect(lastCall()[1].signal).toBe(controller.signal);
+
+    fetchMock.mockImplementation(async () =>
+      jsonResponse({ code: 'PLAN_CHANGE_RUN_PAUSE_NOT_FOUND' }, 404),
+    );
+    const err = await readRunPause('s1', 'job-1').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanEditsClientError);
+    expect((err as PlanEditsClientError).status).toBe(404);
   });
 });

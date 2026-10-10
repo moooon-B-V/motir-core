@@ -10,6 +10,7 @@ export type { StalePlanFinishedCard } from '@/lib/planning/planSessionClientErro
 import type {
   CopyableSessionDto,
   DebugLandingDto,
+  PlanChangeRunPauseDto,
   EarlierSessionDto,
   PlanChangeSessionDto,
   PlanSessionRestartResultDto,
@@ -439,6 +440,25 @@ export type AskSettleResponse =
   | { outcome: 'debugged'; landing: DebugLandingDto; session: PlanChangeSessionDto }
   // A `new_session` turn (MOTIR-7649): the confirm is on the thread, no job ran.
   | { outcome: 'confirming'; session: PlanChangeSessionDto }
+  // A MID-RUN turn (MOTIR-7996) read as a change: forwarded to the running job.
+  | { outcome: 'forwarded'; delivery: MailboxDeliveryResponse; session: PlanChangeSessionDto }
+  // …but the run had ended. Nothing was written; `text` goes back to the composer.
+  | {
+      outcome: 'forward_refused';
+      code: string;
+      jobStatus: string;
+      text: string;
+      session: PlanChangeSessionDto;
+    }
+  // …or the walk was over and the plan not yet decided (MOTIR-7997): the change
+  // became ONE revision of the run's plan. `text` is the forwarded body.
+  | {
+      outcome: 'revised_late';
+      planId: string;
+      revisionJobId: string;
+      text: string;
+      session: PlanChangeSessionDto;
+    }
   | { outcome: 'silent'; session: PlanChangeSessionDto };
 
 /**
@@ -506,6 +526,91 @@ export async function submitAskTurn(
     },
     signal,
   );
+}
+
+/** The planner's mid-run pause, as the rail reads it (MOTIR-8007). */
+export type RunPauseResponse = PlanChangeRunPauseDto;
+
+export type AnswerRunPauseResponse =
+  | { outcome: 'answered'; pause: PlanChangeRunPauseDto; delivery: MailboxDeliveryResponse }
+  | {
+      outcome: 'refused';
+      code: string;
+      jobStatus: string;
+      choice: 'start_over' | 'apply' | 'reply';
+      text?: string;
+      pause: PlanChangeRunPauseDto;
+    };
+
+/** The session's latest pause on this run, or `null` — the rail polls it while the
+ *  run is paused (MOTIR-8007). */
+export async function readRunPause(
+  sessionId: string,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<RunPauseResponse | null> {
+  return get<RunPauseResponse | null>(
+    `/api/ai/plan-change/session/run-pause?sessionId=${encodeURIComponent(sessionId)}&jobId=${encodeURIComponent(jobId)}`,
+    signal,
+  );
+}
+
+/** Answer the planner's pause: START OVER or apply-to-written on a replan, a typed
+ *  reply on an unclear one (MOTIR-8007). A run that ended first answers `refused`
+ *  with the choice (and reply text) to hand back. */
+export async function answerRunPause(
+  sessionId: string,
+  jobId: string,
+  pauseId: string,
+  choice: 'start_over' | 'apply' | 'reply',
+  text?: string,
+  signal?: AbortSignal,
+): Promise<AnswerRunPauseResponse> {
+  return post<AnswerRunPauseResponse>(
+    '/api/ai/plan-change/session/run-pause',
+    { sessionId, jobId, pauseId, choice, ...(text !== undefined ? { text } : {}) },
+    signal,
+  );
+}
+
+/** What {@link submitLateChanges} answers (MOTIR-7997). */
+export type LateChangesResponse =
+  | { outcome: 'none' }
+  | { outcome: 'revised'; planId: string; revisionJobId: string; texts: string[] }
+  | { outcome: 'refused'; code: string; texts: string[]; planStatus?: string };
+
+/**
+ * Turn the changes STRANDED in a finished run's mailbox into ONE revision of its
+ * plan (MOTIR-7997). Called once when a planning run's stream ends and the rail
+ * still lists a forwarded turn it never saw read. A `refused` answer carries every
+ * claimed text, to hand back to the person.
+ */
+export async function submitLateChanges(
+  sessionId: string,
+  runJobId: string,
+  signal?: AbortSignal,
+): Promise<LateChangesResponse> {
+  return post<LateChangesResponse>(
+    '/api/ai/plan-change/session/late-changes',
+    { sessionId, runJobId },
+    signal,
+  );
+}
+
+/**
+ * Send a turn typed WHILE a planning run is in progress (MOTIR-7996). It is NOT
+ * the mailbox: it goes to the answering session with a run snapshot, and only a
+ * change verdict is forwarded to the run (at settle). The response is an ordinary
+ * ask submit — stream and settle its `jobId` like any ask, on its own controller.
+ */
+export async function submitMidRunAskTurn(
+  sessionId: string,
+  runJobId: string,
+  planId: string,
+  body: string,
+  signal?: AbortSignal,
+): Promise<AskSubmitResponse> {
+  return post<AskSubmitResponse>('/api/ai/ask', { body, sessionId, runJobId, planId }, signal);
 }
 
 /**

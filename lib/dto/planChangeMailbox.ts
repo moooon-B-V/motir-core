@@ -48,6 +48,16 @@ export interface MailboxTurnDto {
    * the key unconditionally keeps the shape total.
    */
   target: string | null;
+  /**
+   * Present ONLY on the `fold` turn that DECLINES the planner's START OVER offer
+   * (MOTIR-8007): the run pause's id. Absent on every other turn.
+   */
+  declinesPause?: string;
+  /**
+   * Present ONLY on the `fold` turn that ANSWERS the planner's mid-run question
+   * (MOTIR-8007): the run pause's id. Absent on every other turn.
+   */
+  answersQuestion?: string;
 }
 
 /** What ONE boundary check found. Mirrors `MailboxDelivery`. */

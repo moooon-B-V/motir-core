@@ -91,3 +91,17 @@ export interface JobRunDlqDTO {
   /** When an operator replayed this entry, or null if not yet replayed. */
   replayedAt: string | null;
 }
+
+/**
+ * The System tab's dead letters with NO workspace, and the two numbers its
+ * summary line states (MOTIR-8083). `rows` is unreplayed first, then those
+ * replayed in the last seven days, each newest failure first; the counts are the
+ * true counts even when the list is capped.
+ */
+export interface SystemDlqListDTO {
+  rows: JobRunDlqDTO[];
+  /** Workspace-less dead letters still waiting to be replayed. */
+  waiting: number;
+  /** Workspace-less dead letters replayed in the last seven days. */
+  replayedRecently: number;
+}

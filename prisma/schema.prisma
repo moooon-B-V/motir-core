@@ -382,6 +382,9 @@ model User {
   // (Story MOTIR-4054 · MOTIR-4067). SetNull, the same actor semantics as the
   // turn above — a departed author leaves the record of what was said.
   authoredPlanChangeMailboxEntries PlanChangeMailboxEntry[]      @relation("PlanChangeMailboxEntryAuthor")
+  // Planner pauses this user answered (Story MOTIR-7990 · MOTIR-8007). SetNull —
+  // a departed answerer leaves the record of what was chosen.
+  answeredPlanChangeRunPauses      PlanChangeRunPause[]          @relation("PlanChangeRunPauseAnswerer")
   // Planning-target leases this user's sessions hold (Story MOTIR-2786 ·
   // MOTIR-2787). SetNull — a departed holder leaves the lease for the sweep to
   // expire rather than stranding the item.
@@ -1663,6 +1666,9 @@ model Workspace {
   // while a planning job was running, and the stop that ends it.
   // Workspace-scoped tenant data; cascade with the workspace.
   planChangeMailboxEntries    PlanChangeMailboxEntry[]
+  // The planner's mid-run PAUSES (Story MOTIR-7990 · MOTIR-8007). Workspace-scoped
+  // tenant data; cascade with the workspace.
+  planChangeRunPauses         PlanChangeRunPause[]
   // The planning-target leases held in this workspace (Story MOTIR-2786 ·
   // MOTIR-2787). Workspace-scoped tenant data — cascade with the workspace.
   planTargetLocks             PlanTargetLock[]
@@ -9052,6 +9058,8 @@ model PlanChangeSession {
   /// sequence per job, carrying BOTH the turns typed mid-run and the stop.
   /// Cascade: a deleted thread takes its mailbox with it.
   mailbox     PlanChangeMailboxEntry[]
+  /// The planner's mid-run PAUSES on this thread's runs (MOTIR-8007). Cascade.
+  runPauses   PlanChangeRunPause[]
   /// The work items this conversation currently HOLDS (Story MOTIR-2786 ·
   /// MOTIR-2787). Cascade — a deleted thread releases everything it held.
   targetLocks PlanTargetLock[]
@@ -9213,6 +9221,32 @@ model PlanChangeTurn {
   /// rail then draws that id as a removed chip. Validated at WRITE time (the card,
   /// the workspace, the caller's view) by `aiGuideService`, never trusted as sent.
   attachmentIds         String[]               @default([]) @map("attachment_ids")
+  /// The planning job that was RUNNING when this `user` turn was typed (Story
+  /// MOTIR-7990 · MOTIR-7996; `conversation-turn-intent.md` AMENDMENT 4). It marks
+  /// the turn as a MID-RUN turn, which is what tells the ask settle never to open
+  /// a new planning run for it: it was answered by an `ask_project` job carrying
+  /// the run's snapshot, and only a change verdict reaches the running job's
+  /// mailbox. Null on every other turn, and on every turn written before the
+  /// column existed — a null reads exactly as it always did (no back-fill).
+  runJobId              String?                @map("run_job_id")
+  /// The exact text an `assistant` ANSWER offered to FORWARD to the running
+  /// planner (MOTIR-7996) — the offered `user` turn's own body, in the person's
+  /// words. Set only by a mid-run ask settle whose result carried `offerForward`;
+  /// the NEXT mid-run turn reads it as `pendingOffer`, and a confirmation forwards
+  /// THIS text, never the confirming turn's. Null on every other turn.
+  forwardOffer          String?                @map("forward_offer") @db.Text
+  /// The mailbox entry a mid-run `user` turn was FORWARDED as (MOTIR-7996), written
+  /// in the same locked write that records the turn `plan_change`. An id, not an
+  /// FK, for the reason `citations` gives: the mailbox is the pipe, this is the
+  /// thread's record of what went down it. Null on a turn that was not forwarded.
+  forwardedEntryId      String?                @map("forwarded_entry_id")
+  /// The REVISION job a mid-run `user` turn became (Story MOTIR-7990 · MOTIR-7997):
+  /// the change was forwarded after the walk finished but before the plan was
+  /// decided, so it was submitted as a REVISE_PLAN revision of the run's own plan
+  /// instead of being dropped. An opaque job id (no FK, the `jobId` precedent). The
+  /// rail draws "applied as a revision of the plan" from it. Null on every turn that
+  /// was not revised late.
+  revisedLateJobId      String?                @map("revised_late_job_id")
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).
@@ -9255,14 +9289,14 @@ model PlanChangeTurn {
 /// incoherent in a way nothing downstream can detect (`motir-ai`
 /// `src/llm/mailbox.ts`).
 model PlanChangeMailboxEntry {
-  id             String                        @id @default(cuid())
-  workspaceId    String                        @map("workspace_id")
-  sessionId      String                        @map("session_id")
+  id              String                        @id @default(cuid())
+  workspaceId     String                        @map("workspace_id")
+  sessionId       String                        @map("session_id")
   /// The motir-ai job this entry is addressed to — an OPAQUE job token, a plain
   /// scalar and NOT an FK (the `plan_change_session.last_job_id` precedent). The
   /// mailbox is per-RUN: a thread that submits again starts an empty one, and an
   /// entry can never be read by a job it was not typed at.
-  jobId          String                        @map("job_id")
+  jobId           String                        @map("job_id")
   /// 0-based position in THIS job's mailbox. Allocated under the session row's
   /// `SELECT … FOR UPDATE` lock with a re-read inside the transaction (the
   /// lock-before-read-derived-update rule), and `(session_id, job_id, seq)` is
@@ -9273,18 +9307,18 @@ model PlanChangeMailboxEntry {
   /// gets wrong; `motir-ai`'s `readDelivery` sorts by `receivedAt` and breaks
   /// ties on ARRAY ORDER, so the producer's claim about order travels in the
   /// array — which this column is what builds.
-  seq            Int
-  kind           PlanChangeMailboxKind
+  seq             Int
+  kind            PlanChangeMailboxKind
   /// What the user typed, verbatim. Required on a `turn`, null on a `stop`.
-  body           String?                       @db.Text
+  body            String?                       @db.Text
   /// What the run should DO with this turn — `fold` (carry on) or `restart`
   /// (withdraw what was appended and re-plan). Null on a `stop`. An absent or
   /// unrecognised value reads as `fold` on the consumer side, which is the
   /// branch that loses least when the two repos disagree about a word.
-  disposition    PlanChangeMailboxDisposition? @map("disposition")
+  disposition     PlanChangeMailboxDisposition? @map("disposition")
   /// Where a `restart` RE-ANCHORS the walk — a work-item identifier. Null means
   /// the target the run is already on.
-  restartTarget  String?                       @map("restart_target")
+  restartTarget   String?                       @map("restart_target")
   /// The caller's OWN stable key for this delivery. `(session_id, job_id,
   /// idempotency_key)` is UNIQUE, so a retried submit resolves to the row it
   /// already wrote instead of delivering the same sentence twice.
@@ -9295,7 +9329,7 @@ model PlanChangeMailboxEntry {
   /// `lib/ai/types.ts` says in as many words that `externalRef` is deliberately
   /// NOT one, because `planningTurnId` is AI-TURN-shaped. The shape the card
   /// meant is the general one, and this is it.)
-  idempotencyKey String                        @map("idempotency_key")
+  idempotencyKey  String                        @map("idempotency_key")
   /// When a boundary check READ this entry. Null while it is still waiting; the
   /// read door sets it and never returns a set row again, which is what makes
   /// "a turn read at one boundary is not read at the next" a stored fact rather
@@ -9304,11 +9338,19 @@ model PlanChangeMailboxEntry {
   /// ⚠️ A `stop` IS STILL DERIVED FROM EXISTENCE, not from this column. Once a
   /// run has been ended it stays ended, so consuming the stop entry must not
   /// un-stop the answer.
-  consumedAt     DateTime?                     @map("consumed_at")
+  consumedAt      DateTime?                     @map("consumed_at")
   /// Who typed it (null on a `stop` raised by the system, and cleared when the
   /// author is deleted — the turn's `authorId` semantics).
-  authorId       String?                       @map("author_id")
-  createdAt      DateTime                      @default(now()) @map("created_at")
+  authorId        String?                       @map("author_id")
+  /// The run pause this `fold` turn DECLINES (MOTIR-8007): the person said no to
+  /// the planner's START OVER offer, so this turn tells the walk to apply the change
+  /// to the work items already written. An id, not an FK (the pause is a different
+  /// table with its own lifecycle; the mailbox is the pipe). Null on every other turn.
+  declinesPauseId String?                       @map("declines_pause_id")
+  /// The run pause this `fold` turn ANSWERS (MOTIR-8007): the person's reply to the
+  /// planner's mid-run question, verbatim. Null on every other turn.
+  answersPauseId  String?                       @map("answers_pause_id")
+  createdAt       DateTime                      @default(now()) @map("created_at")
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// COMPOSITE FK, for the reason MOTIR-1735 gives on `PlanChangeTurn.session`:
@@ -9326,6 +9368,68 @@ model PlanChangeMailboxEntry {
   @@index([sessionId, jobId, seq])
   @@index([workspaceId])
   @@map("plan_change_mailbox_entry")
+}
+
+/// The planner's mid-run PAUSE (Story MOTIR-7990 · MOTIR-8007; `conversation-turn-
+/// intent.md` AMENDMENT 4). While its job keeps RUNNING, the planner can stop the
+/// walk on one thing and wait for the person:
+///
+///   * `replan`  — a forwarded change is a RE-PLAN: the planner OFFERS a one-click
+///     START OVER. Yes writes the shipped `restart` mailbox turn; No writes a `fold`
+///     turn (`declines_pause_id`) telling the walk to apply the change to the work
+///     items already written.
+///   * `unclear` — a forwarded change is UNCLEAR about WHAT: the planner asks. The
+///     person's reply is a `fold` turn (`answers_pause_id`), ruled again as a change.
+///
+/// ⚠️ NOT THE END-OF-JOB QUESTION. `PlanChangeTurn.question` is written when a job
+/// has ENDED and its answer submits a NEW planning run; a mid-run question must do the
+/// opposite (reach THIS run), so it lives here and never as an `assistant` turn with
+/// `question` set.
+///
+/// At most ONE is open (unanswered) per job. The answer is CLAIMED under the session
+/// row lock before the motir-ai round-trip, and delivered on the idempotency key
+/// `run-pause:<id>:<choice>`, so two tabs race on the claim and never on the mailbox.
+model PlanChangeRunPause {
+  id                  String    @id @default(cuid())
+  workspaceId         String    @map("workspace_id")
+  sessionId           String    @map("session_id")
+  /// The planning job whose walk is paused — an OPAQUE job token, not an FK.
+  jobId               String    @map("job_id")
+  /// `replan` | `unclear` — CHECK-constrained in the migration (text, like
+  /// `PlanRevision.changeKind`: a new kind is then a code change).
+  kind                String
+  /// The mailbox entry ids of the change turns this pause is about, in the order
+  /// the planner named them. Bodies are read back from core's own rows.
+  changeTurnIds       String[]  @default([]) @map("change_turn_ids")
+  /// The planner's one-line reason — set exactly when `kind = 'replan'` (≤ 500).
+  /// SHOWN to the person and NEVER sent back to the planner.
+  reason              String?   @db.Text
+  /// The planner's question — set exactly when `kind = 'unclear'` (≤ 600). Same.
+  question            String?   @db.Text
+  idempotencyKey      String    @map("idempotency_key")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  /// `start_over` | `apply` (replan) or `replied` (unclear); null while open.
+  answer              String?
+  answeredAt          DateTime? @map("answered_at")
+  answeredById        String?   @map("answered_by_id")
+  /// The person's typed reply, verbatim — set only on `replied`. Kept on the pause
+  /// so a replay can be compared against it and a refused delivery still records it.
+  replyText           String?   @map("reply_text") @db.Text
+  /// The mailbox entry written for the answer (the restart, decline or reply turn).
+  mailboxEntryId      String?   @map("mailbox_entry_id")
+  /// Set when the answer was recorded but could not be delivered because the run
+  /// had ended (`PLAN_CHANGE_JOB_NOT_RUNNING`).
+  deliveryRefusedCode String?   @map("delivery_refused_code")
+
+  workspace  Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  /// COMPOSITE FK, for the reason `PlanChangeMailboxEntry.session` gives.
+  session    PlanChangeSession @relation(fields: [sessionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  answeredBy User?             @relation("PlanChangeRunPauseAnswerer", fields: [answeredById], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, jobId, idempotencyKey])
+  @@index([sessionId, jobId, createdAt])
+  @@index([workspaceId])
+  @@map("plan_change_run_pauses")
 }
 
 /// A mailbox entry is a TURN the user typed or the STOP that ends the run. One

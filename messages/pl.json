@@ -756,7 +756,9 @@
       "workspaceSecurityForbidden": "Tylko właściciele i administratorzy obszaru roboczego mogą zmieniać jego ustawienia zabezpieczeń.",
       "refused": "Nie udało się: {reason}",
       "organizationClosing": "Ta organizacja jest zaplanowana do usunięcia i jest tylko do odczytu. Tylko jej właściciel może anulować usunięcie.",
-      "memberProjectsFailed": "Nie udało się załadować projektów tej osoby."
+      "memberProjectsFailed": "Nie udało się załadować projektów tej osoby.",
+      "systemReplayWorkspaceRow": "Ten wpis w kolejce niedostarczonych należy do przestrzeni roboczej — uruchom go ponownie na karcie Niedostarczone tej przestrzeni.",
+      "systemReplayOperatorOnly": "Tylko operator platformy może ponownie uruchamiać systemowe niedostarczone wpisy."
     },
     "links": {
       "notFound": "Ten element roboczy już nie istnieje.",
@@ -3044,7 +3046,13 @@
         "template": "Szablon",
         "lastEvent": "Ostatnie zdarzenie",
         "never": "Brak zdarzeń od dostawcy"
-      }
+      },
+      "systemDlqTitle": "Niedostarczone bez przestrzeni roboczej",
+      "systemDlqSummary": "{waiting} czeka na ponowne uruchomienie · {replayed} uruchomionych ponownie w ostatnich 7 dniach",
+      "systemDlqTableCaption": "Systemowe niedostarczone",
+      "systemDlqEmptyTitle": "Brak systemowych niedostarczonych",
+      "systemDlqEmptyDesc": "Każde zadanie bez przestrzeni roboczej zakończyło się powodzeniem albo jest nadal ponawiane.",
+      "systemRunsTitle": "Uruchomienia systemowe"
     },
     "account": {
       "eyebrow": "Ustawienia konta",
@@ -7551,6 +7559,48 @@
       "queuedRead": "przeczytane",
       "queuedMarker": "W kolejce — Motir AI przeczyta to po skończeniu elementu roboczego, który teraz pisze.",
       "queuedReadMarker": "Przeczytane na granicy — uwzględnione w tym uruchomieniu.",
+      "midRun": {
+        "pause": {
+          "offerHow": "„Zacznij od nowa” pisze plan ponownie na podstawie nowej prośby. „Kontynuuj” stosuje ją do już napisanych elementów roboczych.",
+          "groupLabel": "Zacząć od nowa?",
+          "startOver": "Zacznij od nowa",
+          "keepGoing": "Kontynuuj i zastosuj",
+          "chosenStartOver": "Wybrano rozpoczęcie od nowa",
+          "chosenKeepGoing": "Wybrano kontynuowanie",
+          "applying": "Stosowanie zmiany do napisanych elementów roboczych",
+          "unclearNote": "Jeszcze nic nie zostało zmienione.",
+          "pausedWord": "wstrzymano",
+          "finishingChoice": "Kończy elementy robocze, nad którymi pracuje, a potem czeka na wybór.",
+          "waitingChoice": "Oczekiwanie na wybór.",
+          "finishingAnswer": "Kończy elementy robocze, nad którymi pracuje, a potem czeka na odpowiedź.",
+          "answeredQueued": "Odpowiedziano — planista przeczyta to w następnym kroku.",
+          "refusal": {
+            "PLAN_CHANGE_JOB_NOT_RUNNING": "Uruchomienie zakończyło się, zanim dotarła do niego odpowiedź.",
+            "generic": "Odpowiedź nie dotarła do uruchomienia."
+          }
+        },
+        "answeringMarker": "Odpowiedź na boku — uruchomienie trwa dalej.",
+        "answeredAside": "Odpowiedziano na boku — nic nie zostało wysłane do uruchomienia.",
+        "forwardedAck": "To zmiana, więc została przekazana planiście. Przeczyta ją w następnym kroku.",
+        "queuedMarker": "W kolejce — planista przeczyta to w następnym kroku.",
+        "readMarker": "Przeczytano — planista to otrzymał.",
+        "forwardOffer": "Jeśli chcesz potraktować to jako zmianę, odpowiedz „tak, przekaż”.",
+        "forwardStale": "Nie przekazano — nic nie zostało zmienione.",
+        "revisedAck": "To zmiana. Plan jest już napisany, więc zostanie ona zastosowana jako poprawka.",
+        "revisedNote": "Zastosowano jako poprawkę tego planu.",
+        "revisedLink": "Zobacz na osi czasu",
+        "refusal": {
+          "finished": "To uruchomienie zostało zakończone.",
+          "stopped": "Zatrzymano to uruchomienie.",
+          "failed": "To uruchomienie nie powiodło się.",
+          "decided": "Ten plan został już zatwierdzony lub odrzucony.",
+          "held": "Do tego planu jest już stosowana inna zmiana.",
+          "noPlan": "To uruchomienie nie utworzyło planu, który można zmienić.",
+          "generic": "Uruchomienie się zakończyło, więc ta wiadomość nie została przekazana.",
+          "tail": "Wiadomość nie została wysłana. Znajduje się w polu poniżej.",
+          "quoted": "Wiadomość nie została wysłana: „{text}”"
+        }
+      },
       "act": {
         "submitted": "wysłanie",
         "reading": "czytanie",

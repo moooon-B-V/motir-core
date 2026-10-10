@@ -3504,7 +3504,13 @@ async function applyModify(
   const linkAdded: Array<{ toId: string; kind: string }> = [];
   for (const ref of patch.blockedByAdd ?? []) {
     const toId = resolveRef(ref);
-    await workItemLinkRepository.create(
+    // `createIfAbsent`, not `create` (MOTIR-8147): naming an edge the card already
+    // has is a statement of the wanted end state, and the unique
+    // `(fromId, toId, kind)` would otherwise abort the WHOLE approve with a
+    // `DuplicateLinkError` nothing catches. Same no-op the `add` path's edges and
+    // the `supersedes` edges below already give a repeat. Only an edge actually
+    // inserted is recorded in the revision diff.
+    const created = await workItemLinkRepository.createIfAbsent(
       {
         workspaceId: ctx.workspaceId,
         fromId: item.workItemId,
@@ -3514,7 +3520,7 @@ async function applyModify(
       },
       tx,
     );
-    linkAdded.push({ toId, kind: 'is_blocked_by' });
+    if (created) linkAdded.push({ toId, kind: 'is_blocked_by' });
   }
   const linkRemoved: Array<{ toId: string; kind: string }> = [];
   for (const ref of patch.blockedByRemove ?? []) {
@@ -5497,6 +5503,27 @@ export const plansService = {
     );
     if (!plan || plan.projectId !== projectId) return null;
     if (plan.status === 'approved' || plan.status === 'declined') return null;
+    return plan.id;
+  },
+
+  /**
+   * A SESSION's latest plan id, REGARDLESS of decision state (MOTIR-7997) — the
+   * outcome-read sibling of {@link plansService.findPendingPlanIdForSession}, which
+   * hides a decided plan because its caller offers a confirm. A late change asks
+   * "which plan did this conversation produce, and what became of it?", and a
+   * decided plan is a perfectly good answer. Browse-gated; a session of another
+   * project answers `null`.
+   */
+  async findLatestPlanIdForSession(
+    projectId: string,
+    sessionId: string,
+    ctx: ServiceContext,
+  ): Promise<string | null> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findLatestBySession(sessionId, tx),
+    );
+    if (!plan || plan.projectId !== projectId) return null;
     return plan.id;
   },
 

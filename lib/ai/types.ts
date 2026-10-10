@@ -252,6 +252,14 @@ export interface JobContextBag {
   // after resolving and view-gating every anchor.
   targetKeys?: string[];
   discovery?: unknown;
+  // The RUN SNAPSHOT of an `ask_project` turn typed WHILE a planning run is in
+  // progress (Story MOTIR-7990 · MOTIR-7996 producer ↔ MOTIR-7993 consumer) —
+  // `{ planId, readable, planStatus?, steps?, proposals?, reason?, pendingOffer? }`
+  // (`RunContext`, lib/services/planRunContextService.ts). PRESENT ⇒ run mode:
+  // the answering session answers from it, or hands the turn back as a `forward`.
+  // ABSENT ⇒ `ask_project` behaves exactly as it always has. Loosely typed here by
+  // design, like `discovery`: each side declares its own types against the contract.
+  run?: unknown;
   // The workspace's connected repo SET — the PLURAL cross-repo contract with
   // motir-ai's multi-repo code-graph reads (7.10.15/MOTIR-1598 producer ↔
   // 7.10.16/MOTIR-1599 consumer): `{ repos: [{ provider, repoRef,
