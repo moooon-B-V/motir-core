@@ -5799,6 +5799,39 @@ plan and the same question.
   and none of them supersedes. The stamp is the only mechanism that answers
   _this changed since you read it_.
 
+**AMENDMENT (2026-10-09, Bug MOTIR-7988) — a HELD plan is LISTED under Planning,
+not in Waiting on you.** The paragraph above said the row stays listed in To
+approve while held, with a _Being rewritten_ pill, and that superseding would
+"drop the row out of To approve". The first half is reversed; the reason against
+superseding stands.
+
+- **Nothing waits on the person while the planner rewrites the plan.** A row in
+  Waiting on you says _act on this_, and the plan they would act on is about to
+  change. So while the lease is held the plan gate is EXCLUDED from the queue,
+  its count and the tab's watermark (`awaitingRoutedToWhere`'s `heldPlanIds`),
+  and the plan is listed under the Workbench's **Planning** tab with the plans
+  being written (`generatingRequestedByWhere`'s `revisingPlanIds`). When the
+  lease ends — `revision_ended`, or the window running out on a revision that
+  died — the row is back in Waiting on you, decidable.
+- **This is a LISTING rule, not a state.** The gate stays `awaiting`, the plan
+  stays `planned`, both verbs are still refused with `PLAN_REVISION_IN_FLIGHT`,
+  and nothing is superseded or re-raised: it is still one question with one row
+  in the record. The lease is read off the trail exactly as above
+  (`planRevisionHoldService.heldPlanIds` → `revisionLeaseOf`) and its ids ride
+  INTO each list's own predicate, so a count and its rows still read one `where`.
+- **Every revision takes the lease now.** The hosted revision always did (the
+  in-app revise route). An MCP-driven revision — `prompts/plan.py --revise` —
+  took none, so the plan stayed a plain decidable question with a LIVE Approve
+  for the whole rewrite: the race this section exists to stop. It now takes it
+  through the `hold_plan_revision` MCP door (`start` · `renew` · `end`); `renew`
+  writes a `revision_renewed` heartbeat on the trail, which the lease counts and
+  the timeline does not show.
+- **The _Being rewritten_ pill** (`ApprovalRow`) is still drawn wherever a held
+  plan gate is rendered from another read, and no longer appears on the Waiting
+  on you tab, which no longer lists the row.
+  MOTIR-6041's acceptance, _"held while the planner rewrites it"_ in To approve,
+  is amended to match: held, and listed under Planning.
+
 #### 11.6 Routing and authority
 
 - **ROUTED to `Plan.createdById`**, the person who asked for the plan

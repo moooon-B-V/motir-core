@@ -16,21 +16,34 @@ import {
 } from '@/lib/ideas/categories';
 import { IDEA_LIMITS } from '@/lib/ideas/limits';
 import {
+  IdeaChangedError,
   IdeaNotActiveError,
   IdeaNotFoundError,
   IdeaSlugTakenError,
+  IdeaTagNotFoundError,
   IdeaTagTakenError,
+  IdeaTranslationShapeError,
+  IdeaTranslationWithoutEnglishError,
+  IdeaUnsupportedLocaleError,
   InvalidIdeaInputError,
   UnknownIdeaTagError,
   type IdeaValidationIssue,
 } from '@/lib/ideas/errors';
+import {
+  IDEA_TRANSLATABLE_FIELDS,
+  isIdeaTranslationLocale,
+  type IdeaTranslatableField,
+  type IdeaTranslationLocale,
+} from '@/lib/ideas/translatableFields';
 import type {
   IdeaActor,
   IdeaEvidenceInput,
   IdeaInput,
+  IdeaLocaleText,
   IdeaPatch,
   IdeaResearchRunInput,
   IdeaTagInput,
+  IdeaTranslationsInput,
   StaffIdeaFilters,
 } from '@/lib/ideas/types';
 import { toIdeaResearchRunDto, toStaffIdeaDto, toStaffIdeaTagDto } from '@/lib/mappers/ideaMappers';
@@ -42,6 +55,7 @@ import {
   ideaRepository,
   type IdeaEvidenceRowInput,
   type IdeaRowUpdate,
+  type IdeaTranslationWrite,
   type IdeaWithRelations,
 } from '@/lib/repositories/ideaRepository';
 import { ideaResearchRunRepository } from '@/lib/repositories/ideaResearchRunRepository';
@@ -273,6 +287,198 @@ function shapeOfRow(row: IdeaWithRelations): IdeaShape {
   };
 }
 
+// ── Translations (Story MOTIR-7772 · MOTIR-7774) ────────────────────────────
+//
+// THE STALE-DROP RULE: when a write changes a field's English, that field's
+// text in every other locale is cleared, and survives only in the locales the
+// SAME write re-supplies. Clear-then-upsert gives one rule for a full, a
+// partial and no re-translation alike. It lives here, in the service, so the
+// console's English-only edits obey it with no change of their own.
+
+/** The English limit a translated field is held to. */
+const TRANSLATION_LIMITS: Record<Exclude<IdeaTranslatableField, 'capabilities'>, number> = {
+  title: IDEA_LIMITS.title,
+  pitch: IDEA_LIMITS.pitch,
+  gap: IDEA_LIMITS.longText,
+  whyNow: IDEA_LIMITS.longText,
+  whyMotir: IDEA_LIMITS.longText,
+  whoElse: IDEA_LIMITS.longText,
+};
+
+function localeEntries<T>(byLocale: Partial<Record<string, T>> | undefined): [string, T][] {
+  return Object.entries(byLocale ?? {}).filter((e): e is [string, T] => e[1] !== undefined);
+}
+
+/** Every locale key anywhere in an idea's input. */
+function localeKeysOf(
+  translations: IdeaTranslationsInput | undefined,
+  evidence: IdeaEvidenceInput[] | undefined,
+): string[] {
+  return [
+    ...localeEntries(translations).map(([k]) => k),
+    ...(evidence ?? []).flatMap((e) => localeEntries(e.claimTranslations).map(([k]) => k)),
+  ];
+}
+
+/** Refuse naming every key that is not one of the ten locales. */
+function assertSupportedLocales(keys: string[]): void {
+  const bad = [...new Set(keys.filter((k) => !isIdeaTranslationLocale(k)))].sort();
+  if (bad.length > 0) throw new IdeaUnsupportedLocaleError(bad);
+}
+
+function textIssue(
+  issues: IdeaValidationIssue[],
+  slug: string | null,
+  field: string,
+  value: unknown,
+  max: number,
+): void {
+  if (typeof value !== 'string' || blank(value) || value.length > max) {
+    issues.push({ slug, field, message: `is required, at most ${max} characters` });
+  }
+}
+
+/** Length and emptiness of every translated value — the service's own check, for every door. */
+function translationIssues(
+  slug: string | null,
+  translations: IdeaTranslationsInput | undefined,
+  evidence: IdeaEvidenceInput[] | undefined,
+  issues: IdeaValidationIssue[],
+): void {
+  for (const [locale, fields] of localeEntries(translations)) {
+    for (const field of IDEA_TRANSLATABLE_FIELDS) {
+      const value = fields[field];
+      if (value === undefined) continue;
+      const at = `translations.${locale}.${field}`;
+      if (field === 'capabilities') {
+        const list = value as unknown;
+        if (!Array.isArray(list) || list.length > IDEA_LIMITS.capabilities) {
+          issues.push({ slug, field: at, message: `at most ${IDEA_LIMITS.capabilities}` });
+          continue;
+        }
+        list.forEach((c, i) => textIssue(issues, slug, `${at}[${i}]`, c, IDEA_LIMITS.capability));
+      } else {
+        textIssue(issues, slug, at, value, TRANSLATION_LIMITS[field]);
+      }
+    }
+  }
+  (evidence ?? []).forEach((e, i) => {
+    for (const [locale, claim] of localeEntries(e.claimTranslations)) {
+      textIssue(
+        issues,
+        slug,
+        `evidence[${i}].claimTranslations.${locale}`,
+        claim,
+        IDEA_LIMITS.claim,
+      );
+    }
+  });
+}
+
+function labelIssues(
+  slug: string | null,
+  labelTranslations: IdeaLocaleText | undefined,
+  issues: IdeaValidationIssue[],
+): void {
+  for (const [locale, label] of localeEntries(labelTranslations)) {
+    textIssue(issues, slug, `labelTranslations.${locale}`, label, IDEA_LIMITS.tagLabel);
+  }
+}
+
+/**
+ * The two rules a translation must satisfy against the English it will sit
+ * beside AFTER the write: a field with no English takes no translation, and a
+ * translated `capabilities` list has the English list's length. `prefix` names
+ * the idea in a batch.
+ */
+function assertTranslationsFit(
+  english: IdeaShape,
+  translations: IdeaTranslationsInput | undefined,
+  prefix = '',
+): void {
+  const withoutEnglish: string[] = [];
+  const mismatched: string[] = [];
+  for (const [locale, fields] of localeEntries(translations)) {
+    for (const field of IDEA_TRANSLATABLE_FIELDS) {
+      const value = fields[field];
+      if (value === undefined) continue;
+      const at = `${prefix}${locale}.${field}`;
+      if (field === 'capabilities') {
+        if (english.capabilities.length === 0) withoutEnglish.push(at);
+        else if ((value as string[]).length !== english.capabilities.length) mismatched.push(at);
+      } else if (blank(english[field])) {
+        withoutEnglish.push(at);
+      }
+    }
+  }
+  if (withoutEnglish.length > 0) throw new IdeaTranslationWithoutEnglishError(withoutEnglish);
+  if (mismatched.length > 0) throw new IdeaTranslationShapeError(mismatched);
+}
+
+function trimmedTranslation(fields: IdeaTranslationsInput[IdeaTranslationLocale]) {
+  const out: IdeaTranslationWrite = {};
+  for (const field of IDEA_TRANSLATABLE_FIELDS) {
+    const value = fields?.[field];
+    if (value === undefined) continue;
+    if (field === 'capabilities') out.capabilities = (value as string[]).map((c) => c.trim());
+    else out[field] = (value as string).trim();
+  }
+  return out;
+}
+
+/** Merge each supplied locale's fields. Returns the locales written. */
+async function writeTranslations(
+  ideaId: string,
+  translations: IdeaTranslationsInput | undefined,
+  tx: Prisma.TransactionClient,
+): Promise<IdeaTranslationLocale[]> {
+  const written: IdeaTranslationLocale[] = [];
+  for (const [locale, fields] of localeEntries(translations)) {
+    const loc = locale as IdeaTranslationLocale;
+    if (
+      (await ideaRepository.upsertTranslations(ideaId, loc, trimmedTranslation(fields), tx)) > 0
+    ) {
+      written.push(loc);
+    }
+  }
+  return written;
+}
+
+function trimmedLocaleText(byLocale: IdeaLocaleText | undefined): IdeaLocaleText {
+  const out: IdeaLocaleText = {};
+  for (const [locale, text] of localeEntries(byLocale)) {
+    out[locale as IdeaTranslationLocale] = text.trim();
+  }
+  return out;
+}
+
+/** Write each fresh evidence row's claim translations (rows in `position` order). */
+async function writeClaimTranslations(
+  rows: { id: string }[],
+  evidence: IdeaEvidenceInput[],
+  tx: Prisma.TransactionClient,
+): Promise<IdeaTranslationLocale[]> {
+  const locales = new Set<IdeaTranslationLocale>();
+  for (const [i, input] of evidence.entries()) {
+    const byLocale = trimmedLocaleText(input.claimTranslations);
+    if (Object.keys(byLocale).length === 0) continue;
+    await ideaRepository.replaceEvidenceTranslations(rows[i]!.id, byLocale, tx);
+    for (const locale of Object.keys(byLocale)) locales.add(locale as IdeaTranslationLocale);
+  }
+  return [...locales];
+}
+
+function sameEnglish(a: string | string[] | null, b: string | string[] | null): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((v, i) => v === b[i]);
+  }
+  return a === b;
+}
+
+function sortedLocales(...lists: IdeaTranslationLocale[][]): IdeaTranslationLocale[] {
+  return [...new Set(lists.flat())].sort();
+}
+
 /** Resolve tag slugs to ids, or refuse naming every unknown one. */
 async function resolveTagIds(
   slugs: string[],
@@ -341,10 +547,17 @@ export const ideasAdminService = {
         { slug: null, field: 'ideas', message: `a batch holds 1 to ${MAX_BATCH} ideas` },
       ]);
     }
+    assertSupportedLocales(ideas.flatMap((i) => localeKeysOf(i.translations, i.evidence)));
     const shapes = ideas.map(shapeOfInput);
     const issues: IdeaValidationIssue[] = [];
-    shapes.forEach((shape) => validateShape(shape, issues));
+    shapes.forEach((shape, i) => {
+      validateShape(shape, issues);
+      translationIssues(shape.slug || null, ideas[i]!.translations, ideas[i]!.evidence, issues);
+    });
     if (issues.length > 0) throw new InvalidIdeaInputError(issues);
+    shapes.forEach((shape, i) =>
+      assertTranslationsFit(shape, ideas[i]!.translations, `${shape.slug}.`),
+    );
 
     const seen = new Set<string>();
     const repeated = new Set<string>();
@@ -368,7 +581,7 @@ export const ideasAdminService = {
         );
 
         const slugs: string[] = [];
-        for (const shape of shapes) {
+        for (const [i, shape] of shapes.entries()) {
           const row = await ideaRepository.create(
             {
               slug: shape.slug,
@@ -386,11 +599,21 @@ export const ideasAdminService = {
             shape.tags.map((t) => tagIds.get(t)!),
             tx,
           );
+          const translatedLocales = sortedLocales(
+            await writeTranslations(row.id, ideas[i]!.translations, tx),
+            await writeClaimTranslations(row.evidence, shape.evidence, tx),
+          );
           await record({
             action: 'idea.add',
             ...auditTarget(row),
             reason: auditReason,
-            metadata: { credential, kind: row.kind, category: row.category, title: row.title },
+            metadata: {
+              credential,
+              kind: row.kind,
+              category: row.category,
+              title: row.title,
+              translatedLocales,
+            },
           });
           slugs.push(row.slug);
         }
@@ -412,15 +635,38 @@ export const ideasAdminService = {
    * replace the lists wholesale; `reviewed: true` stamps `lastReviewedAt`. The
    * merged result must still satisfy every rule a new idea does. One
    * `idea.update` row naming the changed fields.
+   *
+   * Translations (MOTIR-7774): under a lock on the idea's row, a patch carrying
+   * `translations` is refused `IdeaChangedError` unless `expectedUpdatedAt` is
+   * the row's `updatedAt`; then every field whose English this patch CHANGES is
+   * cleared in every locale, and the supplied locales are merged in. A
+   * translation-only patch never touches the idea row, so `updatedAt` stays.
    */
   async updateIdea(actor: IdeaActor, slug: string, patch: IdeaPatch): Promise<StaffIdeaDto> {
     assertLevel(actor, LEVEL_WRITE);
     const auditReason = contextReason(actor, patch.reason);
     const credential = credentialMetadata(actor);
 
+    assertSupportedLocales(localeKeysOf(patch.translations, patch.evidence));
+    const hasTranslations = localeEntries(patch.translations).length > 0;
+    if (patch.translations !== undefined && blank(patch.expectedUpdatedAt)) {
+      throw new InvalidIdeaInputError([
+        { slug, field: 'expectedUpdatedAt', message: 'is required with translations' },
+      ]);
+    }
+
     return withPlatformWrite(actor, async (tx, record) => {
+      // The stale-drop rule is a read-derived write: what the English CHANGED is
+      // decided against the row as it stands under this lock, not the request.
+      if (!(await ideaRepository.lockBySlug(slug, tx))) throw new IdeaNotFoundError(slug);
       const current = await ideaRepository.findBySlugInTx(slug, tx);
       if (!current) throw new IdeaNotFoundError(slug);
+      if (patch.translations !== undefined) {
+        const expected = new Date(patch.expectedUpdatedAt!);
+        if (expected.getTime() !== current.updatedAt.getTime()) {
+          throw new IdeaChangedError(slug, current.updatedAt.toISOString());
+        }
+      }
 
       const update: IdeaRowUpdate = {};
       const changed: string[] = [];
@@ -456,7 +702,7 @@ export const ideasAdminService = {
         update.lastReviewedAt = new Date();
         changed.push('lastReviewedAt');
       }
-      if (changed.length === 0) {
+      if (changed.length === 0 && !hasTranslations) {
         throw new InvalidIdeaInputError([{ slug, field: 'patch', message: 'changes nothing' }]);
       }
 
@@ -476,7 +722,9 @@ export const ideasAdminService = {
       };
       const issues: IdeaValidationIssue[] = [];
       validateShape(merged, issues);
+      translationIssues(slug, patch.translations, patch.evidence, issues);
       if (issues.length > 0) throw new InvalidIdeaInputError(issues);
+      assertTranslationsFit(merged, patch.translations);
 
       if (patch.evidence !== undefined) update.evidence = toEvidenceRows(patch.evidence);
       if (patch.tags !== undefined) {
@@ -484,12 +732,39 @@ export const ideasAdminService = {
         update.tagIds = patch.tags.map((t) => tagIds.get(t)!);
       }
 
-      const row = await ideaRepository.updateBySlug(slug, update, tx);
+      // The fields whose English this write CHANGES, against the locked row.
+      const englishChanged = IDEA_TRANSLATABLE_FIELDS.filter(
+        (f) =>
+          update[f] !== undefined &&
+          !sameEnglish(update[f] as string | string[] | null, current[f]),
+      );
+
+      // A translation-only write leaves the idea row alone, so `updatedAt` does
+      // not move and two skill writes for different locales never refuse each other.
+      let evidenceLocales: IdeaTranslationLocale[] = [];
+      if (changed.length > 0) {
+        const updated = await ideaRepository.updateBySlug(slug, update, tx);
+        if (patch.evidence !== undefined) {
+          evidenceLocales = await writeClaimTranslations(updated.evidence, patch.evidence, tx);
+        }
+      }
+      await ideaRepository.clearTranslatedFields(current.id, englishChanged, tx);
+      const translatedLocales = sortedLocales(
+        await writeTranslations(current.id, patch.translations, tx),
+        evidenceLocales,
+      );
+
+      const row = (await ideaRepository.findBySlugInTx(slug, tx))!;
       await record({
         action: 'idea.update',
         ...auditTarget(row),
         reason: auditReason,
-        metadata: { credential, fields: changed },
+        metadata: {
+          credential,
+          fields: changed,
+          translatedLocales,
+          droppedTranslationFields: englishChanged,
+        },
       });
       return toStaffIdeaDto(row);
     });
@@ -567,7 +842,10 @@ export const ideasAdminService = {
         message: `a new tag needs a stated reason, at most ${IDEA_LIMITS.tagDescription} characters`,
       });
     }
+    assertSupportedLocales(localeEntries(input.labelTranslations).map(([k]) => k));
+    labelIssues(slug || null, input.labelTranslations, issues);
     if (issues.length > 0) throw new InvalidIdeaInputError(issues);
+    const labelTranslations = trimmedLocaleText(input.labelTranslations);
     const credential = credentialMetadata(actor);
 
     try {
@@ -576,20 +854,86 @@ export const ideasAdminService = {
           throw new IdeaTagTakenError(slug);
         }
         const tag = await ideaTagRepository.create({ slug, label, description }, tx);
+        for (const [locale, text] of localeEntries(labelTranslations)) {
+          await ideaTagRepository.upsertTagTranslation(
+            tag.id,
+            locale as IdeaTranslationLocale,
+            text,
+            tx,
+          );
+        }
         await record({
           action: 'idea.tag_add',
           targetKind: 'idea',
           targetId: tag.id,
           targetLabel: `tag:${tag.slug}`,
           reason: description,
-          metadata: { credential, slug: tag.slug, label: tag.label },
+          metadata: {
+            credential,
+            slug: tag.slug,
+            label: tag.label,
+            translatedLocales: Object.keys(labelTranslations).sort(),
+          },
         });
-        return { slug: tag.slug, label: tag.label, description: tag.description, count: 0 };
+        return {
+          slug: tag.slug,
+          label: tag.label,
+          description: tag.description,
+          count: 0,
+          ...(Object.keys(labelTranslations).length > 0 ? { labelTranslations } : {}),
+        };
       });
     } catch (err) {
       if (isUniqueViolation(err)) throw new IdeaTagTakenError(slug);
       throw err;
     }
+  },
+
+  /**
+   * Merge label translations into an existing tag (Story MOTIR-7772 ·
+   * MOTIR-7774) — how the skill fills a tag's missing locales. A locale not
+   * named keeps what it had. A tag's English label has no edit path, so there
+   * is no stale rule here. One `idea.tag_translate` row.
+   */
+  async setTagLabelTranslations(
+    actor: IdeaActor,
+    tagSlug: string,
+    labelTranslations: IdeaLocaleText,
+  ): Promise<StaffIdeaTagDto> {
+    assertLevel(actor, LEVEL_WRITE);
+    const entries = localeEntries(labelTranslations);
+    assertSupportedLocales(entries.map(([k]) => k));
+    const issues: IdeaValidationIssue[] = [];
+    if (entries.length === 0) {
+      issues.push({ slug: tagSlug, field: 'labelTranslations', message: 'names no locale' });
+    }
+    labelIssues(tagSlug, labelTranslations, issues);
+    if (issues.length > 0) throw new InvalidIdeaInputError(issues);
+    const labels = trimmedLocaleText(labelTranslations);
+    const credential = credentialMetadata(actor);
+
+    return withPlatformWrite(actor, async (tx, record) => {
+      const [tag] = await ideaTagRepository.findBySlugs([tagSlug], tx);
+      if (!tag) throw new IdeaTagNotFoundError(tagSlug);
+      for (const [locale, text] of localeEntries(labels)) {
+        await ideaTagRepository.upsertTagTranslation(
+          tag.id,
+          locale as IdeaTranslationLocale,
+          text,
+          tx,
+        );
+      }
+      await record({
+        action: 'idea.tag_translate',
+        targetKind: 'idea',
+        targetId: tag.id,
+        targetLabel: `tag:${tag.slug}`,
+        reason: contextReason(actor),
+        metadata: { credential, slug: tag.slug, translatedLocales: Object.keys(labels).sort() },
+      });
+      const [after] = await ideaTagRepository.findBySlugs([tagSlug], tx);
+      return toStaffIdeaTagDto(after!);
+    });
   },
 
   /** Record one research run of the `motir-ideas` skill. */

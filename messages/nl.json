@@ -9205,6 +9205,7 @@
             "retire": "Een idee ingetrokken",
             "delete": "Een idee verwijderd",
             "tag_add": "Een ideetag toegevoegd",
+            "tag_translate": "Een ideetag vertaald",
             "research_run": "Een onderzoeksrun voor ideeën vastgelegd"
           }
         }
@@ -12875,8 +12876,8 @@
         "consequence": "Goedkeuren voegt deze toe aan je backlog. Afwijzen beëindigt het plan en verandert niets.",
         "reopened": "Heropend vanuit Wacht op jou · gestart door {name} · laatst actief {when}",
         "reopenedYours": "Heropend vanuit Wacht op jou · door jou gestart · laatst actief {when}",
-        "held": "Motir AI schrijft een nieuwe versie van dit plan. Goedkeuren en Afwijzen komen terug zodra het klaar is — het blijft intussen in Wacht op jou.",
-        "heldBy": "{harness} schrijft een nieuwe versie van dit plan. Goedkeuren en Afwijzen komen terug zodra het klaar is — het blijft intussen in Wacht op jou.",
+        "held": "Motir AI schrijft een nieuwe versie van dit plan. Goedkeuren en Afwijzen komen terug zodra het klaar is — tot dan staat het onder In planning, daarna keert het terug naar Wacht op jou.",
+        "heldBy": "{harness} schrijft een nieuwe versie van dit plan. Goedkeuren en Afwijzen komen terug zodra het klaar is — tot dan staat het onder In planning, daarna keert het terug naar Wacht op jou.",
         "stale": {
           "title": "Dit plan is gewijzigd terwijl je het aan het lezen was.",
           "next": "Er is niets goedgekeurd of afgewezen. Het canvas toont nu de nieuwe versie — bekijk die en beslis dan opnieuw."
@@ -12896,7 +12897,7 @@
       },
       "handoff": {
         "writing": "Ik heb wat ik nodig heb — ik schrijf het plan nu. Je hoeft hier niet te wachten: sluit dit wanneer je wilt, en het plan staat voor je klaar in <link>Wacht op jou</link>.",
-        "rewriting": "Ik schrijf een nieuwe versie van dit plan. Je kunt dit sluiten — het blijft in <link>Wacht op jou</link>, en je kunt beslissen zodra ik klaar ben."
+        "rewriting": "Ik schrijf een nieuwe versie van dit plan. Je kunt dit sluiten — terwijl ik werk staat het onder In planning, en zodra ik klaar ben keert het terug naar <link>Wacht op jou</link> zodat je kunt beslissen."
       }
     },
     "planAsk": {

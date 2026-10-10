@@ -247,6 +247,7 @@ describe('the reason rule', () => {
     'idea.retire': 'required',
     'idea.delete': 'required',
     'idea.tag_add': 'inherited',
+    'idea.tag_translate': 'inherited',
     'idea.research_run': 'inherited',
   } as const;
 

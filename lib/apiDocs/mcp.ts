@@ -956,6 +956,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '3909bbcb4967',
   },
+  hold_plan_revision: {
+    // What a reader picks this one on: it is the only plan door that holds a plan
+    // still while it is rewritten, and it moves nothing about the plan itself.
+    summary:
+      'Hold a plan that is up for review while you revise it — listed under Planning, Approve refused — and release it when you finish.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '3d8b5de25ed7',
+  },
   open_plan_session: {
     // Re-worded for MOTIR-6028: a scope holds MANY conversations now, and the
     // result's session `id` is how every later call names the one it means.

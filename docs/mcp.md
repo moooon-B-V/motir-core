@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **96 tools**.
+`initialize` handshake and registers **97 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3949,7 +3949,7 @@ report on the same leg returns the same acknowledgement and records nothing more
 Requires **`work_item:edit`**, which `CLI_TOKEN_GRANT` already carries — a token
 from `motir login` reaches it without widening the grant.
 
-#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan` · `record_plan_revision_reason` · `report_plan_step`
+#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan` · `record_plan_revision_reason` · `report_plan_step` · `hold_plan_revision`
 
 The three tools above hand a **prompt** to Motir's planner and let it decide the
 tree. These two are the other door: **you decide the tree, and Motir reviews it
@@ -4656,6 +4656,52 @@ executing one work item has no business reporting progress on a plan.
 Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_GENERATING` off `generating`, naming the
 status; `PLAN_STEP_INVALID` for a target on `settle` or `end`, a ref naming nothing
 on this plan or in its project, a `folder:` ref, or a key that names no work item.
+
+##### `hold_plan_revision` — hold a plan still while you revise it
+
+A plan that is already up for review (`planned`) stays `planned` while it is
+revised — the revision appends with `revision: true` and is never re-closed. So
+without a hold, a person can approve it halfway through your rewrite and turn a
+proposal set that is neither the plan they read nor the plan they asked for into
+real work items. Approve cannot be undone. This door takes the **revision lease**
+the hosted revision has always taken: while you hold it, the plan is listed under
+the Workbench's **Planning** tab instead of **Waiting on you**, and Approve and
+Decline are refused with `PLAN_REVISION_IN_FLIGHT`. When you end it, the plan is
+back in Waiting on you and can be decided.
+
+| Input     | Type   | Required | Notes                                                                               |
+| --------- | ------ | -------- | ----------------------------------------------------------------------------------- |
+| `planId`  | string | yes      | The plan you are revising.                                                          |
+| `action`  | enum   | yes      | `start` · `renew` · `end`.                                                          |
+| `harness` | string | no       | Your harness as its makers name it (`Claude Code`) — what a refused Approve names.  |
+| `model`   | string | no       | The model you run on, by its id. Leave it out when you do not know it; never guess. |
+
+| `action` | What it does                                                                                                                                                                                                                     |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `start`  | Takes the hold. Call it **before** the revision's first write. Refused with `PLAN_REVISION_IN_FLIGHT` while another revision holds the plan, `PLAN_NOT_EDITABLE` once it is decided.                                             |
+| `renew`  | Keeps the hold. A hold lasts ten minutes from your **latest write** to the plan, so renew every few minutes while you go without one. On a hold that already lapsed it writes nothing and answers `held: false` — `start` again. |
+| `end`    | Releases the hold. Call it however the revision finishes, failure included. A no-op success on a plan nobody holds.                                                                                                              |
+
+A revision that dies without `end` is recovered when its hold runs out. Every
+call but a no-op writes one row on the plan's own trail (the timeline shows the
+start and the end; a renew is a heartbeat and is not shown).
+
+```jsonc
+hold_plan_revision({ planId, action: "start", harness: "Claude Code" })
+// → { planId, action: "start", held: true, expiresAt }
+add_plan_items({ planId, revision: true, proposals: [ … ] })
+hold_plan_revision({ planId, action: "renew" })
+hold_plan_revision({ planId, action: "end" })
+// → { planId, action: "end", held: false, expiresAt: null }
+```
+
+Requires **`ai:view_plan`**, the key every plan-authoring write names. A `motir run`
+credential (`CLI_TOKEN_GRANT`) does not carry it: a run executing one work item
+revises no plan.
+
+Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_EDITABLE` on an `approved` or `declined`
+plan; `PLAN_REVISION_IN_FLIGHT` on a `start` while another revision holds it,
+naming who and until when.
 
 ##### `validate_plan` — CHECK the plan BEFORE `final: true`
 

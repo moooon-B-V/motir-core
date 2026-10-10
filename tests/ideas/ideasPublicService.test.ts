@@ -141,7 +141,7 @@ describe('listActive', () => {
       InvalidIdeaFilterError,
     );
     const none = await ideasPublicService.listActive({ tags: ['no-such-tag'] });
-    expect(none).toEqual({ items: [], categories: [], total: 0 });
+    expect(none).toEqual({ items: [], categories: [], total: 0, locale: 'en' });
   });
 
   it('throws rather than truncate once the cap is passed', async () => {
@@ -170,9 +170,9 @@ describe('listTags', () => {
 
     const tags = await ideasPublicService.listTags();
     expect(tags).toEqual([
-      { slug: 'consumer', label: 'CONSUMER', count: 1 },
-      { slug: 'regulated', label: 'REGULATED', count: 2 },
-      { slug: 'smb', label: 'SMB', count: 4 },
+      { slug: 'consumer', label: 'CONSUMER', labelFallback: false, count: 1 },
+      { slug: 'regulated', label: 'REGULATED', labelFallback: false, count: 2 },
+      { slug: 'smb', label: 'SMB', labelFallback: false, count: 4 },
     ]);
   });
 });

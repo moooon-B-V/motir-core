@@ -9208,6 +9208,7 @@
             "retire": "Idee ausgemustert",
             "delete": "Idee gelöscht",
             "tag_add": "Ideen-Tag hinzugefügt",
+            "tag_translate": "Ideen-Tag übersetzt",
             "research_run": "Recherchelauf für Ideen erfasst"
           }
         }
@@ -12878,8 +12879,8 @@
         "consequence": "Das Genehmigen fügt diese Ihrem Backlog hinzu. Das Ablehnen beendet den Plan und ändert nichts.",
         "reopened": "Erneut geöffnet aus „Wartet auf Sie“ · gestartet von {name} · zuletzt aktiv {when}",
         "reopenedYours": "Erneut geöffnet aus „Wartet auf Sie“ · von Ihnen gestartet · zuletzt aktiv {when}",
-        "held": "Motir AI schreibt eine neue Version dieses Plans. „Genehmigen“ und „Ablehnen“ erscheinen wieder, wenn sie fertig ist — bis dahin bleibt er in „Wartet auf Sie“.",
-        "heldBy": "{harness} schreibt eine neue Version dieses Plans. „Genehmigen“ und „Ablehnen“ erscheinen wieder, wenn sie fertig ist — bis dahin bleibt er in „Wartet auf Sie“.",
+        "held": "Motir AI schreibt eine neue Version dieses Plans. „Genehmigen“ und „Ablehnen“ erscheinen wieder, wenn sie fertig ist — bis dahin steht er unter „In Planung“ und kehrt dann zu „Wartet auf Sie“ zurück.",
+        "heldBy": "{harness} schreibt eine neue Version dieses Plans. „Genehmigen“ und „Ablehnen“ erscheinen wieder, wenn sie fertig ist — bis dahin steht er unter „In Planung“ und kehrt dann zu „Wartet auf Sie“ zurück.",
         "stale": {
           "title": "Dieser Plan hat sich geändert, während Sie ihn gelesen haben.",
           "next": "Es wurde nichts genehmigt oder abgelehnt. Die Arbeitsfläche zeigt jetzt die neue Version — sehen Sie sie durch und entscheiden Sie dann erneut."
@@ -12899,7 +12900,7 @@
       },
       "handoff": {
         "writing": "Ich habe, was ich brauche — ich schreibe jetzt den Plan. Sie müssen hier nicht warten: Schließen Sie dies jederzeit, und der Plan wartet in <link>Wartet auf Sie</link> auf Sie.",
-        "rewriting": "Ich schreibe eine neue Version dieses Plans. Sie können dies schließen — er bleibt in <link>Wartet auf Sie</link>, und Sie können entscheiden, sobald ich fertig bin."
+        "rewriting": "Ich schreibe eine neue Version dieses Plans. Sie können dies schließen — solange ich daran arbeite, steht er unter „In Planung“, und sobald ich fertig bin, kehrt er zur Entscheidung zu <link>Wartet auf Sie</link> zurück."
       }
     },
     "planAsk": {
