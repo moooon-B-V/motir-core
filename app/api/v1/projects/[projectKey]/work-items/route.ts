@@ -130,6 +130,10 @@ export const POST = withV1Route<{ projectKey: string }>(
         ...(body.folderId === undefined ? {} : { folderId: body.folderId }),
         ...pick(body, [
           'descriptionMd',
+          // The language the text is in (MOTIR-8098); omitted, the service records
+          // the organisation's content language.
+          'language',
+          'languages',
           'priority',
           'type',
           'executor',

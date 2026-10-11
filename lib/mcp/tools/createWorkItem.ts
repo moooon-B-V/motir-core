@@ -10,6 +10,8 @@ import {
 } from '@/generated/prisma/client';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import type { Locale } from '@/lib/i18n/locales';
+import { languageArgs, languageInput, languagesInput } from './contentLanguage';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
   CreateWorkItemInput,
@@ -105,6 +107,10 @@ const inputSchema = {
         "in this project: an unknown id is FOLDER_NOT_FOUND, another project's is CROSS_PROJECT_FOLDER.",
     ),
   descriptionMd: z.string().optional().describe('Optional Markdown description body.'),
+  // The language the text is written in (Story MOTIR-7731 · MOTIR-8098). No
+  // `explanation` member: this tool writes no explanation.
+  language: languageInput,
+  languages: languagesInput(['title', 'description'] as const),
   priority: z
     .nativeEnum(WorkItemPriority)
     .optional()
@@ -237,6 +243,8 @@ interface CreateWorkItemArgs {
   parentKey?: string;
   folderId?: string;
   descriptionMd?: string;
+  language?: Locale;
+  languages?: Partial<Record<'title' | 'description', Locale>>;
   priority?: WorkItemPriority;
   storyPoints?: number | null;
   estimateMinutes?: number | null;
@@ -294,6 +302,8 @@ export async function runCreateWorkItem(
       // it beside `parentId` and validates the folder under a lock.
       ...(args.folderId !== undefined ? { folderId: args.folderId } : {}),
       descriptionMd: args.descriptionMd ?? null,
+      // The service records the org's content language when neither is supplied.
+      ...languageArgs(args),
       ...(args.priority ? { priority: args.priority } : {}),
       // Story points (7.8.21): forward only when supplied — both a number and an
       // explicit null pass through (the service validates + treats null as
@@ -378,7 +388,8 @@ export function registerCreateWorkItem(
         'no new children (MARKED_CARD_CANNOT_REOPEN). ' +
         'Honors the same kind-parent rules (an epic is root-only — ' +
         'a parented epic is rejected), leaf-only type/executor/difficulty rule, and access ' +
-        'checks as the UI.',
+        'checks as the UI. `language` (or per-field `languages`) names the language the ' +
+        "text is written in; omitted, the organisation's content language is recorded.",
       inputSchema,
     },
     async (args, extra) => runCreateWorkItem(args, resolveContext(extra)),

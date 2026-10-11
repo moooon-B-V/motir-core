@@ -967,5 +967,17 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.64.0` after MOTIR-7640's
  *   `1.63.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
  *   MEMBERS and the FIELDS.
+ *
+ * - `1.65.0` — MOTIR-8098 (Story MOTIR-7731) adds CONTENT LANGUAGES to work items.
+ *   `WorkItemDetail` gains `languages` (`{ title, description, explanation }`, each a
+ *   locale code or `null` when none was recorded), and the create / update bodies
+ *   accept `language` and `languages` — the language the written text is in.
+ *
+ *   Additive: a new field on an existing shape and new optional body fields (§8's
+ *   allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.65.0` after MOTIR-7708's
+ *   `1.64.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   FIELDS.
  */
-export const V1_CONTRACT_VERSION = '1.64.0';
+export const V1_CONTRACT_VERSION = '1.65.0';
