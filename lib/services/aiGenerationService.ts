@@ -480,7 +480,7 @@ export const aiGenerationService = {
     opts: {
       final?: boolean;
       productName?: string | null;
-      /** The planner's briefing (MOTIR-8157) — written on the generation's close only. */
+      /** The planner's briefing (MOTIR-8157) — written on a final append's close, a generation's or a revision's (MOTIR-8230). */
       summary?: string | null;
       /**
        * The plan's title (MOTIR-8164) — on ANY append of a generation, written

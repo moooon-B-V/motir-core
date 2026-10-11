@@ -152,9 +152,10 @@ export async function POST(req: Request): Promise<Response> {
   // The planner's BRIEFING (Story MOTIR-8149 · Subtask MOTIR-8157) rides the
   // final append the same way: a string is the plan's `summary`, anything else
   // is "no summary" and the plan's summary is left exactly as it was. It is
-  // passed on ONLY for the final append of a generation — a non-final append,
-  // or any revision append, carries it nowhere, because a revision does not
-  // close a plan and so has no briefing of its own to write here.
+  // passed on for EVERY final append — a generation's, and a revision's, which
+  // closes the plan it re-opened through the same `markPlanned` (Bug MOTIR-8208)
+  // and so writes the briefing for the change (Bug MOTIR-8230). A non-final
+  // append carries it nowhere: nothing closes there.
   const rawSummary = (body as { summary?: unknown })?.summary;
   const summary = typeof rawSummary === 'string' ? rawSummary : null;
   // The plan's TITLE (Story MOTIR-8161 · Subtask MOTIR-8164) — the hosted planner
@@ -171,8 +172,8 @@ export async function POST(req: Request): Promise<Response> {
   // `revision: true` says WHICH PASS this append belongs to, and it changes two
   // things and nothing else: the status gate becomes the editable pair rather
   // than `generating` alone (`agent-authored-plans.md` AMENDMENT 10 D1), and
-  // `final` RELEASES the revision lease instead of marking the plan `planned` —
-  // because a revision does not open a plan and does not close one. Absent, this
+  // `final` closes the plan the revision RE-OPENED and then releases the
+  // revision lease (`plansService.closeRevision`, Bug MOTIR-8208). Absent, this
   // route is byte-identical to what it has always been, gate and all.
   //
   // The actor triple rides beside it so the `revision_ended` row names the
@@ -205,7 +206,7 @@ export async function POST(req: Request): Promise<Response> {
         productName,
         revision,
         ...(title !== null ? { title } : {}),
-        ...(final && !revision && summary !== null ? { summary } : {}),
+        ...(final && summary !== null ? { summary } : {}),
         ...(actor ? { actor } : {}),
       },
     );
