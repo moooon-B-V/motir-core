@@ -374,9 +374,10 @@ describe('the ratchets over the real test suite', () => {
 
   it('the pre-auth adjudication is actually being read', () => {
     // `preAuthKeys` parses the MOTIR-2784 guard's VERDICTS map by NAME. A rename
-    // there would make it return an empty set — silently re-opening two settled
+    // there would make it return an empty set — silently re-opening the settled
     // sites as in-scope work. This is the tripwire for that.
     expect([...preAuthKeys()].sort()).toEqual([
+      'databaseConnectionRepository.ts#ping',
       'rateLimitCounterRepository.ts#countAllUnsafe',
       'rateLimitCounterRepository.ts#findCountUnsafe',
     ]);
