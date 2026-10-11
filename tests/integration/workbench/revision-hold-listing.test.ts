@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
@@ -236,6 +236,47 @@ describe('when the revision ENDS the plan is back in Waiting on you, and decidab
       where: { planId, changeKind: 'revision_ended' },
     });
     expect(ended.diff).toMatchObject({ lapsed: true, restoredTo: 'planned' });
+  });
+});
+
+describe('the lapsed-revision pass (MOTIR-8208)', () => {
+  it('one plan that cannot be given back does not stop the rest of the batch', async () => {
+    const fx = await makeWorkItemFixture();
+    const broken = await plannedPlan(fx, 'Broken');
+    const healthy = await plannedPlan(fx, 'Healthy');
+    for (const planId of [broken, healthy]) {
+      await hold(fx, planId, 'start');
+      await ageTrail(planId, PLAN_REVISION_LEASE_MS + 1000);
+    }
+    const original = plansService.settleLapsedRevisionWithin.bind(plansService);
+    const settle = vi
+      .spyOn(plansService, 'settleLapsedRevisionWithin')
+      .mockImplementation(async (tx, planId, workspaceId, now) => {
+        if (planId === broken) throw new Error('boom');
+        return original(tx, planId, workspaceId, now);
+      });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const pass = await planSessionEndService.releaseLapsedRevisions();
+      expect(pass.planIds).toEqual([healthy]);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(broken), expect.any(Error));
+    } finally {
+      settle.mockRestore();
+      warn.mockRestore();
+    }
+    expect((await adminDb.plan.findUniqueOrThrow({ where: { id: broken } })).status).toBe(
+      'generating',
+    );
+    expect((await adminDb.plan.findUniqueOrThrow({ where: { id: healthy } })).status).toBe(
+      'planned',
+    );
+  });
+
+  it('a plan that is gone by the time it is locked is left alone', async () => {
+    const fx = await makeWorkItemFixture();
+    expect(
+      await planSessionEndService.releaseLapsedRevision('no-such-plan', fx.ctx.workspaceId),
+    ).toBe(false);
   });
 });
 

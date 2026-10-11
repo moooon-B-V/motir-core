@@ -599,13 +599,11 @@ async function settleFailedRevision(
       const fresh = await planRepository.findById(plan.id, ctx.workspaceId, tx);
       // Moved on under us: a newer job writes it, or it was decided. Not this job's to settle.
       if (!fresh || fresh.sourceJobId !== jobId) return null;
-      if (
-        fresh.status !== 'planned' &&
-        fresh.status !== 'stale' &&
-        !isReopenedByRevision(fresh, await planRevisionRepository.listByPlan(plan.id, tx))
-      ) {
-        return null;
-      }
+      const revisable =
+        fresh.status === 'planned' ||
+        fresh.status === 'stale' ||
+        isReopenedByRevision(fresh, await planRevisionRepository.listByPlan(plan.id, tx));
+      if (!revisable) return null;
       // Loaded lazily: `plansService` imports this module for its decision transactions, so a
       // static import back would close the cycle this file's header warns about.
       const { plansService } = await import('@/lib/services/plansService');
