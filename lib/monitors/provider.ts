@@ -68,12 +68,21 @@ export const MONITOR_VERIFY_INSTALL_TIMEOUT_MS = MONITOR_GRANT_EXCHANGE_TIMEOUT_
 
 /**
  * Deadline for a token REFRESH, in ms. Longer than the interactive bounds above
- * because nobody is watching: it runs on the eight-hourly sweep
- * (MOTIR-5261), where a slow answer still beats a connection going
- * `degraded` for no reason. It is a bound and not a budget — a hung host must
- * not hold a job open indefinitely.
+ * because nobody is watching: it runs from the unattended poll, where a slow
+ * answer still beats a connection going `degraded` for no reason. It is a bound
+ * and not a budget — a hung host must not hold a job open indefinitely.
+ *
+ * ⚠️ IT IS THE CEILING OF THE SET, NOT THE MIDDLE, AND 15 s LOST A CONNECTION
+ * (MOTIR-8184). Aborting only stops US waiting: the provider has usually
+ * accepted the request and ROTATED the refresh token already, so an abort
+ * leaves a stored refresh token it has invalidated, and the connection is dead
+ * until a person re-authorises. Sentry has been seen answering a refresh in
+ * 10.7 s (MOTIR-5988) and past 15 s (2026-10-10 23:15Z, "No response within
+ * 15000ms."). So the deadline sits well above the slowest answer observed, and a
+ * refresh that still gets no answer is recorded as `refreshUncertainAt` rather
+ * than treated as a revocation.
  */
-export const MONITOR_REFRESH_TIMEOUT_MS = 15_000;
+export const MONITOR_REFRESH_TIMEOUT_MS = 60_000;
 
 /**
  * Deadline for a HEALTH probe, in ms. The tightest of the set, and deliberately:
