@@ -444,6 +444,45 @@ describe('real concurrency', () => {
   );
 
   it(
+    'a Resume whose pre-check reads the session BEFORE the winner binds and the plan AFTER it is RESUME_ALREADY_STARTED (MOTIR-8261)',
+    T,
+    async () => {
+      // The one schedule the 20-iteration race above hits only rarely, forced: the loser's
+      // pre-check reads the session while it is still failed, the winner's bind then commits
+      // (re-pointing the plan and clearing the failure), and only THEN does the loser read the
+      // plan. Its snapshot of the session and the plan it reads now disagree.
+      const f = await failedSession();
+      const realFind = planRepository.findLatestForResume.bind(planRepository);
+      let winner: Promise<{ jobId: string }> | null = null;
+      const spy = vi
+        .spyOn(planRepository, 'findLatestForResume')
+        .mockImplementation(async (sessionId, tx) => {
+          if (!winner) {
+            // First caller is the loser: its session read is done. Run the winner to completion
+            // on its own connections before the loser reads the plan.
+            winner = planSessionResumeService.resume(me(), f.sessionId);
+            await winner;
+          }
+          return realFind(sessionId, tx);
+        });
+      try {
+        const loser = await planSessionResumeService.resume(me(), f.sessionId).then(
+          () => null,
+          (err: unknown) => err,
+        );
+        const won = await winner!;
+        expect(loser).toBeInstanceOf(ResumeAlreadyStartedError);
+        expect((loser as ResumeAlreadyStartedError).jobId).toBe(won.jobId);
+        // The loser spent no job: only the winner submitted.
+        expect(submitJobMock).toHaveBeenCalledTimes(1);
+        expect((await planRow(f.planId)).sourceJobId).toBe(won.jobId);
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it(
     'a Resume racing a person’s restart, 20 times: ended and not re-bound, or open and re-bound — never both',
     { timeout: 300_000 },
     async () => {
