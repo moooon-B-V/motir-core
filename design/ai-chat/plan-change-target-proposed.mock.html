@@ -1,0 +1,2651 @@
+<!doctype html>
+<!--
+  design/ai-chat/plan-change-target-proposed.mock.html (MOTIR-8207).
+
+  DELTA on design/ai-chat/target-picker--search-and-canvas.mock.html and on
+  design-notes.md § "The target picker, revised" (MOTIR-6895), whose panel 6
+  said a proposed card shows no target action. Only the changed panels.
+
+  Read before drawing, and mirrored here: components/planning/ProjectRoadmapCanvas.tsx
+  (renderTargetButton, the action slot), PlanItemNode.tsx (the add frame, op badge),
+  PlanningTargetNode.tsx (PlanningTargetFrame), PlanningTargetChip.tsx (the
+  proposedWord variant, PlanningTargetKeyChip), PlanChangeComposer.tsx (the tray),
+  PlanChangeRail.tsx (the user turn's label), TargetSearchListbox.tsx,
+  PlanProposalList.tsx and ProposalPeek.tsx / IssueQuickViewPanel (the peek header).
+  Rendered against a local build on main before drawing (the plan pane's canvas,
+  list and peek; the overlay's tray).
+
+  TOKENS ARE EXTRACTED, NOT TYPED: the three blocks below are the declarations of
+  packages/design-system/theme.css's @theme, [data-theme='dark'] and
+  :root,[data-appearance-scope] blocks, comments stripped.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A proposed card as a planning target</title>
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-pairing, 'Segoe UI'),
+          var(--font-script-sans, var(--font-sans-tail, sans-serif)),
+          var(--font-sans-tail, sans-serif);
+        --font-serif:
+          var(--font-serif-pairing, Georgia),
+          var(--font-script-serif, var(--font-serif-tail, serif)), var(--font-serif-tail, serif);
+        --font-mono:
+          var(--font-mono-pairing, 'SF Mono'),
+          var(--font-script-mono, var(--font-mono-tail, monospace)),
+          var(--font-mono-tail, monospace);
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --width-rail-chrome: 20px;
+        --spacing-rail-inset: 0px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-progress-fill: var(--color-primary-fill);
+        --el-editor-focus: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --el-product-ai-planner: var(--color-primary);
+        --el-product-project-management: var(--color-accent-teal);
+        --el-product-project-manager: var(--color-accent);
+        --el-product-ai-debugging: var(--color-destructive);
+        --el-product-mcp: color-mix(in srgb, var(--color-primary) 55%, var(--color-destructive));
+        --el-product-cli: var(--color-charcoal);
+        --el-product-claude-code-connector: var(--color-accent-green);
+        --el-product-claude-code-plugin: color-mix(
+          in srgb,
+          var(--color-accent) 55%,
+          var(--color-accent-green)
+        );
+        --el-product-agent-fleet: color-mix(
+          in srgb,
+          var(--color-primary) 50%,
+          var(--color-accent-teal)
+        );
+        --el-product-agent-hosting: var(--color-slate);
+        --el-product-sandbox: color-mix(in srgb, var(--color-accent) 45%, var(--color-charcoal));
+        --el-logo-mark: var(--color-primary-fill);
+        --el-logo-tile: color-mix(in srgb, var(--color-primary-fill) 14%, var(--color-background));
+        --el-showcase-field: var(--color-primary);
+        --el-showcase-field-text: var(--color-background);
+        --el-showcase-field-ink: var(--color-primary);
+        --el-showcase-ground: var(--color-foreground);
+        --el-showcase-ground-text: var(--color-background);
+        --el-showcase-ground-muted: color-mix(
+          in srgb,
+          var(--color-background) 68%,
+          var(--color-foreground)
+        );
+        --el-showcase-ground-raised: color-mix(
+          in srgb,
+          var(--color-foreground) 90%,
+          var(--color-background)
+        );
+        --el-showcase-ground-rule: color-mix(
+          in srgb,
+          var(--color-foreground) 74%,
+          var(--color-background)
+        );
+        --el-showcase-highlight: color-mix(
+          in srgb,
+          var(--color-accent) 55%,
+          var(--color-background)
+        );
+        --el-showcase-decision: color-mix(
+          in srgb,
+          var(--color-accent) 70%,
+          var(--color-background)
+        );
+        --el-showcase-decision-text: var(--color-foreground);
+        --el-showcase-decision-ink: color-mix(
+          in srgb,
+          var(--color-accent) 65%,
+          var(--color-foreground)
+        );
+        --el-showcase-record: color-mix(
+          in srgb,
+          var(--color-accent-teal) 72%,
+          var(--color-foreground)
+        );
+        --el-showcase-record-text: var(--color-background);
+        --el-showcase-wash: var(--color-tint-sky);
+        --el-showcase-wash-warm: var(--color-tint-peach);
+        --el-showcase-paper: var(--color-background);
+        --el-showcase-paper-soft: var(--color-surface-soft);
+        --el-showcase-rule: var(--color-hairline);
+        --el-showcase-text: var(--color-foreground);
+        --el-showcase-muted: var(--color-slate);
+        --el-showcase-wave-1: var(--color-primary);
+        --el-showcase-wave-2: var(--color-accent-teal);
+        --el-showcase-wave-3: var(--color-accent);
+        --el-live-mark-1: var(--color-primary);
+        --el-live-mark-2: var(--color-accent-teal);
+        --el-live-mark-3: var(--color-accent);
+        --el-live-text-1: color-mix(in srgb, var(--color-primary) 60%, var(--color-foreground));
+        --el-live-text-2: color-mix(in srgb, var(--color-accent-teal) 60%, var(--color-foreground));
+        --el-live-text-3: color-mix(in srgb, var(--color-accent) 60%, var(--color-foreground));
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 30px 26px 44px;
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .boardhead h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+        color: var(--el-text-strong);
+      }
+      .boardhead p {
+        margin: 0;
+        max-width: 96ch;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .boardhead p + p {
+        margin-top: 8px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-label {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .panel-label .n {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .panel-label h2 {
+        margin: 0;
+        font-size: 15px;
+        color: var(--el-text-strong);
+      }
+      .panel-label .cap {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .panel-body {
+        padding: 18px;
+      }
+      .cols {
+        display: grid;
+        gap: 22px;
+        align-items: start;
+      }
+      .c2 {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      .c3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .sub {
+        margin: 0 0 8px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .note {
+        margin: 10px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 0 4px;
+        border-radius: var(--radius-kbd);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+      }
+      .stage {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 22px 18px;
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+        color: var(--el-text);
+      }
+      .stage.plain {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-soft);
+      }
+      .darkstage {
+        color: var(--el-text);
+      }
+      .ic {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        vertical-align: -2px;
+      }
+      .ic.s3 {
+        width: 12px;
+        height: 12px;
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      table.spec th {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--el-border);
+        text-align: left;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      table.spec td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: top;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+
+      /* ── breadcrumb bar (the canvas's level bar) ── */
+      .crumbs {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        align-self: flex-start;
+        padding: 8px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border-soft);
+        box-shadow: var(--shadow-card);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .crumbs b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .crumbs .new {
+        font-family: var(--font-mono);
+        font-weight: 600;
+        color: var(--el-accent-on-surface);
+      }
+
+      /* ── canvas cards — WorkItemCardShell (p-3.5, radius-card) + PlanItemNode frames ── */
+      .row {
+        display: flex;
+        gap: 26px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        padding-bottom: 22px;
+      }
+      .nodewrap {
+        position: relative;
+        width: 204px;
+        border-radius: var(--radius-card);
+      }
+      .nodewrap.sel {
+        box-shadow:
+          0 0 0 2px var(--el-surface-soft),
+          0 0 0 4px var(--el-accent-on-surface);
+      }
+      .card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-height: 112px;
+        padding: 12px 13px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+      }
+      .card.add {
+        border-style: dashed;
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .card.done {
+        background: var(--el-tint-sky);
+      }
+      .card .top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .opbadge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        color: var(--el-accent-on-surface);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 6px;
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 500;
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .card .mid {
+        display: flex;
+        gap: 8px;
+        margin-top: 7px;
+      }
+      .kind {
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-type-task);
+      }
+      .kind.story {
+        background: var(--el-tint-mint);
+        color: var(--el-type-story);
+      }
+      .card .k {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-identifier);
+      }
+      .card .k.new {
+        color: var(--el-accent-on-surface);
+        font-weight: 600;
+      }
+      .card .t {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+        color: var(--el-text);
+      }
+      /* PlanningTargetFrame — the accent ring + glow + Target pill, outside the diff frame */
+      .tframe {
+        position: absolute;
+        inset: -2px;
+        border-radius: var(--radius-card);
+        border: 2px solid var(--el-accent);
+        pointer-events: none;
+        box-shadow:
+          0 0 14px color-mix(in srgb, var(--el-accent) 24%, transparent),
+          0 0 28px -4px color-mix(in srgb, var(--el-highlight) 30%, transparent);
+      }
+      .tpill {
+        position: absolute;
+        top: -9px;
+        right: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      /* the selected card's ACTION SLOT — View · target toggle · Open */
+      .slot {
+        position: absolute;
+        left: 50%;
+        bottom: -15px;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+        z-index: 2;
+        white-space: nowrap;
+      }
+      .btn2 {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--spacing-btn-y) var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        box-shadow: var(--shadow-card);
+      }
+      .btn2.dis {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .btnp {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--spacing-btn-y) var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 0;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        box-shadow: var(--shadow-card);
+      }
+      .btnsm {
+        padding: var(--spacing-btn-y-sm) var(--spacing-btn-x-sm);
+        box-shadow: none;
+      }
+      .tip {
+        position: absolute;
+        left: 50%;
+        bottom: -54px;
+        transform: translateX(-50%);
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        background: var(--el-tooltip-bg);
+        color: var(--el-tooltip-text);
+        font-size: 11.5px;
+        white-space: nowrap;
+        z-index: 3;
+      }
+
+      /* ── the List (PlanProposalList) + ProposalPeek header ── */
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-soft);
+      }
+      .lhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .count {
+        padding: 0 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-count-bg);
+        color: var(--el-count-text);
+      }
+      .lrow {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+      }
+      .lrow .ttl {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .lrow .nk {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        margin-right: 6px;
+      }
+      .lrow .meta {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+      .lrow .end {
+        margin-left: auto;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .opchip {
+        padding: 1px 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .tbadge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-accent-on-surface);
+        color: var(--el-accent-on-surface);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .peek {
+        border-radius: var(--radius-modal);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-modal);
+        overflow: hidden;
+      }
+      .peekhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .peekhead .w {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .nyc {
+        padding: 1px 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .iconbtn {
+        display: inline-grid;
+        place-items: center;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+      }
+      .peekbody {
+        padding: 16px 20px;
+      }
+      .peekbody h3 {
+        margin: 0 0 6px;
+        font-family: var(--font-serif);
+        font-size: 22px;
+        color: var(--el-text);
+      }
+      .peekbody p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── the rail, composer tray and target chips ── */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 460px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .turns {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px;
+      }
+      .bub {
+        max-width: 88%;
+        padding: 9px 12px;
+        border-radius: var(--radius-card);
+        font-size: 13.5px;
+        line-height: 1.5;
+      }
+      .bub.u {
+        align-self: flex-end;
+        background: var(--el-chat-bubble-user);
+        color: var(--el-accent-text);
+      }
+      .bub.a {
+        align-self: flex-start;
+        background: var(--el-chat-bubble-ai);
+        color: var(--el-text);
+        border: 1px solid var(--el-border-soft);
+      }
+      .tl {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 4px;
+      }
+      .tl .lbl {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        opacity: 0.8;
+      }
+      .kchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 100%;
+        padding: 1px var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-accent-pressed);
+        color: var(--el-accent-text);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .kchip.prop {
+        border: 1px dashed var(--el-accent-text);
+        font-family: var(--font-sans);
+        font-weight: 500;
+      }
+      .kchip.prop .w {
+        font-family: var(--font-mono);
+        font-weight: 700;
+      }
+      .kchip.prop .tt {
+        max-width: 22ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .kchip.prop.struck .tt {
+        text-decoration: line-through;
+      }
+      .marker {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-page-bg);
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .marker b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .composer {
+        border-top: 1px solid var(--el-border-soft);
+        padding: 10px 12px 12px;
+      }
+      .tray {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .tray .lbl {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .tray .lim {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 100%;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      .chip .key {
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+        font-weight: 500;
+        color: var(--el-link);
+      }
+      .chip.prop {
+        border-style: dashed;
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .chip.prop .key {
+        font-weight: 600;
+        color: var(--el-accent-on-surface);
+      }
+      .chip .tt {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 26ch;
+      }
+      .chip .x {
+        display: inline-grid;
+        place-items: center;
+        margin-right: -2px;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+      }
+      .chip.flash {
+        box-shadow: 0 0 0 2px var(--el-accent-on-surface);
+      }
+      .field {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── TargetSearchListbox ── */
+      .lb {
+        width: 100%;
+        max-width: 460px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .lb .sec {
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-bottom: 1px solid var(--el-border-soft);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .lb .sec.second {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .lb .opts {
+        padding: 4px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .opt.act {
+        background: var(--el-surface-soft);
+      }
+      .opt .key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .opt .key.new {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .opt .tt {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .opt .tt.isT {
+        color: var(--el-text-secondary);
+      }
+      .opt .endpill {
+        margin-left: auto;
+      }
+      .empty {
+        padding: 8px var(--spacing-control-x);
+        text-align: center;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .hints {
+        display: flex;
+        gap: 12px;
+        padding: 4px var(--spacing-control-x);
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-card);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .typeic {
+        display: inline-grid;
+        place-items: center;
+        color: var(--el-type-task);
+      }
+      .typeic.story {
+        color: var(--el-type-story);
+      }
+
+      /* access-path strip */
+      .path {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .step {
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-page-bg);
+      }
+      .step .h {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .step .h .n {
+        display: inline-grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        color: var(--el-text);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .step p {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="i-target" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="6" />
+        <circle cx="12" cy="12" r="2" />
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24">
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+        <circle cx="12" cy="12" r="3" />
+      </symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+      <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+      <symbol id="i-task" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="m9 12 2 2 4-4" />
+      </symbol>
+      <symbol id="i-story" viewBox="0 0 24 24">
+        <path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2z" />
+        <path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z" />
+      </symbol>
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </symbol>
+      <symbol id="i-info" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 16v-4M12 8h.01" />
+      </symbol>
+    </svg>
+
+    <main class="board">
+      <header class="boardhead">
+        <h1>A proposed card as a planning target</h1>
+        <p>
+          Delta on <code>design/ai-chat/target-picker--search-and-canvas.mock.html</code> and on
+          <code>design-notes.md</code> §
+          <em
+            >The target picker, revised — search that finds a number, and Set as target on the
+            canvas</em
+          >
+          (MOTIR-6895). That section said a proposed card <b>shows no target action</b>. This delta
+          reverses that: a card the plan under review <b>adds</b> can be a target, on the Canvas and
+          the List, at any depth. Only the panels that change are drawn; everything else is the
+          shipped surface.
+        </p>
+        <p>
+          One name for the thing: the canvas card the person clicks already reads
+          <b>New</b> in its key slot, and the shipped proposed chip (<code
+            >PlanningTargetChip proposedWord</code
+          >) already carries that word on the <code>add</code> card's dashed-accent frame. A
+          proposed target is drawn with that chip everywhere it appears. The word <b>proposed</b> is
+          used where a sentence has to be read aloud or written out: accessible names, the turn's
+          read-out and the rail notes. Never "plan item", never a <code>planItem:</code> id.
+        </p>
+      </header>
+
+      <!-- 1 ACCESS PATH -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">1</span>
+          <h2>The access path — a plan under review, then the card</h2>
+          <span class="cap">light</span>
+        </div>
+        <div class="panel-body">
+          <div class="path">
+            <div class="step">
+              <div class="h"><span class="n">1</span>Plan with AI</div>
+              <p>
+                From the roadmap, a work item, or a Plans row
+                (<code>?plan=change&amp;planSession=…</code>). The planning overlay opens.
+              </p>
+            </div>
+            <div class="step">
+              <div class="h"><span class="n">2</span>The plan's pane</div>
+              <p>
+                The session has a plan under review, so the pane draws
+                <code>PlanProposalViews</code>: List and Canvas. Its <code>add</code> cards read
+                <b>+ add</b> and <b>New</b>.
+              </p>
+            </div>
+            <div class="step">
+              <div class="h"><span class="n">3</span>Select a New card</div>
+              <p>
+                A click selects it. Its action slot now offers <b>Set as target</b> beside View
+                (panel 2). On the List, the row opens the peek, whose header carries it (panel 3).
+              </p>
+            </div>
+            <div class="step">
+              <div class="h"><span class="n">4</span>It joins the tray</div>
+              <p>
+                The composer's tray shows it as a New chip beside any committed targets (panel 4).
+                The next turn sends both.
+              </p>
+            </div>
+          </div>
+          <p class="note">
+            The second door is unchanged in shape: the composer's search (panel 5) gains a section
+            for this plan's proposals. Neither door exists without a plan under review, because
+            without one there are no proposals.
+          </p>
+        </div>
+      </section>
+
+      <!-- 2 CANVAS -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">2</span>
+          <h2>The Canvas — Set as target on a New card, at any depth</h2>
+          <span class="cap">light · dark</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">2a · selected, not yet a target</p>
+              <div class="stage">
+                <div class="crumbs">
+                  Roadmap <svg class="ic s3"><use href="#i-chev" /></svg> PROD-326 · Epic 6
+                  <svg class="ic s3"><use href="#i-chev" /></svg>
+                  <b>PROD-440 · 6.15 Board filtering</b>
+                </div>
+                <div class="row">
+                  <div class="nodewrap">
+                    <div class="card">
+                      <div class="top"><span class="status">Blocked</span></div>
+                      <div class="mid">
+                        <span class="kind"
+                          ><svg class="ic"><use href="#i-task" /></svg
+                        ></span>
+                        <div>
+                          <div class="k">PROD-443</div>
+                          <div class="t">6.15.3 Enable the board Filter seam</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="nodewrap sel">
+                    <div class="card add">
+                      <div class="top">
+                        <span class="opbadge"
+                          ><svg class="ic s3"><use href="#i-plus" /></svg>add</span
+                        >
+                      </div>
+                      <div class="mid">
+                        <span class="kind"
+                          ><svg class="ic"><use href="#i-task" /></svg
+                        ></span>
+                        <div>
+                          <div class="k new">New</div>
+                          <div class="t">Saved filters for the board</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="slot">
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-eye" /></svg>View
+                      </button>
+                      <button
+                        class="btn2"
+                        aria-label="Set the proposed “Saved filters for the board” as the planning target"
+                      >
+                        <svg class="ic"><use href="#i-target" /></svg>Set as target
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                The button is the shipped one (<code>renderTargetButton</code>): View's secondary
+                treatment, so the card keeps one accent action. Only its
+                <b>accessible name</b> changes for a proposal: <code>setTargetProposedAria</code>,
+                which names the title, because there is no key to name.
+              </p>
+            </div>
+            <div>
+              <p class="sub">2b · after the press — the same card, now a target</p>
+              <div class="stage">
+                <div class="crumbs">
+                  Roadmap <svg class="ic s3"><use href="#i-chev" /></svg> PROD-326 · Epic 6
+                  <svg class="ic s3"><use href="#i-chev" /></svg>
+                  <b>PROD-440 · 6.15 Board filtering</b>
+                </div>
+                <div class="row">
+                  <div class="nodewrap">
+                    <div class="card">
+                      <div class="top"><span class="status">Blocked</span></div>
+                      <div class="mid">
+                        <span class="kind"
+                          ><svg class="ic"><use href="#i-task" /></svg
+                        ></span>
+                        <div>
+                          <div class="k">PROD-443</div>
+                          <div class="t">6.15.3 Enable the board Filter seam</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="nodewrap sel">
+                    <div class="card add">
+                      <div class="top">
+                        <span class="opbadge"
+                          ><svg class="ic s3"><use href="#i-plus" /></svg>add</span
+                        >
+                      </div>
+                      <div class="mid">
+                        <span class="kind"
+                          ><svg class="ic"><use href="#i-task" /></svg
+                        ></span>
+                        <div>
+                          <div class="k new">New</div>
+                          <div class="t">Saved filters for the board</div>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="tframe" aria-hidden="true"></span>
+                    <span class="tpill"
+                      ><svg class="ic s3"><use href="#i-target" /></svg>Target</span
+                    >
+                    <div class="slot">
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-eye" /></svg>View
+                      </button>
+                      <button
+                        class="btn2"
+                        aria-pressed="true"
+                        aria-label="Remove the proposed “Saved filters for the board” from the planning targets"
+                      >
+                        <svg class="ic"><use href="#i-x" /></svg>Remove target
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                <code>PlanningTargetFrame</code> sits <b>outside</b> the add card's dashed frame,
+                exactly as it sits outside a modify card's ring: the op and the target are two
+                facts, and neither replaces the other.
+              </p>
+            </div>
+          </div>
+
+          <div class="cols c2" style="margin-top: 22px">
+            <div>
+              <p class="sub">2c · at depth — a New story, drilled, and its New child</p>
+              <div class="stage">
+                <div class="crumbs">
+                  PROD-326 · Epic 6 <svg class="ic s3"><use href="#i-chev" /></svg> PROD-440
+                  <svg class="ic s3"><use href="#i-chev" /></svg> <span class="new">New</span>
+                  <b>Board filter presets</b>
+                </div>
+                <div class="row">
+                  <div class="nodewrap sel">
+                    <div class="card add">
+                      <div class="top">
+                        <span class="opbadge"
+                          ><svg class="ic s3"><use href="#i-plus" /></svg>add</span
+                        >
+                      </div>
+                      <div class="mid">
+                        <span class="kind"
+                          ><svg class="ic"><use href="#i-task" /></svg
+                        ></span>
+                        <div>
+                          <div class="k new">New</div>
+                          <div class="t">Preset: my open bugs</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="slot">
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-eye" /></svg>View
+                      </button>
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-target" /></svg>Set as target
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                Depth changes nothing: a New card is eligible on whatever level it is drawn,
+                including inside a New container the reader drilled into (its crumb is the shipped
+                <code>proposedCrumb</code>, <b>New</b>).
+              </p>
+            </div>
+            <div>
+              <p class="sub">2d · a New container offers all three</p>
+              <div class="stage">
+                <div class="crumbs">
+                  PROD-326 · Epic 6 <svg class="ic s3"><use href="#i-chev" /></svg>
+                  <b>PROD-440 · 6.15 Board filtering</b>
+                </div>
+                <div class="row">
+                  <div class="nodewrap sel" style="margin-left: 64px">
+                    <div class="card add">
+                      <div class="top">
+                        <span class="opbadge"
+                          ><svg class="ic s3"><use href="#i-plus" /></svg>add</span
+                        >
+                      </div>
+                      <div class="mid">
+                        <span class="kind story"
+                          ><svg class="ic"><use href="#i-story" /></svg
+                        ></span>
+                        <div>
+                          <div class="k new">New</div>
+                          <div class="t">Board filter presets</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="slot">
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-eye" /></svg>View
+                      </button>
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-target" /></svg>Set as target
+                      </button>
+                      <button class="btnp">
+                        Open<svg class="ic"><use href="#i-chev" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                The slot's order is the shipped one: View · target · Open. Open stays the accent.
+              </p>
+            </div>
+          </div>
+
+          <div class="cols c2" style="margin-top: 22px">
+            <div>
+              <p class="sub">2e · dark — selected</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="row">
+                  <div class="nodewrap sel">
+                    <div class="card add">
+                      <div class="top">
+                        <span class="opbadge"
+                          ><svg class="ic s3"><use href="#i-plus" /></svg>add</span
+                        >
+                      </div>
+                      <div class="mid">
+                        <span class="kind"
+                          ><svg class="ic"><use href="#i-task" /></svg
+                        ></span>
+                        <div>
+                          <div class="k new">New</div>
+                          <div class="t">Saved filters for the board</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="slot">
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-eye" /></svg>View
+                      </button>
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-target" /></svg>Set as target
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="sub">2f · dark — a target</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="row">
+                  <div class="nodewrap sel">
+                    <div class="card add">
+                      <div class="top">
+                        <span class="opbadge"
+                          ><svg class="ic s3"><use href="#i-plus" /></svg>add</span
+                        >
+                      </div>
+                      <div class="mid">
+                        <span class="kind"
+                          ><svg class="ic"><use href="#i-task" /></svg
+                        ></span>
+                        <div>
+                          <div class="k new">New</div>
+                          <div class="t">Saved filters for the board</div>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="tframe" aria-hidden="true"></span>
+                    <span class="tpill"
+                      ><svg class="ic s3"><use href="#i-target" /></svg>Target</span
+                    >
+                    <div class="slot">
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-eye" /></svg>View
+                      </button>
+                      <button class="btn2" aria-pressed="true">
+                        <svg class="ic"><use href="#i-x" /></svg>Remove target
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="note">
+            <b>Which cards in this pane are eligible.</b> An <code>add</code> card: as a
+            <b>proposed</b> target. A <code>modify</code> or <code>remove</code> card, and an
+            unchanged committed card drawn for context: as an ordinary target, by its <b>key</b>,
+            exactly as on the no-plan canvas. The plan's pane drew no target action at all until
+            now; it gets the same <code>targetAction</code> the no-plan canvas has, widened to
+            proposals.
+          </p>
+        </div>
+      </section>
+
+      <!-- 3 LIST -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">3</span>
+          <h2>The List — the peek carries the action, the row carries the mark</h2>
+          <span class="cap">light · dark</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">3a · the peek header, an add proposal</p>
+              <div class="peek">
+                <div class="peekhead">
+                  <span class="typeic"
+                    ><svg class="ic"><use href="#i-task" /></svg></span
+                  ><span class="w">New</span><span class="nyc">not yet created</span>
+                  <span style="margin-left: auto"></span>
+                  <button class="btn2 btnsm">
+                    <svg class="ic"><use href="#i-target" /></svg>Set as target
+                  </button>
+                  <span class="iconbtn" aria-label="Close"
+                    ><svg class="ic"><use href="#i-x" /></svg
+                  ></span>
+                </div>
+                <div class="peekbody">
+                  <h3>Saved filters for the board</h3>
+                  <p>Store and recall named board filters.</p>
+                </div>
+              </div>
+              <p class="note">
+                An add proposal's header has no Open link (there is no page to open), so the target
+                button takes that place, before the close. It is the same button at
+                <code>size sm</code>, and it toggles to <b>Remove target</b> in place. The peek
+                stays open.
+              </p>
+            </div>
+            <div>
+              <p class="sub">3b · the row once it is a target</p>
+              <div class="list">
+                <div class="lhead">Adds <span class="count">2</span></div>
+                <div class="lrow">
+                  <span class="typeic"
+                    ><svg class="ic"><use href="#i-task" /></svg
+                  ></span>
+                  <div>
+                    <div>
+                      <span class="nk">no key yet</span
+                      ><span class="ttl">Saved filters for the board</span>
+                    </div>
+                    <div class="meta">task · code &nbsp; under 6.15 Board filtering</div>
+                  </div>
+                  <div class="end">
+                    <span class="tbadge"
+                      ><svg class="ic s3"><use href="#i-target" /></svg>Target</span
+                    ><span class="opchip">add</span>
+                  </div>
+                </div>
+                <div class="lrow">
+                  <span class="typeic"
+                    ><svg class="ic"><use href="#i-task" /></svg
+                  ></span>
+                  <div>
+                    <div>
+                      <span class="nk">no key yet</span
+                      ><span class="ttl">Split the filter bar into chips</span>
+                    </div>
+                    <div class="meta">task · code &nbsp; under 6.15 Board filtering</div>
+                  </div>
+                  <div class="end"><span class="opchip">add</span></div>
+                </div>
+              </div>
+              <p class="note">
+                A row keeps <b>one control</b> (its title opens the peek). The target is shown, not
+                offered, with the search listbox's own outlined <b>Target</b> mark
+                (<code>nodePill</code>) before the op chip.
+              </p>
+            </div>
+          </div>
+          <div class="cols c2" style="margin-top: 22px">
+            <div>
+              <p class="sub">3c · dark — peek header, now a target</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="peek">
+                  <div class="peekhead">
+                    <span class="typeic"
+                      ><svg class="ic"><use href="#i-task" /></svg></span
+                    ><span class="w">New</span><span class="nyc">not yet created</span>
+                    <span style="margin-left: auto"></span>
+                    <button class="btn2 btnsm" aria-pressed="true">
+                      <svg class="ic"><use href="#i-x" /></svg>Remove target
+                    </button>
+                    <span class="iconbtn" aria-label="Close"
+                      ><svg class="ic"><use href="#i-x" /></svg
+                    ></span>
+                  </div>
+                  <div class="peekbody">
+                    <h3>Saved filters for the board</h3>
+                    <p>Store and recall named board filters.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="sub">3d · dark — the row</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="list">
+                  <div class="lrow">
+                    <span class="typeic"
+                      ><svg class="ic"><use href="#i-task" /></svg
+                    ></span>
+                    <div>
+                      <div>
+                        <span class="nk">no key yet</span
+                        ><span class="ttl">Saved filters for the board</span>
+                      </div>
+                      <div class="meta">task · code</div>
+                    </div>
+                    <div class="end">
+                      <span class="tbadge"
+                        ><svg class="ic s3"><use href="#i-target" /></svg>Target</span
+                      ><span class="opchip">add</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4 TRAY -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">4</span>
+          <h2>The tray — mixed targets, and the shared cap</h2>
+          <span class="cap">light · dark</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">4a · a committed target and a proposed one</p>
+              <div class="rail">
+                <div class="composer">
+                  <div class="tray" role="group" aria-label="Targets">
+                    <span class="lbl">Targets</span>
+                    <span class="chip"
+                      ><span class="typeic story"
+                        ><svg class="ic s3"><use href="#i-story" /></svg></span
+                      ><span class="key">PROD-440</span><span class="tt">6.15 Board filtering</span
+                      ><span class="x" aria-label="Remove PROD-440"
+                        ><svg class="ic s3"><use href="#i-x" /></svg></span
+                    ></span>
+                    <span class="chip prop"
+                      ><span class="typeic"
+                        ><svg class="ic s3"><use href="#i-task" /></svg></span
+                      ><span class="key">New</span
+                      ><span class="tt">Saved filters for the board</span
+                      ><span class="x" aria-label="Remove Saved filters for the board (proposed)"
+                        ><svg class="ic s3"><use href="#i-x" /></svg></span
+                    ></span>
+                  </div>
+                  <div class="field">
+                    <svg class="ic"><use href="#i-search" /></svg>Reply, or refine further…
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                The proposed chip is the shipped <code>proposedWord</code> variant <b>plus</b> the
+                remove button the normal chip already has. Its name reads
+                <i>Remove Saved filters for the board (proposed)</i>: the shipped
+                <code>remove</code> string, fed the title with <code>proposedSuffix</code>. The tray
+                keeps the order targets were set in.
+              </p>
+            </div>
+            <div>
+              <p class="sub">4b · at the cap — proposals count toward it</p>
+              <div class="rail">
+                <div class="composer">
+                  <div class="tray" role="group" aria-label="Targets">
+                    <span class="lbl">Targets</span>
+                    <span class="chip"
+                      ><span class="typeic story"
+                        ><svg class="ic s3"><use href="#i-story" /></svg></span
+                      ><span class="key">PROD-440</span><span class="tt">6.15 Board filtering</span
+                      ><span class="x"
+                        ><svg class="ic s3"><use href="#i-x" /></svg></span
+                    ></span>
+                    <span class="chip prop"
+                      ><span class="typeic"
+                        ><svg class="ic s3"><use href="#i-task" /></svg></span
+                      ><span class="key">New</span
+                      ><span class="tt">Saved filters for the board</span
+                      ><span class="x"
+                        ><svg class="ic s3"><use href="#i-x" /></svg></span
+                    ></span>
+                    <span class="chip"
+                      ><span class="key">PROD-443</span
+                      ><span class="tt">6.15.3 Enable the board…</span
+                      ><span class="x"
+                        ><svg class="ic s3"><use href="#i-x" /></svg></span
+                    ></span>
+                    <span class="chip" style="color: var(--el-text-secondary)">+ 17 more</span>
+                    <span class="lim">You can plan around up to 20 items at once.</span>
+                  </div>
+                  <div class="field">
+                    <svg class="ic"><use href="#i-search" /></svg>Reply, or refine further…
+                  </div>
+                </div>
+              </div>
+              <div class="stage" style="margin-top: 14px; padding-bottom: 62px">
+                <div class="row" style="padding-bottom: 0">
+                  <div class="nodewrap sel">
+                    <div class="card add">
+                      <div class="top">
+                        <span class="opbadge"
+                          ><svg class="ic s3"><use href="#i-plus" /></svg>add</span
+                        >
+                      </div>
+                      <div class="mid">
+                        <span class="kind"
+                          ><svg class="ic"><use href="#i-task" /></svg
+                        ></span>
+                        <div>
+                          <div class="k new">New</div>
+                          <div class="t">Split the filter bar into chips</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="slot">
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-eye" /></svg>View
+                      </button>
+                      <button class="btn2 dis" disabled>
+                        <svg class="ic"><use href="#i-target" /></svg>Set as target
+                      </button>
+                    </div>
+                    <span class="tip" role="tooltip"
+                      >You can plan around up to 20 items at once.</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                <code>MAX_PLANNING_TARGETS</code> (20) counts <b>both kinds</b>. At the cap the tray
+                says so, and every Set as target, committed or proposed, is disabled with that
+                sentence as its title. The "+ 17 more" chip is the mock's elision, not a new
+                control. The cap sentence now says <b>items</b>, not <i>work items</i>, because a
+                proposal is not one yet.
+              </p>
+            </div>
+          </div>
+          <div class="cols c2" style="margin-top: 22px">
+            <div>
+              <p class="sub">4c · dark</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="rail">
+                  <div class="composer">
+                    <div class="tray">
+                      <span class="lbl">Targets</span>
+                      <span class="chip"
+                        ><span class="typeic story"
+                          ><svg class="ic s3"><use href="#i-story" /></svg></span
+                        ><span class="key">PROD-440</span
+                        ><span class="tt">6.15 Board filtering</span
+                        ><span class="x"
+                          ><svg class="ic s3"><use href="#i-x" /></svg></span
+                      ></span>
+                      <span class="chip prop"
+                        ><span class="typeic"
+                          ><svg class="ic s3"><use href="#i-task" /></svg></span
+                        ><span class="key">New</span
+                        ><span class="tt">Saved filters for the board</span
+                        ><span class="x"
+                          ><svg class="ic s3"><use href="#i-x" /></svg></span
+                      ></span>
+                    </div>
+                    <div class="field">
+                      <svg class="ic"><use href="#i-search" /></svg>Reply, or refine further…
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="sub">4d · dark — at the cap</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="rail">
+                  <div class="composer">
+                    <div class="tray">
+                      <span class="lbl">Targets</span>
+                      <span class="chip prop"
+                        ><span class="key">New</span
+                        ><span class="tt">Saved filters for the board</span
+                        ><span class="x"
+                          ><svg class="ic s3"><use href="#i-x" /></svg></span
+                      ></span>
+                      <span class="chip" style="color: var(--el-text-secondary)">+ 19 more</span>
+                      <span class="lim">You can plan around up to 20 items at once.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5 SEARCH -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">5</span>
+          <h2>Search — this plan's proposals, in their own section</h2>
+          <span class="cap">light · dark</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">5a · "filter" — both sections</p>
+              <div class="lb" role="listbox" aria-label="Work items to plan around">
+                <div class="sec" id="s1">Work items matching “filter”</div>
+                <div class="opts" role="group" aria-labelledby="s1">
+                  <div class="opt" role="option" aria-disabled="true">
+                    <span class="typeic story"
+                      ><svg class="ic"><use href="#i-story" /></svg></span
+                    ><span class="key">PROD-440</span
+                    ><span class="tt isT">6.15 Board filtering</span
+                    ><span class="endpill tbadge"
+                      ><svg class="ic s3"><use href="#i-target" /></svg>Target</span
+                    >
+                  </div>
+                  <div class="opt act" role="option" aria-selected="true">
+                    <span class="typeic"
+                      ><svg class="ic"><use href="#i-task" /></svg></span
+                    ><span class="key">PROD-443</span
+                    ><span class="tt">6.15.3 Enable the board Filter seam</span
+                    ><span class="endpill status">Blocked</span>
+                  </div>
+                </div>
+                <div class="sec second" id="s2">Proposed in this plan matching “filter”</div>
+                <div class="opts" role="group" aria-labelledby="s2">
+                  <div
+                    class="opt"
+                    role="option"
+                    aria-disabled="true"
+                    aria-label="Saved filters for the board (proposed), already a target"
+                  >
+                    <span class="typeic"
+                      ><svg class="ic"><use href="#i-task" /></svg></span
+                    ><span class="key new">New</span
+                    ><span class="tt isT">Saved filters for the board</span
+                    ><span class="endpill tbadge"
+                      ><svg class="ic s3"><use href="#i-target" /></svg>Target</span
+                    >
+                  </div>
+                  <div
+                    class="opt"
+                    role="option"
+                    aria-label="Split the filter bar into chips (proposed)"
+                  >
+                    <span class="typeic"
+                      ><svg class="ic"><use href="#i-task" /></svg></span
+                    ><span class="key new">New</span
+                    ><span class="tt">Split the filter bar into chips</span
+                    ><span class="endpill opchip">add</span>
+                  </div>
+                </div>
+                <div class="hints" aria-hidden="true">
+                  <span>↑↓ move</span><span>Enter add as target</span><span>Esc close</span>
+                </div>
+              </div>
+              <p class="note">
+                One listbox, two labelled groups; the arrows run through both in order. A proposal
+                row keeps the shipped row grammar with <b>New</b> in the key slot and the op chip
+                where a status pill goes, because a proposal has no status. Only
+                <code>add</code> proposals are listed: a <code>modify</code>/<code>remove</code>
+                names a work item that the first section already finds by key.
+              </p>
+            </div>
+            <div>
+              <p class="sub">5b · no match in either section</p>
+              <div class="lb" role="listbox" aria-label="Work items to plan around">
+                <div class="sec">Work items matching “zebra”</div>
+                <p class="empty">No work items match “zebra”.</p>
+                <div class="sec second">Proposed in this plan matching “zebra”</div>
+                <p class="empty">No proposals in this plan match “zebra”.</p>
+              </div>
+              <p class="sub" style="margin-top: 18px">5c · empty field, a plan under review</p>
+              <div class="lb">
+                <div class="sec">Work items</div>
+                <p class="empty">Search by key, number or title…</p>
+                <div class="sec second">Proposed in this plan</div>
+                <div class="opts">
+                  <div class="opt">
+                    <span class="typeic"
+                      ><svg class="ic"><use href="#i-task" /></svg></span
+                    ><span class="key new">New</span
+                    ><span class="tt">Saved filters for the board</span
+                    ><span class="endpill opchip">add</span>
+                  </div>
+                  <div class="opt">
+                    <span class="typeic"
+                      ><svg class="ic"><use href="#i-task" /></svg></span
+                    ><span class="key new">New</span
+                    ><span class="tt">Split the filter bar into chips</span
+                    ><span class="endpill opchip">add</span>
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                A plan's proposals are few and already loaded, so with an empty field the section
+                lists them all (the plan's own order) instead of asking for typing; it filters on
+                the title as the person types, with no minimum length.
+                <b>With no plan under review the section is absent</b>, and the listbox is
+                byte-identical to MOTIR-6895's.
+              </p>
+            </div>
+          </div>
+          <div class="cols c2" style="margin-top: 22px">
+            <div>
+              <p class="sub">5d · dark</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="lb">
+                  <div class="sec">Work items matching “filter”</div>
+                  <div class="opts">
+                    <div class="opt act">
+                      <span class="typeic"
+                        ><svg class="ic"><use href="#i-task" /></svg></span
+                      ><span class="key">PROD-443</span
+                      ><span class="tt">6.15.3 Enable the board Filter seam</span
+                      ><span class="endpill status">Blocked</span>
+                    </div>
+                  </div>
+                  <div class="sec second">Proposed in this plan matching “filter”</div>
+                  <div class="opts">
+                    <div class="opt">
+                      <span class="typeic"
+                        ><svg class="ic"><use href="#i-task" /></svg></span
+                      ><span class="key new">New</span
+                      ><span class="tt isT">Saved filters for the board</span
+                      ><span class="endpill tbadge"
+                        ><svg class="ic s3"><use href="#i-target" /></svg>Target</span
+                      >
+                    </div>
+                    <div class="opt">
+                      <span class="typeic"
+                        ><svg class="ic"><use href="#i-task" /></svg></span
+                      ><span class="key new">New</span
+                      ><span class="tt">Split the filter bar into chips</span
+                      ><span class="endpill opchip">add</span>
+                    </div>
+                  </div>
+                  <div class="hints">
+                    <span>↑↓ move</span><span>Enter add as target</span><span>Esc close</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="sub">5e · dark — no match</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="lb">
+                  <div class="sec">Work items matching “zebra”</div>
+                  <p class="empty">No work items match “zebra”.</p>
+                  <div class="sec second">Proposed in this plan matching “zebra”</div>
+                  <p class="empty">No proposals in this plan match “zebra”.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6 TURN -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">6</span>
+          <h2>The sent turn — the label, and how it reads aloud</h2>
+          <span class="cap">light · dark</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">6a · one proposed target</p>
+              <div class="rail">
+                <div class="turns">
+                  <div
+                    class="bub u"
+                    aria-label="Targeting 1 item: Saved filters for the board (proposed)"
+                  >
+                    <div class="tl">
+                      <span class="lbl">Targeting 1 item</span
+                      ><span class="kchip prop"
+                        ><span class="w">New</span
+                        ><span class="tt">Saved filters for the board</span></span
+                      >
+                    </div>
+                    Split this into a store and a picker.
+                  </div>
+                </div>
+              </div>
+              <p class="sub" style="margin-top: 16px">6b · mixed</p>
+              <div class="rail">
+                <div class="turns">
+                  <div
+                    class="bub u"
+                    aria-label="Targeting 2 items: PROD-440, Saved filters for the board (proposed)"
+                  >
+                    <div class="tl">
+                      <span class="lbl">Targeting 2 items</span><span class="kchip">PROD-440</span
+                      ><span class="kchip prop"
+                        ><span class="w">New</span
+                        ><span class="tt">Saved filters for the board</span></span
+                      >
+                    </div>
+                    Fold the saved filters into the story.
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                A committed target stays key-only (<code>PlanningTargetKeyChip</code>). A proposal
+                has no key, so its compact chip carries <b>New</b> and the title, truncated, with a
+                dashed edge in the bubble's own ink. The label group's accessible name is
+                <code>turnTargetsAria</code>:
+                <i>Targeting 1 item: Saved filters for the board (proposed)</i>.
+              </p>
+            </div>
+            <div>
+              <p class="sub">6c · dark</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="rail">
+                  <div class="turns">
+                    <div class="bub u">
+                      <div class="tl">
+                        <span class="lbl">Targeting 2 items</span><span class="kchip">PROD-440</span
+                        ><span class="kchip prop"
+                          ><span class="w">New</span
+                          ><span class="tt">Saved filters for the board</span></span
+                        >
+                      </div>
+                      Fold the saved filters into the story.
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                What the turn sends: <code>targetKeys</code> holds <code>PROD-440</code> and
+                <code>planItem:&lt;id&gt;</code>, the same ref form
+                <code>add_plan_items</code> already takes as a <code>parentRef</code>. The person
+                never sees that string.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7 LIFECYCLE -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">7</span>
+          <h2>When the proposal changes under the target</h2>
+          <span class="cap">light · dark</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">7a · re-titled by a later turn</p>
+              <div class="rail">
+                <div class="composer">
+                  <div class="tray">
+                    <span class="lbl">Target</span>
+                    <span class="chip prop"
+                      ><span class="typeic"
+                        ><svg class="ic s3"><use href="#i-task" /></svg></span
+                      ><span class="key">New</span><span class="tt">Named board filters</span
+                      ><span class="x"
+                        ><svg class="ic s3"><use href="#i-x" /></svg></span
+                    ></span>
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                A target is held by its proposal's id, so the title is <b>read</b>, never stored:
+                the tray chip, the canvas pill and the search row all show the current title. A sent
+                turn's chip shows the title as it is now, too. No note: nothing the person chose has
+                changed.
+              </p>
+            </div>
+            <div>
+              <p class="sub">7b · withdrawn from the plan</p>
+              <div class="rail">
+                <div class="turns">
+                  <div class="bub u">
+                    <div class="tl">
+                      <span class="lbl">Targeting 1 item</span
+                      ><span class="kchip prop struck"
+                        ><span class="w">New</span
+                        ><span class="tt">Saved filters for the board</span></span
+                      >
+                    </div>
+                    Split this into a store and a picker.
+                  </div>
+                  <div class="marker">
+                    <svg class="ic"><use href="#i-info" /></svg
+                    ><span
+                      ><b>“Saved filters for the board”</b> was withdrawn from the plan, so it is no
+                      longer a target.</span
+                    >
+                  </div>
+                </div>
+                <div class="composer">
+                  <div class="field">
+                    <svg class="ic"><use href="#i-search" /></svg>Reply, or refine further…
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                The tray drops the chip (the tray is gone when it was the only target). One marker
+                line in the rail says why, in the shipped marker vocabulary. Earlier turns are not
+                rewritten: their chip is <b>struck</b>, the shipped <code>struck</code> treatment.
+              </p>
+            </div>
+          </div>
+          <div class="cols c2" style="margin-top: 22px">
+            <div>
+              <p class="sub">7c · the plan is approved</p>
+              <div class="rail">
+                <div class="turns">
+                  <div class="marker">
+                    <svg class="ic"><use href="#i-info" /></svg
+                    ><span
+                      ><b>“Saved filters for the board”</b> was approved as <b>PROD-812</b> and is
+                      still a target.</span
+                    >
+                  </div>
+                </div>
+                <div class="composer">
+                  <div class="tray">
+                    <span class="lbl">Target</span>
+                    <span class="chip flash"
+                      ><span class="typeic"
+                        ><svg class="ic s3"><use href="#i-task" /></svg></span
+                      ><span class="key">PROD-812</span
+                      ><span class="tt">Saved filters for the board</span
+                      ><span class="x"
+                        ><svg class="ic s3"><use href="#i-x" /></svg></span
+                    ></span>
+                  </div>
+                  <div class="field">
+                    <svg class="ic"><use href="#i-search" /></svg>Reply, or refine further…
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                Approval turns the proposal into a work item, so the target becomes an ordinary one:
+                the chip swaps to the committed chip with the new key, ringed once in the accent ink
+                so the eye finds the change. A sent turn's chip shows the new key, because it now
+                resolves to a work item.
+              </p>
+            </div>
+            <div>
+              <p class="sub">7d · the plan is declined</p>
+              <div class="rail">
+                <div class="turns">
+                  <div class="marker">
+                    <svg class="ic"><use href="#i-info" /></svg
+                    ><span>The plan was declined, so its proposals are no longer targets.</span>
+                  </div>
+                </div>
+                <div class="composer">
+                  <div class="tray">
+                    <span class="lbl">Target</span>
+                    <span class="chip"
+                      ><span class="typeic story"
+                        ><svg class="ic s3"><use href="#i-story" /></svg></span
+                      ><span class="key">PROD-440</span><span class="tt">6.15 Board filtering</span
+                      ><span class="x"
+                        ><svg class="ic s3"><use href="#i-x" /></svg></span
+                    ></span>
+                  </div>
+                  <div class="field">
+                    <svg class="ic"><use href="#i-search" /></svg>Reply, or refine further…
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                Every proposed target is cleared at once; committed targets stay. One marker,
+                however many proposals were cleared.
+              </p>
+            </div>
+          </div>
+          <div class="cols c2" style="margin-top: 22px">
+            <div>
+              <p class="sub">7e · dark — withdrawn</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="rail">
+                  <div class="turns">
+                    <div class="bub u">
+                      <div class="tl">
+                        <span class="lbl">Targeting 1 item</span
+                        ><span class="kchip prop struck"
+                          ><span class="w">New</span
+                          ><span class="tt">Saved filters for the board</span></span
+                        >
+                      </div>
+                      Split this into a store and a picker.
+                    </div>
+                    <div class="marker">
+                      <svg class="ic"><use href="#i-info" /></svg
+                      ><span
+                        ><b>“Saved filters for the board”</b> was withdrawn from the plan, so it is
+                        no longer a target.</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="sub">7f · dark — approved</p>
+              <div class="stage darkstage" data-theme="dark" data-appearance-scope>
+                <div class="rail">
+                  <div class="turns">
+                    <div class="marker">
+                      <svg class="ic"><use href="#i-info" /></svg
+                      ><span
+                        ><b>“Saved filters for the board”</b> was approved as <b>PROD-812</b> and is
+                        still a target.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="tray">
+                      <span class="lbl">Target</span>
+                      <span class="chip flash"
+                        ><span class="key">PROD-812</span
+                        ><span class="tt">Saved filters for the board</span
+                        ><span class="x"
+                          ><svg class="ic s3"><use href="#i-x" /></svg></span
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8 ABSENT -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">8</span>
+          <h2>Where the action is absent or disabled</h2>
+          <span class="cap">light</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c3">
+            <div>
+              <p class="sub">8a · a Visitor</p>
+              <div class="stage" style="padding-bottom: 40px">
+                <div class="row" style="padding-bottom: 0">
+                  <div class="nodewrap sel">
+                    <div class="card add">
+                      <div class="top">
+                        <span class="opbadge"
+                          ><svg class="ic s3"><use href="#i-plus" /></svg>add</span
+                        >
+                      </div>
+                      <div class="mid">
+                        <span class="kind"
+                          ><svg class="ic"><use href="#i-task" /></svg
+                        ></span>
+                        <div>
+                          <div class="k new">New</div>
+                          <div class="t">Saved filters for the board</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="slot">
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-eye" /></svg>View
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                No <code>ai:plan</code>, no composer, so no target action anywhere: View only on the
+                card, nothing in the peek header but the close.
+              </p>
+            </div>
+            <div>
+              <p class="sub">8b · another plan's proposal</p>
+              <div class="lb">
+                <div class="sec">Proposed in this plan matching “preset”</div>
+                <p class="empty">No proposals in this plan match “preset”.</p>
+              </div>
+              <p class="note">
+                Never offered. Search lists only the proposals of the plan this conversation is
+                reviewing, and the canvas draws no other plan's cards. A plan drawn
+                <i>beside</i> the reader's level (the shipped "plan elsewhere" offer) is a trip to
+                it, not a source of targets.
+              </p>
+            </div>
+            <div>
+              <p class="sub">8c · a decided plan</p>
+              <div class="stage" style="padding-bottom: 40px">
+                <div class="row" style="padding-bottom: 0">
+                  <div class="nodewrap sel">
+                    <div class="card add">
+                      <div class="top">
+                        <span class="opbadge"
+                          ><svg class="ic s3"><use href="#i-plus" /></svg>add</span
+                        ><span class="status">Declined</span>
+                      </div>
+                      <div class="mid">
+                        <span class="kind"
+                          ><svg class="ic"><use href="#i-task" /></svg
+                        ></span>
+                        <div>
+                          <div class="k new">New</div>
+                          <div class="t">Saved filters for the board</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="slot">
+                      <button class="btn2">
+                        <svg class="ic"><use href="#i-eye" /></svg>View
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="note">
+                Once the plan is decided its pane shows the outcome; a declined proposal offers no
+                target action. An approved one is a work item now and is targeted by its key on the
+                roadmap canvas.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 9 COPY -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">9</span>
+          <h2>Copy — <code>planningWorkspace.targets</code>, en and zh</h2>
+          <span class="cap">new and changed keys</span>
+        </div>
+        <div class="panel-body">
+          <table class="spec">
+            <thead>
+              <tr>
+                <th>key</th>
+                <th>en</th>
+                <th>zh</th>
+                <th>where</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>proposedSuffix</code> new</td>
+                <td>{title} (proposed)</td>
+                <td>{title}（提案中）</td>
+                <td>accessible names; the turn read-out</td>
+              </tr>
+              <tr>
+                <td><code>setTargetProposedAria</code> new</td>
+                <td>Set the proposed “{title}” as the planning target</td>
+                <td>将提案中的“{title}”设为规划目标</td>
+                <td>canvas and peek button, not a target</td>
+              </tr>
+              <tr>
+                <td><code>removeTargetProposedAria</code> new</td>
+                <td>Remove the proposed “{title}” from the planning targets</td>
+                <td>从规划目标中移除提案中的“{title}”</td>
+                <td>canvas and peek button, a target</td>
+              </tr>
+              <tr>
+                <td><code>proposalsSectionLabel</code> new</td>
+                <td>Proposed in this plan</td>
+                <td>本计划中的提案</td>
+                <td>search, second section, empty field</td>
+              </tr>
+              <tr>
+                <td><code>proposalsSectionLabelQuery</code> new</td>
+                <td>Proposed in this plan matching “{query}”</td>
+                <td>本计划中包含“{query}”的提案</td>
+                <td>search, second section, a query</td>
+              </tr>
+              <tr>
+                <td><code>proposalsNoResults</code> new</td>
+                <td>No proposals in this plan match “{query}”.</td>
+                <td>本计划中没有匹配“{query}”的提案。</td>
+                <td>search, second section empty</td>
+              </tr>
+              <tr>
+                <td><code>turnTargetsAria</code> new</td>
+                <td>{count, plural, one {Targeting # item} other {Targeting # items}}: {items}</td>
+                <td>{count, plural, other {针对 # 项}}：{items}</td>
+                <td>the sent turn's label group</td>
+              </tr>
+              <tr>
+                <td><code>withdrawnNote</code> new</td>
+                <td>“{title}” was withdrawn from the plan, so it is no longer a target.</td>
+                <td>“{title}”已从计划中撤回，不再是目标。</td>
+                <td>rail marker</td>
+              </tr>
+              <tr>
+                <td><code>approvedNote</code> new</td>
+                <td>“{title}” was approved as {key} and is still a target.</td>
+                <td>“{title}”已批准为 {key}，仍是目标。</td>
+                <td>rail marker</td>
+              </tr>
+              <tr>
+                <td><code>declinedNote</code> new</td>
+                <td>The plan was declined, so its proposals are no longer targets.</td>
+                <td>计划已被拒绝，其提案不再是目标。</td>
+                <td>rail marker</td>
+              </tr>
+              <tr>
+                <td><code>limitReached</code> changed</td>
+                <td>You can plan around up to {max} items at once.</td>
+                <td>一次最多可围绕 {max} 项规划。</td>
+                <td>tray; disabled button title</td>
+              </tr>
+              <tr>
+                <td><code>turnLabel</code> changed (zh only)</td>
+                <td>(unchanged) Targeting # item / items</td>
+                <td>{count, plural, other {针对 # 项}}</td>
+                <td>the sent turn</td>
+              </tr>
+              <tr>
+                <td><code>planReview.proposedCrumb</code> reused</td>
+                <td>New</td>
+                <td>新</td>
+                <td>key slot of every proposed chip and search row</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="note">
+            Every other target string is reused unchanged: <code>setTarget</code>,
+            <code>removeTarget</code>, <code>nodePill</code>, <code>trayLabel</code>,
+            <code>remove</code> (fed <code>proposedSuffix</code>), <code>hintPick</code>.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

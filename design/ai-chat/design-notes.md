@@ -5917,3 +5917,157 @@ key under `act.call` — `act.call.tool.*` (40 keys), `act.call.family.*` (12),
 `tests/design-three-file-set.test.ts` pass on it. It amends sheet 3 and MOTIR-7975's
 section, which stay as records. It gates **MOTIR-8064** (the rendering and the en
 and zh catalogues).
+
+## ⭐ A PROPOSED card as a planning target — Set as target on the plan's own cards, a proposals section in search, and what happens when the proposal moves (MOTIR-8207, 2026-10-11)
+
+**Mock:** [`plan-change-target-proposed.mock.html`](plan-change-target-proposed.mock.html), a DELTA
+holding only the panels that change, light and dark. **Gates:** MOTIR-8206 (the build). **Relates
+to:** MOTIR-8205.
+
+**What it amends, by path.** The section
+[`Setting the planning TARGET … (MOTIR-6895)`](#-setting-the-planning-target--the-search-control-a-search-with-its-own-field-the--hand-off-and-set-as-target-on-the-canvas-motir-6895-2026-09-29)
+and its mock [`target-picker--search-and-canvas.mock.html`](target-picker--search-and-canvas.mock.html),
+whose panel 6 said: _"A PROPOSED card (the plan canvas, no key yet) shows no target action — it
+cannot be a target."_ **That sentence is reversed for `add` proposals of the plan the conversation is
+reviewing.** Everything else in MOTIR-6895 stands. Both stay as records.
+
+**Rendered first.** A local build of `main` (ec50b7a) with a plan of two `add` proposals under
+PROD-440, opened through `/roadmap?plan=change&planSession=…`: the plan pane's Canvas (add cards read
+**+ add** and **New**), its List (rows read **no key yet**), the ProposalPeek header (**New** · _not yet
+created_ · close, nothing else), and the no-plan overlay's tray (**TARGET**, one committed chip). The
+plan pane draws no target action today: `PlanningWorkspaceHost` passes `onToggleTarget` only to
+`PlanChangeCanvas`, and `PlanProposalViews` / `PlanReviewCanvas` take no `targetAction`.
+
+### The calls
+
+1. **One name: the shipped word "New".** The card the person clicks already reads **New** in its key
+   slot (`planReview.proposedCrumb`), and `PlanningTargetChip`'s `proposedWord` variant already
+   carries that word on the `add` card's dashed-accent-on-lavender frame. A proposed target is drawn
+   with that chip in the tray, the search row and the sent turn. A new visible word ("proposed") would
+   give one thing two names on one screen. **"proposed" is used where a sentence must be read or
+   written out**: accessible names (`proposedSuffix` → _"Saved filters for the board (proposed)"_),
+   the turn's read-out, and the rail notes. This satisfies the card's turn label \_"Targeting 1 item:
+   <title> (proposed)"_ as the label group's accessible name (`turnTargetsAria`); the visible label
+   stays the shipped _"Targeting 1 item"_ followed by the chip. If a reviewer wants the word visible,
+   it is a one-string change: render `proposedSuffix` instead of the chip's title. Never "plan item",
+   never a `planItem:` id. (The List's row prefix, _no key yet_, is a third shipped word for the same
+   thing. It is left alone here; the row is not a target surface.)
+2. **The Canvas (panel 2).** In the plan's pane, a selected `add` card's action slot gains the shipped
+   target button (`renderTargetButton`, View's secondary treatment, so Open stays the one accent) in
+   the shipped order **View · Set as target · Open**. Its accessible name is `setTargetProposedAria` /
+   `removeTargetProposedAria`, naming the title because there is no key. After the press the card
+   wears `PlanningTargetFrame` **outside** the add frame, and the button reads **Remove target** in
+   place; the canvas stays on its level. **At any depth**: a New card is eligible on whatever level it
+   is drawn, including inside a New container the reader drilled into. In the same pane, `modify` /
+   `remove` cards and unchanged context cards are eligible as **ordinary** targets by their key,
+   exactly as on the no-plan canvas.
+3. **The List (panel 3).** Rows keep **one control** (the title opens the peek). The action lives in
+   the **ProposalPeek header**: an `add` proposal's header has no Open link (no page exists), so the
+   same button at `size sm` takes that place before the close, toggling in place; the peek stays open.
+   A targeted row shows the outlined **Target** mark (`nodePill`, the search listbox's already-target
+   pill) before its op chip — shown, not offered.
+4. **The tray (panel 4).** Mixed trays are allowed, in the order targets were set. The proposed chip
+   is the `proposedWord` variant **plus** the ✕ the committed chip has; its name is the shipped
+   `remove` string fed `proposedSuffix`. **`MAX_PLANNING_TARGETS` (20) counts both kinds.** At the cap
+   the tray's sentence shows and every Set as target, committed or proposed, is disabled with that
+   sentence as its title. The sentence now says **items**, not _work items_ (`limitReached` changed),
+   and the tray's sentence takes `--el-text-secondary` (it sits on the rail's `--el-surface`, where
+   `--el-text-muted` measures 4.17:1).
+5. **Search (panel 5).** One listbox, **two labelled groups**: _Work items_ (unchanged) and _Proposed
+   in this plan_ (`proposalsSectionLabel` / `…Query`). The arrows run through both in order; `Enter`
+   adds as before. A proposal row keeps the row grammar with **New** in the key slot and the op chip
+   where a status pill goes; a proposal already targeted is kept, `aria-disabled`, with the Target
+   pill, like a committed one. Only `add` proposals are listed (a modify/remove is found by key in the
+   first section). The plan's proposals are already loaded, so with an empty field the section lists
+   them all in the plan's order, and it filters on the title as the person types, with no minimum
+   length. Empty: `proposalsNoResults`. **With no plan under review the section is absent** and the
+   listbox is unchanged.
+6. **The sent turn (panel 6).** A committed target stays key-only (`PlanningTargetKeyChip`). A
+   proposed one gets a compact chip on the user bubble: **New** + the title, truncated at 22ch, a
+   dashed edge in the bubble's own ink (`--el-accent-text` on `--el-accent-pressed`, the shipped
+   on-accent pair).
+7. **When the proposal changes (panel 7).** A target is held by the proposal's **id**, and its title is
+   read, never stored:
+   - **Re-titled** by a later turn: every surface shows the current title, including sent turns. No
+     note.
+   - **Withdrawn**: the chip leaves the tray; one rail marker (`withdrawnNote`); earlier turns keep the
+     chip, **struck** (the chip's shipped `struck` prop).
+   - **Plan approved**: the proposal is now a work item, so the target becomes ordinary. The tray chip
+     swaps to the committed chip with the new key, ringed once in `--el-accent-on-surface`; one marker
+     (`approvedNote`, naming the new key); sent turns resolve to the key.
+   - **Plan declined**: every proposed target is cleared at once, committed ones stay; one marker
+     (`declinedNote`), however many were cleared.
+8. **Absent or disabled (panel 8).** A **Visitor** (no `ai:plan`) has no composer, so no target action
+   anywhere: View only on the card, the close alone in the peek. **Another plan's proposals are never
+   offered**: search lists only the reviewed plan's, the canvas draws no other plan's cards, and the
+   "plan elsewhere" offer is a trip, not a source. **A decided plan's pane** offers nothing on a
+   declined proposal; an approved one is a work item, targeted by key on the roadmap canvas. **At the
+   cap**, disabled as in call 4.
+
+### Copy — `planningWorkspace.targets` (en / zh)
+
+| key                                | en                                                                         | zh                                          |
+| ---------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------- |
+| `proposedSuffix` (new)             | {title} (proposed)                                                         | {title}（提案中）                           |
+| `setTargetProposedAria` (new)      | Set the proposed “{title}” as the planning target                          | 将提案中的“{title}”设为规划目标             |
+| `removeTargetProposedAria` (new)   | Remove the proposed “{title}” from the planning targets                    | 从规划目标中移除提案中的“{title}”           |
+| `proposalsSectionLabel` (new)      | Proposed in this plan                                                      | 本计划中的提案                              |
+| `proposalsSectionLabelQuery` (new) | Proposed in this plan matching “{query}”                                   | 本计划中包含“{query}”的提案                 |
+| `proposalsNoResults` (new)         | No proposals in this plan match “{query}”.                                 | 本计划中没有匹配“{query}”的提案。           |
+| `turnTargetsAria` (new)            | {count, plural, one {Targeting # item} other {Targeting # items}}: {items} | {count, plural, other {针对 # 项}}：{items} |
+| `withdrawnNote` (new)              | “{title}” was withdrawn from the plan, so it is no longer a target.        | “{title}”已从计划中撤回，不再是目标。       |
+| `approvedNote` (new)               | “{title}” was approved as {key} and is still a target.                     | “{title}”已批准为 {key}，仍是目标。         |
+| `declinedNote` (new)               | The plan was declined, so its proposals are no longer targets.             | 计划已被拒绝，其提案不再是目标。            |
+| `limitReached` (changed)           | You can plan around up to {max} items at once.                             | 一次最多可围绕 {max} 项规划。               |
+| `turnLabel` (zh changed)           | (unchanged)                                                                | {count, plural, other {针对 # 项}}          |
+
+Reused unchanged: `setTarget`, `removeTarget`, `nodePill`, `trayLabel`, `remove`, `hintPick`, and
+`planReview.proposedCrumb` (**New** / **新**) for every proposed chip's key slot.
+
+### Tokens
+
+Every element is a shipped one; no token is added. Proposed chip: `--el-tint-lavender` fill, dashed
+`--el-accent` border, key word `--el-accent-on-surface`, title `--el-text`, ✕ `--el-text-secondary`,
+`--radius-control`, `--spacing-kbd-x/y`. Target frame and pill: as `PlanningTargetFrame` (`--el-accent`
+border, palette-mixed glow, pill `--el-accent` / `--el-accent-text`, `--radius-badge`). Target button:
+`--el-surface`, `--el-border`, `--el-text-secondary`, `--radius-btn`, `--spacing-btn-x/y`
+(`-sm` in the peek), `--shadow-card`. Search section heads and empties: `--el-text-secondary` on
+`--el-surface`. Turn chip: `--el-accent-pressed` / `--el-accent-text`, `--radius-badge`. Rail markers:
+`--el-text-secondary` on `--el-page-bg`, emphasis `--el-text`.
+
+### What core must build (MOTIR-8206)
+
+- **A `PlanningTarget` form for a proposal.** Today `PlanningTarget` is `{ id, identifier, title, kind }`
+  and `addPlanningTarget` dedupes by `identifier`. A proposal has no identifier: add a discriminated
+  form (e.g. `{ ref: 'planItem:<id>', planItemId, title, kind, proposed: true }`), dedupe on the ref,
+  count it in `MAX_PLANNING_TARGETS`, and resolve title / status at read time from the plan review.
+- **`targetAction` on the plan's pane.** `PlanReviewCanvas` (via `PlanProposalViews`) takes the same
+  `CanvasTargetAction` `PlanChangeCanvas` builds: `isEligible` true for `add` proposals of the reviewed
+  plan **and** for committed cards; `keyFor` the key, or the title for a proposal; `disabledReason`
+  `limitReached`. `ProposalPeek` gets the header button for an `add`. `PlanningWorkspaceHost` passes
+  `onToggleTarget` / `canAddTarget` to the plan pane too, gated on `ai:plan` (no action for a Visitor).
+- **Search.** `TargetSearchListbox` renders a second labelled group from the loaded review's `add`
+  items when a plan is under review, filtered client-side on the title, and the keyboard model spans
+  both groups.
+- **The session's `targetKeys` carry `planItem:<id>` refs to motir-ai**, beside work-item keys, in the
+  same form `add_plan_items` already accepts as a `parentRef`. The rail resolves each ref at render
+  (current title; **New** chip; struck when withdrawn/declined; the work item's key once approved).
+- **Lifecycle.** On a review update, drop withdrawn proposals from the tray (marker), swap approved
+  ones to their new work item (marker, using the approve result's id → key map), clear all proposed
+  on decline (marker).
+- **Copy.** The en + zh keys above.
+
+### GIVES / TAKES
+
+- **GIVES:** the plan pane a target action (Canvas card slot, peek header); the tray a proposed chip
+  with ✕; search a proposals group; the turn a proposed chip and a read-out; three rail markers.
+- **TAKES:** MOTIR-6895 panel 6's "a proposed card shows no target action"; `limitReached`'s _work
+  items_ wording; zh `turnLabel`'s 工作项; the tray sentence's `--el-text-muted` ink. Nothing else is
+  removed: the no-plan canvas, the committed chip, the search's first section and every shipped target
+  string keep their behaviour.
+
+### Render check
+
+The mock was opened in Chromium at 1240px and every panel looked at, light and dark: the action slot
+sits on the card's bottom edge without covering the title, the three-button slot stays inside its
+stage, and the target frame clears the dashed add frame.
