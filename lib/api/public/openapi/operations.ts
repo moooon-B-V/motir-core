@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import type { PublicOperation } from '@/lib/api/public/openapi/operation';
 import {
+  ideaCategory,
   projectCategoriesSchema,
   projectSquarePageSchema,
   publicChangelogPageSchema,
@@ -741,8 +742,10 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
         name: 'category',
         in: 'query',
         required: false,
-        description: 'Restrict to one category, by slug.',
-        schema: z.string(),
+        description:
+          'Restrict to one category, by slug. A slug outside the closed set is ' +
+          '`400 INVALID_IDEA_FILTER`.',
+        schema: ideaCategory,
       },
       {
         name: 'tag',
