@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { MONITOR_REFRESH_LEASE_MS } from '@/lib/services/monitorCredentialService';
 
 /**
  * Guards for MOTIR-2387 — the Fly runtime: `output: 'standalone'`, the
@@ -447,6 +448,22 @@ describe('fly.toml — the deployment configuration', () => {
       .filter((line) => !line.trimStart().startsWith('#'))
       .filter((line) => /^\s*(machine_count|count|machines)\s*=/.test(line));
     expect(assignments).toEqual([]);
+  });
+
+  it('gives a stopping machine long enough to store a credential refresh in flight', () => {
+    // MOTIR-8184. Fly SIGKILLs a machine `kill_timeout` after SIGTERM (5 s by
+    // default). The worker's drain waits for an in-flight monitor token refresh
+    // to commit the pair the provider has already rotated — up to the refresh
+    // LEASE. A kill_timeout shorter than that lease lets a deploy land between
+    // Sentry's answer and our write, which is the connection-killing window this
+    // card closed. Fly caps the value at 300 s.
+    const line = flyToml.split('\n').find((l) => /^kill_timeout\s*=/.test(l));
+    expect(line, 'fly.toml must set a top-level kill_timeout').toBeDefined();
+    const match = /"(\d+)s"/.exec(line ?? '');
+    expect(match).not.toBeNull();
+    const seconds = Number(match![1]);
+    expect(seconds * 1000).toBeGreaterThan(MONITOR_REFRESH_LEASE_MS);
+    expect(seconds).toBeLessThanOrEqual(300);
   });
 });
 

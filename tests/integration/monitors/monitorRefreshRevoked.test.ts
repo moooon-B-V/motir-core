@@ -262,6 +262,9 @@ describe('the permanent refusal is LOGGED ONCE', () => {
       installationRowId: b.installationRowId,
       provider: 'sentry',
       providerReason: GONE,
+      // The refusal line carries the refresh's duration (MOTIR-8184).
+      durationMs: expect.any(Number),
+      refreshUncertainSince: null,
     });
 
     // The later attempts still keep the verdict current without a second line.

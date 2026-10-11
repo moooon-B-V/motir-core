@@ -21,6 +21,16 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
                                 # connects with a plain DATABASE_URL over the
                                 # public internet either way (ADR Q8).
 
+# How long Fly waits after SIGTERM before it SIGKILLs a machine (MOTIR-8184).
+# Fly's default is 5 s, and the worker's drain (`scripts/worker.ts`) waits for an
+# in-flight monitor token REFRESH to commit the pair the provider just rotated —
+# up to `MONITOR_REFRESH_LEASE_MS` (75 s). Killed sooner, a deploy can land
+# between Sentry's answer and our write, and the connection is dead until a
+# person re-authorises. It is a CEILING, not a delay: the web process exits as
+# soon as its open requests finish, and the worker as soon as its drain does.
+# Fly caps it at 300 s. Pinned against the lease by `tests/fly-runtime-config.test.ts`.
+kill_timeout = "90s"
+
 [build]
   dockerfile = "Dockerfile"
 
