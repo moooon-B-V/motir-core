@@ -83,7 +83,10 @@ export function LanguageCard({ contentLanguage = null }: LanguageCardProps = {})
         </div>
       </div>
       {contentLanguage ? (
-        <div className="mt-4 flex flex-col gap-2 border-t border-(--el-border-soft) pt-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div
+          data-testid="content-language-readonly"
+          className="mt-4 flex flex-col gap-2 border-t border-(--el-border-soft) pt-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+        >
           <div className="min-w-0">
             <div className="font-sans text-sm font-medium text-(--el-text)">
               {t('contentLanguage.label', { org: contentLanguage.orgName })}
