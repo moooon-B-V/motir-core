@@ -910,7 +910,8 @@ export const homeService = {
       const projectScopes = await resolveActiveProjectScope(ctx, tx);
       const projectIds = projectScopes.map((scope) => scope.projectId);
       // The plans a revision holds right now (MOTIR-7988) — out of the approvals
-      // count and into the planning one, exactly as the two lists read them.
+      // count, exactly as the list reads them. The planning count needs no such
+      // help: a revision re-opens its plan to `generating` (MOTIR-8208).
       const heldPlanIds = await planRevisionHoldService.heldPlanIds(
         { workspaceId: ctx.workspaceId, projectIds },
         tx,
@@ -1003,7 +1004,6 @@ export const homeService = {
             workspaceId: ctx.workspaceId,
             projectIds,
             userId: ctx.userId,
-            revisingPlanIds: heldPlanIds,
           },
           tx,
         ),

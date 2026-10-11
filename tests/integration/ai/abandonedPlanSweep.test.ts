@@ -27,6 +27,7 @@ import { abandonedPlanSweep } from '@/lib/jobs/definitions/abandonedPlanSweep';
 import { jobDefinitions } from '@/lib/jobs/registry';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { plansService } from '@/lib/services/plansService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { connectAndLinkRepo } from '../../fixtures/codeContextFixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -908,6 +909,91 @@ describe('the sweep — the NO-PRODUCER arm (MOTIR-3236)', () => {
     const byPlan = new Map(summary.outcomes.map((o) => [o.planId, o]));
     expect(byPlan.get(jobless)).toMatchObject({ outcome: 'declined', reason: 'no_producer' });
     expect(byPlan.get(withJob)).toMatchObject({ outcome: 'declined', reason: 'job_terminal' });
+  });
+});
+
+// Bug MOTIR-8208 — a revision RE-OPENS its plan (`planned` → `generating`), and the
+// plan's `createdAt` is the FIRST generation's, so it is always past the grace. The
+// main loop must not judge it as a generation; the revision backstop gives it back.
+describe('the sweep — a plan a REVISION re-opened (MOTIR-8208)', () => {
+  const MCP = { source: 'mcp' as const, harness: 'Claude Code', model: null };
+
+  /** A `planned` plan created a day ago, then re-opened by a revision. */
+  async function reopenedPlan(fx: WorkItemFixture, jobId?: string): Promise<string> {
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Revised', authorSource: 'mcp', authorHarness: 'Claude Code' },
+      fx.ctx,
+    );
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'A card', kind: 'story' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await adminDb.plan.update({
+      where: { id: plan.id },
+      data: { createdAt: new Date(Date.now() - 20 * HOUR) },
+    });
+    await plansService.acquireRevisionLease(plan.id, fx.ctx, MCP, jobId ? { jobId } : {});
+    expect((await planRow(plan.id)).status).toBe('generating');
+    return plan.id;
+  }
+
+  async function ageTrail(planId: string, ms: number) {
+    for (const row of await adminDb.planRevision.findMany({ where: { planId } })) {
+      await adminDb.planRevision.update({
+        where: { id: row.id },
+        data: { changedAt: new Date(row.changedAt.getTime() - ms) },
+      });
+    }
+  }
+
+  it('never declines a plan a LIVE revision holds, however old the plan is', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await reopenedPlan(fx);
+    jobIn('failed');
+
+    const summary = await abandonedPlanService.reconcileAbandoned();
+
+    expect(summary.outcomes.find((o) => o.planId === planId)).toBeUndefined();
+    expect((await planRow(planId)).status).toBe('generating');
+    expect(getJob).not.toHaveBeenCalled();
+  });
+
+  it('gives a LAPSED job-less revision back to `planned` — the lease is the only signal', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await reopenedPlan(fx);
+    await ageTrail(planId, PAST_GRACE_MS);
+
+    const summary = await abandonedPlanService.reconcileAbandoned();
+
+    expect(summary.outcomes.find((o) => o.planId === planId)).toMatchObject({
+      outcome: 'revision_released',
+      reason: 'lease_lapsed',
+    });
+    const plan = await planRow(planId);
+    expect(plan.status).toBe('planned');
+    expect(plan.decidedAt).toBeNull();
+    expect(getJob).not.toHaveBeenCalled();
+  });
+
+  it('gives back a hosted revision whose JOB died unseen, and never declines it', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await reopenedPlan(fx, 'job_revision_dead');
+    await ageTrail(planId, PAST_GRACE_MS);
+    jobIn('failed');
+
+    const summary = await abandonedPlanService.reconcileAbandoned();
+
+    expect(summary.outcomes.find((o) => o.planId === planId)).toMatchObject({
+      outcome: 'revision_failed',
+    });
+    expect((await planRow(planId)).status).toBe('planned');
+    const ended = await adminDb.planRevision.findFirstOrThrow({
+      where: { planId, changeKind: 'revision_ended' },
+    });
+    expect(ended.diff).toMatchObject({ failed: true, restoredTo: 'planned' });
   });
 });
 

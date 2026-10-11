@@ -507,7 +507,8 @@ describe('HELD while a revision is in flight — derived, never stored (§11.5c)
       expect((err as PlanRevisionInFlightError).heldBy).toBe('Claude Code');
     }
     expect((await gateRow(gate.id)).state).toBe('awaiting');
-    expect((await planRow(planId)).status).toBe('planned');
+    // The revision RE-OPENED the plan (MOTIR-8208); its gate is held, not withdrawn.
+    expect((await planRow(planId)).status).toBe('generating');
 
     const read = await approvalGatesService.getForPlan({ planId }, fx.ctx);
     expect(read.gate?.held).toMatchObject({ reason: 'revision_in_flight', heldBy: 'Claude Code' });

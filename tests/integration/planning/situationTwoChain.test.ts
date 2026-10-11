@@ -190,10 +190,16 @@ describe('chain 1 — a failed revision of a planned plan (form B)', () => {
       expect(after.planningSessions?.some((e) => e.sessionId === sessionId) ?? false).toBe(false);
       expect(after.total).toBe(before.total - 1);
 
-      // The revision lands: its final append closes the lease. Then the plan is approved.
-      await adminDb.planRevision.create({
-        data: { planId, changeKind: 'revision_ended', diff: { revision: true, jobId: 'job-r2' } },
+      // The revision RE-OPENED the plan (MOTIR-8208); it lands through its close — the
+      // final append's `closeRevision` — which puts it back to `planned` and ends the
+      // lease. Then the plan is approved.
+      expect((await planRow(planId)).status).toBe('generating');
+      await plansService.closeRevision(planId, fx.ctx, {
+        source: 'native',
+        harness: 'Motir',
+        model: null,
       });
+      expect((await planRow(planId)).status).toBe('planned');
       await plansService.approvePlan(planId, fx.ctx);
       expect((await planRow(planId)).status).toBe('approved');
       expect((await sessionRow(sessionId)).endReason).toBe('approved');
@@ -671,9 +677,10 @@ describe('races (real transactions, ≥ 20 iterations)', () => {
         expect(lease).toBeNull();
         expect(s.endReason).toBe('approved');
       } else {
-        // The turn won: P is leased to the new job and this turn cleared the failure.
+        // The turn won: P is leased to the new job — and re-opened by it (MOTIR-8208) —
+        // and this turn cleared the failure.
         expect(turn.status).toBe('fulfilled');
-        expect(p.status).toBe('planned');
+        expect(p.status).toBe('generating');
         expect(lease).not.toBeNull();
         expect(s.failedAt).toBeNull();
       }

@@ -2066,7 +2066,7 @@ interface HoldPlanRevisionArgs {
 
 /**
  * `hold_plan_revision` → ONE service call per action: `acquireRevisionLease` for
- * `start`, `renewRevisionLease` for `renew`, `releaseRevisionLease` for `end`.
+ * `start`, `renewRevisionLease` for `renew`, `closeRevision` for `end`.
  * The actor is the MCP agent itself, so the trail and a refused decision name it.
  */
 export async function runHoldPlanRevision(
@@ -2109,13 +2109,18 @@ export async function runHoldPlanRevision(
       }),
     );
   }
-  const released = await plansService.releaseRevisionLease(args.planId, ctx, actor, {
-    via: HOLD_PLAN_REVISION_TOOL_NAME,
+  // The END closes the plan the revision re-opened (Bug MOTIR-8208) — through the
+  // same close a generation takes — and then gives the lease back.
+  const released = await plansService.closeRevision(args.planId, ctx, actor, {
+    trailDiff: { via: HOLD_PLAN_REVISION_TOOL_NAME },
   });
   return toolOk(
-    released.released
-      ? `Released plan ${args.planId}: it is back in Waiting on you and can be decided.`
-      : `Plan ${args.planId} was not held; nothing was written.`,
+    released.status === 'declined'
+      ? `Ended the revision of plan ${args.planId}: it holds no proposals, so it was discarded ` +
+          'rather than put in front of a reviewer.'
+      : released.released
+        ? `Released plan ${args.planId}: it is back in Waiting on you and can be decided.`
+        : `Plan ${args.planId} was not held; nothing was written.`,
     exempt(HOLD_PLAN_REVISION_TOOL_NAME, {
       planId: args.planId,
       action: args.action,
@@ -2441,15 +2446,18 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         `\`revision: true\` write (\`${ADD_PLAN_ITEMS_TOOL_NAME}\`, \`${UPDATE_PLAN_ITEM_TOOL_NAME}\`), ` +
         `\`${UPDATE_PLAN_PROPOSAL_TOOL_NAME}\` or \`${WITHDRAW_PLAN_PROPOSAL_TOOL_NAME}\`, and with ` +
         "`action: 'end'` when the revision finishes — however it finishes, including on a " +
-        'failure. While held the plan is listed under Planning instead of Waiting on you, and ' +
+        'failure. `start` RE-OPENS the plan (`planned` → `generating`), so your steps and notes ' +
+        '(`report_plan_step`) land on it, and `end` closes it again through the same check a ' +
+        'finished generation passes (it comes back `planned`, or is discarded if it holds no ' +
+        'proposals). While held the plan is listed under Planning instead of Waiting on you, and ' +
         'Approve and Decline are refused with PLAN_REVISION_IN_FLIGHT. The hold lasts ten ' +
         'minutes from your latest write to the plan; if you may go longer than that without ' +
         "one, send `action: 'renew'` every few minutes. A renew on a hold that already lapsed " +
         "writes nothing and says so (`held: false`) — take it again with `action: 'start'`. " +
         '`start` is REFUSED with PLAN_REVISION_IN_FLIGHT while another revision holds the plan, ' +
         'and with PLAN_NOT_EDITABLE once it is approved or declined. `end` on a plan nobody ' +
-        'holds is a no-op success. A revision that dies without `end` releases itself when the ' +
-        'hold runs out. It changes nothing about the plan’s proposals or status. Same grant as ' +
+        'holds is a no-op success. A revision that dies without `end` is given back to `planned` ' +
+        'once the hold runs out. It changes nothing about the plan’s proposals. Same grant as ' +
         `\`${ADD_PLAN_ITEMS_TOOL_NAME}\`. Costs nothing and starts no job.`,
       inputSchema: holdPlanRevisionInputSchema,
     },

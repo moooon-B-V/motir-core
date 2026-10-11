@@ -503,14 +503,14 @@ export const aiGenerationService = {
     // a rename lands on the plan's trail as the same `brief_edited` row a
     // person's correction does, rather than as an untraced column write.
     //
-    // ⚠️ ONLY WHILE THE PLAN IS `generating`, and never on a revision pass. A
-    // revision does not open or close a plan, so it does not name one; and a plan
-    // that has left `generating` is a reviewer's (or a record's) — a title on
-    // that append is IGNORED rather than refused, so the proposals it carries
-    // still land. A title equal to the stored one writes nothing: a no-op is not
-    // worth a trail row.
+    // ⚠️ ONLY WHILE THE PLAN IS `generating`. A revision of a `planned` plan
+    // RE-OPENS it (Bug MOTIR-8208), so its appends see `generating` and its title
+    // is re-checked exactly as the first generation's was; a plan that has left
+    // `generating` is a reviewer's (or a record's) — a title on that append is
+    // IGNORED rather than refused, so the proposals it carries still land. A title
+    // equal to the stored one writes nothing: a no-op is not worth a trail row.
     const title = opts.title?.trim();
-    if (!opts.revision && title && plan.status === 'generating' && title !== plan.title) {
+    if (title && plan.status === 'generating' && title !== plan.title) {
       await plansService.correctPlanBrief(plan.id, { title }, ctx);
     }
 
@@ -533,21 +533,26 @@ export const aiGenerationService = {
 
     // ⚠️ `final` MEANS *THIS PASS IS OVER*, and what that costs depends on which
     // pass it was (Story MOTIR-3595 · Subtask MOTIR-3598). A GENERATION's last
-    // append closes its plan into the review queue; a REVISION's releases the
-    // lease and leaves the plan exactly where it was — `planned`, before, during
-    // and after (`agent-authored-plans.md` AMENDMENT 10). One flag, one meaning,
-    // dispatched on which pass is running rather than on a second field, so a
-    // revision that touches nothing sends the same `{ proposals: [], final: true }`
-    // shape MOTIR-3193's CLOSE already sends.
+    // append closes its plan into the review queue. A REVISION's closes the plan
+    // it RE-OPENED the same way — through `markPlanned`, with the briefing — and
+    // ends the lease (`plansService.closeRevision`, Bug MOTIR-8208). One flag, one
+    // meaning, dispatched on which pass is running rather than on a second field,
+    // so a revision that touches nothing sends the same
+    // `{ proposals: [], final: true }` shape MOTIR-3193's CLOSE already sends.
     if (opts.revision) {
-      const released = opts.final
-        ? (
-            await plansService.releaseRevisionLease(plan.id, ctx, opts.actor ?? EMPTY_ACTOR, {
-              proposalCount: createdIds.length,
-            })
-          ).released
-        : false;
-      return { planId: plan.id, planItemIds: createdIds, planned: false, released };
+      if (!opts.final) {
+        return { planId: plan.id, planItemIds: createdIds, planned: false, released: false };
+      }
+      const closed = await plansService.closeRevision(plan.id, ctx, opts.actor ?? EMPTY_ACTOR, {
+        summary: opts.summary ?? null,
+        trailDiff: { proposalCount: createdIds.length },
+      });
+      return {
+        planId: plan.id,
+        planItemIds: createdIds,
+        planned: closed.planned,
+        released: closed.released,
+      };
     }
 
     let planned = false;

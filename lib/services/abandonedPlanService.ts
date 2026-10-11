@@ -5,8 +5,16 @@ import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessio
 import {
   endSessionForAbandonedPlan,
   recordFailureWithin,
+  releaseLapsedRevision,
   settleFailedJob,
 } from '@/lib/services/planSessionEndService';
+import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
+import {
+  isReopenedByRevision,
+  revisionLeaseOf,
+  REVISION_ENDED_KIND,
+  REVISION_STARTED_KIND,
+} from '@/lib/planChange/revisionLease';
 import { getJob } from '@/lib/ai/motirAiClient';
 import { failureRecordFrom, type JobWalkStop } from '@/lib/planChange/failureRecord';
 import {
@@ -146,7 +154,12 @@ export type AbandonReason =
    *  for a job that never answered — hence the same constant, not a second one.
    *  Kept as its own reason because the two are found out DIFFERENTLY: `max_age`
    *  asked and was told nothing useful; this one had nobody to ask. */
-  | 'no_producer';
+  | 'no_producer'
+  /** A revision that RE-OPENED its plan wrote nothing for the whole lease window,
+   *  and nobody could be asked about it — an MCP-driven revision has no job (Bug
+   *  MOTIR-8208). The window is the lease's own verdict, so the plan is given
+   *  back to `planned` as it stands. */
+  | 'lease_lapsed';
 
 /** Why a candidate was left alone. */
 export type KeepReason =
@@ -168,7 +181,11 @@ export type KeepReason =
   /** The plan's session is WAITING — failed and waiting to resume, or awaiting its
    *  person — so the plan is not abandoned: a person is coming back to it
    *  (MOTIR-7912; AMENDMENT 23's 2026-10-09 sub-amendment). */
-  | 'session_waiting';
+  | 'session_waiting'
+  /** A revision holds the plan right now (Bug MOTIR-8208) — the plan is
+   *  `generating` because a revision re-opened it, and the lease says the
+   *  revision is still writing. Not abandoned; the revision closes it. */
+  | 'revision_held';
 
 export type AbandonedPlanOutcome =
   | { planId: string; projectId: string; outcome: 'declined'; reason: AbandonReason }
@@ -314,6 +331,33 @@ export function classifyRevisionCandidate(
   return { action: 'fail', reason: verdict.reason };
 }
 
+/** Whether a sweep candidate is `generating` because a revision re-opened it (MOTIR-8208). */
+async function reopenedByRevision(plan: {
+  id: string;
+  workspaceId: string;
+  status: string;
+}): Promise<boolean> {
+  if (plan.status !== 'generating') return false;
+  return withWorkspaceServiceContext(plan.workspaceId, async (tx) =>
+    isReopenedByRevision(plan, await planRevisionRepository.listByPlan(plan.id, tx)),
+  );
+}
+
+/** The job the OPEN revision was started by, when it names one — the latest
+ *  `revision_started` with no `revision_ended` after it. */
+function openRevisionJobId(
+  trail: readonly { changeKind: string; diff?: unknown }[],
+): string | null {
+  for (let i = trail.length - 1; i >= 0; i -= 1) {
+    const row = trail[i]!;
+    if (row.changeKind === REVISION_ENDED_KIND) return null;
+    if (row.changeKind !== REVISION_STARTED_KIND) continue;
+    const jobId = (row.diff as { jobId?: unknown } | null)?.jobId;
+    return typeof jobId === 'string' ? jobId : null;
+  }
+  return null;
+}
+
 async function readWalkStop(jobId: string, coreProjectId: string): Promise<JobWalkStop | null> {
   try {
     return (await getJob(jobId, coreProjectId)).walkStop ?? null;
@@ -369,6 +413,12 @@ export const abandonedPlanService = {
     );
     const outcomes: AbandonedPlanOutcome[] = [];
     for (const plan of candidates) {
+      // ⚠️ A PLAN A REVISION RE-OPENED IS NOT A GENERATION (Bug MOTIR-8208). It is
+      // `generating` while the revision writes it, and its `createdAt` is the FIRST
+      // generation's, so it is always past the grace — judged here, a live revision
+      // would be declined as abandoned. The revision backstop below owns it, and gives
+      // it back to `planned` when its revision dies.
+      if (await reopenedByRevision(plan)) continue;
       // ASK only when there is somebody to ask (MOTIR-3236). A candidate with no
       // `sourceJobId` gets NO `resolveJobState` call: asking motir-ai about a job
       // id that does not exist is a request that can only 404, and a 404 already
@@ -466,6 +516,10 @@ export const abandonedPlanService = {
         // time, so a human decision could have landed since.
         const fresh = await planRepository.findById(plan.id, plan.workspaceId, tx);
         if (!fresh || fresh.status !== 'generating') return false;
+        // A revision that re-opened the plan since discovery owns it now (MOTIR-8208).
+        if (isReopenedByRevision(fresh, await planRevisionRepository.listByPlan(plan.id, tx))) {
+          return false;
+        }
         // AND RE-COUNT, comparing against what discovery saw (MOTIR-3189). This
         // used to read `items > 0`, which was correct only while the predicate
         // guaranteed zero; a partial plan is now a legitimate candidate, so the
@@ -539,6 +593,55 @@ export const abandonedPlanService = {
       planRepository.listStaleRevisionCandidates(olderThan, batchSize, tx),
     );
     for (const plan of stale) {
+      // A `generating` plan is here only when a revision RE-OPENED it (Bug MOTIR-8208);
+      // a generation with a revision lease over it is the main loop's, as before.
+      const trail = await withWorkspaceServiceContext(plan.workspaceId, (tx) =>
+        planRevisionRepository.listByPlan(plan.id, tx),
+      );
+      const reopened = isReopenedByRevision(plan, trail);
+      if (plan.status === 'generating' && !reopened) continue;
+      // WHO TO ASK. The plan's `sourceJobId` is the revision's job only when the open
+      // revision says so — an MCP-driven revision (`hold_plan_revision`) has no job and
+      // leaves `sourceJobId` naming the generation that wrote the plan, which says
+      // nothing about whether the revision is alive. With no job of its own to ask, a
+      // re-opened plan is judged by the lease's window alone.
+      const revisionJobId = openRevisionJobId(trail);
+      if (reopened && (!plan.sourceJobId || revisionJobId !== plan.sourceJobId)) {
+        if (revisionLeaseOf(trail, now)) {
+          outcomes.push({
+            planId: plan.id,
+            projectId: plan.projectId,
+            outcome: 'left_as_is',
+            reason: 'revision_held',
+          });
+          continue;
+        }
+        let released = false;
+        try {
+          released = await releaseLapsedRevision(plan.id, plan.workspaceId, now);
+        } catch (err) {
+          console.warn(
+            `[abandoned-plan-sweep] releasing the lapsed revision of plan ${plan.id} failed`,
+            err,
+          );
+        }
+        outcomes.push(
+          released
+            ? {
+                planId: plan.id,
+                projectId: plan.projectId,
+                outcome: 'revision_released',
+                reason: 'lease_lapsed',
+              }
+            : {
+                planId: plan.id,
+                projectId: plan.projectId,
+                outcome: 'left_as_is',
+                reason: 'row_moved',
+              },
+        );
+        continue;
+      }
       if (!plan.sourceJobId) continue;
       const job = await deps.resolveJobState(plan.sourceJobId, plan.projectId);
       const decision = classifyRevisionCandidate(

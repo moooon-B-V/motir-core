@@ -506,7 +506,10 @@ export function PlanReviewRail({
                 variant="secondary"
                 data-testid="plan-discard"
                 onClick={() => onDecline()}
-                disabled={busy}
+                // A plan is `generating` while a revision rewrites it too (it
+                // re-opens the plan, MOTIR-8208), and the discard is refused under
+                // the lease exactly as Decline is — so it is held with it.
+                disabled={busy || held}
                 leftIcon={<X className="size-4" aria-hidden="true" />}
               >
                 {t('discardCta')}

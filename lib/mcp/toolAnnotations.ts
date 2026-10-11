@@ -256,7 +256,7 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
-  // W: authorPlan.ts → plansService.acquireRevisionLease / renewRevisionLease / releaseRevisionLease — appends one trail row per call (`end` on no hold, and `renew` on a lapsed one, write nothing)
+  // W: authorPlan.ts → plansService.acquireRevisionLease / renewRevisionLease / closeRevision — appends one trail row per call (start and end also move the plan's status: a revision re-opens a `planned` plan and its end closes it, MOTIR-8208) (`end` on no hold, and `renew` on a lapsed one, write nothing)
   hold_plan_revision: {
     readOnlyHint: false,
     destructiveHint: false,
