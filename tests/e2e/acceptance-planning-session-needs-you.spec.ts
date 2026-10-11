@@ -81,8 +81,12 @@ const entrance = (page: Page) => page.getByRole('main').getByTestId('work-item-p
 const overlayOpen = (url: URL) => url.searchParams.has('plan');
 const overlayClosed = (url: URL) => !url.searchParams.has('plan');
 
+// Scoped to the live Workbench subtree (MOTIR-8210): To approve streams in behind an in-page
+// `<Suspense>`, and a second, hidden copy of the row can sit in the DOM outside the page while it
+// lands — an unscoped locator then fails strict mode. `getByRole('main')` alone does not prove it
+// excludes that copy; `workbench-page` is the ancestor the failing log named for the live row only.
 const sessionRow = (page: Page, sessionId: string) =>
-  page.locator(`[data-planning-session="${sessionId}"]`);
+  page.getByTestId('workbench-page').locator(`[data-planning-session="${sessionId}"]`);
 const resumeEntry = (page: Page, sessionId: string) =>
   page.getByRole('main').getByTestId(`to-resume-session-${sessionId}`);
 
