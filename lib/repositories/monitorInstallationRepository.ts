@@ -56,6 +56,7 @@ const SUMMARY_SELECT = {
   healthCheckedAt: true,
   refreshLeaseUntil: true,
   refreshUncertainAt: true,
+  refreshRevokedAt: true,
   metadata: true,
   createdAt: true,
   updatedAt: true,
@@ -74,7 +75,10 @@ export const monitorInstallationRepository = {
     return tx.monitorInstallation.upsert({
       where: { provider_installationId: { provider, installationId } },
       create: { provider, installationId, ...rest },
-      update: rest,
+      // A fresh token set is a refresh token nobody has refused yet, so a
+      // re-authorisation clears a recorded permanent refusal (MOTIR-8170) and
+      // the poll visits this grant's bindings again from the next tick.
+      update: { ...rest, refreshRevokedAt: null },
     });
   },
 
@@ -133,7 +137,9 @@ export const monitorInstallationRepository = {
    *  so nothing — not the health write, not a second statement — shares its
    *  transaction: the shorter the window between the answer and this commit, the
    *  less a stopped machine or a slow neighbour can cost. Clearing
-   *  `refreshUncertainAt` here is what says the grant is known-good again. */
+   *  `refreshUncertainAt` here is what says the grant is known-good again, and
+   *  clearing `refreshRevokedAt` (MOTIR-8170) is the same proof one step further:
+   *  a refresh the provider just accepted is not permanently refused. */
   async storeRefreshedTokens(
     id: string,
     tokens: { accessTokenEncrypted: string; refreshTokenEncrypted: string; tokenExpiresAt: Date },
@@ -141,7 +147,12 @@ export const monitorInstallationRepository = {
   ): Promise<MonitorInstallation> {
     return tx.monitorInstallation.update({
       where: { id },
-      data: { ...tokens, refreshLeaseUntil: null, refreshUncertainAt: null },
+      data: {
+        ...tokens,
+        refreshLeaseUntil: null,
+        refreshUncertainAt: null,
+        refreshRevokedAt: null,
+      },
     });
   },
 
@@ -160,6 +171,34 @@ export const monitorInstallationRepository = {
         ? { refreshLeaseUntil: null, refreshUncertainAt: uncertainAt }
         : { refreshLeaseUntil: null },
     });
+  },
+
+  /**
+   * Record a PERMANENT refresh refusal — `degraded` with the provider's own
+   * reason, plus `refreshRevokedAt` — but ONLY on a grant that does not already
+   * carry one (MOTIR-8170).
+   *
+   * Conditional in the one statement, so the answer says whether THIS refusal is
+   * the first: `1` when it was recorded now, `0` when the grant was already
+   * marked (or is gone). The service logs the refusal on `1` and stays quiet on
+   * `0`, which is what makes it one warn line per refusal rather than one per
+   * attempt.
+   */
+  async markRefreshRevoked(
+    id: string,
+    refusal: { healthReason: string; at: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.monitorInstallation.updateMany({
+      where: { id, refreshRevokedAt: null },
+      data: {
+        health: 'degraded',
+        healthReason: refusal.healthReason,
+        healthCheckedAt: refusal.at,
+        refreshRevokedAt: refusal.at,
+      },
+    });
+    return result.count;
   },
 
   /** Record a health verdict — the `degraded` write the whole epic exists for, or

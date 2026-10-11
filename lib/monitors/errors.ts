@@ -80,6 +80,26 @@ export class MonitorProviderCallError extends Error {
 }
 
 /**
+ * Whether a REFRESH refusal is PERMANENT — the provider has said this refresh
+ * token will never work again, so asking again on the next tick only spends a
+ * call (MOTIR-8170).
+ *
+ * The status is the discriminator, because it is the provider's own verdict on
+ * whose fault the refusal is. A 4xx answer is the provider refusing THIS grant:
+ * Sentry answers 401 "Given refresh token does not exist" for a rotated-away or
+ * revoked token, and an OAuth server answers 400 `invalid_grant` for the same
+ * fact. Everything else is transient and is retried as before:
+ *   · `null` — no answer at all (our deadline, a dead host). Not a verdict.
+ *   · 408 / 429 — the provider asking us to come back later.
+ *   · 5xx — the provider failing, not refusing.
+ *   · anything that is not a {@link MonitorProviderCallError} — not a refusal.
+ */
+export function isPermanentRefreshRefusal(error: unknown): boolean {
+  if (!(error instanceof MonitorProviderCallError) || error.status === null) return false;
+  return error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
+}
+
+/**
  * This workspace has no monitor grant at all — nothing has been connected, or
  * the last binding was removed and took its credential with it.
  *
