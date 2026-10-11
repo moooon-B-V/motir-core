@@ -46,6 +46,10 @@ export const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   // kind, not the resource in the wrong state, so `400` rather than `409`.
   APPROVAL_GATE_VERB_NOT_OFFERED: 400,
   APPROVAL_GATE_ALREADY_AWAITING: 409,
+  // A delivery the card cannot read (MOTIR-8236) — the request is well-formed and the
+  // gate is live; its SET is not in a state anyone can decide over until the pull
+  // request is visible again or its link is removed.
+  APPROVAL_GATE_DELIVERY_UNREADABLE: 409,
   APPROVAL_GATE_KIND_UNREGISTERED: 501,
   // The request is well-formed and the gate is live; its SUBJECT is not in a state
   // that admits Approve until a push fixes the document (MOTIR-5676).

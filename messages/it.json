@@ -12356,6 +12356,10 @@
         "title": "Un’altra decisione su questo oggetto è già in attesa.",
         "next": "Ricarica la pagina per vederla."
       },
+      "deliveryUnreadable": {
+        "title": "Una pull request di questo elemento di lavoro non è più visibile a questa organizzazione.",
+        "next": "Non è stato deciso nulla. Il suo repository ora appartiene a un’altra organizzazione: ricollegalo qui oppure scollega quella pull request dall’elemento di lavoro."
+      },
       "decidedImmutable": {
         "title": "Questa decisione è già stata registrata e non può essere cambiata.",
         "next": "Ricarica la pagina. Se continua a succedere, è un difetto che vale la pena segnalare."
