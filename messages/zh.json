@@ -3424,6 +3424,11 @@
       "displayLanguage": {
         "label": "显示语言",
         "desc": "菜单、标签和日期将使用此语言。"
+      },
+      "contentLanguage": {
+        "label": "内容语言 · {org}",
+        "desc": "Motir 的规划器和智能体为 {org} 编写新工作时使用的语言。由组织的所有者和管理员设置，不会改变你的显示语言。",
+        "changeLink": "在组织设置中更改"
       }
     },
     "profile": {
@@ -5407,6 +5412,15 @@
       "save": "保存更改",
       "saved": "组织已更新",
       "saveError": "无法保存更改",
+      "contentLanguageLabel": "内容语言",
+      "contentLanguageHelp": "Motir 的规划器和智能体为本组织编写新工作时使用的语言。它不会改变 Motir 自身菜单的显示语言——那是每个人自己的显示语言。",
+      "contentLanguageChangedBy": "由 {person} 于 {date} 从 {from} 更改",
+      "contentLanguageFormerMember": "一位已离开的成员",
+      "contentLanguageConfirmTitle": "更改内容语言？",
+      "contentLanguageConfirmBody": "今后，Motir 的规划器和智能体将用<b>{to}</b>而不是<b>{from}</b>为 {org} 编写新工作。",
+      "contentLanguageConfirmKeeps": "已有的工作保留其文本和语言。不会翻译或改写任何内容——只有新的写作会改变。",
+      "contentLanguageConfirmRecorded": "此次更改会连同你的名字和今天的日期一起记录。",
+      "contentLanguageConfirmCta": "更改为{to}",
       "workspacesSummary": "{count, plural, other {#}} 个工作区",
       "membersSummary": "{count, plural, other {#}} 名成员",
       "billing": "账单与用量",

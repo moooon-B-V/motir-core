@@ -5,6 +5,7 @@ import { markOrgClosing, offboardOrg } from '@/lib/ai/motirAiClient';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { organizationDeletionRequestRepository } from '@/lib/repositories/organizationDeletionRequestRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
+import { organizationContentLanguageChangeRepository } from '@/lib/repositories/organizationContentLanguageChangeRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import {
@@ -192,6 +193,9 @@ async function writeTombstone(requestId: string, organizationId: string, now: Da
       .filter((m) => (m.role === 'owner' || m.role === 'admin') && Boolean(m.user.email))
       .map((m) => ({ userId: m.user.id, name: m.user.name, email: m.user.email, role: m.role }));
     await organizationMembershipRepository.deleteAllByOrganization(organizationId, tx);
+    // The content-language history names who made each change (MOTIR-8094); the
+    // tombstone keeps the org row, so its cascade never removes these.
+    await organizationContentLanguageChangeRepository.deleteAllByOrganization(organizationId, tx);
     await organizationRepository.scrubToTombstone(
       organizationId,
       { name: ERASED_ORGANIZATION_NAME, slug: `erased-${randomUUID()}`, erasedAt: now },

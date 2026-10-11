@@ -43,6 +43,7 @@ const WORK_ITEM_DETAIL = {
   obsolescence: null,
   obsolescenceNoteMd: null,
   descriptionMd: '# Body',
+  languages: { title: 'en', description: 'en', explanation: null },
   parentKey: 'MOTIR-2',
   // Story MOTIR-5310 · MOTIR-5412 — the item's OWN folder placement. A subtask
   // under a parent is never filed, so both are null here; the filed shape is

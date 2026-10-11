@@ -170,6 +170,16 @@ afterAll(async () => {
 describe('a due organization is erased to a tombstone holding only its billing record', () => {
   it('erases Git, both workspaces, the AI tenant and the identity — and keeps CiPeriodCharge', async () => {
     await seedBilling(org);
+    // A content-language change names its author (MOTIR-8094); it must not
+    // survive on the tombstone the way the org row does.
+    await adminDb.organizationContentLanguageChange.create({
+      data: {
+        organizationId: org.organizationId,
+        changedByUserId: org.owner.id,
+        fromLanguage: 'en',
+        toLanguage: 'ja',
+      },
+    });
     const requestId = await scheduleDue(org);
     // Before: the Owner of a SHARED org is blocked from erasing their own account.
     expect(
@@ -195,6 +205,11 @@ describe('a due organization is erased to a tombstone holding only its billing r
 
     expect(
       await adminDb.organizationMembership.count({
+        where: { organizationId: org.organizationId },
+      }),
+    ).toBe(0);
+    expect(
+      await adminDb.organizationContentLanguageChange.count({
         where: { organizationId: org.organizationId },
       }),
     ).toBe(0);

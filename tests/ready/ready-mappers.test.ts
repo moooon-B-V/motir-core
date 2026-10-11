@@ -70,6 +70,10 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     // stamped only on entry to a done-category status, and a done item is not
     // in the ready set.
     completedAt: null,
+    // No language recorded (Story MOTIR-7731 · MOTIR-8092).
+    titleLanguage: null,
+    descriptionLanguage: null,
+    explanationLanguage: null,
     createdAt: FIXED_DATE,
     updatedAt: FIXED_DATE,
     ...overrides,

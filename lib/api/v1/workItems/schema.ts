@@ -3,6 +3,7 @@ import { z } from 'zod/v4';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import { WORK_ITEM_OBSOLESCENCES } from '@/lib/issues/obsolescence';
+import { locales } from '@/lib/i18n/locales';
 import type {
   ExecutorDto,
   IssueDetailDto,
@@ -567,9 +568,25 @@ export function presentLinkedPullRequest(
   };
 }
 
+/** A content-language code (Story MOTIR-7731 · MOTIR-8098) — one of the eleven
+ *  locales, the one list in `lib/i18n/locales.ts`. */
+export const languageSchema = z.enum(locales);
+
+/** The recorded language of each work-text field — `null` when none was
+ *  recorded (text written before content languages, and imported text). Never
+ *  defaulted to `en`: a defaulted value could not be told from a real one. */
+const workItemLanguagesSchema = z.object({
+  title: languageSchema.nullable(),
+  description: languageSchema.nullable(),
+  explanation: languageSchema.nullable(),
+});
+
 /** The single-item READ: the work item's fields plus everything a detail adds. */
 export const workItemDetailSchema = workItemFieldsSchema.extend({
   descriptionMd: z.string().nullable(),
+  /** Each text field's recorded language (Story MOTIR-7731 · MOTIR-8098).
+   *  ADDITIVE; `V1_CONTRACT_VERSION` moves for it. */
+  languages: workItemLanguagesSchema,
   parentKey: workItemKeySchema.nullable(),
   /** The folder the item is FILED in — its OWN placement, beside `parentKey`
    *  (Story MOTIR-5310 · MOTIR-5412). Non-null exactly when the item is filed, and
@@ -844,6 +861,11 @@ export function presentWorkItemDetail(
       obsolescenceNoteMd: item.obsolescenceNoteMd,
     }),
     descriptionMd: item.descriptionMd,
+    languages: {
+      title: item.languages.title,
+      description: item.languages.description,
+      explanation: item.languages.explanation,
+    },
     parentKey: detail.parent === null ? null : detail.parent.identifier,
     folderId: detail.folderId,
     folderPath: detail.folderId === null ? null : [...folderPath],
@@ -1045,6 +1067,15 @@ export const createWorkItemBodySchema = z
     // `PLACEMENT_CONFLICT` (422) rather than silently picking one.
     folderId: z.string().min(1).nullish(),
     descriptionMd: z.string().nullish(),
+    // The language the text is written in (Story MOTIR-7731 · MOTIR-8098):
+    // `language` for every text field, `languages` per field (wins). Omitted, the
+    // organisation's content language is recorded. Non-nullable — the service
+    // decides; there is no "clear the language".
+    language: languageSchema.optional(),
+    languages: z
+      .object({ title: languageSchema.optional(), description: languageSchema.optional() })
+      .strict()
+      .optional(),
     priority: prioritySchema.optional(),
     type: typeSchema.nullish(),
     executor: executorSchema.nullish(),
@@ -1095,6 +1126,17 @@ export const updateWorkItemBodySchema = z
     title: z.string().min(1).optional(),
     descriptionMd: z.string().nullish(),
     explanationMd: z.string().nullish(),
+    // As on create, plus `explanation`. Re-records only the fields this PATCH
+    // edits; a language alone changes nothing.
+    language: languageSchema.optional(),
+    languages: z
+      .object({
+        title: languageSchema.optional(),
+        description: languageSchema.optional(),
+        explanation: languageSchema.optional(),
+      })
+      .strict()
+      .optional(),
     parentKey: workItemKeySchema.nullish(),
     /** File the item into this folder, or take it out of its folder with `null`
      *  (MOTIR-5412). Applied atomically with every other field in the body, under

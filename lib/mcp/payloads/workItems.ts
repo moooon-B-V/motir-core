@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { locales } from '@/lib/i18n/locales';
 import {
   commentSchema,
   dependencyEdgesSchema,
@@ -149,6 +150,16 @@ export const mcpMonitorIssueLinkSchema = z
   // agent is TOLD to rely on are the ones named above.
   .catchall(z.unknown());
 
+/** The recorded language of each work-text field (Story MOTIR-7731 · MOTIR-8098)
+ *  — a locale code, or `null` when none was recorded (text written before
+ *  content languages, and imported text). Never defaulted to `en`. */
+const localeOrNull = z.enum(locales).nullable();
+export const mcpWorkItemLanguagesSchema = z.object({
+  title: localeOrNull,
+  description: localeOrNull,
+  explanation: localeOrNull,
+});
+
 /** `get_work_item`'s `latestRefusal` — {@link LatestRefusalDTO}, field for field. */
 const mcpLatestRefusalSchema = z.object({
   gateId: z.string(),
@@ -188,6 +199,16 @@ export const getWorkItemPayload = definePayload({
        * otherwise. Absent on the projected answer, where a proposal has no gate.
        */
       latestRefusal: mcpLatestRefusalSchema.nullable().optional(),
+      /**
+       * The item itself — its columns ride through unchanged; DECLARED here is
+       * `languages` (Story MOTIR-7731 · MOTIR-8098): each text field's recorded
+       * language, `null` when none was recorded. Optional only for the
+       * projected answer.
+       */
+      item: z
+        .object({ languages: mcpWorkItemLanguagesSchema.optional() })
+        .catchall(z.unknown())
+        .optional(),
     })
     .catchall(z.unknown()) as unknown as z.ZodType<
     {
@@ -286,6 +307,7 @@ const workItemDtoExtras = {
   descriptionMd: z.string().nullable(),
   explanationMd: z.string().nullable(),
   explanationSource: z.string(),
+  languages: mcpWorkItemLanguagesSchema,
   executor: z.string().nullable(),
   /** How hard the leaf is to reason about (Story MOTIR-6016) — `low` | `medium`
    *  | `high`, or null (always null on an epic or story). */
@@ -368,6 +390,11 @@ export function presentMcpWorkItem(dto: WorkItemDto): McpWorkItem {
     descriptionMd: dto.descriptionMd,
     explanationMd: dto.explanationMd,
     explanationSource: dto.explanationSource,
+    languages: {
+      title: dto.languages.title,
+      description: dto.languages.description,
+      explanation: dto.languages.explanation,
+    },
     executor: dto.executor,
     difficulty: dto.difficulty,
     position: dto.position,

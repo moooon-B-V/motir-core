@@ -302,6 +302,9 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         'is `null` otherwise, including when a later approval answered it. It is the same ' +
         'refusal the dispatched prompt’s CHANGES REQUESTED section quotes: address that reason ' +
         'in the next attempt.' +
+        ' Each of the title, description and explanation has a recorded language in ' +
+        '`item.languages` (`{ title, description, explanation }`); `null` means none was ' +
+        'recorded — text written before content languages, and imported text.' +
         ' Pass `planId` to read the card as it would stand once that plan materializes — the ' +
         'live tree ⊕ the plan’s proposals, so you can see what you proposed without merging ' +
         '`get_plan` against this call yourself. ' +

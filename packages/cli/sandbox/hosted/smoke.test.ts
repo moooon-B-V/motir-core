@@ -578,6 +578,8 @@ function workItemDetail(s: Scenario, key: string) {
     createdAt: NOW,
     updatedAt: NOW,
     descriptionMd: null,
+    // Each text field's recorded language (MOTIR-8098) — required-and-nullable.
+    languages: { title: null, description: null, explanation: null },
     parentKey: card.parentKey,
     folderId: null,
     folderPath: null,

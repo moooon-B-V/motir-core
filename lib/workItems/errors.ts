@@ -31,6 +31,7 @@ export type WorkItemErrorTag =
   | 'TYPE_NOT_ALLOWED_ON_KIND'
   | 'DIFFICULTY_NOT_ALLOWED_ON_KIND'
   | 'INVALID_OBSOLESCENCE'
+  | 'INVALID_CONTENT_LANGUAGE'
   | 'OBSOLESCENCE_REQUIRES_FINISHED'
   | 'MARKED_CARD_CANNOT_REOPEN'
   | 'NOT_EPIC'
@@ -288,6 +289,20 @@ export class InvalidObsolescenceError extends WorkItemError {
       `${JSON.stringify(value) ?? String(value)} is not an obsolescence (expected "outdated", "deprecated" or null).`,
     );
     this.name = 'InvalidObsolescenceError';
+  }
+}
+
+/**
+ * A recorded content language outside the eleven locales (Story MOTIR-7731 ·
+ * MOTIR-8096) — `lib/i18n/locales.ts` is the list. A client error → 422 (the
+ * blanket `WorkItemError` mapping), raised before anything is written.
+ */
+export class InvalidWorkItemLanguageError extends WorkItemError {
+  readonly tag = 'INVALID_CONTENT_LANGUAGE' as const;
+  readonly code = 'INVALID_CONTENT_LANGUAGE' as const;
+  constructor(value: unknown) {
+    super(`${JSON.stringify(value) ?? String(value)} is not a supported content language.`);
+    this.name = 'InvalidWorkItemLanguageError';
   }
 }
 

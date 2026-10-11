@@ -3424,6 +3424,11 @@
       "displayLanguage": {
         "label": "표시 언어",
         "desc": "메뉴, 레이블, 날짜에 이 언어를 사용합니다."
+      },
+      "contentLanguage": {
+        "label": "콘텐츠 언어 · {org}",
+        "desc": "Motir의 플래너와 에이전트가 {org}의 새 작업을 작성하는 언어입니다. 조직의 소유자와 관리자가 설정하며, 표시 언어는 바뀌지 않습니다.",
+        "changeLink": "조직 설정에서 변경"
       }
     },
     "profile": {
@@ -5407,6 +5412,15 @@
       "save": "변경 사항 저장",
       "saved": "조직이 업데이트되었습니다",
       "saveError": "변경 사항을 저장하지 못했습니다",
+      "contentLanguageLabel": "콘텐츠 언어",
+      "contentLanguageHelp": "Motir의 플래너와 에이전트가 이 조직의 새 작업을 작성하는 언어입니다. Motir 자체 메뉴가 표시되는 언어는 바뀌지 않습니다. 그것은 각 사람의 표시 언어입니다.",
+      "contentLanguageChangedBy": "{person} 님이 {date}에 {from}에서 변경함",
+      "contentLanguageFormerMember": "이전 멤버",
+      "contentLanguageConfirmTitle": "콘텐츠 언어를 변경하시겠습니까?",
+      "contentLanguageConfirmBody": "이제부터 Motir의 플래너와 에이전트는 {org}의 새 작업을 <b>{from}</b> 대신 <b>{to}</b>(으)로 작성합니다.",
+      "contentLanguageConfirmKeeps": "이미 있는 작업은 텍스트와 언어를 그대로 유지합니다. 번역되거나 다시 작성되는 것은 없으며, 새로 작성하는 내용만 바뀝니다.",
+      "contentLanguageConfirmRecorded": "이 변경은 회원님의 이름과 오늘 날짜와 함께 기록됩니다.",
+      "contentLanguageConfirmCta": "{to}(으)로 변경",
       "workspacesSummary": "{count, plural, other {워크스페이스 #개}}",
       "membersSummary": "{count, plural, other {멤버 #명}}",
       "billing": "결제 및 사용량",

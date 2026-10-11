@@ -293,7 +293,15 @@ import type {
   WorkItemRepositoryDto,
   WorkItemPlacementDto,
   WorkItemTreeRowDto,
+  WorkItemLanguageField,
 } from '@/lib/dto/workItems';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import {
+  assertWriteLanguage,
+  hasText,
+  resolveWriteLanguage,
+  toOrgContentLanguage,
+} from '@/lib/workItems/contentLanguage';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import {
   buildProseVsGraphAdvisories,
@@ -529,6 +537,55 @@ function assertDifficultyKindConsistent(
   if (difficulty !== null && !isTypeableKind(kind)) {
     throw new DifficultyNotAllowedOnKindError(kind);
   }
+}
+
+const LANGUAGE_COLUMN = {
+  title: 'titleLanguage',
+  description: 'descriptionLanguage',
+  explanation: 'explanationLanguage',
+} as const satisfies Record<WorkItemLanguageField, keyof WorkItem>;
+
+/** Refuse a language outside the eleven locales before anything is written (MOTIR-8096). */
+function assertWorkItemLanguages(input: {
+  language?: unknown;
+  languages?: Partial<Record<WorkItemLanguageField, unknown>>;
+}): void {
+  assertWriteLanguage(input.language);
+  for (const field of Object.keys(LANGUAGE_COLUMN) as WorkItemLanguageField[]) {
+    assertWriteLanguage(input.languages?.[field]);
+  }
+}
+
+/**
+ * The language columns an UPDATE re-records (Story MOTIR-7731 · MOTIR-8096). A
+ * field is re-recorded when its value changed, or when the patch carries it with
+ * an explicit language for it; a field left empty records NULL. Every other
+ * column is left out, so its stored value — NULL included — is untouched. The
+ * org's language is read only when some field needs it.
+ */
+async function recordEditedLanguages(
+  patch: Pick<UpdateWorkItemInput, 'language' | 'languages' | 'languageRecording'>,
+  fields: Record<WorkItemLanguageField, { changed: boolean; value: string | null } | null>,
+  current: Pick<WorkItem, 'workspaceId'>,
+  tx: Prisma.TransactionClient,
+): Promise<Partial<Record<(typeof LANGUAGE_COLUMN)[WorkItemLanguageField], Locale | null>>> {
+  const out: Partial<Record<(typeof LANGUAGE_COLUMN)[WorkItemLanguageField], Locale | null>> = {};
+  let orgLanguage: Locale | null = null;
+  for (const field of Object.keys(LANGUAGE_COLUMN) as WorkItemLanguageField[]) {
+    const f = fields[field];
+    if (f === null) continue;
+    const explicit = patch.languages?.[field] ?? patch.language;
+    if (!f.changed && explicit === undefined) continue;
+    if (!hasText(f.value) || patch.languageRecording === 'unrecorded') {
+      out[LANGUAGE_COLUMN[field]] = null;
+      continue;
+    }
+    orgLanguage ??= toOrgContentLanguage(
+      await organizationRepository.findContentLanguageByWorkspaceId(current.workspaceId, tx),
+    );
+    out[LANGUAGE_COLUMN[field]] = resolveWriteLanguage(explicit, orgLanguage);
+  }
+  return out;
 }
 
 /**
@@ -1731,6 +1788,7 @@ export const workItemsService = {
    * authoritative tenant of the row.
    */
   async createWorkItem(input: CreateWorkItemInput, ctx: ServiceContext): Promise<WorkItemDto> {
+    assertWorkItemLanguages(input);
     // MOTIR-2569: the OPENING read is context-bound (`readProject`), and the
     // cross-workspace 404 is made EXPLICIT here rather than left to
     // `assertCanEdit` three lines down. Two reasons, and the second is the one
@@ -2062,6 +2120,18 @@ export const workItemsService = {
         }
       }
 
+      // The language each text field is written in (Story MOTIR-7731 ·
+      // MOTIR-8096): explicit per field, else the call's, else the org's — read
+      // here so the record and the write share one snapshot. An empty body
+      // records NULL.
+      const orgLanguage = toOrgContentLanguage(
+        await organizationRepository.findContentLanguageByWorkspaceId(workspaceId, tx),
+      );
+      const langFor = (field: WorkItemLanguageField) =>
+        input.languageRecording === 'unrecorded'
+          ? null
+          : resolveWriteLanguage(input.languages?.[field] ?? input.language, orgLanguage);
+
       const data: WorkItemCreateInput = {
         workspaceId,
         projectId: input.projectId,
@@ -2073,6 +2143,9 @@ export const workItemsService = {
         title: input.title,
         descriptionMd: normalizedDescriptionMd ?? null,
         explanationMd: normalizedExplanationMd ?? null,
+        titleLanguage: langFor('title'),
+        descriptionLanguage: hasText(normalizedDescriptionMd) ? langFor('description') : null,
+        explanationLanguage: hasText(normalizedExplanationMd) ? langFor('explanation') : null,
         status: statusKey,
         ...(input.explanationSource ? { explanationSource: input.explanationSource } : {}),
         // Work-item provenance (Story MOTIR-1685) — stamp the planning and/or
@@ -2402,6 +2475,7 @@ export const workItemsService = {
       'targetRepos',
       'targetRepositories',
     ];
+    assertWorkItemLanguages(patch);
     const anyFieldProvided = PATCH_KEYS.some((k) => patch[k] !== undefined);
     if (!anyFieldProvided) {
       const current = await readWorkItem(id, ctx);
@@ -2587,6 +2661,29 @@ export const workItemsService = {
         update.explanationMd = normalizedExplanationMd;
         diff.explanationMd = { from: current.explanationMd, to: normalizedExplanationMd };
       }
+      // Re-record a field's language only when THAT field is edited (Story
+      // MOTIR-7731 · MOTIR-8096): its value changed, or the patch carries the
+      // field together with an explicit language for it. A form that resubmits
+      // every field must not re-label the ones nobody touched. Not part of the
+      // revision diff — the language is a property of the text, not an edit.
+      const languageUpdate = await recordEditedLanguages(
+        patch,
+        {
+          title:
+            patch.title !== undefined ? { changed: 'title' in update, value: patch.title } : null,
+          description:
+            normalizedDescriptionMd !== undefined
+              ? { changed: 'descriptionMd' in update, value: normalizedDescriptionMd }
+              : null,
+          explanation:
+            normalizedExplanationMd !== undefined
+              ? { changed: 'explanationMd' in update, value: normalizedExplanationMd }
+              : null,
+        },
+        current,
+        tx,
+      );
+      Object.assign(update, languageUpdate);
       if (patch.priority !== undefined && patch.priority !== current.priority) {
         update.priority = patch.priority;
         diff.priority = { from: current.priority, to: patch.priority };
@@ -2835,8 +2932,14 @@ export const workItemsService = {
       }
 
       if (Object.keys(diff).length === 0) {
+        // Only a language was re-stated (the text is unchanged): store it, and
+        // record no revision — nothing a reader would call an edit happened.
+        const row =
+          Object.keys(languageUpdate).length > 0
+            ? await workItemRepository.update(id, languageUpdate, tx)
+            : current;
         return {
-          dto: toWorkItemDto(current),
+          dto: toWorkItemDto(row),
           revisionId: null,
           addedDescMentionIds: [],
           changedFieldIds: [] as string[],

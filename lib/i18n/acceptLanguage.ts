@@ -48,3 +48,18 @@ export function matchAcceptLanguage(header: string | null | undefined): Locale |
   }
   return null;
 }
+
+/**
+ * The browser's FIRST-ranked language range — after the same q-ordering
+ * {@link matchAcceptLanguage} uses (`q=0` and `*` dropped) — lowercased, or
+ * `null` for an empty or missing header (Story MOTIR-7731 · MOTIR-8093).
+ *
+ * Deliberately NOT a best match: it does not skip a range Motir has no locale
+ * for. `sv, zh;q=0.9` answers `sv` here where {@link matchAcceptLanguage}
+ * answers `zh`, because the organisation content-language rule reads the top
+ * entry alone (`lib/i18n/contentLanguage.ts`).
+ */
+export function topAcceptLanguageTag(header: string | null | undefined): string | null {
+  if (!header) return null;
+  return parse(header)[0]?.tag ?? null;
+}

@@ -110,6 +110,10 @@ export const PATCH = withV1Route<{ key: string }>({ permission: 'work_item:edit'
         'title',
         'descriptionMd',
         'explanationMd',
+        // Metadata about the text fields above (MOTIR-8098): the service re-records
+        // only the fields this PATCH edits, so a language alone changes nothing.
+        'language',
+        'languages',
         'priority',
         'type',
         'executor',

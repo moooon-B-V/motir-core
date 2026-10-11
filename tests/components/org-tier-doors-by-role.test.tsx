@@ -26,8 +26,13 @@ import { OrgControl } from '@/app/(authed)/_components/OrgControl';
 import { WorkspaceSwitcher } from '@/app/(authed)/_components/WorkspaceSwitcher';
 import { ShellTierNav } from '@/app/(authed)/_components/ShellTierNav';
 
-const ACME: OrganizationDTO = { id: 'org_acme', name: 'Acme', slug: 'acme' };
-const BEACON: OrganizationDTO = { id: 'org_beacon', name: 'Beacon', slug: 'beacon' };
+const ACME: OrganizationDTO = { id: 'org_acme', name: 'Acme', slug: 'acme', contentLanguage: 'en' };
+const BEACON: OrganizationDTO = {
+  id: 'org_beacon',
+  name: 'Beacon',
+  slug: 'beacon',
+  contentLanguage: 'en',
+};
 const ws = (n: number): WorkspaceSummaryDTO[] =>
   Array.from({ length: n }, (_, i) => ({
     id: `ws${i}`,

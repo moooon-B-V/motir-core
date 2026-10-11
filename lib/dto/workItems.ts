@@ -12,6 +12,7 @@ import type { FixDetailDto, FixGroupPointerDto, WorkItemFixReasonDto } from '@/l
 import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 import type { FilterAst } from '@/lib/filters/ast';
+import type { Locale } from '@/lib/i18n/locales';
 import type { WorkflowDto, StatusCategoryDto } from './workflows';
 import type { SprintBlockerDto } from './sprints';
 import type { RelationshipKind } from './workItemLinks';
@@ -113,6 +114,16 @@ export interface WorkItemRepositoryDto {
   primary: boolean;
 }
 
+/** The recorded language of a work item's three text fields; `null` = none recorded. */
+export interface WorkItemLanguagesDto {
+  title: Locale | null;
+  description: Locale | null;
+  explanation: Locale | null;
+}
+
+/** The fields a work-item write can record a language for. */
+export type WorkItemLanguageField = keyof WorkItemLanguagesDto;
+
 export interface WorkItemDto {
   id: string;
   projectId: string;
@@ -124,6 +135,12 @@ export interface WorkItemDto {
   descriptionMd: string | null;
   explanationMd: string | null;
   explanationSource: WorkItemExplanationSourceDto;
+  /**
+   * The language each text field was written in (Story MOTIR-7731 · MOTIR-8096).
+   * `null` means no language was recorded — text written before the story, or
+   * an empty field — and is never read as `en`.
+   */
+  languages: WorkItemLanguagesDto;
   status: string;
   priority: WorkItemPriorityDto;
   assigneeId: string | null;
@@ -1277,6 +1294,21 @@ export interface WorkItemProvenanceInput {
 
 export interface CreateWorkItemInput {
   projectId: string;
+  /**
+   * The language this write's text is in (Story MOTIR-7731 · MOTIR-8096):
+   * `language` for every text field written, `languages` per field (wins).
+   * Omitted, a written field records the organisation's content language. A
+   * code outside the eleven locales is `InvalidWorkItemLanguageError` (422).
+   */
+  language?: Locale;
+  languages?: Partial<Record<WorkItemLanguageField, Locale>>;
+  /**
+   * `'unrecorded'` stores NULL as the language of every field this write
+   * touches, whatever `language` / `languages` say (MOTIR-8097). For a writer
+   * that cannot vouch for the text's language — an import. Absent, the rule
+   * above applies.
+   */
+  languageRecording?: 'unrecorded';
   parentId?: string | null;
   /**
    * File the new item straight into a folder of the SAME project (Story
@@ -1478,6 +1510,21 @@ export interface CreateWorkItemLinkInput {
  * transitions the source to `user_edited`.
  */
 export interface UpdateWorkItemInput {
+  /**
+   * The language this write's text is in (Story MOTIR-7731 · MOTIR-8096):
+   * `language` for every text field written, `languages` per field (wins).
+   * Omitted, an EDITED field records the organisation's content language. A
+   * code outside the eleven locales is `InvalidWorkItemLanguageError` (422).
+   */
+  language?: Locale;
+  languages?: Partial<Record<WorkItemLanguageField, Locale>>;
+  /**
+   * `'unrecorded'` stores NULL as the language of every field this write
+   * touches, whatever `language` / `languages` say (MOTIR-8097). For a writer
+   * that cannot vouch for the text's language — an import. Absent, the rule
+   * above applies.
+   */
+  languageRecording?: 'unrecorded';
   parentId?: string | null;
   /**
    * Change the item's FOLDER placement in the same transaction as every other

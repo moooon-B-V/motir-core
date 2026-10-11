@@ -23,6 +23,7 @@ import type {
 } from '@/lib/dto/workItems';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
+import { readRecordedLanguage } from '@/lib/workItems/contentLanguage';
 
 // Prisma → DTO converters for the work-item domain. The service calls these
 // just before returning so no Prisma row shape (Date objects, Decimal
@@ -80,6 +81,13 @@ export function toWorkItemDto(
     descriptionMd: row.descriptionMd,
     explanationMd: row.explanationMd,
     explanationSource: row.explanationSource,
+    // The recorded languages (Story MOTIR-7731 · MOTIR-8096) — NULL stays null;
+    // a defaulted `en` would be indistinguishable from a real one.
+    languages: {
+      title: readRecordedLanguage(row.titleLanguage),
+      description: readRecordedLanguage(row.descriptionLanguage),
+      explanation: readRecordedLanguage(row.explanationLanguage),
+    },
     status: row.status,
     priority: row.priority,
     assigneeId: row.assigneeId,

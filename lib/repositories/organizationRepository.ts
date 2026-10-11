@@ -2,6 +2,7 @@ import { type Organization, Prisma } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
+import type { Locale } from '@/lib/i18n/locales';
 
 // Organization repository — single Prisma operations on the `organization`
 // table (the root tenancy tier, Story 6.10). The org-scoped business logic
@@ -136,6 +137,26 @@ export const organizationRepository = {
   },
 
   /**
+   * The content language of the organisation that owns `workspaceId` (Story
+   * MOTIR-7731 · MOTIR-8096) — the language a work-text write records when its
+   * caller names none. Read inside the write's own transaction, under the
+   * workspace context it already holds, so the recorded language and the write
+   * cannot disagree. NULL for a workspace the transaction is not bound to.
+   */
+  async findContentLanguageByWorkspaceId(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    // Through `app_workspace_content_language` (MOTIR-8097), not a join: the org
+    // row is invisible to a workspace writer that is not an org member — the
+    // system principal — and the function reads it for the BOUND workspace only.
+    const rows = await tx.$queryRaw<Array<{ contentLanguage: string | null }>>`
+      SELECT app_workspace_content_language(${workspaceId}) AS "contentLanguage"
+    `;
+    return rows[0]?.contentLanguage ?? null;
+  },
+
+  /**
    * Of the organisation ids given, which still have a row — the liveness read
    * motir-ai's code-graph reconciler subtracts from its own bucket enumeration
    * (MOTIR-4647). Answers about the ids it is GIVEN and never enumerates, so a
@@ -170,7 +191,12 @@ export const organizationRepository = {
   },
 
   async create(
-    data: { name: string; slug: string },
+    data: {
+      name: string;
+      slug: string;
+      /** The language new work is written in (MOTIR-8093); omitted keeps the column default `en`. */
+      contentLanguage?: Locale;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<Organization> {
     return tx.organization.create({ data });
@@ -186,6 +212,8 @@ export const organizationRepository = {
       requiresTwoFactor?: boolean;
       /** Set when a deletion is scheduled, cleared by a cancel (MOTIR-6399). */
       closingSince?: Date | null;
+      /** Written only by `organizationContentLanguageService` (MOTIR-8094). */
+      contentLanguage?: Locale;
     },
     tx: Prisma.TransactionClient,
   ): Promise<Organization> {

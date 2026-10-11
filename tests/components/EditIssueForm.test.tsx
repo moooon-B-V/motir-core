@@ -51,6 +51,7 @@ const issue: WorkItemDto = {
   descriptionMd: null,
   explanationMd: null,
   explanationSource: 'user_authored',
+  languages: { title: null, description: null, explanation: null },
   status: 'todo',
   priority: 'medium',
   assigneeId: null,

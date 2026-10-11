@@ -5,6 +5,7 @@ import {
   SystemPrincipalNotProvisionedError,
 } from '@/lib/ai/serviceAuth';
 import { aiWorkItemsService } from '@/lib/services/aiWorkItemsService';
+import { isLocale } from '@/lib/i18n/locales';
 import { enforceInternalServiceRateLimit } from '@/lib/rateLimit/aiGuard';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -63,14 +64,17 @@ export async function PATCH(
   } catch {
     return fail('WORK_ITEMS_INVALID', 'request body must be valid JSON', 400);
   }
-  const { descriptionMd } = (body ?? {}) as Record<string, unknown>;
+  const { descriptionMd, language } = (body ?? {}) as Record<string, unknown>;
   if (typeof descriptionMd !== 'string') {
     return fail('WORK_ITEMS_INVALID', '`descriptionMd` is required and must be a string.', 400);
+  }
+  if (language !== undefined && (typeof language !== 'string' || !isLocale(language))) {
+    return fail('WORK_ITEMS_INVALID', '`language` must be one of the supported locales.', 400);
   }
 
   try {
     const dto = await aiWorkItemsService.updateFiledBugDescription(
-      { identifier: key, descriptionMd },
+      { identifier: key, descriptionMd, ...(language !== undefined ? { language } : {}) },
       auth.ctx,
     );
     return NextResponse.json({ key: dto.identifier }, { status: 200 });

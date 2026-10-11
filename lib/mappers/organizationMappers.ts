@@ -1,6 +1,9 @@
-import type { Organization } from '@/generated/prisma/client';
+import type { Organization, OrganizationContentLanguageChange } from '@/generated/prisma/client';
+import { defaultLocale, isLocale } from '@/lib/i18n/locales';
 import type { OrgMembershipWithUser } from '@/lib/repositories/organizationMembershipRepository';
 import type {
+  ContentLanguageChangeDTO,
+  ContentLanguageLatestChangeDTO,
   CurrentOrganizationDTO,
   OrganizationDTO,
   OrgMemberDTO,
@@ -16,6 +19,32 @@ export function toOrganizationDTO(org: Organization): OrganizationDTO {
     id: org.id,
     name: org.name,
     slug: org.slug,
+    // The column is text; a value outside the eleven is read as the default
+    // rather than passed on as a Locale it is not.
+    contentLanguage: isLocale(org.contentLanguage) ? org.contentLanguage : defaultLocale,
+  };
+}
+
+export function toContentLanguageChangeDTO(
+  row: OrganizationContentLanguageChange,
+): ContentLanguageChangeDTO {
+  return {
+    changedByUserId: row.changedByUserId,
+    fromLanguage: row.fromLanguage,
+    toLanguage: row.toLanguage,
+    changedAt: row.changedAt.toISOString(),
+  };
+}
+
+export function toContentLanguageLatestChangeDTO(
+  row: OrganizationContentLanguageChange,
+  changedBy: { name: string | null; email: string } | null,
+): ContentLanguageLatestChangeDTO {
+  return {
+    fromLanguage: row.fromLanguage,
+    toLanguage: row.toLanguage,
+    changedAt: row.changedAt.toISOString(),
+    changedByLabel: changedBy ? changedBy.name?.trim() || changedBy.email : null,
   };
 }
 

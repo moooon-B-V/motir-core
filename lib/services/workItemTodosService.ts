@@ -28,6 +28,14 @@ import type {
   WorkItemTodoListDto,
 } from '@/lib/dto/workItemTodos';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { Locale } from '@/lib/i18n/locales';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import {
+  assertWriteLanguage,
+  hasText,
+  resolveWriteLanguage,
+  toOrgContentLanguage,
+} from '@/lib/workItems/contentLanguage';
 
 // Work-item to-do service (Story MOTIR-3808 · Subtask MOTIR-3813) — the
 // business logic over the MOTIR-3813 repository, built to
@@ -202,6 +210,13 @@ export interface TodoWriteResult {
 
 export interface AddTodoInput {
   text: string;
+  /**
+   * The language this write's text is in (Story MOTIR-7731 · MOTIR-8096):
+   * `language` for both fields, `languages` per field (wins). Omitted, a written
+   * field records the organisation's content language; empty notes record NULL.
+   */
+  language?: Locale;
+  languages?: { text?: Locale; notes?: Locale };
   /** The INSTRUCTIONS — optional Markdown, the *how* of this one operation. */
   notesMd?: string | null;
   commandText?: string | null;
@@ -217,9 +232,30 @@ export interface AddTodoInput {
 
 export interface UpdateTodoInput {
   text?: string;
+  /**
+   * The language this write's text is in (Story MOTIR-7731 · MOTIR-8096):
+   * `language` for both fields, `languages` per field (wins). Omitted, an EDITED
+   * field records the organisation's content language; empty notes record NULL.
+   */
+  language?: Locale;
+  languages?: { text?: Locale; notes?: Locale };
   notesMd?: string | null;
   commandText?: string | null;
   executor?: ExecutorDto | null;
+}
+
+/** Refuse a language outside the eleven locales before anything is written. */
+function assertTodoLanguages(input: Pick<AddTodoInput, 'language' | 'languages'>): void {
+  assertWriteLanguage(input.language);
+  assertWriteLanguage(input.languages?.text);
+  assertWriteLanguage(input.languages?.notes);
+}
+
+/** The org's content language, read inside the write's own transaction. */
+async function orgLanguageOf(workspaceId: string, tx: Prisma.TransactionClient): Promise<Locale> {
+  return toOrgContentLanguage(
+    await organizationRepository.findContentLanguageByWorkspaceId(workspaceId, tx),
+  );
 }
 
 export const workItemTodosService = {
@@ -263,9 +299,11 @@ export const workItemTodosService = {
     const text = requireText(input.text);
     const notesMd = normalizeNotes(input.notesMd);
     const commandText = normalizeCommand(input.commandText);
+    assertTodoLanguages(input);
 
     return withWorkspaceContext(ctx, async (tx) => {
       const item = await resolveEditableWorkItem(workItemId, ctx, tx);
+      const orgLanguage = await orgLanguageOf(item.workspaceId, tx);
       await lockTodoList(item.id, tx);
       // Read AFTER the lock, never before it — a list read outside the lock
       // that guards it is a snapshot of the past.
@@ -281,6 +319,10 @@ export const workItemTodosService = {
           workItemId: item.id,
           text,
           notesMd,
+          textLanguage: resolveWriteLanguage(input.languages?.text ?? input.language, orgLanguage),
+          notesLanguage: hasText(notesMd)
+            ? resolveWriteLanguage(input.languages?.notes ?? input.language, orgLanguage)
+            : null,
           commandText,
           executor,
           position: keyForAppend(last),
@@ -318,9 +360,28 @@ export const workItemTodosService = {
     if (input.notesMd !== undefined) patch.notesMd = normalizeNotes(input.notesMd);
     if (input.commandText !== undefined) patch.commandText = normalizeCommand(input.commandText);
     if (input.executor !== undefined) patch.executor = input.executor;
+    assertTodoLanguages(input);
 
     return withWorkspaceContext(ctx, async (tx) => {
       const { todo, item } = await resolveEditableTodo(todoId, ctx, tx);
+      // Re-record a field's language only when THAT field is edited — its value
+      // changed, or it came with an explicit language (MOTIR-8096). Editing the
+      // notes alone leaves the text's language as it was, NULL included.
+      const explicitText = input.languages?.text ?? input.language;
+      const explicitNotes = input.languages?.notes ?? input.language;
+      const textEdited =
+        typeof patch.text === 'string' && (patch.text !== todo.text || explicitText !== undefined);
+      const nextNotes = patch.notesMd as string | null | undefined;
+      const notesEdited =
+        nextNotes !== undefined && (nextNotes !== todo.notesMd || explicitNotes !== undefined);
+      if (textEdited || (notesEdited && hasText(nextNotes))) {
+        const orgLanguage = await orgLanguageOf(item.workspaceId, tx);
+        if (textEdited) patch.textLanguage = resolveWriteLanguage(explicitText, orgLanguage);
+        if (notesEdited && hasText(nextNotes)) {
+          patch.notesLanguage = resolveWriteLanguage(explicitNotes, orgLanguage);
+        }
+      }
+      if (notesEdited && !hasText(nextNotes)) patch.notesLanguage = null;
       if (Object.keys(patch).length === 0) {
         return { todo: toWorkItemTodoDto(todo), progress: await progressOf(item.id, tx) };
       }

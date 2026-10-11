@@ -1420,6 +1420,11 @@ export interface components {
             obsolescence: components["schemas"]["WorkItemObsolescence"] | null;
             obsolescenceNoteMd: string | null;
             descriptionMd: string | null;
+            languages: {
+                title: ("en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "it" | "nl" | "pl" | "pt") | null;
+                description: ("en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "it" | "nl" | "pl" | "pt") | null;
+                explanation: ("en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "it" | "nl" | "pl" | "pt") | null;
+            };
             parentKey: string | null;
             folderId: string | null;
             folderPath: string[] | null;
@@ -3071,6 +3076,14 @@ export interface operations {
                     folderId?: string | null;
                     descriptionMd?: string | null;
                     /** @enum {string} */
+                    language?: "en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "it" | "nl" | "pl" | "pt";
+                    languages?: {
+                        /** @enum {string} */
+                        title?: "en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "it" | "nl" | "pl" | "pt";
+                        /** @enum {string} */
+                        description?: "en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "it" | "nl" | "pl" | "pt";
+                    };
+                    /** @enum {string} */
                     priority?: "lowest" | "low" | "medium" | "high" | "highest";
                     type?: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "choice" | "deploy" | "manual" | "legal" | "chore") | null;
                     executor?: ("coding_agent" | "human") | null;
@@ -3523,6 +3536,16 @@ export interface operations {
                     title?: string;
                     descriptionMd?: string | null;
                     explanationMd?: string | null;
+                    /** @enum {string} */
+                    language?: "en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "it" | "nl" | "pl" | "pt";
+                    languages?: {
+                        /** @enum {string} */
+                        title?: "en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "it" | "nl" | "pl" | "pt";
+                        /** @enum {string} */
+                        description?: "en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "it" | "nl" | "pl" | "pt";
+                        /** @enum {string} */
+                        explanation?: "en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "it" | "nl" | "pl" | "pt";
+                    };
                     parentKey?: string | null;
                     folderId?: string | null;
                     /** @enum {string} */

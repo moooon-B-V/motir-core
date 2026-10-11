@@ -10,6 +10,9 @@ import {
 } from '@/generated/prisma/client';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import type { Locale } from '@/lib/i18n/locales';
+import type { WorkItemLanguageField } from '@/lib/dto/workItems';
+import { languageArgs, languageInput, languagesInput } from './contentLanguage';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
   ExecutorDto,
@@ -60,6 +63,10 @@ const inputSchema = {
     .nullable()
     .optional()
     .describe('New Markdown explanation body (the "why"); null clears it.'),
+  // The language of the text this call writes (Story MOTIR-7731 · MOTIR-8098).
+  // Metadata about a field, not a field: alone it patches nothing.
+  language: languageInput,
+  languages: languagesInput(['title', 'description', 'explanation'] as const),
   priority: z.nativeEnum(WorkItemPriority).optional().describe('New priority (lowest…highest).'),
   type: z
     .nativeEnum(WorkItemType)
@@ -159,6 +166,8 @@ interface UpdateWorkItemArgs {
   title?: string;
   descriptionMd?: string | null;
   explanationMd?: string | null;
+  language?: Locale;
+  languages?: Partial<Record<WorkItemLanguageField, Locale>>;
   priority?: WorkItemPriority;
   type?: WorkItemType | null;
   executor?: Executor | null;
@@ -238,6 +247,8 @@ export async function runUpdateWorkItem(
 ): Promise<CallToolResult> {
   try {
     const patch = toPatch(args);
+    // Counted BEFORE the language keys join: a language re-labels nothing on
+    // its own, so `{ key, language }` is still an empty patch (MOTIR-8098).
     const patchedKeys = Object.keys(patch);
     if (patchedKeys.length === 0) {
       return toolError(
@@ -253,9 +264,13 @@ export async function runUpdateWorkItem(
     const identifier = normalizeIdentifier(args.key);
     const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
     const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
-    const dto = await workItemsService.updateWorkItem(item.id, patch, ctx);
+    const dto = await workItemsService.updateWorkItem(
+      item.id,
+      { ...patch, ...languageArgs(args) },
+      ctx,
+    );
     return toolOk(
-      summarize(dto, Object.keys(patch)),
+      summarize(dto, patchedKeys),
       derived(workItemWritePayload, presentMcpWorkItem(dto)),
     );
   } catch (err) {
@@ -282,7 +297,10 @@ export function registerUpdateWorkItem(
         'category is refused with OBSOLESCENCE_REQUIRES_FINISHED — archive an item nobody will ' +
         'finish instead. Clearing is always legal, and after it the item can be reopened. ' +
         'Re-parenting under a marked item is refused with MARKED_CARD_CANNOT_REOPEN. Honors the same leaf-only type/difficulty rules, ' +
-        'project-repository validation, assignee-membership check, and access checks as the UI.',
+        'project-repository validation, assignee-membership check, and access checks as the UI. ' +
+        '`language` (or per-field `languages`) names the language of the text written; an ' +
+        "edited field with none records the organisation's content language, and a language " +
+        'alone changes nothing (NO_FIELDS_TO_PATCH).',
       inputSchema,
     },
     async (args, extra) => runUpdateWorkItem(args, resolveContext(extra)),

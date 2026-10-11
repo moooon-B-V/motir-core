@@ -39,6 +39,7 @@ import { hash, verify } from './passwords';
 import { mcpOAuthPolicy } from './mcpOAuthPolicy';
 import { localeSync } from './localeSync';
 import { localeFromRequestHeaders } from '@/lib/i18n/seedLocale';
+import { contentLanguageFromAcceptLanguage } from '@/lib/i18n/contentLanguage';
 import { seedResourcesLazily } from './lazyResourceSeed';
 import {
   CIMD_FETCH_POLICY,
@@ -394,7 +395,7 @@ export const authOptions: BetterAuthOptions & {
             locale: localeFromRequestHeaders(ctx?.headers ?? ctx?.request?.headers ?? null),
           },
         }),
-        after: async (user) => {
+        after: async (user, ctx) => {
           // ⚠️ THE LEGAL ACCEPTANCE IS RECORDED FIRST, AND IN ITS OWN
           // try/catch (Story 8.4 · Subtask MOTIR-1135).
           //
@@ -438,9 +439,16 @@ export const authOptions: BetterAuthOptions & {
             // owner memberships for both, atomically. provisionForNewUser is the
             // named entry for this (it delegates to createWorkspace's
             // mint-own-org branch).
+            //
+            // The minted org's CONTENT language comes from the browser's top
+            // `Accept-Language` tag (Story MOTIR-7731 · MOTIR-8093): `zh` for a
+            // Chinese browser, `en` for every other one. better-auth hands
+            // `after` the same endpoint context `before` reads.
+            const headers = ctx?.headers ?? ctx?.request?.headers ?? null;
             await workspacesService.provisionForNewUser({
               userId: user.id,
               userName: user.name,
+              contentLanguage: contentLanguageFromAcceptLanguage(headers?.get('accept-language')),
             });
             // ⚠️ THE DEFAULT PROJECT IS **NOT** SEEDED HERE, AND THAT IS A
             // STRUCTURAL DECISION RATHER THAN AN OMISSION (MOTIR-4870).

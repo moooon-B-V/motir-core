@@ -146,9 +146,9 @@ export const ko: McpSummaryTranslations = {
   },
   create_work_item: {
     summary:
-      '부모 아래 또는 폴더 안에 에픽, 스토리, 작업, 버그 또는 하위 작업을 만듭니다. 포인트, 예상 시간, type, executor, difficulty, repo, 폐기 표시를 한 번의 호출로 지정할 수 있습니다.',
+      '부모 아래 또는 폴더 안에 에픽, 스토리, 작업, 버그 또는 하위 작업을 만듭니다. 포인트, 예상 시간, type, executor, difficulty, repo, 폐기 표시, 콘텐츠 언어를 한 번의 호출로 지정할 수 있습니다.',
     source:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
   },
   delete_comment: {
     summary:

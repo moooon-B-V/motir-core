@@ -510,6 +510,28 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'Who this step is for: "human" or "coding_agent". Declarative — it authorizes nothing. Omitted ⇒ the card’s own executor, or "human" when the card has none.',
       },
+      language: {
+        type: 'string',
+        enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+        description:
+          "Optional: the language every text field this call writes is in — one of en, zh, ja, ko, de, fr, es, it, nl, pl, pt. Omit it to record the organisation's content language.",
+      },
+      languages: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+          },
+          notes: {
+            type: 'string',
+            enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+          },
+        },
+        additionalProperties: false,
+        description:
+          'Optional: the language of each text field this call writes (text, notes), winning over `language` for that field.',
+      },
     },
     required: ['key', 'text'],
     additionalProperties: false,
@@ -1100,6 +1122,28 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           "Optional: the id of a folder (as `list_folders` returns it) to FILE the new item into — the other placement beside parentKey, which it may not be combined with (PLACEMENT_CONFLICT). A filed item is a root, so any kind may be filed, a subtask included. The folder must be in this project: an unknown id is FOLDER_NOT_FOUND, another project's is CROSS_PROJECT_FOLDER.",
       },
       descriptionMd: { type: 'string', description: 'Optional Markdown description body.' },
+      language: {
+        type: 'string',
+        enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+        description:
+          "Optional: the language every text field this call writes is in — one of en, zh, ja, ko, de, fr, es, it, nl, pl, pt. Omit it to record the organisation's content language.",
+      },
+      languages: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+          },
+          description: {
+            type: 'string',
+            enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+          },
+        },
+        additionalProperties: false,
+        description:
+          'Optional: the language of each text field this call writes (title, description), winning over `language` for that field.',
+      },
       priority: {
         type: 'string',
         enum: ['lowest', 'low', 'medium', 'high', 'highest'],
@@ -3491,6 +3535,32 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: ['string', 'null'],
         description: 'New Markdown explanation body (the "why"); null clears it.',
       },
+      language: {
+        type: 'string',
+        enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+        description:
+          "Optional: the language every text field this call writes is in — one of en, zh, ja, ko, de, fr, es, it, nl, pl, pt. Omit it to record the organisation's content language.",
+      },
+      languages: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+          },
+          description: {
+            type: 'string',
+            enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+          },
+          explanation: {
+            type: 'string',
+            enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+          },
+        },
+        additionalProperties: false,
+        description:
+          'Optional: the language of each text field this call writes (title, description, explanation), winning over `language` for that field.',
+      },
       priority: {
         type: 'string',
         enum: ['lowest', 'low', 'medium', 'high', 'highest'],
@@ -3617,6 +3687,28 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         anyOf: [{ type: 'string', enum: ['coding_agent', 'human'] }, { type: 'null' }],
         description:
           'Who the step is for: "human" or "coding_agent". Omitted ⇒ unchanged; null clears it.',
+      },
+      language: {
+        type: 'string',
+        enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+        description:
+          "Optional: the language every text field this call writes is in — one of en, zh, ja, ko, de, fr, es, it, nl, pl, pt. Omit it to record the organisation's content language.",
+      },
+      languages: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+          },
+          notes: {
+            type: 'string',
+            enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
+          },
+        },
+        additionalProperties: false,
+        description:
+          'Optional: the language of each text field this call writes (text, notes), winning over `language` for that field.',
       },
     },
     required: ['key', 'todoId'],
