@@ -214,6 +214,7 @@
     "outcomeDeclined": "odrzucono",
     "field_title": "Tytuł",
     "field_priority": "Priorytet",
+    "field_kind": "Rodzaj",
     "field_type": "Typ",
     "field_executor": "Wykonawca",
     "field_storyPoints": "Punkty historii",

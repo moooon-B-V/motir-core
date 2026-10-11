@@ -327,6 +327,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   description:
                     'Leaf work type. A CLOSED set: these fourteen members ARE the schema enum. An explicit `null` clears it.',
                 },
+                kind: {
+                  type: 'string',
+                  enum: ['story', 'task', 'bug', 'subtask'],
+                  description:
+                    'RE-KIND the target — the plan door’s `change_kind` (never `epic`). Judged against the PROJECTED tree: the parent must admit the new kind, the new kind must admit every child the target keeps, and re-kinding a leaf into a `story` must clear its leaf fields in the same patch (`type: null`, `difficulty: null`) or it is refused by name. The executor is not a patch key: a re-kind to a container clears it at approve.',
+                },
                 storyPoints: {
                   type: ['number', 'null'],
                   description: 'Re-scope the agile sizing. An explicit `null` clears it.',
@@ -3326,6 +3332,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 ],
                 description:
                   'Leaf work type. A CLOSED set: these fourteen members ARE the schema enum. An explicit `null` clears it.',
+              },
+              kind: {
+                type: 'string',
+                enum: ['story', 'task', 'bug', 'subtask'],
+                description:
+                  'RE-KIND the target — the plan door’s `change_kind` (never `epic`). Judged against the PROJECTED tree: the parent must admit the new kind, the new kind must admit every child the target keeps, and re-kinding a leaf into a `story` must clear its leaf fields in the same patch (`type: null`, `difficulty: null`) or it is refused by name. The executor is not a patch key: a re-kind to a container clears it at approve.',
               },
               storyPoints: {
                 type: ['number', 'null'],

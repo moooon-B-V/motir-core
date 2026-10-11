@@ -214,6 +214,7 @@
     "outcomeDeclined": "afgewezen",
     "field_title": "Titel",
     "field_priority": "Prioriteit",
+    "field_kind": "Soort",
     "field_type": "Type",
     "field_executor": "Uitvoerder",
     "field_storyPoints": "Storypoints",

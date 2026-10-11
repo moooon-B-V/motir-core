@@ -4232,3 +4232,54 @@ may not have re-read. **What it does not change:** the permission (`ai:view_plan
 CLI-minted token is still refused), the editable fields (a revision, like a deepen, cannot re-parent,
 re-edge or re-pin — those are `update_plan_proposal`'s), and `updateProposal`'s own attribution (a
 reviewer's inline edit is still that person's).
+
+## AMENDMENT 25 — a `modify` RE-KINDS a committed card: `patch.kind`, judged on the projected tree (bug MOTIR-8192, 2026-10-11)
+
+A re-plan that finds a committed `task` is really a `story` had no way to say so on the plan a person
+approves. `PLAN_ITEM_PATCH_KEYS` carried no `kind`, so `assertKnownPatchKeys` refused the key at the
+append (AMENDMENT 20's refuse-by-name rule doing its job), and the only door was `change_kind`,
+outside the plan. The correction door already carried `kind` for an `add`, but held it to fewer rules
+than the direct door holds a kind change: a type stayed on a re-kinded container, and the parent and
+children were judged only by the close's before/after verdict, which admits a write to a plan that
+was already unapprovable.
+
+**§1 — the key.** `PlanItemPatch.kind` is one of `story` · `task` · `bug` · `subtask`
+(`MODIFY_KIND_TARGETS`), the set `change_kind` offers, and for its reason: an `epic` is scaffolding a
+plan lays with an `add`. `epic` and every non-member are refused by name at the append and the
+correction (`validateProposedKindChange`, `INVALID_PROPOSAL`), and as `unknown_kind` at the close and
+approve. Applied by `applyModify` with the `kind` revision cell `workItemsService` records; the review
+shows a `kind` change row (`Kind  task → story`). It moves no rail row in the peek.
+
+**§2 — the tree it is judged on.** The append, the correction and approve ask the questions
+`workItemsService.updateWorkItem`'s kind path asks, against the PROJECTED tree
+(`assertKindChangesLegal`, fed by `plansService.resolveKindChangeContexts`): the target's parent
+admits the new kind; the new kind admits every committed child the target KEEPS (a child the plan
+moves away or removes is not kept; a child the plan re-kinds is judged at its own projected kind);
+both refusals are `illegal_parent`, naming the child. Every other placement question in the gate —
+an `add` under the target, a `modify` moving a card under it or moving the target itself, the
+difficulty check — reads the target at its projected kind (`withProjectedKinds`). The `work_item`
+kind trigger backstops the parent half only; it never looks at a row's children.
+
+**§3 — the leaf fields: REFUSED, not cleared.** A container keeps no `type` and no `difficulty`.
+When a re-kind to `story` would leave the target's own value standing, the proposal is refused by
+name — `type_on_container` (a new grammar reason) or `difficulty_on_container` — and the author adds
+`type: null` / `difficulty: null` to the patch. Clearing silently was the alternative and is
+rejected: it would erase a field the author never mentioned, on an approve nobody watches, which is
+the opposite of what the direct door does (`TypeNotAllowedOnKindError` / `DifficultyNotAllowedOnKindError`).
+
+**§3a — the executor is DERIVED.** AMENDMENT 4 D3a stands: `executor` is not a patch key, and
+AMENDMENT 20 §1 declined to add one. So a re-kind to a container sets the executor to `null` at
+approve, beside the `kind` write — the end state the direct door insists on — and the review shows it
+as a derived `executor` change row, the way MOTIR-6259's seeded executor is shown. MOTIR-8192's own
+example patch carried `executor: null`; that key is still refused, and needs no replacement.
+
+**§4 — an `add`'s kind correction.** When a correction, a deepen, a review edit or a revision
+SUPPLIES a kind, the edited `add` is held to the same rules before the write: a container keeps no
+`type` or `executor` (`assertReKindedAddKeepsNoLeafFields`, refused by name; `todos` and `difficulty`
+were already refused on the merged kind), its parent admits the new kind, and the new kind admits
+every proposal the plan hangs under it (`assertAddKindPlacementLegal`). An edit that does not supply a
+kind is not re-judged, so a proposal written before this rule is not refused for an unrelated edit.
+An `add` that PROPOSES a container with a `type` at the append is unchanged by this amendment.
+
+**Not in scope.** motir-ai's `MODIFY_PATCH_KEYS` mirror. A plan authored there cannot propose a re-kind
+until it learns the key; nothing it sends today changes.
