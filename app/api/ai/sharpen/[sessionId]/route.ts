@@ -8,7 +8,9 @@ import { mapSharpenError, NO_STORE } from '../_errors';
 
 // GET /api/ai/sharpen/[sessionId] — one of the caller's Sharpen sessions in the
 // active project (Task MOTIR-1101 · Subtask MOTIR-8181). Another person's
-// session, or one of another project, is a 404. HTTP only.
+// session, or one of another project, is a 404.
+//
+// NOT rate-limited, deliberately: a database read that submits no job. HTTP only.
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ sessionId: string }> },
