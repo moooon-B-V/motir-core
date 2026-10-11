@@ -80,6 +80,22 @@ async function precheck(pctx: ProjectContext, sessionId: string): Promise<Resume
     }
     const plan = await planRepository.findLatestForResume(session.id, tx);
     if (!plan || plan.status !== 'generating' || plan.sourceJobId !== session.failedJobId) {
+      // Neither read takes a lock and the isolation is read committed, so a concurrent
+      // Resume's bind can commit BETWEEN the two: the session above was read still failed,
+      // and the plan is already re-pointed at the winner's job (MOTIR-8261). Re-read the
+      // session, which now sees that commit, and refuse the way the bind does for the same
+      // race — ended, or already resumed naming the winning job — rather than as a plan that
+      // cannot be resumed.
+      const fresh = await planChangeSessionRepository.findByIdInProject(
+        session.id,
+        pctx.projectId,
+        pctx.workspaceId,
+        tx,
+      );
+      if (fresh?.endedAt) throw new PlanSessionEndedError(fresh.id);
+      if (fresh && sessionWaitingState(fresh) !== 'failed') {
+        throw new ResumeAlreadyStartedError(fresh.id, fresh.lastJobId);
+      }
       throw new PlanNotResumableError(session.id);
     }
     return { sessionId: session.id, planId: plan.id, failedJobId: session.failedJobId };
