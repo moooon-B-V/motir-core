@@ -466,6 +466,38 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
     expect(await locksOf(sessionId)).toBe(1);
   });
 
+  it(
+    'records NOTHING when the plan wrote after it was judged silent — the compare-and-set (MOTIR-8132)',
+    T,
+    async () => {
+      const sessionId = await openSession(await seedCard());
+      const plan = await planIn(sessionId, { ageHours: 2, sourceJobId: 'job-late' });
+
+      const out = await abandonedPlanService.reconcileAbandoned({
+        deps: {
+          resolveJobState: async () => asState(failedState),
+          // The last read before the record: a producer write lands here and moves
+          // the stamp the sweep judged by.
+          getJobWalkStop: async () => {
+            await adminDb.plan.update({
+              where: { id: plan.id },
+              data: { lastActivityAt: new Date() },
+            });
+            return null;
+          },
+        },
+      });
+
+      expect(out.outcomes).toEqual([
+        { planId: plan.id, projectId: fx.projectId, outcome: 'left_as_is', reason: 'row_moved' },
+      ]);
+      const s = await sessionRow(sessionId);
+      expect(s.failedAt).toBeNull();
+      expect(s.endedAt).toBeNull();
+      expect((await planRow(plan.id)).status).toBe('generating');
+    },
+  );
+
   describe('still declines — the counterfactuals', () => {
     it('a session-less plan and a `guide` session', T, async () => {
       const orphan = await planIn(await openSession(await seedCard()), {
