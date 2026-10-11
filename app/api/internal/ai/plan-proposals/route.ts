@@ -70,6 +70,11 @@ import type { ProposalInput } from '@/lib/dto/plans';
 //
 // Service-to-service only, resolved by `sourceJobId` like every seam beside it,
 // so a job token cannot read another job's plan. Read-only.
+// The longest plan title the append seam stores (MOTIR-8164). A longer one is
+// CUT, not refused: a title is a label, and refusing the append over its length
+// would throw away the proposals it carries.
+const PLAN_TITLE_MAX = 200;
+
 export async function GET(req: Request): Promise<Response> {
   let auth;
   try {
@@ -152,6 +157,16 @@ export async function POST(req: Request): Promise<Response> {
   // close a plan and so has no briefing of its own to write here.
   const rawSummary = (body as { summary?: unknown })?.summary;
   const summary = typeof rawSummary === 'string' ? rawSummary : null;
+  // The plan's TITLE (Story MOTIR-8161 · Subtask MOTIR-8164) — the hosted planner
+  // names its plan from the settled ask on its first append and may correct it
+  // on the final one, ahead of the briefing. Unlike `summary` it rides ANY
+  // append, not only the final one. A string is trimmed and cut to
+  // PLAN_TITLE_MAX characters; anything else, or a blank string, is "no title"
+  // and the plan keeps the title it has. The service ignores it on a revision
+  // append and on a plan that has left `generating`.
+  const rawTitle = (body as { title?: unknown })?.title;
+  const trimmedTitle = typeof rawTitle === 'string' ? rawTitle.trim() : '';
+  const title = trimmedTitle.length > 0 ? trimmedTitle.slice(0, PLAN_TITLE_MAX).trim() : null;
   // ── THE REVISION PASS (Story MOTIR-3595 · Subtask MOTIR-3598) ──────────────
   // `revision: true` says WHICH PASS this append belongs to, and it changes two
   // things and nothing else: the status gate becomes the editable pair rather
@@ -189,6 +204,7 @@ export async function POST(req: Request): Promise<Response> {
         final,
         productName,
         revision,
+        ...(title !== null ? { title } : {}),
         ...(final && !revision && summary !== null ? { summary } : {}),
         ...(actor ? { actor } : {}),
       },

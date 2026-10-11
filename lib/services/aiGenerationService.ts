@@ -482,6 +482,11 @@ export const aiGenerationService = {
       productName?: string | null;
       /** The planner's briefing (MOTIR-8157) — written on the generation's close only. */
       summary?: string | null;
+      /**
+       * The plan's title (MOTIR-8164) — on ANY append of a generation, written
+       * while the plan is `generating`; ignored on a revision or a later status.
+       */
+      title?: string | null;
       revision?: boolean;
       actor?: PlanRevisionAgentActor;
     } = {},
@@ -490,6 +495,24 @@ export const aiGenerationService = {
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
     );
     if (!plan) throw new NoPlanForJobError(jobId);
+
+    // THE PLAN'S TITLE (Story MOTIR-8161 · Subtask MOTIR-8164), written FIRST so
+    // it is settled before this append's proposals and — on the final append —
+    // before the briefing is written by the close below. Through
+    // `correctPlanBrief`, the door behind the MCP `update_plan` (MOTIR-4637), so
+    // a rename lands on the plan's trail as the same `brief_edited` row a
+    // person's correction does, rather than as an untraced column write.
+    //
+    // ⚠️ ONLY WHILE THE PLAN IS `generating`, and never on a revision pass. A
+    // revision does not open or close a plan, so it does not name one; and a plan
+    // that has left `generating` is a reviewer's (or a record's) — a title on
+    // that append is IGNORED rather than refused, so the proposals it carries
+    // still land. A title equal to the stored one writes nothing: a no-op is not
+    // worth a trail row.
+    const title = opts.title?.trim();
+    if (!opts.revision && title && plan.status === 'generating' && title !== plan.title) {
+      await plansService.correctPlanBrief(plan.id, { title }, ctx);
+    }
 
     let createdIds: string[] = [];
     if (proposals.length > 0) {
