@@ -109,6 +109,28 @@ describe('the transaction-stall monitor sits behind the SAME gate (MOTIR-6701)',
     expect(isTransactionStallMonitorRunning()).toBe(false);
   });
 
+  // MOTIR-8265: the blocking-stack watchdog is a THREAD and an inspector
+  // session, so it must not exist where Sentry does not.
+  it('starts NO watchdog thread, inspector session or GC observer when the DSN is unset', async () => {
+    await import('@/sentry.server.config');
+    const { __forTests, isLoopBlockWatchdogRunning } =
+      await import('@/lib/monitoring/loopBlockWatchdog');
+    expect(isLoopBlockWatchdogRunning()).toBe(false);
+    expect(__forTests.threadId()).toBeNull();
+  });
+
+  it('starts the watchdog thread when the DSN is set, and stopping it ends the thread', async () => {
+    vi.stubEnv('SENTRY_DSN', 'https://key@o1.ingest.us.sentry.io/2');
+    await import('@/sentry.server.config');
+    const { __forTests } = await import('@/lib/monitoring/loopBlockWatchdog');
+    const { stopTransactionStallMonitor } = await import('@/lib/monitoring/transactionStall');
+    expect(__forTests.threadId()).not.toBeNull();
+    const exited = __forTests.exited();
+    stopTransactionStallMonitor();
+    await exited;
+    expect(__forTests.threadId()).toBeNull();
+  });
+
   it('starts the monitor on the server when the DSN is set', async () => {
     vi.stubEnv('SENTRY_DSN', 'https://key@o1.ingest.us.sentry.io/2');
     await import('@/sentry.server.config');

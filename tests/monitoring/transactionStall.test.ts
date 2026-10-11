@@ -3,12 +3,14 @@ import type { AddressInfo } from 'node:net';
 import type { ErrorEvent } from '@sentry/nextjs';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, dbPool } from '@/lib/db';
+import { BLOCK_THRESHOLD_MS } from '@/lib/monitoring/loopBlockWatchdog';
 import { PROCESS_PRESSURE_TAG } from '@/lib/monitoring/processPressure';
 import { serverBeforeSend, serverSentryInitOptions } from '@/lib/monitoring/serverInit';
 import {
   STALL_TAG,
   startTransactionStallMonitor,
   stopTransactionStallMonitor,
+  tagTransactionStall,
   transactionStallTags,
   transactionTimeoutHalf,
 } from '@/lib/monitoring/transactionStall';
@@ -92,6 +94,60 @@ describe('the GC / heap / CPU readings (MOTIR-8264)', () => {
     const tags = transactionStallTags(Object.assign(new Error('x'), { code: 'P2028' }))!;
     for (const key of Object.values(PROCESS_PRESSURE_TAG)) expect(tags).toHaveProperty(key);
     expect(transactionStallTags(new Error('boom'))).toBeNull();
+  });
+});
+
+describe('the blocking stack (MOTIR-8265)', () => {
+  /** Hold the loop in a NAMED synchronous function the capture can point at. */
+  function blockLoopForTest(ms: number): void {
+    const until = Date.now() + ms;
+    while (Date.now() < until) {
+      // spin
+    }
+  }
+  const BLOCK_MS = BLOCK_THRESHOLD_MS + 800;
+
+  it('reads `unmeasured` x3 when nothing blocked the loop — never a zero', () => {
+    const tags = transactionStallTags(Object.assign(new Error('x'), { code: 'P2028' }))!;
+    expect(tags[STALL_TAG.loopBlockMs]).toBe('unmeasured');
+    expect(tags[STALL_TAG.loopBlockFrame]).toBe('unmeasured');
+    expect(tags[STALL_TAG.loopBlockAgeS]).toBe('unmeasured');
+  });
+
+  it('names the blocking function on a real P2028, read with no await before it', async () => {
+    // The watchdog thread needs a moment to come up and the first heartbeat to land.
+    await sleep(300);
+    const err = await rejectionOf(
+      db.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT 1`;
+          blockLoopForTest(BLOCK_MS);
+          await tx.$queryRaw`SELECT 1`;
+        },
+        { timeout: TX_BUDGET_MS },
+      ),
+    );
+    expect(transactionTimeoutHalf(err)).toBe('timeout');
+
+    // Read in the very tick the rejection is handled: the capture was taken
+    // during the block and must already be readable, with no sleep to wait on.
+    const tags = transactionStallTags(err)!;
+    expect(numericTag(tags, STALL_TAG.loopBlockMs)).toBeGreaterThanOrEqual(BLOCK_MS - 100);
+    expect(tags[STALL_TAG.loopBlockFrame]).toContain('blockLoopForTest');
+    numericTag(tags, STALL_TAG.loopBlockAgeS);
+
+    // The full stack rides in `contexts`, not in a tag.
+    const sent = tagTransactionStall({ type: undefined }, { originalException: err });
+    const context = (sent.contexts as { loop_block?: { frames: string[]; blockMs: number } })
+      .loop_block!;
+    expect(context.frames.length).toBeGreaterThan(0);
+    expect(context.frames.length).toBeLessThanOrEqual(50);
+    expect(context.frames.join('\n')).toContain('blockLoopForTest');
+  }, 30_000);
+
+  it('leaves every existing tag in place beside the new ones', async () => {
+    const tags = transactionStallTags(Object.assign(new Error('x'), { code: 'P2028' }))!;
+    for (const key of Object.values(STALL_TAG)) expect(tags).toHaveProperty(key);
   });
 });
 
@@ -242,6 +298,24 @@ describe('the Node runtimes’ beforeSend (app server and job worker)', () => {
     );
     const sent = serverBeforeSend(event(), { originalException: p2028 })!;
     expect(sent.tags).toMatchObject({ existing: 'kept', [STALL_TAG.half]: 'maxWait' });
+  });
+
+  it('the job worker’s options carry the blocking-stack tags too (MOTIR-8265)', () => {
+    vi.stubEnv('SENTRY_DSN', 'https://key@o1.ingest.us.sentry.io/2');
+    try {
+      const options = serverSentryInitOptions()!;
+      const p2028 = Object.assign(new Error('x'), { code: 'P2028' });
+      const sent = options.beforeSend!(event(), { originalException: p2028 }) as ErrorEvent;
+      for (const key of [
+        STALL_TAG.loopBlockMs,
+        STALL_TAG.loopBlockFrame,
+        STALL_TAG.loopBlockAgeS,
+      ]) {
+        expect(sent.tags).toHaveProperty([key]);
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('passes any other event through untouched', () => {

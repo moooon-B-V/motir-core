@@ -1,6 +1,12 @@
 import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
 import type { ErrorEvent, EventHint } from '@sentry/nextjs';
 import {
+  readLoopBlock,
+  rollLoopBlockWindow,
+  startLoopBlockWatchdog,
+  stopLoopBlockWatchdog,
+} from './loopBlockWatchdog';
+import {
   processPressureTags,
   rollProcessPressureWindow,
   startProcessPressure,
@@ -130,12 +136,15 @@ export function startTransactionStallMonitor(): void {
       // The GC / heap / CPU readings (MOTIR-8264) roll on this same clock, so
       // every window-based tag on an event spans the same two windows.
       rollProcessPressureWindow();
+      // ...and so does the blocking-stack capture (MOTIR-8265).
+      rollLoopBlockWindow();
     }, WINDOW_MS),
   };
   // Never keep a process alive for a measurement.
   monitor.timer.unref();
   loopMonitor = monitor;
   startProcessPressure();
+  startLoopBlockWatchdog();
 }
 
 /** Stop the monitor and forget every reading — for tests. */
@@ -145,6 +154,7 @@ export function stopTransactionStallMonitor(): void {
   loopMonitor.histogram.disable();
   loopMonitor = null;
   stopProcessPressure();
+  void stopLoopBlockWatchdog();
 }
 
 /** True when {@link startTransactionStallMonitor} has run in this process. */
@@ -237,6 +247,11 @@ export const STALL_TAG = {
   busiestWaiting: 'tx.pool_busiest_waiting',
   busiestMax: 'tx.pool_busiest_max',
   uptimeS: 'tx.uptime_s',
+  // What the main thread was running while the loop was blocked (MOTIR-8265,
+  // `./loopBlockWatchdog`).
+  loopBlockMs: 'tx.loop_block_ms',
+  loopBlockFrame: 'tx.loop_block_frame',
+  loopBlockAgeS: 'tx.loop_block_age_s',
 } as const;
 
 /** What a reading reports when there is nothing to read — never a zero, which
@@ -310,6 +325,24 @@ export function transactionStallTags(err: unknown): Record<string, string> | nul
     // What held the CPU over the same span — GC, heap, cgroup throttle, steal
     // (MOTIR-8264, `./processPressure`).
     ...processPressureTags(),
+    ...loopBlockTags(),
+  };
+}
+
+/** `tx.loop_block_*` — all three `unmeasured` unless a block reached the threshold. */
+function loopBlockTags(): Record<string, string> {
+  const block = readLoopBlock();
+  if (!block) {
+    return {
+      [STALL_TAG.loopBlockMs]: UNMEASURED,
+      [STALL_TAG.loopBlockFrame]: UNMEASURED,
+      [STALL_TAG.loopBlockAgeS]: UNMEASURED,
+    };
+  }
+  return {
+    [STALL_TAG.loopBlockMs]: String(Math.round(block.blockMs)),
+    [STALL_TAG.loopBlockFrame]: block.frame ?? UNMEASURED,
+    [STALL_TAG.loopBlockAgeS]: block.ageS === null ? UNMEASURED : String(block.ageS),
   };
 }
 
@@ -320,5 +353,11 @@ export function transactionStallTags(err: unknown): Record<string, string> | nul
 export function tagTransactionStall(event: ErrorEvent, hint: EventHint): ErrorEvent {
   const tags = transactionStallTags(hint.originalException);
   if (!tags) return event;
-  return { ...event, tags: { ...event.tags, ...tags } };
+  const block = readLoopBlock();
+  return {
+    ...event,
+    tags: { ...event.tags, ...tags },
+    // The full captured stack is too long for a tag.
+    ...(block?.context ? { contexts: { ...event.contexts, loop_block: block.context } } : {}),
+  };
 }
