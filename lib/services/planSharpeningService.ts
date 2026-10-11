@@ -37,7 +37,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // may not edit the target cannot have it edited for them.
 //
 //   • plan scope      → `ai:view_plan` (the plan gate) + edit on the plan's
-//                       project; legal while `generating` or `planned`; the
+//                       project; legal while `generating`, `planned` or `stale`; the
 //                       requirement and every `perItem` proposal edit in ONE
 //                       transaction under the plan's row lock.
 //   • work-item scope → `work_item:edit` on the item's project (the ordinary
@@ -66,8 +66,10 @@ const ACCEPTANCE_PARTS = [
   'acceptance',
 ] as const;
 
-/** A plan's editable statuses — the pair every other plan edit uses. */
-const EDITABLE_PLAN_STATUSES = new Set(['generating', 'planned']);
+/** The plan statuses a write-back lands on: the editable pair every other plan
+ *  edit uses, plus `stale`, which the Sharpen door opens on (design MOTIR-8173:
+ *  "Sharpening still writes to it"). A decided plan is refused. */
+const EDITABLE_PLAN_STATUSES = new Set(['generating', 'planned', 'stale']);
 
 /** How many times a work-item write is retried after a concurrent edit moved
  *  the row between the read and the write. */

@@ -162,6 +162,14 @@ describe('plan scope', () => {
     expect(after).toContain('- A CSV downloads\n- The file names the month');
   });
 
+  it('writes to a stale plan, which the Sharpen door opens on', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, itemId } = await planWithAdd(fx, { planned: true });
+    await adminDb.plan.update({ where: { id: planId }, data: { status: 'stale' } });
+    await planSharpeningService.writeBack(planInput(planId, itemId), fx.ctx);
+    expect(await storedRequirement(planId)).toMatchObject(REQUIREMENT);
+  });
+
   it.each(['approved', 'declined'] as const)(
     'refuses a %s plan and writes nothing',
     async (status) => {
