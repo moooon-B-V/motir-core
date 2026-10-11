@@ -15,6 +15,8 @@ import { PLAN_TARGET_LOCK_LEASE_MS } from '@/lib/planChange/targetLock';
 import {
   REVISION_ENDED_KIND,
   REVISION_STARTED_KIND,
+  isReopenedByRevision,
+  PLAN_REVISION_LEASE_MS,
   revisionLeaseOf,
 } from '@/lib/planChange/revisionLease';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
@@ -279,8 +281,16 @@ export async function releaseRevisionForFailedJob(
     if (!plan) return null;
     const locked = await planRepository.lockById(plan.id, tx);
     if (!locked) return null;
+    const fresh = await planRepository.findById(plan.id, workspaceId, tx);
+    if (!fresh) return null;
     const rows = await planRevisionRepository.listByPlan(plan.id, tx);
-    if (!revisionLeaseOf(rows, new Date())) return { planId: plan.id, released: false };
+    // A revision that RE-OPENED its plan is given back however its lease stands
+    // (Bug MOTIR-8208): a lapsed lease over a `generating` plan still owes the plan
+    // its `planned`.
+    const reopened = isReopenedByRevision(fresh, rows);
+    if (!reopened && !revisionLeaseOf(rows, new Date())) {
+      return { planId: plan.id, released: false };
+    }
     const start = [...rows].reverse().find((r) => r.changeKind === REVISION_STARTED_KIND);
     const startedBy = (start?.diff as { jobId?: unknown } | null)?.jobId;
     if (startedBy !== jobId) return { planId: plan.id, released: false };
@@ -290,12 +300,82 @@ export async function releaseRevisionForFailedJob(
         changeKind: REVISION_ENDED_KIND,
         changedById: null,
         actor: { source: 'native', harness: 'Motir', model: null },
-        diff: { revision: true, jobId, failed: true },
+        diff: {
+          revision: true,
+          jobId,
+          failed: true,
+          ...(reopened ? { restoredTo: 'planned' } : {}),
+        },
       },
       tx,
     );
+    if (reopened) {
+      // Loaded lazily, for the cycle this file's header warns about.
+      const { plansService } = await import('@/lib/services/plansService');
+      await plansService.restoreReopenedPlanWithin(tx, plan.id);
+    }
     return { planId: plan.id, released: true };
   });
+}
+
+/**
+ * GIVE BACK A PLAN WHOSE RE-OPENING REVISION LAPSED (Bug MOTIR-8208): the
+ * revision's lease ran out with no `revision_ended`, so nobody is writing the plan,
+ * and it goes back to `planned` as it stands (`plansService.settleLapsedRevisionWithin`).
+ * The person can ask for the revision again.
+ *
+ * Re-checked under the plan's lock: a revision that renewed, ended or was taken
+ * again since discovery is left alone (`false`).
+ */
+export async function releaseLapsedRevision(
+  planId: string,
+  workspaceId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  return withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const locked = await planRepository.lockById(planId, tx);
+    if (!locked) return false;
+    // Loaded lazily, for the cycle this file's header warns about.
+    const { plansService } = await import('@/lib/services/plansService');
+    return plansService.settleLapsedRevisionWithin(tx, planId, workspaceId, now);
+  });
+}
+
+/** Plans given back per lapsed-revision pass; a backlog drains over several passes. */
+export const LAPSED_REVISION_BATCH_SIZE = 200;
+
+/**
+ * THE LAPSED-REVISION PASS (Bug MOTIR-8208) — run by the planning-lock sweep every
+ * 5 minutes. A revision RE-OPENS its plan (`planned` → `generating`), so a revision
+ * that stops writing without ending — a job that died unseen, an agent that went
+ * away mid-`hold_plan_revision` — would otherwise leave the plan `generating` with
+ * nobody writing it. Every such plan whose lease has lapsed is given back to
+ * `planned`, within one sweep interval of the lapse.
+ *
+ * CROSS-TENANT discovery, PER-TENANT restore, exactly like the idle close: the read
+ * runs under the system context and each restore binds the plan's own workspace and
+ * re-checks under the plan's row lock.
+ */
+export async function releaseLapsedRevisions(
+  now: Date = new Date(),
+  batchSize: number = LAPSED_REVISION_BATCH_SIZE,
+): Promise<{ restored: number; planIds: string[] }> {
+  const lapsedBefore = new Date(now.getTime() - PLAN_REVISION_LEASE_MS);
+  const candidates = await withSystemContext((tx) =>
+    planRepository.listLapsedRevisionCandidates(lapsedBefore, batchSize, tx),
+  );
+  const planIds: string[] = [];
+  for (const plan of candidates) {
+    try {
+      if (await releaseLapsedRevision(plan.id, plan.workspaceId, now)) planIds.push(plan.id);
+    } catch (err) {
+      console.warn(
+        `[planSessionEnd] giving back the lapsed revision of plan ${plan.id} failed`,
+        err,
+      );
+    }
+  }
+  return { restored: planIds.length, planIds };
 }
 
 /**
@@ -474,7 +554,16 @@ async function settleFailedRevision(
 ): Promise<SettleFailedJobResult | null> {
   const located = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
     const plan = await planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx);
-    if (!plan || (plan.status !== 'planned' && plan.status !== 'stale')) return null;
+    if (!plan) return null;
+    // A `generating` plan is a revision's only when the revision RE-OPENED it (Bug
+    // MOTIR-8208); any other `generating` plan is a walk, and the session arm settles it.
+    if (
+      plan.status !== 'planned' &&
+      plan.status !== 'stale' &&
+      !isReopenedByRevision(plan, await planRevisionRepository.listByPlan(plan.id, tx))
+    ) {
+      return null;
+    }
     const session = plan.sessionId
       ? await planChangeSessionRepository.findById(plan.sessionId, ctx.workspaceId, tx)
       : null;
@@ -510,7 +599,13 @@ async function settleFailedRevision(
       const fresh = await planRepository.findById(plan.id, ctx.workspaceId, tx);
       // Moved on under us: a newer job writes it, or it was decided. Not this job's to settle.
       if (!fresh || fresh.sourceJobId !== jobId) return null;
-      if (fresh.status !== 'planned' && fresh.status !== 'stale') return null;
+      if (
+        fresh.status !== 'planned' &&
+        fresh.status !== 'stale' &&
+        !isReopenedByRevision(fresh, await planRevisionRepository.listByPlan(plan.id, tx))
+      ) {
+        return null;
+      }
       // Loaded lazily: `plansService` imports this module for its decision transactions, so a
       // static import back would close the cycle this file's header warns about.
       const { plansService } = await import('@/lib/services/plansService');
@@ -602,4 +697,6 @@ export const planSessionEndService = {
   endSessionForAbandonedPlan,
   settleFailedJob,
   releaseRevisionForFailedJob,
+  releaseLapsedRevision,
+  releaseLapsedRevisions,
 };

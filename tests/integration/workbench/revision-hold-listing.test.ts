@@ -7,6 +7,7 @@ import { planReviewService } from '@/lib/services/planReviewService';
 import { workbenchPlanningService } from '@/lib/services/workbenchPlanningService';
 import { workbenchWatermarkService } from '@/lib/services/workbenchWatermarkService';
 import { runHoldPlanRevision } from '@/lib/mcp/tools/authorPlan';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { PlanNotEditableError, PlanRevisionInFlightError } from '@/lib/plans/errors';
 import { PLAN_REVISION_LEASE_MS } from '@/lib/planChange/revisionLease';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
@@ -127,9 +128,10 @@ describe('a HELD revision moves the plan from Waiting on you to Planning', () =>
     const page = await workbenchPlanningService.listMyPlansBeingWritten(me(fx));
     expect(page.items[0]!.progress).toBeTruthy();
 
-    // The plan's STATUS never moved, and its question is still asked — HELD, not withdrawn.
+    // The revision RE-OPENED the plan (MOTIR-8208) — it is being written again —
+    // and its question is still asked: HELD, not withdrawn.
     expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
-      'planned',
+      'generating',
     );
     expect(await gateState(planId)).toBe('awaiting');
   });
@@ -206,9 +208,34 @@ describe('when the revision ENDS the plan is back in Waiting on you, and decidab
     await hold(fx, planId, 'start');
     await ageTrail(planId, PLAN_REVISION_LEASE_MS + 1000);
 
+    // The planning-lock sweep's lapsed-revision pass gives the re-opened plan back
+    // (MOTIR-8208): `planned`, its gate still the one awaiting question.
+    const pass = await planSessionEndService.releaseLapsedRevisions();
+    expect(pass.planIds).toEqual([planId]);
+    expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
+      'planned',
+    );
+    expect(await gateState(planId)).toBe('awaiting');
     expect(await listings(fx, planId)).toMatchObject({ inWaiting: true, inPlanning: false });
     await plansService.approvePlan(planId, fx.ctx);
     expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(1);
+  });
+
+  it('on EXPIRY before the sweep — Approve gives the plan back itself, then decides it', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx);
+    await hold(fx, planId, 'start');
+    await ageTrail(planId, PLAN_REVISION_LEASE_MS + 1000);
+    expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
+      'generating',
+    );
+
+    await plansService.approvePlan(planId, fx.ctx);
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(1);
+    const ended = await adminDb.planRevision.findFirstOrThrow({
+      where: { planId, changeKind: 'revision_ended' },
+    });
+    expect(ended.diff).toMatchObject({ lapsed: true, restoredTo: 'planned' });
   });
 });
 
@@ -246,6 +273,7 @@ describe('RENEW keeps the hold between writes, and never takes a lapsed one', ()
     const renewed = await hold(fx, planId, 'renew');
     expect(renewed.structuredContent).toMatchObject({ held: false, expiresAt: null });
     expect(await adminDb.planRevision.count({ where: { planId } })).toBe(before);
+    await planSessionEndService.releaseLapsedRevisions();
     expect(await listings(fx, planId)).toMatchObject({ inWaiting: true, inPlanning: false });
   });
 });

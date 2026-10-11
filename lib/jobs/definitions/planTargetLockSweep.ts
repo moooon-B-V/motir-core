@@ -73,6 +73,12 @@ export const planTargetLockSweep = defineJob(
     const idle = await ctx.step.run('close-idle-planning-sessions', () =>
       services.planSessionEnd.closeIdleSessions(),
     );
+    // A revision whose lease LAPSED gives the plan it re-opened back to `planned`
+    // (Bug MOTIR-8208), so a revision that stopped writing never leaves its plan
+    // `generating` with nobody writing it for longer than one interval.
+    await ctx.step.run('release-lapsed-plan-revisions', () =>
+      services.planSessionEnd.releaseLapsedRevisions(),
+    );
     const released = await ctx.step.run('release-expired-planning-locks', () =>
       services.planTargetLock.releaseExpired(),
     );

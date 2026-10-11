@@ -63,6 +63,7 @@ import { plansService } from '@/lib/services/plansService';
 import { planDriftService } from '@/lib/services/planDriftService';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { classifyFailedWaitingTurn } from '@/lib/planChange/failedWaitingTurn';
+import { isReopenedByRevision } from '@/lib/planChange/revisionLease';
 import {
   classifySessionTurn,
   type SessionTurnPlanStatus,
@@ -175,16 +176,18 @@ async function failedWaitingShape(
   resumable: boolean;
   waitingPlan: { planId: string; title: string | null; status: 'planned' | 'stale' } | null;
 }> {
+  const read = async (t: Prisma.TransactionClient) => {
+    const rows = await planRepository.listUndecidedBySession(row.id, t);
+    return Promise.all(rows.map(async (p) => ({ ...p, status: await turnStatusOf(p, t) })));
+  };
   const plans = tx
-    ? await planRepository.listUndecidedBySession(row.id, tx)
-    : await withWorkspaceServiceContext(pctx.workspaceId, (t) =>
-        planRepository.listUndecidedBySession(row.id, t),
-      );
+    ? await read(tx)
+    : await withWorkspaceServiceContext(pctx.workspaceId, (t) => read(t));
   const resumable =
     classifyFailedWaitingTurn({
       waiting: sessionWaitingState(row),
       failedJobId: row.failedJobId,
-      plans: plans.map((p) => ({ ...p, status: undecidedStatus(p.status) })),
+      plans,
     }) === 'refuse_resume';
   // Newest first (the repository orders it): the first `planned` / `stale` one waits.
   const waiting = plans.find((p) => p.status === 'planned' || p.status === 'stale');
@@ -874,6 +877,25 @@ function undecidedStatus(status: string): SessionTurnPlanStatus {
   return status === 'planned' || status === 'stale' ? status : 'generating';
 }
 
+/**
+ * An undecided plan's status AS A CONVERSATION'S NEXT TURN READS IT (Bug MOTIR-8208).
+ * A revision RE-OPENS the plan it rewrites (`planned` → `generating`), but that plan
+ * is still the one the conversation waits on: a turn sent while the revision runs
+ * REVISES it — and is refused `PLAN_REVISION_IN_FLIGHT` until the revision ends —
+ * rather than opening a second plan beside it as a `generating` plan would. So a
+ * re-opened plan reads as `planned` here, exactly as it read before the re-open.
+ */
+async function turnStatusOf(
+  plan: { id: string; status: string },
+  tx: Prisma.TransactionClient,
+): Promise<SessionTurnPlanStatus> {
+  const status = undecidedStatus(plan.status);
+  if (status !== 'generating') return status;
+  return isReopenedByRevision(plan, await planRevisionRepository.listByPlan(plan.id, tx))
+    ? 'planned'
+    : status;
+}
+
 /** The revision actor a conversation's revise records — Motir's own planner. */
 const SESSION_REVISION_ACTOR = { source: 'native', harness: 'Motir', model: null } as const;
 
@@ -1015,7 +1037,7 @@ async function claimPlanAgain(
       const turn = classifySessionTurn({
         origin: fresh.origin,
         endedAt: fresh.endedAt,
-        latestUndecided: latest ? { id: latest.id, status: undecidedStatus(latest.status) } : null,
+        latestUndecided: latest ? { id: latest.id, status: await turnStatusOf(latest, tx) } : null,
         planAgainOf: stalePlanId,
       });
       if (turn.kind === 'revise') return turn;
@@ -2544,11 +2566,14 @@ export const planChangeSessionsService = {
       failedJobId: session.failedJobId,
       plans:
         sessionWaitingState(session) === 'failed'
-          ? (
-              await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-                planRepository.listUndecidedBySession(session.id, tx),
-              )
-            ).map((p) => ({ ...p, status: undecidedStatus(p.status) }))
+          ? await withWorkspaceServiceContext(pctx.workspaceId, async (tx) =>
+              Promise.all(
+                (await planRepository.listUndecidedBySession(session.id, tx)).map(async (p) => ({
+                  ...p,
+                  status: await turnStatusOf(p, tx),
+                })),
+              ),
+            )
           : [],
     });
     if (failedTurn === 'refuse_resume') throw new PlanSessionAwaitingResumeError(session.id);
@@ -2580,13 +2605,14 @@ export const planChangeSessionsService = {
     // plan is revised in place, a `stale` one is answered in words, and an
     // accept of that answer plans it again. Read outside any lock — every
     // branch that writes re-checks under its own lock.
-    const latest = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-      planRepository.findLatestUndecidedBySession(session.id, tx),
-    );
+    const latest = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+      const row = await planRepository.findLatestUndecidedBySession(session.id, tx);
+      return row ? { id: row.id, status: await turnStatusOf(row, tx) } : null;
+    });
     const turn = classifySessionTurn({
       origin: session.origin,
       endedAt: session.endedAt,
-      latestUndecided: latest ? { id: latest.id, status: undecidedStatus(latest.status) } : null,
+      latestUndecided: latest,
       planAgainOf: opts.planAgainOf,
     });
     if (turn.kind === 'revise') {

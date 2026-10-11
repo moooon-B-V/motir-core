@@ -369,8 +369,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   },
   'reconcile-abandoned-plans': {
     file: 'lib/jobs/definitions/abandonedPlanSweep.ts',
+    // `lease_lapsed` / `revision_held` added by MOTIR-8208: two new reason MEMBERS
+    // only, so a replayed old value is still a member of the new shape.
     shape:
-      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "no_producer_recent" | "row_moved" | "session_waiting" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" }>; scanned: number }',
+      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "no_producer_recent" | "revision_held" | "row_moved" | "session_waiting" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" }>; scanned: number }',
   },
   'reconcile-established-runs': {
     file: 'lib/jobs/definitions/migrateOnboardingSweep.ts',
@@ -431,6 +433,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // Added by MOTIR-7638 (AMENDMENT 23 §2): the lock sweep closes an idle
     // session before it releases expired leases.
     shape: '{ closed: number; sessionIds: Array<string> }',
+  },
+  'release-lapsed-plan-revisions': {
+    file: 'lib/jobs/definitions/planTargetLockSweep.ts',
+    // Added by MOTIR-8208: a revision re-opens its plan to `generating`, so the lock
+    // sweep gives a plan whose revision lease lapsed back to `planned`.
+    shape: '{ planIds: Array<string>; restored: number }',
   },
   'release-expired-planning-locks': {
     file: 'lib/jobs/definitions/planTargetLockSweep.ts',

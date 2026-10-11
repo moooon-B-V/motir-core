@@ -160,6 +160,32 @@ describe('a turn over a PLANNED plan revises it', () => {
   );
 
   it(
+    'a turn while the revision RUNS is refused PLAN_REVISION_IN_FLIGHT — the re-opened plan is not a new generation (MOTIR-8208)',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const target = await card('Re-opened');
+      const { sessionId, planId } = await conversationWithPlannedPlan([target.id]);
+      await say(sessionId, 'Keep the PDF report');
+      await planChangeSessionsService.submit(me(), { sessionId });
+      // The revision re-opened the plan: it reads `generating` while it is rewritten…
+      expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
+        'generating',
+      );
+
+      await say(sessionId, 'And make it weekly');
+      const second = await planChangeSessionsService
+        .submit(me(), { sessionId })
+        .catch((e: unknown) => e);
+
+      // …but it is still the plan the conversation waits on, so the next turn revises
+      // it — refused while the first revision holds it — and never opens a second plan.
+      expect((second as { code?: string }).code).toBe('PLAN_REVISION_IN_FLIGHT');
+      expect(await plansIn(sessionId)).toBe(1);
+      expect(await trail(planId, 'revision_started')).toHaveLength(1);
+    },
+  );
+
+  it(
     'a session whose latest undecided plan is generating, or that has none, opens a new plan as today',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {

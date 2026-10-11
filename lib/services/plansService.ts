@@ -151,6 +151,8 @@ import {
   revisionLeaseOf,
   REVISION_STARTED_KIND,
   REVISION_ENDED_KIND,
+  REVISION_REOPENED_FROM_KEY,
+  revisionReopenedFrom,
 } from '@/lib/planChange/revisionLease';
 import {
   resolveAuthoredRepoPinsInProject,
@@ -2161,6 +2163,60 @@ function assertPlanProposalsEditable(plan: Pick<Plan, 'id' | 'status'>): void {
   if (plan.status !== 'generating' && plan.status !== 'planned') {
     throw new PlanNotEditableError(plan.id, plan.status);
   }
+}
+
+/**
+ * GIVE A RE-OPENED PLAN ITS STATUS BACK (Bug MOTIR-8208): `generating` → `planned`,
+ * with the plan's question asked again in the same transaction.
+ *
+ * The caller holds the plan's row lock and has just written the `revision_ended`
+ * row that records the end, so the status change is on the trail. `raise` is
+ * idempotent: the gate the plan held when the revision re-opened it is still
+ * `awaiting`, so in the ordinary case it writes nothing, and a plan whose
+ * revision withdrew every proposal is asked nothing, exactly as `raise` decides.
+ */
+async function restoreReopenedPlanWithin(
+  planId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const restored = await planRepository.update(planId, { status: 'planned' }, tx);
+  await planGateService.raise(restored, tx);
+}
+
+/**
+ * GIVE BACK A RE-OPENED PLAN WHOSE REVISION LAPSED (Bug MOTIR-8208), in the caller's
+ * transaction and under its plan lock: the lease's window ran out with no
+ * `revision_ended`, so nobody is writing the plan, and it goes back to `planned` as
+ * it stands — one `revision_ended` signed by Motir, then the restore.
+ *
+ * The lease is the authority here exactly as it was before a revision re-opened
+ * anything: a lapsed lease made the plan decidable then, and it makes it `planned`
+ * now. Called by the decision paths first (so a person who presses Approve the
+ * moment a revision lapses is not refused for a status nobody holds) and by the
+ * planning-lock sweep's lapsed-revision pass. Returns whether it restored.
+ */
+async function settleLapsedRevisionWithin(
+  planId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const fresh = await planRepository.findById(planId, workspaceId, tx);
+  if (!fresh || fresh.status !== 'generating') return false;
+  const rows = await planRevisionRepository.listByPlan(planId, tx);
+  if (!revisionReopenedFrom(rows) || revisionLeaseOf(rows, now)) return false;
+  await planRevisionsService.recordRevision(
+    {
+      planId,
+      changeKind: REVISION_ENDED_KIND,
+      changedById: null,
+      actor: { source: 'native', harness: 'Motir', model: null },
+      diff: { revision: true, lapsed: true, restoredTo: 'planned' },
+    },
+    tx,
+  );
+  await restoreReopenedPlanWithin(planId, tx);
+  return true;
 }
 
 function assertKnownRepoRole(role: unknown, planItemId: string | null, label: string): void {
@@ -5187,7 +5243,7 @@ export const plansService = {
   async markPlanned(
     planId: string,
     ctx: ServiceContext,
-    opts: { productName?: string | null; summary?: string | null } = {},
+    opts: { productName?: string | null; summary?: string | null; revision?: boolean } = {},
   ): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -5388,8 +5444,12 @@ export const plansService = {
     // ASK — *a plan is waiting for you in Motir* — and there is nothing waiting:
     // the plan is decided before this line runs. Recording one would put a
     // pointer to a discarded plan on a run's leg.
+    //
+    // ⚠️ NOR DOES THE CLOSE OF A REVISION (Bug MOTIR-8208): the plan was the run's
+    // finding when it first closed, and a revision re-opening and closing it again
+    // is the same plan, not a second one waiting.
     if (row.status === 'planned') {
-      await recordSubmittedPlanFinding(row, count, ctx);
+      if (!opts.revision) await recordSubmittedPlanFinding(row, count, ctx);
     } else {
       // A discarded close is as terminal as a decline, so it releases the
       // planning-target locks the same way `declinePlan` does. A plan with zero
@@ -7383,8 +7443,26 @@ export const plansService = {
         // (`getOutcome` and the abandoned-plan sweep are both scoped to
         // `generating`, which a revised plan is not). The lease is what makes a
         // single scalar safe: one plan is revised by one job.
-        if (opts.jobId) {
-          await planRepository.update(planId, { sourceJobId: opts.jobId }, tx);
+        //
+        // ⚠️ AND THE RE-OPEN RIDES IT TOO (Bug MOTIR-8208). A revision of a
+        // `planned` plan moves it back to `generating` for as long as it runs: the
+        // revision WRITES the plan again, so its steps and notes (which only a
+        // `generating` plan takes) land, and Approve and Decline are unavailable
+        // until it closes. The status it came from is recorded on this start row,
+        // which is what {@link closeRevision} and every failure path read to give
+        // it back. The plan's `plan_approval` gate is untouched: it stays
+        // `awaiting` and HELD (the lease is what holds it), so the question a
+        // person was asked is the same question when the plan closes again.
+        const reopens = fresh.status === 'planned';
+        if (opts.jobId || reopens) {
+          await planRepository.update(
+            planId,
+            {
+              ...(opts.jobId ? { sourceJobId: opts.jobId } : {}),
+              ...(reopens ? { status: 'generating', lastActivityAt: at } : {}),
+            },
+            tx,
+          );
         }
         await planRevisionsService.recordRevision(
           {
@@ -7392,7 +7470,11 @@ export const plansService = {
             changeKind: REVISION_STARTED_KIND,
             ...generationActor(fresh, ctx),
             actor,
-            diff: { revision: true, ...(opts.jobId ? { jobId: opts.jobId } : {}) },
+            diff: {
+              revision: true,
+              ...(opts.jobId ? { jobId: opts.jobId } : {}),
+              ...(reopens ? { [REVISION_REOPENED_FROM_KEY]: 'planned' } : {}),
+            },
           },
           tx,
         );
@@ -7480,22 +7562,104 @@ export const plansService = {
     // `closeExpired` reads the lease as of the epoch, so a start with no end counts as held
     // however old it is: the failure settle writes the closing row an expired lease never
     // got, which is what stops the sweep from re-finding the plan on every pass.
-    const held = revisionLeaseOf(
-      await planRevisionRepository.listByPlan(planId, tx),
-      opts.closeExpired ? new Date(0) : new Date(),
-    );
-    if (!held) return { planId, released: false };
+    const rows = await planRevisionRepository.listByPlan(planId, tx);
+    const held = revisionLeaseOf(rows, opts.closeExpired ? new Date(0) : new Date());
+    // A revision that RE-OPENED the plan owes it its status back however its lease
+    // stands (Bug MOTIR-8208): a lapsed lease over a `generating` plan is still a
+    // plan nobody is writing, and leaving it there is the stuck state this closes.
+    const reopened = fresh.status === 'generating' ? revisionReopenedFrom(rows) : null;
+    if (!held && !reopened) return { planId, released: false };
     await planRevisionsService.recordRevision(
       {
         planId,
         changeKind: REVISION_ENDED_KIND,
         ...generationActor(fresh, ctx),
         actor,
-        diff: { revision: true, ...diff },
+        diff: { revision: true, ...diff, ...(reopened ? { restoredTo: reopened } : {}) },
       },
       tx,
     );
+    if (reopened) await restoreReopenedPlanWithin(planId, tx);
     return { planId, released: true };
+  },
+
+  /**
+   * {@link restoreReopenedPlanWithin} for a SYSTEM caller that has just ended a
+   * re-opening revision itself (`planSessionEndService.releaseRevisionForFailedJob`),
+   * in its transaction and under its plan lock.
+   */
+  async restoreReopenedPlanWithin(tx: Prisma.TransactionClient, planId: string): Promise<void> {
+    await restoreReopenedPlanWithin(planId, tx);
+  },
+
+  /** {@link settleLapsedRevisionWithin}, for a caller outside this service holding the
+   *  plan's lock in its own transaction (the planning-lock sweep, the plan gate's door). */
+  async settleLapsedRevisionWithin(
+    tx: Prisma.TransactionClient,
+    planId: string,
+    workspaceId: string,
+    now: Date = new Date(),
+  ): Promise<boolean> {
+    return settleLapsedRevisionWithin(planId, workspaceId, tx, now);
+  },
+
+  /**
+   * CLOSE A REVISION (Bug MOTIR-8208) — the end of a revision pass, for the two
+   * doors that end one on purpose: a hosted revision's final append and the MCP
+   * `hold_plan_revision { op: 'end' }`.
+   *
+   * A revision that RE-OPENED its plan closes it the way a generation closes —
+   * through {@link markPlanned}, so the close's gate, the briefing and the empty
+   * close all apply to the revised plan exactly as they did to the first one —
+   * and then ends the lease. A revision that did not re-open it (a plan that was
+   * still `generating` when the revision began, or one closed already) only ends
+   * the lease, as before.
+   *
+   * ⚠️ A CLOSE THE GATE REFUSES STILL GIVES THE PLAN BACK. The refusal is
+   * re-thrown so the caller learns why, but the lease is released first, which
+   * restores the plan to `planned` as it stands: a revision whose result cannot
+   * be closed must not leave the plan `generating` with nobody writing it, and
+   * the person can ask for the revision again.
+   */
+  async closeRevision(
+    planId: string,
+    ctx: ServiceContext,
+    actor: PlanRevisionAgentActor,
+    opts: { summary?: string | null; diff?: Record<string, unknown> } = {},
+  ): Promise<{ planId: string; released: boolean; planned: boolean; status: string }> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    const reopened =
+      plan.status === 'generating'
+        ? await withWorkspaceServiceContext(ctx.workspaceId, async (tx) =>
+            revisionReopenedFrom(await planRevisionRepository.listByPlan(planId, tx)),
+          )
+        : null;
+    let status = plan.status as string;
+    if (reopened) {
+      try {
+        const closed = await plansService.markPlanned(planId, ctx, {
+          summary: opts.summary ?? null,
+          revision: true,
+        });
+        status = closed.status;
+      } catch (err) {
+        await plansService.releaseRevisionLease(planId, ctx, actor, {
+          ...opts.diff,
+          closeRefused: true,
+        });
+        throw err;
+      }
+    }
+    const { released } = await plansService.releaseRevisionLease(
+      planId,
+      ctx,
+      actor,
+      opts.diff ?? {},
+    );
+    return { planId, released, planned: status === 'planned', status };
   },
 
   /**
@@ -7900,8 +8064,21 @@ async function approveWithin(
     prep;
   const locked = await planRepository.lockById(planId, tx);
   if (!locked) throw new PlanNotFoundError(planId);
+  // A revision that re-opened the plan and LAPSED gives it back first (MOTIR-8208),
+  // so the status read below is the one the lease says it has.
+  await settleLapsedRevisionWithin(planId, ctx.workspaceId, tx);
   const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
   if (!fresh) throw new PlanNotFoundError(planId);
+  // ⚠️ REFUSE IF A REVISION HOLDS IT (MOTIR-3598, AMENDMENT 10 D2) —
+  // under the lock, before a single row is materialized. Approve is
+  // one-shot, so the only safe answer to "a revision is halfway through
+  // rewriting this set" is not to materialize it. The reviewer waits,
+  // reads what changed, and approves the plan they asked for.
+  //
+  // FIRST, ahead of the status test (Bug MOTIR-8208): a revision RE-OPENS the
+  // plan to `generating`, so the status alone would refuse it as not `planned`
+  // and lose the answer the reviewer needs — who is revising it, and until when.
+  await assertNoRevisionInFlight(planId, tx);
   if (fresh.status !== 'planned') {
     throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
   }
@@ -7909,12 +8086,6 @@ async function approveWithin(
   // converse) — under the plan lock, which the raise takes too, so no gate can land
   // between this read and the `approved` write.
   await assertNoAwaitingGateUnlessDeciding(planId, opts, tx);
-  // ⚠️ AND REFUSE IF A REVISION HOLDS IT (MOTIR-3598, AMENDMENT 10 D2) —
-  // under the lock, before a single row is materialized. Approve is
-  // one-shot, so the only safe answer to "a revision is halfway through
-  // rewriting this set" is not to materialize it. The reviewer waits,
-  // reads what changed, and approves the plan they asked for.
-  await assertNoRevisionInFlight(planId, tx);
   const proposals = await planItemRepository.findByPlan(planId, tx);
   // …AND THE EMPTINESS CHECK AGAIN, ON THE FRESH SET UNDER THE LOCK
   // (MOTIR-4146). Same placement and same reason as `assertRepoPins
@@ -8235,6 +8406,9 @@ async function declineWithin(
 ) {
   const locked = await planRepository.lockById(planId, tx);
   if (!locked) throw new PlanNotFoundError(planId);
+  // A lapsed re-opening revision gives the plan back first (MOTIR-8208): declining it
+  // is then the decision on a `planned` plan it is, never a DISCARD of one being written.
+  await settleLapsedRevisionWithin(planId, ctx.workspaceId, tx);
   const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
   if (!fresh) throw new PlanNotFoundError(planId);
   if (fresh.status !== 'planned' && fresh.status !== 'generating' && fresh.status !== 'stale') {
@@ -8244,13 +8418,15 @@ async function declineWithin(
     // (MOTIR-3025).
     throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned, stale or generating');
   }
-  // The PLAIN decline is for a plan nobody is being asked about (§11.8 item 5 — a
-  // `generating` or `stale` plan); an asked one is declined through the door.
-  await assertNoAwaitingGateUnlessDeciding(planId, opts, tx);
   // A DECLINE is refused under the lease too, and for a reason of its own:
   // `declined` is a closed decision, so a revision that finishes writing
   // into a declined plan leaves proposals on a plan nobody will ever read.
+  // Ahead of the gate test, so a plan a revision RE-OPENED (MOTIR-8208) is
+  // refused for the revision, which is the reason that holds.
   await assertNoRevisionInFlight(planId, tx);
+  // The PLAIN decline is for a plan nobody is being asked about (§11.8 item 5 — a
+  // `generating` or `stale` plan); an asked one is declined through the door.
+  await assertNoAwaitingGateUnlessDeciding(planId, opts, tx);
   const updated = await planRepository.update(
     planId,
     {

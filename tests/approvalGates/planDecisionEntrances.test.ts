@@ -382,7 +382,8 @@ describe('REFUSALS every entrance hears', () => {
     await expect(
       planDecisionService.decline({ planId, stamp, source: 'api' }, fx.ctx),
     ).rejects.toBeInstanceOf(PlanRevisionInFlightError);
-    expect((await planRow(planId)).status).toBe('planned');
+    // Re-opened by the revision (MOTIR-8208), its question held rather than withdrawn.
+    expect((await planRow(planId)).status).toBe('generating');
     expect((await gatesOf(planId)).map((g) => g.state)).toEqual(['awaiting']);
     // The surface can say so before anyone presses.
     expect((await planReviewService.getPlanReview(planId, fx.ctx)).gate?.held).toMatchObject({
