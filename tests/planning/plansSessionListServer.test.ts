@@ -74,10 +74,32 @@ describe('buildSessionRowViews', () => {
       latestPlan: { id: 'p_1', status: 'planned' },
       planCount: 1,
       state: 'planned',
+      failure: null,
       end: null,
       copiedFrom: null,
       seed: null,
     });
+  });
+
+  it('builds the STOP LINE of a failed attempt — a walk on a `waiting` row, a change on a plan’s (MOTIR-7921 / 7944)', async () => {
+    const failure = {
+      failedAt: '2026-09-22T23:55:00.000Z',
+      reason: 'rate_limited',
+      stopPhase: 'author' as const,
+      stopTitle: 'Export a report',
+    };
+    const [walk, change] = await buildSessionRowViews(
+      [dto({ state: 'waiting', failure }), dto({ id: 's_2', state: 'planned', failure })],
+      'u1',
+    );
+    expect(walk!.failure).toMatchObject({
+      kind: 'walk',
+      reason: 'rate_limited',
+      stopPhase: 'author',
+      stopTitle: 'Export a report',
+    });
+    expect(change!.failure).toMatchObject({ kind: 'change', reason: 'rate_limited' });
+    expect(walk!.failure!.timeLabel).toBe('at 2026-09-22T23:55:00.000Z');
   });
 
   it('passes the seed through untouched (MOTIR-6209)', async () => {

@@ -422,6 +422,12 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       '`enforceAuthRateLimit` lives. Better-Auth keeps that counter itself and never ' +
       'consults `sharedRateLimitStore()`. (MOTIR-3067)',
   ],
+  [
+    'tests/planChange/resumeRoute.test.ts',
+    'Its 429 comes from a MOCK of `enforceAiRateLimit` (`rateLimit.mockResolvedValue(new ' +
+      'Response(…, { status: 429 }))`): the route runs with the limiter replaced, so no request ' +
+      'counts through the shared Postgres store and the production deadline never applies.',
+  ],
 ]);
 
 /**

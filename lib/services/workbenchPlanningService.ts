@@ -22,6 +22,11 @@ import type { WorkbenchPlanningPageDto, WorkbenchPlanningRowDto } from '@/lib/dt
 // `planning` badge read — the rule the approvals tab states for its own badge. No
 // second `status: 'generating'` + `createdById` predicate is written here.
 //
+// ⚠️ A FAILED PLAN IS NOT HERE (MOTIR-7914). The failure path leaves a failed hosted plan
+// `generating` on purpose, and `generatingRequestedByWhere` carves it out through the data
+// card's `FAILED_WAITING_WHERE` — so it neither lists nor counts here, and never turns
+// *stalled*; it lives on To resume (`homeService.listToResume`) until the person Resumes it.
+//
 // ⚠️ PROGRESS IS REUSED, NOT RE-DERIVED. The page is handed to
 // `planProgressService.snapshotsForPlans` and each snapshot is carried through
 // unchanged; nothing here reads a step, counts an `add` or compares a clock.

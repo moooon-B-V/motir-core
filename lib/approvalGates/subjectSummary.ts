@@ -8,6 +8,7 @@ import type {
   ManualWorkSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PlanApprovalSubjectSummaryDTO,
+  PlanningSessionSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
   UnregisteredSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
@@ -31,6 +32,8 @@ import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { decisionIdentityOf, titleFromDecisionPath } from '@/lib/approvalGates/decisionSubject';
 import { planGateHeldOf } from '@/lib/approvalGates/planApprovalHandler';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 
 // THE SUBJECT SUMMARY — what a QUEUE ROW says about the thing being decided,
@@ -213,6 +216,59 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
         held: planGateHeldOf(trails.get(plan.id) ?? [], now),
       };
       out.set(plan.id, summary);
+    }
+    return out;
+  },
+  // MOTIR-7913 — a PLANNING-SESSION row (Story MOTIR-7905). `subjectId` is the session and
+  // the row has no card, so everything it draws is read here, in three queries for the
+  // page: the sessions (with their newest plan and the planner's last turn), the
+  // projects' names, nothing per row. A session that no longer waits on its person is
+  // ABSENT — the row says the subject no longer resolves rather than naming a question
+  // nobody is asking. The row's real rendering is the Workbench card's (MOTIR-7917).
+  async planning_session(subjectIds, tx) {
+    const sessions = await planChangeSessionRepository.findManyForGateSummary(subjectIds, tx);
+    const projects = new Map(
+      (
+        await projectRepository.findManyByIds([...new Set(sessions.map((s) => s.projectId))], tx)
+      ).map((project) => [project.id, project.name]),
+    );
+    // The first target's title, per project — the row's § 29 `targeted` form names the plan by
+    // it (MOTIR-7917). A key that no longer resolves leaves the title null and the form falls.
+    const keysByProject = new Map<string, Set<string>>();
+    for (const session of sessions) {
+      const first = session.targetKeys[0];
+      if (!first) continue;
+      const keys = keysByProject.get(session.projectId) ?? new Set<string>();
+      keys.add(first);
+      keysByProject.set(session.projectId, keys);
+    }
+    const targetTitles = new Map<string, string>();
+    for (const [projectId, keys] of keysByProject) {
+      for (const item of await workItemRepository.findByIdentifiers(projectId, [...keys], tx)) {
+        targetTitles.set(`${projectId}:${item.identifier}`, item.title);
+      }
+    }
+    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const session of sessions) {
+      if (!session.awaitingPersonSince || !session.awaitingPersonCause) continue;
+      const planner = session.turns[0] ?? null;
+      const plan = session.plans[0] ?? null;
+      const summary: PlanningSessionSubjectSummaryDTO = {
+        kind: 'planning_session',
+        sessionId: session.id,
+        planId: plan?.id ?? null,
+        cause: session.awaitingPersonCause,
+        question: session.awaitingPersonCause === 'question' ? (planner?.question ?? null) : null,
+        plannerLine: session.awaitingPersonCause === 'reply' ? (planner?.body ?? null) : null,
+        since: session.awaitingPersonSince.toISOString(),
+        planTitle: plan?.title ?? null,
+        targetKey: session.targetKeys[0] ?? null,
+        targetTitle: session.targetKeys[0]
+          ? (targetTitles.get(`${session.projectId}:${session.targetKeys[0]}`) ?? null)
+          : null,
+        projectName: projects.get(session.projectId) ?? '',
+      };
+      out.set(session.id, summary);
     }
     return out;
   },

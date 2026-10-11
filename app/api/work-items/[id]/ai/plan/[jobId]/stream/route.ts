@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { contextualPlanningService } from '@/lib/services/contextualPlanningService';
-import { failureReasonFrame, isTerminalFailureFrame } from '@/lib/ai/jobStream';
+import { failureReasonFrame, terminalStatusOf, walkPositionOf } from '@/lib/ai/jobStream';
+import type { JobWalkPosition } from '@/lib/planChange/failureRecord';
 import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import type { JobStreamEvent } from '@/lib/ai/types';
@@ -102,6 +103,7 @@ export async function GET(
       try {
         let result = first;
         let reasonEmitted = false;
+        let lastPosition: JobWalkPosition | null = null;
         while (!result.done) {
           controller.enqueue(encoder.encode(formatFrame(result.value)));
           if (!reasonEmitted) {
@@ -111,14 +113,21 @@ export async function GET(
               controller.enqueue(encoder.encode(formatFrame(reason)));
             }
           }
-          // A failed attempt ENDS its session here, server-side, before the
-          // stream closes (AMENDMENT 23 §2). Best-effort: the abandoned-plan
-          // sweep ends it as the backstop, so a write that fails here is not lost.
-          if (isTerminalFailureFrame(result.value)) {
+          // The last `walk_position` frame is the stop point when the terminal
+          // problem carries none (a machine that died names no `walkStop`).
+          lastPosition = walkPositionOf(result.value) ?? lastPosition;
+          // A failed attempt is SETTLED here, server-side, before the stream closes
+          // (AMENDMENT 23's 2026-10-09 sub-amendment): a failed hosted walk RECORDS its
+          // failure and leaves the session open; a canceled job, a `guide` session or a
+          // plan that is not `generating` still ends it. Best-effort: the abandoned-plan
+          // sweep records the same failure as the backstop, so a write that fails here
+          // is not lost.
+          const terminal = terminalStatusOf(result.value);
+          if (terminal) {
             await planSessionEndService
-              .endSessionForFailedJob(jobId, ctx)
+              .settleFailedJob(jobId, ctx, { status: terminal, lastPosition })
               .catch((err) =>
-                console.warn(`[stream] ending the session of job ${jobId} failed`, err),
+                console.warn(`[stream] settling the session of job ${jobId} failed`, err),
               );
           }
           result = await iterator.next();

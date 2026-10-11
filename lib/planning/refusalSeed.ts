@@ -65,6 +65,8 @@ export function isRefusalSeedGate(gate: RefusalSeedGateFacts): boolean {
     case 'agent_review':
     // Manual work is never refused (`manual-work-gate.md` §4), so it seeds nothing.
     case 'manual_work':
+    // A planning session's gate has no refusal (MOTIR-7913).
+    case 'planning_session':
       return false;
     default: {
       // A compile-time exhaustiveness check; at runtime an unknown value (a
@@ -198,6 +200,7 @@ export function anchorOf(
     case 'plan_approval':
     case 'agent_review':
     case 'manual_work':
+    case 'planning_session':
       return itemKey;
     default: {
       const unreachable: never = kind;

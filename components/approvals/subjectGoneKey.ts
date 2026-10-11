@@ -20,6 +20,9 @@ const SUBJECT_GONE_KEY: Record<ApprovalGateKindDTO, string> = {
   plan_approval: 'plan_approval',
   agent_review: 'agent_review',
   manual_work: 'manual_work',
+  // A session that stopped waiting is withdrawn `session_ended`, never read as gone, so it
+  // borrows the plan question's sentence only to stay total (MOTIR-7913).
+  planning_session: 'plan_approval',
 };
 
 /** The catalogue key, under `subjectGone.`, for a gone subject of this kind. */

@@ -194,7 +194,27 @@ export async function allSubmitSitesInLib(): Promise<{ files: string[]; sites: S
  * not a type error. A site spelling the literal instead is flagged, correctly.
  */
 export function planningSitesMissing(sites: SubmitSite[], token: string): string[] {
+  const builderCarries = sharedBuilderNames(token);
   return sites
     .filter((s) => s.kind === PLANNING_KIND && !s.args.includes(token))
+    .filter((s) => !(builderCarries && SPREADS_THE_BUILDER.test(s.args)))
     .map((s) => `${s.file}: submitJob('${s.kind}', …) sends no ${token}`);
+}
+
+/**
+ * A planning submit may carry the always-present fields by SPREADING the shared builder's
+ * output (`buildPlanningJobContext(ctx).planningFields`, MOTIR-7916) instead of naming each
+ * constant itself — the point of extracting it, so a third submit cannot bypass the fields.
+ * That is only honest while the builder itself names the token, which
+ * {@link sharedBuilderNames} reads off the builder's own source.
+ */
+const SPREADS_THE_BUILDER = /(?:\.\.\.|^\s*|[,(]\s*)planningFields\b/;
+
+/** Does `buildPlanningJobContext` (the shared builder) itself name `token`? */
+function sharedBuilderNames(token: string): boolean {
+  const src = blankComments(readFileSync('lib/services/aiPlanEditsService.ts', 'utf8'));
+  const start = src.indexOf('async function buildPlanningJobContext');
+  if (start === -1) return false;
+  const end = src.indexOf('\nasync function ', start + 10);
+  return src.slice(start, end === -1 ? undefined : end).includes(token);
 }

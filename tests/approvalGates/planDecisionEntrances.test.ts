@@ -160,7 +160,9 @@ describe('THE INVENTORY — while a plan gate is awaiting, only the door writes 
       // The session END's discard (AMENDMENT 23 §2, MOTIR-7637) — of the session's
       // LATEST plan, and only while it is `generating`: a plan is asked about once it
       // is `planned`, so there is never a question for this write to go around.
-      'lib/services/planSessionEndService.ts': 1,
+      //   Two: that discard, and the keep-the-session arm's decline of the failed attempt's
+      //   own `generating` plan beside a waiting one (MOTIR-7936) — same `generating`-only rule.
+      'lib/services/planSessionEndService.ts': 2,
       // Four in plansService, each named:
       //   · markPlanned's EMPTY close (`declined` / `discarded`, §11.8 item 1 — no gate);
       //   · the LAST-withdrawal discard (item 3 — it supersedes `plan_discarded` in the

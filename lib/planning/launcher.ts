@@ -125,12 +125,16 @@ export type PlanningLaunchContext =
  * `planning` is the Workbench's Planning tab (`design/workbench/design-notes.md` § 36.6,
  * MOTIR-7831): only the plan's own requester ever reaches that list, so its line has no
  * *started by {name}* form.
+ *
+ * `resume` is the Workbench's To resume tab (`design/workbench/design-notes.md` § 37.2,
+ * MOTIR-7917): a failed planning session's **Open**. That tab is the reader's OWN list, so
+ * its line has the same single *started by you* form as `planning`.
  */
-export type PlanningEntrance = 'approvals' | 'planning';
+export type PlanningEntrance = 'approvals' | 'planning' | 'resume';
 
 /** Every entrance, so the address parser is total over the union rather than testing one
  *  string — a third entrance added above is then read back without a second edit here. */
-const PLANNING_ENTRANCES: readonly PlanningEntrance[] = ['approvals', 'planning'];
+const PLANNING_ENTRANCES: readonly PlanningEntrance[] = ['approvals', 'planning', 'resume'];
 
 /** Resolve the originating context to the planning mode the workspace opens in. */
 export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMode {

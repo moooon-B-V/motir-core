@@ -414,28 +414,33 @@ test('every door to a waiting plan opens the planning overlay, even after its se
     await beat();
   });
 
-  await chapter('Plan something new while a plan waits — its session reads Closed', async () => {
-    const asked = await askOnCard(page, email, seed.subtaskKey, SECOND_ASK);
-    endedSessionId = asked.sessionId;
-    waitingPlanId = await finishSessionPlan(endedSessionId, 'Move the host seam behind a flag');
+  await chapter(
+    'Plan something new while a plan waits — its session reads Waiting for approval',
+    async () => {
+      const asked = await askOnCard(page, email, seed.subtaskKey, SECOND_ASK);
+      endedSessionId = asked.sessionId;
+      waitingPlanId = await finishSessionPlan(endedSessionId, 'Move the host seam behind a flag');
 
-    // Back into that conversation, and end it the way a person does.
-    await openFromCard(page, seed.subtaskKey);
-    await planSomethingNew(page, endedSessionId);
-    // PERSISTED: the session ended `restarted`, and its plan still WAITS.
-    expect(await sessionEnd(endedSessionId)).toMatchObject({ endReason: 'restarted' });
-    expect(await planStatus(waitingPlanId)).toBe('planned');
-    await beat();
-    await closeViaEscape(page);
+      // Back into that conversation, and end it the way a person does.
+      await openFromCard(page, seed.subtaskKey);
+      await planSomethingNew(page, endedSessionId);
+      // PERSISTED: the session ended `restarted`, and its plan still WAITS.
+      expect(await sessionEnd(endedSessionId)).toMatchObject({ endReason: 'restarted' });
+      expect(await planStatus(waitingPlanId)).toBe('planned');
+      await beat();
+      await closeViaEscape(page);
 
-    await openPlans(page);
-    const row = sessionRow(page, endedSessionId);
-    await expect(row).toContainText(state.closed);
-    await noConversationNote(page);
-    await beat();
-  });
+      await openPlans(page);
+      const row = sessionRow(page, endedSessionId);
+      // MOTIR-7944: an ended session that still holds a plan awaiting a decision reads that
+      // plan's state, not Closed (only an idle end stays Closed).
+      await expect(row).toContainText(state.planned);
+      await noConversationNote(page);
+      await beat();
+    },
+  );
 
-  await chapter('The Closed row, its chip and its address all open the waiting plan', async () => {
+  await chapter('The row, its chip and its address all open the waiting plan', async () => {
     // The row's title.
     await sessionRow(page, endedSessionId).getByRole('link', { name: SECOND_ASK }).click();
     let overlay = await overlayOn(page, '/plans', endedSessionId);
@@ -444,7 +449,7 @@ test('every door to a waiting plan opens the planning overlay, even after its se
     await closeViaEscape(page);
 
     // Its chip.
-    await chipDoor(sessionRow(page, endedSessionId), state.closed).click();
+    await chipDoor(sessionRow(page, endedSessionId), state.planned).click();
     overlay = await overlayOn(page, '/plans', endedSessionId);
     await decidable(overlay);
     await beat();

@@ -61,7 +61,11 @@ const ALL_KINDS = Object.values(ApprovalGateKind);
 /** The kinds whose gate hangs off a CARD — every one but `plan_approval`, which the CHECK
  *  `approval_gate_work_item_iff_not_plan` keeps card-less (Story MOTIR-6012 · MOTIR-6034).
  *  Its row is covered by `tests/approvalGates/cardlessGateReads.test.ts`. */
-const CARD_KINDS = ALL_KINDS.filter((kind) => kind !== 'plan_approval');
+const CARD_KINDS = ALL_KINDS.filter(
+  // …and `planning_session`, the second card-less kind (MOTIR-7913), whose row is covered by
+  // `tests/integration/approvals/planningSessionGate.test.ts`.
+  (kind) => kind !== 'plan_approval' && kind !== 'planning_session',
+);
 /** The card kinds that NEVER reach a person's To approve read. `agent_review` (Story
  *  MOTIR-1626; ADR `approval-gates.md` §12.1) asks the review AGENT, not the person it is
  *  routed to: `awaitingRoutedToWhere` excludes the kind, and the person meets it on the

@@ -521,7 +521,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
     'one documented exception — `watcher` carries no `updatedAt`, so its freshness lives ' +
     'across a relation Prisma cannot `_max` through.';
 
-  it('is ONE transaction of fifteen statements, and the shape is the point', async () => {
+  it('is ONE transaction of eighteen statements, and the shape is the point', async () => {
     for (let i = 0; i < 10; i += 1) await card(`Bulk ${i}`);
     await gateOn({ title: 'Decide me', assigneeId: fx.ownerId });
 
@@ -553,11 +553,19 @@ describe('COST — this read runs once a second per open Workbench', () => {
       'workItem.aggregate',
       'workItem.aggregate',
       'workItem.aggregate',
-      // …the approvals queue on the gate's own predicate…
+      // …the approvals queue on the gate's own predicate, which now first reads the
+      // planning sessions that still wait on their person (MOTIR-7913) — a gate's subject
+      // is an opaque id the aggregate cannot join, so the live set rides in as `IN (…)`…
+      'planChangeSession.findMany',
       'approvalGate.aggregate',
-      // …and Watching, the one tab that costs two.
+      // …Watching, the one tab that costs two…
       'watcher.count',
       'watcher.findFirst',
+      // …and the reader's failed planning sessions, folded into To resume's pair
+      // (MOTIR-7914) so a new failure moves the tab's change detector as it moves the badge.
+      'planChangeSession.aggregate',
+      // …and the sessions that ended `failed` before MOTIR-7905 yet hold a waiting plan (MOTIR-7939).
+      'planChangeSession.aggregate',
     ]);
   });
 
@@ -567,9 +575,9 @@ describe('COST — this read runs once a second per open Workbench', () => {
     const watermark = await statementsOf(() => workbenchWatermarkService.read(ctx()));
     const counts = await statementsOf(() => homeService.tabCounts(ctx()));
 
-    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Fifteen statements is
+    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Eighteen statements is
     // not obviously cheap or expensive in the abstract; what settles it is that
-    // the strip ALREADY issues fourteen to render its badges for the tabs this
+    // the strip ALREADY issues seventeen to render its badges for the tabs this
     // read covers, and this read answers strictly more — every tab's freshness as
     // well as its size — for one more.
     //
@@ -588,7 +596,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
       if (i % 3 === 0) await watch(row.id, fx.ownerId);
     }
     const big = await statementsOf(() => workbenchWatermarkService.read(ctx()));
-    expect(big).toHaveLength(15);
+    expect(big).toHaveLength(18);
   });
 
   it('runs on indexes that are actually present', async () => {

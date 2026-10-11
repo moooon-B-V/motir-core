@@ -71,6 +71,7 @@ import type {
   Tenant,
   UsageQuery,
 } from './types';
+import { parseJobWalkStop } from '@/lib/planChange/failureRecord';
 import { PLANNER_MODEL_LIST_REASONS, type PlannerModelListReason } from './types';
 import type { CategoryFigures, SpendCategory } from '@/lib/platform/spend';
 
@@ -293,6 +294,7 @@ export async function submitJob(
   tenant: Tenant,
   context: JobContextBag,
   actor: RequestActor,
+  opts: { resume?: { planId: string; fromJobId: string } } = {},
 ): Promise<{ jobId: string }> {
   const { url, serviceToken } = config();
   // THE PER-ORG KILL-SWITCHES (MOTIR-750), read here because every new planning
@@ -316,6 +318,8 @@ export async function submitJob(
     tenant: sentTenant,
     context,
     readBackToken,
+    // Only when resuming a failed walk (MOTIR-7916): absent ⇒ the body is byte-identical to today.
+    ...(opts.resume ? { resume: opts.resume } : {}),
   };
 
   const res = await aiFetch(`${url}/v1/jobs`, {
@@ -378,6 +382,7 @@ export async function getJob(jobId: string, coreProjectId: string): Promise<JobV
     status: body.status,
     result: body.result ?? null,
     error: body.error ? errorFromProblem(body.error) : null,
+    walkStop: parseJobWalkStop(body.error?.walkStop),
   };
 }
 

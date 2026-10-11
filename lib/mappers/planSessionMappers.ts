@@ -82,6 +82,18 @@ export function toPlanSessionRowDto(row: PlanSessionListRow): PlanSessionRowDto 
       : null,
     planCount: row.planCount,
     state: row.state as PlanSessionStateDto,
+    failure:
+      row.failedAt && row.failureReason
+        ? {
+            failedAt: row.failedAt.toISOString(),
+            reason: row.failureReason,
+            stopPhase:
+              row.failureStopPhase === 'lay' || row.failureStopPhase === 'author'
+                ? row.failureStopPhase
+                : null,
+            stopTitle: row.failureStopTitle ?? null,
+          }
+        : null,
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
     endReason: (row.endReason as PlanSessionEndReasonDto | null) ?? null,
     endedBy: row.endedById && row.endedByName ? { id: row.endedById, name: row.endedByName } : null,

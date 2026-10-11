@@ -768,6 +768,8 @@ describe('the routes are actually WIRED to the guards', () => {
     // `guide_work_item` model job, so it draws the same `ai:generate` bucket.
     'app/api/ai/guide/route.ts',
     'app/api/ai/plan-change/session/submit/route.ts',
+    // RESUME of a failed planning session (MOTIR-7916) submits a `plan` job — it spends credits.
+    'app/api/ai/plan-change/session/resume/route.ts',
     'app/api/ai/plan/generate/route.ts',
     // THE ROUTING RUN (Story MOTIR-4753 · MOTIR-4769). It opens no plan, which
     // is what makes it look free and is not: it submits a `plan_routing` model

@@ -86,7 +86,8 @@ async function resolveScope(
   const fullView = holdsRecordView(held, ctx, 'plan:view_any');
   if ((requested ?? 'project') === 'project' && fullView) return { scope: 'project', mine: null };
   const routedPlanIds = await approvalGateRepository.findAwaitingRoutedPlanIds(
-    { projectIds: [projectId], userId: ctx.userId },
+    // `findAwaitingRoutedPlanIds` selects the plan kind alone, so no session set is owed.
+    { projectIds: [projectId], userId: ctx.userId, awaitingSessionIds: [] },
     tx,
   );
   return { scope: 'mine', mine: { userId: ctx.userId, routedPlanIds } };

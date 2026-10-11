@@ -20,6 +20,7 @@ import { PLAN_STATE_PARAM } from '@/lib/planning/planSessionFilter';
 const COUNTS = {
   none: 2,
   generating: 1,
+  waiting: 2,
   planned: 3,
   stale: 0,
   approved: 9,
@@ -37,16 +38,17 @@ const option = (name: string) => screen.getByRole('button', { name: new RegExp(`
 const group = () => screen.getByRole('group', { name: 'Filter conversations by plan state' });
 
 describe('the filter’s a11y contract', () => {
-  it('is a LABELLED group of eight real buttons — All first, then every state', () => {
+  it('is a LABELLED group of nine real buttons — All first, then every state', () => {
     renderWithIntl(<PlanStatusTabs value={null} counts={COUNTS} />);
 
     const labels = within(group())
       .getAllByRole('button')
       .map((b) => b.textContent);
     expect(labels).toEqual([
-      'All24',
+      'All26',
       'No plan yet2',
       'Writing1',
+      'Waiting to resume2',
       'Waiting for approval3',
       'Stale0',
       'Approved9',

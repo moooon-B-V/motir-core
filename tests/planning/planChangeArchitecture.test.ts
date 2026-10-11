@@ -254,6 +254,8 @@ describe('the story’s routes are HTTP-only (4-layer)', () => {
     'app/api/ai/plan-change/session/route.ts',
     'app/api/ai/plan-change/session/turns/route.ts',
     'app/api/ai/plan-change/session/submit/route.ts',
+    // RESUME of a failed session (Story MOTIR-7905 · MOTIR-7916) — one service call, mapped errors.
+    'app/api/ai/plan-change/session/resume/route.ts',
     // The BOUNDARY MAILBOX's two doors (Story MOTIR-4054 · MOTIR-4067) — the
     // INGEST a session posts a mid-run turn to, and the READ DOOR motir-ai
     // consumes at a phase boundary. Listed here rather than left implicit: the

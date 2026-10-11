@@ -4,6 +4,7 @@
 // failures that sit underneath it — into motir-core typed errors, so no caller
 // ever branches on a raw HTTP status or an upstream JSON shape.
 
+import type { JobWalkStop } from '@/lib/planChange/failureRecord';
 import type { Problem, JobStatus, PlannerModelListReason, ResultEnvelope } from './types';
 
 export abstract class MotirAiError extends Error {
@@ -252,6 +253,9 @@ export interface JobView {
   status: JobStatus;
   result: ResultEnvelope | null;
   error: MotirAiError | null;
+  /** Where a failed planning walk stopped, parsed from `error.walkStop`; `null` when
+   *  absent or malformed (MOTIR-7912) — a motir-ai that predates it still works. */
+  walkStop?: JobWalkStop | null;
 }
 
 // Map a problem+json (from a non-2xx response or a failed job's error) onto the

@@ -11,6 +11,11 @@ import {
   GuideCardClosedError,
   GuideCardNotManualError,
   GuideSessionNotPlannableError,
+  NotSessionOwnerError,
+  PlanNotResumableError,
+  PlanSessionAwaitingResumeError,
+  ResumeAlreadyStartedError,
+  SessionNotFailedError,
   GuideTurnFilesRefusedError,
   PlanChangeJobNotRunningError,
   PlanChangeFlipNotOfferedError,
@@ -193,6 +198,26 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   if (err instanceof GuideSessionNotPlannableError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
+  // RESUMING A FAILED PLANNING SESSION (Story MOTIR-7905 · MOTIR-7916).
+  if (err instanceof NotSessionOwnerError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
+  }
+  if (err instanceof ResumeAlreadyStartedError) {
+    // The winner's job id, so a double-click streams the one attempt that is running.
+    return NextResponse.json(
+      { code: err.code, error: err.message, jobId: err.jobId },
+      { status: 409 },
+    );
+  }
+  if (err instanceof PlanSessionAwaitingResumeError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, sessionId: err.sessionId },
+      { status: 409 },
+    );
+  }
+  if (err instanceof SessionNotFailedError || err instanceof PlanNotResumableError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
   if (err instanceof GuideCardClosedError) {
     return NextResponse.json(
       { code: err.code, error: err.message, reason: err.reason },
@@ -238,6 +263,9 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
         // for a decision), and the session holding it.
         freesBy: err.freesBy?.toISOString() ?? null,
         holderSessionId: err.holderSessionId,
+        // MOTIR-7912: the holder's session is waiting, and why.
+        sessionWaiting: err.sessionWaiting,
+        waitingCause: err.waitingCause,
       },
       { status: 409 },
     );

@@ -48,6 +48,21 @@ export async function buildSessionRowViews(
       : null,
     planCount: session.planCount,
     state: session.state,
+    failure: session.failure
+      ? {
+          // A row that reads `waiting` stopped mid-WALK; one that reads its plan's own state
+          // (`planned` / `stale`) failed a CHANGE to that plan (design § _The Plans page_).
+          kind: session.state === 'waiting' ? 'walk' : 'change',
+          reason: session.failure.reason,
+          stopPhase: session.failure.stopPhase,
+          stopTitle: session.failure.stopTitle,
+          timeLabel: format.relativeTime(new Date(session.failure.failedAt)),
+          fullLabel: format.dateTime(new Date(session.failure.failedAt), {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          }),
+        }
+      : null,
     end:
       session.endedAt && session.endReason
         ? {

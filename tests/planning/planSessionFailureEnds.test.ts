@@ -11,6 +11,12 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
+// ⚠️ SINCE MOTIR-7912 A FAILED HOSTED ATTEMPT NO LONGER ENDS ITS SESSION through the
+// relays or the sweep — they RECORD it (`tests/integration/planning/sessionFailureWaits.test.ts`
+// holds that split, with `canceled`, `guide` and a non-`generating` plan as the arms that
+// still end). What stands here is the END ITSELF (`endSessionForFailedJob`, the no-producer
+// sweep arm, the idle close), which those arms still call.
+//
 // A FAILED ATTEMPT ENDS ITS SESSION (story MOTIR-7630 · MOTIR-7638) — against a
 // REAL Postgres. `docs/decisions/agent-authored-plans.md` AMENDMENT 23 §2: the
 // stream relays end the session on a terminal frame, the abandoned-plan sweep ends

@@ -317,7 +317,7 @@ export default async function WorkbenchPage({
     // The Approvals tab's rows are read inside `<ApprovalsTab>` so a boundary
     // can sit around them; this window stays empty for it and is not rendered.
     isApprovals || isPlanning
-      ? Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE })
+      ? Promise.resolve<HomePageDto>({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE })
       : readTab(tab, ctx, page),
     homeService.tabCounts(ctx),
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
@@ -412,6 +412,7 @@ export default async function WorkbenchPage({
             pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
             empty={<EmptyTab tab={tab} />}
             viewerId={ctx.userId}
+            planningSessions={tab === 'to-resume' ? (window.planningSessions ?? []) : []}
           />
         )}
       </div>

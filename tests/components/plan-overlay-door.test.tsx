@@ -93,6 +93,35 @@ describe('an undecided plan with a session', () => {
     );
   });
 
+  it('a door given `via` carries it on the overlay address, project-wide and anchored alike', async () => {
+    answer('planned', { sessionId: 's1', targetKeys: [] });
+    const project = await renderDoor(
+      <PlanOverlayDoor planId="p_1" via="resume" data-testid="door">
+        Open
+      </PlanOverlayDoor>,
+    );
+    expect(project.getAttribute('href')).toBe(
+      withPlanningOverlay(HOST, { kind: 'project', sessionId: 's1', via: 'resume' }),
+    );
+    cleanup();
+    fetchMock.mockReset();
+    answer('planned', { sessionId: 's2', targetKeys: ['MOTIR-12'] });
+    const anchored = await renderDoor(
+      <PlanOverlayDoor planId="p_2" via="resume" data-testid="door">
+        Open
+      </PlanOverlayDoor>,
+    );
+    fireEvent.click(anchored, { button: 0 });
+    expect(shallowPush).toHaveBeenCalledExactlyOnceWith(
+      withPlanningOverlay(HOST, {
+        kind: 'work-item',
+        itemKey: 'MOTIR-12',
+        sessionId: 's2',
+        via: 'resume',
+      }),
+    );
+  });
+
   it('leaves every modified click to the browser, on the full overlay address', async () => {
     answer('generating', { sessionId: 's1', targetKeys: [] });
     const door = await renderDoor();
