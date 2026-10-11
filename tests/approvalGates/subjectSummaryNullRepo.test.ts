@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { summarizeGateSubjects } from '@/lib/approvalGates/subjectSummary';
 
 // MOTIR-8213 — a delivery whose `repo` include reads back null (the repository is hidden
