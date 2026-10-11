@@ -7621,6 +7621,11 @@
         "groupFinished": "{step} — 완료"
       }
     },
+    "codeUnreadable": {
+      "planBody": "지금은 코드를 읽을 수 없어서 계획을 변경하지 않았습니다. Motir가 확인하고 있습니다.",
+      "planMarker": "아무것도 기록되지 않았습니다 — 계획은 그대로입니다.",
+      "askNotice": "이 답변을 위해 코드를 읽을 수 없었습니다. 여기서 코드에 관한 내용은 확인되지 않은 것으로 보세요."
+    },
     "targets": {
       "sectionLabel": "작업 항목",
       "sectionLabelQuery": "“{query}”와(과) 일치하는 작업 항목",

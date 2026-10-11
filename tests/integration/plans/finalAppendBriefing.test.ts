@@ -35,6 +35,7 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+const ORIGINAL_TITLE = 'Plan for Acme';
 const ORIGINAL_SUMMARY = 'What the plan said about itself when it was opened.';
 const BRIEFING = [
   '## 1. What was asked and the problem found',
@@ -65,7 +66,7 @@ function append(fx: WorkItemFixture, body: Record<string, unknown>): Promise<Res
 async function openPlan(fx: WorkItemFixture, jobId: string): Promise<string> {
   const plan = await plansService.createPlan(
     fx.projectId,
-    { sourceJobId: jobId, summary: ORIGINAL_SUMMARY },
+    { sourceJobId: jobId, summary: ORIGINAL_SUMMARY, title: ORIGINAL_TITLE },
     fx.ctx,
   );
   return plan.id;
@@ -198,5 +199,127 @@ describe('the final append carries the planner’s briefing into the plan’s su
     expect(row.status).toBe('declined');
     expect(row.decisionReason).toBe('discarded');
     expect(row.summary).toBe(BRIEFING);
+  });
+});
+
+// Story MOTIR-8161 · Subtask MOTIR-8164 — the hosted planner NAMES its plan
+// through the same seam: an optional `title` on ANY append of a generation,
+// written while the plan is `generating` through `correctPlanBrief` (the
+// `update_plan` door), so the rename is on the plan's trail as `brief_edited`.
+describe('an append carrying `title` names the generating plan', () => {
+  const briefEdits = (planId: string) =>
+    adminDb.planRevision.findMany({ where: { planId, changeKind: 'brief_edited' } });
+
+  it('a non-final append with `title` renames the generating plan and records the edit', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await openPlan(fx, 'job_title_first');
+
+    const res = await append(fx, {
+      jobId: 'job_title_first',
+      proposals: ONE_ADD,
+      title: '  Add an export button to the report page ',
+    });
+
+    expect(res.status).toBe(200);
+    const row = await planRow(planId);
+    expect(row.status).toBe('generating');
+    expect(row.title).toBe('Add an export button to the report page');
+    // The same timeline row a person's `update_plan` title edit writes.
+    const edits = await briefEdits(planId);
+    expect(edits).toHaveLength(1);
+    expect(edits[0]!.diff).toMatchObject({ fields: ['title'], correction: true });
+  });
+
+  it('a final append with `title` AND `summary` stores both and closes the plan', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await openPlan(fx, 'job_title_final');
+
+    const res = await append(fx, {
+      jobId: 'job_title_final',
+      proposals: ONE_ADD,
+      final: true,
+      title: 'Export the report as CSV',
+      summary: BRIEFING,
+    });
+
+    expect(res.status).toBe(200);
+    const row = await planRow(planId);
+    expect(row.status).toBe('planned');
+    expect(row.title).toBe('Export the report as CSV');
+    expect(row.summary).toBe(BRIEFING);
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['a blank string', '   '],
+    ['a number', 7],
+  ])('an append whose title is %s leaves the title unchanged', async (_label, title) => {
+    const fx = await makeWorkItemFixture();
+    const planId = await openPlan(fx, 'job_title_none');
+
+    const res = await append(fx, {
+      jobId: 'job_title_none',
+      proposals: ONE_ADD,
+      ...(title === undefined ? {} : { title }),
+    });
+
+    expect(res.status).toBe(200);
+    expect((await planRow(planId)).title).toBe(ORIGINAL_TITLE);
+    expect(await briefEdits(planId)).toHaveLength(0);
+  });
+
+  it('a title longer than 200 characters is stored cut to 200, not refused', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await openPlan(fx, 'job_title_long');
+
+    const res = await append(fx, {
+      jobId: 'job_title_long',
+      proposals: ONE_ADD,
+      title: 'x'.repeat(260),
+    });
+
+    expect(res.status).toBe(200);
+    expect((await planRow(planId)).title).toBe('x'.repeat(200));
+  });
+
+  it('a `title` on a REVISION append is ignored and the append behaves as before', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await openPlan(fx, 'job_title_revision');
+    await append(fx, { jobId: 'job_title_revision', proposals: ONE_ADD, final: true });
+    expect((await planRow(planId)).status).toBe('planned');
+
+    const res = await append(fx, {
+      jobId: 'job_title_revision',
+      proposals: [],
+      final: true,
+      revision: true,
+      title: 'A revision does not rename',
+    });
+
+    expect(res.status).toBe(200);
+    const row = await planRow(planId);
+    expect(row.status).toBe('planned');
+    expect(row.title).toBe(ORIGINAL_TITLE);
+    expect(await briefEdits(planId)).toHaveLength(0);
+  });
+
+  it('a `title` sent to a plan that has left `generating` is ignored, not an error', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await openPlan(fx, 'job_title_closed');
+    await append(fx, { jobId: 'job_title_closed', proposals: ONE_ADD, final: true });
+    expect((await planRow(planId)).status).toBe('planned');
+
+    // A late, non-revision append: the title is dropped before the status gate
+    // the proposals themselves meet, so the answer is that gate's, unchanged.
+    const res = await append(fx, {
+      jobId: 'job_title_closed',
+      proposals: [],
+      title: 'Too late to rename',
+    });
+
+    expect(res.status).toBe(200);
+    expect((await planRow(planId)).title).toBe(ORIGINAL_TITLE);
+    expect(await briefEdits(planId)).toHaveLength(0);
   });
 });

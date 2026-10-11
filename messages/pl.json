@@ -7624,6 +7624,11 @@
         "groupFinished": "{step} — zakończone"
       }
     },
+    "codeUnreadable": {
+      "planBody": "Teraz nie mogę odczytać Twojego kodu, więc nie zmieniłem planu. Motir się tym zajmuje.",
+      "planMarker": "Nic nie zostało zapisane — Twój plan pozostaje bez zmian.",
+      "askNotice": "Nie udało mi się odczytać Twojego kodu na potrzeby tej odpowiedzi. Wszystko, co tu napisano o kodzie, traktuj jako niepotwierdzone."
+    },
     "targets": {
       "sectionLabel": "Elementy robocze",
       "sectionLabelQuery": "Elementy robocze pasujące do „{query}”",

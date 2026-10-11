@@ -9138,6 +9138,15 @@ model PlanChangeTurn {
   /// mailbox. Null on every other turn, and on every turn written before the
   /// column existed — a null reads exactly as it always did (no back-fill).
   runJobId              String?                @map("run_job_id")
+  /// How the CODE-GRAPH OUTAGE touched this `assistant` turn (Story MOTIR-8136 ·
+  /// MOTIR-8141; `design/code-context/design-notes.md` §17) — `declined` for a
+  /// plan-writing turn that wrote NO plan because the code could not be read,
+  /// `answered` for a question that was answered without it. Written in the SAME
+  /// append as the turn, from the job result's own outage signal, so the notice
+  /// survives a reload and stays in the history after the graph returns. Null on
+  /// every other turn, role and row written before the column existed (no
+  /// back-fill): a null reads exactly as the turn always did.
+  codeUnreadable        PlanChangeTurnOutage?  @map("code_unreadable")
   /// The exact text an `assistant` ANSWER offered to FORWARD to the running
   /// planner (MOTIR-7996) — the offered `user` turn's own body, in the person's
   /// words. Set only by a mid-run ask settle whose result carried `offerForward`;
@@ -9415,6 +9424,17 @@ enum PlanChangeTurnConfirm {
   new_session
 
   @@map("plan_change_turn_confirm")
+}
+
+/// How a code-graph outage touched an `assistant` turn (Story MOTIR-8136 ·
+/// MOTIR-8141) — the stored face the rail draws from, `design-notes.md` §17.
+enum PlanChangeTurnOutage {
+  /// A plan-writing job met the outage and wrote no plan.
+  declined
+  /// A question job was answered without the code.
+  answered
+
+  @@map("plan_change_turn_outage")
 }
 
 /// ONE work item held EXCLUSIVELY by ONE planning session (Story MOTIR-2786 ·

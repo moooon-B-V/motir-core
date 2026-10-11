@@ -7621,6 +7621,11 @@
         "groupFinished": "{step} — finished"
       }
     },
+    "codeUnreadable": {
+      "planBody": "I can't read your code right now, so I haven't changed your plan. Motir is on it.",
+      "planMarker": "Nothing was written — your plan is unchanged.",
+      "askNotice": "I couldn't read your code for this answer. Treat anything about the code here as unconfirmed."
+    },
     "targets": {
       "sectionLabel": "Work items",
       "sectionLabelQuery": "Work items matching “{query}”",
