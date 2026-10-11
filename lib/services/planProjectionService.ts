@@ -16,6 +16,7 @@ import type {
   PlanWithItemsDto,
 } from '@/lib/dto/plans';
 import { DEFAULT_PROPOSED_KIND } from '@/lib/plans/validateProposals';
+import { isContainerKind } from '@/lib/plans/validateProposedKind';
 import { isWorkItemRef } from '@/lib/plans/refs';
 import { edgeDisposition, type EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { WorkItem } from '@/generated/prisma/client';
@@ -483,6 +484,14 @@ export async function buildProjection(
     // executor is never projected — the stored value stands.
     if (item.patch && 'type' in item.patch) {
       projectedType.set(item.workItemId, item.patch.type ?? null);
+    }
+    // The RE-KIND (bug MOTIR-8192 · AMENDMENT 25) — the node takes the kind the
+    // approve will write, so every kind-reading rule downstream judges a task
+    // turned story as a story. A re-kind to a container also DERIVES the
+    // executor to `null` at approve (`applyModify`), so it is projected so.
+    if (item.patch?.kind) {
+      nodes.get(item.workItemId)!.kind = item.patch.kind;
+      if (isContainerKind(item.patch.kind)) projectedExecutor.set(item.workItemId, null);
     }
     // The RE-PARENT (MOTIR-3859's `patch.parentRef`, projected by MOTIR-3867).
     // Same sparse-patch semantics, and here they are load-bearing rather than

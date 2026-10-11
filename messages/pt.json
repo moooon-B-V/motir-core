@@ -214,6 +214,7 @@
     "outcomeDeclined": "recusado",
     "field_title": "Título",
     "field_priority": "Prioridade",
+    "field_kind": "Categoria",
     "field_type": "Tipo",
     "field_executor": "Executor",
     "field_storyPoints": "Pontos de história",

@@ -36,6 +36,8 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   explanationMd: null,
   priority: null,
   type: null,
+  // A RE-KIND (bug MOTIR-8192) moves no rail row — the denominator is unchanged.
+  kind: 'story',
   storyPoints: null,
   estimateMinutes: null,
   // MOTIR-6133 carries it; MOTIR-6137 gives it the seventh rail row.

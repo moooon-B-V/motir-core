@@ -54,6 +54,7 @@ import type {
 } from '@/lib/dto/plans';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { resolveExecutor } from '@/lib/issues/executorDefaults';
+import { isContainerKind } from '@/lib/plans/validateProposedKind';
 import type { PlanRevision, Prisma } from '@/generated/prisma/client';
 import { planRepository } from '@/lib/repositories/planRepository';
 import {
@@ -271,7 +272,13 @@ function seededExecutor(
   target: WorkItem | undefined,
 ): ExecutorDto | null {
   const current = (target?.executor ?? null) as ExecutorDto | null;
-  if (!target || !patch || patch.type === undefined) return current;
+  if (!target || !patch) return current;
+  // A RE-KIND to a container DERIVES it to `null` (bug MOTIR-8192 · AMENDMENT
+  // 25) — `applyModify` clears it beside the `kind` write.
+  if (patch.kind !== undefined && patch.kind !== target.kind && isContainerKind(patch.kind)) {
+    return null;
+  }
+  if (patch.type === undefined) return current;
   return resolveExecutor((patch.type ?? null) as WorkItemTypeDto | null, undefined, current);
 }
 
@@ -301,6 +308,12 @@ function buildChanges(
   }
   if (patch.priority !== undefined && patch.priority !== (target?.priority ?? null)) {
     changes.push({ field: 'priority', from: target?.priority ?? null, to: patch.priority ?? null });
+  }
+  // A RE-KIND (bug MOTIR-8192 · AMENDMENT 25) — `Kind  task → story`, read live
+  // from the target on the left. Directly before `type`, the leaf field a
+  // container re-kind must clear in the same patch.
+  if (patch.kind !== undefined && patch.kind !== (target?.kind ?? null)) {
+    changes.push({ field: 'kind', from: target?.kind ?? null, to: patch.kind });
   }
   if (patch.type !== undefined && patch.type !== (target?.type ?? null)) {
     changes.push({ field: 'type', from: target?.type ?? null, to: patch.type ?? null });

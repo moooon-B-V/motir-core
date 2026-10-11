@@ -52,6 +52,11 @@ import type {
 export const PLAN_ITEM_CHANGE_FIELDS = [
   'title',
   'priority',
+  /** A RE-KIND of the target (bug MOTIR-8192 · `agent-authored-plans.md`
+   *  AMENDMENT 25) — `patch.kind`, emitted directly before `type`, the leaf
+   *  field a re-kind to a container clears in the same patch. Both sides are
+   *  the WIRE kinds (`task` → `story`); the FROM side is read off the target. */
+  'kind',
   'type',
   /** The target's EXECUTOR when the approve will SEED it (bug MOTIR-6259) — a
    *  `modify` that re-types a card with no executor gets the type's default, by
@@ -178,6 +183,11 @@ export const PATCH_KEY_RAIL_ROW = {
   blockedByRemove: null,
   priority: 'priority',
   type: 'type',
+  // A RE-KIND (bug MOTIR-8192) moves no RAIL row — the peek's rail has none for
+  // the hierarchy kind, and adding one would change the count line's
+  // denominator for every plan. The reviewer reads it as a `kind` CHANGE row on
+  // the canvas node and in the list, like the bodies above.
+  kind: null,
   storyPoints: 'storyPoints',
   estimateMinutes: 'estimateMinutes',
   // A leaf's DIFFICULTY (MOTIR-6133 carries it, MOTIR-6137 renders it) — the

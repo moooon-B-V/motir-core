@@ -82,16 +82,21 @@ import {
   type ProposalRefCarrier,
 } from '@/lib/plans/refs';
 import {
+  assertAddKindPlacementLegal,
   assertBlockedByLevels,
   assertFolderPlacementsLegal,
+  assertKindChangesLegal,
   assertProposalSetSelfConsistent,
   assertReparentLegal,
   assertSupersedesGraphAcyclic,
   collectReferencedFolderIds,
   collectReferencedWorkItemIds,
   DEFAULT_PROPOSED_KIND,
+  projectedKindOverrides,
   proposedParentAnchorIds,
   validatePlanProposals,
+  withProjectedKinds,
+  type KindChangeContext,
   type LiveFolderState,
   type LiveWorkItemState,
   type ProposalNode,
@@ -100,6 +105,11 @@ import {
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
+import {
+  assertReKindedAddKeepsNoLeafFields,
+  isContainerKind,
+  validateProposedKindChange,
+} from '@/lib/plans/validateProposedKind';
 import {
   assertMarkTargetIsFinished,
   patchSetsObsolescence,
@@ -772,6 +782,11 @@ function validateProposal(p: ProposalInput): void {
     // sizing alone, or an explicit `null` that clears it.
     validateStoryPoints(p.patch.storyPoints ?? null);
     validateEstimateMinutes(p.patch.estimateMinutes ?? null);
+    // A `modify` may RE-KIND the target (bug MOTIR-8192 · AMENDMENT 25).
+    // MEMBERSHIP only here — `epic` refused by name; the parent, the children
+    // and the leaf fields need the tree, and run in `addProposals`' transaction
+    // (`assertKindChangesLegalAtAppend`) and again at approve.
+    validateProposedKindChange(p.patch.kind, proposalLabel({ op: p.op, workItemId: p.workItemId }));
     // A `modify` may RE-JUDGE the target's difficulty (MOTIR-6133). MEMBERSHIP
     // only here — this pass is pure and the target's KIND needs a read, so the
     // container half runs inside `addProposals`' transaction
@@ -1153,6 +1168,10 @@ async function runPersistGate(
     ctx,
     tx,
   );
+  // The committed tree around every target a `modify` RE-KINDS (bug MOTIR-8192)
+  // — skipped entirely when no proposal re-kinds, so a plan that changes no kind
+  // costs exactly what it cost before.
+  const kindChangeContextById = await resolveKindChangeContexts(nodes, rows, ctx, tx);
   validatePlanProposals({
     items: nodes,
     liveById,
@@ -1164,7 +1183,144 @@ async function runPersistGate(
     markTargetStatusCategoryById,
     folderById,
     edgeAncestorsById,
+    kindChangeContextById,
   });
+}
+
+/**
+ * The committed tree around every target a `modify` in `nodes` RE-KINDS (bug
+ * MOTIR-8192 · AMENDMENT 25) — its parent's kind, its folder filing, its leaf
+ * fields and its live children — in at most two batched reads, both skipped
+ * when no proposal carries `patch.kind`. `rows` are the live rows the caller
+ * already read for the plan's referenced ids; a target missing from them is left
+ * to `materialize`, as every other live-row question is.
+ *
+ * With a `tx`, the reads run on it (the caller holds the workspace GUC and has
+ * lifted the project narrowing); without one they open their own workspace
+ * context, as `runPersistGate`'s pre-transaction pass does.
+ */
+async function resolveKindChangeContexts(
+  nodes: readonly ProposalNode[],
+  rows: readonly WorkItem[],
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<Map<string, KindChangeContext>> {
+  const out = new Map<string, KindChangeContext>();
+  const targetIds = new Set(
+    nodes
+      .filter((n) => n.op === 'modify' && n.workItemId && n.patch?.kind !== undefined)
+      .map((n) => n.workItemId!),
+  );
+  if (targetIds.size === 0) return out;
+  const targets = rows.filter((r) => targetIds.has(r.id));
+  if (targets.length === 0) return out;
+  const parentIds = [
+    ...new Set(targets.map((t) => t.parentId).filter((id): id is string => id !== null)),
+  ];
+  const read = async (t: Prisma.TransactionClient) => ({
+    parents: await workItemRepository.findByIdsInWorkspace(parentIds, ctx.workspaceId, t),
+    children: await workItemRepository.findChildKindsForItems(
+      targets.map((r) => r.id),
+      ctx.workspaceId,
+      t,
+    ),
+  });
+  const { parents, children } = tx
+    ? await read(tx)
+    : await withWorkspaceServiceContext(ctx.workspaceId, read);
+  const parentKindById = new Map(parents.map((p) => [p.id, p.kind as string]));
+  for (const target of targets) {
+    out.set(target.id, {
+      parentId: target.parentId,
+      parentKind: target.parentId ? (parentKindById.get(target.parentId) ?? null) : null,
+      filed: target.folderId !== null,
+      type: target.type,
+      difficulty: target.difficulty,
+      children: children
+        .filter((c) => c.parentId === target.id)
+        .map((c) => ({ id: c.id, key: c.identifier, title: c.title, kind: c.kind })),
+    });
+  }
+  return out;
+}
+
+/**
+ * Run the RE-KIND gate over a proposal set at the APPEND (bug MOTIR-8192 ·
+ * AMENDMENT 25) — the same `assertKindChangesLegal` the approve path runs, given
+ * the same context, so a re-kind admitted here cannot be refused there for a
+ * reason the author could have been told while the plan was still theirs.
+ *
+ * The whole batch is judged, INCLUDING the proposals already on the plan, for
+ * the reason `assertReparentsLegalAtAppend` gives: a re-kind is a question about
+ * the projected tree, and the plan's other proposals are part of it. Skipped
+ * with no read when nothing in `nodes` re-kinds. The project narrowing is lifted
+ * for the reason that function lifts it.
+ */
+async function assertKindChangesLegalAtAppend(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (!nodes.some((n) => n.op === 'modify' && n.patch?.kind !== undefined)) return;
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const rows = await workItemRepository.findByIdsInWorkspace(
+      collectReferencedWorkItemIds(nodes),
+      ctx.workspaceId,
+      tx,
+    );
+    const liveById = new Map<string, LiveWorkItemState>(rows.map((r) => [r.id, toLiveState(r)]));
+    const contexts = await resolveKindChangeContexts(nodes, rows, ctx, tx);
+    assertKindChangesLegal(nodes, liveById, contexts);
+  });
+}
+
+/**
+ * Hold an `add` whose KIND an edit just changed to the rules a new kind owes
+ * (bug MOTIR-8192 · AMENDMENT 25 §4) — at the correction and at every
+ * `editAddProposal` mode, the doors that can re-kind a proposed card:
+ *
+ *   - a CONTAINER keeps no `type` / `executor` — refused by name, the same
+ *     refusal-not-clear rule a `modify` follows (`assertReKindedAddKeepsNoLeafFields`;
+ *     `todos` and `difficulty` were already refused on the merged kind);
+ *   - its PARENT admits the new kind, and the new kind admits every proposal
+ *     the plan hangs under it (`assertAddKindPlacementLegal`).
+ *
+ * Run UNCONDITIONALLY when the edit supplies a kind — not left to the close's
+ * before/after verdict, which admits a write to a plan that was already
+ * unapprovable — because an illegal kind is a mistake this write introduces.
+ * `nodes` is the plan's proposal set WITH the edited `add` already merged.
+ */
+async function assertReKindedAddLegal(
+  addId: string,
+  merged: PlanItemProposedFields,
+  nodes: readonly ProposalNode[],
+  label: string,
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  assertReKindedAddKeepsNoLeafFields(merged.kind ?? DEFAULT_PROPOSED_KIND, merged, label);
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const rows = await workItemRepository.findByIdsInWorkspace(
+      collectReferencedWorkItemIds(nodes),
+      ctx.workspaceId,
+      tx,
+    );
+    assertAddKindPlacementLegal(addId, nodes, new Map(rows.map((r) => [r.id, toLiveState(r)])));
+  });
+}
+
+/** A live row in the shape the plan gate reads. */
+function toLiveState(r: WorkItem): LiveWorkItemState {
+  return {
+    id: r.id,
+    key: r.identifier,
+    title: r.title,
+    kind: r.kind,
+    status: r.status,
+    projectId: r.projectId,
+  };
 }
 
 /**
@@ -3241,6 +3397,27 @@ async function applyModify(
       diff.executor = { from: current.executor, to: nextExecutor };
     }
   }
+  // RE-KIND the target (bug MOTIR-8192 · AMENDMENT 25) — the same `kind` diff
+  // cell `workItemsService.updateWorkItem` records, so the activity feed renders
+  // it through the disposition already registered.
+  //
+  // ⚠️ EVERY GUARD HAS ALREADY RUN, as for the re-parent below: the parent, the
+  // children it keeps and the leaf fields were judged at the append and again by
+  // `validatePlanProposals` (`assertKindChangesLegal`). A container's `type` and
+  // `difficulty` therefore arrive cleared by this same patch or not at all.
+  //
+  // The EXECUTOR is the one leaf field no patch key reaches (AMENDMENT 4 D3a), so
+  // a re-kind to a container DERIVES it to `null` here — the end state
+  // `updateWorkItem` insists on, where a person clears it by hand — and the
+  // review shows that row before the button (`planReviewService.buildChanges`).
+  if (patch.kind !== undefined && patch.kind !== current.kind) {
+    update.kind = patch.kind as WorkItemUpdateInput['kind'];
+    diff.kind = { from: current.kind, to: patch.kind };
+    if (isContainerKind(patch.kind) && current.executor !== null) {
+      update.executor = null;
+      diff.executor = { from: current.executor, to: null };
+    }
+  }
   // Leaf sizing re-scope (MOTIR-1532) — the SAME point/estimate columns the `add`
   // path materializes, applied here as an in-place modify. `storyPoints` is a
   // Prisma Decimal, so compare + record the diff NUMERICALLY (the `Number(...)`
@@ -3668,18 +3845,12 @@ async function assertReparentsLegalAtAppend(
   await withProjectNarrowingSuspended(tx, planProjectId, async () => {
     const referenced = collectReferencedWorkItemIds(nodes);
     const rows = await workItemRepository.findByIdsInWorkspace(referenced, ctx.workspaceId, tx);
-    const liveById = new Map<string, LiveWorkItemState>(
-      rows.map((r) => [
-        r.id,
-        {
-          id: r.id,
-          key: r.identifier,
-          title: r.title,
-          kind: r.kind,
-          status: r.status,
-          projectId: r.projectId,
-        },
-      ]),
+    // At their PROJECTED kinds (bug MOTIR-8192) — a move of, or under, a card
+    // this plan re-kinds is judged against the kind it will have, as the approve
+    // gate judges it.
+    const liveById = withProjectedKinds(
+      new Map<string, LiveWorkItemState>(rows.map((r) => [r.id, toLiveState(r)])),
+      projectedKindOverrides(nodes),
     );
     const ancestorIdsById = await resolveReparentAncestors(nodes, ctx, tx);
     const folderById = await resolveFolderById(nodes, ctx, tx);
@@ -3744,7 +3915,9 @@ async function assertModifyDifficultiesLegalAtAppend(
     );
     const kindById = new Map(rows.map((r) => [r.id, r.kind as string]));
     for (const p of judged) {
-      const kind = kindById.get(p.workItemId!);
+      // The PROJECTED kind (bug MOTIR-8192): a patch that re-kinds its target
+      // is judged against the kind it will have.
+      const kind = p.patch!.kind ?? kindById.get(p.workItemId!);
       if (kind === undefined) continue;
       validateProposedDifficulty(
         p.patch!.difficulty,
@@ -3993,6 +4166,24 @@ async function editAddProposal(
         next,
         proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
       );
+      // And a RE-KIND, held to what the new kind owes (bug MOTIR-8192 ·
+      // AMENDMENT 25 §4) — the deepen and both review edits can change `kind`,
+      // and none of them re-ran the kind-parent grammar before.
+      if (input.kind !== undefined) {
+        await assertReKindedAddLegal(
+          item.id,
+          next,
+          (await planItemRepository.findByPlan(planId, tx)).map((i) =>
+            i.id === item.id
+              ? { ...toProposalNode(i), proposedFields: next as ProposalNode['proposedFields'] }
+              : toProposalNode(i),
+          ),
+          proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+          ctx,
+          fresh.projectId,
+          tx,
+        );
+      }
       await planItemRepository.update(
         planItemId,
         { proposedFields: next as unknown as Prisma.InputJsonValue },
@@ -4929,6 +5120,13 @@ export const plansService = {
           if (anyReparent(withIncoming)) {
             await assertReparentsLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
           }
+
+          // ⚠️ THE RE-KIND GATE, AT THE APPEND (bug MOTIR-8192 · AMENDMENT 25) —
+          // for the re-parent gate's own reason: a re-kind is judged against
+          // committed rows that exist already, so the author hears about an
+          // illegal one while the plan is still theirs. Skipped, with no read,
+          // when no proposal on the plan carries `patch.kind`.
+          await assertKindChangesLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
 
           // ⚠️ THE FOLDER GATE, AT THE APPEND (MOTIR-5414) — the second check on
           // this path that costs a read, and skipped entirely unless some
@@ -6060,6 +6258,28 @@ export const plansService = {
             next,
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
+          // A RE-KIND, held to what the new kind owes (bug MOTIR-8192 ·
+          // AMENDMENT 25 §4): no leaf field on a container, and a placement the
+          // plan's own tree admits — judged with this correction's parentRef.
+          if (input.kind !== undefined) {
+            await assertReKindedAddLegal(
+              item.id,
+              next,
+              all.map((i) =>
+                i.id === item.id
+                  ? {
+                      ...toProposalNode(i),
+                      parentRef: input.parentRef !== undefined ? input.parentRef : i.parentRef,
+                      proposedFields: next as ProposalNode['proposedFields'],
+                    }
+                  : toProposalNode(i),
+              ),
+              proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+              ctx,
+              plan.projectId,
+              tx,
+            );
+          }
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
             ...Object.keys(input).filter(
@@ -6092,6 +6312,12 @@ export const plansService = {
             );
             validateStoryPoints(input.patch?.storyPoints ?? null);
             validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+            // The replacement patch's RE-KIND (bug MOTIR-8192), held to the
+            // append's membership check here and to its tree check below.
+            validateProposedKindChange(
+              input.patch?.kind,
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
             // The replacement patch's MARK (MOTIR-6629), held to the append's check.
             validateProposedObsolescence(
               input.patch,
@@ -6129,15 +6355,16 @@ export const plansService = {
               proposalLabel({ op: item.op, workItemId: item.workItemId }),
             );
             // The replacement patch's DIFFICULTY (MOTIR-6133), judged against the
-            // TARGET's live kind — the append's two halves in one call, since the
-            // transaction is already open.
+            // TARGET's PROJECTED kind — the patch's re-kind when it carries one
+            // (bug MOTIR-8192), else the live kind — the append's two halves in
+            // one call, since the transaction is already open.
             if (input.patch?.difficulty !== undefined && input.patch?.difficulty !== null) {
               const target = item.workItemId
                 ? await workItemRepository.findById(item.workItemId, tx)
                 : null;
               validateProposedDifficulty(
                 input.patch.difficulty,
-                target ? target.kind : null,
+                input.patch.kind ?? (target ? target.kind : null),
                 proposalLabel({ op: item.op, workItemId: item.workItemId }),
               );
             }
@@ -6233,6 +6460,16 @@ export const plansService = {
         // proposals, which is the set the corrected one will sit among.
         if (anyReparent([correctedNode])) {
           await assertReparentsLegalAtAppend(
+            [...all.filter((i) => i.id !== item.id).map(toProposalNode), correctedNode],
+            ctx,
+            plan.projectId,
+            tx,
+          );
+        }
+        // …and the append's RE-KIND gate (bug MOTIR-8192), for the same reason:
+        // a kind the projected tree refuses is a mistake this write introduces.
+        if (correctedNode.op === 'modify' && correctedNode.patch?.kind !== undefined) {
+          await assertKindChangesLegalAtAppend(
             [...all.filter((i) => i.id !== item.id).map(toProposalNode), correctedNode],
             ctx,
             plan.projectId,

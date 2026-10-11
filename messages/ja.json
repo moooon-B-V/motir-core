@@ -214,6 +214,7 @@
     "outcomeDeclined": "却下済み",
     "field_title": "タイトル",
     "field_priority": "優先度",
+    "field_kind": "種別",
     "field_type": "種類",
     "field_executor": "実行者",
     "field_storyPoints": "ストーリーポイント",
