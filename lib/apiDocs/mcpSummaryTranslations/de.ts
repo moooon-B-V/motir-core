@@ -152,9 +152,9 @@ export const de: McpSummaryTranslations = {
   },
   create_work_item: {
     summary:
-      'Einen Epic, eine Story, Aufgabe, einen Bug oder eine Unteraufgabe unter einem übergeordneten Element oder in einem Ordner anlegen; Punkte, Schätzung, Typ, Ausführender, Schwierigkeit, Repository und Veraltet-Markierung in einem Aufruf.',
+      'Einen Epic, eine Story, Aufgabe, einen Bug oder eine Unteraufgabe unter einem übergeordneten Element oder in einem Ordner anlegen; Punkte, Schätzung, Typ, Ausführender, Schwierigkeit, Repository, Veraltet-Markierung und Inhaltssprache in einem Aufruf.',
     source:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
   },
   delete_comment: {
     summary:

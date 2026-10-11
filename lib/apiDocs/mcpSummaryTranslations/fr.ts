@@ -149,9 +149,9 @@ export const fr: McpSummaryTranslations = {
   },
   create_work_item: {
     summary:
-      "Créer un Epic, une Story, une Tâche, un Bug ou une Sous-tâche sous un parent ou dans un Dossier ; points, Estimation, type, executor, difficulté, dépôt et marque d'obsolescence en un seul appel.",
+      "Créer un Epic, une Story, une Tâche, un Bug ou une Sous-tâche sous un parent ou dans un Dossier ; points, Estimation, type, executor, difficulté, dépôt, marque d'obsolescence et langue du contenu en un seul appel.",
     source:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
   },
   delete_comment: {
     summary:

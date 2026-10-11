@@ -44,7 +44,9 @@ ALTER TABLE "organization_content_language_change" ADD CONSTRAINT "organization_
 
 -- RLS — the organisation-scoped shape `organization_deletion_request` uses: a
 -- row is visible to a transaction bound to its organisation, or to the system
--- arm. Written only through `withOrgContext` (MOTIR-8094); removed by the
+-- arm, and READABLE by the person it names as the changer (the `app.user_id`
+-- arm the personal-data export reads it through, `lib/export/personalDataSections.ts`).
+-- Written only through `withOrgContext` (MOTIR-8094); removed by the
 -- organisation's FK cascade, which RLS does not filter.
 ALTER TABLE "organization_content_language_change" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "organization_content_language_change" FORCE ROW LEVEL SECURITY;
@@ -54,6 +56,7 @@ CREATE POLICY "organization_content_language_change_org_or_system" ON "organizat
   USING (
     current_setting('app.system_admin', true) = 'true'
     OR "organization_id" = current_setting('app.organization_id', true)
+    OR "changed_by_user_id" = current_setting('app.user_id', true)
   )
   WITH CHECK (
     current_setting('app.system_admin', true) = 'true'

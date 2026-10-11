@@ -149,9 +149,9 @@ export const es: McpSummaryTranslations = {
   },
   create_work_item: {
     summary:
-      'Crea una Épica, Historia, Tarea, Error o Subtarea bajo un padre o en una Carpeta; puntos, Estimación, tipo, ejecutor, dificultad, repositorio y marca de obsolescencia en una sola llamada.',
+      'Crea una Épica, Historia, Tarea, Error o Subtarea bajo un padre o en una Carpeta; puntos, Estimación, tipo, ejecutor, dificultad, repositorio, marca de obsolescencia e idioma del contenido en una sola llamada.',
     source:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
   },
   delete_comment: {
     summary:

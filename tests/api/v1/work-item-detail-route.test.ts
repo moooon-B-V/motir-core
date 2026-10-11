@@ -328,6 +328,7 @@ describe('the v1 work-item presenters', () => {
           estimateMinutes: null,
           storyPoints: null,
           descriptionMd: null,
+          languages: { title: null, description: null, explanation: null },
           sprintId: null,
           targetRepo: null,
           executor: null,

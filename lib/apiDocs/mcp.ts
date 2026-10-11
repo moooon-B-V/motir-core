@@ -533,7 +533,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-6582, summary UNCHANGED: the item and its child rows carry
     // the obsolescence mark + note — fields of the item, which "one item in full"
     // already covers; the summary enumerates questions, not columns.
-    descriptionFingerprint: 'fda118ef0ca9',
+    // Re-pinned for MOTIR-8098, summary UNCHANGED: the item carries `languages`, each
+    // text field's recorded content language — a field of the item, which "one item
+    // in full" already covers.
+    descriptionFingerprint: '729b47f94961',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.
@@ -978,10 +981,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-6582, summary WIDENED: the obsolescence mark joins the
     // fields settable in the one call, and this summary enumerates them.
     summary:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
     // Re-pinned for MOTIR-6673, summary UNCHANGED: the description names OBSOLESCENCE_REQUIRES_FINISHED (a mark on create) and MARKED_CARD_CANNOT_REOPEN (a marked parent); the summary states no
     // status rule.
-    descriptionFingerprint: '8ed6d96eb4b3',
+    // Re-pinned for MOTIR-8098, summary WIDENED: `language` / `languages` override the
+    // organisation's content language for the new item's text, one more field set in
+    // the one call, and this summary enumerates them.
+    descriptionFingerprint: '058838aefb65',
   },
   update_work_item: {
     // Re-pinned for MOTIR-5585: the description now names PROJECT-repository
@@ -996,7 +1002,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "Edit any subset of an item's fields, including the explanation body create cannot set.",
     // Re-pinned for MOTIR-6673, summary UNCHANGED: the description names the finished-card rule (OBSOLESCENCE_REQUIRES_FINISHED) and MARKED_CARD_CANNOT_REOPEN for a re-parent; the summary states no
     // status rule.
-    descriptionFingerprint: '7321d3e5ba1a',
+    // Re-pinned for MOTIR-8098, summary UNCHANGED: the description names `language` /
+    // `languages` for the edited text; "any subset of an item's fields" covers them.
+    descriptionFingerprint: '1a04f0375758',
   },
   transition_status: {
     summary:
@@ -1075,11 +1083,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   list_work_item_todos: {
     summary: 'Read a work item’s to-do list: its steps in order, which are done, and the progress.',
-    descriptionFingerprint: '2ec9edb36848',
+    // Re-pinned for MOTIR-8098, summary UNCHANGED: each step carries the language its
+    // text was recorded in — a field of the step, not a new question.
+    descriptionFingerprint: '48f4bc2ba869',
   },
   add_work_item_todo: {
     summary: 'Append one step to the end of a work item’s to-do list.',
-    descriptionFingerprint: 'cb50e4038b0a',
+    // Re-pinned for MOTIR-8098, summary UNCHANGED: the step records the organisation's
+    // content language unless `language` names another.
+    descriptionFingerprint: '912e836d1d6f',
   },
   set_work_item_todo_done: {
     summary:

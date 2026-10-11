@@ -148,9 +148,9 @@ export const pt: McpSummaryTranslations = {
   },
   create_work_item: {
     summary:
-      'Crie um epic, story, task, bug ou subtask sob um pai ou em uma Pasta; pontos, Estimativa, type, executor, difficulty, repositório e marca de obsolescência em uma só chamada.',
+      'Crie um epic, story, task, bug ou subtask sob um pai ou em uma Pasta; pontos, Estimativa, type, executor, difficulty, repositório, marca de obsolescência e idioma do conteúdo em uma só chamada.',
     source:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
   },
   delete_comment: {
     summary:

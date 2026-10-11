@@ -133,9 +133,9 @@ export const zh: McpSummaryTranslations = {
   },
   create_work_item: {
     summary:
-      '在父级之下或文件夹中创建篇章、故事、任务、缺陷或子任务；points、estimate、type、executor、difficulty、repo 和过时标记一次调用即可设置。',
+      '在父级之下或文件夹中创建篇章、故事、任务、缺陷或子任务；points、estimate、type、executor、difficulty、repo、过时标记和内容语言一次调用即可设置。',
     source:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
   },
   delete_comment: {
     summary: '永久删除你自己写的评论及其回复。在这里只有评论作者可以删除。',

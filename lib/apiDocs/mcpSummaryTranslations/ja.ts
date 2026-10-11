@@ -149,9 +149,9 @@ export const ja: McpSummaryTranslations = {
   },
   create_work_item: {
     summary:
-      '親の下、またはフォルダー内に、エピック、ストーリー、タスク、バグ、サブタスクを作成します。ポイント、見積もり、タイプ、executor、難易度、リポジトリ、陳腐化マークを1回の呼び出しで指定できます。',
+      '親の下、またはフォルダー内に、エピック、ストーリー、タスク、バグ、サブタスクを作成します。ポイント、見積もり、タイプ、executor、難易度、リポジトリ、陳腐化マーク、コンテンツ言語を1回の呼び出しで指定できます。',
     source:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
   },
   delete_comment: {
     summary:

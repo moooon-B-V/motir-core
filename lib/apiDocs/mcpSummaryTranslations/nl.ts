@@ -148,9 +148,9 @@ export const nl: McpSummaryTranslations = {
   },
   create_work_item: {
     summary:
-      'Maak een Epic, Story, Taak, Bug of Subtaak onder een bovenliggend item of in een Map; punten, Schatting, type, executor, moeilijkheid, repo en veroudering-markering in één aanroep.',
+      'Maak een Epic, Story, Taak, Bug of Subtaak onder een bovenliggend item of in een Map; punten, Schatting, type, executor, moeilijkheid, repo, veroudering-markering en inhoudstaal in één aanroep.',
     source:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
   },
   delete_comment: {
     summary:
