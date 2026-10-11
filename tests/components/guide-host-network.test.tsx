@@ -263,6 +263,22 @@ describe('opening the guide', () => {
   });
 });
 
+describe('the canvas pane', () => {
+  // MOTIR-8232: the canvas is the resizable frame's `1fr` grid item. Without `min-w-0` its
+  // automatic minimum is its min-content — a long, non-wrapping card title in the crumb
+  // stretched the track and pushed the chat column (and the divider) off-screen. happy-dom
+  // has no layout, so the guard is the class that removes the automatic minimum.
+  it('may shrink below its content, so a long card title cannot push the chat pane out', async () => {
+    handler = ordinary({ before: [], after: [] });
+    renderHost({ ...CARD, identifier: 'PROD-88', title: 'A very long card title '.repeat(20) });
+    await waitFor(() => expect(posted('/api/ai/guide/settle')).toHaveLength(1));
+    const frame = screen.getByTestId('planning-resizable-frame');
+    const canvasPane = screen.getByTestId('guide-crumb').parentElement?.parentElement;
+    expect(canvasPane?.parentElement).toBe(frame);
+    expect(canvasPane?.className).toContain('min-w-0');
+  });
+});
+
 describe('a turn that does not finish', () => {
   it('a failed stream is the guarantee line, and Try again re-runs the SAME turn', async () => {
     listTodosAction.mockResolvedValue({

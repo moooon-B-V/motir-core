@@ -128,7 +128,17 @@ function sharedReadsFor(
     async deliveries(subjectIds) {
       all ??= workItemDeliveryRepository.listByWorkItemsWithChecks(ids, tx);
       const wanted = new Set(subjectIds);
-      return (await all).filter((delivery) => wanted.has(delivery.workItemId));
+      // ⚠️ A delivery whose `repo` reads back NULL is dropped (MOTIR-8213). The column is
+      // NOT NULL and the generated type says the include is always populated, but the
+      // nested `github_repo` read runs under the reader's own RLS context: a repository the
+      // reader's tenancy cannot see comes back as `repo: null` rather than as an error, and
+      // both loaders below dereference `repo.owner`. Such a member cannot be NAMED, so it
+      // does not appear in the summary; a card left with no nameable member takes the
+      // "subject no longer resolves" row, which is what the queue already says for a card
+      // that delivers nothing.
+      return (await all).filter(
+        (delivery) => wanted.has(delivery.workItemId) && (delivery.repo as unknown) !== null,
+      );
     },
   };
 }
