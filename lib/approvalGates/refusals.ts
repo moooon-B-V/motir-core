@@ -89,6 +89,9 @@ export type GateRefusal =
       primary: PendingPrimary;
     }
   | { tag: 'APPROVAL_GATE_ALREADY_AWAITING' }
+  // A pull request the card is delivered by that this reader cannot see (MOTIR-8236):
+  // nothing is decided over a partly visible set.
+  | { tag: 'APPROVAL_GATE_DELIVERY_UNREADABLE' }
   | { tag: 'APPROVAL_GATE_DECIDED_IMMUTABLE' }
   | { tag: 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH' }
   | { tag: 'APPROVAL_GATE_HAS_NO_CARD' }
@@ -214,6 +217,7 @@ export function toGateRefusal(
     case 'APPROVAL_GATE_KIND_UNREGISTERED':
     case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
     case 'APPROVAL_GATE_ALREADY_AWAITING':
+    case 'APPROVAL_GATE_DELIVERY_UNREADABLE':
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
     case 'APPROVAL_GATE_HAS_NO_CARD':

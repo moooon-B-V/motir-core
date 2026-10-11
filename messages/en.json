@@ -12350,6 +12350,10 @@
         "title": "Another decision on this subject is already waiting.",
         "next": "Reload the page to see it."
       },
+      "deliveryUnreadable": {
+        "title": "A pull request on this work item is no longer visible to this organization.",
+        "next": "Nothing was decided. Its repository now belongs to another organization: reconnect it here, or unlink that pull request from the work item."
+      },
       "decidedImmutable": {
         "title": "This decision was already recorded and cannot be changed.",
         "next": "Reload the page. If this keeps happening, it is a defect worth reporting."

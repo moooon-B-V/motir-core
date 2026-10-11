@@ -1,4 +1,5 @@
 import type { Prisma, WorkItemDelivery } from '@/generated/prisma/client';
+import { ApprovalGateDeliveryUnreadableError } from '@/lib/approvalGates/errors';
 import type { LinkedChangeRequestCompletionFact } from '@/lib/repositories/githubPullRequestRepository';
 
 // Single Prisma operations on the `work_item_delivery` table — the ONE association
@@ -121,15 +122,40 @@ export const workItemDeliveryRepository = {
     });
   },
 
+  /**
+   * ⚠️ AND IT ANSWERS THE WHOLE SET OR REFUSES (Bug MOTIR-8236). This is the read the
+   * approval gates and approve-and-merge decide over. A delivery row is admitted on
+   * the CARD's workspace, but its pull request and repository are admitted through
+   * `github_repo`'s policies, so a repository that has left the card's organisation
+   * comes back as a visible row with NULL joins — which the generated type says cannot
+   * happen, and every caller dereferenced. A member silently dropped here would let a
+   * decision be taken over part of the set, so a set with an unreadable member raises
+   * {@link ApprovalGateDeliveryUnreadableError}, naming those deliveries, rather than
+   * returning it. The display reads take the other answer and drop the member
+   * (MOTIR-8215).
+   */
   async listByWorkItemWithChecks(
     workItemId: string,
     tx: Prisma.TransactionClient,
   ): Promise<WorkItemDeliveryWithChecks[]> {
-    return tx.workItemDelivery.findMany({
+    const rows = await tx.workItemDelivery.findMany({
       where: { workItemId },
       include: WITH_CHECKS,
       orderBy: { createdAt: 'asc' },
     });
+    // The type says these joins are never null; under RLS they can be.
+    const unreadable = rows.filter(
+      (row) =>
+        (row.pullRequest as WorkItemDeliveryWithChecks['pullRequest'] | null) === null ||
+        (row.repo as WorkItemDeliveryWithChecks['repo'] | null) === null,
+    );
+    if (unreadable.length > 0) {
+      throw new ApprovalGateDeliveryUnreadableError(
+        workItemId,
+        unreadable.map((row) => row.id),
+      );
+    }
+    return rows;
   },
 
   /**
