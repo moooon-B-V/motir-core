@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
+import { MarkdownView } from '@/components/ui/MarkdownView';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
 import { PlanStaleBand } from '@/components/planning/PlanChangeConfirmBar';
@@ -316,9 +317,9 @@ export function PlanReviewRail({
               its break opportunities into the MIN-CONTENT size the fixed 22rem
               track is measured from. */}
           {review.summary ? (
-            <p className="min-w-0 text-sm wrap-anywhere text-(--el-text-secondary)">
-              {review.summary}
-            </p>
+            <div className="min-w-0 text-sm wrap-anywhere text-(--el-text-secondary)">
+              <MarkdownView value={review.summary} />
+            </div>
           ) : null}
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)">
             <span>{t('itemCount', { n: review.itemCount })}</span>
