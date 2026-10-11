@@ -81,8 +81,11 @@ const entrance = (page: Page) => page.getByRole('main').getByTestId('work-item-p
 const overlayOpen = (url: URL) => url.searchParams.has('plan');
 const overlayClosed = (url: URL) => !url.searchParams.has('plan');
 
+// Scoped to the live subtree (MOTIR-8210): To approve streams in behind an in-page `<Suspense>`,
+// and React's hidden `S:0` SSR staging block holds a second copy of the row outside `<main>` while
+// it lands — an unscoped locator then fails strict mode.
 const sessionRow = (page: Page, sessionId: string) =>
-  page.locator(`[data-planning-session="${sessionId}"]`);
+  page.getByRole('main').locator(`[data-planning-session="${sessionId}"]`);
 const resumeEntry = (page: Page, sessionId: string) =>
   page.getByRole('main').getByTestId(`to-resume-session-${sessionId}`);
 
