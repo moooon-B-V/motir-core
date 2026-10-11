@@ -863,6 +863,52 @@ export const githubRepoRepository = {
     return result.count;
   },
 
+  /** Every row for one host repository under `provider`, oldest first — the
+   *  "who already owns this repository?" read a per-organisation claim checks
+   *  before writing (Story MOTIR-8216 · MOTIR-8218). More than one row is
+   *  legitimate (a takeover leaves the shared row beside the customer's), but
+   *  they always share ONE organisation: the `trg_github_repo_one_organization`
+   *  trigger refuses a second. Run under `withSystemContext`, since the owner
+   *  may be another tenant. */
+  async findByHostRepoId(
+    provider: string,
+    repoId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubRepo[]> {
+    return tx.githubRepo.findMany({
+      where: { provider, repoId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /** The repositories ONE organisation has claimed through a (possibly shared)
+   *  installation (MOTIR-8218). On a shared installation this is that
+   *  organisation's subset, never the whole account. */
+  async listByInstallationAndOrg(
+    installationId: string,
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubRepo[]> {
+    return tx.githubRepo.findMany({
+      where: { installationId, organizationId },
+      orderBy: [{ owner: 'asc' }, { name: 'asc' }],
+    });
+  },
+
+  /** Remove ONE organisation's repositories from an installation — the
+   *  per-organisation disconnect (MOTIR-8218). Other organisations' rows on the
+   *  same installation are untouched; their pull-request rows cascade only with
+   *  their own repository. `deleteMany`, so a re-run is a no-op. Returns the
+   *  count. */
+  async deleteByInstallationAndOrg(
+    installationId: string,
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubRepo.deleteMany({ where: { installationId, organizationId } });
+    return result.count;
+  },
+
   /**
    * The DISTINCT workspaces holding at least one repository owned by `owner` —
    * the entry point for any org-wide fan-out over Motir-hosted repos
