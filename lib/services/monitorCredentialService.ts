@@ -1,6 +1,10 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { getMonitorProvider } from '@/lib/monitors';
-import { MonitorGrantNotFoundError, MonitorProviderCallError } from '@/lib/monitors/errors';
+import {
+  MonitorGrantNotFoundError,
+  MonitorProviderCallError,
+  isPermanentRefreshRefusal,
+} from '@/lib/monitors/errors';
 import { MONITOR_REFRESH_TIMEOUT_MS } from '@/lib/monitors/provider';
 import { readOrgSlug } from '@/lib/mappers/monitorMappers';
 import { decryptToken, encryptToken } from '@/lib/monitors/tokenCrypto';
@@ -204,19 +208,49 @@ async function refreshUnderLock(
   );
 }
 
-/** Hand back the credential, or COMMIT the verdict and then throw. */
+/** Hand back the credential, or COMMIT the verdict and then throw.
+ *
+ *  ⚠️ A PERMANENT refusal (MOTIR-8170) is recorded differently from a transient
+ *  one. The provider has said the refresh token will never work again, so the
+ *  grant is marked `refreshRevokedAt`, the poll stops visiting it, and the warn
+ *  line is written ONCE — when the mark is first set — rather than on every
+ *  attempt. Before this, a grant whose token Sentry no longer had was refreshed,
+ *  refused and logged on every five-minute tick until somebody noticed.
+ *  A timeout or a 5xx stays transient: `degraded`, logged, and tried again. */
 async function settle(outcome: RefreshOutcome): Promise<MonitorAccessToken> {
   if (outcome.kind === 'ok') return outcome.credential;
 
-  await withSystemContext((tx) => writeDegraded(outcome.installationRowId, outcome.reason, tx));
-  // ⚠️ THE LOG LINE CARRIES THE REASON AND NO CREDENTIAL. The error path is where
+  // ⚠️ THE LOG LINES CARRY THE REASON AND NO CREDENTIAL. The error path is where
   // a token usually escapes — the happy path has nobody printing anything — so
   // the fields are named explicitly rather than spread from the row.
-  console.warn('[monitorCredentialService] refresh refused; connection marked degraded', {
+  const fields = {
     installationRowId: outcome.installationRowId,
     provider: outcome.provider,
     providerReason: outcome.reason,
-  });
+  };
+
+  if (isPermanentRefreshRefusal(outcome.error)) {
+    const firstRecorded = await withSystemContext(async (tx) => {
+      const marked = await monitorInstallationRepository.markRefreshRevoked(
+        outcome.installationRowId,
+        { healthReason: outcome.reason, at: new Date() },
+        tx,
+      );
+      // Already marked: refresh the verdict's reason and time, and say nothing.
+      if (marked === 0) await writeDegraded(outcome.installationRowId, outcome.reason, tx);
+      return marked > 0;
+    });
+    if (firstRecorded) {
+      console.warn(
+        '[monitorCredentialService] refresh permanently refused; connection must be reconnected, polling stopped',
+        fields,
+      );
+    }
+    throw outcome.error;
+  }
+
+  await withSystemContext((tx) => writeDegraded(outcome.installationRowId, outcome.reason, tx));
+  console.warn('[monitorCredentialService] refresh refused; connection marked degraded', fields);
   throw outcome.error;
 }
 

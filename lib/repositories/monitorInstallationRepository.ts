@@ -54,6 +54,7 @@ const SUMMARY_SELECT = {
   health: true,
   healthReason: true,
   healthCheckedAt: true,
+  refreshRevokedAt: true,
   metadata: true,
   createdAt: true,
   updatedAt: true,
@@ -72,7 +73,10 @@ export const monitorInstallationRepository = {
     return tx.monitorInstallation.upsert({
       where: { provider_installationId: { provider, installationId } },
       create: { provider, installationId, ...rest },
-      update: rest,
+      // A fresh token set is a refresh token nobody has refused yet, so a
+      // re-authorisation clears a recorded permanent refusal (MOTIR-8170) and
+      // the poll visits this grant's bindings again from the next tick.
+      update: { ...rest, refreshRevokedAt: null },
     });
   },
 
@@ -117,13 +121,46 @@ export const monitorInstallationRepository = {
     await tx.$queryRaw`SELECT id FROM monitor_installation WHERE id = ${id} FOR UPDATE`;
   },
 
-  /** Persist a rotated token set, after a refresh under the lock above. */
+  /** Persist a rotated token set, after a refresh under the lock above. A
+   *  refresh the provider just accepted is proof the grant is not permanently
+   *  refused, so the same write clears `refreshRevokedAt` (MOTIR-8170). */
   async updateTokens(
     id: string,
     tokens: { accessTokenEncrypted: string; refreshTokenEncrypted: string; tokenExpiresAt: Date },
     tx: Prisma.TransactionClient,
   ): Promise<MonitorInstallation> {
-    return tx.monitorInstallation.update({ where: { id }, data: tokens });
+    return tx.monitorInstallation.update({
+      where: { id },
+      data: { ...tokens, refreshRevokedAt: null },
+    });
+  },
+
+  /**
+   * Record a PERMANENT refresh refusal — `degraded` with the provider's own
+   * reason, plus `refreshRevokedAt` — but ONLY on a grant that does not already
+   * carry one (MOTIR-8170).
+   *
+   * Conditional in the one statement, so the answer says whether THIS refusal is
+   * the first: `1` when it was recorded now, `0` when the grant was already
+   * marked (or is gone). The service logs the refusal on `1` and stays quiet on
+   * `0`, which is what makes it one warn line per refusal rather than one per
+   * attempt.
+   */
+  async markRefreshRevoked(
+    id: string,
+    refusal: { healthReason: string; at: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.monitorInstallation.updateMany({
+      where: { id, refreshRevokedAt: null },
+      data: {
+        health: 'degraded',
+        healthReason: refusal.healthReason,
+        healthCheckedAt: refusal.at,
+        refreshRevokedAt: refusal.at,
+      },
+    });
+    return result.count;
   },
 
   /** Record a health verdict — the `degraded` write the whole epic exists for, or
