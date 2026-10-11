@@ -105,6 +105,16 @@ describe('failureRecordFrom', () => {
     });
   });
 
+  it('records a plan with NO job as internal with no job and no stop point (MOTIR-8132)', () => {
+    const rec = failureRecordFrom({ ...base, failedJobId: null, walkStop: null });
+    expect(rec).toMatchObject({
+      failedJobId: null,
+      failureReason: 'internal',
+      failureStopPhase: null,
+      failureStopRef: null,
+    });
+  });
+
   it('records an UNKNOWN reasonCode as internal, never as prose', () => {
     const rec = failureRecordFrom({
       ...base,
@@ -154,22 +164,35 @@ describe('the frame readers', () => {
 describe('classifySessionCandidate — the second table', () => {
   const failedJob = { status: 'failed', reachable: true, failure: null } as const;
   const succeededJob = { status: 'succeeded', reachable: true, failure: null } as const;
-  const verdictOf = (job: Parameters<typeof classifyAbandonedCandidate>[0], ageH = 2) =>
-    classifyAbandonedCandidate(job, ageH * 3_600_000);
+  const SILENT_MS = 20 * 60_000;
+  const dead = (job: Parameters<typeof classifyAbandonedCandidate>[0]) => {
+    const verdict = classifyAbandonedCandidate(job, SILENT_MS);
+    if (!verdict.abandoned) throw new Error('fixture is not dead');
+    return verdict;
+  };
 
   it('spares a waiting session on either wait', () => {
-    expect(classifySessionCandidate('failed', verdictOf(failedJob), failedJob)).toEqual({
+    expect(classifySessionCandidate('failed', dead(failedJob))).toEqual({
       action: 'keep',
       reason: 'session_waiting',
     });
-    expect(classifySessionCandidate('awaiting_person', verdictOf(failedJob), failedJob)).toEqual({
+    expect(classifySessionCandidate('awaiting_person', dead(failedJob))).toEqual({
       action: 'keep',
       reason: 'session_waiting',
     });
   });
 
-  it('records a failed job, a vanished job and an aged-out job on an open session', () => {
-    expect(classifySessionCandidate('open', verdictOf(failedJob), failedJob)).toEqual({
+  it('records EVERY dead verdict on an open session — never a decline (MOTIR-8132)', () => {
+    expect(classifySessionCandidate('open', dead(failedJob))).toEqual({
+      action: 'record',
+      reason: 'job_terminal',
+    });
+    expect(classifySessionCandidate('open', dead(succeededJob))).toEqual({
+      action: 'record',
+      reason: 'job_terminal',
+    });
+    const canceled = { status: 'canceled', reachable: true, failure: null } as const;
+    expect(classifySessionCandidate('open', dead(canceled))).toEqual({
       action: 'record',
       reason: 'job_terminal',
     });
@@ -178,27 +201,18 @@ describe('classifySessionCandidate — the second table', () => {
       reachable: false,
       failure: { code: 'MOTIR_AI_JOB_NOT_FOUND', message: 'x' },
     } as const;
-    expect(classifySessionCandidate('open', verdictOf(gone), gone)).toEqual({
+    expect(classifySessionCandidate('open', dead(gone))).toEqual({
       action: 'record',
       reason: 'job_gone',
     });
     const running = { status: 'running', reachable: true, failure: null } as const;
-    expect(classifySessionCandidate('open', verdictOf(running, 30), running)).toEqual({
+    expect(classifySessionCandidate('open', dead(running))).toEqual({
       action: 'record',
-      reason: 'max_age',
+      reason: 'silent',
     });
-  });
-
-  it('declines everything else, exactly as today', () => {
-    expect(classifySessionCandidate('open', verdictOf(succeededJob), succeededJob)).toEqual({
-      action: 'decline',
-    });
-    const canceled = { status: 'canceled', reachable: true, failure: null } as const;
-    expect(classifySessionCandidate('open', verdictOf(canceled), canceled)).toEqual({
-      action: 'decline',
-    });
-    expect(classifySessionCandidate('open', verdictOf(null, 30), null)).toEqual({
-      action: 'decline',
+    expect(classifySessionCandidate('open', dead(null))).toEqual({
+      action: 'record',
+      reason: 'silent',
     });
   });
 });

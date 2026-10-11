@@ -77,10 +77,11 @@ describe('system.auto-plan-cadence-tick — the schedule wiring (MOTIR-920)', ()
     // abandoned-plan sweep, and reconciling before it is what lets a plan freed
     // this hour unpause that project's planning in the SAME hour's tick. That
     // property survived the re-timing and is what is asserted now.
+    //
+    // Since MOTIR-8132 the sweep runs every five minutes, so the order holds
+    // trivially: a pass at :25 always precedes the :30 tick.
     expect(AUTO_PLAN_CADENCE_TICK_CRON).toBe('30 * * * *');
-    expect(Number(AUTO_PLAN_CADENCE_TICK_CRON.split(' ')[0])).toBeGreaterThan(
-      Number(ABANDONED_PLAN_SWEEP_CRON.split(' ')[0]),
-    );
+    expect(ABANDONED_PLAN_SWEEP_CRON).toBe('*/5 * * * *');
   });
 
   it('takes the IDEMPOTENT retry budget — safe only because the sweep re-derives every gate', () => {

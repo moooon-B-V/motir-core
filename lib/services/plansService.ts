@@ -233,6 +233,7 @@ import {
 } from '@/lib/mappers/planMappers';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { buildScope } from '@/lib/planChange/scope';
 import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
@@ -285,6 +286,41 @@ const BLOCKED_STATUS_KEY = 'blocked';
 // `MAX_PAGE_LIMIT` is untouched: a caller may still ask for more.
 const DEFAULT_PAGE_LIMIT = 10;
 const MAX_PAGE_LIMIT = 100;
+
+/**
+ * STAMP A PLAN'S ACTIVITY, AND LET A RETURNING PRODUCER RESUME (MOTIR-8132) — the one
+ * door every content write and step signal stamps `lastActivityAt` through, in the
+ * write's own transaction.
+ *
+ * The abandoned-plan sweep RECORDS a failure on the session of a `generating` plan that
+ * went silent past `PLAN_STALLED_AFTER_MS`, and leaves the plan, its proposals and its
+ * held cards exactly where they were. So a producer that comes back — a hosted job
+ * that was only slow, an MCP author resuming a skeleton — must be able to pick the
+ * plan up by WRITING: when the plan is `generating` and the latest of its session, and
+ * that session is failed-waiting, the record is cleared here, beside the stamp. The
+ * plan then reads `working` / `writing` again with everything it held.
+ *
+ * Lock order is the sweep's (`recordFailureWithin`): the write already holds the plan
+ * row, and the clear takes the session row after it. A write the sweep raced either
+ * moved the stamp before the sweep's compare-and-set (nothing recorded) or lands after
+ * the record and clears it here.
+ */
+async function stampPlanActivity(
+  plan: { id: string; sessionId: string | null; status: string; workspaceId: string },
+  at: Date,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await planRepository.touchActivity(plan.id, at, tx);
+  if (plan.status !== 'generating' || !plan.sessionId) return;
+  const session = await planChangeSessionRepository.findWaitingState(
+    plan.sessionId,
+    plan.workspaceId,
+    tx,
+  );
+  if (!session || sessionWaitingState(session) !== 'failed') return;
+  if ((await planRepository.findLatestIdBySession(plan.sessionId, tx)) !== plan.id) return;
+  await planChangeSessionRepository.clearFailure(plan.sessionId, tx);
+}
 
 function clampLimit(limit: number | undefined): number {
   if (limit == null || !Number.isFinite(limit)) return DEFAULT_PAGE_LIMIT;
@@ -4321,7 +4357,7 @@ async function editAddProposal(
         tx,
       );
       // The plan's activity stamp (MOTIR-7822), beside the trail row it mirrors.
-      await planRepository.touchActivity(planId, new Date(), tx);
+      await stampPlanActivity(fresh, new Date(), tx);
       const allItems = await planItemRepository.findByPlan(planId, tx);
       return { row: fresh, items: allItems };
     },
@@ -4835,7 +4871,7 @@ async function withGeneratingPlanStep<T>(
       }
       const now = new Date();
       const out = await write(fresh, tx, now);
-      await planRepository.touchActivity(planId, now, tx);
+      await stampPlanActivity(fresh, now, tx);
       return out;
     },
   );
@@ -5372,7 +5408,7 @@ export const plansService = {
           }
           // The plan's activity stamp (MOTIR-7822) — EVERY append, an empty one
           // included: an append is a planner alive and writing.
-          await planRepository.touchActivity(planId, new Date(), tx);
+          await stampPlanActivity(fresh, new Date(), tx);
           const allItems = await planItemRepository.findByPlan(planId, tx);
           return { row: fresh, items: allItems, appendedItemIds };
         },
@@ -6108,7 +6144,7 @@ export const plansService = {
           tx,
         );
         // The plan's activity stamp (MOTIR-7822).
-        await planRepository.touchActivity(planId, new Date(), tx);
+        await stampPlanActivity(fresh, new Date(), tx);
         return { row: updated, items: await planItemRepository.findByPlan(planId, tx) };
       },
     );
@@ -6618,7 +6654,7 @@ export const plansService = {
           tx,
         );
         // The plan's activity stamp (MOTIR-7822).
-        await planRepository.touchActivity(planId, new Date(), tx);
+        await stampPlanActivity(fresh, new Date(), tx);
         return { row: fresh, items: await planItemRepository.findByPlan(planId, tx) };
       },
     );
@@ -6719,7 +6755,7 @@ export const plansService = {
           tx,
         );
         // The plan's activity stamp (MOTIR-7822).
-        await planRepository.touchActivity(planId, new Date(), tx);
+        await stampPlanActivity(fresh, new Date(), tx);
 
         const remaining = await planItemRepository.findByPlan(planId, tx);
 

@@ -509,90 +509,36 @@ export const planRepository = {
   },
 
   /**
-   * The ABANDONED-PLAN candidates, across workspaces — the discovery read behind
-   * the reconciling sweep (MOTIR-3064; widened to PARTIAL plans by MOTIR-3189).
-   * Returns `generating` plans that have a PRODUCER and are older than
-   * `olderThan`, whatever they hold; the sweep then asks motir-ai what became of
-   * each one's job and terminates only the ones whose producer is provably gone.
+   * Every `generating` plan, STALEST FIRST (`lastActivityAt` ascending, `id` breaking
+   * a tie) — the abandoned-plan sweep's candidates (MOTIR-8132). Cross-workspace, so
+   * it runs under `withSystemContext` against the plan policy's system-read arm.
    *
-   * THIS IS THE OTHER HALF OF {@link findUndecidedByProject}'s exclusion, and the
-   * two are deliberately disjoint. MOTIR-3051 excluded the orphan with NO
-   * producer, because that row can be judged from itself. This one carries a
-   * `sourceJobId`, so it is indistinguishable BY THE ROW from a generation that
-   * is going perfectly well and simply has not appended yet — the answer is not
-   * in the plan table at all, it is in whether the job behind it is still alive.
-   * So the gate cannot widen to cover it, and a sweep that ASKS is the shape
-   * (`docs/decisions/agent-authored-plans.md` AMENDMENT 2).
+   * There is no age predicate any more: the sweep judges every candidate by its
+   * silence (`now - lastActivityAt`) and a job's fast-path answer, and a plan inside
+   * the threshold is still selected because a job that already ENDED is dead at once.
+   * Stalest first means a backlog bigger than `limit` drains the plans most likely to
+   * be dead before the ones still writing. The `(status, createdAt)` index serves the
+   * `status = 'generating'` filter, and the generating set is small.
    *
-   * ⚠️ `olderThan` IS A CORRECTNESS ARGUMENT, NOT A PERFORMANCE ONE. Between
-   * `submitExpand`'s `createPlan` and motir-ai's first append a healthy plan
-   * holds zero items with a live job — the exact shape this read selects. The age
-   * bound is what keeps the sweep out of that window entirely, so it can never
-   * race a submit it would otherwise be asking about milliseconds after it
-   * happened.
-   *
-   * ⚠️ IT IS NO LONGER EMPTY-ONLY (MOTIR-3189), AND THE EXCLUSION DID NOT FALL
-   * FOR BEING TOO CAUTIOUS. MOTIR-3064 AC 5 read: *"a PARTIAL plan is a real
-   * proposal a person can read and decline — the release valve works there, so
-   * nothing here may touch it."* Read, yes. Decline, no: `declinePlan` and
-   * `approvePlan` both re-read under their row lock and refused anything but
-   * `planned`, so there was no path out of `generating` for anyone — not the
-   * sweep, not a person, not a token. The exclusion protected a human decision
-   * the status guard made impossible, and stranded every partial plan
-   * permanently, which is the same harm MOTIR-3064 existed to remove:
-   * `findUndecidedByProject` reads `generating` as UNDECIDED whatever the plan
-   * holds. The valve is real now — `declinePlan` accepts `generating` and
-   * records `discarded` — and this arm covers the plans nobody is coming back
-   * to look at.
-   *
-   * ⚠️ SO THE COUNT IS SELECTED RATHER THAN ASSERTED, AND THE WRITE COMPARES IT.
-   * `items: { none: {} }` was doing two jobs — the filter here, and the write's
-   * did-it-move guard. With the filter gone the guard cannot stay a presence
-   * test, so the candidate carries `_count.items` and the write refuses on a
-   * MISMATCH. `row_moved` then keeps meaning exactly what it always meant (the
-   * row changed between the ask and the act) while a plan that was ALREADY
-   * partial at discovery goes through.
-   *
-   * Cross-workspace, so it runs under `withSystemContext` against the plan
-   * policy's `FOR SELECT` system arm; every write the sweep then makes re-binds
-   * to that row's own workspace. **`plan_item` still needs its arm, and the
-   * direction has REVERSED into the safe one.** Under `items: { none: {} }` an
-   * RLS-hidden proposal made a correlated `NOT EXISTS` vacuously true and
-   * WIDENED the scan onto exactly the rows the exclusion protected. Under
-   * `_count` a hidden proposal reads the count LOW, the write re-counts under
-   * the plan's own workspace context, the two disagree, and the verdict is
-   * `row_moved` — nothing is terminated. A blind spot here now costs a pass
-   * rather than a plan. The arm (MOTIR-3064's migration) stays: the scan reads
-   * `plan_item` either way, and a permanently-`row_moved` sweep is a broken one.
-   *
-   * Bounded by `take` and ordered oldest-first, so a backlog drains over
-   * successive passes rather than in one long transaction.
+   * The candidate carries `_count.items` (MOTIR-3189) so the sweep's write can refuse
+   * on a MISMATCH — a proposal that arrived during the ask. It is also what makes an
+   * RLS blind spot in this cross-workspace scan fail SAFE: a hidden proposal reads the
+   * count low here, the write re-counts under the plan's own workspace, the two
+   * disagree, and nothing is terminated.
    */
   async listAbandonedCandidates(
-    olderThan: Date,
     limit: number,
     tx: Prisma.TransactionClient,
   ): Promise<AbandonedPlanCandidate[]> {
     // ⚠️ NO `sourceJobId` PREDICATE (MOTIR-3236). This clause used to read
-    // `sourceJobId: { not: null }`, and the cast that followed stated that
-    // narrowing in the type system. Both are gone, and the reason is a shape
-    // rather than one more case: the predicate had become a WHITELIST of the
-    // plan shapes the sweep knew how to judge, so each newly-recognised shape
-    // cost a schema-adjacent query edit (MOTIR-3051, MOTIR-3064, MOTIR-3189, and
-    // then the job-less plan this one is about — four defects, one shape).
-    //
-    // So SELECTION is now the cheap, total question — is it `generating` and
-    // past the grace? — and the JUDGEMENT is `classifyAbandonedCandidate`, a
-    // pure decision table with a unit test per arm. `sourceJobId` is an INPUT to
-    // that table now, not a condition of being seen by it; the next unrecognised
-    // shape is a new arm, not a new migration-adjacent predicate.
+    // `sourceJobId: { not: null }`: the predicate had become a WHITELIST of the plan
+    // shapes the sweep knew how to judge. SELECTION is the cheap, total question —
+    // is it `generating`? — and the JUDGEMENT is `classifyAbandonedCandidate`, a pure
+    // decision table with a unit test per arm.
     return tx.plan.findMany({
-      where: {
-        status: 'generating',
-        createdAt: { lte: olderThan },
-      },
+      where: { status: 'generating' },
       include: { _count: { select: { items: true } } },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ lastActivityAt: 'asc' }, { id: 'asc' }],
       take: limit,
     });
   },

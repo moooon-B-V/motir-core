@@ -262,7 +262,11 @@ const DOORS: Door[] = [
     run: async ({ planId }) => {
       await adminDb.plan.update({
         where: { id: planId },
-        data: { createdAt: new Date(Date.now() - 72 * HOUR) },
+        // Silent as well as old: the sweep judges `lastActivityAt` (MOTIR-8132).
+        data: {
+          createdAt: new Date(Date.now() - 72 * HOUR),
+          lastActivityAt: new Date(Date.now() - 72 * HOUR),
+        },
       });
       const out = await abandonedPlanService.reconcileAbandoned();
       return out;

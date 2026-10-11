@@ -128,6 +128,8 @@ The other nineteen jobs keep their schedules:
 
 - **5 hourly:** `abandoned-plan-sweep`, `auto-plan-cadence-tick`, `ci-actions-gate-sweep`,
   `filter-subscription-tick`, `organization-erasure-sweep`;
+  (`abandoned-plan-sweep` later joined the `*/5` set, MOTIR-8132, 2026-10-11, once it began
+  judging a plan by its silence);
 - **12 daily**, **1 weekly** (`public-follow-digest`) and **1 monthly** (`ci-minutes-reconcile`).
 
 Their period is what they are for: a daily retention sweep is daily because a day is the unit its

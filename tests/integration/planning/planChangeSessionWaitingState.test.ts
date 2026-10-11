@@ -170,11 +170,19 @@ describe('the CHECK constraints refuse a raw write the invariants forbid', () =>
     );
   });
 
-  it('a failure without its job (failure_whole)', async () => {
+  it('a job without its failure (failure_whole)', async () => {
     const id = await openSession();
 
-    expect(await refused(id, `"failed_at" = now(), "failure_reason" = 'internal'`)).toContain(
+    expect(await refused(id, `"failed_job_id" = 'j'`)).toContain(
       'plan_change_session_failure_whole',
+    );
+  });
+
+  it('a failure with NO job is accepted — a silent job-less plan (MOTIR-8132)', async () => {
+    const id = await openSession();
+
+    expect(await refused(id, `"failed_at" = now(), "failure_reason" = 'internal'`)).toBe(
+      'NOT REFUSED',
     );
   });
 
