@@ -4,6 +4,7 @@ import type {
   WorkItemTodoDto,
   WorkItemTodoListDto,
 } from '@/lib/dto/workItemTodos';
+import { readRecordedLanguage } from '@/lib/workItems/contentLanguage';
 
 /**
  * The row shape the mappers need: the to-do plus the (optional) user who
@@ -34,6 +35,9 @@ export function toWorkItemTodoDto(row: WorkItemTodoRow): WorkItemTodoDto {
     // spellings of "no instructions", because the client tests this field to
     // decide whether to draw the disclosure at all.
     notesMd: row.notesMd === null || row.notesMd === '' ? null : row.notesMd,
+    // Recorded languages (MOTIR-8096): NULL stays null, never `en`.
+    textLanguage: readRecordedLanguage(row.textLanguage),
+    notesLanguage: readRecordedLanguage(row.notesLanguage),
     // Explicitly normalised: a row with no command is `null` on the wire, never
     // `''`, because `commandText === null` is the client's test for "is this a
     // command row?" and an empty string would answer it wrongly.

@@ -137,6 +137,27 @@ export const organizationRepository = {
   },
 
   /**
+   * The content language of the organisation that owns `workspaceId` (Story
+   * MOTIR-7731 · MOTIR-8096) — the language a work-text write records when its
+   * caller names none. Read inside the write's own transaction, under the
+   * workspace context it already holds, so the recorded language and the write
+   * cannot disagree. NULL when the row is not visible.
+   */
+  async findContentLanguageByWorkspaceId(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const rows = await tx.$queryRaw<Array<{ contentLanguage: string }>>`
+      SELECT o."content_language" AS "contentLanguage"
+      FROM "workspace" w
+      JOIN "organization" o ON o."id" = w."organizationId"
+      WHERE w."id" = ${workspaceId}
+      LIMIT 1
+    `;
+    return rows[0]?.contentLanguage ?? null;
+  },
+
+  /**
    * Of the organisation ids given, which still have a row — the liveness read
    * motir-ai's code-graph reconciler subtracts from its own bucket enumeration
    * (MOTIR-4647). Answers about the ids it is GIVEN and never enumerates, so a

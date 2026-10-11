@@ -72,6 +72,10 @@ const STATUS_WRITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'not-a-status-write',
     "writes `planFolderFiling`'s placement patch only — `folderId`, `parentId: null` and `position`; reported because the patch is a variable the scanner cannot follow, not because a status is in it",
   ],
+  'lib/services/workItemsService.ts#updateWorkItem#workItemRepository.update': [
+    'not-a-status-write',
+    "the language-only write (MOTIR-8096): when a patch re-states unchanged text with an explicit language, `recordEditedLanguages`' result — `titleLanguage` / `descriptionLanguage` / `explanationLanguage` only — is stored on its own; reported because that patch is a function result the scanner cannot follow. The edit's main `update` (which can carry no status either) is followed and not reported",
+  ],
   'lib/repositories/workItemRepository.ts#update#workItem.update': [
     'repository-leaf',
     'the door itself — an opaque `patch` parameter; lifecycle belongs to the service layer, and every caller of it is adjudicated above',
