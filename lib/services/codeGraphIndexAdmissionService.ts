@@ -106,7 +106,11 @@ const SLOT_TTL_MARGIN_SECONDS = 300;
 /** Why an index container was not admitted. Every one of these means WAIT — the
  *  caller queues and asks again. None of them means "drop this index". */
 export type IndexAdmissionDeferralReason =
-  /** The organisation has no paid AI plan, or it could not be read (MOTIR-6909). */
+  /** The organisation has no paid AI plan, or it could not be read (MOTIR-6909).
+   *  ⚠️ `ai_plan_required` is the ONE reason here that does not mean wait
+   *  (MOTIR-8235): no container finishing changes an organisation's plan, so
+   *  `waitForAdmission` returns it on the first refusal and the index job
+   *  records it as a pause. `plan_unknown` is a transient and waits. */
   | 'ai_plan_required'
   | 'plan_unknown'
   /** ANOTHER RUN is already indexing this (repo × project) — MOTIR-2160. Not a

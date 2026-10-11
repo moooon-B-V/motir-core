@@ -1,4 +1,5 @@
 import { fetchCodeGraphRunVerdict, type CodeGraphRunVerdict } from '@/lib/ai/motirAiClient';
+import { AI_PLAN_INDEX_PAUSE_REASON } from '@/lib/ciFleet/indexAllowance';
 import { indexFleetConfig } from '@/lib/orchestrator';
 import type {
   IndexAdvanceOutcome,
@@ -311,13 +312,24 @@ export async function runIndexFleetSteps(
   // an index that ran must never fail because a field write did not.
   const headAtStart = await claimIndexingRepo(ctx, target.repoRef);
 
-  const { coreTimings, indexModes } = await indexEveryProject(
-    ctx,
-    services,
-    input,
-    target,
-    dispatchId,
-  );
+  const dispatched = await indexEveryProject(ctx, services, input, target, dispatchId);
+
+  // ⚠️ A PLAN REFUSAL IS A RECORDED PAUSE, NOT A FAILED RUN (MOTIR-8235). The
+  // admission gate answered `ai_plan_required`: the organisation has no paid AI
+  // plan, and nothing about that changes while this run waits. It used to wait
+  // sixty attempts and then throw `IndexDispatchFailedError`, which the monitor
+  // filed as a production error once per repository. Nothing was booted and
+  // nothing was claimed, so this is the same shape as the allowance stop above:
+  // the reason goes on the repository row (which also releases the indexing
+  // claim taken just above), the run SUCCEEDS as a no-op carrying it, and no
+  // `output.repoRef` is written, so §6's "this repo is indexed" claim is never
+  // made. The catch-up sweep (MOTIR-5290) re-asks paused repositories, so an
+  // organisation that takes a plan resumes without anyone re-dispatching it.
+  if ('planRefused' in dispatched) {
+    await pauseIndexingRepo(target.repoRef, AI_PLAN_INDEX_PAUSE_REASON);
+    return { indexed: false, reason: AI_PLAN_INDEX_PAUSE_REASON };
+  }
+  const { coreTimings, indexModes } = dispatched;
 
   const result = await finishIndexRun(ctx, services, input, target, coreTimings, indexModes);
   await settleIndexingRepo(target.repoRef, headAtStart);
@@ -358,7 +370,11 @@ async function indexEveryProject(
   target: Extract<IndexTarget, { indexed: true }>,
   /** See its definition in {@link runIndexFleetSteps} — the cross-pass identity. */
   dispatchId: string,
-): Promise<{ coreTimings: IndexCoreTimings[]; indexModes: IndexModeRecord[] }> {
+): Promise<
+  | { coreTimings: IndexCoreTimings[]; indexModes: IndexModeRecord[] }
+  /** The organisation has no paid AI plan (MOTIR-8235) — see the caller. */
+  | { planRefused: true }
+> {
   const steps = stepSeam(ctx);
 
   // ⚠️ RE-DERIVED PER PASS, NEVER ACCUMULATED ACROSS THEM (MOTIR-4413). This
@@ -430,6 +446,11 @@ async function indexEveryProject(
     // whether the repo may be claimed. Every non-`settled` outcome (a deferred
     // admission, a refused provision, an unpullable image, a failed teardown)
     // reaches the same throw carrying its own discriminator.
+    // ⚠️ EXCEPT A PLAN REFUSAL, which booted nothing and is not a failure of
+    // this run (MOTIR-8235): the caller records it as a pause.
+    if (outcome.outcome === 'admission_deferred' && outcome.reason === 'ai_plan_required') {
+      return { planRefused: true };
+    }
     if (outcome.outcome !== 'settled' || !outcome.verdict.indexed) {
       // ⚠️ A SIZE REFUSAL IS RECORDED ON THE REPOSITORY BEFORE THE RUN FAILS
       // (MOTIR-7130), so `/code` can say why this repository stopped updating —
