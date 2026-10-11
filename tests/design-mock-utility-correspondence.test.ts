@@ -852,6 +852,8 @@ export const UTILITY_PROPERTIES: Record<string, readonly string[]> = {
   p: ['padding'],
   pl: ['padding-left'],
   pr: ['padding-right'],
+  // `pt` arrived with MOTIR-8091's confirm dialog, the `Modal.Footer` rule.
+  pt: ['padding-top'],
   px: ['padding-inline', 'padding-left', 'padding-right'],
   py: ['padding-block', 'padding-bottom', 'padding-top'],
   ring: ['--tw-ring-color'],

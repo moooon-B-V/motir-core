@@ -3,6 +3,7 @@ import { defaultLocale, isLocale } from '@/lib/i18n/locales';
 import type { OrgMembershipWithUser } from '@/lib/repositories/organizationMembershipRepository';
 import type {
   ContentLanguageChangeDTO,
+  ContentLanguageLatestChangeDTO,
   CurrentOrganizationDTO,
   OrganizationDTO,
   OrgMemberDTO,
@@ -32,6 +33,18 @@ export function toContentLanguageChangeDTO(
     fromLanguage: row.fromLanguage,
     toLanguage: row.toLanguage,
     changedAt: row.changedAt.toISOString(),
+  };
+}
+
+export function toContentLanguageLatestChangeDTO(
+  row: OrganizationContentLanguageChange,
+  changedBy: { name: string | null; email: string } | null,
+): ContentLanguageLatestChangeDTO {
+  return {
+    fromLanguage: row.fromLanguage,
+    toLanguage: row.toLanguage,
+    changedAt: row.changedAt.toISOString(),
+    changedByLabel: changedBy ? changedBy.name?.trim() || changedBy.email : null,
   };
 }
 

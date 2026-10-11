@@ -3424,6 +3424,11 @@
       "displayLanguage": {
         "label": "表示言語",
         "desc": "メニュー、ラベル、日付がこの言語で表示されます。"
+      },
+      "contentLanguage": {
+        "label": "コンテンツ言語 · {org}",
+        "desc": "Motir のプランナーとエージェントが {org} の新しい作業を書く言語です。組織のオーナーと管理者が設定します。あなたの表示言語は変わりません。",
+        "changeLink": "組織の設定で変更"
       }
     },
     "profile": {
@@ -5407,6 +5412,15 @@
       "save": "変更を保存",
       "saved": "組織を更新しました",
       "saveError": "変更を保存できませんでした",
+      "contentLanguageLabel": "コンテンツ言語",
+      "contentLanguageHelp": "Motir のプランナーとエージェントがこの組織の新しい作業を書く言語です。Motir 自体のメニューの表示言語は変わりません。それは各自の表示言語です。",
+      "contentLanguageChangedBy": "{person} が {date} に {from} から変更",
+      "contentLanguageFormerMember": "退出したメンバー",
+      "contentLanguageConfirmTitle": "コンテンツ言語を変更しますか？",
+      "contentLanguageConfirmBody": "今後、Motir のプランナーとエージェントは {org} の新しい作業を<b>{from}</b>ではなく<b>{to}</b>で書きます。",
+      "contentLanguageConfirmKeeps": "既存の作業はそのテキストと言語を保持します。翻訳や書き換えは行われず、新しく書かれるものだけが変わります。",
+      "contentLanguageConfirmRecorded": "この変更はあなたの名前と今日の日付とともに記録されます。",
+      "contentLanguageConfirmCta": "{to}に変更",
       "workspacesSummary": "{count, plural, other {# 個のワークスペース}}",
       "membersSummary": "{count, plural, other {# 人のメンバー}}",
       "billing": "請求と使用量",

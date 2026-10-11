@@ -24,6 +24,18 @@ export interface ContentLanguageChangeDTO {
 }
 
 /**
+ * The latest change of an organisation's content language, as the General
+ * card's attribution line shows it (MOTIR-8095). `changedByLabel` is the
+ * person's display name, else their email; null when that user no longer exists.
+ */
+export interface ContentLanguageLatestChangeDTO {
+  fromLanguage: string;
+  toLanguage: string;
+  changedAt: string;
+  changedByLabel: string | null;
+}
+
+/**
  * What the member-side SUSPENDED notice renders (`/organization-suspended`,
  * MOTIR-752; design `platform-admin` AMENDMENT 2026-10-03 Panel 3d).
  * `organization` is null unless the reader is a member of that organization AND

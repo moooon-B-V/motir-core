@@ -3424,6 +3424,11 @@
       "displayLanguage": {
         "label": "Język wyświetlania",
         "desc": "Menu, etykiety i daty są wyświetlane w tym języku."
+      },
+      "contentLanguage": {
+        "label": "Język treści · {org}",
+        "desc": "Język, w którym planista i agenci Motir piszą nową pracę dla {org}. Ustawiają go właściciele i administratorzy organizacji; nie zmienia on języka wyświetlania.",
+        "changeLink": "Zmień w ustawieniach organizacji"
       }
     },
     "profile": {
@@ -5407,6 +5412,15 @@
       "save": "Zapisz zmiany",
       "saved": "Organizacja zaktualizowana",
       "saveError": "Nie udało się zapisać zmian",
+      "contentLanguageLabel": "Język treści",
+      "contentLanguageHelp": "Język, w którym planista i agenci Motir piszą nową pracę dla tej organizacji. Nie zmienia języka menu Motir — to jest język wyświetlania każdej osoby.",
+      "contentLanguageChangedBy": "Zmieniono z {from}: {person}, {date}",
+      "contentLanguageFormerMember": "były członek",
+      "contentLanguageConfirmTitle": "Zmienić język treści?",
+      "contentLanguageConfirmBody": "Od teraz planista i agenci Motir będą pisać nową pracę dla {org} w języku <b>{to}</b> zamiast <b>{from}</b>.",
+      "contentLanguageConfirmKeeps": "Istniejąca praca zachowuje swój tekst i język. Nic nie jest tłumaczone ani przepisywane — zmienia się tylko nowo pisana treść.",
+      "contentLanguageConfirmRecorded": "Zmiana zostanie zapisana z Twoim imieniem i dzisiejszą datą.",
+      "contentLanguageConfirmCta": "Zmień na {to}",
       "workspacesSummary": "{count, plural, one {# obszar roboczy} few {# obszary robocze} many {# obszarów roboczych} other {# obszaru roboczego}}",
       "membersSummary": "{count, plural, one {# członek} few {# członków} many {# członków} other {# członka}}",
       "billing": "Rozliczenia i użycie",

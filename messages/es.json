@@ -3424,6 +3424,11 @@
       "displayLanguage": {
         "label": "Idioma de la interfaz",
         "desc": "Los menús, las etiquetas y las fechas usan este idioma."
+      },
+      "contentLanguage": {
+        "label": "Idioma del contenido · {org}",
+        "desc": "El idioma en que el planificador y los agentes de Motir escriben el trabajo nuevo de {org}. Lo eligen los propietarios y administradores de la organización; no cambia tu idioma de la interfaz.",
+        "changeLink": "Cambiar en Configuración de la organización"
       }
     },
     "profile": {
@@ -5407,6 +5412,15 @@
       "save": "Guardar cambios",
       "saved": "Organización actualizada",
       "saveError": "No se pudieron guardar los cambios",
+      "contentLanguageLabel": "Idioma del contenido",
+      "contentLanguageHelp": "El idioma en que el planificador y los agentes de Motir escriben el trabajo nuevo de esta organización. No cambia el idioma en que se muestran los menús de Motir: ese es el idioma de la interfaz de cada persona.",
+      "contentLanguageChangedBy": "Cambiado de {from} por {person} el {date}",
+      "contentLanguageFormerMember": "un antiguo miembro",
+      "contentLanguageConfirmTitle": "¿Cambiar el idioma del contenido?",
+      "contentLanguageConfirmBody": "A partir de ahora, el planificador y los agentes de Motir escribirán el trabajo nuevo de {org} en <b>{to}</b> en lugar de <b>{from}</b>.",
+      "contentLanguageConfirmKeeps": "El trabajo que ya existe conserva su texto y su idioma. No se traduce ni se reescribe nada: solo cambia lo que se escriba a partir de ahora.",
+      "contentLanguageConfirmRecorded": "El cambio se registra con tu nombre y la fecha de hoy.",
+      "contentLanguageConfirmCta": "Cambiar a {to}",
       "workspacesSummary": "{count, plural, one {# espacio de trabajo} other {# espacios de trabajo}}",
       "membersSummary": "{count, plural, one {# miembro} other {# miembros}}",
       "billing": "Facturación y uso",

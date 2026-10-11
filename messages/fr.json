@@ -3424,6 +3424,11 @@
       "displayLanguage": {
         "label": "Langue d’affichage",
         "desc": "Les menus, libellés et dates utilisent cette langue."
+      },
+      "contentLanguage": {
+        "label": "Langue du contenu · {org}",
+        "desc": "La langue dans laquelle le planificateur et les agents de Motir rédigent le nouveau travail de {org}. Elle est définie par les propriétaires et administrateurs de l’organisation et ne change pas votre langue d’affichage.",
+        "changeLink": "Modifier dans les paramètres de l’organisation"
       }
     },
     "profile": {
@@ -5407,6 +5412,15 @@
       "save": "Enregistrer les modifications",
       "saved": "Organisation mise à jour",
       "saveError": "Impossible d’enregistrer les modifications",
+      "contentLanguageLabel": "Langue du contenu",
+      "contentLanguageHelp": "La langue dans laquelle le planificateur et les agents de Motir rédigent le nouveau travail de cette organisation. Elle ne change pas la langue des menus de Motir, qui est la langue d’affichage de chacun.",
+      "contentLanguageChangedBy": "Modifiée depuis {from} par {person} le {date}",
+      "contentLanguageFormerMember": "un ancien membre",
+      "contentLanguageConfirmTitle": "Changer la langue du contenu ?",
+      "contentLanguageConfirmBody": "Désormais, le planificateur et les agents de Motir rédigeront le nouveau travail de {org} en <b>{to}</b> au lieu de <b>{from}</b>.",
+      "contentLanguageConfirmKeeps": "Le travail existant conserve son texte et sa langue. Rien n’est traduit ni réécrit : seuls les nouveaux écrits changent.",
+      "contentLanguageConfirmRecorded": "La modification est enregistrée avec votre nom et la date du jour.",
+      "contentLanguageConfirmCta": "Passer en {to}",
       "workspacesSummary": "{count, plural, one {# espace de travail} other {# espaces de travail}}",
       "membersSummary": "{count, plural, one {# membre} other {# membres}}",
       "billing": "Facturation et utilisation",

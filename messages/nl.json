@@ -3424,6 +3424,11 @@
       "displayLanguage": {
         "label": "Weergavetaal",
         "desc": "Menu's, labels en datums gebruiken deze taal."
+      },
+      "contentLanguage": {
+        "label": "Inhoudstaal · {org}",
+        "desc": "De taal waarin de planner en agents van Motir nieuw werk voor {org} schrijven. Ingesteld door de eigenaren en beheerders van de organisatie; je weergavetaal verandert er niet door.",
+        "changeLink": "Wijzigen in Organisatie-instellingen"
       }
     },
     "profile": {
@@ -5407,6 +5412,15 @@
       "save": "Wijzigingen opslaan",
       "saved": "Organisatie bijgewerkt",
       "saveError": "Wijzigingen konden niet worden opgeslagen",
+      "contentLanguageLabel": "Inhoudstaal",
+      "contentLanguageHelp": "De taal waarin de planner en agents van Motir nieuw werk voor deze organisatie schrijven. De taal van de menu’s van Motir verandert er niet door: dat is ieders eigen weergavetaal.",
+      "contentLanguageChangedBy": "Gewijzigd van {from} door {person} op {date}",
+      "contentLanguageFormerMember": "een voormalig lid",
+      "contentLanguageConfirmTitle": "Inhoudstaal wijzigen?",
+      "contentLanguageConfirmBody": "Vanaf nu schrijven de planner en agents van Motir nieuw werk voor {org} in het <b>{to}</b> in plaats van het <b>{from}</b>.",
+      "contentLanguageConfirmKeeps": "Bestaand werk behoudt zijn tekst en taal. Er wordt niets vertaald of herschreven: alleen nieuw schrijfwerk verandert.",
+      "contentLanguageConfirmRecorded": "De wijziging wordt vastgelegd met je naam en de datum van vandaag.",
+      "contentLanguageConfirmCta": "Wijzigen naar {to}",
       "workspacesSummary": "{count, plural, one {# werkruimte} other {# werkruimtes}}",
       "membersSummary": "{count, plural, one {# lid} other {# leden}}",
       "billing": "Facturering en gebruik",

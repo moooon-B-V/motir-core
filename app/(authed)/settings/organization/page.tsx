@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationDeletionService } from '@/lib/services/organizationDeletionService';
+import { organizationContentLanguageService } from '@/lib/services/organizationContentLanguageService';
 import {
   isWorkspaceTierRevealed,
   preferredOrganizationId,
@@ -14,6 +15,7 @@ import {
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { orgCan } from '@/lib/organizations/capabilities';
+import type { Locale } from '@/lib/i18n/locales';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
@@ -175,6 +177,7 @@ export default async function OrganizationSettingsPage({
         <OrgPaneBody
           orgId={org.id}
           orgName={org.name}
+          contentLanguage={org.contentLanguage}
           role={current.role}
           isAdmin={isAdmin}
           canTransfer={canTransfer}
@@ -204,6 +207,7 @@ export default async function OrganizationSettingsPage({
 async function OrgPaneBody({
   orgId,
   orgName,
+  contentLanguage,
   role,
   isAdmin,
   canTransfer,
@@ -220,6 +224,7 @@ async function OrgPaneBody({
 }: {
   orgId: string;
   orgName: string;
+  contentLanguage: Locale;
   role: React.ComponentProps<typeof OrgGeneralCard>['role'];
   isAdmin: boolean;
   canTransfer: boolean;
@@ -239,7 +244,7 @@ async function OrgPaneBody({
   // page is the fold-in alone, and neither read is theirs to make.
   // `allSettledOrThrow`, never a bare `Promise.all`: each arm opens a
   // transaction (MOTIR-3066).
-  const [members, workspacesPage] = isAdmin
+  const [members, workspacesPage, latestContentLanguageChange] = isAdmin
     ? await allSettledOrThrow([
         organizationsService.listMembers({ organizationId: orgId, actorUserId, limit: 1 }),
         canManageWorkspaces
@@ -249,8 +254,13 @@ async function OrgPaneBody({
               limit: ORG_WORKSPACES_PAGE_SIZE,
             })
           : Promise.resolve(null),
+        // The Content language row's attribution line (MOTIR-8095).
+        organizationContentLanguageService.getLatestContentLanguageChange({
+          organizationId: orgId,
+          actorUserId,
+        }),
       ])
-    : [null, null];
+    : [null, null, null];
 
   // The Owner's Danger zone reads (Story MOTIR-6306 · MOTIR-6402): the open
   // deletion request, and — only while there is none — the dialog's step-1
@@ -278,6 +288,9 @@ async function OrgPaneBody({
             role={role}
             workspaceCount={orgWorkspaceCount}
             memberCount={members.total}
+            contentLanguage={contentLanguage}
+            canEdit={isAdmin}
+            latestContentLanguageChange={latestContentLanguageChange}
           />
 
           {/* The org-tier home for creating and removing workspaces (MOTIR-6312 ·

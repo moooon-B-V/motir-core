@@ -32,6 +32,17 @@ export const organizationContentLanguageChangeRepository = {
     });
   },
 
+  /** The newest change, or null when the language was never changed. */
+  async findLatestByOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<OrganizationContentLanguageChange | null> {
+    return tx.organizationContentLanguageChange.findFirst({
+      where: { organizationId },
+      orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
   /**
    * Every row of the organisation — the erasure tombstone's step. The org row
    * survives erasure (it carries the billing record), so its cascade never

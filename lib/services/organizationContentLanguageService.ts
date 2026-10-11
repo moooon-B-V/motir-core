@@ -1,11 +1,20 @@
-import type { ContentLanguageChangeDTO, OrganizationDTO } from '@/lib/dto/organizations';
+import type {
+  ContentLanguageChangeDTO,
+  ContentLanguageLatestChangeDTO,
+  OrganizationDTO,
+} from '@/lib/dto/organizations';
 import { isLocale } from '@/lib/i18n/locales';
-import { toContentLanguageChangeDTO, toOrganizationDTO } from '@/lib/mappers/organizationMappers';
+import {
+  toContentLanguageChangeDTO,
+  toContentLanguageLatestChangeDTO,
+  toOrganizationDTO,
+} from '@/lib/mappers/organizationMappers';
 import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
 import { withOrgContext } from '@/lib/organizations/context';
 import { InvalidContentLanguageError, OrganizationNotFoundError } from '@/lib/organizations/errors';
 import { organizationContentLanguageChangeRepository } from '@/lib/repositories/organizationContentLanguageChangeRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { assertOrgCapability } from '@/lib/services/organizationAccessService';
 
 // An organisation's CONTENT language — the language new work in it is written in
@@ -80,5 +89,31 @@ export const organizationContentLanguageService = {
       },
     );
     return rows.map(toContentLanguageChangeDTO);
+  },
+
+  /**
+   * The newest change with the person who made it — the General card's
+   * attribution line (MOTIR-8095). Owner or admin only, like the history; null
+   * when the language was never changed (registration writes no row).
+   */
+  async getLatestContentLanguageChange(input: {
+    organizationId: string;
+    actorUserId: string;
+  }): Promise<ContentLanguageLatestChangeDTO | null> {
+    return withOrgContext(
+      { userId: input.actorUserId, organizationId: input.organizationId },
+      async (tx) => {
+        await assertOrgCapability(input.actorUserId, input.organizationId, 'manageOrgSettings', tx);
+        const row = await organizationContentLanguageChangeRepository.findLatestByOrganization(
+          input.organizationId,
+          tx,
+        );
+        if (!row) return null;
+        const user = row.changedByUserId
+          ? await userRepository.findById(row.changedByUserId, tx)
+          : null;
+        return toContentLanguageLatestChangeDTO(row, user);
+      },
+    );
   },
 };

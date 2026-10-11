@@ -206,6 +206,50 @@ describe('listContentLanguageChanges', () => {
   });
 });
 
+describe('getLatestContentLanguageChange (MOTIR-8095)', () => {
+  it('is null until the language changes, then names the newest change and who made it', async () => {
+    const { orgId, owner, other: admin } = await orgWith('admin');
+    expect(
+      await svc.getLatestContentLanguageChange({ organizationId: orgId, actorUserId: owner.id }),
+    ).toBeNull();
+
+    await adminDb.user.update({ where: { id: owner.id }, data: { name: 'Lin Wei' } });
+    await adminDb.user.update({ where: { id: admin.id }, data: { name: ' ' } });
+    await svc.changeContentLanguage({
+      organizationId: orgId,
+      actorUserId: owner.id,
+      language: 'ja',
+    });
+    expect(
+      await svc.getLatestContentLanguageChange({ organizationId: orgId, actorUserId: admin.id }),
+    ).toMatchObject({ fromLanguage: 'en', toLanguage: 'ja', changedByLabel: 'Lin Wei' });
+
+    // A person with no display name is named by their email.
+    await svc.changeContentLanguage({
+      organizationId: orgId,
+      actorUserId: admin.id,
+      language: 'de',
+    });
+    const latest = await svc.getLatestContentLanguageChange({
+      organizationId: orgId,
+      actorUserId: owner.id,
+    });
+    expect(latest).toMatchObject({
+      fromLanguage: 'ja',
+      toLanguage: 'de',
+      changedByLabel: admin.email,
+    });
+    expect(typeof latest?.changedAt).toBe('string');
+  });
+
+  it('refuses a member', async () => {
+    const { orgId, other: member } = await orgWith('member');
+    await expect(
+      svc.getLatestContentLanguageChange({ organizationId: orgId, actorUserId: member.id }),
+    ).rejects.toBeInstanceOf(OrgForbiddenError);
+  });
+});
+
 describe('the organisation DTO', () => {
   it('carries contentLanguage to a plain member', async () => {
     const { orgId, owner, other: member } = await orgWith('member');

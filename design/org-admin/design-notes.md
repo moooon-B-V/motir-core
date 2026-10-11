@@ -1069,3 +1069,199 @@ for the organisation, and `acceptanceVideoEligibilityService` still reads it fro
 here — only the SWITCH moves. That is why the project-tier control has a
 _no paid plan_ state at all, and why its footer says the plan is bought once for
 the organisation rather than offering to buy one per project.
+
+## Content language on the General card (MOTIR-8091 · Story MOTIR-7731) — AMENDS Panel 2
+
+**Design system — verdict: ON MOTIR DESIGN, branch (a).** Read: `package.json`
+(depends on `"@motir/design-system": "workspace:*"`), `app/globals.css` (line 13,
+`@import '@motir/design-system/theme.css'`), and
+`node_modules/@motir/design-system/package.json` (**0.13.0**, which exports
+`./mock`). The axes are each person's own (`app/layout.tsx` stamps their applied
+`data-style` / `data-palette` / `data-type`), so the mock is drawn at the
+package defaults (`DEFAULT_STYLE_ID` · `DEFAULT_PALETTE_ID` · `DEFAULT_TYPE_ID`).
+It is built with the package's `renderMock` from its real parts — `Card`,
+`Input`, `FormField`, `Combobox`, `Button`, `Pill`, `SectionLabel`. Three
+surfaces `renderMock` cannot open statically are drawn with the exact class lists
+those parts carry in 0.13.0: the `Combobox` listbox (a portal), the `Modal`
+panel and the `Toast` item (both Radix). The settings rails use
+`components/ui/Sidebar.tsx`'s row classes. **Nothing new is proposed for the
+package** and no product-local component is added: every element here is a part
+that already ships.
+
+**Asset:** [`org-admin--content-language.mock.html`](./org-admin--content-language.mock.html),
+a DELTA of [`org-admin.mock.html`](./org-admin.mock.html) **Panel 2** (the
+General card), which stays unmodified. The card is drawn as
+`app/(authed)/settings/organization/_components/OrgGeneralCard.tsx` renders it
+on `main` (512db0943), read from source and composed from the same parts, with
+one row added.
+
+### What changes
+
+The General card gains a **Content language** row under **Organization name**.
+It is the language Motir's planner and agents write this organisation's NEW work
+in (`Organization.contentLanguage`, MOTIR-8092), and it is distinct from each
+person's **display language** (`Account settings ▸ Language & region`, the
+`NEXT_LOCALE` preference), which it never changes.
+
+### ⚠️ How a member reaches the value — verified, and the design's answer
+
+The card asked whether a plain member can open General at all. **They cannot,
+and this design does not change that:**
+
+- `app/(authed)/settings/organization/page.tsx` renders `OrgGeneralCard` only
+  when `orgCan(current.role, 'manageOrgSettings')` — owner and admin. A member
+  who reaches the page (below the workspace-tier reveal, for the §6d fold-in)
+  sees the folded-in workspace sections and NO org-scoped card; above the reveal
+  the page is `notFound()` for them (MOTIR-6312 · panel 3d).
+- `lib/settings/organizationSettingsNav.ts` hides the org rail's rows from a
+  member above the reveal, and the role model's approved criterion is that "an
+  org Member sees no org settings beyond their own profile".
+- `OrgGeneralCard` takes `role` but draws `isOwner ? owner : admin` without a
+  member case, which is consistent: it is never rendered for one.
+
+So the **read-only member variant lives on the member's OWN Language pane**,
+the place every person already goes for language: `Account settings ▸ Language &
+region` (`app/(authed)/settings/account/language/page.tsx`, `LanguageCard`). The
+shipped card gains a second settings-row under **Display language**, separated
+by the card's existing hairline grammar:
+
+- label **"Content language · {org}"**, description _"The language Motir's
+  planner and agents write {org}'s new work in. Set by the organization's owners
+  and admins; it doesn't change your display language."_
+- the value as **plain text** in the control column (`lang` set to the code), at
+  the same position as the Display language select, so the row lines up with the
+  editable row above it. No select, no Save.
+- An **owner/admin** sees the same row plus a link, **"Change in Organization
+  settings"** (`--el-link`), to `/settings/organization` — the way back to the
+  control (panel 2b).
+- `{org}` is the ACTIVE organisation, resolved the way the shell resolves it
+  (`preferredOrganizationId`). A person with no active organisation sees no row.
+
+**Consequence for the access path, flagged:** the control card (MOTIR-8095) now
+touches TWO surfaces — `OrgGeneralCard` and `LanguageCard` — and the account
+Language page must read the active organisation's `contentLanguage`
+(`OrganizationDTO.contentLanguage`, MOTIR-8094 makes every member's read carry
+it). The org page's gates are unchanged.
+
+**The doors are drawn (panel 1):** owner/admin — the org menu's **Settings** row
+(`OrgControl`) ▸ the org rail's **Organisation** row, General card first;
+member — the user menu's **Account settings** ▸ the account rail's **Language &
+region** row.
+
+### States (panel by panel)
+
+| panel | state                   | what is drawn                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | the doors               | org menu ▸ Settings ▸ Organisation (owner/admin); user menu ▸ Account settings ▸ Language & region (member)                                                                                                                                                                                                                                                                                             |
+| 2     | at rest, side by side   | owner/admin: the General card with **Content language** = `中文` (`Combobox`, own-script label, helper text). Member: the Language card's read-only row                                                                                                                                                                                                                                                 |
+| 2b    | in their panes          | the member's pane; the owner/admin's pane with **Change in Organization settings**                                                                                                                                                                                                                                                                                                                      |
+| 3     | options open            | all eleven, each in its own script, in `lib/i18n/locales.ts` order — English, 中文, 日本語, 한국어, Deutsch, Français, Español, Italiano, Nederlands, Polski, Português — current one checked (`--el-accent-on-surface`), the hovered one on `--el-option-active-bg`. The list IS `locales.map(l => ({ value: l, label: localeLabel[l], lang: l }))`, `LanguageCard`'s own option list — no second copy |
+| 4     | changed (dirty)         | `日本語` picked, nothing sent                                                                                                                                                                                                                                                                                                                                                                           |
+| 5     | confirm, idle + pending | `Modal` size `md`, initial focus on **Cancel** (the `MembersOnlyConfirmDialog` precedent). Pending: Confirm `loading`, Cancel / × / Escape inert                                                                                                                                                                                                                                                        |
+| 5b    | cancelled               | dialog closed, nothing sent, the select back on the STORED value                                                                                                                                                                                                                                                                                                                                        |
+| 6     | saving error            | the select back on the stored value + the card's existing error toast **"Couldn't save changes"** (`orgAdmin.settings.saveError`)                                                                                                                                                                                                                                                                       |
+| 7     | saved                   | the card's existing success toast **"Organization updated"** (`orgAdmin.settings.saved`), the new value shown, and the attribution line                                                                                                                                                                                                                                                                 |
+| 8     | narrow (360px)          | the card's header and footer stack (Save full-width), the dialog fits with its buttons stacked (primary on top), the member row stacks; `Português` and `Nederlands` render whole — the trigger is `16rem` max and the listbox sizes to its widest label (`w-max`, capped `18rem`), so no own-script label truncates                                                                                    |
+
+**No "nothing recorded yet" state.** Every organisation has a value: existing
+ones are backfilled `en` (MOTIR-8092) and new ones are set at registration
+(MOTIR-8093). The control is never empty and draws no placeholder.
+
+### Save covers Name AND language — one button, the confirm first
+
+The card keeps ONE **Save changes** with its shipped enable rule (disabled only
+while the name is blank). On Save:
+
+1. **Language unchanged** → the name saves exactly as today (`PATCH
+/api/organizations/[orgId]`), no dialog.
+2. **Language changed** → the confirm opens FIRST; **nothing is sent until
+   Confirm.** Cancel / × / Escape closes it, sends nothing (not the name either),
+   returns focus to Save and puts the select back on the stored value; a typed
+   name stays typed.
+3. **Confirm** → `PATCH /api/organizations/[orgId]/content-language` (MOTIR-8094)
+   first; only when it succeeds is a changed name sent. Either failing → the
+   error toast, and the select reverts to the stored value. One success toast for
+   the whole save, then `router.refresh()` (the card's existing explicit-Save
+   pattern).
+
+### The confirm — copy (en)
+
+- Title: **"Change the content language?"**
+- From → to chips: the old language on `--el-muted`, an arrow, the new on
+  `--el-tint-lavender` (`--el-text-strong`), each with its own `lang`.
+- _"From now on, Motir's planner and agents write {org}'s new work in **{to}**
+  instead of **{from}**."_
+- _"Work that already exists keeps its text and its language. Nothing is
+  translated or rewritten — only new writing changes."_
+- _"The change is recorded with your name and today's date."_ (`text-xs`)
+- Buttons: **Cancel** (`secondary`) · **"Change to {to}"** (`primary`).
+
+`{from}` / `{to}` are `localeLabel` endonyms, never translated into the display
+language — the reader is choosing a language by its own name.
+
+### Attribution — shown on the General card only, latest change only
+
+**Under the control, below the helper text:** _"Changed from {from} by {person}
+on {date}"_ (`text-xs`, `--el-text-secondary`), from the NEWEST row of
+`listContentLanguageChanges` (MOTIR-8094). `{person}` is that user's display
+name (their email when they have none; "a former member" when the user is
+gone); `{date}` is the date formatted in the reader's display language.
+
+- **Shown only when a change has been recorded.** The registration default
+  writes no history row, so a never-changed organisation shows no line.
+- **Owner/admin only.** `listContentLanguageChanges` is refused to a member, and
+  the member's row shows the value alone.
+- **Not a history.** One line, the latest change. The full list stays readable
+  through the service; any page that shows it is later work.
+
+### Token roles
+
+| element                             | colour                                                                 | shape                                                                         |
+| ----------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| row label                           | `--el-text` (`FormField`)                                              | —                                                                             |
+| helper text                         | `--el-text-helper` (`FormField`)                                       | —                                                                             |
+| attribution line                    | `--el-text-secondary`                                                  | —                                                                             |
+| select trigger / listbox            | `Combobox`'s own                                                       | `--radius-input` · `--height-control` / `--radius-card` · `--shadow-elevated` |
+| option row · hovered · check        | `--el-text` · `--el-option-active-bg` · `--el-accent-on-surface`       | `--radius-control` · `--spacing-control-x/y`                                  |
+| member read-only value              | `--el-text`                                                            | —                                                                             |
+| member row description (white card) | `--el-text-muted` (as `LanguageCard`'s)                                | —                                                                             |
+| "Change in Organization settings"   | `--el-link`                                                            | —                                                                             |
+| dialog panel                        | `Modal`'s own                                                          | `--radius-modal` · `--shadow-modal`                                           |
+| dialog body copy                    | `--el-text-secondary`, names `--el-text`                               | —                                                                             |
+| from chip · to chip                 | `--el-muted` + `--el-text` · `--el-tint-lavender` + `--el-text-strong` | `--radius-badge` · `--spacing-chip-x/y`                                       |
+| toasts                              | `Toast`'s `success` / `error`                                          | `--radius-card` · `--shadow-elevated`                                         |
+
+### Copy strings (en)
+
+New keys, `orgAdmin.settings.*` unless noted:
+
+- `contentLanguageLabel` — "Content language"
+- `contentLanguageHelp` — "The language Motir's planner and agents write this
+  organization's new work in. It doesn't change the language Motir's own menus
+  are shown in — that is each person's display language."
+- `contentLanguageChangedBy` — "Changed from {from} by {person} on {date}"
+- `contentLanguageConfirmTitle` — "Change the content language?"
+- `contentLanguageConfirmBody` — "From now on, Motir's planner and agents write
+  {org}'s new work in <b>{to}</b> instead of <b>{from}</b>."
+- `contentLanguageConfirmKeeps` — "Work that already exists keeps its text and its
+  language. Nothing is translated or rewritten — only new writing changes."
+- `contentLanguageConfirmRecorded` — "The change is recorded with your name and
+  today's date."
+- `contentLanguageConfirmCta` — "Change to {to}"
+- `settings.language.contentLanguage.label` — "Content language · {org}"
+- `settings.language.contentLanguage.desc` — "The language Motir's planner and
+  agents write {org}'s new work in. Set by the organization's owners and admins;
+  it doesn't change your display language."
+- `settings.language.contentLanguage.changeLink` — "Change in Organization
+  settings"
+
+Cancel reuses `common.cancel`; the toasts reuse `orgAdmin.settings.saved` /
+`saveError`. Every key lands in all eleven catalogues
+(`tests/i18n-catalog.test.ts`).
+
+### Cards this design reads (`relates_to`)
+
+MOTIR-8094 (the change service/route: owner/admin only, members refused, the
+who/from/to/when record) and MOTIR-8095 (the control, which builds every state
+above). The story's acceptance criteria and its Verification steps 5–6 are what
+panels 4–7 draw.
