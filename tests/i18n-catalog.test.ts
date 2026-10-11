@@ -668,8 +668,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'billing.ci.pausedBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'billing.agents.unavailable': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'billing.search.unavailable': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
-    'onboarding.entrance.hintDefault': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
-    'onboarding.howItWorks.body': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'onboarding.chat.composerPlaceholder':
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'github.development.fix.rearm': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
