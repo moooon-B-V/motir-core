@@ -133,6 +133,42 @@ export const workItemDeliveryRepository = {
   },
 
   /**
+   * {@link listByWorkItemWithChecks}, restricted to the members whose pull
+   * request AND repository the bound reader can see (Bug MOTIR-8215) — the read a
+   * DISPLAY surface asks.
+   *
+   * ⚠️ THE TWO JOINS ARE GATED BY DIFFERENT POLICIES THAN THE ROW. A delivery row
+   * is admitted on its own `workspace_id`, the card's. The pull request and the
+   * repository are admitted through `github_repo` — its workspace, or the
+   * reader's ORGANISATION (`20260905214500_github_org_read_arms`). When the
+   * repository stops belonging to that organisation (another organisation
+   * connecting the same GitHub installation re-stamps it), the delivery row is
+   * still visible and the relation it includes comes back NULL, which the
+   * generated type says cannot happen. Every display mapper then threw reading
+   * `pullRequest.checkRuns`, taking the peek, the item page and the approval
+   * overlay down with it.
+   *
+   * The two relation filters below put the same policies in the WHERE, so a
+   * member the reader cannot see is absent from the answer rather than present
+   * with a hole in it — RLS's own semantics, and the shape the generated type
+   * already promises. Still one query.
+   *
+   * Kept apart from {@link listByWorkItemWithChecks} on purpose: the gates and the
+   * merge read the WHOLE set, and a member silently dropped there would let a
+   * decision be taken over part of it.
+   */
+  async listReadableByWorkItemWithChecks(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemDeliveryWithChecks[]> {
+    return tx.workItemDelivery.findMany({
+      where: { workItemId, pullRequest: { is: {} }, repo: { is: {} } },
+      include: WITH_CHECKS,
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /**
    * The WORKSPACE that owns a card's deliveries, or null when it has none
    * (MOTIR-3721, moving `githubPullRequestRepository.findWorkspaceIdByWorkItem`).
    *

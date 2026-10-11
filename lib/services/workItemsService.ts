@@ -7154,7 +7154,13 @@ export const workItemsService = {
    */
   async listDeliverySet(workItemId: string, ctx: ServiceContext): Promise<WorkItemDeliveryDto[]> {
     return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
-      const rows = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+      // READABLE members only (Bug MOTIR-8215): a member whose pull request or
+      // repository this reader's organisation cannot see is absent, not a null
+      // the mapper below would dereference.
+      const rows = await workItemDeliveryRepository.listReadableByWorkItemWithChecks(
+        workItemId,
+        tx,
+      );
       // Each member's STANDING queue failure (MOTIR-5720), over ONE read for the set
       // — the rule is `queueExitHoldsAtHead`, the same one the card's badge, the
       // promotion hold and the repair claim read.
