@@ -2,7 +2,7 @@
 // MOTIR-8180).
 //
 // A Sharpen session crosses the motir-core → motir-ai seam from INSIDE the Next
-// server: `POST /api/ai/sharpen` calls `submitJob('sharpen_turn', …)` and `POST
+// server: `POST /api/ai/sharpen` submits a `sharpen_turn` job and `POST
 // /api/ai/sharpen/settle` calls `getJob`, so a browser-level `page.route` reaches
 // neither. And the session's last act — motir-ai calling core's write-back,
 // `PUT /api/internal/ai/plan-sharpening` — is what the E2E exists to prove, so

@@ -123,6 +123,8 @@ export type PersonalDataDelegate =
   | 'planChangeTurn'
   | 'planChangeMailboxEntry'
   | 'planChangeRunPause'
+  | 'sharpenSession'
+  | 'sharpenTurn'
   | 'workItemTodo'
   | 'folder'
   | 'page'
@@ -661,6 +663,23 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     // (Story MOTIR-7990 · MOTIR-8007), and `reply_text` is their own words verbatim.
     basis: 'Mid-run planner pauses the reader answered.',
     where: (userId) => ({ answeredById: userId }),
+  },
+  {
+    table: 'sharpen_session',
+    model: 'sharpenSession',
+    tier: 'tenant',
+    // A Sharpen conversation the reader opened on a plan or work item (Task
+    // MOTIR-1101), and the answers it settled.
+    basis: 'Sharpen conversations the reader opened.',
+    where: (userId) => ({ createdById: userId }),
+  },
+  {
+    table: 'sharpen_turn',
+    model: 'sharpenTurn',
+    tier: 'tenant',
+    // The reader's own answers verbatim, exported like a plan-change turn.
+    basis: 'Answers the reader gave in a Sharpen conversation.',
+    where: (userId) => ({ authorId: userId }),
   },
   {
     table: 'work_item_todo',

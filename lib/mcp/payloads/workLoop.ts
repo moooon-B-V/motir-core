@@ -231,6 +231,25 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
    * wrote during a rollout.
    */
   sessionId: z.string().nullable(),
+  /**
+   * The requirement a Sharpen session SETTLED on the plan (Task MOTIR-1101) —
+   * MCP-only, on the same extension point as the fields above. An agent that
+   * reads a plan to build or judge it reads what the person settled with it,
+   * kept apart from the assumptions the planner marked for what they skipped.
+   * Null when nobody has sharpened the plan.
+   */
+  sharpenedRequirement: z
+    .object({
+      outcome: z.string().optional(),
+      behaviour: z.string().optional(),
+      scopeEdge: z.string().optional(),
+      constraints: z.string().optional(),
+      acceptance: z.string().optional(),
+      assumptions: z.string().optional(),
+      plannerAssumptions: z.array(z.object({ question: z.string(), recommendation: z.string() })),
+      settledAt: z.string(),
+    })
+    .nullable(),
   items: z.array(z.unknown()),
 });
 export type McpPlan = z.infer<typeof mcpPlanSchema>;
@@ -261,6 +280,7 @@ export function presentMcpPlan(
     authorModel: redactNativeActor(plan.authorSource, plan.authorModel),
     decisionReason: plan.decisionReason,
     sessionId: plan.sessionId,
+    sharpenedRequirement: plan.sharpenedRequirement,
     // Each proposal carries the folder it NAMES and that folder's path
     // (MOTIR-5415) — `/api/v1`'s `folderId` / `folderPath`, on the same item the
     // `parentRef` rides. Only when the caller resolved them; the fields are then
