@@ -732,11 +732,26 @@ describe('PlanningWorkspaceHost — Plan something new (MOTIR-7650)', () => {
 
   it('the swap re-points an address that named the old session, re-keys the canvas and refreshes', () => {
     window.history.replaceState(null, '', '/items/ACME-1?plan=replan&planSession=s1');
-    renderHost({ mode: 'replan', from: 'project' });
+    const { rerender } = renderHost({ mode: 'replan', from: 'project' });
 
     act(() => conversation.onRestarted!('s2'));
 
     expect(new URL(window.location.href).searchParams.get('planSession')).toBe('s2');
+    // The refresh waits for the router to commit the new address (MOTIR-8212) —
+    // the address swap is a navigation of its own, and a refresh overlapping it
+    // can hard-reload the page.
+    expect(refresh).not.toHaveBeenCalled();
+    rerender(
+      <PlanningWorkspaceHost
+        projectKey="ACME"
+        projectName="Acme"
+        launch={{ ...parsePlanningLaunch({ mode: 'replan', from: 'project' }), sessionId: 's2' }}
+        anchorId={null}
+        onClose={noop}
+        initialTarget={null}
+        canManage={false}
+      />,
+    );
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!.startsWith('1:')).toBe(
       true,

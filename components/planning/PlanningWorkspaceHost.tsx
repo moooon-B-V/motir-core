@@ -441,23 +441,48 @@ function PlanWorkspaceHost({
   // address that NAMED the old session now names the new one, so a reload opens
   // what is on screen. A REPLACE, not a push — Back should not return to a session
   // that no longer accepts a turn — and shallow, because the body is already here.
-  const replaceSessionAddress = useCallback((sessionId: string) => {
+  // Answers whether it rewrote the address.
+  const replaceSessionAddress = useCallback((sessionId: string): boolean => {
     const url = new URL(window.location.href);
-    if (!url.searchParams.has(OVERLAY_PARAM_NAMES.session)) return;
+    if (!url.searchParams.has(OVERLAY_PARAM_NAMES.session)) return false;
     url.searchParams.set(OVERLAY_PARAM_NAMES.session, sessionId);
     shallowReplace(`${url.pathname}${url.search}${url.hash}`);
+    return true;
   }, []);
   // …and the ended session gave its cards back, so the canvas island re-reads them
   // at their prior status and the server-rendered surfaces take the refresh — the
   // end effect below cannot see this end, because the session id changed with it.
+  //
+  // ⚠️ THE REFRESH WAITS FOR THE ADDRESS (bug MOTIR-8212). Next turns a
+  // `history.replaceState` into a router navigation of its own, so a refresh
+  // dispatched in the same tick is a SECOND navigation overlapping the first —
+  // the shape `coordinatedRefresh.tsx` documents (MOTIR-6640), which the
+  // coordinator cannot see because only one of the two goes through it. Under
+  // load the pair mismatches twice and Next hard-reloads the page, and the
+  // reload aborts whatever the overlay has in flight: on the CARRY that is the
+  // carried turn's submit (two merge-queue traces show it ERR_ABORTED ~100ms
+  // after the swap, followed by a document load of the new address). So when the
+  // address was rewritten, the refresh runs once the router has COMMITTED it —
+  // `launch.sessionId` naming the new session is that signal — and not before.
+  const refreshAfterAddressRef = useRef<string | null>(null);
   const onRestarted = useCallback(
     (sessionId: string) => {
-      replaceSessionAddress(sessionId);
       setTreeVersion((v) => v + 1);
+      if (replaceSessionAddress(sessionId)) {
+        refreshAfterAddressRef.current = sessionId;
+        return;
+      }
       refresh();
     },
     [replaceSessionAddress, refresh],
   );
+  const addressedSessionId = launch.sessionId ?? null;
+  useEffect(() => {
+    const awaited = refreshAfterAddressRef.current;
+    if (awaited === null || addressedSessionId !== awaited) return;
+    refreshAfterAddressRef.current = null;
+    refresh();
+  }, [addressedSessionId, refresh]);
   const {
     state,
     send,
