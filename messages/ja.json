@@ -7509,18 +7509,14 @@
       },
       "progress": {
         "submitted": "会話を Motir AI に送信しています…",
-        "searching": "計画を読み取っています…",
-        "drilling": "ツリーを順に処理しています…",
         "proposed": "{count, plural, =0 {提案された作業をキャンバスに配置しています…} other {これまでに # 項目を提案しました…}}",
         "validating": "提案を計画と照らし合わせて確認しています…",
         "reading": "依頼内容を読み取っています…",
         "redirected": "提案を作成しています…",
         "redirectedDebug": "バグを追跡しています…",
-        "retrieval": "計画を読み取っています…",
         "laying": "階層を配置しています…",
         "authoring": "作業項目を作成しています…",
-        "note": "検討しています…",
-        "unknown": "処理しています…"
+        "note": "検討しています…"
       },
       "error": {
         "body": "送信できませんでした。会話は保存されています。もう一度試すか、変更内容を言い換えてください。",
@@ -7606,9 +7602,6 @@
         "reading": "読み取り",
         "redirected": "引き継ぎ",
         "redirectedDebug": "引き継ぎ",
-        "retrieval": "取得",
-        "searching": "検索",
-        "drilling": "掘り下げ",
         "laying": "配置",
         "authoring": "作成",
         "note": "メモ",
@@ -7616,23 +7609,10 @@
         "validating": "検証",
         "matching": "照合",
         "writing": "書き込み",
-        "unknown": "フレーム",
-        "retrievalLine": "{family} を読み取りました",
-        "retrievalBlockedLine": "参照の上限に達しました — 手元の情報で続行します。",
         "layingLine": "{target} を配置しています",
         "authoringLine": "{title} を作成しています",
         "matchingLine": "すでに対応する作業項目があるか確認しています",
-        "writingLine": "診断内容を {key} に書き込んでいます",
-        "unknownLine": "フレーム: {frame}",
-        "retrievalLineBare": "計画の情報源から読み取りました",
-        "family": {
-          "planTree": "計画ツリー",
-          "codeGraph": "コードグラフ",
-          "codeHealth": "コードヘルス",
-          "web": "ウェブ",
-          "lessons": "教訓",
-          "codeRead": "リポジトリ"
-        }
+        "writingLine": "診断内容を {key} に書き込んでいます"
       },
       "openerFollowUp": "{label} を選択しました。Motir AI がそれによって決まる作業を計画しています。",
       "composerPlaceholderGuide": "ステップがどうだったか Motir AI に伝えてください…",

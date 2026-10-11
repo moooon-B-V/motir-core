@@ -52,7 +52,6 @@ import { consumeStream } from '@/lib/planning/planEditsClient';
 import {
   applyPlanFrame,
   type PlanChangeConversationState,
-  type PlanChangeProgress,
   type PlanFrameState,
 } from '@/lib/hooks/usePlanChangeConversation';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
@@ -79,8 +78,6 @@ const TR: Record<'en' | 'zh', Tr> = {
   zh: createTranslator({ locale: 'zh', messages: zh, namespace: NS }) as unknown as Tr,
 };
 const LOCALES = ['en', 'zh'] as const;
-
-type CallAct = Extract<PlanChangeProgress, { kind: 'call' }>;
 
 let fx: WorkItemFixture;
 
@@ -240,40 +237,17 @@ describe('1 · the wire — the relay and the client reader lose nothing', () =>
   });
 });
 
-describe('2 · the fold — one row per call, each mark on its own call', () => {
-  it('every start is one call row; no matched lookup draws a row; no frame is unknown', async () => {
+describe('2 · the fold — no lookup, no tool call and no unlisted frame becomes an act', () => {
+  it('the recording folds to the run rows alone, and nothing logs a warning', async () => {
     const warn = vi.spyOn(console, 'warn');
     const { acts } = fold(await readStream()).at(-1)!;
-    const starts = TOOL_CALL_STREAM.filter((f) => f.event === 'tool_call');
-    const calls = acts.filter((a): a is CallAct => a.kind === 'call');
-    expect(calls.map((c) => c.callId)).toEqual(
-      starts.map((f) => (f.data as { callId: string }).callId),
-    );
-    // Every `retrieval` in the recording carries the callId of a call it saw.
-    expect(acts.some((a) => a.kind === 'retrieval')).toBe(false);
-    expect(acts.some((a) => a.kind === 'unknown')).toBe(false);
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it('a failed read is failed, a refusal is refused, the rest stay as they ran', async () => {
-    const { acts } = fold(await readStream()).at(-1)!;
-    const calls = acts.filter((a): a is CallAct => a.kind === 'call');
-    const failedReads = TOOL_CALL_STREAM.filter(
-      (f) => f.event === 'retrieval' && (f.data as { ok: boolean }).ok === false,
-    ).map((f) => (f.data as { callId: string }).callId);
-    const refusals = TOOL_CALL_STREAM.filter(
-      (f) => f.event === 'tool_call_failed' && (f.data as { reason: string }).reason === 'refused',
-    ).map((f) => (f.data as { callId: string }).callId);
-    expect(failedReads).toHaveLength(1);
-    expect(refusals).toHaveLength(6);
-    for (const c of calls) {
-      const expected = failedReads.includes(c.callId ?? '')
-        ? 'failed'
-        : refusals.includes(c.callId ?? '')
-          ? 'refused'
-          : 'running';
-      expect(c.outcome, `${c.tool} ${c.callId}`).toBe(expected);
+    // MOTIR-8158: a tool call and a lookup are quiet frames, so the record holds
+    // neither — live, it holds what a reopened rail draws.
+    const kinds = new Set<string>(acts.map((a) => a.kind));
+    for (const gone of ['call', 'retrieval', 'searching', 'drilling', 'unknown']) {
+      expect(kinds.has(gone), gone).toBe(false);
     }
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -306,7 +280,6 @@ describe('3 · the screen, mid-run — three author sessions open at once, no ca
     it(`${locale}: each author step renders and none of its calls does; the bar repeats a step`, async () => {
       const t = TR[locale];
       const mid = fold(await readStream())[MID]!;
-      expect(mid.acts.some((a) => a.kind === 'call')).toBe(true);
       renderRail(mid, locale);
 
       const steps = screen.getAllByTestId('plan-change-act-authoring');

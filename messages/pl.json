@@ -7509,18 +7509,14 @@
       },
       "progress": {
         "submitted": "Wysyłanie rozmowy do Motir AI…",
-        "searching": "Czytanie planu…",
-        "drilling": "Przechodzenie przez drzewo…",
         "proposed": "{count, plural, =0 {Umieszczanie proponowanej pracy na kanwie…} one {Dotąd zaproponowano # element…} few {Dotąd zaproponowano # elementy…} many {Dotąd zaproponowano # elementów…} other {Dotąd zaproponowano # elementu…}}",
         "validating": "Sprawdzanie propozycji względem planu…",
         "reading": "Czytanie prośby…",
         "redirected": "Praca nad propozycją…",
         "redirectedDebug": "Śledzenie błędu…",
-        "retrieval": "Czytanie planu…",
         "laying": "Rozkładanie poziomu…",
         "authoring": "Pisanie elementu roboczego…",
-        "note": "Przemyślenie sprawy…",
-        "unknown": "Praca w toku…"
+        "note": "Przemyślenie sprawy…"
       },
       "error": {
         "body": "To się nie udało. Rozmowa jest zapisana — spróbuj ponownie albo przeformułuj zmianę.",
@@ -7606,9 +7602,6 @@
         "reading": "czytanie",
         "redirected": "przekazanie",
         "redirectedDebug": "przekazanie",
-        "retrieval": "pobieranie",
-        "searching": "wyszukiwanie",
-        "drilling": "zagłębianie",
         "laying": "rozkładanie",
         "authoring": "pisanie",
         "note": "notatka",
@@ -7616,23 +7609,10 @@
         "validating": "weryfikacja",
         "matching": "dopasowanie",
         "writing": "zapis",
-        "unknown": "ramka",
-        "retrievalLine": "Przeczytano: {family}",
-        "retrievalBlockedLine": "Wyczerpano wyszukiwania — kontynuuję z tym, co mam.",
         "layingLine": "Rozkładanie: {target}",
         "authoringLine": "Pisanie: {title}",
         "matchingLine": "Sprawdzanie, czy jakiś element roboczy już to obejmuje",
-        "writingLine": "Zapisywanie diagnozy w {key}",
-        "unknownLine": "ramka: {frame}",
-        "retrievalLineBare": "Przeczytano źródła planu",
-        "family": {
-          "planTree": "drzewo planu",
-          "codeGraph": "graf kodu",
-          "codeHealth": "kondycja kodu",
-          "web": "sieć",
-          "lessons": "lekcje",
-          "codeRead": "repozytorium"
-        }
+        "writingLine": "Zapisywanie diagnozy w {key}"
       },
       "openerFollowUp": "Wybrano właśnie {label}. Motir AI planuje to, co ten wybór blokuje.",
       "composerPlaceholderGuide": "Powiedz Motir AI, jak poszedł ten krok…",

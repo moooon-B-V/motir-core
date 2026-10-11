@@ -7512,18 +7512,14 @@
       },
       "progress": {
         "submitted": "Enviando la conversación a Motir AI…",
-        "searching": "Leyendo tu plan…",
-        "drilling": "Recorriendo el árbol…",
         "proposed": "{count, plural, =0 {Colocando el trabajo propuesto en el lienzo…} one {# elemento propuesto hasta ahora…} other {# elementos propuestos hasta ahora…}}",
         "validating": "Comprobando la propuesta con tu plan…",
         "reading": "Leyendo tu solicitud…",
         "redirected": "Trabajando en la propuesta…",
         "redirectedDebug": "Rastreando el error…",
-        "retrieval": "Leyendo el plan…",
         "laying": "Organizando un nivel…",
         "authoring": "Escribiendo un elemento de trabajo…",
-        "note": "Pensándolo bien…",
-        "unknown": "Trabajando…"
+        "note": "Pensándolo bien…"
       },
       "error": {
         "body": "No se completó. Tu conversación está guardada: vuelve a intentarlo o formula el cambio de otra manera.",
@@ -7609,9 +7605,6 @@
         "reading": "leyendo",
         "redirected": "traspaso",
         "redirectedDebug": "traspaso",
-        "retrieval": "consulta",
-        "searching": "búsqueda",
-        "drilling": "profundizar",
         "laying": "organizar",
         "authoring": "redactar",
         "note": "nota",
@@ -7619,23 +7612,10 @@
         "validating": "validar",
         "matching": "cotejo",
         "writing": "escribir",
-        "unknown": "fotograma",
-        "retrievalLine": "Fuente consultada: {family}",
-        "retrievalBlockedLine": "Sin consultas disponibles: sigue con lo que tiene.",
         "layingLine": "Organizando {target}",
         "authoringLine": "Escribiendo {title}",
         "matchingLine": "Comprobando si algún elemento de trabajo ya lo cubre",
-        "writingLine": "Escribiendo el diagnóstico en {key}",
-        "unknownLine": "fotograma: {frame}",
-        "retrievalLineBare": "Leyó las fuentes del plan",
-        "family": {
-          "planTree": "árbol del plan",
-          "codeGraph": "grafo de código",
-          "codeHealth": "salud del código",
-          "web": "web",
-          "lessons": "lecciones",
-          "codeRead": "repositorio"
-        }
+        "writingLine": "Escribiendo el diagnóstico en {key}"
       },
       "openerFollowUp": "Acabas de elegir {label}. Motir AI está planificando lo que condiciona.",
       "composerPlaceholderGuide": "Cuéntale a Motir AI cómo fue el paso…",

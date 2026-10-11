@@ -182,7 +182,6 @@ describe('the debug run', () => {
     // "Reading your request…" would read as still working (bug MOTIR-7924).
     expect(result.current.state.acts).toEqual([
       { kind: 'redirectedDebug' },
-      { kind: 'retrieval', family: 'code_graph', blocked: false },
       { kind: 'matching' },
       { kind: 'writing', key: 'PROD-412' },
     ]);
@@ -339,11 +338,11 @@ describe('narrateDebugFrame', () => {
     ).toBeNull();
   });
 
-  it('passes every other frame to the shipped narration', () => {
-    expect(narrateDebugFrame('retrieval', { family: 'plan_tree' }, null)).toEqual({
-      kind: 'retrieval',
-      family: 'plan_tree',
-      blocked: false,
+  it('passes every other frame to the shipped narration — a lookup draws nothing', () => {
+    expect(narrateDebugFrame('retrieval', { family: 'plan_tree' }, null)).toBeNull();
+    expect(narrateDebugFrame('pass', { proposed: 2 }, null)).toEqual({
+      kind: 'proposed',
+      count: 2,
     });
   });
 });

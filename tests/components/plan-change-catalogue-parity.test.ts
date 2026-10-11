@@ -51,9 +51,12 @@ describe('the act and narration catalogues — en and zh, key for key', () => {
     expect(broken).toEqual([]);
   });
 
-  it('the retired per-call catalogue is gone from both locales', () => {
+  it('the retired per-call and lookup catalogues are gone from both locales', () => {
     expect([...EN.keys(), ...ZH.keys()].filter((k) => k.startsWith('act.call.'))).toEqual([]);
-    expect(EN.has('act.family.codeRead')).toBe(true);
+    // MOTIR-8158: the lookup rows and their strings are gone too.
+    for (const gone of ['act.family.codeRead', 'act.retrievalLine', 'act.unknownLine']) {
+      expect(EN.has(gone), gone).toBe(false);
+    }
     expect(EN.has('narration.groupFinished')).toBe(true);
   });
 });

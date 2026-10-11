@@ -7512,18 +7512,14 @@
       },
       "progress": {
         "submitted": "Invio della conversazione a Motir AI…",
-        "searching": "Lettura del tuo piano…",
-        "drilling": "Analisi dell’albero…",
         "proposed": "{count, plural, =0 {Posizionamento del lavoro proposto sul canvas…} one {# elemento proposto finora…} other {# elementi proposti finora…}}",
         "validating": "Verifica della proposta rispetto al tuo piano…",
         "reading": "Lettura della tua richiesta…",
         "redirected": "Elaborazione della proposta…",
         "redirectedDebug": "Ricerca della causa del Bug…",
-        "retrieval": "Lettura del piano…",
         "laying": "Disposizione di un livello…",
         "authoring": "Scrittura di un elemento di lavoro…",
-        "note": "Ragionamento in corso…",
-        "unknown": "Elaborazione…"
+        "note": "Ragionamento in corso…"
       },
       "error": {
         "body": "L’operazione non è andata a buon fine. La conversazione è salvata: riprova o riformula la modifica.",
@@ -7609,9 +7605,6 @@
         "reading": "lettura",
         "redirected": "passaggio",
         "redirectedDebug": "passaggio",
-        "retrieval": "recupero",
-        "searching": "ricerca",
-        "drilling": "approfondimento",
         "laying": "disposizione",
         "authoring": "scrittura",
         "note": "nota",
@@ -7619,23 +7612,10 @@
         "validating": "verifica",
         "matching": "confronto",
         "writing": "scrittura",
-        "unknown": "frame",
-        "retrievalLine": "Letto: {family}",
-        "retrievalBlockedLine": "Ricerche esaurite: prosegue con ciò che ha.",
         "layingLine": "Disposizione di {target}",
         "authoringLine": "Scrittura di {title}",
         "matchingLine": "Verifica se un elemento di lavoro lo copre già",
-        "writingLine": "Scrittura della diagnosi su {key}",
-        "unknownLine": "frame: {frame}",
-        "retrievalLineBare": "Letto dalle fonti del piano",
-        "family": {
-          "planTree": "albero del piano",
-          "codeGraph": "grafo del codice",
-          "codeHealth": "salute del codice",
-          "web": "web",
-          "lessons": "lezioni",
-          "codeRead": "repository"
-        }
+        "writingLine": "Scrittura della diagnosi su {key}"
       },
       "openerFollowUp": "Hai appena scelto {label}. Motir AI sta pianificando ciò che questa scelta sblocca.",
       "composerPlaceholderGuide": "Racconta a Motir AI com’è andato il passaggio…",

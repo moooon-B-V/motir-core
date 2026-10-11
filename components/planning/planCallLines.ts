@@ -7,31 +7,22 @@ import type { PlanChangeProgress } from '@/lib/hooks/usePlanChangeConversation';
  * Everything here is pure: which acts the record draws, which steps are open and
  * what the one live region announces. `PlanActRecord` renders from it.
  *
- * ⚠️ THE PER-CALL LINES ARE GONE. `design/ai-chat/design-notes.md` § "⭐ Planner
+ * ⚠️ THERE ARE NO TOOL-CALL ACTS. `design/ai-chat/design-notes.md` § "⭐ Planner
  * narration in the chat panel" (MOTIR-8061) amends MOTIR-7975's § "The per-call
- * line on the planning rail": a tool call is no longer drawn in the rail, for
- * either planner, and a failed or refused call's mark is dropped rather than
- * moved onto its step. The planner says what it is doing in its own words
- * instead (`PlanNarration`). The hook still records `call` acts, because the
- * stream still carries `tool_call` frames; this module is where the record stops
- * drawing them.
+ * line on the planning rail": a tool call is not drawn in the rail, for either
+ * planner. The planner says what it is doing in its own words instead
+ * (`PlanNarration`). The frame map (`planChangeFrames.ts`) keeps every lookup
+ * frame quiet, so the record never holds one (MOTIR-8158).
  *
  * ⚠️ THE RECORD STAYS FLAT. `acts` is the hook's append-only list and
  * `applyPlanFrame` owns it; everything below is a VIEW derived at render time.
  */
 
-/** The record without its `call` acts — what the rail draws, in order. */
-export function withoutCalls(acts: readonly PlanChangeProgress[]): PlanChangeProgress[] {
-  return acts.filter((act) => act.kind !== 'call');
-}
-
-/** The act rows that name a step of the walk. The others (`submitted`,
- *  `retrieval`, `note`, `proposed`, `unknown`, and the debug turn's two) do not. */
+/** The act rows that name a step of the walk. The others (`submitted`, `note`,
+ *  `proposed`, and the debug turn's two) do not. */
 const STEP_KINDS: ReadonlySet<PlanChangeProgress['kind']> = new Set([
   'reading',
   'redirected',
-  'searching',
-  'drilling',
   'laying',
   'authoring',
   'validating',

@@ -55,14 +55,7 @@ import {
   PlanSessionPlanStaleClientError,
   type StalePlanFinishedCard,
 } from '@/lib/planning/planSessionClientErrors';
-import {
-  FRAME_DISPOSITIONS,
-  TOOL_CALL_FAMILIES,
-  TOOL_CALL_VERBS,
-  isKnownFrameKind,
-  type ToolCallFamily,
-  type ToolCallVerb,
-} from '@/lib/planning/planChangeFrames';
+import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
 import {
   streamAskJob,
   streamAugmentJob,
@@ -161,12 +154,6 @@ export type PlanChangeProgress =
   /** The debug turn's ONE write is being made onto `key` (the anchored triage
    *  bug). Drawn only when the key is known before the settle names it. */
   | { kind: 'writing'; key: string }
-  | { kind: 'searching' }
-  | { kind: 'drilling' }
-  /** A graph LOOKUP the planner made (MOTIR-4069) — `{ tool, family }` over the
-   *  five retrieval families, or the budget-exhausted variant. Emitted on every
-   *  planner read since retrieval shipped, and rendered by nothing until now. */
-  | { kind: 'retrieval'; family: string | null; blocked: boolean }
   /** A level being laid, and one card being written. */
   | { kind: 'laying'; target: string | null }
   | { kind: 'authoring'; title: string | null }
@@ -174,42 +161,7 @@ export type PlanChangeProgress =
    *  nothing when the text is blank, so this is never an empty row. */
   | { kind: 'note'; text: string }
   | { kind: 'proposed'; count: number }
-  | { kind: 'validating' }
-  /**
-   * ONE TOOL CALL the planner STARTED (Story MOTIR-7974 · MOTIR-7976) — read off
-   * the `tool_call` frame, whose wire contract is written down in
-   * `lib/planning/planChangeFrames.ts`.
-   *
-   * Every field is nullable because the frame is parsed DEFENSIVELY: a field
-   * missing, of the wrong type or outside its closed set is `null`, and the rail
-   * then shows the family's (or the generic) line — never a hole and never the
-   * text "undefined". `outcome` starts `running`; a LATER frame carrying the same
-   * `callId` marks it (`applyPlanFrame`), so a failed lookup or a refused write
-   * never reads as a success.
-   */
-  | {
-      kind: 'call';
-      callId: string | null;
-      tool: string | null;
-      family: ToolCallFamily | null;
-      verb: ToolCallVerb | null;
-      object: { kind: 'path' | 'query' | 'item' | 'parent'; value: string } | null;
-      itemRef: string | null;
-      /** `refused` is a walk write the walk refused (`tool_call_failed` with
-       *  reason `refused`); `failed` an error or an `ok: false` lookup. The
-       *  design (MOTIR-7975) marks the two with different words. */
-      outcome: 'running' | 'failed' | 'refused' | 'skipped';
-    }
-  /**
-   * ⚠️ A frame NOBODY HAS DECIDED ABOUT — the LOUD default (MOTIR-4069).
-   *
-   * It carries the raw kind so a developer can see WHICH frame arrived
-   * unaccounted for. This is the arm that covers the future: the frame list is a
-   * snapshot of a sweep, so a kind added upstream tomorrow lands here rather than
-   * disappearing through a `default: return null` the way `retrieval` did for
-   * its whole life.
-   */
-  | { kind: 'unknown'; frame: string };
+  | { kind: 'validating' };
 
 /** What an approve landed, as the rail says it back — the shared summary every
  *  confirming surface reports (`planReviewClient`), re-exported here because the
@@ -641,51 +593,6 @@ function withoutReading(acts: PlanChangeProgress[]): PlanChangeProgress[] {
   return acts.filter((act) => act.kind !== 'reading');
 }
 
-/**
- * The longest object value a `call` act keeps. A MEMORY guard, not the display
- * cap — how much of a path or query the rail SHOWS is the design's and the
- * renderer's; this only stops a pathological frame from growing the record.
- */
-export const TOOL_CALL_VALUE_MAX = 2000;
-
-/** A non-blank string, or null — never a throw, never `"undefined"`. */
-function nonBlank(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  return trimmed.length === 0 ? null : trimmed;
-}
-
-/** `raw` if it is a member of the closed set, else null. */
-function memberOf<T extends string>(set: readonly T[], raw: unknown): T | null {
-  return typeof raw === 'string' && (set as readonly string[]).includes(raw) ? (raw as T) : null;
-}
-
-const CALL_OBJECT_KINDS = ['path', 'query', 'item', 'parent'] as const;
-
-/** Parse a `tool_call` frame's payload into its act — total over ANY input. */
-function narrateToolCall(d: Record<string, unknown>): PlanChangeProgress {
-  const rawObject = d['object'];
-  let object: Extract<PlanChangeProgress, { kind: 'call' }>['object'] = null;
-  if (rawObject !== null && typeof rawObject === 'object') {
-    const o = rawObject as Record<string, unknown>;
-    // `none` is a call with no specific object, so it is absent here exactly as
-    // a missing object is: both read as the family's generic line.
-    const kind = memberOf(CALL_OBJECT_KINDS, o['kind']);
-    const value = nonBlank(o['value']);
-    if (kind && value) object = { kind, value: value.slice(0, TOOL_CALL_VALUE_MAX) };
-  }
-  return {
-    kind: 'call',
-    callId: nonBlank(d['callId']),
-    tool: nonBlank(d['tool']),
-    family: memberOf(TOOL_CALL_FAMILIES, d['family']),
-    verb: memberOf(TOOL_CALL_VERBS, d['verb']),
-    object,
-    itemRef: nonBlank(d['itemRef']),
-    outcome: 'running',
-  };
-}
-
 /** The statuses a planning job ENDS on — motir-ai's terminal set (MOTIR-7985). */
 const TERMINAL_JOB_STATUSES: ReadonlySet<string> = new Set(['succeeded', 'failed', 'canceled']);
 
@@ -717,23 +624,16 @@ function pauseBeforeResubscribe(attempt: number, signal: AbortSignal): Promise<v
 export function narrateFrame(event: string, data: unknown): PlanChangeProgress | null {
   const d = (data ?? {}) as Record<string, unknown>;
 
-  // ⚠️ THE LOUD DEFAULT, AND IT IS THE FIRST THING RATHER THAN THE LAST.
-  //
-  // The bug this card repairs was not the missing `retrieval` arm — it was the
-  // `default: return null` underneath it, which made EVERY frame kind added
-  // upstream invisible with no signature: nothing threw, nothing logged, the
-  // rail just said less than the run did. Adding one arm would have fixed
-  // today's symptom and left the mechanism, and the next frame would have
-  // reproduced it exactly.
-  //
-  // So an unaccounted kind is now the noisy case. It surfaces on the rail AND in
-  // the console, where a developer sees it.
+  // ⚠️ AN UNLISTED FRAME DRAWS NOTHING (MOTIR-8158). It used to surface on the
+  // rail as `frame: <name>`, which meant nothing to the person. The developer
+  // signal stays — a console warning naming the file to fix — and catching a new
+  // kind is the job of `tests/planning/frameKindParity.test.ts`, not the screen.
   if (!isKnownFrameKind(event)) {
     console.warn(
       `[plan-change] unnarrated frame kind "${event}" — add it to PLAN_CHANGE_FRAME_KINDS ` +
         `and give it a disposition in lib/planning/planChangeFrames.ts`,
     );
-    return { kind: 'unknown', frame: event };
+    return null;
   }
 
   const disposition = FRAME_DISPOSITIONS[event];
@@ -742,14 +642,6 @@ export function narrateFrame(event: string, data: unknown): PlanChangeProgress |
   if ('quiet' in disposition) return null;
 
   switch (disposition.show) {
-    case 'retrieval': {
-      const family = d['family'];
-      return {
-        kind: 'retrieval',
-        family: typeof family === 'string' ? family : null,
-        blocked: d['blocked'] === true,
-      };
-    }
     case 'laying': {
       const target = d['target'];
       return { kind: 'laying', target: typeof target === 'string' ? target : null };
@@ -770,12 +662,6 @@ export function narrateFrame(event: string, data: unknown): PlanChangeProgress |
       const raw = d['proposed'];
       return { kind: 'proposed', count: typeof raw === 'number' ? raw : 0 };
     }
-    case 'call':
-      return narrateToolCall(d);
-    case 'searching':
-      return { kind: 'searching' };
-    case 'drilling':
-      return { kind: 'drilling' };
     case 'validating':
       return { kind: 'validating' };
     default:
@@ -790,85 +676,30 @@ export function narrateFrame(event: string, data: unknown): PlanChangeProgress |
 export type PlanFrameState = Pick<PlanChangeConversationState, 'progress' | 'acts'>;
 
 /**
- * Apply one frame of a PLANNING run to the act record and the live line
- * (Story MOTIR-7974 · MOTIR-7976).
+ * Apply one frame of a PLANNING run to the act record and the live line.
  *
- * {@link narrateFrame} stays a pure one-frame → one-act function — that is the
- * totality test's contract. JOINING a later frame to an earlier act needs the
- * record, so it lives here:
- *
- *  1. a `retrieval` whose `callId` matches a `call` act (newest first) MARKS it —
- *     `skipped` for `blocked: true` (an older producer's shape), `failed` for
- *     `ok: false` — and appends NOTHING. A matched success changes nothing: the
- *     call's line already says it, and a second line per lookup is the log sheet
- *     3 of `plan-change-run-live.mock.html` forbids;
- *  2. a `tool_call_failed` with a matching `callId` marks it — `refused` for
- *     reason `refused`, else `failed`; with no match it does nothing — a mark has
- *     no line of its own;
- *  3. anything else — a `retrieval` with no `callId` or none that matches (an
- *     older producer, a job that emits no `tool_call`) included — narrates and
- *     appends exactly as before, replacing the live line.
- *
- * A mark on the act the live line holds updates the live line too. Matching is
- * by `callId` ALONE, so parallel author sessions interleave in arrival order and
- * each mark finds its own call. Returns the SAME object when nothing changes.
+ * {@link narrateFrame} is a pure one-frame → one-act function; a quiet frame (a
+ * lookup, a tool call, a bookkeeping frame, an unlisted kind) yields null and
+ * changes nothing. APPEND to the rail and REPLACE the live line, in one update.
+ * Returns the SAME object when nothing changes.
  */
 export function applyPlanFrame(
   state: PlanFrameState,
   event: string,
   data: unknown,
 ): PlanFrameState {
-  if (event === 'retrieval' || event === 'tool_call_failed') {
-    const d = (data ?? {}) as Record<string, unknown>;
-    const callId = nonBlank(d['callId']);
-    const index = callId === null ? -1 : findCallAct(state.acts, callId);
-    if (index >= 0) {
-      const outcome: 'failed' | 'refused' | 'skipped' | null =
-        event === 'tool_call_failed'
-          ? d['reason'] === 'refused'
-            ? 'refused'
-            : 'failed'
-          : d['blocked'] === true
-            ? 'skipped'
-            : d['ok'] === false
-              ? 'failed'
-              : null;
-      if (outcome === null) return state;
-      const current = state.acts[index]!;
-      const marked = { ...current, outcome } as PlanChangeProgress;
-      const acts = state.acts.slice();
-      acts[index] = marked;
-      return { acts, progress: state.progress === current ? marked : state.progress };
-    }
-    // A failure mark for a call this record never saw: nothing to mark, and a
-    // mark is never a line of its own (`tool_call_failed` is QUIET).
-    if (event === 'tool_call_failed') return state;
-  }
   const progress = narrateFrame(event, data);
-  // APPEND to the rail and REPLACE the live line, in one update. A quiet frame
-  // yields null and does neither, which is the decision the disposition map
-  // recorded rather than a frame falling through.
   if (!progress) return state;
   return { progress, acts: [...state.acts, progress] };
-}
-
-/** The index of the newest `call` act carrying `callId`, or -1. */
-function findCallAct(acts: readonly PlanChangeProgress[], callId: string): number {
-  for (let i = acts.length - 1; i >= 0; i -= 1) {
-    const act = acts[i]!;
-    if (act.kind === 'call' && act.callId === callId) return i;
-  }
-  return -1;
 }
 
 /**
  * Narrate one frame of a `debug_bug` job (MOTIR-7050; `debug-turn.mock.html`
  * panel 1) — the diagnosis's own acts, on top of the shipped narration.
  *
- * The job speaks in two voices. Its graph and plan LOOKUPS are the planner's
- * `retrieval` frames, so they go through {@link narrateFrame} unchanged (and so
- * does every other kind, keeping its loud default for a kind nobody decided
- * about). Its PHASES are `status` frames — quiet for a plan run, where they are
+ * The job speaks in two voices. Its graph and plan LOOKUPS are `retrieval`
+ * frames, which {@link narrateFrame} keeps quiet (MOTIR-8158: a lookup means
+ * nothing to the person). Its PHASES are `status` frames — quiet for a plan run, where they are
  * bookkeeping — and two of them are exactly the acts the design adds:
  *
  *  · `searching` → `matching`: the duplicate check.
@@ -2306,11 +2137,10 @@ export function usePlanChangeConversation({
             }));
           },
           () => {},
-          // The ask job reports every LOOKUP as a `retrieval` frame (MOTIR-7923):
-          // narrated exactly as a plan run's are, one act per lookup, so a long
-          // answer never reads as a rail stuck on "Reading your request…". Its
-          // phase frames (`status`, `retrieval_ready`) are quiet by the shared
-          // disposition map — a redirect's hand-off is drawn by the settle below.
+          // The ask job's LOOKUPS (`retrieval` frames, MOTIR-7923) are quiet by the
+          // shared disposition map, as a plan run's are (MOTIR-8158): they mean
+          // nothing to the person. So are its phase frames (`status`,
+          // `retrieval_ready`) — a redirect's hand-off is drawn by the settle below.
           (event, data) => {
             if (!mountedRef.current) return;
             const progress = narrateFrame(event, data);

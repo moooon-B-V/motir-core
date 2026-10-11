@@ -110,7 +110,7 @@ beforeEach(() => {
 describe('the ENTRANCE — where the stop is, and when', () => {
   it('offers Stop while the run is streaming, in the PINNED footer', () => {
     const { container } = renderRail(
-      { phase: 'streaming', progress: { kind: 'searching' } },
+      { phase: 'streaming', progress: { kind: 'reading' } },
       { onStop },
     );
 
@@ -137,7 +137,7 @@ describe('the ENTRANCE — where the stop is, and when', () => {
   });
 
   it('offers no bar when the host supplies no `onStop` — the shipped composer, unchanged', () => {
-    renderRail({ phase: 'streaming', progress: { kind: 'searching' } });
+    renderRail({ phase: 'streaming', progress: { kind: 'reading' } });
     expect(screen.queryByTestId('plan-change-running-bar')).toBeNull();
   });
 
@@ -152,7 +152,7 @@ describe('the ENTRANCE — where the stop is, and when', () => {
   });
 
   it('raises the stop once per click', () => {
-    renderRail({ phase: 'streaming', progress: { kind: 'searching' } }, { onStop });
+    renderRail({ phase: 'streaming', progress: { kind: 'reading' } }, { onStop });
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(onStop).toHaveBeenCalledTimes(1);
   });
@@ -268,7 +268,7 @@ describe('STOPPED — a decision, and asserted BY ABSENCE', () => {
 describe('THE COMPOSER STAYS LIVE while the run works (MOTIR-4274)', () => {
   it('⚠️ leaves the @ trigger and the input ENABLED while streaming', () => {
     const { container } = renderRail(
-      { phase: 'streaming', progress: { kind: 'searching' } },
+      { phase: 'streaming', progress: { kind: 'reading' } },
       { onStop },
     );
 
@@ -293,7 +293,7 @@ describe('THE COMPOSER STAYS LIVE while the run works (MOTIR-4274)', () => {
 
   it('…and Send becomes available as soon as there is something to send', () => {
     const { container } = renderRail(
-      { phase: 'streaming', progress: { kind: 'searching' } },
+      { phase: 'streaming', progress: { kind: 'reading' } },
       { onStop },
     );
     // A `<textarea>` since MOTIR-6238 — the composer's field, queried through
@@ -323,7 +323,7 @@ describe('THE COMPOSER STAYS LIVE while the run works (MOTIR-4274)', () => {
 describe('A QUEUED turn, and the same turn once the run has READ it (MOTIR-4274)', () => {
   const queued = (read: boolean) => ({
     phase: 'streaming' as const,
-    progress: { kind: 'searching' as const },
+    progress: { kind: 'reading' as const },
     queued: [{ id: 'm1', text: 'Also drop the narration card.', read }],
   });
 
@@ -365,7 +365,7 @@ describe('A QUEUED turn, and the same turn once the run has READ it (MOTIR-4274)
   });
 
   it('shows nothing when nothing is queued — the ordinary run', () => {
-    renderRail({ phase: 'streaming', progress: { kind: 'searching' } }, { onStop });
+    renderRail({ phase: 'streaming', progress: { kind: 'reading' } }, { onStop });
     expect(screen.queryByTestId('plan-change-queued')).toBeNull();
     expect(screen.queryByTestId('plan-change-queued-read')).toBeNull();
   });

@@ -7506,18 +7506,14 @@
       },
       "progress": {
         "submitted": "대화를 Motir AI에 보내는 중…",
-        "searching": "계획을 읽는 중…",
-        "drilling": "트리를 살펴보는 중…",
         "proposed": "{count, plural, =0 {제안된 작업을 캔버스에 배치하는 중…} other {지금까지 항목 #개 제안됨…}}",
         "validating": "제안을 계획과 대조하는 중…",
         "reading": "요청을 읽는 중…",
         "redirected": "제안을 작성하는 중…",
         "redirectedDebug": "버그를 추적하는 중…",
-        "retrieval": "계획을 읽는 중…",
         "laying": "한 수준을 배치하는 중…",
         "authoring": "작업 항목을 작성하는 중…",
-        "note": "생각하는 중…",
-        "unknown": "작업 중…"
+        "note": "생각하는 중…"
       },
       "error": {
         "body": "처리되지 않았습니다. 대화는 저장되어 있으니 다시 시도하거나 변경 내용을 다르게 표현해 보세요.",
@@ -7603,9 +7599,6 @@
         "reading": "읽기",
         "redirected": "인계",
         "redirectedDebug": "인계",
-        "retrieval": "조회",
-        "searching": "검색",
-        "drilling": "탐색",
         "laying": "배치",
         "authoring": "작성",
         "note": "메모",
@@ -7613,23 +7606,10 @@
         "validating": "검증",
         "matching": "대조",
         "writing": "기록",
-        "unknown": "프레임",
-        "retrievalLine": "{family} 읽음",
-        "retrievalBlockedLine": "조회 한도 소진 — 가진 정보로 계속 진행합니다.",
         "layingLine": "{target} 배치 중",
         "authoringLine": "{title} 작성 중",
         "matchingLine": "이미 이를 다루는 작업 항목이 있는지 확인하는 중",
-        "writingLine": "{key}에 진단 내용을 기록하는 중",
-        "unknownLine": "프레임: {frame}",
-        "retrievalLineBare": "계획의 출처에서 읽음",
-        "family": {
-          "planTree": "계획 트리",
-          "codeGraph": "코드 그래프",
-          "codeHealth": "코드 상태",
-          "web": "웹",
-          "lessons": "교훈",
-          "codeRead": "저장소"
-        }
+        "writingLine": "{key}에 진단 내용을 기록하는 중"
       },
       "openerFollowUp": "방금 {label}을(를) 선택했습니다. Motir AI가 이 선택에 달린 작업을 계획하고 있습니다.",
       "composerPlaceholderGuide": "단계가 어떻게 진행되었는지 Motir AI에게 알려 주세요…",
