@@ -564,7 +564,7 @@ function assertWorkItemLanguages(input: {
  * org's language is read only when some field needs it.
  */
 async function recordEditedLanguages(
-  patch: Pick<UpdateWorkItemInput, 'language' | 'languages'>,
+  patch: Pick<UpdateWorkItemInput, 'language' | 'languages' | 'languageRecording'>,
   fields: Record<WorkItemLanguageField, { changed: boolean; value: string | null } | null>,
   current: Pick<WorkItem, 'workspaceId'>,
   tx: Prisma.TransactionClient,
@@ -576,7 +576,7 @@ async function recordEditedLanguages(
     if (f === null) continue;
     const explicit = patch.languages?.[field] ?? patch.language;
     if (!f.changed && explicit === undefined) continue;
-    if (!hasText(f.value)) {
+    if (!hasText(f.value) || patch.languageRecording === 'unrecorded') {
       out[LANGUAGE_COLUMN[field]] = null;
       continue;
     }
@@ -2128,7 +2128,9 @@ export const workItemsService = {
         await organizationRepository.findContentLanguageByWorkspaceId(workspaceId, tx),
       );
       const langFor = (field: WorkItemLanguageField) =>
-        resolveWriteLanguage(input.languages?.[field] ?? input.language, orgLanguage);
+        input.languageRecording === 'unrecorded'
+          ? null
+          : resolveWriteLanguage(input.languages?.[field] ?? input.language, orgLanguage);
 
       const data: WorkItemCreateInput = {
         workspaceId,

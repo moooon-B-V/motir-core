@@ -141,18 +141,17 @@ export const organizationRepository = {
    * MOTIR-7731 · MOTIR-8096) — the language a work-text write records when its
    * caller names none. Read inside the write's own transaction, under the
    * workspace context it already holds, so the recorded language and the write
-   * cannot disagree. NULL when the row is not visible.
+   * cannot disagree. NULL for a workspace the transaction is not bound to.
    */
   async findContentLanguageByWorkspaceId(
     workspaceId: string,
     tx: Prisma.TransactionClient,
   ): Promise<string | null> {
-    const rows = await tx.$queryRaw<Array<{ contentLanguage: string }>>`
-      SELECT o."content_language" AS "contentLanguage"
-      FROM "workspace" w
-      JOIN "organization" o ON o."id" = w."organizationId"
-      WHERE w."id" = ${workspaceId}
-      LIMIT 1
+    // Through `app_workspace_content_language` (MOTIR-8097), not a join: the org
+    // row is invisible to a workspace writer that is not an org member — the
+    // system principal — and the function reads it for the BOUND workspace only.
+    const rows = await tx.$queryRaw<Array<{ contentLanguage: string | null }>>`
+      SELECT app_workspace_content_language(${workspaceId}) AS "contentLanguage"
     `;
     return rows[0]?.contentLanguage ?? null;
   },

@@ -152,6 +152,25 @@ describe('the five per-field language columns', () => {
   });
 });
 
+describe('app_workspace_content_language()', () => {
+  it('reads the language for the BOUND workspace only, and NULL for any other', async () => {
+    const fx = await makeWorkItemFixture();
+    await adminDb.organization.update({
+      where: { id: fx.workspace.organizationId },
+      data: { contentLanguage: 'ko' },
+    });
+    const read = (bound: string) =>
+      adminDb.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.workspace_id', ${bound}, true)`;
+        const rows = await tx.$queryRaw<{ lang: string | null }[]>`
+          SELECT app_workspace_content_language(${fx.workspaceId}) AS lang`;
+        return rows[0]!.lang;
+      });
+    expect(await read(fx.workspaceId)).toBe('ko');
+    expect(await read('some-other-workspace')).toBeNull();
+  });
+});
+
 describe('OrganizationContentLanguageChange', () => {
   it('accepts a who / from / to / when row and is removed with its organisation', async () => {
     const user = await adminDb.user.create({

@@ -1302,6 +1302,13 @@ export interface CreateWorkItemInput {
    */
   language?: Locale;
   languages?: Partial<Record<WorkItemLanguageField, Locale>>;
+  /**
+   * `'unrecorded'` stores NULL as the language of every field this write
+   * touches, whatever `language` / `languages` say (MOTIR-8097). For a writer
+   * that cannot vouch for the text's language — an import. Absent, the rule
+   * above applies.
+   */
+  languageRecording?: 'unrecorded';
   parentId?: string | null;
   /**
    * File the new item straight into a folder of the SAME project (Story
@@ -1511,6 +1518,13 @@ export interface UpdateWorkItemInput {
    */
   language?: Locale;
   languages?: Partial<Record<WorkItemLanguageField, Locale>>;
+  /**
+   * `'unrecorded'` stores NULL as the language of every field this write
+   * touches, whatever `language` / `languages` say (MOTIR-8097). For a writer
+   * that cannot vouch for the text's language — an import. Absent, the rule
+   * above applies.
+   */
+  languageRecording?: 'unrecorded';
   parentId?: string | null;
   /**
    * Change the item's FOLDER placement in the same transaction as every other

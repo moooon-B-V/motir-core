@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { isPlannerBugHomeMarker } from '@/lib/ai/plannerBugHome';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
+import type { Locale } from '@/lib/i18n/locales';
 import type { JobRequestAuth } from '@/lib/ai/jobAuth';
 import {
   NATIVE_PLANNER_HARNESS,
@@ -52,6 +53,9 @@ export interface FileServiceBugInput {
    *  into the project's BUG DESTINATION — its folder, or the project root (a
    *  top-level `bug` is matrix-legal). */
   parentKey?: string | null;
+  /** The language the title and description are written in (Story MOTIR-7731 ·
+   *  MOTIR-8097). Omitted, the organisation's content language is recorded. */
+  language?: Locale;
 }
 
 export const aiWorkItemsService = {
@@ -109,6 +113,7 @@ export const aiWorkItemsService = {
         parentId,
         folderId,
         descriptionMd: input.descriptionMd ?? null,
+        ...(input.language !== undefined ? { language: input.language } : {}),
       },
       ctx,
     );
@@ -154,7 +159,7 @@ export const aiWorkItemsService = {
    * (`updateWorkItem`'s edit gate, the row lock, the revision) runs unchanged.
    */
   async updateFiledBugDescription(
-    input: { identifier: string; descriptionMd: string },
+    input: { identifier: string; descriptionMd: string; language?: Locale },
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
     const identifier = input.identifier.trim().toUpperCase();
@@ -164,7 +169,14 @@ export const aiWorkItemsService = {
     if (item.kind !== 'bug' || item.reporterId !== ctx.userId) {
       throw new WorkItemNotFoundError(identifier);
     }
-    return workItemsService.updateWorkItem(item.id, { descriptionMd: input.descriptionMd }, ctx);
+    return workItemsService.updateWorkItem(
+      item.id,
+      {
+        descriptionMd: input.descriptionMd,
+        ...(input.language !== undefined ? { language: input.language } : {}),
+      },
+      ctx,
+    );
   },
 
   /**

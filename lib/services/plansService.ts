@@ -123,6 +123,9 @@ import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
 import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { hasText, toOrgContentLanguage } from '@/lib/workItems/contentLanguage';
+import type { Locale } from '@/lib/i18n/locales';
 import { normalizeCommand, normalizeNotes, requireText } from '@/lib/workItemTodos/normalize';
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
@@ -2437,6 +2440,14 @@ async function materialize(
   if (statusKey == null) throw new NoInitialStatusError(plan.projectId);
 
   const adds = items.filter((i) => i.op === 'add');
+  // The language every approved add's text is recorded in (Story MOTIR-7731 ·
+  // MOTIR-8097). A proposal carries no language of its own, and the planner is
+  // asked to write in the organisation's content language, so that is what the
+  // created rows record. Read ONCE, in this transaction, before the per-item
+  // loop — approve's round-trip budget (MOTIR-3396) gains one query, not N.
+  const orgLanguage = toOrgContentLanguage(
+    await organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
+  );
   // The provenance guard, RE-RUN here (MOTIR-2990). `addProposals` already
   // rejects an unknown `planningProvenance.source` at the append, and this is the
   // same check at the persist boundary — the "core re-checks, defense in depth"
@@ -2539,6 +2550,11 @@ async function materialize(
       // at its schema default (`user_authored`). Intra-plan temp-ref tokens in the
       // explanation are rewritten in Pass 3, like the description.
       explanationMd: normalizedExplanationMd ?? null,
+      // The recorded language of each written field (MOTIR-8097); an empty body
+      // records NULL. Pass 3's temp-ref rewrite is not an edit and leaves these.
+      titleLanguage: orgLanguage,
+      descriptionLanguage: hasText(normalizedDescriptionMd) ? orgLanguage : null,
+      explanationLanguage: hasText(normalizedExplanationMd) ? orgLanguage : null,
       ...(typeof normalizedExplanationMd === 'string' && normalizedExplanationMd.trim() !== ''
         ? {
             explanationSource:
@@ -2718,12 +2734,15 @@ async function materialize(
     const createdTodos: MaterializedTodo[] = [];
     let lastTodoPosition: string | null = null;
     for (const todo of pf.todos ?? []) {
+      const notesMd = normalizeNotes(todo.notesMd);
       const row = await workItemTodoRepository.create(
         {
           workspaceId: ctx.workspaceId,
           workItemId: created.id,
           text: requireText(todo.text),
-          notesMd: normalizeNotes(todo.notesMd),
+          notesMd,
+          textLanguage: orgLanguage,
+          notesLanguage: hasText(notesMd) ? orgLanguage : null,
           commandText: normalizeCommand(todo.commandText),
           executor: (todo.executor ?? pf.executor ?? 'human') as WorkItemCreateInput['executor'],
           position: keyForAppend(lastTodoPosition),
@@ -3368,6 +3387,28 @@ async function applyModify(
   if (normalizedExplanationMd !== undefined && normalizedExplanationMd !== current.explanationMd) {
     update.explanationMd = normalizedExplanationMd;
     diff.explanationMd = { from: current.explanationMd, to: normalizedExplanationMd };
+  }
+  // Re-record the language of each text field this modify CHANGED (Story
+  // MOTIR-7731 · MOTIR-8097) — the app-service rule: an untouched field keeps
+  // its recorded language (NULL included), an emptied one records NULL. The
+  // org's language is read only when a changed field needs it. Not part of the
+  // revision diff — the language is a property of the text, not an edit.
+  const changedText = [
+    ['titleLanguage', 'title' in update ? update.title : undefined],
+    ['descriptionLanguage', 'descriptionMd' in update ? update.descriptionMd : undefined],
+    ['explanationLanguage', 'explanationMd' in update ? update.explanationMd : undefined],
+  ] as const;
+  let modifyLanguage: Locale | null = null;
+  for (const [column, value] of changedText) {
+    if (value === undefined) continue;
+    if (typeof value !== 'string' || !hasText(value)) {
+      update[column] = null;
+      continue;
+    }
+    modifyLanguage ??= toOrgContentLanguage(
+      await organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
+    );
+    update[column] = modifyLanguage;
   }
   if (patch.priority !== undefined && patch.priority !== current.priority) {
     update.priority = patch.priority as WorkItemUpdateInput['priority'];
