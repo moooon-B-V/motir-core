@@ -2,6 +2,7 @@ import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { submitJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { MotirAiConfigError } from '@/lib/ai/errors';
 import {
@@ -89,6 +90,12 @@ import { buildScope } from '@/lib/planChange/scope';
 // resolved into `guideContext.files` (`lib/ai/guideFiles.ts`, A3.4) and every
 // earlier turn's files ride as one-line notes. A temporary walk attaches too —
 // a file is the card's evidence, not the list's (A3.1).
+//
+// ── THE PROJECT'S CODE (MOTIR-8234) ──────────────────────────────────────────
+// Every guide job carries the project's connected repositories as `context.code`,
+// exactly as an ask or debug turn does, so motir-ai can read the code a step needs
+// (read-only) instead of asking the person to paste it. A project with none sends
+// no `code` key, and motir-ai's guide says it cannot read the code.
 //
 // ── WHAT THIS DOES NOT DO ────────────────────────────────────────────────────
 // It ends at the job submitted and the turn persisted. Landing the result —
@@ -296,7 +303,17 @@ async function submitGuideJob(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  const context: JobContextBag = { prompt: turn.body, guideContext };
+  // The CODE half (MOTIR-8234): the same producer `ask_project` and `debug_bug` use
+  // (`aiAskService`). motir-ai reads the project's code before a guide turn only when
+  // `context.code.repos[]` names a repository; without it the guide asked the person
+  // to paste code and wrote to-do commands from memory. `undefined` means "no
+  // connected repo", and the key is then OMITTED, never sent empty.
+  const code = await resolvePlanningCodeContext({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    projectId: ctx.projectId,
+  });
+  const context: JobContextBag = { prompt: turn.body, guideContext, ...(code ? { code } : {}) };
   return submitJob(
     'guide_work_item',
     {
