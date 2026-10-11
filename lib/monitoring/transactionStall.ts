@@ -1,5 +1,11 @@
 import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
 import type { ErrorEvent, EventHint } from '@sentry/nextjs';
+import {
+  processPressureTags,
+  rollProcessPressureWindow,
+  startProcessPressure,
+  stopProcessPressure,
+} from './processPressure';
 
 // WHAT A TRANSACTION TIMEOUT WAS WAITING ON (MOTIR-6701).
 //
@@ -121,11 +127,15 @@ export function startTransactionStallMonitor(): void {
     timer: setInterval(() => {
       monitor.previous = snapshot(histogram);
       histogram.reset();
+      // The GC / heap / CPU readings (MOTIR-8264) roll on this same clock, so
+      // every window-based tag on an event spans the same two windows.
+      rollProcessPressureWindow();
     }, WINDOW_MS),
   };
   // Never keep a process alive for a measurement.
   monitor.timer.unref();
   loopMonitor = monitor;
+  startProcessPressure();
 }
 
 /** Stop the monitor and forget every reading — for tests. */
@@ -134,6 +144,7 @@ export function stopTransactionStallMonitor(): void {
   clearInterval(loopMonitor.timer);
   loopMonitor.histogram.disable();
   loopMonitor = null;
+  stopProcessPressure();
 }
 
 /** True when {@link startTransactionStallMonitor} has run in this process. */
@@ -296,6 +307,9 @@ export function transactionStallTags(err: unknown): Record<string, string> | nul
     [STALL_TAG.loopP99Ms]: loop ? String(Math.round(loop.p99Ms)) : UNMEASURED,
     ...poolTags(registeredPools()),
     [STALL_TAG.uptimeS]: String(Math.round(process.uptime())),
+    // What held the CPU over the same span — GC, heap, cgroup throttle, steal
+    // (MOTIR-8264, `./processPressure`).
+    ...processPressureTags(),
   };
 }
 

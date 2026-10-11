@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import type { ErrorEvent } from '@sentry/nextjs';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, dbPool } from '@/lib/db';
+import { PROCESS_PRESSURE_TAG } from '@/lib/monitoring/processPressure';
 import { serverBeforeSend, serverSentryInitOptions } from '@/lib/monitoring/serverInit';
 import {
   STALL_TAG,
@@ -82,6 +83,14 @@ describe('recognising a transaction timeout', () => {
     ).toBeNull();
     expect(transactionTimeoutHalf(new Error('boom'))).toBeNull();
     expect(transactionTimeoutHalf(undefined)).toBeNull();
+    expect(transactionStallTags(new Error('boom'))).toBeNull();
+  });
+});
+
+describe('the GC / heap / CPU readings (MOTIR-8264)', () => {
+  it('ride on a P2028’s tag set and on nothing else', () => {
+    const tags = transactionStallTags(Object.assign(new Error('x'), { code: 'P2028' }))!;
+    for (const key of Object.values(PROCESS_PRESSURE_TAG)) expect(tags).toHaveProperty(key);
     expect(transactionStallTags(new Error('boom'))).toBeNull();
   });
 });
