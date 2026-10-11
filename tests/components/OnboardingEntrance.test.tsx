@@ -24,29 +24,31 @@ import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
 afterEach(cleanup);
 
 describe('OnboardingEntrance', () => {
-  it('renders the default panel: idea box + Start planning + the secondary import row', () => {
+  it('renders the default panel: idea box + Start + the secondary import row', () => {
     renderWithIntl(<OnboardingEntrance carriedIdea={null} />);
 
-    screen.getByRole('heading', { name: 'How would you like to start?' });
-    screen.getByText('Build with AI');
+    screen.getByRole('heading', { name: 'Vibe the project' });
+    screen.getByText('Welcome to Motir');
 
     // The "See how Motir works" explainer link is part of the header.
     expect(screen.getByRole('link', { name: /see how motir works/i }).getAttribute('href')).toBe(
       '/onboarding/how-it-works',
     );
 
-    // The idea box is empty and labelled "Your idea".
-    const idea = screen.getByRole('textbox', { name: 'Your idea' }) as HTMLTextAreaElement;
+    // The idea box is empty and labelled "What are you building?".
+    const idea = screen.getByRole('textbox', {
+      name: 'What are you building?',
+    }) as HTMLTextAreaElement;
     expect(idea.value).toBe('');
 
     // Primary CTA is a submit button (drives the form → startPlanningAction).
-    const start = screen.getByRole('button', { name: /start planning/i }) as HTMLButtonElement;
+    const start = screen.getByRole('button', { name: /^start$/i }) as HTMLButtonElement;
     expect(start.type).toBe('submit');
 
     // The secondary migrate row is a real link to the migrate wizard.
     screen.getByText('OR');
     const migrateLink = screen.getByRole('link', {
-      name: /i have an existing project — migrate it/i,
+      name: /already have a project\?/i,
     });
     expect(migrateLink.getAttribute('href')).toBe('/onboarding/migrate');
   });
@@ -62,15 +64,16 @@ describe('OnboardingEntrance', () => {
     screen.getByRole('link', { name: /see how motir works/i });
 
     // The preserved idea pre-fills the box.
-    expect((screen.getByRole('textbox', { name: 'Your idea' }) as HTMLTextAreaElement).value).toBe(
-      idea,
-    );
+    expect(
+      (screen.getByRole('textbox', { name: 'What are you building?' }) as HTMLTextAreaElement)
+        .value,
+    ).toBe(idea);
 
     // The CTA becomes "Continue with this idea".
     screen.getByRole('button', { name: /continue with this idea/i });
 
     // Arriving with an idea in hand = starting fresh: the migrate path is dropped.
-    expect(screen.queryByRole('link', { name: /migrate it/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /already have a project\?/i })).toBeNull();
     expect(screen.queryByText('OR')).toBeNull();
   });
 });

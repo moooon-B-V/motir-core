@@ -41,12 +41,12 @@ test('Start planning routes the entrance into the discovery chat', async ({ page
   );
 
   await page.goto('/onboarding');
-  await expect(page.getByRole('heading', { name: 'How would you like to start?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Vibe the project' })).toBeVisible();
 
   await page
-    .getByRole('textbox', { name: 'Your idea' })
+    .getByRole('textbox', { name: 'What are you building?' })
     .fill('A booking app for a hair salon where clients pick a stylist and time.');
-  await page.getByRole('button', { name: /start planning/i }).click();
+  await page.getByRole('button', { name: /^start$/i }).click();
 
   // Forwards to the discovery chat surface, which renders its composer.
   await page.waitForURL('**/onboarding/discovery');
@@ -58,7 +58,7 @@ test('the existing-project door routes to the migrate wizard', async ({ page }) 
   await createFirstProject(page, 'Invoicer');
 
   await page.goto('/onboarding');
-  await page.getByRole('link', { name: /i have an existing project/i }).click();
+  await page.getByRole('link', { name: /already have a project\?/i }).click();
 
   // The entrance's existing-project door routes to the migrate wizard
   // (MOTIR-934); its optional Import step reaches the importer (MOTIR-942) at
@@ -75,6 +75,8 @@ test('the "See how Motir works" link routes to the explainer hand-off', async ({
   await page.getByRole('link', { name: /see how motir works/i }).click();
 
   await page.waitForURL('**/onboarding/how-it-works');
-  await expect(page.getByRole('heading', { name: 'How Motir works' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'AI does the work. You make the calls.' }),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Back to start' })).toBeVisible();
 });
