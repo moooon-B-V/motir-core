@@ -79,6 +79,7 @@ import type {
   PlanChangeProgress,
   QueuedTurn,
 } from '@/lib/hooks/usePlanChangeConversation';
+import { planRunPhase } from '@/lib/planning/planRunPhase';
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
@@ -382,7 +383,13 @@ export function PlanChangeRail({
   const declinedHere = state.decided === 'declined' && Boolean(state.review?.gate);
   // A PLAN RUN is writing (MOTIR-6037's hand-off, Panel 9): the planner has what it needs
   // and the run is a server job, so the reader may leave. An ASK run carries no plan id.
-  const writing = state.phase === 'streaming' && state.planId !== null;
+  // ⚠️ ONLY ONCE THE RUN HAS SETTLED ITS TARGET (MOTIR-8203). Before that the run is
+  // still in its conversation phase and may come back with a question, so "I have
+  // what I need" would be false and would send the person away at the one moment
+  // the planner may need them. `planRunPhase` is the one definition of the boundary.
+  const runPhase = planRunPhase(state);
+  const writing = runPhase === 'planning';
+  const conversing = runPhase === 'conversation';
   // …and it is REWRITING the plan in hand rather than writing a first one.
   const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
@@ -1005,6 +1012,15 @@ export function PlanChangeRail({
             the run carries on server-side and the plan will be waiting in To approve.
             A revision of the plan in hand gets its own form. The link is a real
             anchor to the tab (§22.9). */}
+        {/* THE CONVERSATION PHASE (MOTIR-8203): until the run settles what it is
+            planning, the planner says only what is true — it is working out the
+            ask and may still have a question. Keyed, like the hand-off it gives way
+            to at `target_settled`; a question ends the run before either is due. */}
+        {conversing ? (
+          <Bubble role="assistant" testId="plan-conversation-phase">
+            {tp('handoff.conversing')}
+          </Bubble>
+        ) : null}
         {writing ? (
           <Bubble role="assistant" testId="plan-handoff">
             {tp.rich(rewritingPlan ? 'handoff.rewriting' : 'handoff.writing', {

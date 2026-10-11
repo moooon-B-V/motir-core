@@ -12966,6 +12966,7 @@
         "proceed": "Oui, refuser"
       },
       "handoff": {
+        "conversing": "Je détermine ce que vous demandez et où cela s’inscrit dans le projet. Je vous poserai peut-être une question avant de commencer la planification.",
         "writing": "J'ai ce qu'il me faut — je rédige le plan maintenant. Inutile d'attendre ici : fermez quand vous le souhaitez, le plan vous attendra dans <link>En attente de votre part</link>.",
         "rewriting": "Je rédige une nouvelle version de ce plan. Vous pouvez fermer — pendant que je travaille, il est dans En planification, et il revient dans <link>En attente de votre part</link> pour que vous décidiez une fois que j'aurai terminé."
       }

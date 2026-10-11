@@ -12963,6 +12963,7 @@
         "proceed": "Tak, odrzuć"
       },
       "handoff": {
+        "conversing": "Ustalam, o co prosisz i gdzie to pasuje w projekcie. Zanim zacznę planować, mogę zadać ci pytanie.",
         "writing": "Mam wszystko, czego potrzebuję — piszę teraz plan. Nie trzeba tu czekać: zamknij to okno w dowolnej chwili, a plan będzie czekać w sekcji <link>Czeka na Ciebie</link>.",
         "rewriting": "Piszę nową wersję tego planu. Możesz to zamknąć — w trakcie pracy plan jest w sekcji „Planowanie”, a gdy skończę, wróci do sekcji <link>Czeka na Ciebie</link>, gdzie podejmiesz decyzję."
       }

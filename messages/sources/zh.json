@@ -10060,6 +10060,7 @@
   "approvalGate.planApproval.declineConfirm.label": "Why are you declining it?",
   "approvalGate.planApproval.declineConfirm.helper": "Optional. It is kept with the decision.",
   "approvalGate.planApproval.declineConfirm.proceed": "Yes, decline",
+  "approvalGate.planApproval.handoff.conversing": "I’m working out what you’re asking for and where it fits in the project. I may ask you a question before I start planning.",
   "approvalGate.planApproval.handoff.writing": "I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in <link>Waiting on you</link>.",
   "approvalGate.planApproval.handoff.rewriting": "I’m writing a new version of this plan. You can close this — it is under Planning while I work, and it comes back to <link>Waiting on you</link> for you to decide once I’m done.",
   "approvalGate.planAsk.title": "Plan the follow-up with Motir AI?",
