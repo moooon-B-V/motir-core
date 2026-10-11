@@ -19,11 +19,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const init = vi.hoisted(() => vi.fn());
 const captureRouterTransitionStart = vi.hoisted(() => vi.fn());
 const captureRequestError = vi.hoisted(() => vi.fn());
+const withScope = vi.hoisted(() => vi.fn());
 
 vi.mock('@sentry/nextjs', () => ({
   init,
   captureRouterTransitionStart,
   captureRequestError,
+  withScope,
 }));
 
 /** Every monitoring variable cleared — the self-hoster's environment. */
@@ -166,9 +168,18 @@ describe('the CLIENT cannot read a runtime environment, and says so', () => {
 });
 
 describe('the server request-error hook is always exported (`instrumentation.ts`)', () => {
-  it('is Sentry.captureRequestError, with no DSN set', async () => {
+  it('forwards to Sentry.captureRequestError, with no DSN set', async () => {
+    // A wrapper since MOTIR-8214 (it tags the digest), so the export is no longer
+    // the SDK function itself — what must hold is that every call reaches it.
+    captureRequestError.mockClear();
     const mod = await import('@/instrumentation');
-    expect(mod.onRequestError).toBe(captureRequestError);
+    const args = [
+      new Error('boom'),
+      { path: '/workbench', method: 'GET', headers: {} },
+      { routerKind: 'App Router', routePath: '/workbench', routeType: 'render' },
+    ] as Parameters<typeof mod.onRequestError>;
+    mod.onRequestError(...args);
+    expect(captureRequestError).toHaveBeenCalledWith(...args);
     expect(init).not.toHaveBeenCalled();
   });
 
