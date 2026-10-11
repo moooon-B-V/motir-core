@@ -2102,7 +2102,7 @@ export async function runHoldPlanRevision(
   // The END closes the plan the revision re-opened (Bug MOTIR-8208) — through the
   // same close a generation takes — and then gives the lease back.
   const released = await plansService.closeRevision(args.planId, ctx, actor, {
-    diff: { via: HOLD_PLAN_REVISION_TOOL_NAME },
+    trailDiff: { via: HOLD_PLAN_REVISION_TOOL_NAME },
   });
   return toolOk(
     released.status === 'declined'

@@ -7625,7 +7625,11 @@ export const plansService = {
     planId: string,
     ctx: ServiceContext,
     actor: PlanRevisionAgentActor,
-    opts: { summary?: string | null; diff?: Record<string, unknown> } = {},
+    opts: {
+      summary?: string | null;
+      /** Extra keys for the `revision_ended` row on the plan's trail. */
+      trailDiff?: Record<string, unknown>;
+    } = {},
   ): Promise<{ planId: string; released: boolean; planned: boolean; status: string }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -7647,7 +7651,7 @@ export const plansService = {
         status = closed.status;
       } catch (err) {
         await plansService.releaseRevisionLease(planId, ctx, actor, {
-          ...opts.diff,
+          ...opts.trailDiff,
           closeRefused: true,
         });
         throw err;
@@ -7657,7 +7661,7 @@ export const plansService = {
       planId,
       ctx,
       actor,
-      opts.diff ?? {},
+      opts.trailDiff ?? {},
     );
     return { planId, released, planned: status === 'planned', status };
   },

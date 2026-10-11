@@ -545,7 +545,7 @@ export const aiGenerationService = {
       }
       const closed = await plansService.closeRevision(plan.id, ctx, opts.actor ?? EMPTY_ACTOR, {
         summary: opts.summary ?? null,
-        diff: { proposalCount: createdIds.length },
+        trailDiff: { proposalCount: createdIds.length },
       });
       return {
         planId: plan.id,

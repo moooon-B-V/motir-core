@@ -958,12 +958,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '8a4719704960',
   },
   hold_plan_revision: {
-    // What a reader picks this one on: it is the only plan door that holds a plan
-    // still while it is rewritten, and it moves nothing about the plan itself.
+    // What a reader picks this one on: it is the only plan door that re-opens a
+    // plan up for review while it is rewritten, and closes it again at the end.
     summary:
-      'Hold a plan that is up for review while you revise it — listed under Planning, Approve refused — and release it when you finish.',
+      'Re-open a plan that is up for review while you revise it — generating, Approve refused, steps recorded — and close it again when you finish.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '3d8b5de25ed7',
+    // Re-pinned for MOTIR-8208: the revision re-opens the plan and `end` closes it.
+    descriptionFingerprint: '36c67f640eb5',
   },
   open_plan_session: {
     // Re-worded for MOTIR-6028: a scope holds MANY conversations now, and the
