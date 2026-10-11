@@ -4,7 +4,7 @@
 // string unions, the `proposed_fields` / `patch` JSON columns become typed
 // objects). The 7.4.5 plan-detail + 7.4.13 plans-list UIs bind to these.
 
-import type { JobStatus } from '@/lib/ai/types';
+import type { JobStatus, SubmittedRequirement } from '@/lib/ai/types';
 import type {
   CrossLevelEdgeDto,
   ExecutorDto,
@@ -847,6 +847,71 @@ export interface PlanDto {
    * fourth kind of ending. See {@link PlanDecisionReasonDto}.
    */
   decisionReason: PlanDecisionReasonDto | null;
+  /**
+   * The requirement a Sharpen session SETTLED on this plan (Task MOTIR-1101 ·
+   * MOTIR-8183), or null when nobody has sharpened it. Written whole by the
+   * write-back door on every call, so it is always the cumulative state — a
+   * session stopped halfway leaves exactly what was settled before the stop.
+   */
+  sharpenedRequirement: SharpenedRequirementDto | null;
+}
+
+/**
+ * One assumption the PLANNER recorded for a question the person skipped or
+ * answered "you decide" to (Task MOTIR-1101) — its own recommendation, kept
+ * apart from the answers the person gave so a reader can tell the two apart.
+ */
+export interface PlannerAssumptionDto {
+  question: string;
+  recommendation: string;
+}
+
+/**
+ * What a Sharpen session settled on a plan (Task MOTIR-1101 · MOTIR-8183): the
+ * six parts of the settled requirement (`SubmittedRequirement`, every part
+ * optional — a session settles some of them), the planner's marked assumptions,
+ * and when the last write landed.
+ */
+export interface SharpenedRequirementDto extends SubmittedRequirement {
+  plannerAssumptions: PlannerAssumptionDto[];
+  /** ISO time of the write that stored this value. */
+  settledAt: string;
+}
+
+/** Where a Sharpen write-back lands — a plan, or one committed work item. */
+export type SharpeningScope = { planId: string } | { workItemKey: string };
+
+/**
+ * The body motir-ai's grilling session sends core's internal write-back door,
+ * `PUT /api/internal/ai/plan-sharpening` (Task MOTIR-1101 — the store is
+ * MOTIR-8183, the door MOTIR-8175, the sender MOTIR-8176). ONE contract for both
+ * sides.
+ *
+ * Every call carries the CUMULATIVE state, never a delta: `requirement` holds
+ * every answer settled so far and `plannerAssumptions` every assumption, so a
+ * call after each answer and a single call at stop leave the same result.
+ */
+export interface SharpeningWriteBackInput {
+  /** The motir-ai job sending it — the job token's own job. */
+  jobId: string;
+  scope: SharpeningScope;
+  requirement: Partial<SubmittedRequirement>;
+  plannerAssumptions: PlannerAssumptionDto[];
+  /** Plan scope only — per-`add`-proposal acceptance criteria and assumptions. */
+  perItem?: SharpeningPerItemInput[];
+}
+
+/** One `add` proposal's share of a plan-scope write-back. */
+export interface SharpeningPerItemInput {
+  planItemId: string;
+  acceptance: string[];
+  assumptions: string[];
+}
+
+/** What the write-back door answers: where it wrote, and when. */
+export interface SharpeningWriteBackResult {
+  scope: SharpeningScope;
+  settledAt: string;
 }
 
 /** A plan plus its bundled proposal items (the detail view). */

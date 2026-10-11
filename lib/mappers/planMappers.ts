@@ -19,6 +19,7 @@ import type {
   PlanNarrationSessionDto,
   PlanStepDto,
   PlanWithItemsDto,
+  SharpenedRequirementDto,
   WorkItemPlanHistoryEntryDto,
 } from '@/lib/dto/plans';
 import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
@@ -86,6 +87,10 @@ export function toPlanDto(row: Plan, itemCount: number): PlanDto {
     // the review surface can tell a DISCARDED plan from one somebody reviewed
     // and rejected without re-deriving it from which timestamps are null.
     decisionReason: row.decisionReason,
+    // What a Sharpen session settled (Task MOTIR-1101 · MOTIR-8183). The column
+    // is written only by `planSharpeningService` in the DTO's own shape, so it is
+    // read back as that shape; null on every plan nobody sharpened.
+    sharpenedRequirement: (row.sharpenedRequirement as SharpenedRequirementDto | null) ?? null,
   };
 }
 

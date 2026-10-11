@@ -7161,24 +7161,24 @@ enum PlanSessionEndReason {
 /// untouched. The lifecycle timestamps + decider ARE the history surface (when
 /// planned / when decided / by whom). Workspace-scoped tenant data (RLS).
 model Plan {
-  id             String                  @id @default(cuid())
-  workspaceId    String                  @map("workspace_id")
-  projectId      String                  @map("project_id")
-  status         PlanStatus              @default(generating)
+  id                   String                  @id @default(cuid())
+  workspaceId          String                  @map("workspace_id")
+  projectId            String                  @map("project_id")
+  status               PlanStatus              @default(generating)
   /// A short label for the plan — typically the idea/prompt the generation came from.
-  title          String?
+  title                String?
   /// Longer human summary of what the plan proposes (Markdown), when distinct from the title.
-  summary        String?                 @db.Text
+  summary              String?                 @db.Text
   /// AI-suggested product/project name (MOTIR-1554/1551) — set on the FINAL
   /// plan-proposals append, and ONLY by the onboarding generation. Consumed at
   /// approve to rename a still-provisional draft project. Null otherwise.
-  productName    String?                 @map("product_name")
+  productName          String?                 @map("product_name")
   /// The motir-ai generation job that produced this plan, for provenance.
-  sourceJobId    String?                 @map("source_job_id")
+  sourceJobId          String?                 @map("source_job_id")
   /// WHY this plan was started (MOTIR-916) — `user` (someone clicked) or
   /// `cadence` (the auto-plan watcher fired it when the ready set drained).
   /// Set at submit; never changes afterwards.
-  origin         PlanOrigin              @default(user)
+  origin               PlanOrigin              @default(user)
   /// WHO ASKED for this plan (MOTIR-2986) — the person whose request produced
   /// it, as opposed to `decidedById`'s who APPROVED it and `authorSource`'s
   /// which AGENT wrote it. A plan has up to three parties and they are commonly
@@ -7190,7 +7190,7 @@ model Plan {
   /// person a request they never made. The requester is written ⟺ a person
   /// actually asked (`origin = 'user'`); a cadence plan is identified by its
   /// `origin`, not by a fabricated requester.
-  createdById    String?                 @map("created_by_id")
+  createdById          String?                 @map("created_by_id")
   /// WHO authored this plan (MOTIR-2986), as opposed to `origin`'s WHY,
   /// `createdById`'s WHO ASKED and `sourceJobId`'s WHICH JOB — the
   /// `source · harness · model` triple
@@ -7203,21 +7203,21 @@ model Plan {
   /// SERVER-SET at the write seam — `mcp` from the `create_plan` MCP tool, the
   /// same discipline `create_work_item` applies so an agent cannot claim
   /// `native`/`manual`. NEVER a caller field.
-  authorSource   WorkItemPlanningSource? @map("author_source")
+  authorSource         WorkItemPlanningSource? @map("author_source")
   /// The authoring agent's harness, SELF-REPORTED at `create_plan`
   /// (`plannedWithHarness`) — free text by Decision 2, stored as-supplied
   /// (trimmed, empty → null). Null on every plan Motir's own generator produced:
   /// the generator path is deliberately not retrofitted here (MOTIR-2996).
-  authorHarness  String?                 @map("author_harness")
+  authorHarness        String?                 @map("author_harness")
   /// The authoring agent's model, SELF-REPORTED at `create_plan`
   /// (`plannedWithModel`) — free text, same rules as `authorHarness`.
-  authorModel    String?                 @map("author_model")
-  createdAt      DateTime                @default(now()) @map("created_at")
+  authorModel          String?                 @map("author_model")
+  createdAt            DateTime                @default(now()) @map("created_at")
   /// Set when generation completes (→ `planned`).
-  plannedAt      DateTime?               @map("planned_at")
+  plannedAt            DateTime?               @map("planned_at")
   /// Set on approve/decline, with the deciding actor.
-  decidedAt      DateTime?               @map("decided_at")
-  decidedById    String?                 @map("decided_by_id")
+  decidedAt            DateTime?               @map("decided_at")
+  decidedById          String?                 @map("decided_by_id")
   /// WHY this plan ended, for the three histories `declined` now covers
   /// (MOTIR-3189). `reviewed` — a person read a finished plan and said no.
   /// `discarded` — a person ended a plan that never finished generating.
@@ -7239,14 +7239,14 @@ model Plan {
   /// NULL is not a fourth reason: every row written before this column existed
   /// reads null, so a consumer treats it as "not recorded" and falls back to the
   /// status. Never set on `approved` — an approval has one history.
-  decisionReason PlanDecisionReason?     @map("decision_reason")
+  decisionReason       PlanDecisionReason?     @map("decision_reason")
   /// The planning SESSION this plan belongs to (AMENDMENT 17 §5) — set at
   /// creation on every author path and NEVER re-pointed; a revision keeps it
   /// (only `sourceJobId` moves). Closes AMENDMENT 16 D5's `lastJobId` lookup.
   /// NULLABLE AT THE DATABASE only so a build predating this column can still
   /// write a plan during a rollout; "every plan has a session" is enforced by
   /// the author paths (MOTIR-6022) and the MOTIR-6020 backfill.
-  sessionId      String?                 @map("session_id")
+  sessionId            String?                 @map("session_id")
   /// WHEN anything last happened to this plan while it was being written
   /// (Story MOTIR-7820 · MOTIR-7822): stamped by every planner step signal and
   /// by every content write (create, append, deepen, edit, correction,
@@ -7254,7 +7254,15 @@ model Plan {
   /// DECISION (`planned` / `approved` / `declined`) is not activity and does not
   /// stamp it. What tells a stalled plan from a busy one — `createdAt` and the
   /// decision timestamps cannot, because a plan records nothing between them.
-  lastActivityAt DateTime                @default(now()) @map("last_activity_at")
+  lastActivityAt       DateTime                @default(now()) @map("last_activity_at")
+  /// The SHARPENED requirement (Task MOTIR-1101 · MOTIR-8183) — the answers a
+  /// person settled in a Sharpen session on this plan, plus the planner's marked
+  /// assumptions for the questions they skipped or left to it, written by the
+  /// write-back door (`planSharpeningService`) as a FULL replace each call. The
+  /// shape is `SharpenedRequirementDto` (`lib/dto/plans.ts`): the six
+  /// `SubmittedRequirement` parts, `plannerAssumptions` and `settledAt`. NULL
+  /// means nobody sharpened this plan — every plan written before the column.
+  sharpenedRequirement Json?                   @map("sharpened_requirement")
 
   workspace         Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project           Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
