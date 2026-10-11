@@ -222,9 +222,19 @@ export const monitorConnectionRepository = {
    * exist until it has read them. Ordered by id so a tick's fan-out is stable.
    * Each row carries its `installationId` (where the credential lives) and its
    * `boundByUserId` (whose identity files the bugs).
+   *
+   * ⚠️ A binding whose GRANT carries a permanent refresh refusal
+   * (`refreshRevokedAt`) is LEFT OUT (MOTIR-8170). Its credential cannot refresh
+   * until a person re-authorises, so polling it only re-asks the provider for a
+   * token it has already said does not exist — one call and one warn line every
+   * tick, forever. A grant that is merely `degraded` (a timeout, a 5xx) is still
+   * listed, and a re-authorisation or a successful refresh clears the mark.
    */
   async listForPolling(tx: Prisma.TransactionClient): Promise<MonitorConnection[]> {
-    return tx.monitorConnection.findMany({ orderBy: { id: 'asc' } });
+    return tx.monitorConnection.findMany({
+      where: { installation: { refreshRevokedAt: null } },
+      orderBy: { id: 'asc' },
+    });
   },
 
   /** Record what the last poll did — the line the Monitoring room shows. */

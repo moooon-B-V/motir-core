@@ -12738,6 +12738,15 @@ model MonitorInstallation {
   /// When the health above was last established. NULL until the first probe.
   healthCheckedAt DateTime? @map("health_checked_at")
 
+  /// When the provider PERMANENTLY refused this grant's refresh token — a 4xx
+  /// answer such as Sentry's "Given refresh token does not exist" (MOTIR-8170).
+  /// NULL while the refresh token is believed good. Set, the grant can never
+  /// refresh again until a person re-authorises, so the reconciling poll skips
+  /// every binding on it rather than spending a provider call and a warn line on
+  /// each five-minute tick. A successful refresh and a re-authorisation both
+  /// clear it. A timeout or a 5xx never sets it: those are retried next tick.
+  refreshRevokedAt DateTime? @map("refresh_revoked_at")
+
   /// Per-provider context that carries NO secret — Sentry's organisation slug,
   /// so the room can say which org is connected without a provider call. Json?
   /// because the shape is the provider's; the discriminator above says how to
