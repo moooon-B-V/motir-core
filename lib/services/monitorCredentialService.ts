@@ -42,22 +42,31 @@ import { withSystemContext } from '@/lib/workspaces/context';
 export const MONITOR_EXPIRY_SKEW_MS = 60_000;
 
 /**
- * How long the refresh TRANSACTION may run, in ms — derived from the provider
- * call's own deadline, never left at Prisma's 5-second default.
+ * How long a refresh LEASE lasts, in ms — the provider call's own deadline plus
+ * a margin for the two short transactions around it (MOTIR-8184).
  *
- * ⚠️ WHY THE DEFAULT BROKE A LIVE CONNECTION (MOTIR-5988). The lock is held
- * across the provider call on purpose (below), so the transaction lasts at least
- * as long as the call. Sentry took ~10 s; the transaction expired at 5 s; Sentry
- * had already ROTATED the refresh token, and the write storing the new pair
- * rolled back. What was left in the row was a refresh token the provider had
- * invalidated, so every later refresh was refused until a person re-authorised.
- *
- * TWO calls, not one: a caller blocked on the row lock waits out the holder's
- * whole provider call, and on the forced-refresh path then makes its own. The
- * margin covers the queries around them. Pinned as arithmetic by
- * `monitorCredential.test.ts`, so neither constant can be edited alone into a gap.
+ * The lease is the single-flight guarantee now that no transaction is held
+ * across the provider call: a caller that finds a live lease waits rather than
+ * spending the same rotating refresh token. It must outlive the call it guards,
+ * or a second caller could take over while the first is still waiting on the
+ * provider — and it must EXPIRE, so a process that died mid-call leaves a lease
+ * the next caller takes over rather than a grant nobody can refresh. Pinned as
+ * arithmetic by `monitorCredential.test.ts`.
  */
-export const MONITOR_REFRESH_TRANSACTION_TIMEOUT_MS = 2 * MONITOR_REFRESH_TIMEOUT_MS + 10_000;
+export const MONITOR_REFRESH_LEASE_MS = MONITOR_REFRESH_TIMEOUT_MS + 15_000;
+
+/** How often a caller that found a live lease re-reads the grant, in ms. */
+export const MONITOR_REFRESH_LEASE_POLL_MS = 250;
+
+/**
+ * How many times the write that stores a rotated pair is attempted.
+ *
+ * By the time it runs the provider has already invalidated the old refresh
+ * token, so this one statement failing is the whole incident MOTIR-8184 is
+ * about. A transient database error (a dropped pooled connection, a Neon compute
+ * waking) is worth two more tries; anything that survives three is surfaced.
+ */
+const STORE_ATTEMPTS = 3;
 
 /** What a caller gets to make one provider call with. */
 export interface MonitorAccessToken {
@@ -87,21 +96,10 @@ async function writeDegraded(
 }
 
 /**
- * What one locked read-decide-write produced. A DISCRIMINATED RESULT rather than
- * a thrown error, and that is the whole shape of the fix below.
- *
- * ⚠️ THROWING OUT OF THE TRANSACTION ROLLS THE VERDICT BACK. The first draft
- * wrote `degraded` under the same lock and then re-threw the provider's error —
- * and `$transaction` discarded the write on the way out, so the connection that
- * had just been refused still read `connected`. Its own two tests caught it: the
- * service returned exactly the right error and the row said nothing had
- * happened. So the refusal LEAVES the transaction as a value, and the verdict is
- * committed by a second one.
- *
- * That second write is deliberately NOT under the lock, and does not need to be:
- * the lock exists to stop two callers spending one rotating refresh token, and a
- * health verdict is a fact about the answer that came back rather than a write
- * derived from a row somebody else may be changing.
+ * What one refresh attempt produced. A DISCRIMINATED RESULT rather than a thrown
+ * error: a refusal is a fact to record (`settle` commits the verdict), not an
+ * exception to unwind through a transaction that would roll the verdict back —
+ * the shape MOTIR-5261's first draft got wrong.
  */
 type RefreshOutcome =
   | { kind: 'ok'; credential: MonitorAccessToken }
@@ -111,97 +109,239 @@ type RefreshOutcome =
       provider: string;
       reason: string;
       error: unknown;
+      durationMs: number;
+      /** When an earlier refresh went out and got no answer, if one did. A
+       *  refusal after that is most likely its consequence, not a revocation. */
+      refreshUncertainSince: Date | null;
+    };
+
+/** What the short locked read decided. */
+type LeaseDecision =
+  | { kind: 'fresh'; credential: MonitorAccessToken }
+  | { kind: 'wait' }
+  | {
+      kind: 'refresh';
+      grant: {
+        id: string;
+        provider: string;
+        installationId: string;
+        refreshTokenEncrypted: string;
+        refreshUncertainAt: Date | null;
+      };
+      orgSlug: string | null;
     };
 
 /**
- * Lock the grant, decide, and refresh if needed — holding the lock ACROSS the
- * provider call.
- *
- * `force` skips the expiry check, for the one case where a stored token looks
- * fresh and has been refused anyway.
+ * Every refresh currently between "lease taken" and "outcome committed" in THIS
+ * process. A stopping process awaits them ({@link
+ * monitorCredentialService.settleInFlightRefreshes}) before it disconnects from
+ * the database, so a deploy's SIGTERM does not cut a refresh off between the
+ * provider's answer and the write that stores it.
  */
-async function refreshUnderLock(
-  installationRowId: string,
-  { force }: { force: boolean },
-): Promise<RefreshOutcome> {
-  return withSystemContext(
-    async (tx) => {
-      await monitorInstallationRepository.lockById(installationRowId, tx);
-      const grant = await monitorInstallationRepository.findCredentialById(installationRowId, tx);
-      if (!grant) throw new MonitorGrantNotFoundError(installationRowId);
+const inFlightRefreshes = new Set<Promise<unknown>>();
 
-      const orgSlug = readOrgSlug(grant.metadata);
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-      // The common path, and the one the LOSER of a race lands on: a stored token
-      // that is still good. No provider call at all — which is the observable
-      // consequence the concurrency test asserts.
-      if (!force && grant.tokenExpiresAt.getTime() - MONITOR_EXPIRY_SKEW_MS > Date.now()) {
-        return {
-          kind: 'ok',
-          credential: {
-            installationRowId: grant.id,
-            provider: grant.provider,
-            orgSlug,
-            token: decryptToken(grant.accessTokenEncrypted),
-            expiresAt: grant.tokenExpiresAt,
-          },
-        };
-      }
+/** Short transaction #1: lock, re-read, and decide — taking the lease if this
+ *  caller is the one that refreshes. Commits before any provider call. */
+async function decide(installationRowId: string, force: boolean): Promise<LeaseDecision> {
+  return withSystemContext(async (tx) => {
+    await monitorInstallationRepository.lockById(installationRowId, tx);
+    const grant = await monitorInstallationRepository.findCredentialById(installationRowId, tx);
+    if (!grant) throw new MonitorGrantNotFoundError(installationRowId);
 
-      const provider = getMonitorProvider(grant.provider);
-      let refreshed;
-      try {
-        refreshed = await provider.refreshCredential({
-          installationId: grant.installationId,
-          refreshToken: decryptToken(grant.refreshTokenEncrypted),
-        });
-      } catch (error) {
-        // A refusal here is the customer having revoked the integration far more
-        // often than it is an outage, and either way the connection is not usable.
-        return {
-          kind: 'refused',
-          installationRowId: grant.id,
-          provider: grant.provider,
-          reason:
-            error instanceof MonitorProviderCallError
-              ? error.providerReason
-              : 'The refresh failed.',
-          error,
-        };
-      }
+    const orgSlug = readOrgSlug(grant.metadata);
+    const now = Date.now();
 
-      const updated = await monitorInstallationRepository.updateTokens(
-        grant.id,
-        {
-          accessTokenEncrypted: encryptToken(refreshed.accessToken),
-          refreshTokenEncrypted: encryptToken(refreshed.refreshToken),
-          tokenExpiresAt: refreshed.expiresAt,
-        },
-        tx,
-      );
-      // A successful refresh is also evidence of HEALTH, so the terminal value of
-      // the lifecycle is written here rather than left showing a stale failure — a
-      // re-authorised connection that keeps reading `degraded` is the same silent
-      // wrongness one polarity over.
-      await monitorInstallationRepository.updateHealth(
-        grant.id,
-        { health: 'connected', healthReason: null, healthCheckedAt: new Date() },
-        tx,
-      );
+    // Somebody else is mid-refresh, so wait for their pair — checked BEFORE the
+    // expiry, exactly as the old row lock blocked every reader. Spending the same
+    // refresh token now is the hazard the lease exists for; and a token that
+    // merely LOOKS fresh while a refresh is in flight is usually the one a forced
+    // refresh is replacing because the provider just refused it.
+    if (grant.refreshLeaseUntil && grant.refreshLeaseUntil.getTime() > now) {
+      return { kind: 'wait' };
+    }
 
+    // The common path, and the one a waiter lands on once the holder has stored
+    // its pair: a stored token that is still good. No provider call at all —
+    // which is the observable consequence the concurrency test asserts.
+    if (!force && grant.tokenExpiresAt.getTime() - MONITOR_EXPIRY_SKEW_MS > now) {
       return {
-        kind: 'ok',
+        kind: 'fresh',
         credential: {
           installationRowId: grant.id,
           provider: grant.provider,
           orgSlug,
-          token: refreshed.accessToken,
-          expiresAt: updated.tokenExpiresAt,
+          token: decryptToken(grant.accessTokenEncrypted),
+          expiresAt: grant.tokenExpiresAt,
         },
       };
-    },
-    { timeout: MONITOR_REFRESH_TRANSACTION_TIMEOUT_MS },
+    }
+
+    await monitorInstallationRepository.setRefreshLease(
+      grant.id,
+      new Date(now + MONITOR_REFRESH_LEASE_MS),
+      tx,
+    );
+    return {
+      kind: 'refresh',
+      grant: {
+        id: grant.id,
+        provider: grant.provider,
+        installationId: grant.installationId,
+        refreshTokenEncrypted: grant.refreshTokenEncrypted,
+        refreshUncertainAt: grant.refreshUncertainAt,
+      },
+      orgSlug,
+    };
+  });
+}
+
+/** Short transaction #2: the rotated pair, ALONE, retried on a transient error. */
+async function storeRotatedPair(
+  installationRowId: string,
+  tokens: { accessTokenEncrypted: string; refreshTokenEncrypted: string; tokenExpiresAt: Date },
+): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await withSystemContext((tx) =>
+        monitorInstallationRepository.storeRefreshedTokens(installationRowId, tokens, tx),
+      );
+      return;
+    } catch (error) {
+      if (attempt >= STORE_ATTEMPTS) throw error;
+      await sleep(250 * attempt);
+    }
+  }
+}
+
+/**
+ * Call the provider and commit what it answered — with NO transaction open
+ * while it answers.
+ *
+ * ⚠️ WHY THE LOCK IS NO LONGER HELD ACROSS THIS CALL (MOTIR-8184). The provider
+ * rotates the refresh token the moment it accepts the request. Everything that
+ * could stop our write after that point — a transaction budget (MOTIR-5988), a
+ * client-side abort, a machine stopping before `COMMIT` — leaves a refresh token
+ * the provider has already invalidated, and the connection is dead until a
+ * person re-authorises. Holding a row lock and a transaction across the call
+ * made every one of those a rollback of the new pair. Now the pair is written
+ * in its own transaction, first, the instant it arrives; the health write
+ * follows in another; and single-flight is a lease column, not an open lock.
+ */
+async function refreshWithLease(
+  grant: Extract<LeaseDecision, { kind: 'refresh' }>['grant'],
+  orgSlug: string | null,
+): Promise<RefreshOutcome> {
+  const provider = getMonitorProvider(grant.provider);
+  const startedAt = Date.now();
+
+  let refreshed;
+  try {
+    refreshed = await provider.refreshCredential({
+      installationId: grant.installationId,
+      refreshToken: decryptToken(grant.refreshTokenEncrypted),
+    });
+  } catch (error) {
+    // NO ANSWER (a timeout, a dropped connection — `status` null) is not a
+    // refusal: the request may have reached the provider and rotated the token.
+    // So the stored pair is left exactly as it is, and the moment is recorded.
+    const noAnswer = error instanceof MonitorProviderCallError && error.status === null;
+    const released = await withSystemContext((tx) =>
+      monitorInstallationRepository.releaseRefreshLease(
+        grant.id,
+        { uncertainAt: noAnswer ? new Date() : null },
+        tx,
+      ),
+    );
+    // A refusal here is the customer having revoked the integration far more
+    // often than it is an outage, and either way the connection is not usable.
+    return {
+      kind: 'refused',
+      installationRowId: grant.id,
+      provider: grant.provider,
+      reason:
+        error instanceof MonitorProviderCallError ? error.providerReason : 'The refresh failed.',
+      error,
+      durationMs: Date.now() - startedAt,
+      refreshUncertainSince: noAnswer ? released.refreshUncertainAt : grant.refreshUncertainAt,
+    };
+  }
+
+  // FIRST, AND ALONE: the rotated pair. Nothing shares this transaction.
+  await storeRotatedPair(grant.id, {
+    accessTokenEncrypted: encryptToken(refreshed.accessToken),
+    refreshTokenEncrypted: encryptToken(refreshed.refreshToken),
+    tokenExpiresAt: refreshed.expiresAt,
+  });
+
+  // ⚠️ ONE LINE PER REFRESH, AND NO CREDENTIAL IN IT — the duration and the new
+  // expiry are what let the next lost pair be traced from the platform's logs,
+  // which MOTIR-8184's own incident could not be. `info`, not `warn`: a refresh
+  // that worked is not a warning, and it happens about three times a day a grant.
+  // eslint-disable-next-line no-console -- the refresh trace the card asks for
+  console.info('[monitorCredentialService] refresh succeeded', {
+    installationRowId: grant.id,
+    provider: grant.provider,
+    durationMs: Date.now() - startedAt,
+    expiresAt: refreshed.expiresAt.toISOString(),
+  });
+
+  // A successful refresh is also evidence of HEALTH, so the terminal value of
+  // the lifecycle is written here rather than left showing a stale failure — a
+  // re-authorised connection that keeps reading `degraded` is the same silent
+  // wrongness one polarity over. A failure here costs a stale badge, never the
+  // pair, which is why it is a second transaction.
+  await withSystemContext((tx) =>
+    monitorInstallationRepository.updateHealth(
+      grant.id,
+      { health: 'connected', healthReason: null, healthCheckedAt: new Date() },
+      tx,
+    ),
   );
+
+  return {
+    kind: 'ok',
+    credential: {
+      installationRowId: grant.id,
+      provider: grant.provider,
+      orgSlug,
+      token: refreshed.accessToken,
+      expiresAt: refreshed.expiresAt,
+    },
+  };
+}
+
+/**
+ * Decide, and refresh if needed — single-flight across callers and processes.
+ *
+ * `force` skips the expiry check, for the one case where a stored token looks
+ * fresh and has been refused anyway. A forced caller that had to WAIT for
+ * somebody else's refresh does not refresh again: the pair it was refused with
+ * has just been replaced, and spending the new refresh token as well is how two
+ * page loads used to break a connection.
+ */
+async function refresh(
+  installationRowId: string,
+  { force }: { force: boolean },
+): Promise<RefreshOutcome> {
+  let waited = false;
+  for (;;) {
+    const decision = await decide(installationRowId, force && !waited);
+    if (decision.kind === 'fresh') return { kind: 'ok', credential: decision.credential };
+    if (decision.kind === 'wait') {
+      waited = true;
+      await sleep(MONITOR_REFRESH_LEASE_POLL_MS);
+      continue;
+    }
+    const run = refreshWithLease(decision.grant, decision.orgSlug);
+    inFlightRefreshes.add(run);
+    try {
+      return await run;
+    } finally {
+      inFlightRefreshes.delete(run);
+    }
+  }
 }
 
 /** Hand back the credential, or COMMIT the verdict and then throw. */
@@ -211,38 +351,44 @@ async function settle(outcome: RefreshOutcome): Promise<MonitorAccessToken> {
   await withSystemContext((tx) => writeDegraded(outcome.installationRowId, outcome.reason, tx));
   // ⚠️ THE LOG LINE CARRIES THE REASON AND NO CREDENTIAL. The error path is where
   // a token usually escapes — the happy path has nobody printing anything — so
-  // the fields are named explicitly rather than spread from the row.
+  // the fields are named explicitly rather than spread from the row. It is the
+  // refusal's ONE line, with the same duration the success line carries.
   console.warn('[monitorCredentialService] refresh refused; connection marked degraded', {
     installationRowId: outcome.installationRowId,
     provider: outcome.provider,
     providerReason: outcome.reason,
+    durationMs: outcome.durationMs,
+    // Non-null means an earlier refresh got no answer: an "invalid grant" now is
+    // most likely that lost rotation, not the customer revoking the integration.
+    refreshUncertainSince: outcome.refreshUncertainSince?.toISOString() ?? null,
   });
   throw outcome.error;
 }
 
 export const monitorCredentialService = {
   /**
-   * A USABLE access token for one grant — refreshing under a row lock when the
+   * A USABLE access token for one grant — refreshing, single-flight, when the
    * stored one is expired or nearly so.
    *
-   * ⚠️ THE LOCK IS HELD ACROSS THE REFRESH HTTP CALL, DELIBERATELY, and this is
-   * not the usual benign race. The provider ROTATES the refresh token on every
-   * refresh, so a second concurrent refresh spending the same stored refresh
-   * token either fails or invalidates the pair the first one just persisted — a
-   * connection broken by nothing but two page loads arriving together. So a
-   * concurrent caller BLOCKS on the lock, then re-reads and finds a credential
-   * that is now fresh, and performs NO second refresh.
+   * ⚠️ ONE REFRESH AT A TIME PER GRANT, and this is not the usual benign race.
+   * The provider ROTATES the refresh token on every refresh, so a second
+   * concurrent refresh spending the same stored refresh token either fails or
+   * invalidates the pair the first one just persisted — a connection broken by
+   * nothing but two page loads arriving together. So a concurrent caller finds
+   * the refresh LEASE, waits for it, re-reads, finds a credential that is now
+   * fresh, and performs NO second refresh. (Until MOTIR-8184 this was a row lock
+   * held across the HTTP call; see {@link refreshWithLease} for why it is not.)
    *
    * That last clause is the observable part, which is what makes it testable at
-   * all: "it is locked" is unobservable, "exactly one provider call is made and
-   * the loser proceeds with the winner's token" is not.
+   * all: "it is single-flight" is unobservable, "exactly one provider call is
+   * made and the loser proceeds with the winner's token" is not.
    *
    * SYSTEM context, like the GitLab token mint: a refresh is a trusted operation
    * that a webhook, a poll or a page load may all reach, and the workspace is
    * discovered FROM the row rather than supplied by the caller.
    */
   async getAccessToken(installationRowId: string): Promise<MonitorAccessToken> {
-    const outcome = await refreshUnderLock(installationRowId, { force: false });
+    const outcome = await refresh(installationRowId, { force: false });
     return settle(outcome);
   },
 
@@ -283,7 +429,7 @@ export const monitorCredentialService = {
   },
 
   /**
-   * Refresh REGARDLESS of the stored expiry, under the same lock.
+   * Refresh REGARDLESS of the stored expiry, under the same lease.
    *
    * Separate from {@link getAccessToken} rather than a flag on it, because the
    * two answer different questions — "give me something usable" and "the thing
@@ -291,8 +437,30 @@ export const monitorCredentialService = {
    * case be reached by accident from the first.
    */
   async forceRefresh(installationRowId: string): Promise<MonitorAccessToken> {
-    const outcome = await refreshUnderLock(installationRowId, { force: true });
+    const outcome = await refresh(installationRowId, { force: true });
     return settle(outcome);
+  },
+
+  /**
+   * Wait for every refresh this process has in flight to COMMIT its outcome, or
+   * for `timeoutMs`, whichever comes first. Called by a stopping process before
+   * it disconnects from the database (`scripts/worker.ts`'s drain, MOTIR-8184).
+   *
+   * ⚠️ A STOP IS WHERE A ROTATED PAIR USED TO DIE. The provider has rotated the
+   * token the moment it answers; a process that exits before the pair is stored
+   * leaves the grant holding a refresh token that no longer exists. Resolves
+   * whether the refreshes succeeded or not — a refusal is still an outcome the
+   * row has recorded — and never throws.
+   */
+  async settleInFlightRefreshes(timeoutMs: number): Promise<{ pending: number }> {
+    if (inFlightRefreshes.size === 0) return { pending: 0 };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    });
+    await Promise.race([Promise.allSettled([...inFlightRefreshes]), deadline]);
+    clearTimeout(timer);
+    return { pending: inFlightRefreshes.size };
   },
 
   /**

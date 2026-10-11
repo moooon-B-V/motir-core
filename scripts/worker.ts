@@ -49,6 +49,10 @@ import { JobWorker } from '@/lib/jobs/engine/worker';
 import { JobScheduler } from '@/lib/jobs/engine/scheduler';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { listenForQueuedJobs } from '@/lib/jobs/engine/notify';
+import {
+  MONITOR_REFRESH_LEASE_MS,
+  monitorCredentialService,
+} from '@/lib/services/monitorCredentialService';
 // Side-effect import: evaluates every definition module so `defineJob` has
 // registered every job. See the warning above — this is not an unused import.
 import '@/lib/jobs/registry';
@@ -195,7 +199,22 @@ async function main(): Promise<void> {
     console.info(`[worker] ${signal} — draining`);
     void (async () => {
       await listener.stop();
-      await worker.shutdown();
+      // ⚠️ AN IN-FLIGHT CREDENTIAL REFRESH IS WAITED ON, NOT ONLY THE JOB AROUND
+      // IT (MOTIR-8184). The job drain gives up after its own deadline and
+      // releases the claim, which is fine for a job — it re-runs — and fatal for a
+      // monitor token refresh: the provider rotates the refresh token as it
+      // answers, so disconnecting before the new pair is stored kills the
+      // connection until a person re-authorises. `fly.toml`'s `kill_timeout`
+      // is sized to cover this wait.
+      const [, refreshes] = await Promise.all([
+        worker.shutdown(),
+        monitorCredentialService.settleInFlightRefreshes(MONITOR_REFRESH_LEASE_MS),
+      ]);
+      if (refreshes.pending > 0) {
+        console.warn(
+          `[worker] ${refreshes.pending} credential refresh(es) still in flight at exit`,
+        );
+      }
       await db.$disconnect();
       console.info('[worker] drained; exiting');
       process.exit(0);

@@ -248,6 +248,68 @@ describe('the SENTRY adapter, against a stubbed HTTP layer', () => {
     expect(credential.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 8 * 60 * 60 * 1000);
   });
 
+  it('waits for a refresh Sentry answers after the OLD 15 s deadline (MOTIR-8184)', async () => {
+    // Aborting a refresh only stops US waiting: Sentry has usually rotated the
+    // refresh token already, so the old 15 s bound threw away a pair Sentry had
+    // issued (production, 2026-10-10 23:15Z: "No response within 15000ms.").
+    vi.useFakeTimers();
+    try {
+      globalThis.fetch = vi.fn(
+        (_input: unknown, init?: RequestInit) =>
+          new Promise((resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+            setTimeout(
+              () =>
+                resolve(
+                  new Response(JSON.stringify({ token: 'access-2', refreshToken: 'refresh-2' }), {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                  }),
+                ),
+              20_000,
+            );
+          }),
+      ) as unknown as typeof fetch;
+      const pending = sentryMonitorProvider.refreshCredential({
+        installationId: 'inst-1',
+        refreshToken: 'refresh-1',
+      });
+      await vi.advanceTimersByTimeAsync(20_001);
+      await expect(pending).resolves.toMatchObject({
+        accessToken: 'access-2',
+        refreshToken: 'refresh-2',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still bounds a refresh that never answers, at the refresh deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      globalThis.fetch = vi.fn(
+        (_input: unknown, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      ) as unknown as typeof fetch;
+      const pending = sentryMonitorProvider.refreshCredential({
+        installationId: 'inst-1',
+        refreshToken: 'refresh-1',
+      });
+      // `status: null` is what the credential service reads as "may have
+      // rotated" rather than as a refusal.
+      const settled = expect(pending).rejects.toMatchObject({
+        status: null,
+        providerReason: `No response within ${MONITOR_REFRESH_TIMEOUT_MS}ms.`,
+      });
+      await vi.advanceTimersByTimeAsync(MONITOR_REFRESH_TIMEOUT_MS + 1);
+      await settled;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('verifies the install with { status: "installed" }', async () => {
     stubFetch([{ body: {} }]);
     await sentryMonitorProvider.verifyInstall({

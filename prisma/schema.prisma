@@ -12738,6 +12738,22 @@ model MonitorInstallation {
   /// When the health above was last established. NULL until the first probe.
   healthCheckedAt DateTime? @map("health_checked_at")
 
+  /// The single-flight LEASE on a token refresh (MOTIR-8184). Set in a short
+  /// transaction before the provider call and cleared by the transaction that
+  /// stores the rotated pair, so no transaction — and no row lock — is open while
+  /// the provider is answering. A caller that finds a live lease waits for it
+  /// rather than spending the same rotating refresh token a second time. A lease
+  /// left behind by a process that died mid-call simply expires. NULL when no
+  /// refresh is in flight.
+  refreshLeaseUntil DateTime? @map("refresh_lease_until")
+
+  /// When a refresh last went out and got NO ANSWER — a timeout or a dropped
+  /// connection (MOTIR-8184). The provider may still have rotated the refresh
+  /// token on its side, so the stored pair is left as it is and this records that
+  /// the next refusal is most likely the consequence of that lost answer rather
+  /// than the customer revoking the integration. Cleared by a successful refresh.
+  refreshUncertainAt DateTime? @map("refresh_uncertain_at")
+
   /// Per-provider context that carries NO secret — Sentry's organisation slug,
   /// so the room can say which org is connected without a provider call. Json?
   /// because the shape is the provider's; the discriminator above says how to

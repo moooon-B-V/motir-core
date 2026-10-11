@@ -54,6 +54,8 @@ const SUMMARY_SELECT = {
   health: true,
   healthReason: true,
   healthCheckedAt: true,
+  refreshLeaseUntil: true,
+  refreshUncertainAt: true,
   metadata: true,
   createdAt: true,
   updatedAt: true,
@@ -107,23 +109,57 @@ export const monitorInstallationRepository = {
     return tx.monitorInstallation.findUnique({ where: { id } });
   },
 
-  /** Lock a grant FOR UPDATE by its internal id — the read that guards the token
-   *  refresh. The provider rotates the refresh token on every refresh, so two
-   *  concurrent mints MUST serialize on this lock or the later token is
-   *  invalidated by the earlier one. The caller re-reads through
-   *  `findCredentialById` inside the SAME transaction. (Written for the
-   *  credential-lifecycle card, MOTIR-5261, which is the only caller.) */
+  /** Lock a grant FOR UPDATE by its internal id — the read that guards the
+   *  refresh LEASE (MOTIR-8184). The provider rotates the refresh token on every
+   *  refresh, so two concurrent refreshes MUST NOT both spend it: the caller takes
+   *  this lock, re-reads through `findCredentialById` inside the SAME short
+   *  transaction, and either finds a fresh token, finds a live lease, or takes the
+   *  lease itself. ⚠️ The lock is no longer held across the provider call — that
+   *  was the design MOTIR-5988 and MOTIR-8184 both lost a token to. */
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.$queryRaw`SELECT id FROM monitor_installation WHERE id = ${id} FOR UPDATE`;
   },
 
-  /** Persist a rotated token set, after a refresh under the lock above. */
-  async updateTokens(
+  /** Take the single-flight refresh lease until `until`. Written under the lock
+   *  above, and committed BEFORE the provider is called. */
+  async setRefreshLease(id: string, until: Date, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.monitorInstallation.update({ where: { id }, data: { refreshLeaseUntil: until } });
+  },
+
+  /** Persist a rotated token set and release the lease, in ONE statement.
+   *
+   *  ⚠️ IT IS THE FIRST WRITE AFTER THE PROVIDER ANSWERS, AND IT RUNS ALONE.
+   *  Sentry has already invalidated the old refresh token by the time this runs,
+   *  so nothing — not the health write, not a second statement — shares its
+   *  transaction: the shorter the window between the answer and this commit, the
+   *  less a stopped machine or a slow neighbour can cost. Clearing
+   *  `refreshUncertainAt` here is what says the grant is known-good again. */
+  async storeRefreshedTokens(
     id: string,
     tokens: { accessTokenEncrypted: string; refreshTokenEncrypted: string; tokenExpiresAt: Date },
     tx: Prisma.TransactionClient,
   ): Promise<MonitorInstallation> {
-    return tx.monitorInstallation.update({ where: { id }, data: tokens });
+    return tx.monitorInstallation.update({
+      where: { id },
+      data: { ...tokens, refreshLeaseUntil: null, refreshUncertainAt: null },
+    });
+  },
+
+  /** Release the lease after a refresh that did NOT produce a pair. With
+   *  `uncertainAt` set, the provider gave no answer at all, so it may still have
+   *  rotated the refresh token: that moment is recorded, and the stored pair is
+   *  left exactly as it is. */
+  async releaseRefreshLease(
+    id: string,
+    { uncertainAt }: { uncertainAt: Date | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorInstallation> {
+    return tx.monitorInstallation.update({
+      where: { id },
+      data: uncertainAt
+        ? { refreshLeaseUntil: null, refreshUncertainAt: uncertainAt }
+        : { refreshLeaseUntil: null },
+    });
   },
 
   /** Record a health verdict — the `degraded` write the whole epic exists for, or
