@@ -129,6 +129,13 @@ export async function register() {
 
   if (process.env['NEXT_RUNTIME'] !== 'nodejs') return;
 
+  // Per-response `close` listener ceiling (MOTIR-8171): the framework stack puts
+  // 8–9 on an ordinary response, so a couple more tip it over Node's 10. See the
+  // module for the measurement and why this is not a leak.
+  const { installResponseCloseListenerLimit } =
+    await import('@/lib/http/responseCloseListenerLimit');
+  installResponseCloseListenerLimit();
+
   // Every E2E seam, from the ONE table the job worker installs from too
   // (`lib/test-mock-seams.ts`, MOTIR-5837). Dynamic, like every import below the
   // runtime gate, so the Edge bundle never analyses the mocks.
