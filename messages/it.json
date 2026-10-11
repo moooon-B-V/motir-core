@@ -12967,6 +12967,7 @@
         "proceed": "Sì, rifiuta"
       },
       "handoff": {
+        "conversing": "Sto capendo cosa chiedi e dove si colloca nel progetto. Potrei farti una domanda prima di iniziare a pianificare.",
         "writing": "Ho quello che mi serve — sto scrivendo il piano adesso. Non devi aspettare qui: chiudi pure quando vuoi, e il piano ti aspetterà in <link>In attesa di te</link>.",
         "rewriting": "Sto scrivendo una nuova versione di questo piano. Puoi chiudere — mentre lavoro è in In pianificazione, e quando avrò finito torna in <link>In attesa di te</link> perché tu possa decidere."
       }

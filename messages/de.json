@@ -12967,6 +12967,7 @@
         "proceed": "Ja, ablehnen"
       },
       "handoff": {
+        "conversing": "Ich kläre gerade, worum Sie bitten und wo es in das Projekt passt. Bevor ich mit der Planung beginne, stelle ich Ihnen möglicherweise eine Frage.",
         "writing": "Ich habe, was ich brauche — ich schreibe jetzt den Plan. Sie müssen hier nicht warten: Schließen Sie dies jederzeit, und der Plan wartet in <link>Wartet auf Sie</link> auf Sie.",
         "rewriting": "Ich schreibe eine neue Version dieses Plans. Sie können dies schließen — solange ich daran arbeite, steht er unter „In Planung“, und sobald ich fertig bin, kehrt er zur Entscheidung zu <link>Wartet auf Sie</link> zurück."
       }

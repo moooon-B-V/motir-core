@@ -56,6 +56,7 @@ import {
   type StalePlanFinishedCard,
 } from '@/lib/planning/planSessionClientErrors';
 import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
+import { reopenedPlanJobId } from '@/lib/planning/planRunPhase';
 import {
   streamAskJob,
   streamAugmentJob,
@@ -262,6 +263,15 @@ export interface PlanChangeConversationState {
    * a stubbed one carries only `jobId`.
    */
   planId: string | null;
+  /**
+   * The plan job whose `target_settled` frame has arrived (MOTIR-8203) — the end
+   * of the conversation phase (PART 1) and the start of the planning phase. Keyed
+   * by JOB rather than a boolean so a new run is unsettled without every start
+   * reducer having to reset it, and a question that ends a job in PART 1 never
+   * settles it. Read through `planRunPhase` (`lib/planning/planRunPhase.ts`), never directly. Optional so a
+   * state built by hand (every rail test) is an unsettled one.
+   */
+  settledJobId?: string | null;
   /** The last approve's result, so the rail can say what landed. */
   approved: PlanApproveSummary | null;
   /** A recoverable failure: `FAILED` / `EMPTY` / `immutable` / a typed code. */
@@ -530,6 +540,7 @@ const INITIAL: PlanChangeConversationState = {
   decided: null,
   jobId: null,
   planId: null,
+  settledJobId: null,
   approved: null,
   errorCode: null,
   outOfCredits: false,
@@ -1126,6 +1137,35 @@ export function usePlanChangeConversation({
   useEffect(() => {
     if (polledReview) setState((s) => ({ ...s, ...narrationFrom(s, polledReview) }));
   }, [polledReview]);
+
+  // A REOPENED RUN SETTLES FROM ITS STORED FRAMES (MOTIR-8203). A viewer who
+  // comes back to a plan Motir is still writing did not see `target_settled`
+  // arrive, so the run is subscribed once more — the relay replays a job from its
+  // first frame — and read only for that frame. It closes the moment it has it,
+  // and the whole time it is open nothing else is narrated from it: the live pane
+  // and the stored narration already draw the run. Best-effort: a stream that
+  // cannot be opened leaves the run in its conversation phase.
+  const unsettledReopenedJob = (() => {
+    const job = reopenedPlanJobId(state);
+    return job !== undefined && job !== (state.settledJobId ?? null) ? job : null;
+  })();
+  useEffect(() => {
+    if (!unsettledReopenedJob) return;
+    const controller = new AbortController();
+    void streamAugmentJob(
+      unsettledReopenedJob,
+      controller.signal,
+      () => {},
+      () => {},
+      (event) => {
+        if (event !== 'target_settled' || controller.signal.aborted) return;
+        controller.abort();
+        if (!mountedRef.current) return;
+        setState((s) => ({ ...s, settledJobId: unsettledReopenedJob }));
+      },
+    );
+    return () => controller.abort();
+  }, [unsettledReopenedJob]);
   const heldReview = state.review;
   useEffect(() => {
     if (heldReview) setState((s) => ({ ...s, ...narrationFrom(s, heldReview) }));
@@ -1648,6 +1688,12 @@ export function usePlanChangeConversation({
               }
             }
             if (!mountedRef.current) return;
+            // THE CONVERSATION PHASE IS OVER (MOTIR-8203): the planner has settled
+            // what it is planning, so the hand-off becomes true. Quiet on the act
+            // rail; it moves only the phase.
+            if (event === 'target_settled') {
+              setState((s) => (s.settledJobId === jobId ? s : { ...s, settledJobId: jobId }));
+            }
             // APPEND, REPLACE the live line, or MARK an earlier call — one update,
             // decided by `applyPlanFrame` (MOTIR-7976). A quiet frame changes
             // nothing, which is the decision the disposition map recorded rather

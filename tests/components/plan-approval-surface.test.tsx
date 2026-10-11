@@ -272,7 +272,13 @@ describe('HELD — the planner is writing a new version (Panel 4, §11.5c)', () 
   });
 
   it('is held while THIS surface’s own run rewrites the plan in hand — and the hand-off says so', () => {
-    conversation.state = stateWith({ phase: 'streaming', review: review(), planId: 'plan_1' });
+    conversation.state = stateWith({
+      phase: 'streaming',
+      review: review(),
+      planId: 'plan_1',
+      jobId: 'job_1',
+      settledJobId: 'job_1',
+    });
     renderHost();
     expect(
       (within(bar()).getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled,
@@ -420,7 +426,13 @@ describe('NOT DECIDABLE YET — a planned plan nobody has been asked about', () 
 
 describe('the HAND-OFF before generation (Panel 9)', () => {
   it('when a plan run starts writing, the planner says the reader may leave, and where to come back', () => {
-    conversation.state = stateWith({ phase: 'streaming', review: null, planId: 'plan_9' });
+    conversation.state = stateWith({
+      phase: 'streaming',
+      review: null,
+      planId: 'plan_9',
+      jobId: 'job_9',
+      settledJobId: 'job_9',
+    });
     renderHost();
     const handoff = screen.getByTestId('plan-handoff');
     expect(handoff.textContent).toBe(
@@ -437,6 +449,125 @@ describe('the HAND-OFF before generation (Panel 9)', () => {
     conversation.state = stateWith({ phase: 'streaming', review: null, planId: null });
     renderHost();
     expect(screen.queryByTestId('plan-handoff')).toBeNull();
+    expect(screen.queryByTestId('plan-conversation-phase')).toBeNull();
+  });
+});
+
+// THE HAND-OFF WAITS FOR `target_settled` (MOTIR-8203). A plan job has its plan id
+// from the submit, but its conversation phase (PART 1) runs inside the same job and
+// may still come back with a question — so "I have what I need" is said only once the
+// job has settled its target, and until then the planner says what is true.
+describe('the CONVERSATION PHASE before the hand-off (MOTIR-8203)', () => {
+  const CONVERSING =
+    'I’m working out what you’re asking for and where it fits in the project. I may ask you a question before I start planning.';
+
+  it('a plan job streaming without `target_settled` shows the conversation line, never the hand-off', () => {
+    conversation.state = stateWith({
+      phase: 'streaming',
+      review: null,
+      planId: 'plan_9',
+      jobId: 'job_9',
+      settledJobId: null,
+    });
+    renderHost();
+    expect(screen.queryByTestId('plan-handoff')).toBeNull();
+    const line = screen.getByTestId('plan-conversation-phase');
+    expect(line.textContent).toBe(CONVERSING);
+    expect(line.closest('[role="log"]')).not.toBeNull();
+  });
+
+  it('before the submit has even answered with a job, it is still the conversation phase', () => {
+    conversation.state = stateWith({ phase: 'streaming', review: null, planId: 'plan_9' });
+    renderHost();
+    expect(screen.queryByTestId('plan-handoff')).toBeNull();
+    expect(screen.getByTestId('plan-conversation-phase')).toBeTruthy();
+  });
+
+  it('a settlement belongs to its own job: an earlier run’s does not settle a new one', () => {
+    conversation.state = stateWith({
+      phase: 'streaming',
+      review: null,
+      planId: 'plan_9',
+      jobId: 'job_10',
+      settledJobId: 'job_9',
+    });
+    renderHost();
+    expect(screen.queryByTestId('plan-handoff')).toBeNull();
+    expect(screen.getByTestId('plan-conversation-phase')).toBeTruthy();
+  });
+
+  it('after `target_settled` the conversation line gives way to the hand-off', () => {
+    conversation.state = stateWith({
+      phase: 'streaming',
+      review: null,
+      planId: 'plan_9',
+      jobId: 'job_9',
+      settledJobId: 'job_9',
+    });
+    renderHost();
+    expect(screen.queryByTestId('plan-conversation-phase')).toBeNull();
+    expect(screen.getByTestId('plan-handoff').textContent).toMatch(/^I have what I need/);
+  });
+
+  it('the REWRITING variant follows the same rule', () => {
+    conversation.state = stateWith({
+      phase: 'streaming',
+      review: review(),
+      planId: 'plan_1',
+      jobId: 'job_1',
+      settledJobId: null,
+    });
+    renderHost();
+    expect(screen.queryByTestId('plan-handoff')).toBeNull();
+    expect(screen.getByTestId('plan-conversation-phase').textContent).toBe(CONVERSING);
+  });
+
+  it('a job that came back with a question shows neither: the run is over', () => {
+    conversation.state = stateWith({
+      phase: 'idle',
+      review: null,
+      planId: 'plan_9',
+      jobId: 'job_9',
+      settledJobId: null,
+    });
+    renderHost();
+    expect(screen.queryByTestId('plan-handoff')).toBeNull();
+    expect(screen.queryByTestId('plan-conversation-phase')).toBeNull();
+  });
+});
+
+describe('a REOPENED overlay mid-run shows what a live viewer sees (MOTIR-8203)', () => {
+  const generating = (over: Partial<PlanReviewDto> = {}) =>
+    review(null, { id: 'plan_9', status: 'generating', authorSource: 'native', ...over });
+  const reopened = (over: Partial<PlanChangeConversationState> = {}) =>
+    stateWith({
+      phase: 'idle',
+      review: null,
+      planId: 'plan_9',
+      session: { ...session(), lastJobId: 'job_9' },
+      liveReview: generating(),
+      ...over,
+    });
+
+  it('before settlement: the conversation line', () => {
+    conversation.state = reopened();
+    renderHost();
+    expect(screen.queryByTestId('plan-handoff')).toBeNull();
+    expect(screen.getByTestId('plan-conversation-phase')).toBeTruthy();
+  });
+
+  it('after settlement: the hand-off', () => {
+    conversation.state = reopened({ settledJobId: 'job_9' });
+    renderHost();
+    expect(screen.queryByTestId('plan-conversation-phase')).toBeNull();
+    expect(screen.getByTestId('plan-handoff')).toBeTruthy();
+  });
+
+  it('a plan an agent is writing over MCP has no conversation phase, and no hand-off', () => {
+    conversation.state = reopened({ liveReview: generating({ authorSource: 'mcp' }) });
+    renderHost();
+    expect(screen.queryByTestId('plan-handoff')).toBeNull();
+    expect(screen.queryByTestId('plan-conversation-phase')).toBeNull();
   });
 });
 

@@ -12964,6 +12964,7 @@
         "proceed": "Ja, afwijzen"
       },
       "handoff": {
+        "conversing": "Ik zoek uit waar je om vraagt en waar het in het project past. Misschien stel ik je een vraag voordat ik begin met plannen.",
         "writing": "Ik heb wat ik nodig heb — ik schrijf het plan nu. Je hoeft hier niet te wachten: sluit dit wanneer je wilt, en het plan staat voor je klaar in <link>Wacht op jou</link>.",
         "rewriting": "Ik schrijf een nieuwe versie van dit plan. Je kunt dit sluiten — terwijl ik werk staat het onder In planning, en zodra ik klaar ben keert het terug naar <link>Wacht op jou</link> zodat je kunt beslissen."
       }
