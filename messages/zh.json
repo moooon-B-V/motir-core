@@ -214,6 +214,7 @@
     "outcomeDeclined": "已拒绝",
     "field_title": "标题",
     "field_priority": "优先级",
+    "field_kind": "种类",
     "field_type": "类型",
     "field_executor": "执行者",
     "field_storyPoints": "故事点",

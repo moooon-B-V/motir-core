@@ -161,6 +161,7 @@
   "planReview.outcomeDeclined": "declined",
   "planReview.field_title": "Title",
   "planReview.field_priority": "Priority",
+  "planReview.field_kind": "Kind",
   "planReview.field_type": "Type",
   "planReview.field_executor": "Executor",
   "planReview.field_storyPoints": "Story points",

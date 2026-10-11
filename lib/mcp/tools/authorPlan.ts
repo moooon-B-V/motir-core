@@ -16,7 +16,7 @@ import type {
   ProposedTodoInput,
   CorrectPlanBriefKey,
 } from '@/lib/dto/plans';
-import { PLAN_ITEM_REASON_MAX } from '@/lib/dto/plans';
+import { MODIFY_KIND_TARGETS, PLAN_ITEM_REASON_MAX } from '@/lib/dto/plans';
 import { PLAN_NARRATION_BATCH_MAX, PLAN_NARRATION_SENTENCE_MAX } from '@/lib/plans/planNarration';
 import {
   TODO_COMMAND_MAX_LENGTH,
@@ -518,6 +518,16 @@ const patchSchema = z
       .describe(
         'Leaf work type. A CLOSED set: these fourteen members ARE the schema enum. An ' +
           'explicit `null` clears it.',
+      ),
+    kind: z
+      .enum(MODIFY_KIND_TARGETS)
+      .optional()
+      .describe(
+        'RE-KIND the target — the plan door’s `change_kind` (never `epic`). Judged against the ' +
+          'PROJECTED tree: the parent must admit the new kind, the new kind must admit every ' +
+          'child the target keeps, and re-kinding a leaf into a `story` must clear its leaf ' +
+          'fields in the same patch (`type: null`, `difficulty: null`) or it is refused by ' +
+          'name. The executor is not a patch key: a re-kind to a container clears it at approve.',
       ),
     storyPoints: z
       .number()

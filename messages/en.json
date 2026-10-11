@@ -214,6 +214,7 @@
     "outcomeDeclined": "declined",
     "field_title": "Title",
     "field_priority": "Priority",
+    "field_kind": "Kind",
     "field_type": "Type",
     "field_executor": "Executor",
     "field_storyPoints": "Story points",

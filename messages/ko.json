@@ -214,6 +214,7 @@
     "outcomeDeclined": "거절됨",
     "field_title": "제목",
     "field_priority": "우선순위",
+    "field_kind": "종류",
     "field_type": "유형",
     "field_executor": "실행 주체",
     "field_storyPoints": "스토리 포인트",

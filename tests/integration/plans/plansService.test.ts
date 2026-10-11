@@ -1216,7 +1216,8 @@ describe('plansService.updateProposal — edit a proposed add (7.21.6)', () => {
       itemId,
       {
         title: 'New title',
-        kind: 'story',
+        // A leaf kind: a re-kind to a container may not keep a `type` (MOTIR-8192).
+        kind: 'bug',
         priority: 'high',
         type: 'design',
         descriptionMd: 'Why this matters',
@@ -1226,7 +1227,7 @@ describe('plansService.updateProposal — edit a proposed add (7.21.6)', () => {
     const edited = updated.items.find((i) => i.id === itemId)!;
     expect(edited.proposedFields).toMatchObject({
       title: 'New title',
-      kind: 'story',
+      kind: 'bug',
       priority: 'high',
       type: 'design',
       descriptionMd: 'Why this matters',

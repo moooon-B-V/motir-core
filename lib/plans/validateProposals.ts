@@ -34,6 +34,8 @@ import {
 import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
+import { isContainerKind, isModifyKindTarget } from '@/lib/plans/validateProposedKind';
+import { MODIFY_KIND_TARGETS } from '@/lib/dto/plans';
 import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
 import {
   assertMarkTargetIsFinished,
@@ -105,9 +107,15 @@ export interface ProposalNode {
    */
   patch: {
     parentRef?: string | null;
-    /** A re-judged DIFFICULTY (MOTIR-6133) — refused when the TARGET's live
-     *  kind is a container (`difficulty_on_container`). */
+    /** A re-judged DIFFICULTY (MOTIR-6133) — refused when the TARGET's
+     *  PROJECTED kind is a container (`difficulty_on_container`). */
     difficulty?: string | null;
+    /** A RE-KIND of the target (bug MOTIR-8192 · AMENDMENT 25) — judged against
+     *  the projected tree by {@link assertKindChangesLegal}, and the kind every
+     *  other placement question in this gate reads for the target. */
+    kind?: string | null;
+    /** A re-type (read here only by the re-kind's leaf-field check). */
+    type?: string | null;
     blockedByAdd?: string[] | null;
     blockedByRemove?: string[] | null;
     /** The obsolescence MARK and its note (MOTIR-6629) — membership is the
@@ -127,6 +135,28 @@ export interface ProposalNode {
     supersededByAdd?: string[] | null;
     supersededByRemove?: string[] | null;
   } | null;
+}
+
+/**
+ * What a `modify` that RE-KINDS its target needs to know about the COMMITTED
+ * tree around it (bug MOTIR-8192 · AMENDMENT 25) — the target's place and its
+ * leaf fields, and its live children. Resolved by the service
+ * (`plansService.resolveKindChangeContexts`) in batched reads, so the gate stays
+ * pure. Keyed by the target's work-item id.
+ */
+export interface KindChangeContext {
+  /** The target's committed parent, or `null` at the root (filed or not). */
+  parentId: string | null;
+  /** That parent's live kind, or `null` at the root. */
+  parentKind: string | null;
+  /** The target sits in a FOLDER (MOTIR-5414) — a placement admitting any kind. */
+  filed: boolean;
+  /** The target's live `type` and `difficulty` — what a container would keep
+   *  when the patch does not clear them. */
+  type: string | null;
+  difficulty: string | null;
+  /** The target's live (non-archived) children. */
+  children: ReadonlyArray<{ id: string; key: string; title: string; kind: string }>;
 }
 
 /** A live work item the plan references (a real parent, or a modify/remove target). */
@@ -264,6 +294,20 @@ export interface ValidatePlanProposalsInput {
    * chain is skipped, never guessed.
    */
   edgeAncestorsById?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * The committed tree around every target a `modify` RE-KINDS (bug MOTIR-8192 ·
+   * AMENDMENT 25), by target id — see {@link KindChangeContext}.
+   *
+   * OPTIONAL, and permissive when absent: a re-kind whose target has no entry is
+   * judged for its membership and through the placements the plan itself
+   * writes, never against committed children it was not shown. Every service
+   * caller resolves it (`runPersistGate`, and the append's
+   * `assertKindChangesLegalAtAppend`). Under the write, the `work_item` kind
+   * trigger backstops the PARENT half only — it judges a row against its own
+   * parent, never against its children — which is why the children half is
+   * this gate's to ask.
+   */
+  kindChangeContextById?: ReadonlyMap<string, KindChangeContext>;
 }
 
 /** One committed `is_blocked_by` edge: `blockedId` is blocked BY `blockerId`. */
@@ -402,7 +446,9 @@ function assertDifficultyOnLeaf(
   throw new PlanGrammarError(
     'difficulty_on_container',
     item.id,
-    `${describeSubject(item, liveById)} sets difficulty "${String(difficulty)}" on a \`${target.kind}\`, which is a container and cannot carry one. The target is a container now; the plan's author must drop \`patch.difficulty\` or set it to null.`,
+    item.patch?.kind !== undefined
+      ? `${describeSubject(item, liveById)} re-kinds its target to a \`${target.kind}\` and sets difficulty "${String(difficulty)}" on it. A container cannot carry a difficulty — send \`difficulty: null\` with the new kind.`
+      : `${describeSubject(item, liveById)} sets difficulty "${String(difficulty)}" on a \`${target.kind}\`, which is a container and cannot carry one. The target is a container now; the plan's author must drop \`patch.difficulty\` or set it to null.`,
   );
 }
 
@@ -1089,6 +1135,217 @@ function assertParentKindLegal(
   }
 }
 
+// ── The RE-KIND a `modify` may now propose (bug MOTIR-8192 · AMENDMENT 25) ────
+//
+// `patch.kind` turns a committed work item into another kind on approve. Every
+// question `workItemsService.updateWorkItem`'s kind path asks is asked here,
+// against the PROJECTED tree rather than the live one: the parent admits the new
+// kind, the new kind admits every child the target keeps, and a container keeps
+// no leaf field. The plan's OWN placements (an `add` under the target, a
+// `modify` moving a card under it, a re-parent of the target itself) read the
+// projected kind through {@link withProjectedKinds}, so steps 3 and 3c judge
+// them against the kind the target will HAVE, not the kind it has.
+
+/**
+ * The kind every `modify` in `items` re-kinds its target to, by target id. Only a
+ * WELL-FORMED re-kind (a `MODIFY_KIND_TARGETS` member) projects; a malformed one
+ * leaves the live kind standing and is refused by {@link assertKindChangesLegal}.
+ */
+export function projectedKindOverrides(items: readonly ProposalNode[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const item of items) {
+    if (item.op !== 'modify' || !item.workItemId) continue;
+    const kind = item.patch?.kind;
+    if (isModifyKindTarget(kind)) out.set(item.workItemId, kind);
+  }
+  return out;
+}
+
+/** `liveById` with each re-kinded target's `kind` replaced by its projected one. */
+export function withProjectedKinds(
+  liveById: ValidatePlanProposalsInput['liveById'],
+  overrides: ReadonlyMap<string, string>,
+): ValidatePlanProposalsInput['liveById'] {
+  if (overrides.size === 0) return liveById;
+  const out = new Map(liveById);
+  for (const [id, kind] of overrides) {
+    const live = out.get(id);
+    if (live) out.set(id, { ...live, kind });
+  }
+  return out;
+}
+
+/**
+ * Assert every `modify`'s re-kind is legal against the projected tree, or throw
+ * the typed rejection that says why (bug MOTIR-8192 · AMENDMENT 25). PURE: the
+ * committed tree around each target arrives in `kindChangeContextById`.
+ *
+ *   1. membership — `unknown_kind` for anything outside `MODIFY_KIND_TARGETS`
+ *      (no `epic`);
+ *   2. the PARENT admits the new kind — `illegal_parent`. Skipped when the same
+ *      patch re-parents the target: step 3c judges that move with the projected
+ *      kind already;
+ *   3. the new kind admits every committed CHILD the target keeps —
+ *      `illegal_parent`, naming the child. A child the plan moves away or
+ *      removes is not kept; a child the plan re-kinds is judged by its own
+ *      projected kind;
+ *   4. a CONTAINER keeps no leaf field — `type_on_container` /
+ *      `difficulty_on_container` when the patch leaves the target's own value
+ *      standing. Refused rather than cleared: AMENDMENT 25 §3.
+ *
+ * A target that resolves to nothing, or has no context, is left to
+ * `materialize` and to the doors, as step 4 of the gate leaves it.
+ */
+export function assertKindChangesLegal(
+  items: readonly ProposalNode[],
+  liveById: ValidatePlanProposalsInput['liveById'],
+  kindChangeContextById: ReadonlyMap<string, KindChangeContext>,
+): void {
+  const overrides = projectedKindOverrides(items);
+  const kindOf = (id: string, live: string): string => overrides.get(id) ?? live;
+  const notKept = new Set<string>();
+  for (const item of items) {
+    if (!item.workItemId) continue;
+    if (item.op === 'remove') notKept.add(item.workItemId);
+    if (item.op === 'modify' && item.patch?.parentRef !== undefined) notKept.add(item.workItemId);
+  }
+
+  for (const item of items) {
+    if (item.op !== 'modify' || !item.workItemId || item.patch?.kind === undefined) continue;
+    const next = item.patch.kind;
+    if (!isModifyKindTarget(next)) {
+      throw new PlanGrammarError(
+        'unknown_kind',
+        item.id,
+        `${describeSubject(item, liveById)} re-kinds its target to "${String(next)}", which is not a kind a work item can be re-kinded to. Legal values: ${MODIFY_KIND_TARGETS.join(', ')}.`,
+      );
+    }
+    const target = liveById.get(item.workItemId);
+    const context = target ? kindChangeContextById.get(target.id) : undefined;
+    if (!target || !context) continue;
+    const subject = `${describeSubject(item, liveById)} re-kinds ${describeNode(target.id, [], liveById)} from \`${target.kind}\` to \`${next}\``;
+
+    if (item.patch.parentRef === undefined) {
+      const parentKind =
+        context.parentId === null ? null : kindOf(context.parentId, context.parentKind ?? '');
+      if (parentKind === null || isIssueType(parentKind)) {
+        try {
+          assertValidPlacement({ parentKind, filed: context.filed }, next);
+        } catch (err) {
+          if (err instanceof IllegalParentTypeError) {
+            throw new PlanGrammarError(
+              'illegal_parent',
+              item.id,
+              `${subject}, which its current parent does not admit: ${err.message}`,
+            );
+          }
+          throw err;
+        }
+      }
+    }
+
+    for (const child of context.children) {
+      if (notKept.has(child.id)) continue;
+      const childKind = kindOf(child.id, child.kind);
+      if (!isIssueType(childKind)) continue;
+      try {
+        assertValidParent(next, childKind);
+      } catch (err) {
+        if (err instanceof IllegalParentTypeError) {
+          throw new PlanGrammarError(
+            'illegal_parent',
+            item.id,
+            `${subject}, which cannot parent its child ${child.key} "${child.title}" (a \`${childKind}\`): ${err.message} Move or re-kind that child in the same plan, or keep the kind.`,
+          );
+        }
+        throw err;
+      }
+    }
+
+    if (isContainerKind(next)) {
+      const type = 'type' in item.patch ? (item.patch.type ?? null) : context.type;
+      if (type !== null) {
+        throw new PlanGrammarError(
+          'type_on_container',
+          item.id,
+          `${subject}, but the target would keep its type "${type}". A \`${next}\` is a container and cannot carry a type — add \`type: null\` to the patch.`,
+        );
+      }
+      const difficulty =
+        'difficulty' in item.patch ? (item.patch.difficulty ?? null) : context.difficulty;
+      if (difficulty !== null) {
+        throw new PlanGrammarError(
+          'difficulty_on_container',
+          item.id,
+          `${subject}, but the target would keep its difficulty "${difficulty}". A \`${next}\` is a container and cannot carry a difficulty — add \`difficulty: null\` to the patch.`,
+        );
+      }
+    }
+  }
+}
+
+/**
+ * The KIND-PARENT half of the gate for ONE proposed `add` whose kind a door just
+ * changed (bug MOTIR-8192 · AMENDMENT 25 §4): its own placement under the kind
+ * of its parent, and the placement of every proposal the plan hangs UNDER it — a
+ * child `add`, or a `modify` moving its target there. The same two matrices
+ * step 3 and step 3c ask over the whole plan, asked here of the one proposal the
+ * edit touched, so a correction or a deepen cannot re-kind an `add` into a shape
+ * the plan's own tree refuses and leave it for the reviewer to meet at approve.
+ *
+ * `liveById` must hold the add's real parent (when it has one) and every
+ * `modify` target moving under it; a row missing from it is skipped, never
+ * guessed — the close's whole-plan gate is the backstop.
+ */
+export function assertAddKindPlacementLegal(
+  addId: string,
+  items: readonly ProposalNode[],
+  liveById: ValidatePlanProposalsInput['liveById'],
+): void {
+  const addsById = new Map(items.filter((i) => i.op === 'add').map((a) => [a.id, a]));
+  const add = addsById.get(addId);
+  if (!add) return;
+  const projected = withProjectedKinds(liveById, projectedKindOverrides(items));
+  const kind = issueKindOf(add);
+  const placeAdd = (node: ProposalNode, parentKind: IssueType | null): void => {
+    const filed = node.parentRef !== null && isFolderRef(node.parentRef);
+    try {
+      assertValidPlacement({ parentKind, filed }, issueKindOf(node));
+    } catch (err) {
+      if (err instanceof IllegalParentTypeError) {
+        throw new PlanGrammarError(
+          'illegal_parent',
+          node.id,
+          `${describeProposal(node)} is not a legal placement: ${err.message}`,
+        );
+      }
+      throw err;
+    }
+  };
+
+  const ref = add.parentRef;
+  if (!ref || isFolderRef(ref)) {
+    placeAdd(add, null);
+  } else if (isTempRef(ref)) {
+    const parent = addsById.get(tempRefId(ref));
+    if (parent) placeAdd(add, issueKindOf(parent));
+  } else {
+    const parentKind = projected.get(ref)?.kind;
+    if (parentKind !== undefined && isIssueType(parentKind)) placeAdd(add, parentKind);
+  }
+
+  const under = `${TEMP_REF_PREFIX}${add.id}`;
+  for (const node of items) {
+    if (node.op === 'add' && node.parentRef === under) placeAdd(node, kind);
+    if (node.op === 'modify' && node.workItemId && node.patch?.parentRef === under) {
+      const target = projected.get(node.workItemId);
+      if (target && isIssueType(target.kind)) {
+        assertParentKindLegal(node, kind, target.kind, liveById);
+      }
+    }
+  }
+}
+
 // ── NAMING THE WORK ITEM A REFUSAL IS ABOUT (MOTIR-3936) ─────────────────────
 //
 // Every message below used to identify its subject as `Proposal <cuid>`. That is
@@ -1593,6 +1850,10 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   const adds = items.filter((i) => i.op === 'add');
   const addsById = new Map(adds.map((a) => [a.id, a]));
   const addIds = new Set(addsById.keys());
+  // The live rows with every RE-KINDED target at the kind it will HAVE (bug
+  // MOTIR-8192 · AMENDMENT 25) — what every placement question below reads, so
+  // an `add` under a task the plan turns into a story is judged under a story.
+  const projectedLiveById = withProjectedKinds(liveById, projectedKindOverrides(items));
 
   // 1. PURE — no blocker listed twice, no self-reference, no `parentRef` cycle.
   //    Already enforced at the append; re-run here because the approve path
@@ -1639,7 +1900,7 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     //     proposal alone, needing no graph.
     assertProposedSubjectValid(item);
     const childKind = issueKindOf(item);
-    const parentKind = effectiveParentKind(item, addsById, liveById);
+    const parentKind = effectiveParentKind(item, addsById, projectedLiveById);
     // A `folder:` parent FILES the card (MOTIR-5414), and a folder admits any
     // kind — so a `subtask` filed into a folder is legal while the same subtask
     // at the project root is still refused. `assertValidPlacement` is the
@@ -1718,7 +1979,7 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   //     kind, and on a `modify`'s LIVE target kind, which is the case the doors
   //     cannot see (a target re-kinded after the append). A property of the
   //     proposal plus the one row it names, so it sits with the grammar.
-  for (const item of items) assertDifficultyOnLeaf(item, liveById);
+  for (const item of items) assertDifficultyOnLeaf(item, projectedLiveById);
 
   // 3c. The RE-PARENT a `modify` may now propose (MOTIR-3859) — tenancy, cycle,
   //     depth, the kind matrix, and the terminal-parent refusal, in that order.
@@ -1729,7 +1990,7 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   for (const item of items) {
     assertReparentLegal(
       item,
-      liveById,
+      projectedLiveById,
       ancestorIdsById,
       terminalStatusKeys,
       planProjectId,
@@ -1737,6 +1998,12 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
       addsById,
     );
   }
+
+  // 3d. The RE-KIND a `modify` may now propose (bug MOTIR-8192 · AMENDMENT 25) —
+  //     membership, the parent, the children it keeps and the leaf fields a
+  //     container may not keep. With the placements above because it IS one:
+  //     a kind is legal only where it sits and over what it holds.
+  assertKindChangesLegal(items, liveById, input.kindChangeContextById ?? new Map());
 
   // 4. Done-work immutability. A `modify`/`remove` never rewrites completed work.
   //    A target that resolves to nothing is left to `materialize`, which raises

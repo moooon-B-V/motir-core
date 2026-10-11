@@ -458,7 +458,9 @@ export type PlanGrammarViolation =
   /** The proposed (parent kind → child kind) pair the matrix forbids, or a
    *  top-level placement of a kind that requires a parent. */
   | 'illegal_parent'
-  /** An `add` proposing a `kind` that is not one of the five issue types. */
+  /** An `add` proposing a `kind` that is not one of the five issue types, or a
+   *  `modify` whose `patch.kind` is not one a target may be re-kinded to
+   *  (`MODIFY_KIND_TARGETS` — no `epic`; bug MOTIR-8192). */
   | 'unknown_kind'
   /**
    * An `add` proposing a `type` that is not one of the fourteen `WorkItemType`
@@ -515,7 +517,17 @@ export type PlanGrammarViolation =
    * approve writes the column directly (it bypasses `workItemsService`) and a
    * story ends up with the difficulty every other door refuses it.
    */
-  | 'difficulty_on_container';
+  | 'difficulty_on_container'
+  /**
+   * A `modify` re-kinding its target to a CONTAINER (`story`) while the target
+   * keeps a non-null `type` (bug MOTIR-8192; `agent-authored-plans.md`
+   * AMENDMENT 25) — the projected type is the patch's `type` when it carries
+   * one, else the target's. `workItemsService` refuses the same end state with
+   * `TypeNotAllowedOnKindError`; approve writes the row directly, so the plan
+   * path refuses it here, by name, rather than clearing a field nobody asked to
+   * clear. The patch fixes it with `type: null`.
+   */
+  | 'type_on_container';
 
 /*
  * ⚠️ `subject_on_container` WAS A MEMBER AND IS RETIRED (MOTIR-5607).
@@ -553,6 +565,7 @@ const PLAN_GRAMMAR_VIOLATION_MEMBERS: Record<PlanGrammarViolation, true> = {
   parent_terminal: true,
   malformed_subject: true,
   difficulty_on_container: true,
+  type_on_container: true,
 };
 
 /** {@link PlanGrammarViolation}'s members as an array — see the record above. */
