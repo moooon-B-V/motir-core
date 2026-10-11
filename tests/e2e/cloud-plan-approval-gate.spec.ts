@@ -11,7 +11,8 @@
 // lane's. Bug MOTIR-7988 then restated the hold chapter: a plan being rewritten is
 // being PLANNED again, so it LEAVES Waiting on you (it is under Planning) rather than
 // staying listed with *Being rewritten*; the held surface is opened from the row's
-// own door link. The header below is the receipt's, kept as it was written.
+// own door link. Bug MOTIR-8208 re-opens the plan for the rewrite, so that surface
+// shows the plan being written, with no decision bar, rather than disabled verbs. The header below is the receipt's, kept as it was written.
 //
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
@@ -213,7 +214,8 @@ async function finishRewrite(planId: string, ctx: Ctx, title: string): Promise<v
     ctx,
     { revision: true },
   );
-  await plansService.releaseRevisionLease(planId, ctx, MOTIR_AI_REVISION);
+  // The revision's close (Bug MOTIR-8208): back to `planned` through `markPlanned`.
+  await plansService.closeRevision(planId, ctx, MOTIR_AI_REVISION);
 }
 
 const planStatus = async (planId: string) =>
@@ -327,15 +329,17 @@ test('a finished plan waits in To approve, leaves it while it is rewritten, and 
     await expect(page.getByRole('link', { name: /Waiting on you/ })).not.toContainText('1');
     await beat();
 
-    // The surface still opens — to watch, not to decide — and says where the plan is.
+    // The surface still opens — to watch, not to decide. The revision RE-OPENED the
+    // plan (Bug MOTIR-8208), so it shows the plan being written, with its progress, and
+    // no decision bar at all: a plan being written has nothing to decide.
     // The door's href is the plan page, which forwards to the surface with no entrance.
     await page.goto(doorHref);
     await landOnSurface(page, sessionId, null);
-    await planRendered(page, 1);
-    await expect(bar(page)).toContainText(surface.held);
-    await expect(verb(bar(page), surface.approve)).toBeDisabled();
-    await expect(verb(bar(page), surface.decline)).toBeDisabled();
-    await expect(verb(reviewBlock(page), surface.approve)).toBeDisabled();
+    await expect(workspace(page).getByText(en.planReview.liveWriting).first()).toBeVisible({
+      timeout: FIRST_PAINT_MS,
+    });
+    await expect(bar(page)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: surface.approve, exact: true })).toHaveCount(0);
     await beat();
   });
 
