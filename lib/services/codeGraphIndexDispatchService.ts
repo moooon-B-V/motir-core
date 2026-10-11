@@ -2167,6 +2167,15 @@ export const codeGraphIndexDispatchService = {
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       const verdict = await this.admitIndexContainer(input, options);
       if (verdict.outcome !== 'deferred') return verdict;
+      // ⚠️ `ai_plan_required` IS AN ANSWER, NOT A BUSY FLEET (MOTIR-8235). Every
+      // other deferral is a count that a finishing container changes, so waiting
+      // is how it clears. The org's plan is not: the gate read it and said no,
+      // and asking sixty more times over the next hour changes nothing — that
+      // wait used to end in an `IndexDispatchFailedError` the monitor filed as a
+      // production error. Returned on the first refusal; the caller turns it
+      // into a recorded pause, and the catch-up sweep asks again later.
+      // `plan_unknown` stays on the wait: an unreadable plan is a transient.
+      if (verdict.reason === 'ai_plan_required') return verdict;
       last = verdict;
       // No wait after the LAST attempt — nothing would observe it.
       if (attempt < attempts) await sleep(indexAdmissionWaitMs(attempt, options));

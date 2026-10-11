@@ -43,6 +43,12 @@ export interface IndexAllowanceVerdict {
  *  `hard_stop_no_credit` → `paused_index_no_credit`. */
 export type IndexPauseReason = `paused_index_${string}`;
 
+/** The pause recorded when index admission refuses an organisation with no paid
+ *  AI plan (MOTIR-8235). Not an allowance stop, but the same kind of state: a
+ *  repository that is not being indexed for a reason, which the catch-up sweep
+ *  re-asks about. */
+export const AI_PLAN_INDEX_PAUSE_REASON: IndexPauseReason = 'paused_index_ai_plan_required';
+
 const HARD_STOP_PREFIX = 'hard_stop_';
 
 /**
