@@ -55,7 +55,7 @@ export const abandonedPlanSweep = defineJob(
     retryPolicy: 'idempotent',
   },
   (ctx, services) => {
-    return ctx.step.run('reconcile-abandoned-plans', () =>
+    return ctx.step.run('reconcile-abandoned-plans-v2', () =>
       services.abandonedPlan.reconcileAbandoned(),
     );
   },
