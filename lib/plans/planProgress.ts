@@ -46,6 +46,8 @@ import type { PlanStepDto, PlanStepKindDto } from '@/lib/dto/plans';
  *   2. a single step is dropped as QUIET when `now − step.startedAt >
  *      PLAN_STALLED_AFTER_MS` — a session that died without clearing stops
  *      naming an item even while its siblings keep the plan alive.
+ * The abandoned-plan sweep's DEAD rule reads it too (MOTIR-8132), with the same
+ * comparison, so the rail's `stalled` and the sweep's `silent` cannot disagree.
  * Re-measure and change THIS constant; never a surface.
  */
 export const PLAN_STALLED_AFTER_MS = 900_000;

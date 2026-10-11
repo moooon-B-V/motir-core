@@ -411,7 +411,12 @@ export async function endSessionForFailedJob(
 }
 
 /** What {@link recordFailureWithin} did. */
-export type RecordFailureOutcome = 'recorded' | 'ended' | 'plan_not_generating' | 'not_latest';
+export type RecordFailureOutcome =
+  | 'recorded'
+  | 'ended'
+  | 'plan_not_generating'
+  | 'not_latest'
+  | 'activity_moved';
 
 /**
  * RECORD A FAILED ATTEMPT ON ITS OPEN SESSION, INSIDE THE CALLER'S TRANSACTION
@@ -426,13 +431,19 @@ export type RecordFailureOutcome = 'recorded' | 'ended' | 'plan_not_generating' 
  * Only a `generating` LATEST plan is a failed walk; anything else is
  * `'plan_not_generating'` and the caller falls back to the existing end. When
  * `onlyPlanId` is given (the sweep), that plan must still be the session's latest.
+ *
+ * When `lastActivityAt` is given (the sweep, MOTIR-8132), the write is a
+ * COMPARE-AND-SET on it: the plan's stamp is re-read under the plan lock and the
+ * failure is recorded only if it still equals the one the sweep judged silent. A
+ * content write or step signal that landed in between moved it — that producer is
+ * alive — and the answer is `'activity_moved'`, with nothing written.
  */
 export async function recordFailureWithin(
   tx: Prisma.TransactionClient,
   sessionId: string,
   workspaceId: string,
   record: PlanSessionFailureRecord,
-  opts: { onlyPlanId?: string } = {},
+  opts: { onlyPlanId?: string; lastActivityAt?: Date } = {},
 ): Promise<RecordFailureOutcome> {
   const latestPlanId = await planRepository.findLatestIdBySession(sessionId, tx);
   if (latestPlanId) await planRepository.lockById(latestPlanId, tx);
@@ -446,6 +457,12 @@ export async function recordFailureWithin(
   // the session still waits, and the plan stays decidable.
   if (plan?.status !== 'generating' && plan?.status !== 'planned' && plan?.status !== 'stale') {
     return 'plan_not_generating';
+  }
+  if (
+    opts.lastActivityAt !== undefined &&
+    plan.lastActivityAt.getTime() !== opts.lastActivityAt.getTime()
+  ) {
+    return 'activity_moved';
   }
   if (!(await planChangeSessionRepository.markFailed(sessionId, record, tx))) return 'ended';
   // The failure write nulls the awaiting-person marker (a session never waits for both), so the

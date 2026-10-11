@@ -116,8 +116,12 @@ describe('parsePlanSessionFailureRecord', () => {
     ).toThrow();
   });
 
-  it('refuses a missing job id', () => {
+  it('refuses an EMPTY job id', () => {
     expect(() => parsePlanSessionFailureRecord({ ...base, failedJobId: '' })).toThrow();
+  });
+
+  it('accepts NO job — a silent plan with no producer (MOTIR-8132)', () => {
+    expect(parsePlanSessionFailureRecord({ ...base, failedJobId: null }).failedJobId).toBeNull();
   });
 
   it('⚠️ CAPS what motir-ai sends rather than refusing it — a failure must stay recordable', () => {
