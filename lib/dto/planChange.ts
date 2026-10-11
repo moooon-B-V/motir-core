@@ -41,6 +41,11 @@ export type PlanChangeTurnIntentDto = 'plan_change' | 'ask' | 'debug' | 'guide' 
  *  AMENDMENT 3, A3.2) — which fixed confirm an `assistant` turn core wrote is. */
 export type PlanChangeTurnConfirmDto = 'new_session';
 
+/** Wire form of the Prisma `PlanChangeTurnOutage` enum (Story MOTIR-8136 ·
+ *  MOTIR-8141) — how a code-graph outage touched an `assistant` turn:
+ *  `declined` wrote no plan, `answered` answered without the code. */
+export type PlanChangeTurnOutageDto = 'declined' | 'answered';
+
 /** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
  *  `system` submission marker and on an `assistant` turn (the job that produced
  *  it); `authorId` only on a `user` turn (and null once that user is deleted). */
@@ -168,6 +173,14 @@ export interface PlanChangeTurnDto {
    * other turn. Optional for the reason {@link anchorKey} is.
    */
   confirm?: PlanChangeTurnConfirmDto | null;
+  /**
+   * How a code-graph outage touched this `assistant` turn (Story MOTIR-8136 ·
+   * MOTIR-8141; `design/code-context/design-notes.md` §17): the stored face the
+   * rail draws — `declined` (no plan was written) or `answered` (answered without
+   * the code). Null on every other turn. Optional for the reason {@link anchorKey}
+   * is.
+   */
+  codeUnreadable?: PlanChangeTurnOutageDto | null;
   /**
    * The planning job that was RUNNING when this `user` turn was typed (MOTIR-7996).
    * Present on a MID-RUN turn, which was answered by an `ask_project` job carrying

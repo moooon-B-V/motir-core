@@ -706,6 +706,105 @@ repositories` action"_. Both were taken back by that card's own re-scope later t
    `ProjectRepo.githubRepoId @unique`, which currently makes _"connect a repo to a second project"_
    inexpressible. Named in §1 with the four-row audit; not this card's to build.
 
+## 17. The OUTAGE state on a planning turn — "I can't read your code right now" (delta)
+
+**Subtask [MOTIR-8137] · story [MOTIR-8136]. A DELTA, not an edit.** Drawn in
+`design/code-context/planning-turn-code-unreadable.mock.html`, which amends §5's panel E and the
+plan-change rail (`components/planning/PlanChangeRail.tsx`, `TURN_RENDERERS`) and edits neither
+mock. [MOTIR-1764]'s states, the Code page and the audit's "not measured" face are unchanged.
+
+### 17.1 What this is, and what it is not
+
+[MOTIR-1764]'s **state E** is _missing_ context: no repository connected or indexed — a standing
+condition of the project that the person can fix. This is the _outage_: the project's code **is**
+connected and indexed, and Motir cannot read it right now. A transient condition of the platform
+the person cannot fix. The two never appear together (panel 5 draws state E beside the outage faces
+once, labelled): state E offers **Connect a repository**, the outage offers nothing beyond
+**Try again** and carries **no link to the Code page**.
+
+### 17.2 The two faces
+
+Both compose shipped pieces and **add no component**: the assistant `Bubble`, the passive marker
+line, the information notice `EarlierNotice` (`--el-notice-info-bg` on `--el-text-strong`,
+`--radius-control`, `--spacing-control-x/y`, 12px) and the rail's own secondary small **Try
+again** (`RefreshCw`, `onRetry`).
+
+| #   | State                                                                                | What the turn shows                                                                                                                                                                                       | Register               |
+| --- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| 1   | **Plan-writing turn, outage** (generate / draft, expand, replan, augment, plan edit) | The assistant bubble holds the notice below and **nothing else** — no plan card, no proposal tree, no "plan ready" bar. Under it the marker line, then **Try again**. The canvas keeps the previous plan. | information            |
+| 2   | **Question turn, outage** (`ask_project`, `debug_bug`)                               | The answer renders as today, **with the notice as the bubble's first child, above the answer**. The citation foot ("Answered from N work items") is unchanged.                                            | information            |
+| 3   | Outage ongoing, a second turn                                                        | Each turn carries **its own** state. **No sticky banner** (17.3).                                                                                                                                         | —                      |
+| 4   | Recovery                                                                             | The next turn is an ordinary turn, no outage chrome. Earlier outage turns **keep their notice and marker** — never cleared retroactively.                                                                 | —                      |
+| 5   | Contrast with state E                                                                | Drawn once, labelled.                                                                                                                                                                                     | warning vs information |
+| 6   | In flight                                                                            | The shipped in-flight line, exactly as today. The outage face appears **only when the turn ends**; there is no intermediate "reading code…" warning.                                                      | —                      |
+| 7   | Narrow rail, keyboard, screen reader                                                 | The text wraps inside the bubble, never truncates; Try again is in the tab order.                                                                                                                         | —                      |
+
+**The register is the decision.** A plan-writing turn that meets the outage **did not fail; it
+declined to write blind.** It therefore takes the information register, never the rose failure
+treatment (`--el-tint-rose`, "That didn't go through") the rail draws for a turn that really broke,
+which would tell the person something broke on their side. A question turn's answer is delivered,
+so it is not the failure treatment either, and **no per-claim marking is drawn**: the guarantee is
+that the answer states no unread code fact as verified (the motir-ai rule), and the notice covers
+the rest.
+
+### 17.3 The one decision this card records — no sticky banner
+
+The notice lives **on the turn**. No banner is pinned to the rail head or the page while the outage
+lasts. A banner would outlive the outage — still there, or needing dismissal, after the code is
+readable again — and teach people to read past it (the argument §12 makes for the freshness warning
+that must be seen to clear). The rail head and composer look exactly as they do on a healthy day. Two
+turns in one outage say the same thing twice, on purpose: the statement belongs to the turn it is
+true of.
+
+### 17.4 The exact strings
+
+The words are the contract; code and design agree on them. New keys sit beside
+`planningWorkspace.conversation` in `messages/en.json`; **Try again is the shipped `retry` key**,
+not a new string.
+
+| Key                 | Text                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------- |
+| `outage.planBody`   | I can't read your code right now, so I haven't changed your plan. Motir is on it.             |
+| `outage.planMarker` | Nothing was written — your plan is unchanged.                                                 |
+| `outage.askNotice`  | I couldn't read your code for this answer. Treat anything about the code here as unconfirmed. |
+| `retry` (shipped)   | Try again                                                                                     |
+
+**No panel states a cause in infrastructure terms** (graph service, replica, machine), a credit or
+cost reason, or any operator detail — and neither does a string.
+
+### 17.5 Per-element tokens and behaviour
+
+| Element     | Primitive / token                                                                                                                                               |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The notice  | Information notice: `--el-notice-info-bg` fill, `--el-text-strong` ink, `--radius-control`, `--spacing-control-x/y`, 12px, a 14px `Info` glyph (`aria-hidden`). |
+| The bubble  | The shipped assistant `Bubble`: `--el-chat-bubble-ai`, `--radius-card`, 13px. The notice is its first child with 8px below it.                                  |
+| The marker  | The shipped passive marker: centred, 12px, `--el-text-secondary`.                                                                                               |
+| Try again   | The shipped secondary small `Button` + `RefreshCw`; `onRetry` re-submits the **same** request; disabled while it runs. Plan-writing turn only.                  |
+| Live region | The notice is `role="status"` — announced once when the turn is appended; a reloaded thread draws it without announcing.                                        |
+| Ink         | `--el-text-strong` on the tint; captions `--el-text-secondary`. Never `--el-text-faint` or muted on a tint.                                                     |
+
+### 17.6 The contract the render card reads ([MOTIR-8141])
+
+The render draws from **(a) the turn kind** — plan-writing or question — and **(b) the presence of
+the outage signal** on the turn's job result (the `codeUnreadable` field motir-ai sets: `halt:
+'code_unreadable'` with the repository, the repository set and the reason), **and nothing else**.
+It must **not** display the repository or the reason: they are the operator's. A plan-writing job
+with the signal was halted and wrote no plan (face 1); a question job with the signal was answered
+(face 2) — told apart by the job kind, not by a second field.
+
+### 17.7 Entry path
+
+No new entry. Both faces appear inside the turn the person is already reading in the planning rail
+(`PlanChangeRail`, `TURN_RENDERERS.assistant`). Try again is the rail's existing re-submit.
+
+### 17.8 What this does NOT decide
+
+The component, the reading of the signal, and its tests ([MOTIR-8141]); what the signal is called
+and how it is set (the motir-ai cards); the Code page, state E's panels and the audit face.
+
+[MOTIR-8136]: https://app.motir.co/items/MOTIR-8136
+[MOTIR-8137]: https://app.motir.co/items/MOTIR-8137
+[MOTIR-8141]: https://app.motir.co/items/MOTIR-8141
 [MOTIR-1754]: https://app.motir.co/items/MOTIR-1754
 [MOTIR-1764]: https://app.motir.co/items/MOTIR-1764
 [MOTIR-1765]: https://app.motir.co/items/MOTIR-1765

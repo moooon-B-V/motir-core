@@ -7627,6 +7627,11 @@
         "groupFinished": "{step} — abgeschlossen"
       }
     },
+    "codeUnreadable": {
+      "planBody": "Ich kann deinen Code gerade nicht lesen und habe deshalb deinen Plan nicht geändert. Motir kümmert sich darum.",
+      "planMarker": "Es wurde nichts geschrieben — dein Plan ist unverändert.",
+      "askNotice": "Ich konnte deinen Code für diese Antwort nicht lesen. Behandle alles, was hier über den Code steht, als unbestätigt."
+    },
     "targets": {
       "sectionLabel": "Arbeitselemente",
       "sectionLabelQuery": "Arbeitselemente, die „{query}“ entsprechen",

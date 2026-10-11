@@ -7627,6 +7627,11 @@
         "groupFinished": "{step} — terminado"
       }
     },
+    "codeUnreadable": {
+      "planBody": "Ahora mismo no puedo leer tu código, así que no he cambiado tu plan. Motir se está ocupando.",
+      "planMarker": "No se escribió nada: tu plan no ha cambiado.",
+      "askNotice": "No pude leer tu código para esta respuesta. Trata como no confirmado todo lo que se diga aquí sobre el código."
+    },
     "targets": {
       "sectionLabel": "Elementos de trabajo",
       "sectionLabelQuery": "Elementos de trabajo que coinciden con “{query}”",

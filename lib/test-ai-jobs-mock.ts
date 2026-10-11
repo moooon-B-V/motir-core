@@ -60,6 +60,12 @@ export interface AskJobOutcome {
   forward?: { text: string } | null;
   offerForward?: { text: string } | null;
   run?: { readable: boolean; reason?: string | null } | null;
+  /**
+   * The code graph could not be read for this answer (Story MOTIR-8136 · MOTIR-8144):
+   * the result carries motir-ai's top-level `codeUnreadable` signal beside the answer.
+   * Present only when declared, so every other reply is byte-identical to before.
+   */
+  codeUnreadable?: boolean;
 }
 
 /**
@@ -151,7 +157,21 @@ export interface PlanJobOutcome {
    * so the run records no narration.
    */
   turn?: { message: string; question?: string | null };
+  /**
+   * The run HALTED on an unreadable code graph and wrote no plan (Story MOTIR-8136 ·
+   * MOTIR-8144): `result` is motir-ai's halt envelope — an empty delta and the
+   * `codeUnreadable` signal, no `turn`. Wins over `turn` when both are declared.
+   */
+  codeUnreadable?: boolean;
 }
+
+/** motir-ai's `codeUnreadable` signal, as `CodeUnreadableEnvelope` shapes it. */
+const CODE_UNREADABLE_SIGNAL = {
+  halt: 'code_unreadable',
+  repoRef: 'acme/web',
+  repoRefs: ['acme/web'],
+  reason: 'snapshot_integrity',
+} as const;
 
 /** One recorded `POST /v1/jobs` (diagnostic; the spec owns the fixture file). */
 export interface SubmittedJob {
@@ -620,6 +640,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                   : {}),
                 ...(outcome.run !== undefined ? { run: outcome.run } : {}),
               },
+              ...(outcome.codeUnreadable ? { codeUnreadable: CODE_UNREADABLE_SIGNAL } : {}),
             }
           : kind === 'debug_bug' && debugBugOutcomeAt(index).debugBug !== undefined
             ? { debugBug: debugBugOutcomeAt(index).debugBug }
@@ -641,10 +662,16 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                       ...(routing.missing ? { missing: routing.missing } : {}),
                     },
                   }
-                : kind === 'plan' && planOutcomeAt(index).turn
-                  ? // The planner's utterance (MOTIR-7809), read by `readPlanningTurn`.
-                    { turn: planOutcomeAt(index).turn }
-                  : {};
+                : kind === 'plan' && planOutcomeAt(index).codeUnreadable
+                  ? // The HALT on an unreadable code graph (MOTIR-8144): no plan, no turn — only the
+                    // signal (the delta field is left out for the reason the routing arm gives).
+                    {
+                      codeUnreadable: CODE_UNREADABLE_SIGNAL,
+                    }
+                  : kind === 'plan' && planOutcomeAt(index).turn
+                    ? // The planner's utterance (MOTIR-7809), read by `readPlanningTurn`.
+                      { turn: planOutcomeAt(index).turn }
+                    : {};
       const settled: Record<string, unknown> = { status: 'succeeded', result };
       return { statusCode: 200, data: settled, responseOptions: json };
     })
