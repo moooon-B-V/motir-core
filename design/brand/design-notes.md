@@ -4,9 +4,9 @@
 **Story:** MOTIR-656 (8.3 Marketing site + brand mark) · **Subtask:** MOTIR-1139 (8.3.1)
 **Consumed by:** MOTIR-1150 (8.3.5, apply the mark across the app) — layout + token source of truth.
 **Current mark:** the **wave band** — **APPROVED by Yue on 2026-08-06**, derived from his editable
-draw.io source. MOTIR-1140 (8.3.2) is closed; see §1 for the decision and what it settled. The one
-thing still open against this mark is trademark clearance (MOTIR-2267), which does not block
-MOTIR-1150 but must land before public launch.
+draw.io source. MOTIR-1140 (8.3.2) is closed; see §1 for the decision and what it settled.
+Trademark clearance (MOTIR-2267) ran on 2026-10-11: no conflict found, and the word mark "Motir" is
+registered in the EU (EUTM 019377304, canovol B.V.). See §1 _Trademark clearance — the wave band_.
 **Assets:** `design/brand/motir-logo.drawio.svg` (the editable **source**) ·
 `design/brand/wave-band.svg` (native 768 × 768.5, the artwork) · `design/brand/wave-band-24.svg`
 (24-grid cut).
@@ -121,11 +121,38 @@ resolutions, because each one constrains what MOTIR-1150 may do to the mark.
   no second cut, no simplified small-size variant, no permanent two-artwork tax. Where extra
   distinctiveness is wanted at favicon size, the tiled form (§5) already supplies it at zero cost.
 
-**Still open, and not blocking:** no prior-art check has been run on this mark. The check below was
-performed against the _lattice_. A wave band is a much less crowded shape than a concentric rhombus,
-but "less crowded" is not "checked" — **MOTIR-2267** (trademark clearance, classes 9 + 42) searches
-this shape, not that one. It does not block MOTIR-1150; it must land before public launch, ahead of
-MOTIR-1130.
+### Trademark clearance — the wave band (MOTIR-2267, 2026-10-11)
+
+A first-pass search of the free public registers, run by Yue with an agent — **not a legal opinion**;
+counsel was not engaged. The full record, with every hit, is the result comment on MOTIR-2267. The
+prior-art table further down concerns the _lattice_ and says nothing about this mark.
+
+**Searched revision:** `wave-band.svg` @ `91a9f3b25fd3efff2b4876f056509912f4ee5f5b` (the MOTIR-3181
+re-draw). A later re-draw is an unsearched revision.
+
+**Word mark "Motir", classes 9 + 42.**
+
+- **EU — registered.** EUTM **019377304**, owner **canovol B.V.** (moooon B.V.'s holding company),
+  registered 2026-09-24, runs to 2036-06-09.
+- **UK — no "motir" marks.** The EUTM does not cover the UK.
+- **US — no "Motir" in any class.** Live near-matches in 9/42 form a crowded MOT-x field (MOTOR,
+  MOTR, MOTAR, MOTIF, MOTIO); MOTOR and MOTR are the ones to show counsel before a US filing.
+
+**The wave band.** Searched as Vienna **26.11.01 / 26.11.06 / 26.11.13** (one band · thick · wavy)
+in the EU and UK, and USPTO design codes **26.17.02 / 26.17.09** in the US: EUIPO image search, TMview
+image search (office GB), and 540 of the 921 live logo-only US marks in 9/42 coded 26.17.02, reviewed
+by eye. Closest neighbours:
+
+| Mark                                                                             | Owner                     | Classes      | Assessment                                                                                                                                     |
+| -------------------------------------------------------------------------------- | ------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| EUTM 019086187 (registered) · USPTO 79431378 (pending) — heavy black N-wave band | Leat IP B.V. (NL)         | 9, 42        | **Not similar, clearly distinguishable — Yue's decision.** It shares all three Vienna codes and the classes, so it is the mark to show counsel |
+| USPTO 7668564 / 7668566 — folded black ribbon N                                  | Alohi SA (CH)             | 9, 38, 42    | A 3D folded strip, not a flat band                                                                                                             |
+| USPTO 7095344 — N-wave inside a rounded diamond                                  | Messingschlager GmbH (DE) | 8, 9, 11, 12 | Enclosed in a frame; bicycle-parts trade                                                                                                       |
+| USPTO 6908701 — thick black "AV" wave                                            | Audisian / Cotron (TW)    | 9            | Reads as letters; audio trade                                                                                                                  |
+
+**Verdict: no conflict found; the mark decision stays closed.** Two things are owed elsewhere, not
+here: a Madrid extension of EUTM 019377304 to the UK, the US and others, whose priority window closes
+on **2026-12-09**; and, for counsel, an intra-group licence from canovol B.V. to moooon B.V.
 
 ### On record — the lattice, chosen and then set aside
 
@@ -584,9 +611,10 @@ the band to a constant width** — the pinch and swell is deliberate (§1) · do
 - **⚠️ Maskable icons render at 0.55 × canvas, not 0.605** (§5). The band's extreme point is its
   bounding-box corner, so at the non-maskable scale it overflows the 0.8 safe circle and the OS mask
   clips it. (Both numbers moved on 2026-08-19 with the margin removal — §1.)
-- **Neither prior-art check nor trademark clearance covers this mark.** §1's visual-similarity table
-  was run against the _lattice_, which is a different shape. **MOTIR-2267** searches the wave band in
-  classes 9 and 42 and must land before launch — it does not block this card.
+- **Trademark clearance covers this mark as of revision `91a9f3b`** (MOTIR-2267, 2026-10-11 — §1
+  _Trademark clearance — the wave band_). §1's visual-similarity table was run against the
+  _lattice_, a different shape, and still says nothing about this one. A re-draw of the band is an
+  unsearched revision.
 - **If a motion identity is ever wanted, D is on file** with two motions already built. That would be
   its own card, and the motion surfaces live in `motir-marketing`, not here.
 
