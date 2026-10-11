@@ -283,6 +283,35 @@ export interface PlanChangeSessionDto {
   endReason?: 'failed' | 'idle' | 'restarted' | 'declined' | 'approved' | null;
   /** Who ended it — filled by the by-id read; null when Motir ended it. */
   endedBy?: { id: string; name: string } | null;
+  /**
+   * A FAILED attempt waiting to resume (Story MOTIR-7905 · MOTIR-7908). Set only
+   * while the session is OPEN and its latest hosted attempt failed. `reason` is
+   * motir-ai's closed code — the client translates it (en / zh); no English
+   * crosses the boundary. `stopPhase` / `stopRef` / `stopTitle` say where the walk
+   * stopped (all null when it failed before reaching a level).
+   *
+   * ⚠️ NOT HERE, on purpose: the failed job's id (what the resume submits as
+   * `fromJobId`) and motir-ai's `detail` (support and logs only). Both are server-side.
+   *
+   * Optional, and null on an open session that is not waiting, so every hand-built
+   * thread is unchanged (the `endedAt?` precedent).
+   */
+  failure?: PlanSessionFailureDto | null;
+  /**
+   * WHICH failed-waiting shape this is, set only while {@link failure} is (Story MOTIR-7905 ·
+   * MOTIR-7941): `'resume'` — a half-written walk that only Resume continues; `'reply'` — a
+   * plan waits for the person and the NEXT TURN continues the session. Derived by the same
+   * classifier the submit door refuses by; never re-derived in the client.
+   */
+  failedWaiting?: 'resume' | 'reply' | null;
+  /**
+   * The plan that WAITS for the person beside a failure — the session's most recent undecided
+   * `planned` / `stale` plan — or null. Set only while {@link failure} is.
+   */
+  waitingPlan?: { planId: string; title: string | null; status: 'planned' | 'stale' } | null;
+  /** The conversation is waiting on its OWNER's next turn (MOTIR-7908); never set
+   *  together with {@link failure}. */
+  awaitingPerson?: PlanSessionAwaitingPersonDto | null;
   /** The ENDED session this one carries over (AMENDMENT 23 §6), or null. Its
    *  copied turns keep their own `createdAt`, so they are the turns written
    *  before this session's own `createdAt`. */
@@ -297,6 +326,37 @@ export interface PlanChangeSessionDto {
   takenBack?: boolean;
 }
 
+/** motir-ai's closed failure vocabulary (`walkStop.reasonCode`), as the client sees it. */
+export type PlanSessionFailureReasonDto =
+  | 'rate_limited'
+  | 'out_of_credits'
+  | 'model_unavailable'
+  | 'token_expired'
+  | 'internal';
+
+/** A failed attempt waiting to resume — see {@link PlanChangeSessionDto.failure}. */
+export interface PlanSessionFailureDto {
+  /**
+   * Whether the way on is **Resume** — the session holds a half-written failed walk (or a shape
+   * with no other exit) — rather than a plain turn: a failed session whose most recent
+   * undecided plan is `planned` / `stale` (situation 2) is continued by the next turn, and its
+   * composer stays open. Absent ⇒ true. Derived by the same classifier the submit door refuses
+   * by (MOTIR-7905 · MOTIR-7918 / MOTIR-7941).
+   */
+  resumable?: boolean;
+  failedAt: string;
+  reason: PlanSessionFailureReasonDto;
+  stopPhase: 'lay' | 'author' | null;
+  stopRef: string | null;
+  stopTitle: string | null;
+}
+
+/** A conversation waiting on its owner — see {@link PlanChangeSessionDto.awaitingPerson}. */
+export interface PlanSessionAwaitingPersonDto {
+  since: string;
+  cause: 'question' | 'reply';
+}
+
 /**
  * ANOTHER holder has one of the scope's cards (AMENDMENT 23 §4) — the overlay's
  * refusal, read on open (`heldBy` on the anchored resume) or carried by a send's
@@ -307,6 +367,11 @@ export interface PlanTargetHeldByDto {
   holder: string | null;
   freesBy: string | null;
   holderSessionId: string | null;
+  /** The holder's session is waiting (on its person, or to resume); absent ⇒ false.
+   *  The refusal says "waiting on <holder>" in place of a free-by time. */
+  sessionWaiting?: boolean;
+  /** Why it waits; absent ⇒ null. */
+  waitingCause?: 'question' | 'reply' | 'failed' | null;
 }
 
 /**

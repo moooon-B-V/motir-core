@@ -376,7 +376,12 @@ describe('the browse floor', () => {
 describe('the repository reads take `tx` and hold under RLS', () => {
   it('both reads answer under `withWorkspaceContext`', async () => {
     await seedPopulation();
-    const scope = { projectIds: [fx.projectId], userId: memberId, fullView: false };
+    const scope = {
+      projectIds: [fx.projectId],
+      userId: memberId,
+      fullView: false,
+      awaitingSessionIds: [],
+    };
     const [awaiting, decided] = await withWorkspaceContext(fx.ctx, async (tx) => [
       await approvalGateRepository.findRecordsAwaiting(scope, { skip: 0, take: 50 }, tx),
       await approvalGateRepository.findRecordsDecided(scope, { skip: 0, take: 50 }, tx),
@@ -388,7 +393,12 @@ describe('the repository reads take `tx` and hold under RLS', () => {
   it('as `motir_app` bound to ANOTHER workspace, a full-view read of this project returns nothing', async () => {
     await seedPopulation();
     const foreign = await makeWorkItemFixture({ name: 'Bravo', identifier: 'BRAVO' });
-    const scope = { projectIds: [fx.projectId], userId: fx.ownerId, fullView: true };
+    const scope = {
+      projectIds: [fx.projectId],
+      userId: fx.ownerId,
+      fullView: true,
+      awaitingSessionIds: [],
+    };
     const read = (workspaceId: string) =>
       db.$transaction(async (tx: Prisma.TransactionClient) => {
         await tx.$executeRaw`SELECT set_config('app.user_id', ${fx.ownerId}, true)`;

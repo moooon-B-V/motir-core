@@ -160,12 +160,14 @@ async function requireAddressed(
 
 /** A lock refusal as the overlay reads it (AMENDMENT 23 §4) — the same fields the
  *  `409 PLAN_TARGET_LOCKED` body carries. */
-function toHeldBy(err: PlanTargetLockedError): PlanTargetHeldByDto {
+export function toHeldBy(err: PlanTargetLockedError): PlanTargetHeldByDto {
   return {
     target: err.targetIdentifier,
     holder: err.holderName,
     freesBy: err.freesBy?.toISOString() ?? null,
     holderSessionId: err.holderSessionId,
+    sessionWaiting: err.sessionWaiting,
+    waitingCause: err.waitingCause,
   };
 }
 

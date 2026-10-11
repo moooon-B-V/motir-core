@@ -184,6 +184,22 @@
   is point 8's _interim home_. `pages.md` AMENDMENT 3 defines the SEALED and
   FROZEN marks.
 
+- **AMENDED 2026-10-09 (MOTIR-7911, for Story MOTIR-7905, decided by MOTIR-7906), at §1
+  and _Deliberately NOT decided here_ — a `planning-session` gate kind is
+  RECORDED.** A hosted planning session that needs its person — the planner
+  stopped with a WHAT question, or the conversation is waiting on the person's
+  next turn and they left — raises one gate whose subject is the SESSION, routed to
+  the session's owner, listed in Waiting on you and cleared by the person's next
+  turn or the session's end. §1's MOTIR-7906 amendment states it; additive, nothing
+  struck. A plan awaiting approval stays on `plan_approval` (§11).
+
+- **AMENDED 2026-10-10 (MOTIR-7937, for Story MOTIR-7905, decided by MOTIR-7906), at
+  _Deliberately NOT decided here_ — a failure beside a waiting plan is NOT a gate.** A
+  session whose later run failed beside a `planned` / `stale` plan lists in To resume; it
+  raises no `planning-session` gate, and the waiting plan's own gate stays `plan_approval`.
+  Additive, nothing struck. `agent-authored-plans.md` AMENDMENT 23's 2026-10-10
+  sub-amendment is its other half.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -1254,6 +1270,34 @@ at the point the vocabulary is introduced costs one row in a frozen array.
 a permission-holder who is neither assignee nor reporter may still decide it
 from the item page, without it cluttering their queue. A reader who may see a
 gate but not decide it sees its state and no control.
+
+> ### §1 — AMENDMENT (MOTIR-7911, 2026-10-09, decided by MOTIR-7906): a `planning-session` gate — the SESSION is the subject, and it asks its owner to come back
+>
+> **Additive.** Nothing in §1's table is edited or struck; this records one more kind,
+> decided by the planner-recorded decision MOTIR-7906 for Story MOTIR-7905
+> (`agent-authored-plans.md` AMENDMENT 23's 2026-10-09 sub-amendment is its other half).
+> The code is MOTIR-7913 and MOTIR-7917 through MOTIR-7921; this amendment ships none.
+>
+> 1. **The kind is `planning-session`, and its subject is a planning SESSION.** It follows
+>    §11's `plan_approval` shape — a gate that belongs to a plan-side subject rather than to
+>    a card — with the session in place of the plan.
+> 2. **Two causes, one kind.** (a) The planner stopped with a WHAT question
+>    (`returned-to-conversation`) and the answer is the person's; (b) the conversation is
+>    waiting on the person's next turn and they left. The cause is recorded on the session
+>    (`awaitingPersonCause`) and names the question in words.
+> 3. **Routing is the session's OWNER, alone.** It is listed in Waiting on you for that
+>    person and nobody else; there is no assignee/reporter fallback, because a session has
+>    one owner.
+> 4. **Raised on the event, cleared by the next turn or the end.** The gate is raised when a
+>    hosted session enters either wait, and it clears when the person sends a turn or the
+>    session ends — by a person's restart, a decline or an approve. A session in either wait
+>    is spared by `closeIdleSessions` and `endSessionForAbandonedPlan`.
+> 5. **There is no decide verb.** The only act the row offers is opening the planning overlay
+>    at that session; answering is typing the next turn. No Approve, Decline or Request
+>    changes is added by this kind.
+> 6. **A failed session is NOT this kind.** A failed hosted attempt waits in the Workbench's
+>    **To resume** tab, not in Waiting on you; it is a different wait on the same session
+>    (never both at once).
 
 > ### §2 — AMENDMENT (MOTIR-4911, 2026-09-08): AUTHORITY is a RELATIONSHIP or ADMIN, not two permission keys
 >
@@ -6483,6 +6527,14 @@ decision` + `executor: human` — is decided in §1's MOTIR-5952 amendment.**
   the subject when a card has one; the file in a pull request remains the subject
   when it has none. Migrating historical `docs/decisions/` files into pages, and
   page ↔ work-item mention links, are still not decided here.
+- **A plan awaiting approval and the `planning-session` gate.** **AMENDED (MOTIR-7911,
+  2026-10-09, decided by MOTIR-7906):** a plan that waits for approval — including one
+  that sits beside a failed attempt in the same session — stays on `plan_approval` (§11)
+  and keeps its row in Waiting on you. The `planning-session` gate is about the SESSION
+  needing its person; it never replaces or doubles a plan's own question, and the two
+  open the same overlay. **AMENDED (MOTIR-7937, 2026-10-10):** a failure beside a waiting
+  plan (situation 2) is not a gate either — it lists in To resume, and the waiting plan's
+  own gate is still `plan_approval`.
 - **Re-homing the ACCEPTANCE gate.** `AcceptancePanel` is the language §1
   generalises from and is deliberately left where it is; folding it onto the
   Approvals tab is its own story.

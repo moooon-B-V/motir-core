@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
-import { failureReasonFrame } from '@/lib/ai/jobStream';
+import { failureReasonFrame, terminalStatusOf, walkPositionOf } from '@/lib/ai/jobStream';
+import type { JobWalkPosition } from '@/lib/planChange/failureRecord';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -86,6 +88,7 @@ export async function GET(
       try {
         let result = first;
         let reasonEmitted = false;
+        let lastPosition: JobWalkPosition | null = null;
         while (!result.done) {
           controller.enqueue(encoder.encode(formatFrame(result.value)));
           if (!reasonEmitted) {
@@ -94,6 +97,18 @@ export async function GET(
               reasonEmitted = true;
               controller.enqueue(encoder.encode(formatFrame(reason)));
             }
+          }
+          lastPosition = walkPositionOf(result.value) ?? lastPosition;
+          // A failed or canceled REVISION is settled here (MOTIR-7936): its lease is given
+          // back at once and, for a failure, the session keeps its plan and waits. Best-effort:
+          // the abandoned-plan sweep settles the same job as the backstop.
+          const terminal = terminalStatusOf(result.value);
+          if (terminal) {
+            await planSessionEndService
+              .settleFailedJob(jobId, ctx, { status: terminal, lastPosition })
+              .catch((err) =>
+                console.warn(`[stream] settling the revision job ${jobId} failed`, err),
+              );
           }
           result = await iterator.next();
         }

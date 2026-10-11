@@ -31,9 +31,9 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 vi.mock('@/lib/services/projectAccessService', () => ({
   projectAccessService: { assertPermission: vi.fn(async () => undefined) },
 }));
-const endSessionForFailedJob = vi.fn(async () => undefined);
+const settleFailedJob = vi.fn(async () => undefined);
 vi.mock('@/lib/services/planSessionEndService', () => ({
-  planSessionEndService: { endSessionForFailedJob },
+  planSessionEndService: { settleFailedJob },
 }));
 
 const { GET } = await import('@/app/api/ai/augment/[jobId]/stream/route');
@@ -102,7 +102,7 @@ function streamReq(jobId: string) {
 beforeEach(() => {
   process.env['MOTIR_AI_URL'] = 'https://ai.example.test';
   process.env['MOTIR_AI_SERVICE_TOKEN'] = 'svc-token';
-  endSessionForFailedJob.mockClear();
+  settleFailedJob.mockClear();
   session.current = { user: { id: 'user_1', email: 'pm@moooon.net', name: 'PM' } };
   activeCtx.current = {
     userId: 'user_1',
@@ -175,7 +175,7 @@ describe('the relay follows a job past the stream window', () => {
       ]),
     );
     // The failed attempt's session is ended, once — not once per window.
-    expect(endSessionForFailedJob).toHaveBeenCalledTimes(1);
+    expect(settleFailedJob).toHaveBeenCalledTimes(1);
   });
 
   it('a stream that ends on its own terminal done is subscribed ONCE', async () => {

@@ -7362,7 +7362,8 @@
         "stale": "已过时",
         "approved": "已批准",
         "declined": "已拒绝",
-        "closed": "已关闭"
+        "closed": "已关闭",
+        "waiting": "待继续"
       },
       "origin": {
         "mcp": "智能体计划",
@@ -7419,7 +7420,9 @@
         "approved": "已批准 · {time}"
       },
       "continuedFrom": "接续 {when} 的对话",
-      "continuedFromAria": "打开此对话所接续的对话（{when} 关闭）"
+      "continuedFromAria": "打开此对话所接续的对话（{when} 关闭）",
+      "stop": "停在{where} · 原因：{why} · {time}",
+      "stopChange": "你上一次的修改没能完成 · {time}"
     }
   },
   "planningWorkspace": {
@@ -7519,7 +7522,9 @@
         "notDecidable": "这份计划暂时还不能决定 —— 还没有人被请求批准它。没有任何改动。",
         "discard": "放弃没有成功。提案仍在画布上等待处理 —— 可以重试，或直接批准。",
         "askSilent": "没有得到任何回复。换一种方式提问试试。",
-        "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的工作项已恢复原状。"
+        "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的工作项已恢复原状。",
+        "revisionInFlight": "Motir AI 正在修订这个计划。你的消息已保留——新版本完成后请再发送一次。",
+        "awaitingResume": "此会话正在等待继续，暂时无法接收消息。请先继续它——你的消息已保留。"
       },
       "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
       "correctToAsk": "改为回答这个问题",
@@ -7787,6 +7792,16 @@
         "writing": "正在基于本对话撰写新计划。",
         "restored": "此计划涉及的工作已重新打开，此计划重新生效。没有开始新计划。",
         "restoredOne": "{workItem} 已重新打开，此计划重新生效。没有开始新计划。"
+      },
+      "refusal": {
+        "waitingOn": "正在等待 {name}",
+        "waitingOnSomeone": "正在等待某人",
+        "why": {
+          "question": "对方的规划器提出了疑问，正在等回答。",
+          "reply": "对方的对话正在等回复。",
+          "failed": "对方的尝试失败了，正在等对方继续。"
+        },
+        "openSession": "打开他们的会话"
       }
     },
     "arrival": {
@@ -7911,6 +7926,15 @@
       "earlierOpen": "打开",
       "disabledStreaming": "本次运行结束后可用",
       "swapped": "你之前的会话已关闭，新的会话已打开。"
+    },
+    "waiting": {
+      "failedHead": "这次尝试停下了",
+      "kept": "已写的计划得到保留，它涉及的工作项仍处于规划中。",
+      "holdReason": "请先继续这次失败的尝试。在它等待期间，发送已暂停。",
+      "onlyStarter": "只有 {name} 或项目管理员可以继续它。",
+      "onlyStarterAnon": "只有发起者或项目管理员可以继续它。",
+      "failureLine": "你上一次对这个计划的修改没能完成 · {when}",
+      "failureLineAgain": "你上一次的修改再次没能完成 · {when}"
     }
   },
   "codeHealth": {
@@ -8737,7 +8761,8 @@
         "decision_confirmation": "确认决策",
         "plan_approval": "计划审批",
         "agent_review": "智能体审查",
-        "manual_work": "人工工作"
+        "manual_work": "人工工作",
+        "planning_session": "规划会话"
       },
       "reviewRow": "查看 {key} — {sentence}",
       "pullRequest": {
@@ -8933,6 +8958,69 @@
         "unknownLine": "已不再编写。"
       },
       "ceiling": "显示你最新的 {shown} 个正在编写的计划。其余 {rest} 个请见<link>计划页</link>。"
+    },
+    "planningSession": {
+      "kind": "规划会话",
+      "waitingToResume": "待继续",
+      "resume": "继续",
+      "resuming": "正在继续…",
+      "open": "打开",
+      "failedAt": "{when}失败",
+      "written": "已写 {n}/{m}",
+      "second": "第二次尝试",
+      "stoppedAt": "停在",
+      "because": "原因：{reason}",
+      "resumingNote": "正在从停下的地方接着写。开始后此行会消失。",
+      "reopened": "从“待继续”重新打开 · 由你发起 · 最近活动 {when}",
+      "openAria": "打开失败的规划会话——{sentence}",
+      "couldNot": "无法开始继续。",
+      "stop": {
+        "lay": "正在铺设「{title}」",
+        "layTop": "正在铺设项目顶层",
+        "author": "正在撰写「{title}」",
+        "draft": "正在起草新条目"
+      },
+      "reason": {
+        "rate_limited": "请求过于频繁",
+        "out_of_credits": "组织的额度已用完",
+        "model_unavailable": "AI 服务暂不可用",
+        "token_expired": "与 AI 服务的连接已过期",
+        "internal": "我们这边出了故障"
+      },
+      "refusal": {
+        "credits": "你的组织的 Motir AI 额度已用完。补充额度后再继续。",
+        "notOwner": "只有发起此会话的人或项目管理员可以继续它。",
+        "ended": "此会话已在此期间结束。打开它查看经过。",
+        "notFailed": "此会话已不再等待继续。打开它查看当前状态。",
+        "notResumable": "此会话持有的计划无法继续。打开它查看当前状态。",
+        "unavailable": "无法连接 Motir AI。请稍后再试。"
+      },
+      "left": {
+        "title": "已移到“待继续”",
+        "line": "其尝试失败了，目前写好的计划已保留。请在“待继续”中继续。",
+        "link": "前往“待继续”",
+        "turn": "已在同一对话中修订——此条目将消失。",
+        "carry": "已带入新的对话——此条目将消失。",
+        "decided": "已决定——此条目将消失。",
+        "again": "正在此处重新规划——此条目将消失。"
+      },
+      "form": {
+        "b": {
+          "badChange": "你上一次对这个计划的修改没能完成",
+          "stateWaiting": "等待你的批准",
+          "stateStale": "已过期",
+          "nextReply": "计划仍在等你。回复即可继续。",
+          "nextAgain": "它所改动的工作已经完成。重新规划即可继续。"
+        },
+        "c": {
+          "ended": "对话已于{when}结束",
+          "gloss": "你的下一条消息会把计划带进一个新的对话。",
+          "chip": "对话已结束"
+        },
+        "walk": {
+          "alsoWaiting": "另有一个计划在等你批准："
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12983,6 +13071,15 @@
       },
       "consequence": "标记完成后 {key} 将移至“已完成”。",
       "consequenceMerges": "标记完成会在此记录。{key} 会在其拉取请求合并后移至“已完成”。"
+    },
+    "planningSession": {
+      "row": {
+        "kind": "规划会话",
+        "asked": "Motir AI 提问：",
+        "waitReply": "Motir AI 在等你回复。",
+        "since": "自 {when}",
+        "open": "打开规划会话——{sentence}"
+      }
     }
   },
   "approvalOverlay": {

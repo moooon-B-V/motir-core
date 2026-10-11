@@ -271,11 +271,12 @@ describe('a turn over a PLANNED plan revises it', () => {
       await say(sessionId, 'Change it');
       const out = await planChangeSessionsService.submit(me(), { sessionId });
 
-      await planSessionEndService.endSessionForFailedJob(out.jobId, {
-        userId: fx.ownerId,
-        workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
-      });
+      await planSessionEndService.settleFailedJob(
+        out.jobId,
+        { userId: fx.ownerId, workspaceId: fx.workspaceId, projectId: fx.projectId },
+        { status: 'failed' },
+        { readJob: async () => ({ error: { code: 'rate_limited' }, walkStop: null }) },
+      );
 
       const ended = await trail(planId, 'revision_ended');
       expect(ended).toHaveLength(1);
@@ -284,10 +285,11 @@ describe('a turn over a PLANNED plan revises it', () => {
       expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
         'planned',
       );
-      // The session's failure is recorded as before.
-      expect(
-        (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } })).endReason,
-      ).toBe('failed');
+      // The failure is RECORDED on the session, which stays open beside its plan
+      // (MOTIR-7905 · MOTIR-7936) — it is no longer ended.
+      const after = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } });
+      expect(after.endedAt).toBeNull();
+      expect(after.failedJobId).toBe(out.jobId);
     },
   );
 });

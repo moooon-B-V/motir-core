@@ -1,5 +1,9 @@
 import { Prisma, type Plan, type PlanStatus } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
+import {
+  FAILED_WAITING_WHERE,
+  UNDECIDED_PLAN_STATUSES,
+} from '@/lib/planChange/sessionWaitingState';
 
 /** A plan the abandoned-plan sweep may act on — every `generating` plan past the
  *  grace, carrying the proposal COUNT read in the same statement.
@@ -85,6 +89,13 @@ function generatingRequestedByWhere(scope: GeneratingRequestedByScope): Prisma.P
       : {
           OR: [{ status: 'generating' }, { status: 'planned', id: { in: [...revising] } }],
         }),
+    // A plan whose SESSION is failed and waiting to resume is NOT being written (MOTIR-7914):
+    // the failure path leaves it `generating` on purpose, and without this carve-out it would
+    // sit here and turn *stalled* — a claim that is false, because it waits for the person to
+    // press Resume. It lives on To resume instead. The definition is imported, never re-spelled
+    // (`lib/planChange/sessionWaitingState.ts`); a plan with NO session (an MCP plan) and a plan
+    // whose session is open and not failed both stay in the set.
+    NOT: { session: { is: { ...FAILED_WAITING_WHERE } } },
   };
 }
 
@@ -145,7 +156,132 @@ export const planRepository = {
    *  (AMENDMENT 23 §2). */
   async countUndecidedBySession(sessionId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.plan.count({
-      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+      where: { sessionId, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
+    });
+  },
+
+  /** How many of a session's plans WAIT FOR A DECISION (`planned` / `stale`), leaving one
+   *  out — the end arms' guard (MOTIR-7936): a session holding a plan a person is yet to
+   *  decide is never ended by a failure beside it. `excludePlanId` is the plan being
+   *  declined, so it never counts itself. */
+  async countAwaitingDecisionBySession(
+    sessionId: string,
+    excludePlanId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.plan.count({
+      where: {
+        sessionId,
+        status: { in: ['planned', 'stale'] },
+        ...(excludePlanId ? { id: { not: excludePlanId } } : {}),
+      },
+    });
+  },
+
+  /**
+   * `planned` / `stale` plans whose revision lease is HELD BY A JOB THAT STARTED BEFORE
+   * `olderThan` and never ended: the latest `revision_started` row has no later
+   * `revision_ended`. The sweep's backstop for a revision whose failure no relay saw
+   * (MOTIR-7936). Cross-workspace — runs under the system context against the plan and
+   * plan_revision system-read policies.
+   */
+  async listStaleRevisionCandidates(
+    olderThan: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      id: string;
+      workspaceId: string;
+      projectId: string;
+      sessionId: string | null;
+      sourceJobId: string | null;
+      leaseStartedAt: Date;
+    }>
+  > {
+    return tx.$queryRaw`
+      SELECT p."id", p."workspace_id" AS "workspaceId", p."project_id" AS "projectId",
+             p."session_id" AS "sessionId", p."source_job_id" AS "sourceJobId",
+             (SELECT max(r."changed_at") FROM "plan_revision" r
+               WHERE r."plan_id" = p."id" AND r."change_kind" = 'revision_started') AS "leaseStartedAt"
+      FROM "plan" p
+      WHERE p."status" IN ('planned', 'stale')
+        AND EXISTS (
+          SELECT 1 FROM "plan_revision" s
+          WHERE s."plan_id" = p."id" AND s."change_kind" = 'revision_started'
+            AND s."changed_at" <= ${olderThan}
+            AND NOT EXISTS (
+              SELECT 1 FROM "plan_revision" e
+              WHERE e."plan_id" = p."id" AND e."change_kind" = 'revision_ended'
+                AND (e."changed_at", e."id") > (s."changed_at", s."id")
+            )
+        )
+      ORDER BY p."created_at" ASC, p."id" ASC
+      LIMIT ${limit}
+    `;
+  },
+
+  /**
+   * A session's LATEST plan with what a RESUME checks (MOTIR-7916): its id, status and the
+   * job that wrote it. Read cheaply before a job is spent and again under the locks before
+   * the bind.
+   */
+  async findLatestForResume(sessionId: string, tx: Prisma.TransactionClient) {
+    return tx.plan.findFirst({
+      where: { sessionId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { id: true, status: true, sourceJobId: true, projectId: true },
+    });
+  },
+
+  /**
+   * RE-POINT a `generating` plan at the job that now writes it (MOTIR-7916): the bind a resume
+   * makes. ONE conditional `updateMany` on `status = 'generating'`, so a plan that was decided
+   * or declined meanwhile is left alone and the caller learns it from the return. Also stamps
+   * `lastActivityAt`, so the resumed plan does not read as stalled before its first signal.
+   */
+  async repointSourceJob(
+    planId: string,
+    jobId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.plan.updateMany({
+      where: { id: planId, status: 'generating' },
+      data: { sourceJobId: jobId, lastActivityAt: new Date() },
+    });
+    return result.count > 0;
+  },
+
+  /**
+   * The UNDECIDED plans of a PAGE of sessions in ONE read (MOTIR-7939) — what To resume names
+   * a session's form and its waiting plan by, and the plan fields the progress read needs, so
+   * naming a page costs no per-row query. Newest first within a session.
+   */
+  async listUndecidedBySessions(sessionIds: readonly string[], tx: Prisma.TransactionClient) {
+    if (sessionIds.length === 0) return [];
+    return tx.plan.findMany({
+      where: { sessionId: { in: [...sessionIds] }, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
+      select: {
+        id: true,
+        sessionId: true,
+        projectId: true,
+        status: true,
+        title: true,
+        createdAt: true,
+        lastActivityAt: true,
+        authorSource: true,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /** Every UNDECIDED plan of a session with what a turn on a failed session classifies by
+   *  (MOTIR-7938): its id, status, producing job and age. */
+  async listUndecidedBySession(sessionId: string, tx: Prisma.TransactionClient) {
+    return tx.plan.findMany({
+      where: { sessionId, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
+      select: { id: true, status: true, title: true, sourceJobId: true, createdAt: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },
 
@@ -158,7 +294,7 @@ export const planRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<Plan | null> {
     return tx.plan.findFirst({
-      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+      where: { sessionId, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },
@@ -320,7 +456,7 @@ export const planRepository = {
       where: {
         projectId,
         workspaceId,
-        status: { in: ['generating', 'planned', 'stale'] },
+        status: { in: [...UNDECIDED_PLAN_STATUSES] },
         AND: [
           { NOT: { status: 'generating', sourceJobId: null, items: { none: {} } } },
           // ⚠️ A CLOSED plan holding NOTHING is nobody's decision either

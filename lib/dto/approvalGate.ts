@@ -65,7 +65,11 @@ export type ApprovalGateKindDTO =
   | 'agent_review'
   /** MANUAL WORK a run reached, waiting on a person (MOTIR-7474;
    *  `docs/decisions/manual-work-gate.md`). */
-  | 'manual_work';
+  | 'manual_work'
+  /** A hosted PLANNING SESSION that needs its person — a planner's question, or a
+   *  conversation waiting on a reply (MOTIR-7913; ADR `approval-gates.md` §1's
+   *  MOTIR-7906 amendment). Card-less like `plan_approval`; it has no verbs. */
+  | 'planning_session';
 
 /**
  * WHETHER A DECISION IS WAITING ON A WORK ITEM, AND ON WHOM — the one answer the
@@ -192,7 +196,12 @@ export type ApprovalGateSupersedeCauseDTO =
   /** A `manual_work` card stopped being manual (MOTIR-7474). */
   | 'no_longer_manual'
   /** A `manual_work` card reached a done status by a write nobody decided (MOTIR-7474). */
-  | 'closed_without_decision';
+  | 'closed_without_decision'
+  /** The person sent a turn on the planning session a `planning_session` gate asked
+   *  about — the question is answered (MOTIR-7913). */
+  | 'answered'
+  /** The planning session a `planning_session` gate asked about ended (MOTIR-7913). */
+  | 'session_ended';
 
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can
@@ -702,6 +711,7 @@ export interface UnregisteredSubjectSummaryDTO {
     | 'decision_choice'
     | 'decision_confirmation'
     | 'plan_approval'
+    | 'planning_session'
     | 'manual_work'
   >;
 }
@@ -795,6 +805,37 @@ export interface PlanApprovalSubjectSummaryDTO {
 }
 
 /**
+ * WHICH PLANNING SESSION is waiting on its person, at row scale (Story MOTIR-7905 ·
+ * MOTIR-7913). A `planning_session` gate has no card, so everything the row draws is
+ * here. The naming fields are shaped as {@link PlanApprovalSubjectSummaryDTO}'s so the
+ * row reuses the plan-naming forms; the real rendering is the Workbench card's.
+ */
+export interface PlanningSessionSubjectSummaryDTO {
+  kind: 'planning_session';
+  /** The session — the gate's `subjectId`. */
+  sessionId: string;
+  /** The session's latest plan, or null when it has none yet. */
+  planId: string | null;
+  /** WHY the session waits: the planner's `question`, or the conversation's `reply`. */
+  cause: 'question' | 'reply';
+  /** The planner's question, verbatim — set for the `question` cause. */
+  question: string | null;
+  /** The planner's last line — set for the `reply` cause. */
+  plannerLine: string | null;
+  /** ISO-8601 — when the session began waiting. */
+  since: string;
+  /** `Plan.title`, as written, or null. */
+  planTitle: string | null;
+  /** The session's first target key, or null for a project-wide session. */
+  targetKey: string | null;
+  /** That target's title, or null when it has none or the key no longer resolves — what the
+   *  row's `targeted` plan-naming form reads (MOTIR-7917). */
+  targetTitle: string | null;
+  /** The project's name — the leading line's last fallback. */
+  projectName: string;
+}
+
+/**
  * What a row says about the thing being decided, per kind.
  *
  * ⚠️ TOTAL OVER `ApprovalGateKind`, not over the kinds somebody had in mind —
@@ -812,6 +853,7 @@ export type ApprovalGateSubjectSummaryDTO =
   | DecisionChoiceSubjectSummaryDTO
   | DecisionConfirmationSubjectSummaryDTO
   | PlanApprovalSubjectSummaryDTO
+  | PlanningSessionSubjectSummaryDTO
   | ManualWorkSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 

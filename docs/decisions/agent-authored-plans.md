@@ -11,12 +11,16 @@
   MOTIR-2992 (the vitest gate), MOTIR-2993 (the E2E). AMENDMENT 3 is consumed by
   MOTIR-3095 (projected validity on the MCP), MOTIR-3096 (projected reads),
   MOTIR-3097 (the story's vitest gate). AMENDMENT 6 amends AMENDMENT 2 — its
-  empty-only exclusion — and is written by MOTIR-3189.
+  empty-only exclusion — and is written by MOTIR-3189. AMENDMENT 23's 2026-10-10
+  sub-amendment (situation 2) is consumed by MOTIR-7936, 7938, 7939, 7940, 7941 and 7942.
   AMENDMENT 10 amends AMENDMENT 8's boundary — it is written by MOTIR-3596 and consumed by
   MOTIR-3598 (the job-token door), MOTIR-3599 (the `revise_plan` submit), MOTIR-3600 (the motir-ai
   handler), MOTIR-3601 (the review-surface affordance) and MOTIR-3602 (the story's vitest gate).
   AMENDMENT 17 (sessions as records, `Plan.sessionId`) is written by MOTIR-6018 and consumed by
   MOTIR-6019 through MOTIR-6028, the children of story MOTIR-6011.
+  AMENDMENT 23's failure clauses are amended by its 2026-10-09 sub-amendment (MOTIR-7906, the
+  decision card; written by MOTIR-7911) and consumed by story MOTIR-7905's code subtasks
+  (MOTIR-7908 through MOTIR-7921 and their follow-ons) and by the carry story MOTIR-7928.
   AMENDMENT 23 §6's 2026-10-09 amendment (an ended session whose plan still waits is carried WITH
   that plan) is written by MOTIR-7931 and consumed by the children of story MOTIR-7928.
 
@@ -4032,6 +4036,61 @@ decision page `cmuvqpwut00k3hxoibeafy0he`, which is the record of authority. MOT
 §1 (the columns, the `closed` state and the backfill in
 `20261005220000_plan_change_session_end`).
 
+### AMENDMENT 23 — sub-amendment (MOTIR-7906 · MOTIR-7911, 2026-10-09): a FAILURE no longer ends a hosted session — true resume
+
+Decided by **MOTIR-7906** (planner-recorded, owner answer A of run 20261008-195233: _true resume_),
+which supersedes AMENDMENT 23 on its **failure clauses only**. Nothing above is edited; each struck
+clause below stays legible so a reader arriving from MOTIR-7629, 7630, 7632 or 7638 lands on the
+correction.
+
+**What is struck.**
+
+- ~~`endSession` is the single writer of its end (`failed`, `idle`, `restarted`, `declined`,
+  `approved`)~~ — `failed` is no longer a way a hosted session ends. It stays in the vocabulary for
+  rows already written (see _What stands_).
+- ~~a failed attempt ends its session as soon as Motir observes the failure~~ — the stream relays
+  (`endSessionForFailedJob`) and the hourly abandoned-plan sweep (`endSessionForAbandonedPlan`) no
+  longer end the session of a failed attempt (MOTIR-7638, MOTIR-7630's _"a failed attempt closes it
+  at once"_).
+- ~~a failed session's `generating` plan is declined as `abandoned`~~ and ~~its cards are given
+  back~~ (MOTIR-7632 §2).
+- ~~a failed … session reads **Closed** on the Plans list~~ and ~~a failed … session can be copied
+  into a fresh one~~ for a failure (MOTIR-7641, MOTIR-7633 / MOTIR-7643's failed-and-Closed overlay
+  with _Start a new session_).
+
+**What replaces it.** When a hosted planning attempt fails partway through a lay or author walk,
+the session **stays open**, its `generating` plan keeps every proposal it wrote, and its cards stay
+held at Planning. The session waits in the Workbench's **To resume** tab, naming where the walk
+stopped and why. **Resume** starts a new attempt in the **same session on the same plan** and the
+walk continues from the next unfinished level or card, reading the plan itself as the record of
+progress (closed levels and authored proposals are not redone).
+
+- **The discriminator is the session's failure record, not a new plan status.** A failed plan stays
+  `generating`; it is told apart from a stalled one by the session's failure columns (when, the
+  reason, where the walk stopped), which are recorded by MOTIR-7908.
+- **Both sweeps spare a waiting session.** `closeIdleSessions` and `endSessionForAbandonedPlan`
+  never end a session that is failed-waiting or awaiting its person; only a person ends it
+  (restart / _Plan something new_, decline, or approve). A session that is neither keeps the idle
+  close.
+- **Another member** who tries to plan a held card is refused naming the holder and that the
+  session is _waiting on <name>_, with no free-by time.
+- **A failure beside a waiting plan (situation 2)** is the same failed-waiting state: the
+  `planned` / `stale` plan stays decidable, and the person's next turn continues in that session
+  and clears the failure. That behaviour, and the carry of a session already ended `failed`, are
+  recorded in the situation-2 and carry stories (MOTIR-7937 and MOTIR-7928) and are **not** stated
+  here.
+
+**What stands.** Decline, approve and a person's restart still END a session; an ended session is
+never resumed; **Closed** (Motir's ending) versus **Declined** (a person's) is kept; an idle,
+non-waiting session still closes after the lease; and the copy-into-a-new-session offer remains for a
+session ended any other way. Sessions already ended `failed` under the old rule are not rewritten.
+
+**Out of scope:** MCP-authored plans (`prompts/plan.py` or any MCP client — its return goes to its
+own terminal and it has no hosted job to fail) and `guide` sessions keep their current behaviour.
+
+The decision page (MOTIR-7906) is the record of authority; where it differs from this summary, the
+page wins. It supersedes the decision page `cmuvqpwut00k3hxoibeafy0he` **on these clauses only**.
+
 ### AMENDMENT 23 §6, amended 2026-10-09 — an ended session whose plan still waits is carried WITH that plan
 
 **What changed, and on whose word.** Story MOTIR-7928 (_A waiting plan whose session has ended keeps
@@ -4087,6 +4146,66 @@ turn. Where an undecided plan is decided is MOTIR-7883's overlay, not this block
 **Consumed by:** the carry service (MOTIR-7930) and the overlay on an ended session whose plan still
 waits (MOTIR-7932). MOTIR-7905 consumes the same mechanism for its sessions that ended `failed`
 before it.
+
+### AMENDMENT 23 — sub-amendment (MOTIR-7906 · MOTIR-7937, 2026-10-10): situation 2 — a failure beside a waiting plan
+
+**On whose word.** The owner rule of 2026-10-08, verbatim: _"situation 2 the plan should be in to
+resume tab"_ and _"if the user starts to chat to ask further change of the plan, we can create a new
+session to carry the existing plan."_ The decision page is **MOTIR-7906**, whose _Decision_ and
+Consequences 6–8 are the source of every clause below; this block decides nothing the page does not.
+
+**What is struck, for a FAILURE only** (the 2026-10-09 block above struck the same text for a failed
+`generating` plan and is not restated):
+
+- ~~a `planned` plan waits under a session that reads Closed and "is decided on its own
+  surface, as today"~~ — a session whose later run FAILED beside a `planned` / `stale` plan is not
+  ended and does not read Closed; it waits in To resume.
+- ~~a failed … session reads **Closed** on the Plans list~~ — here for a session that holds a
+  waiting plan. (`endSessionWithin` declining only a `generating` plan and leaving a `planned` /
+  `stale` one under an ended session was how situation 2 arose.)
+
+**The rule now.**
+
+- A failure never ends a hosted session, whatever plans it holds. Two shapes arrive here: a failed
+  REVISION of the waiting plan, and a failed run that opened a newer `generating` plan.
+- Every undecided plan stays exactly as it is and stays **decidable**. A failed revision releases
+  its revision lease at once, so the person is not refused for the next ten minutes.
+- The session's cards stay held.
+- The session waits in **To resume**, naming the waiting plan and the failure. Opening it shows the
+  overlay with the plan, its decide door and a chatbox.
+- This is the SAME failed-waiting state as the 2026-10-09 block's, not a second state (Consequence 6).
+  Only what the session holds differs.
+- A job canceled beside a waiting plan declines only the canceled attempt's own `generating` plan
+  and leaves the session open with no failure record: the person stopped it, and the waiting plan
+  carries on.
+
+**How the person continues — one line per form.**
+
+- **A failed walk** (a failed `generating` plan) takes **Resume**: the 2026-10-09 block's rule.
+- **A failure beside a waiting plan** is continued by the person's **next turn in that same
+  session**. That turn revises the plan, clears the failure, and carries nothing — the session is
+  still open.
+- **Both at once** (the failed run also opened a newer `generating` plan): Resume continues that
+  walk, and the waiting plan stays decidable beside it.
+
+**Sessions ended `failed` before this.** Such a session lists in To resume too, keyed on its most
+recent UNDECIDED plan (Consequence 7: its latest plan is usually the declined failed attempt). It has
+**no Resume**, because an ended session is never resumed. The person's first turn carries the plan
+into a NEW session by the mechanism in the heading _AMENDMENT 23 §6, amended 2026-10-09 — an ended
+session whose plan still waits is carried WITH that plan_, which this block does not restate. The
+entry clears once the plan is carried or decided.
+
+**Waiting on you (Consequence 8).** Yes: the waiting plan's `plan_approval` row stays in Waiting on you
+where MOTIR-7460 puts it, and the To resume entry is about the failure; the two open the same overlay.
+
+**What still stands.** Decline, approve and a person's restart END a session; an ended session is never
+reopened; **Closed** versus **Declined** is kept; `idle` still closes a session that is not waiting;
+take-back to the owner's own open session stands. **Out of scope:** MCP-authored plans and `guide`
+sessions keep their current behaviour.
+
+- **Consumed by:** MOTIR-7936 (the failure path beside a waiting plan), MOTIR-7938 (the next turn),
+  MOTIR-7939 (To resume's three forms), MOTIR-7940 and MOTIR-7941 (their rendering) and MOTIR-7942
+  (the situation-2 gate).
 
 ## AMENDMENT 24 — a REVISION rewrites a landed card in place: `update_plan_item { revision: true }` (2026-10-08)
 

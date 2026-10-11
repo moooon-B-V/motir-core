@@ -30,6 +30,7 @@ const {
   streamAsk,
   readSession,
   startCopied,
+  resumeSession,
 } = vi.hoisted(() => ({
   open: vi.fn(),
   append: vi.fn(),
@@ -47,6 +48,7 @@ const {
   streamAsk: vi.fn(),
   readSession: vi.fn(),
   startCopied: vi.fn(),
+  resumeSession: vi.fn(),
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
@@ -69,6 +71,10 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   settleAskJob: settleAsk,
   getPlanChangeSession: readSession,
   startCopiedSession: startCopied,
+  // Story MOTIR-7905 · MOTIR-7918: the failed-waiting session's Resume door.
+  resumePlanSession: resumeSession,
+  resumeAlreadyStartedJobId: (err: { code?: string; body?: { jobId?: string } } | null) =>
+    err?.code === 'RESUME_ALREADY_STARTED' ? (err.body?.jobId ?? null) : null,
 }));
 
 vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
@@ -94,6 +100,9 @@ import {
   usePlanChangeConversation,
   targetHeldFrom,
   sessionEnded,
+  sessionFailed,
+  sessionAwaitsResume,
+  refusalCodeOf,
   SESSION_END_REREAD_MS,
 } from '@/lib/hooks/usePlanChangeConversation';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
@@ -165,11 +174,22 @@ async function mounted(opts: { anchorId?: string } = {}) {
 
 describe('the pure readers', () => {
   it('reads a 409 PLAN_TARGET_LOCKED body as the holder and its free-by — nothing else', () => {
-    expect(targetHeldFrom(new PlanEditsClientError(409, 'PLAN_TARGET_LOCKED', HELD))).toEqual(HELD);
+    expect(targetHeldFrom(new PlanEditsClientError(409, 'PLAN_TARGET_LOCKED', HELD))).toEqual({
+      ...HELD,
+      sessionWaiting: false,
+      waitingCause: null,
+    });
     // A plan's hold carries no free-by and may carry no name.
     expect(
       targetHeldFrom(new PlanEditsClientError(409, 'PLAN_TARGET_LOCKED', { target: 'ACME-40' })),
-    ).toEqual({ target: 'ACME-40', holder: null, freesBy: null, holderSessionId: null });
+    ).toEqual({
+      target: 'ACME-40',
+      holder: null,
+      freesBy: null,
+      holderSessionId: null,
+      sessionWaiting: false,
+      waitingCause: null,
+    });
     expect(targetHeldFrom(new PlanEditsClientError(500, null))).toBeNull();
     expect(targetHeldFrom(new Error('boom'))).toBeNull();
     // A 409 with no body still reads as a refusal, with nothing named.
@@ -178,7 +198,26 @@ describe('the pure readers', () => {
       holder: null,
       freesBy: null,
       holderSessionId: null,
+      sessionWaiting: false,
+      waitingCause: null,
     });
+  });
+
+  it('reads sessionWaiting and its cause off the 409 (MOTIR-7918); absent ⇒ false', () => {
+    expect(
+      targetHeldFrom(
+        new PlanEditsClientError(409, 'PLAN_TARGET_LOCKED', {
+          ...HELD,
+          sessionWaiting: true,
+          waitingCause: 'failed',
+        }),
+      ),
+    ).toMatchObject({ sessionWaiting: true, waitingCause: 'failed' });
+    expect(
+      targetHeldFrom(
+        new PlanEditsClientError(409, 'PLAN_TARGET_LOCKED', { ...HELD, waitingCause: 'nonsense' }),
+      ),
+    ).toMatchObject({ sessionWaiting: false, waitingCause: null });
   });
 
   it('a session has ended only when the SERVER row says so', () => {
@@ -276,7 +315,11 @@ describe('another holder’s card is refused IN PLACE (AMENDMENT 23 §4)', () =>
     await act(async () => {
       await result.current.send('Split ACME-40.');
     });
-    expect(result.current.state.targetHeld).toEqual(HELD);
+    expect(result.current.state.targetHeld).toEqual({
+      ...HELD,
+      sessionWaiting: false,
+      waitingCause: null,
+    });
     expect(result.current.state.errorCode).toBeNull();
     expect(result.current.state.phase).toBe('idle');
     expect(streamAsk).not.toHaveBeenCalled();
@@ -515,3 +558,183 @@ function deferred(): Deferred {
   });
   return { promise, resolve, reject };
 }
+
+// ── A FAILED HOSTED ATTEMPT WAITS TO BE RESUMED (Story MOTIR-7905 · MOTIR-7918) ──
+
+const FAILURE = {
+  failedAt: '2026-07-27T11:00:00.000Z',
+  reason: 'rate_limited' as const,
+  stopPhase: 'author' as const,
+  stopRef: 'ACME-20',
+  stopTitle: 'Export a report',
+};
+const failedSession = (over: Partial<NonNullable<PlanChangeSessionDto['failure']>> = {}) => ({
+  ...session(['Add recurring invoices.']),
+  failure: { ...FAILURE, ...over },
+});
+
+describe('the pure readers for a session waiting on a failure', () => {
+  it('failed-waiting is read from the server’s row, and an ended session is never it', () => {
+    expect(sessionFailed(null)).toBe(false);
+    expect(sessionFailed(session([]))).toBe(false);
+    expect(sessionFailed(failedSession())).toBe(true);
+    expect(sessionFailed({ ...failedSession(), endedAt: ENDED_AT, endReason: 'failed' })).toBe(
+      false,
+    );
+  });
+
+  it('only a resumable failure awaits RESUME; situation 2 (resumable: false) takes a turn', () => {
+    expect(sessionAwaitsResume(failedSession())).toBe(true);
+    expect(sessionAwaitsResume(failedSession({ resumable: true }))).toBe(true);
+    expect(sessionAwaitsResume(failedSession({ resumable: false }))).toBe(false);
+  });
+});
+
+describe('after a failed stream', () => {
+  it('adopts a row that carries `failure` (and no end) — the rail then draws the failure line', async () => {
+    submitAsk.mockResolvedValue({ jobId: 'ask-1', turnId: 't0', session: session(['x']) });
+    streamAsk.mockImplementation(
+      async (_job: string, _signal: AbortSignal, onError: (code: string | null) => void) => {
+        onError('PLANNER_FAILED');
+      },
+    );
+    readSession.mockResolvedValue(failedSession());
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Split it.');
+    });
+    await waitFor(() => expect(result.current.state.session?.failure?.reason).toBe('rate_limited'));
+    expect(result.current.state.session?.endedAt ?? null).toBeNull();
+  });
+
+  it('a re-read that returns `endedAt` still draws the end marker as before', async () => {
+    submitAsk.mockResolvedValue({ jobId: 'ask-1', turnId: 't0', session: session(['x']) });
+    streamAsk.mockImplementation(
+      async (_job: string, _signal: AbortSignal, onError: (code: string | null) => void) => {
+        onError('PLANNER_FAILED');
+      },
+    );
+    readSession.mockResolvedValue(ended(session(['x'])));
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Split it.');
+    });
+    await waitFor(() => expect(result.current.state.session?.endedAt).toBe(ENDED_AT));
+  });
+});
+
+describe('Retry inside a session waiting to resume', () => {
+  it('submits nothing — it would open a second plan beside the held one', async () => {
+    open.mockResolvedValue(failedSession());
+    const { result } = await mounted();
+    expect(result.current.state.session?.failure).toBeTruthy();
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(submit).not.toHaveBeenCalled();
+    expect(submitAnchored).not.toHaveBeenCalled();
+    expect(resubmitAnchored).not.toHaveBeenCalled();
+    expect(rerunAsk).not.toHaveBeenCalled();
+  });
+});
+
+describe('Resume', () => {
+  const RESUMED = {
+    jobId: 'job-9',
+    planId: 'plan-3',
+    session: session(['Add recurring invoices.']),
+  };
+
+  it('calls the door ONCE (even on a double press), reads resuming, and attaches the returned job on the returned plan', async () => {
+    open.mockResolvedValue(failedSession());
+    let release!: (v: unknown) => void;
+    resumeSession.mockReturnValue(new Promise((r) => (release = r)));
+    stream.mockImplementation(async () => {});
+    const { result } = await mounted();
+
+    await act(async () => {
+      void result.current.resume();
+      void result.current.resume();
+    });
+    expect(resumeSession).toHaveBeenCalledTimes(1);
+    expect(resumeSession).toHaveBeenCalledWith('s1', expect.anything());
+    expect(result.current.state.resuming).toBe(true);
+
+    await act(async () => release(RESUMED));
+    await waitFor(() => expect(stream).toHaveBeenCalled());
+    expect(stream.mock.calls[0]![0]).toBe('job-9');
+    expect(result.current.state.planId).toBe('plan-3');
+    // The new attempt's row carries no failure — Resume cleared it server-side.
+    expect(result.current.state.session?.failure ?? null).toBeNull();
+    await waitFor(() => expect(result.current.state.resuming).toBe(false));
+  });
+
+  it('RESUME_ALREADY_STARTED attaches to the winning job it carries — no error', async () => {
+    open.mockResolvedValue(failedSession());
+    resumeSession.mockRejectedValue(
+      new PlanEditsClientError(409, 'RESUME_ALREADY_STARTED', { jobId: 'job-winner' }),
+    );
+    stream.mockImplementation(async () => {});
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.resume();
+    });
+    expect(stream.mock.calls[0]![0]).toBe('job-winner');
+    expect(result.current.state.resumeError ?? null).toBeNull();
+  });
+
+  it.each(['SESSION_NOT_FAILED', 'PLAN_NOT_RESUMABLE', 'NOT_SESSION_OWNER', 'PLAN_SESSION_ENDED'])(
+    '%s keeps the failure line and holds the code beside it',
+    async (code) => {
+      open.mockResolvedValue(failedSession());
+      resumeSession.mockRejectedValue(new PlanEditsClientError(409, code));
+      const { result } = await mounted();
+      await act(async () => {
+        await result.current.resume();
+      });
+      expect(result.current.state.resumeError).toBe(code);
+      expect(result.current.state.session?.failure?.reason).toBe('rate_limited');
+      expect(stream).not.toHaveBeenCalled();
+    },
+  );
+
+  it('out of credits reads as the credit code', async () => {
+    open.mockResolvedValue(failedSession());
+    resumeSession.mockRejectedValue(new PlanEditsClientError(402, null));
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.resume();
+    });
+    expect(result.current.state.resumeError).toBe('MOTIR_AI_OUT_OF_CREDITS');
+  });
+
+  it('does nothing on a session that is not waiting to resume', async () => {
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.resume();
+    });
+    expect(resumeSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('a TURN refused by a session that waits (MOTIR-7941)', () => {
+  it('reads the two refusals by their code, and nothing else', () => {
+    expect(refusalCodeOf(new PlanEditsClientError(409, 'PLAN_REVISION_IN_FLIGHT'))).toBe(
+      'PLAN_REVISION_IN_FLIGHT',
+    );
+    expect(refusalCodeOf(new PlanEditsClientError(409, 'SESSION_AWAITING_RESUME'))).toBe(
+      'SESSION_AWAITING_RESUME',
+    );
+    expect(refusalCodeOf(new PlanEditsClientError(409, 'PLAN_SESSION_ENDED'))).toBeNull();
+    expect(refusalCodeOf(new Error('boom'))).toBeNull();
+  });
+
+  it('a refused send holds the code as the rail’s error (not the generic FAILED)', async () => {
+    submitAsk.mockRejectedValue(new PlanEditsClientError(409, 'SESSION_AWAITING_RESUME'));
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Change it.');
+    });
+    expect(result.current.state.errorCode).toBe('SESSION_AWAITING_RESUME');
+  });
+});

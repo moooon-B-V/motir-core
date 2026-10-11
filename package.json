@@ -53,6 +53,7 @@
     "coverage:platform-admin": "vitest run --config vitest.coverage.platform-admin.config.ts --coverage",
     "coverage:agent-instance-run": "vitest run --config vitest.coverage.agent-instance-run.config.ts --coverage",
     "coverage:pages": "vitest run --config vitest.coverage.pages.config.ts --coverage",
+    "coverage:planning-session-needs-you": "vitest run --config vitest.coverage.planning-session-needs-you.config.ts --coverage",
     "coverage:session-lifecycle": "vitest run --config vitest.coverage.session-lifecycle.config.ts --coverage",
     "coverage:plan-something-new": "vitest run --config vitest.coverage.plan-something-new.config.ts --coverage",
     "coverage:mid-run-turns": "vitest run --config vitest.coverage.mid-run-turns.config.ts --coverage",

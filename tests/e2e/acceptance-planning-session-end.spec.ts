@@ -34,6 +34,7 @@ import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanningAnchorTree, PLANNING_ANCHOR_PASSWORD } from './_helpers/planning-anchor-seed';
 import { latestPlanningSession } from './_helpers/planChangeConversation';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -116,7 +117,13 @@ async function cardOf(key: string) {
 async function sessionRow(id: string) {
   return adminDb.planChangeSession.findUniqueOrThrow({
     where: { id },
-    select: { endedAt: true, endReason: true, copiedFromSessionId: true },
+    select: {
+      endedAt: true,
+      endReason: true,
+      copiedFromSessionId: true,
+      failedAt: true,
+      workspaceId: true,
+    },
   });
 }
 
@@ -186,6 +193,19 @@ test('a failed attempt closes its session, the conversation carries on, and the 
     await openFromCard(page, key);
     await sendFromCard(page, FIRST);
     failedId = (await latestPlanningSession(email)).id;
+
+    // MOTIR-7905 (decision MOTIR-7906): a failed HOSTED attempt no longer ends its session — it
+    // keeps it and waits in To resume. The Closed form below is the one a session that ended
+    // `failed` BEFORE that story still has, so the historic end is made through the end door
+    // and the session is reopened by its own address.
+    await expect.poll(async () => (await sessionRow(failedId)).failedAt).not.toBeNull();
+    expect((await sessionRow(failedId)).endedAt).toBeNull();
+    await planSessionEndService.endSession(failedId, 'failed', {
+      workspaceId: (await sessionRow(failedId)).workspaceId,
+    });
+    const closedAddress = new URL(page.url());
+    closedAddress.searchParams.set('planSession', failedId);
+    await page.goto(closedAddress.pathname + closedAddress.search);
 
     // The failure line with no Try again, the Closed marker, and Start a new session.
     await expect(failedClosed(page)).toBeVisible();

@@ -46,6 +46,7 @@ function view(over: Partial<SessionRowView> = {}): SessionRowView {
     seed: null,
     // An OPEN session reads its latest plan's state (AMENDMENT 23 §1).
     state: latestPlan?.status ?? 'none',
+    failure: null,
     end: null,
     copiedFrom: null,
     ...over,
@@ -445,5 +446,126 @@ describe('an ENDED session (MOTIR-7642)', () => {
     expect(screen.getByText('已关闭')).toBeTruthy();
     expect(screen.getByTestId('plan-session-end').textContent).toBe('已关闭 · 尝试失败 · 18:34');
     expect(screen.getByText('接续 18:34 的对话')).toBeTruthy();
+  });
+});
+
+// ── A SESSION WHOSE ATTEMPT FAILED (Story MOTIR-7905 · MOTIR-7921 / MOTIR-7944) ────────────────
+// Drawn to `plans-tabbed-list--waiting-to-resume.mock.html` and `…--situation-2.mock.html`.
+
+describe('Waiting to resume (MOTIR-7921)', () => {
+  const walk = (over: Partial<SessionRowView> = {}) =>
+    view({
+      state: 'waiting',
+      latestPlan: { id: 'p_9', status: 'generating' },
+      failure: {
+        kind: 'walk',
+        reason: 'rate_limited',
+        stopPhase: 'author',
+        stopTitle: 'Export a report',
+        timeLabel: '5 minutes ago',
+        fullLabel: 'Oct 10, 2026, 8:00 AM',
+      },
+      ...over,
+    });
+
+  it('reads the awaiting chip, the stop line in the To resume words — and not “active {when}”', () => {
+    renderWithIntl(<SessionRow view={walk()} />);
+    expect(screen.getByText('Waiting to resume').className).toContain('tint-yellow');
+    expect(screen.getByTestId('plans-stop-line').textContent).toBe(
+      'Stopped at Writing Export a report · because the model was rate-limited · 5 minutes ago',
+    );
+    expect(screen.getByTestId('plans-stop-line').getAttribute('title')).toBe(
+      'Oct 10, 2026, 8:00 AM',
+    );
+    expect(screen.queryByText(/^active /)).toBeNull();
+  });
+
+  it('the chip is a PLAIN pill — one control, one tab stop; the row’s own door opens the overlay', () => {
+    renderWithIntl(<SessionRow view={walk()} />);
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    const door = screen.getByRole('link', { name: 'Split invoicing out of billing' });
+    expect(fireEvent.click(door)).toBe(false);
+    const url = new URL(shallowPush.mock.calls[0]![0] as string, 'http://x');
+    expect(url.searchParams.get('planSession')).toBe('s_1');
+  });
+
+  it('a waiting row with NO plan yet reads the same, naming where it stopped', () => {
+    renderWithIntl(
+      <SessionRow
+        view={walk({
+          latestPlan: null,
+          planCount: 0,
+          title: '',
+          targetKeys: [],
+          failure: {
+            kind: 'walk',
+            reason: 'model_unavailable',
+            stopPhase: 'lay',
+            stopTitle: null,
+            timeLabel: '5 minutes ago',
+            fullLabel: '',
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText('Waiting to resume')).toBeTruthy();
+    expect(screen.getByTestId('plans-stop-line').textContent).toBe(
+      "Stopped at Laying the project's top level · because the AI provider was unavailable · 5 minutes ago",
+    );
+  });
+
+  it('renders in zh with no English', () => {
+    renderWithIntl(
+      <SessionRow
+        view={walk({
+          failure: {
+            kind: 'walk',
+            reason: 'rate_limited',
+            stopPhase: 'author',
+            stopTitle: 'Export a report',
+            timeLabel: '5 分钟前',
+            fullLabel: '',
+          },
+        })}
+      />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    expect(screen.getByText('待继续')).toBeTruthy();
+    expect(screen.getByTestId('plans-stop-line').textContent).toBe(
+      '停在正在撰写「Export a report」 · 原因：请求过于频繁 · 5 分钟前',
+    );
+  });
+});
+
+describe('a failure beside a waiting plan (MOTIR-7944)', () => {
+  const beside = (status: 'planned' | 'stale') =>
+    view({
+      state: status,
+      latestPlan: { id: 'p_9', status },
+      failure: {
+        kind: 'change',
+        reason: 'internal',
+        stopPhase: null,
+        stopTitle: null,
+        timeLabel: '5 minutes ago',
+        fullLabel: '',
+      },
+    });
+
+  it('reads the PLAN’s state — never Closed, not Waiting to resume — and the change line', () => {
+    renderWithIntl(<SessionRow view={beside('planned')} />);
+    expect(screen.getByTestId('plans-stop-line').textContent).toBe(
+      'Your last change could not be made · 5 minutes ago',
+    );
+    expect(screen.queryByText('Closed')).toBeNull();
+    expect(screen.queryByText('Waiting to resume')).toBeNull();
+    // An undecided plan keeps its chip door (MOTIR-7889).
+    expect(screen.getByRole('link', { name: 'Open the plan — Waiting for approval' })).toBeTruthy();
+  });
+
+  it('a stale plan reads Stale with the same line', () => {
+    renderWithIntl(<SessionRow view={beside('stale')} />);
+    expect(screen.getByText('Stale')).toBeTruthy();
+    expect(screen.getByTestId('plans-stop-line')).toBeTruthy();
   });
 });

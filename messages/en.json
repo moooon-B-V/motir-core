@@ -7366,7 +7366,8 @@
         "stale": "Stale",
         "approved": "Approved",
         "declined": "Declined",
-        "closed": "Closed"
+        "closed": "Closed",
+        "waiting": "Waiting to resume"
       },
       "origin": {
         "mcp": "Agent plan",
@@ -7423,7 +7424,9 @@
         "approved": "Approved · {time}"
       },
       "continuedFrom": "Continued from the {when} conversation",
-      "continuedFromAria": "Open the conversation this one continues, closed {when}"
+      "continuedFromAria": "Open the conversation this one continues, closed {when}",
+      "stop": "Stopped at {where} · because {why} · {time}",
+      "stopChange": "Your last change could not be made · {time}"
     }
   },
   "planningWorkspace": {
@@ -7523,7 +7526,9 @@
         "notDecidable": "This plan can’t be decided yet — nobody has been asked to approve it. Nothing was changed.",
         "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it.",
         "askSilent": "Nothing came back. Try asking that a different way.",
-        "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were."
+        "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were.",
+        "revisionInFlight": "Motir AI is already revising this plan. Your message is kept — send it again once the new version lands.",
+        "awaitingResume": "This session is waiting to be resumed, so it can't take a message yet. Resume it first — your message is kept."
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
       "correctToAsk": "Answer this instead",
@@ -7791,6 +7796,16 @@
         "writing": "A new plan is being written from this conversation.",
         "restored": "Work this plan changes is open again, so this plan is current again. Nothing new was started.",
         "restoredOne": "{workItem} is open again, so this plan is current again. Nothing new was started."
+      },
+      "refusal": {
+        "waitingOn": "Waiting on {name}",
+        "waitingOnSomeone": "Waiting on someone",
+        "why": {
+          "question": "Their planner asked a question and is waiting for the answer.",
+          "reply": "Their conversation is waiting for their reply.",
+          "failed": "Their attempt failed and is waiting for them to resume it."
+        },
+        "openSession": "Open their session"
       }
     },
     "arrival": {
@@ -7915,6 +7930,15 @@
       "earlierOpen": "Open it",
       "disabledStreaming": "Available when this run finishes",
       "swapped": "Your earlier session is closed. A new session is open."
+    },
+    "waiting": {
+      "failedHead": "This attempt stopped",
+      "kept": "The plan so far is kept, and the work items it covers stay at Planning.",
+      "holdReason": "Resume the failed attempt first. Sending is paused while it waits.",
+      "onlyStarter": "Only {name} or a project manager can resume this.",
+      "onlyStarterAnon": "Only the person who started this or a project manager can resume it.",
+      "failureLine": "Your last change to this plan could not be made · {when}",
+      "failureLineAgain": "Your last change could not be made again · {when}"
     }
   },
   "codeHealth": {
@@ -8741,7 +8765,8 @@
         "decision_confirmation": "Confirm decision",
         "plan_approval": "Plan approval",
         "agent_review": "Agent review",
-        "manual_work": "Manual work"
+        "manual_work": "Manual work",
+        "planning_session": "Planning session"
       },
       "reviewRow": "Review {key} — {sentence}",
       "pullRequest": {
@@ -8937,6 +8962,69 @@
         "unknownLine": "No longer being written."
       },
       "ceiling": "Showing your {shown} newest plans being written. The other {rest} are on the <link>Plans page</link>."
+    },
+    "planningSession": {
+      "kind": "Planning session",
+      "waitingToResume": "Waiting to resume",
+      "resume": "Resume",
+      "resuming": "Resuming…",
+      "open": "Open",
+      "failedAt": "failed {when}",
+      "written": "{n} of {m} written",
+      "second": "Second attempt",
+      "stoppedAt": "Stopped at",
+      "because": "because {reason}",
+      "resumingNote": "Picking the walk up where it stopped. This row clears when it starts.",
+      "reopened": "Reopened from To resume · started by you · last active {when}",
+      "openAria": "Open the failed planning session — {sentence}",
+      "couldNot": "Could not start a resume.",
+      "stop": {
+        "lay": "Laying {title}",
+        "layTop": "Laying the project's top level",
+        "author": "Writing {title}",
+        "draft": "Drafting a new item"
+      },
+      "reason": {
+        "rate_limited": "the model was rate-limited",
+        "out_of_credits": "the organization ran out of credits",
+        "model_unavailable": "the AI provider was unavailable",
+        "token_expired": "its connection to the AI provider expired",
+        "internal": "something went wrong on our side"
+      },
+      "refusal": {
+        "credits": "Your organization is out of Motir AI credits. Add credits, then resume.",
+        "notOwner": "Only the person who started this session or a project manager can resume it.",
+        "ended": "This session ended meanwhile. Open it to see how.",
+        "notFailed": "This session is not waiting to resume any more. Open it to see where it stands.",
+        "notResumable": "The plan this session held can't be continued. Open it to see where it stands.",
+        "unavailable": "Motir AI could not be reached. Try again in a moment."
+      },
+      "left": {
+        "title": "Moved to To resume",
+        "line": "Its attempt failed, and the plan so far is kept. Resume it from To resume.",
+        "link": "Go to To resume",
+        "turn": "Revised in the same conversation — this entry is gone.",
+        "carry": "Carried into a new conversation — this entry is gone.",
+        "decided": "Decided — this entry is gone.",
+        "again": "Planning it again here — this entry is gone."
+      },
+      "form": {
+        "b": {
+          "badChange": "Your last change to this plan could not be made",
+          "stateWaiting": "Waiting for your approval",
+          "stateStale": "Out of date",
+          "nextReply": "The plan is still waiting. Reply to carry on.",
+          "nextAgain": "The work it changes has finished. Plan it again to carry on."
+        },
+        "c": {
+          "ended": "The conversation ended {when}",
+          "gloss": "Your next message carries the plan into a new conversation.",
+          "chip": "Conversation ended"
+        },
+        "walk": {
+          "alsoWaiting": "Also waiting for your approval:"
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12987,6 +13075,15 @@
       },
       "consequence": "Marking done moves {key} to Done.",
       "consequenceMerges": "Marking done records it here. {key} moves to Done when its pull request merges."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Planning session",
+        "asked": "Motir AI asked:",
+        "waitReply": "Motir AI is waiting for your reply.",
+        "since": "since {when}",
+        "open": "Open the planning session — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

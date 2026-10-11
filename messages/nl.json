@@ -7369,7 +7369,8 @@
         "stale": "Verouderd",
         "approved": "Goedgekeurd",
         "declined": "Afgewezen",
-        "closed": "Gesloten"
+        "closed": "Gesloten",
+        "waiting": "Te hervatten"
       },
       "origin": {
         "mcp": "Agentplan",
@@ -7426,7 +7427,9 @@
         "approved": "Goedgekeurd · {time}"
       },
       "continuedFrom": "Voortgezet uit het gesprek van {when}",
-      "continuedFromAria": "Het gesprek openen waarop dit voortbouwt, gesloten {when}"
+      "continuedFromAria": "Het gesprek openen waarop dit voortbouwt, gesloten {when}",
+      "stop": "Gestopt bij {where} · omdat {why} · {time}",
+      "stopChange": "Je laatste wijziging kon niet worden doorgevoerd · {time}"
     }
   },
   "planningWorkspace": {
@@ -7526,7 +7529,9 @@
         "notDecidable": "Over dit plan kan nog niet worden beslist — er is nog niemand gevraagd het goed te keuren. Er is niets gewijzigd.",
         "discard": "Verwijderen is niet gelukt. Het voorstel staat nog op het canvas — probeer het opnieuw, of keur het goed.",
         "askSilent": "Er kwam niets terug. Probeer het op een andere manier te vragen.",
-        "failedClosed": "Die poging is niet gelukt, dus deze sessie is gesloten. De werkitems die erin zaten, staan weer waar ze stonden."
+        "failedClosed": "Die poging is niet gelukt, dus deze sessie is gesloten. De werkitems die erin zaten, staan weer waar ze stonden.",
+        "revisionInFlight": "Motir AI is dit plan al aan het herzien. Je bericht is bewaard — verstuur het opnieuw zodra de nieuwe versie er is.",
+        "awaitingResume": "Deze sessie wacht op hervatting en kan nog geen bericht aannemen. Hervat haar eerst — je bericht is bewaard."
       },
       "answeredFrom": "{count, plural, =0 {Beantwoord zonder iets aan te halen} one {Beantwoord op basis van # werkitem} other {Beantwoord op basis van # werkitems}}",
       "correctToAsk": "In plaats daarvan dit beantwoorden",
@@ -7794,6 +7799,16 @@
         "writing": "Er wordt een nieuw plan geschreven vanuit dit gesprek.",
         "restored": "Werk dat dit plan wijzigt is weer open, dus dit plan is weer actueel. Er is niets nieuws gestart.",
         "restoredOne": "{workItem} is weer open, dus dit plan is weer actueel. Er is niets nieuws gestart."
+      },
+      "refusal": {
+        "waitingOn": "Wacht op {name}",
+        "waitingOnSomeone": "Wacht op iemand",
+        "why": {
+          "question": "De planner stelde een vraag en wacht op het antwoord.",
+          "reply": "Het gesprek wacht op een antwoord.",
+          "failed": "De poging is mislukt en wacht tot die wordt hervat."
+        },
+        "openSession": "Hun sessie openen"
       }
     },
     "arrival": {
@@ -7918,6 +7933,15 @@
       "earlierOpen": "Openen",
       "disabledStreaming": "Beschikbaar zodra deze run klaar is",
       "swapped": "Je eerdere sessie is gesloten. Er is een nieuwe sessie geopend."
+    },
+    "waiting": {
+      "failedHead": "Deze poging is gestopt",
+      "kept": "Het plan tot nu toe is bewaard en de bijbehorende werkitems blijven op ‘In planning’.",
+      "holdReason": "Hervat eerst de mislukte poging. Verzenden is gepauzeerd zolang die wacht.",
+      "onlyStarter": "Alleen {name} of een projectmanager kan dit hervatten.",
+      "onlyStarterAnon": "Alleen de persoon die dit startte of een projectmanager kan het hervatten.",
+      "failureLine": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd · {when}",
+      "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd · {when}"
     }
   },
   "codeHealth": {
@@ -8744,7 +8768,8 @@
         "decision_confirmation": "Beslissing bevestigen",
         "plan_approval": "Goedkeuring van plan",
         "agent_review": "Agentreview",
-        "manual_work": "Handmatig werk"
+        "manual_work": "Handmatig werk",
+        "planning_session": "Planningssessie"
       },
       "reviewRow": "{key} beoordelen — {sentence}",
       "pullRequest": {
@@ -8940,6 +8965,69 @@
         "unknownLine": "Wordt niet meer geschreven."
       },
       "ceiling": "Je {shown} nieuwste plannen die worden geschreven, worden getoond. De andere {rest} staan op de <link>pagina Plannen</link>."
+    },
+    "planningSession": {
+      "kind": "Planningssessie",
+      "waitingToResume": "Te hervatten",
+      "resume": "Hervatten",
+      "resuming": "Wordt hervat…",
+      "open": "Openen",
+      "failedAt": "{when} mislukt",
+      "written": "{n} van {m} geschreven",
+      "second": "Tweede poging",
+      "stoppedAt": "Gestopt bij",
+      "because": "omdat {reason}",
+      "resumingNote": "Gaat verder waar het gestopt is. Deze rij verdwijnt zodra het begint.",
+      "reopened": "Heropend vanuit ‘Te hervatten’ · door jou gestart · laatst actief {when}",
+      "openAria": "De mislukte planningssessie openen — {sentence}",
+      "couldNot": "De hervatting kon niet worden gestart.",
+      "stop": {
+        "lay": "{title} wordt neergezet",
+        "layTop": "Het hoogste niveau van het project wordt neergezet",
+        "author": "{title} wordt geschreven",
+        "draft": "Een nieuw item wordt opgesteld"
+      },
+      "reason": {
+        "rate_limited": "het model de limiet voor aanvragen bereikte",
+        "out_of_credits": "de organisatie geen tegoed meer had",
+        "model_unavailable": "de AI-aanbieder niet beschikbaar was",
+        "token_expired": "de verbinding met de AI-aanbieder verlopen was",
+        "internal": "er aan onze kant iets misging"
+      },
+      "refusal": {
+        "credits": "Je organisatie heeft geen Motir AI-tegoed meer. Voeg tegoed toe en hervat dan.",
+        "notOwner": "Alleen de persoon die deze sessie startte of een projectmanager kan hem hervatten.",
+        "ended": "Deze sessie is intussen beëindigd. Open hem om te zien hoe.",
+        "notFailed": "Deze sessie wacht niet meer op hervatting. Open hem om te zien hoe het ervoor staat.",
+        "notResumable": "Het plan van deze sessie kan niet worden voortgezet. Open de sessie om te zien hoe het ervoor staat.",
+        "unavailable": "Motir AI was niet bereikbaar. Probeer het zo meteen opnieuw."
+      },
+      "left": {
+        "title": "Verplaatst naar ‘Te hervatten’",
+        "line": "De poging is mislukt en het plan tot nu toe is bewaard. Hervat het vanuit ‘Te hervatten’.",
+        "link": "Naar ‘Te hervatten’",
+        "turn": "In hetzelfde gesprek herzien — deze regel verdwijnt.",
+        "carry": "Meegenomen naar een nieuw gesprek — deze regel verdwijnt.",
+        "decided": "Besloten — deze regel verdwijnt.",
+        "again": "Hier opnieuw gepland — deze regel verdwijnt."
+      },
+      "form": {
+        "b": {
+          "badChange": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd",
+          "stateWaiting": "Wacht op je goedkeuring",
+          "stateStale": "Verouderd",
+          "nextReply": "Het plan wacht nog. Reageer om verder te gaan.",
+          "nextAgain": "Het werk dat het wijzigt is afgerond. Plan het opnieuw om verder te gaan."
+        },
+        "c": {
+          "ended": "Het gesprek eindigde {when}",
+          "gloss": "Je volgende bericht neemt het plan mee naar een nieuw gesprek.",
+          "chip": "Gesprek beëindigd"
+        },
+        "walk": {
+          "alsoWaiting": "Wacht ook op je goedkeuring:"
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12990,6 +13078,15 @@
       },
       "consequence": "Als klaar markeren verplaatst {key} naar Klaar.",
       "consequenceMerges": "Als klaar markeren legt het hier vast. {key} gaat naar Klaar zodra de pull request wordt gemerged."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Planningssessie",
+        "asked": "Motir AI vroeg:",
+        "waitReply": "Motir AI wacht op je antwoord.",
+        "since": "sinds {when}",
+        "open": "De planningssessie openen — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

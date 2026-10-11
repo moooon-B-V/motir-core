@@ -102,9 +102,10 @@ function pressFor(kind: ApprovalGateKind, decision: GateDecision) {
 }
 
 /** Every registered card kind — the plan gate is card-less and offers `decline`, which the
- *  last block covers on its own. */
+ *  last block covers on its own; the planning-session gate is card-less and offers no verb
+ *  at all (MOTIR-7913). */
 const CARD_KINDS = (Object.keys(APPROVAL_GATE_HANDLERS) as ApprovalGateKind[]).filter(
-  (k) => k !== 'plan_approval',
+  (k) => k !== 'plan_approval' && k !== 'planning_session',
 );
 const VERBS: readonly GateDecision[] = ['approve', 'choose', 'request_changes', 'overturn'];
 

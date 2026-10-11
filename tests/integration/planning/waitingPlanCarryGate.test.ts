@@ -541,7 +541,18 @@ describe('case 6 — a pre-MOTIR-7905 `failed` source carries its EARLIER plan',
         createdById: fx.ownerId,
       },
     });
-    await endShipped(sourceId, 'failed');
+    // The row the OLD end left behind, written directly: since MOTIR-7936 the shipped end
+    // never ends a session that holds a waiting plan, so this history can only be data.
+    await adminDb.planChangeSession.update({
+      where: { id: sourceId },
+      data: { endedAt: new Date(), endReason: 'failed' },
+    });
+    await adminDb.plan.update({
+      where: { id: later.id },
+      data: { status: 'declined', decisionReason: 'abandoned', decidedAt: new Date() },
+    });
+    // …and it gave the session's cards back.
+    await adminDb.planTargetLock.deleteMany({ where: { sessionId: sourceId } });
     expect((await planRow(later.id)).status).toBe('declined');
 
     const out = await planChangeSessionsService.startCopied(me(), sourceId, { body: 'Go on' });

@@ -39,7 +39,7 @@ const SUBJECTS: Record<
   // has its own file: `approval-row-manual-work.test.tsx` (MOTIR-7478).
   Exclude<
     ApprovalGateKindDTO,
-    'pull_request_merge' | 'plan_approval' | 'agent_review' | 'manual_work'
+    'pull_request_merge' | 'plan_approval' | 'agent_review' | 'manual_work' | 'planning_session'
   >,
   ApprovalGateSubjectSummaryDTO
 > = {

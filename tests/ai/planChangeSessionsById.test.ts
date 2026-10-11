@@ -380,6 +380,9 @@ describe('the target lock between sessions of one scope (AMENDMENT 17 §6)', () 
       holder: 'Teammate ' + seq,
       freesBy: new Date(lock.expiresAt!.getTime() + 5 * MINUTE).toISOString(),
       holderSessionId: theirs.id,
+      // A plain hold is not a waiting one (MOTIR-7912).
+      sessionWaiting: false,
+      waitingCause: null,
     });
     // Looking created nothing.
     expect(await adminDb.planChangeSession.count()).toBe(1);

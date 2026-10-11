@@ -489,6 +489,13 @@ export interface RequestEnvelope {
   tenant: Tenant;
   context: JobContextBag;
   readBackToken: string;
+  /**
+   * Continue an EXISTING plan's walk instead of starting one (Story MOTIR-7905 · MOTIR-7916;
+   * motir-ai's `JobRequest.resume`, MOTIR-7910): `planId` is the plan to continue and
+   * `fromJobId` the failed job whose conversation and settled PART 1 the new job reads.
+   * Absent on every other submit, so the body is byte-identical to before.
+   */
+  resume?: { planId: string; fromJobId: string };
 }
 
 /**
@@ -588,6 +595,8 @@ export interface Problem {
   code: string;
   detail?: string;
   jobId?: string;
+  /** Where a failed planning walk stopped (MOTIR-7909). Untrusted until parsed. */
+  walkStop?: unknown;
 }
 
 // The raw GET /v1/jobs/:id wire body (contract §2.4). The client maps this into

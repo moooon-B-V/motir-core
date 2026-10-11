@@ -7366,7 +7366,8 @@
         "stale": "오래됨",
         "approved": "승인됨",
         "declined": "거절됨",
-        "closed": "종료됨"
+        "closed": "종료됨",
+        "waiting": "재개 필요"
       },
       "origin": {
         "mcp": "에이전트 계획",
@@ -7423,7 +7424,9 @@
         "approved": "승인됨 · {time}"
       },
       "continuedFrom": "{when} 대화에서 이어짐",
-      "continuedFromAria": "이 대화가 이어받은 대화 열기({when} 종료됨)"
+      "continuedFromAria": "이 대화가 이어받은 대화 열기({when} 종료됨)",
+      "stop": "중단된 위치: {where} · 원인: {why} · {time}",
+      "stopChange": "마지막 변경을 반영하지 못했습니다 · {time}"
     }
   },
   "planningWorkspace": {
@@ -7523,7 +7526,9 @@
         "notDecidable": "이 계획은 아직 결정할 수 없습니다 — 승인을 요청받은 사람이 없습니다. 변경된 것은 없습니다.",
         "discard": "삭제가 처리되지 않았습니다. 제안은 여전히 캔버스에서 대기 중입니다 — 다시 시도하거나 승인하세요.",
         "askSilent": "아무것도 반환되지 않았습니다. 다른 방식으로 질문해 보세요.",
-        "failedClosed": "해당 시도가 처리되지 않아 이 세션이 종료되었습니다. 세션이 보유하던 작업 항목은 원래 위치로 돌아갔습니다."
+        "failedClosed": "해당 시도가 처리되지 않아 이 세션이 종료되었습니다. 세션이 보유하던 작업 항목은 원래 위치로 돌아갔습니다.",
+        "revisionInFlight": "Motir AI가 이미 이 계획을 수정하고 있습니다. 메시지는 보관되어 있으니 새 버전이 반영되면 다시 보내세요.",
+        "awaitingResume": "이 세션은 재개를 기다리는 중이라 아직 메시지를 받을 수 없습니다. 먼저 재개하세요. 메시지는 보관되어 있습니다."
       },
       "answeredFrom": "{count, plural, =0 {아무것도 인용하지 않고 답변함} other {작업 항목 #개를 근거로 답변함}}",
       "correctToAsk": "대신 이 질문에 답변",
@@ -7791,6 +7796,16 @@
         "writing": "이 대화로 새 계획을 작성하고 있습니다.",
         "restored": "이 계획이 변경하는 작업이 다시 열려 이 계획이 다시 유효합니다. 새로 시작된 것은 없습니다.",
         "restoredOne": "{workItem}이(가) 다시 열려 이 계획이 다시 유효합니다. 새로 시작된 것은 없습니다."
+      },
+      "refusal": {
+        "waitingOn": "{name} 님을 기다리는 중",
+        "waitingOnSomeone": "다른 사람을 기다리는 중",
+        "why": {
+          "question": "상대방의 계획 도구가 질문을 했고 답변을 기다리고 있습니다.",
+          "reply": "상대방의 대화가 답장을 기다리고 있습니다.",
+          "failed": "상대방의 시도가 실패했고 재개를 기다리고 있습니다."
+        },
+        "openSession": "상대방의 세션 열기"
       }
     },
     "arrival": {
@@ -7915,6 +7930,15 @@
       "earlierOpen": "열기",
       "disabledStreaming": "이 실행이 끝나면 사용할 수 있습니다",
       "swapped": "이전 세션이 종료되었습니다. 새 세션이 열렸습니다."
+    },
+    "waiting": {
+      "failedHead": "이 시도가 중단되었습니다",
+      "kept": "지금까지의 계획은 보관되며, 해당 작업 항목은 '계획 중' 상태로 유지됩니다.",
+      "holdReason": "먼저 실패한 시도를 재개하세요. 대기 중에는 전송이 일시 중지됩니다.",
+      "onlyStarter": "{name} 님 또는 프로젝트 관리자만 재개할 수 있습니다.",
+      "onlyStarterAnon": "시작한 사람 또는 프로젝트 관리자만 재개할 수 있습니다.",
+      "failureLine": "이 계획에 대한 마지막 변경을 반영하지 못했습니다 · {when}",
+      "failureLineAgain": "마지막 변경을 다시 반영하지 못했습니다 · {when}"
     }
   },
   "codeHealth": {
@@ -8741,7 +8765,8 @@
         "decision_confirmation": "결정 확인",
         "plan_approval": "계획 승인",
         "agent_review": "에이전트 검토",
-        "manual_work": "수동 작업"
+        "manual_work": "수동 작업",
+        "planning_session": "기획 세션"
       },
       "reviewRow": "{key} 검토 — {sentence}",
       "pullRequest": {
@@ -8937,6 +8962,69 @@
         "unknownLine": "더 이상 작성되고 있지 않습니다."
       },
       "ceiling": "작성 중인 계획 중 최신 {shown}개를 표시합니다. 나머지 {rest}개는 <link>계획 페이지</link>에 있습니다."
+    },
+    "planningSession": {
+      "kind": "계획 세션",
+      "waitingToResume": "재개 필요",
+      "resume": "재개",
+      "resuming": "재개하는 중…",
+      "open": "열기",
+      "failedAt": "{when} 실패",
+      "written": "{m}개 중 {n}개 작성됨",
+      "second": "두 번째 시도",
+      "stoppedAt": "중단된 위치",
+      "because": "원인: {reason}",
+      "resumingNote": "중단된 지점부터 이어서 진행합니다. 시작되면 이 행은 사라집니다.",
+      "reopened": "‘재개 필요’에서 다시 열림 · 시작한 사람: 나 · 마지막 활동 {when}",
+      "openAria": "실패한 계획 세션 열기 — {sentence}",
+      "couldNot": "재개를 시작하지 못했습니다.",
+      "stop": {
+        "lay": "{title} 배치 중",
+        "layTop": "프로젝트 최상위 배치 중",
+        "author": "{title} 작성 중",
+        "draft": "새 항목 초안 작성 중"
+      },
+      "reason": {
+        "rate_limited": "모델의 요청 한도를 초과했습니다",
+        "out_of_credits": "조직의 크레딧이 소진되었습니다",
+        "model_unavailable": "AI 제공업체를 사용할 수 없었습니다",
+        "token_expired": "AI 제공업체와의 연결이 만료되었습니다",
+        "internal": "저희 쪽에서 문제가 발생했습니다"
+      },
+      "refusal": {
+        "credits": "조직의 Motir AI 크레딧이 소진되었습니다. 크레딧을 추가한 뒤 다시 재개하세요.",
+        "notOwner": "이 세션을 시작한 사람 또는 프로젝트 관리자만 재개할 수 있습니다.",
+        "ended": "그사이 이 세션이 종료되었습니다. 열어서 경위를 확인하세요.",
+        "notFailed": "이 세션은 더 이상 재개를 기다리고 있지 않습니다. 열어서 현재 상태를 확인하세요.",
+        "notResumable": "이 세션이 가지고 있던 계획은 이어서 진행할 수 없습니다. 열어서 현재 상태를 확인하세요.",
+        "unavailable": "Motir AI에 연결할 수 없었습니다. 잠시 후 다시 시도하세요."
+      },
+      "left": {
+        "title": "‘재개 필요’로 이동됨",
+        "line": "시도가 실패했지만 지금까지의 계획은 보관되어 있습니다. ‘재개 필요’에서 재개하세요.",
+        "link": "‘재개 필요’로 이동",
+        "turn": "같은 대화에서 수정되었습니다 — 이 항목은 사라집니다.",
+        "carry": "새 대화로 이어졌습니다 — 이 항목은 사라집니다.",
+        "decided": "결정되었습니다 — 이 항목은 사라집니다.",
+        "again": "여기서 계획을 다시 세우는 중입니다 — 이 항목은 사라집니다."
+      },
+      "form": {
+        "b": {
+          "badChange": "이 계획에 대한 마지막 변경을 반영하지 못했습니다",
+          "stateWaiting": "승인 대기 중",
+          "stateStale": "최신 상태 아님",
+          "nextReply": "계획은 계속 대기 중입니다. 이어서 진행하려면 답장하세요.",
+          "nextAgain": "변경하려던 작업이 이미 끝났습니다. 이어서 진행하려면 계획을 다시 세우세요."
+        },
+        "c": {
+          "ended": "대화가 {when} 종료되었습니다",
+          "gloss": "다음 메시지를 보내면 계획이 새 대화로 이어집니다.",
+          "chip": "대화 종료됨"
+        },
+        "walk": {
+          "alsoWaiting": "승인을 기다리는 계획이 하나 더 있습니다:"
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12987,6 +13075,15 @@
       },
       "consequence": "완료로 표시하면 {key}이(가) 완료로 이동합니다.",
       "consequenceMerges": "완료로 표시하면 여기에 기록됩니다. 풀 리퀘스트가 병합되면 {key}이(가) 완료로 이동합니다."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "계획 세션",
+        "asked": "Motir AI의 질문:",
+        "waitReply": "Motir AI가 회신을 기다리고 있습니다.",
+        "since": "{when}부터",
+        "open": "계획 세션 열기 — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

@@ -7372,7 +7372,8 @@
         "stale": "Veraltet",
         "approved": "Genehmigt",
         "declined": "Abgelehnt",
-        "closed": "Geschlossen"
+        "closed": "Geschlossen",
+        "waiting": "Wartet auf Fortsetzung"
       },
       "origin": {
         "mcp": "Agentenplan",
@@ -7429,7 +7430,9 @@
         "approved": "Genehmigt · {time}"
       },
       "continuedFrom": "Fortsetzung des Gesprächs vom {when}",
-      "continuedFromAria": "Das Gespräch öffnen, das hiermit fortgesetzt wird, geschlossen {when}"
+      "continuedFromAria": "Das Gespräch öffnen, das hiermit fortgesetzt wird, geschlossen {when}",
+      "stop": "Angehalten bei {where} · weil {why} · {time}",
+      "stopChange": "Ihre letzte Änderung konnte nicht vorgenommen werden · {time}"
     }
   },
   "planningWorkspace": {
@@ -7529,7 +7532,9 @@
         "notDecidable": "Über diesen Plan kann noch nicht entschieden werden – niemand wurde um Genehmigung gebeten. Es wurde nichts geändert.",
         "discard": "Das Verwerfen hat nicht geklappt. Der Vorschlag wartet weiterhin auf der Arbeitsfläche – versuchen Sie es erneut, oder genehmigen Sie ihn.",
         "askSilent": "Es kam nichts zurück. Versuchen Sie, die Frage anders zu stellen.",
-        "failedClosed": "Dieser Versuch hat nicht geklappt, daher wurde diese Sitzung geschlossen. Die Arbeitselemente, die sie enthielt, sind wieder an ihrem ursprünglichen Platz."
+        "failedClosed": "Dieser Versuch hat nicht geklappt, daher wurde diese Sitzung geschlossen. Die Arbeitselemente, die sie enthielt, sind wieder an ihrem ursprünglichen Platz.",
+        "revisionInFlight": "Motir AI überarbeitet diesen Plan bereits. Ihre Nachricht bleibt erhalten – senden Sie sie erneut, sobald die neue Version vorliegt.",
+        "awaitingResume": "Diese Sitzung wartet darauf, fortgesetzt zu werden, und kann noch keine Nachricht annehmen. Setzen Sie sie zuerst fort – Ihre Nachricht bleibt erhalten."
       },
       "answeredFrom": "{count, plural, =0 {Ohne Quellenangabe beantwortet} one {Anhand von # Arbeitselement beantwortet} other {Anhand von # Arbeitselementen beantwortet}}",
       "correctToAsk": "Stattdessen beantworten",
@@ -7797,6 +7802,16 @@
         "writing": "Aus diesem Gespräch wird ein neuer Plan erstellt.",
         "restored": "Arbeit, die dieser Plan ändert, ist wieder offen, daher ist dieser Plan wieder aktuell. Es wurde nichts Neues gestartet.",
         "restoredOne": "{workItem} ist wieder offen, daher ist dieser Plan wieder aktuell. Es wurde nichts Neues gestartet."
+      },
+      "refusal": {
+        "waitingOn": "Wartet auf {name}",
+        "waitingOnSomeone": "Wartet auf jemanden",
+        "why": {
+          "question": "Der Planer hat eine Frage gestellt und wartet auf die Antwort.",
+          "reply": "Die Unterhaltung wartet auf die Antwort der Person.",
+          "failed": "Der Versuch ist fehlgeschlagen und wartet darauf, fortgesetzt zu werden."
+        },
+        "openSession": "Deren Sitzung öffnen"
       }
     },
     "arrival": {
@@ -7921,6 +7936,15 @@
       "earlierOpen": "Öffnen",
       "disabledStreaming": "Verfügbar, wenn dieser Lauf abgeschlossen ist",
       "swapped": "Ihre frühere Sitzung ist geschlossen. Eine neue Sitzung ist geöffnet."
+    },
+    "waiting": {
+      "failedHead": "Dieser Versuch wurde angehalten",
+      "kept": "Der bisherige Plan bleibt erhalten, und die betroffenen Arbeitselemente bleiben „In Planung“.",
+      "holdReason": "Setzen Sie zuerst den fehlgeschlagenen Versuch fort. Das Senden ist pausiert, solange er wartet.",
+      "onlyStarter": "Nur {name} oder ein Projektmanager kann dies fortsetzen.",
+      "onlyStarterAnon": "Nur die Person, die dies gestartet hat, oder ein Projektmanager kann es fortsetzen.",
+      "failureLine": "Ihre letzte Änderung an diesem Plan konnte nicht vorgenommen werden · {when}",
+      "failureLineAgain": "Ihre letzte Änderung konnte erneut nicht vorgenommen werden · {when}"
     }
   },
   "codeHealth": {
@@ -8747,7 +8771,8 @@
         "decision_confirmation": "Entscheidung bestätigen",
         "plan_approval": "Plangenehmigung",
         "agent_review": "Agenten-Review",
-        "manual_work": "Manuelle Arbeit"
+        "manual_work": "Manuelle Arbeit",
+        "planning_session": "Planungssitzung"
       },
       "reviewRow": "{key} prüfen – {sentence}",
       "pullRequest": {
@@ -8943,6 +8968,69 @@
         "unknownLine": "Wird nicht mehr geschrieben."
       },
       "ceiling": "Ihre {shown} neuesten Pläne, die gerade geschrieben werden, werden angezeigt. Die übrigen {rest} finden Sie auf der <link>Seite „Pläne“</link>."
+    },
+    "planningSession": {
+      "kind": "Planungssitzung",
+      "waitingToResume": "Wartet auf Fortsetzung",
+      "resume": "Fortsetzen",
+      "resuming": "Wird fortgesetzt…",
+      "open": "Öffnen",
+      "failedAt": "{when} fehlgeschlagen",
+      "written": "{n} von {m} geschrieben",
+      "second": "Zweiter Versuch",
+      "stoppedAt": "Angehalten bei",
+      "because": "weil {reason}",
+      "resumingNote": "Der Lauf wird dort fortgesetzt, wo er angehalten hat. Diese Zeile verschwindet, sobald er startet.",
+      "reopened": "Aus „Fortzusetzen“ erneut geöffnet · von Ihnen gestartet · zuletzt aktiv {when}",
+      "openAria": "Fehlgeschlagene Planungssitzung öffnen — {sentence}",
+      "couldNot": "Die Fortsetzung konnte nicht gestartet werden.",
+      "stop": {
+        "lay": "{title} wird angelegt",
+        "layTop": "Oberste Ebene des Projekts wird angelegt",
+        "author": "{title} wird geschrieben",
+        "draft": "Neues Element wird entworfen"
+      },
+      "reason": {
+        "rate_limited": "das Modell das Ratenlimit erreicht hat",
+        "out_of_credits": "der Organisation die Credits ausgegangen sind",
+        "model_unavailable": "der KI-Anbieter nicht verfügbar war",
+        "token_expired": "die Verbindung zum KI-Anbieter abgelaufen ist",
+        "internal": "auf unserer Seite etwas schiefgelaufen ist"
+      },
+      "refusal": {
+        "credits": "Ihrer Organisation sind die Credits für Motir AI ausgegangen. Fügen Sie Credits hinzu und setzen Sie dann fort.",
+        "notOwner": "Nur die Person, die diese Sitzung gestartet hat, oder ein Projektmanager kann sie fortsetzen.",
+        "ended": "Diese Sitzung wurde inzwischen beendet. Öffnen Sie sie, um zu sehen, wie.",
+        "notFailed": "Diese Sitzung wartet nicht mehr auf eine Fortsetzung. Öffnen Sie sie, um den Stand zu sehen.",
+        "notResumable": "Der Plan dieser Sitzung kann nicht fortgesetzt werden. Öffnen Sie sie, um den Stand zu sehen.",
+        "unavailable": "Motir AI war nicht erreichbar. Versuchen Sie es gleich noch einmal."
+      },
+      "left": {
+        "title": "Nach „Fortzusetzen“ verschoben",
+        "line": "Der Versuch ist fehlgeschlagen, der bisherige Plan bleibt erhalten. Setzen Sie ihn unter „Fortzusetzen“ fort.",
+        "link": "Zu „Fortzusetzen“",
+        "turn": "In derselben Unterhaltung überarbeitet — dieser Eintrag verschwindet.",
+        "carry": "In eine neue Unterhaltung übertragen — dieser Eintrag verschwindet.",
+        "decided": "Entschieden — dieser Eintrag verschwindet.",
+        "again": "Wird hier neu geplant — dieser Eintrag verschwindet."
+      },
+      "form": {
+        "b": {
+          "badChange": "Ihre letzte Änderung an diesem Plan konnte nicht vorgenommen werden",
+          "stateWaiting": "Wartet auf Ihre Genehmigung",
+          "stateStale": "Veraltet",
+          "nextReply": "Der Plan wartet weiterhin. Antworten Sie, um fortzufahren.",
+          "nextAgain": "Die Arbeit, die er ändert, ist abgeschlossen. Planen Sie ihn neu, um fortzufahren."
+        },
+        "c": {
+          "ended": "Die Unterhaltung endete {when}",
+          "gloss": "Ihre nächste Nachricht überträgt den Plan in eine neue Unterhaltung.",
+          "chip": "Unterhaltung beendet"
+        },
+        "walk": {
+          "alsoWaiting": "Wartet außerdem auf Ihre Genehmigung:"
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12993,6 +13081,15 @@
       },
       "consequence": "Das Markieren als erledigt setzt {key} auf Erledigt.",
       "consequenceMerges": "Das Markieren als erledigt erfasst es hier. {key} wird auf Erledigt gesetzt, wenn sein Pull Request gemergt wird."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Planungssitzung",
+        "asked": "Motir AI hat gefragt:",
+        "waitReply": "Motir AI wartet auf Ihre Antwort.",
+        "since": "seit {when}",
+        "open": "Planungssitzung öffnen — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

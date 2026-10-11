@@ -7372,7 +7372,8 @@
         "stale": "Non aggiornato",
         "approved": "Approvato",
         "declined": "Rifiutato",
-        "closed": "Chiuso"
+        "closed": "Chiuso",
+        "waiting": "Da riprendere"
       },
       "origin": {
         "mcp": "Piano dell’agente",
@@ -7429,7 +7430,9 @@
         "approved": "Approvato · {time}"
       },
       "continuedFrom": "Continuazione della conversazione del {when}",
-      "continuedFromAria": "Apri la conversazione di cui questa è la continuazione, chiusa {when}"
+      "continuedFromAria": "Apri la conversazione di cui questa è la continuazione, chiusa {when}",
+      "stop": "Interrotta a {where} · perché {why} · {time}",
+      "stopChange": "Non è stato possibile applicare la tua ultima modifica · {time}"
     }
   },
   "planningWorkspace": {
@@ -7529,7 +7532,9 @@
         "notDecidable": "Non è ancora possibile decidere su questo piano: a nessuno è stato chiesto di approvarlo. Non è stato modificato nulla.",
         "discard": "Lo scarto non è andato a buon fine. La proposta è ancora in attesa sul canvas: riprova oppure approvala.",
         "askSilent": "Non è arrivata alcuna risposta. Prova a formulare la domanda in un altro modo.",
-        "failedClosed": "Il tentativo non è andato a buon fine, quindi questa sessione è stata chiusa. Gli elementi di lavoro che conteneva sono tornati dov’erano."
+        "failedClosed": "Il tentativo non è andato a buon fine, quindi questa sessione è stata chiusa. Gli elementi di lavoro che conteneva sono tornati dov’erano.",
+        "revisionInFlight": "Motir AI sta già rivedendo questo piano. Il tuo messaggio è conservato: invialo di nuovo quando arriva la nuova versione.",
+        "awaitingResume": "Questa sessione attende di essere ripresa e non può ancora ricevere messaggi. Riprendila prima: il tuo messaggio è conservato."
       },
       "answeredFrom": "{count, plural, =0 {Risposta data senza citare nulla} one {Risposta basata su # elemento di lavoro} other {Risposta basata su # elementi di lavoro}}",
       "correctToAsk": "Rispondi invece a questo",
@@ -7797,6 +7802,16 @@
         "writing": "Un nuovo piano viene scritto da questa conversazione.",
         "restored": "Il lavoro modificato da questo piano è di nuovo aperto, quindi questo piano è di nuovo attuale. Non è stato avviato nulla di nuovo.",
         "restoredOne": "{workItem} è di nuovo aperto, quindi questo piano è di nuovo attuale. Non è stato avviato nulla di nuovo."
+      },
+      "refusal": {
+        "waitingOn": "In attesa di {name}",
+        "waitingOnSomeone": "In attesa di qualcuno",
+        "why": {
+          "question": "Il suo pianificatore ha fatto una domanda e attende la risposta.",
+          "reply": "La sua conversazione attende la sua risposta.",
+          "failed": "Il suo tentativo non è riuscito e attende di essere ripreso."
+        },
+        "openSession": "Apri la sua sessione"
       }
     },
     "arrival": {
@@ -7921,6 +7936,15 @@
       "earlierOpen": "Aprila",
       "disabledStreaming": "Disponibile al termine di questa esecuzione",
       "swapped": "La sessione precedente è chiusa. È aperta una nuova sessione."
+    },
+    "waiting": {
+      "failedHead": "Questo tentativo si è interrotto",
+      "kept": "Il piano scritto finora è conservato e gli elementi di lavoro coinvolti restano «In pianificazione».",
+      "holdReason": "Riprendi prima il tentativo non riuscito. L’invio è sospeso finché è in attesa.",
+      "onlyStarter": "Solo {name} o un responsabile del progetto può riprenderlo.",
+      "onlyStarterAnon": "Solo la persona che l’ha avviato o un responsabile del progetto può riprenderlo.",
+      "failureLine": "Non è stato possibile applicare la tua ultima modifica a questo piano · {when}",
+      "failureLineAgain": "La tua ultima modifica non è stata applicata di nuovo · {when}"
     }
   },
   "codeHealth": {
@@ -8747,7 +8771,8 @@
         "decision_confirmation": "Conferma della decisione",
         "plan_approval": "Approvazione del piano",
         "agent_review": "Revisione dell’agente",
-        "manual_work": "Lavoro manuale"
+        "manual_work": "Lavoro manuale",
+        "planning_session": "Sessione di pianificazione"
       },
       "reviewRow": "Rivedi {key}: {sentence}",
       "pullRequest": {
@@ -8943,6 +8968,69 @@
         "unknownLine": "Non più in fase di stesura."
       },
       "ceiling": "Vengono mostrati i tuoi {shown} piani in fase di stesura più recenti. Gli altri {rest} si trovano nella <link>pagina Piani</link>."
+    },
+    "planningSession": {
+      "kind": "Sessione di pianificazione",
+      "waitingToResume": "Da riprendere",
+      "resume": "Riprendi",
+      "resuming": "Ripresa in corso…",
+      "open": "Apri",
+      "failedAt": "non riuscita {when}",
+      "written": "{n} di {m} scritti",
+      "second": "Secondo tentativo",
+      "stoppedAt": "Interrotta a",
+      "because": "perché {reason}",
+      "resumingNote": "Riprende da dove si era fermata. Questa riga scompare quando parte.",
+      "reopened": "Riaperta da «Da riprendere» · avviata da te · ultima attività {when}",
+      "openAria": "Apri la sessione di pianificazione non riuscita — {sentence}",
+      "couldNot": "Impossibile avviare la ripresa.",
+      "stop": {
+        "lay": "Posizionamento di {title}",
+        "layTop": "Posizionamento del livello superiore del progetto",
+        "author": "Scrittura di {title}",
+        "draft": "Stesura di un nuovo elemento"
+      },
+      "reason": {
+        "rate_limited": "il modello ha raggiunto il limite di richieste",
+        "out_of_credits": "l’organizzazione ha esaurito i crediti",
+        "model_unavailable": "il fornitore di IA non era disponibile",
+        "token_expired": "la connessione al fornitore di IA è scaduta",
+        "internal": "qualcosa è andato storto da parte nostra"
+      },
+      "refusal": {
+        "credits": "La tua organizzazione ha esaurito i crediti Motir AI. Aggiungi crediti, poi riprendi.",
+        "notOwner": "Solo la persona che ha avviato questa sessione o un responsabile del progetto può riprenderla.",
+        "ended": "Nel frattempo questa sessione è terminata. Aprila per vedere come.",
+        "notFailed": "Questa sessione non è più in attesa di essere ripresa. Aprila per vedere a che punto è.",
+        "notResumable": "Il piano che questa sessione conteneva non può essere proseguito. Aprila per vedere a che punto è.",
+        "unavailable": "Impossibile raggiungere Motir AI. Riprova tra un momento."
+      },
+      "left": {
+        "title": "Spostato in «Da riprendere»",
+        "line": "Il tentativo non è riuscito e il piano scritto finora è conservato. Riprendilo da «Da riprendere».",
+        "link": "Vai a «Da riprendere»",
+        "turn": "Rivisto nella stessa conversazione — questa voce scompare.",
+        "carry": "Portato in una nuova conversazione — questa voce scompare.",
+        "decided": "Deciso — questa voce scompare.",
+        "again": "Ripianificazione qui — questa voce scompare."
+      },
+      "form": {
+        "b": {
+          "badChange": "Non è stato possibile applicare la tua ultima modifica a questo piano",
+          "stateWaiting": "In attesa della tua approvazione",
+          "stateStale": "Non aggiornato",
+          "nextReply": "Il piano è ancora in attesa. Rispondi per proseguire.",
+          "nextAgain": "Il lavoro che modifica è terminato. Pianificalo di nuovo per proseguire."
+        },
+        "c": {
+          "ended": "La conversazione è terminata {when}",
+          "gloss": "Il tuo prossimo messaggio porta il piano in una nuova conversazione.",
+          "chip": "Conversazione terminata"
+        },
+        "walk": {
+          "alsoWaiting": "Anche in attesa della tua approvazione:"
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12993,6 +13081,15 @@
       },
       "consequence": "Segnandolo come completato, {key} passa a Completato.",
       "consequenceMerges": "Segnandolo come completato, viene registrato qui. {key} passa a Completato quando la sua pull request viene unita."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Sessione di pianificazione",
+        "asked": "Motir AI ha chiesto:",
+        "waitReply": "Motir AI attende la tua risposta.",
+        "since": "da {when}",
+        "open": "Apri la sessione di pianificazione — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

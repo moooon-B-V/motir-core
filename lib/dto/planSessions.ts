@@ -10,7 +10,10 @@ import type { PlanStatusDto } from '@/lib/dto/plans';
  * A session's PLAN STATE (§8, as amended by AMENDMENT 23 §1). The END is read
  * FIRST: a session Motir ended (`failed` · `idle` · `restarted`) is `closed`, one
  * a person ended reads `declined` / `approved`. An OPEN session reads its LATEST
- * plan's `PlanStatus`, or `none` when it has proposed nothing. `none` and
+ * plan's `PlanStatus`, or `none` when it has proposed nothing — except that an open session
+ * waiting on a FAILED attempt reads `waiting` (Waiting to resume; Story MOTIR-7905 · MOTIR-7921)
+ * while its plan is still being written, and one whose plan waits for a decision reads that
+ * plan's status (MOTIR-7944). `none`, `waiting` and
  * `closed` are members of the vocabulary in their own right, never fallbacks:
  * the filter, the counts and the chip are all TOTAL over them. The type is
  * derived from the array, so the two cannot drift.
@@ -18,12 +21,13 @@ import type { PlanStatusDto } from '@/lib/dto/plans';
 export const PLAN_SESSION_STATE_VALUES = [
   'none',
   'generating',
+  'waiting',
   'planned',
   'stale',
   'approved',
   'declined',
   'closed',
-] as const satisfies readonly ('none' | 'closed' | PlanStatusDto)[];
+] as const satisfies readonly ('none' | 'closed' | 'waiting' | PlanStatusDto)[];
 
 export type PlanSessionStateDto = (typeof PLAN_SESSION_STATE_VALUES)[number];
 
@@ -96,6 +100,14 @@ export interface PlanSessionRowDto {
   /** The session's state, END first (AMENDMENT 23 §1) — the value the filter
    *  and the counts read, so the chip can never disagree with its tab. */
   state: PlanSessionStateDto;
+  /** The failed attempt's record while the session is OPEN and waiting on it (Story MOTIR-7905 ·
+   *  MOTIR-7921) — the row's stop line — else null. The reason is the stable code. */
+  failure?: {
+    failedAt: string;
+    reason: string;
+    stopPhase: 'lay' | 'author' | null;
+    stopTitle: string | null;
+  } | null;
   /** When it ended, or null while it is OPEN. */
   endedAt: string | null;
   /** Why it ended, or null while it is OPEN. */

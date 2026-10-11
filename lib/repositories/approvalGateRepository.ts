@@ -1397,12 +1397,38 @@ export interface AwaitingRoutingScope {
   /** The reader — §2's single recipient. */
   userId: string;
   /**
+   * The planning sessions of these projects that STILL WAIT on their person right now
+   * (`AWAITING_PERSON_WHERE`; Story MOTIR-7905 · MOTIR-7913) — resolved by the SERVICE in
+   * the same transaction, because a `planning_session` gate's subject is an opaque id with
+   * no relation to join. A gate row of that kind is listed only if its subject is in this
+   * set, so a session that has since failed or ended never shows a stale row whatever the
+   * gate row still says. Empty ⇒ no planning-session row is listed.
+   */
+  awaitingSessionIds: readonly string[];
+  /**
    * The plans a REVISION holds right now (Bug MOTIR-7988), whose `plan_approval`
    * gates leave the queue while the planner rewrites them — resolved by the
    * service from the revision lease, which no column says. Omitted or empty, no
    * plan gate is excluded.
    */
   heldPlanIds?: readonly string[];
+}
+
+/** The card-less kind whose row is live only while its subject session still waits. */
+const PLANNING_SESSION_KIND = 'planning_session' as const;
+
+/**
+ * The planning-session LIVENESS clause (MOTIR-7913), written once for every reader of
+ * the awaiting predicate: any kind but `planning_session` passes; a `planning_session`
+ * row passes only when its session is in {@link AwaitingRoutingScope.awaitingSessionIds}.
+ */
+function planningSessionLiveWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGateWhereInput {
+  return {
+    OR: [
+      { kind: { not: PLANNING_SESSION_KIND } },
+      { kind: PLANNING_SESSION_KIND, subjectId: { in: [...scope.awaitingSessionIds] } },
+    ],
+  };
 }
 
 /**
@@ -1438,14 +1464,18 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
     // is excluded here — the list, its count, the home count and the marker all read this.
     kind: { not: 'agent_review' },
     ...CARRIED_MERGE_GATE_EXCLUDED,
-    // ⚠️ A PLAN BEING REWRITTEN IS NOT WAITING ON ANYBODY (Bug MOTIR-7988;
-    // `approval-gates.md` §11.5c's 2026-10-09 amendment). Its gate stays `awaiting`
-    // and HELD — the decide door refuses it — but the person has nothing to decide
-    // until the revision lands, so it is off the list, its count and the watermark,
-    // and listed under Planning instead. It returns when the lease ends.
-    ...(scope.heldPlanIds && scope.heldPlanIds.length > 0
-      ? { AND: [{ NOT: { kind: 'plan_approval', subjectId: { in: [...scope.heldPlanIds] } } }] }
-      : {}),
+    AND: [
+      // …a planning-session row is listed only while its session still waits (MOTIR-7913)…
+      planningSessionLiveWhere(scope),
+      // ⚠️ …and A PLAN BEING REWRITTEN IS NOT WAITING ON ANYBODY (Bug MOTIR-7988;
+      // `approval-gates.md` §11.5c's 2026-10-09 amendment). Its gate stays `awaiting`
+      // and HELD — the decide door refuses it — but the person has nothing to decide
+      // until the revision lands, so it is off the list, its count and the watermark,
+      // and listed under Planning instead. It returns when the lease ends.
+      ...(scope.heldPlanIds && scope.heldPlanIds.length > 0
+        ? [{ NOT: { kind: 'plan_approval' as const, subjectId: { in: [...scope.heldPlanIds] } } }]
+        : []),
+    ],
   };
 }
 
@@ -1574,7 +1604,9 @@ function recordsAwaitingWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateW
     projectId: { in: scope.projectIds },
     state: 'awaiting',
     ...CARRIED_MERGE_GATE_EXCLUDED,
-    ...recordsWithheldWhere(scope),
+    // Under `AND`: the withholding clause is itself an `AND`, and a spread of both would
+    // silently replace one with the other.
+    AND: [planningSessionLiveWhere(scope), recordsWithheldWhere(scope)],
   };
 }
 

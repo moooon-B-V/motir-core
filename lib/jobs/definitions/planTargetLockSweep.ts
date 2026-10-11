@@ -60,7 +60,13 @@ export const planTargetLockSweep = defineJob(
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {
-    // The IDLE CLOSE first (AMENDMENT 23 §2; MOTIR-7638): ending an idle session
+    // THE REPLY-WAIT PASS before everything else (MOTIR-7913): a conversation the planner
+    // replied to and the person left is marked and gated here, so the idle close below
+    // never reaches a session this pass is about to mark.
+    await ctx.step.run('raise-awaiting-reply-planning-sessions', () =>
+      services.planningSessionGate.raiseAwaitingReplies(),
+    );
+    // The IDLE CLOSE next (AMENDMENT 23 §2; MOTIR-7638): ending an idle session
     // gives back everything it held, so the lease release below then finds only
     // the leases of sessions that are NOT idle — a session whose plan waits for a
     // decision, which keeps its plan-held locks for its reviewer.

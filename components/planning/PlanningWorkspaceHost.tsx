@@ -471,6 +471,7 @@ function PlanWorkspaceHost({
     answerRestartConfirm,
     answerRunPause,
     planAgain,
+    resume,
     showEarlierNarration,
   } = usePlanChangeConversation({
     onApproved,
@@ -1096,6 +1097,10 @@ function PlanWorkspaceHost({
           // its swap re-keys the address through `onRestarted`, the restart's path.
           onCarrySend={(text) => void send(text)}
           onPlanAgain={() => void planAgain()}
+          // RESUME a failed attempt (MOTIR-7918): its starter or a project manager (panels 3b / 3c).
+          // A session of the viewer's own, or one the server did not name a starter for, is theirs.
+          onResume={() => void resume()}
+          canResume={state.reopened?.mine !== false || canManage}
           onShowEarlierNarration={() => void showEarlierNarration()}
           gateView={gateView}
           declining={declineFrom === 'rail'}

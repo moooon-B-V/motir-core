@@ -33,6 +33,10 @@ import type {
   PlanSessionStateDto,
 } from '@/lib/dto/planSessions';
 
+import {
+  resumeReasonKeyOf,
+  stopPhraseKeyOf,
+} from '@/app/(authed)/workbench/_components/planningSessionWords';
 import type { SessionRowView } from './types';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
@@ -96,6 +100,10 @@ function StateChip({ state, label }: { state: PlanSessionStateDto; label: React.
       return <Pill tone="neutral">{label}</Pill>;
     case 'generating':
       return <Pill severity="info">{label}</Pill>;
+    case 'waiting':
+      // Waiting to resume (Story MOTIR-7905 · MOTIR-7921): the To resume state pill's yellow
+      // — distinct from Generating's sky and Closed's peach, and no danger ink.
+      return <Pill tone="awaiting">{label}</Pill>;
     case 'planned':
       return <Pill status="planned">{label}</Pill>;
     case 'stale':
@@ -111,6 +119,28 @@ function StateChip({ state, label }: { state: PlanSessionStateDto; label: React.
       // in the end line's words, never in the hue.
       return <Pill severity="warning">{label}</Pill>;
   }
+}
+
+/** THE STOP LINE (Story MOTIR-7905 · MOTIR-7921 / MOTIR-7944): in the place *active {when}* takes,
+ *  the failed attempt in the same step and reason words as the To resume entry — *Stopped at
+ *  {where} · because {why} · {time}* for a failed walk, *Your last change could not be made ·
+ *  {time}* for a failure beside a plan that waits. Keyed on the stable codes, never raw. */
+function FailureLine({ failure }: { failure: NonNullable<SessionRowView['failure']> }) {
+  const t = useTranslations('aiPlanning.sessions');
+  const tp = useTranslations('workbench.planningSession');
+  const text =
+    failure.kind === 'change'
+      ? t('stopChange', { time: failure.timeLabel })
+      : t('stop', {
+          where: tp(`stop.${stopPhraseKeyOf(failure)}`, { title: failure.stopTitle ?? '' }),
+          why: tp(`reason.${resumeReasonKeyOf(failure.reason)}`),
+          time: failure.timeLabel,
+        });
+  return (
+    <span data-testid="plans-stop-line" title={failure.fullLabel}>
+      {text}
+    </span>
+  );
 }
 
 /** Where the conversation opens: anchored at its first key, or project-wide. */
@@ -362,8 +392,13 @@ export function SessionRow({
   // something to decide — and never on an ENDED row whose plan is decided (the
   // Closed read, MOTIR-7634). An ended row with an UNDECIDED plan keeps its door
   // (Story MOTIR-7883 · MOTIR-7889).
+  // …and NEVER on a `waiting` row (MOTIR-7921): its chip is a plain pill — one control, one
+  // tab stop — because the row's own door already opens the same overlay at that session.
   const chipIsDoor =
-    !closedRead && view.latestPlan !== null && destination?.kind === 'planning-surface';
+    !closedRead &&
+    state !== 'waiting' &&
+    view.latestPlan !== null &&
+    destination?.kind === 'planning-surface';
   // `Waiting for approval` keeps the accent border — the retired row's
   // `awaitingReview` rule, same meaning: this one needs a decision.
   const awaitingReview = state === 'planned';
@@ -406,7 +441,9 @@ export function SessionRow({
         </Link>
         <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-(--el-text-secondary)">
           <Anchor keys={view.targetKeys} />
-          {view.end ? (
+          {view.failure ? (
+            <FailureLine failure={view.failure} />
+          ) : view.end ? (
             <EndLine end={view.end} />
           ) : (
             <span>{t('lastActive', { when: view.activeLabel })}</span>

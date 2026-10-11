@@ -56,6 +56,10 @@ export const APPROVAL_GATE_KINDS = [
   // The manual-work question a run raised (MOTIR-7474): its Waiting on you row opens
   // here, where Mark done is pressed (`manual-work-gate.md` §5).
   'manual_work',
+  // A WIRE SPELLING, never an address this build opens: a planning-session row opens the
+  // planning overlay through the plan-overlay door, and the approval overlay address is
+  // NOT extended to it (MOTIR-7913). Listed so the tuple stays total over the enum.
+  'planning_session',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 
 // Exhaustiveness: a member added to `ApprovalGateKindDTO` and not to the tuple

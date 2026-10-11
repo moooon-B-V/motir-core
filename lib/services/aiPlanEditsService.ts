@@ -154,94 +154,69 @@ async function assertCanPlan(ctx: ProjectContext): Promise<void> {
   );
 }
 
-async function submitPlanEditJob(
-  context: JobContextBag,
-  ctx: ProjectContext,
-  opts: PlanEditSubmitOptions = {},
-): Promise<PlanEditSubmitResult> {
+/**
+ * THE CONTEXT EVERY PLANNING SUBMIT SENDS (MOTIR-7916) — the tenant and the always-present
+ * fields, written ONCE. `submitPlanEditJob`, `submitRevise` and `submitResume` each used to
+ * (or would have had to) rebuild this, and a field one of them forgot was dropped silently:
+ * the MOTIR-4343 shape, where the two submits that bypassed the shared one never sent the
+ * consent flag. Now a third submit cannot bypass it.
+ *
+ *   * `generateExplanations`, the planning-mistake flag and the onboarding marker are ALWAYS
+ *     present — `false` when off — because absence reads on the far side as "the producer
+ *     predates the field", i.e. as ON;
+ *   * `code` and `repositories` are spread conditionally, because for them absence means
+ *     "this workspace has none".
+ *
+ * The caller adds what is SPECIFIC to its submit (an anchor set, a `planId`, a prompt).
+ */
+async function buildPlanningJobContext(ctx: ProjectContext) {
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  // ⚠️ THE PLANNING PRODUCER, not the bare grant list (MOTIR-4604). It carries
-  // each repo's freshness VERDICT, the REASON it is behind and an explicit
-  // IN-FLIGHT flag, and it ENQUEUES a refresh where one can actually run —
-  // through the shipped debounced path, never awaited. `undefined` still means
-  // "no connected repo", so `context.code` is omitted exactly as before.
+  // The PLANNING PRODUCER, not the bare grant list (MOTIR-4604): freshness verdict, reason and
+  // in-flight flag, enqueuing a refresh where one can run. `undefined` ⇒ no connected repo.
   const code = await resolvePlanningCodeContext({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
     projectId: ctx.projectId,
   });
-  // The PROJECT's repository SET (MOTIR-3044), on THIS shared submit rather than
-  // per operation — for the same reason `generateExplanations` is set here: the
-  // anchor set makes the submitted kind only a FALLBACK, so a per-kind site would
-  // still drop the field on the contextual path. One site therefore covers
-  // `augment`, `expand_item`, `replan` and every contextual turn, which is what
-  // makes "every planning operation carries it" a property of the code rather
-  // than of the test that happened to drive one.
+  // The project's repository SET (MOTIR-3044), on every planning submit.
   const repositories = await resolveProjectRepoContext(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  // May this project's planner record what it got wrong (MOTIR-3350)? Resolved
-  // on THIS shared submit for exactly the reason the two lines above are: the
-  // anchor set makes the submitted kind only a FALLBACK, so a per-kind site would
-  // drop the flag on the contextual path — and a dropped flag here reads on the
-  // far side as "old producer", i.e. as ON, which is the wrong answer for a
-  // project that switched it off.
+  // May this project's planner record what it got wrong (MOTIR-3350)?
   const recordPlanningMistakes = await resolveRecordPlanningMistakesForJob(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  const tenant = buildTenant(ctx, organizationId, isMeta, internalBilling);
+  return {
+    tenant: buildTenant(ctx, organizationId, isMeta, internalBilling),
+    planningFields: {
+      generateExplanations: ctx.project.aiGenerateExplanations,
+      [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
+      // Is this the project's FIRST plan (MOTIR-4736)?
+      [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
+      ...(code ? { code } : {}),
+      ...(repositories ? { repositories } : {}),
+    },
+  };
+}
+
+async function submitPlanEditJob(
+  context: JobContextBag,
+  ctx: ProjectContext,
+  opts: PlanEditSubmitOptions = {},
+): Promise<PlanEditSubmitResult> {
+  const { tenant, planningFields } = await buildPlanningJobContext(ctx);
   const { jobId } = await submitJob(
     // ONE planning kind (ADR `session-model.md` §6 step 2). Every planning submit
     // in the product sends this; motir-ai reads WHAT the run is about off the
     // context bag, not off a name.
     'plan',
     tenant,
-    {
-      ...context,
-      // The AI-drafted-explanations opt-in (Story 7.4 · MOTIR-850), on the wire
-      // for plan EDITS too (MOTIR-2110). `startGeneration` has always sent it on
-      // `generate_tree`, and the contract is that motir-ai reads the flag ONLY
-      // from `context.generateExplanations` and never from motir-core config —
-      // so a submit that omits it cannot be compensated for on the far side, and
-      // the project setting silently stopped applying the moment the plan moved
-      // off its first generation. Re-plan is where a plan spends most of its
-      // life, so most nodes were being born without the WHY.
-      //
-      // Set HERE, on the one shared submit, rather than in a per-kind submit:
-      // the anchor set makes the submitted kind only a FALLBACK (see
-      // `submitContextual`) — motir-ai's scoping module classifies a contextual
-      // turn and can resolve an `augment` submit into a re-plan — so a
-      // replan-only site would still drop the flag on the contextual path. Same
-      // field name, same source (`Project.aiGenerateExplanations`, a non-null
-      // boolean column), no new config path; ALWAYS present, `false` when off,
-      // exactly as the `generate_tree` submit sends it.
-      generateExplanations: ctx.project.aiGenerateExplanations,
-      // ALWAYS present, `false` when off — never spread-conditionally like `code`
-      // and `repositories` below. Those two use absence to mean "this workspace
-      // has none"; here absence means "the producer predates the field" and the
-      // consumer reads it as ON, so omitting it when the setting is off would
-      // silently keep capturing. The key is the constant, not a literal: there is
-      // no shared type across the boundary and a typo is not a type error.
-      [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
-      // Is this the project's FIRST plan (MOTIR-4736)? On THIS shared submit for
-      // exactly the reason the three lines above are: the anchor set makes the
-      // submitted kind only a FALLBACK, so a per-kind site would drop the field
-      // on the contextual path. One site covers `augment`, `expand_item`,
-      // `replan` and every contextual turn.
-      //
-      // ALWAYS present, `false` once `onboardingRanAt` is stamped — never spread
-      // conditionally: absence means "the producer predates this field" and sends
-      // motir-ai back to inferring onboarding from an empty tree (MOTIR-4178),
-      // which is the guess this field exists to replace.
-      [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
-      ...(code ? { code } : {}),
-      ...(repositories ? { repositories } : {}),
-    },
+    { ...context, ...planningFields },
     { userId: ctx.userId },
   );
   // WHO ASKED (MOTIR-2986) — and this is the ONE seam where the acting user is
@@ -543,6 +518,33 @@ export const aiPlanEditsService = {
     return dispatchRevision(planId, intent, ctx);
   },
 
+  /**
+   * Submit a RESUME of a failed walk (Story MOTIR-7905 · MOTIR-7916): a `plan` job carrying
+   * `resume: { planId, fromJobId }`, which motir-ai continues from the plan's own persisted
+   * state (MOTIR-7910). It opens NO plan — the caller re-binds the SAME plan to the returned
+   * job (`planSessionResumeService`), submit FIRST and bind SECOND exactly as `submitRevise`
+   * does, because the job id does not exist until motir-ai answers. Metered, so typed errors
+   * (out of credits, unreachable, a motir-ai refusal of the resume) propagate with nothing
+   * written.
+   */
+  async submitResume(
+    planId: string,
+    fromJobId: string,
+    ctx: ProjectContext,
+  ): Promise<{ jobId: string }> {
+    await assertCanPlan(ctx);
+    const { tenant, planningFields } = await buildPlanningJobContext(ctx);
+    return submitJob(
+      'plan',
+      tenant,
+      // NO `planId` in the context: that key is what makes a job a REVISION on the far side,
+      // and a resume continues a WALK — the plan it continues rides `resume`, not the bag.
+      planningFields,
+      { userId: ctx.userId },
+      { resume: { planId, fromJobId } },
+    );
+  },
+
   streamAugment(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
     return streamJob(jobId, coreProjectId);
   },
@@ -586,67 +588,24 @@ async function dispatchRevision(
   const held = await plansService.readRevisionLease(planId, ctx);
   if (held) throw new PlanRevisionInFlightError(planId, held.heldBy, held.expiresAt);
 
-  let jobId: string;
-  try {
-    const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    // The planning producer (MOTIR-4604), as on the shared submit above.
-    const code = await resolvePlanningCodeContext({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-      projectId: ctx.projectId,
-    });
-    const repositories = await resolveProjectRepoContext(ctx.projectId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    // MOTIR-4343. `submitRevise` is the OTHER submit that bypasses
-    // `submitPlanEditJob` — deliberately, because a revision holds a lease and
-    // must not open a second plan — so it never reached the resolution that
-    // sits inside that shared submit, and a project with capture switched off
-    // was still captured on every revision. Resolved for the SUBMITTING
-    // project: `ctx.projectId` is the one the plan was just proved to belong
-    // to (the `PlanNotFoundError` guard above), so this is the same project
-    // whose setting the reviewer configured.
-    const recordPlanningMistakes = await resolveRecordPlanningMistakesForJob(ctx.projectId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    const submitted = await submitJob(
-      // ONE planning kind (ADR §6 step 2). `context.planId` below is what makes
-      // this a REVISION on the far side — `readerForPlan`'s first arm — so it is
-      // the only thing distinguishing it on the wire now, and its silent loss
-      // would route every revision to the project arm.
-      'plan',
-      buildTenant(ctx, organizationId, isMeta, internalBilling),
-      {
-        // The PLAN is the target. `planId` is the only address a revision has —
-        // its proposals have no `MOTIR-<n>` until somebody approves them, which
-        // is the gap this job kind exists to close.
-        planId,
-        prompt,
-        generateExplanations: ctx.project.aiGenerateExplanations,
-        // ALWAYS present, `false` when off — the same discipline as the shared
-        // submit above, and for the same reason: absence reads as ON.
-        [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
-        // The onboarding marker (MOTIR-4736). `submitRevise` is the OTHER
-        // submit that bypasses `submitPlanEditJob`, so like the consent flag it
-        // has to be set here or it is never set at all. Same discipline again:
-        // ALWAYS present, never spread conditionally.
-        [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
-        ...(code ? { code } : {}),
-        ...(repositories ? { repositories } : {}),
-      },
-      { userId: ctx.userId },
-    );
-    jobId = submitted.jobId;
-  } catch (err) {
-    // Nothing to unwind: the lease is taken BELOW, so a submit that never
-    // returned a job id has left the plan exactly as it found it.
-    throw err;
-  }
+  // The tenant and every planning-context field come from the ONE builder every planning
+  // submit shares (consent flag, onboarding marker, code and repository context). A
+  // revision is the OTHER submit that bypasses `submitPlanEditJob` — deliberately, because it
+  // holds a lease and must not open a second plan — so it has to call the builder itself or
+  // never gets the fields at all (MOTIR-4343, MOTIR-4736). Nothing to unwind on a failed
+  // submit: the lease is taken BELOW, so a submit that never returned a job id has left the
+  // plan exactly as it found it.
+  const { tenant, planningFields } = await buildPlanningJobContext(ctx);
+  const { jobId } = await submitJob(
+    // ONE planning kind (ADR §6 step 2). `context.planId` below is what makes this a REVISION
+    // on the far side — `readerForPlan`'s first arm — so its silent loss would route every
+    // revision to the project arm. The PLAN is the target: `planId` is the only address a
+    // revision has, its proposals having no `MOTIR-<n>` until somebody approves them.
+    'plan',
+    tenant,
+    { planId, prompt, ...planningFields },
+    { userId: ctx.userId },
+  );
 
   // ⚠️ ACQUIRE AFTER THE SUBMIT, because the acquire is what BINDS the plan to
   // this job (`sourceJobId`) and the id does not exist until motir-ai answers.

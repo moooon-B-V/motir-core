@@ -187,6 +187,41 @@ question once, when it was deployed. `pnpm db:backfill:plan-gates --dry-run`
 confirms none was missed, and the same command without `--dry-run` repairs any
 that were.
 
+### When a planning session needs you
+
+A planning session that is waiting on **you** shows up in **Waiting on you**. Two
+things put it there: the planner stopped to ask you a question only you can
+answer, or the conversation is waiting on your next reply and you left. Only the
+session's owner is asked, and the row has no Approve or Decline. Opening it takes
+you back into the planning view at that session, and **sending your next message
+clears it**. The session is not ended while it waits: it is not closed for being
+idle, and nobody else can plan the cards it holds. If another member tries,
+Motir tells them the session is _waiting on_ you.
+
+### When a planning attempt fails
+
+If Motir AI fails partway through writing a plan, the session is **not ended** and
+the plan keeps everything it had written. The session waits in **To resume**, in
+the Workbench, and says where the planner stopped and why. **Resume** continues
+the same session on the same plan from the next unfinished level or card, without
+redoing what is done. The cards it holds stay at Planning meanwhile. A person
+still ends a session by starting something new, declining or approving.
+
+The same holds when you asked for a **change to a plan that was waiting for your
+approval** and that change fails. The plan is still there and you can still
+approve or decline it. The conversation waits in **To resume**, naming the plan
+and what went wrong. Opening it shows the plan with Approve and Decline and a
+place to type; typing continues the same conversation and clears the entry. The
+plan keeps its own row in **Waiting on you** as before.
+
+Conversations that ended after a failure like this before the change also appear
+in **To resume**. They cannot be resumed, but typing there starts a new
+conversation that carries the plan with it.
+
+The decision behind both is MOTIR-7906; the record is
+[`docs/decisions/approval-gates.md`](./decisions/approval-gates.md), §1's
+`planning-session` amendment.
+
 ## What you see
 
 The gate always renders as the same three bands, in the same order, and the order
