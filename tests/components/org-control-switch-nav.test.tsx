@@ -36,11 +36,13 @@ const ACME: OrganizationDTO = {
   id: 'org_acme',
   name: 'Acme',
   slug: 'acme',
+  contentLanguage: 'en',
 };
 const BEACON: OrganizationDTO = {
   id: 'org_beacon',
   name: 'Beacon',
   slug: 'beacon',
+  contentLanguage: 'en',
 };
 
 function renderOrgControl() {

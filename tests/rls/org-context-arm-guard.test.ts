@@ -339,12 +339,18 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       '(org_membership_visible_active_or_own), both admitted by the bound app.organization_id',
   },
   'lib/services/organizationErasureSweepService.ts#writeTombstone': {
-    tables: ['organization', 'organization_deletion_request', 'organization_membership'],
+    tables: [
+      'organization',
+      'organization_content_language_change',
+      'organization_deletion_request',
+      'organization_membership',
+    ],
     source: 'scan',
     why:
       'MOTIR-6400 — the erasure tombstone, with no actor: it reads the org and its roster (the ' +
-      'erased notice captures the Owner and Admins first), deletes every membership, scrubs the ' +
-      'org and marks the request erased, all under the bound app.organization_id',
+      'erased notice captures the Owner and Admins first), deletes every membership and (MOTIR-8094) ' +
+      'the attributed content-language history, scrubs the org and marks the request erased, all ' +
+      'under the bound app.organization_id',
   },
   'lib/services/organizationRetentionPurgeService.ts#runDue': {
     tables: ['organization', 'organization_deletion_request'],

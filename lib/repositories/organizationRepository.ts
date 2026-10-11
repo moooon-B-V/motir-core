@@ -192,6 +192,8 @@ export const organizationRepository = {
       requiresTwoFactor?: boolean;
       /** Set when a deletion is scheduled, cleared by a cancel (MOTIR-6399). */
       closingSince?: Date | null;
+      /** Written only by `organizationContentLanguageService` (MOTIR-8094). */
+      contentLanguage?: Locale;
     },
     tx: Prisma.TransactionClient,
   ): Promise<Organization> {

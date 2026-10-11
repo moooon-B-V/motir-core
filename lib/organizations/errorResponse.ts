@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   AlreadyOrgMemberError,
+  InvalidContentLanguageError,
   InvalidOwnershipTargetError,
   OwnershipChangedError,
   OwnershipConfirmationMismatchError,
@@ -87,6 +88,9 @@ export function mapOrgError(err: unknown): NextResponse | null {
     // Read-only while the org is scheduled for deletion (MOTIR-6396) — a state a
     // cancel undoes, so a conflict rather than a permission refusal.
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof InvalidContentLanguageError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
   }
   if (err instanceof OrgSlugCollisionError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });

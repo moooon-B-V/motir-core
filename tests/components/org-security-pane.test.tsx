@@ -75,7 +75,7 @@ vi.mock('@/app/(authed)/_actions', () => ({
   createWorkspaceAction: vi.fn(async () => undefined),
 }));
 
-const ORG = { id: 'org_acme', name: 'Acme', slug: 'acme' };
+const ORG = { id: 'org_acme', name: 'Acme', slug: 'acme', contentLanguage: 'en' };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -186,7 +186,7 @@ describe('the org menu carries the door onto it', () => {
       <ToastProvider>
         <OrgControl
           activeOrg={{ id: 'org_acme', name: 'Acme', role: 'owner' }}
-          orgs={[{ id: 'org_acme', name: 'Acme', slug: 'acme' }]}
+          orgs={[{ id: 'org_acme', name: 'Acme', slug: 'acme', contentLanguage: 'en' }]}
           cloudBilling={false}
           workspaceTierRevealed={false}
         />
@@ -207,7 +207,7 @@ describe('the org menu carries the door onto it', () => {
       <ToastProvider>
         <OrgControl
           activeOrg={{ id: 'org_acme', name: 'Acme', role: 'owner' }}
-          orgs={[{ id: 'org_acme', name: 'Acme', slug: 'acme' }]}
+          orgs={[{ id: 'org_acme', name: 'Acme', slug: 'acme', contentLanguage: 'en' }]}
           cloudBilling={false}
           workspaceTierRevealed={false}
         />
