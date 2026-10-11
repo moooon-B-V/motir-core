@@ -13,9 +13,17 @@
 export const SHARPENED_BLOCK_START = '<!-- motir:sharpened:start -->';
 export const SHARPENED_BLOCK_END = '<!-- motir:sharpened:end -->';
 
+/** `text` without its trailing newlines. A loop, not `/\n+$/`: that regex is
+ *  quadratic on a long run of newlines, and the text is a person's input. */
+export function trimTrailingNewlines(text: string): string {
+  let end = text.length;
+  while (end > 0 && text.charCodeAt(end - 1) === 10) end -= 1;
+  return text.slice(0, end);
+}
+
 /** The block as it is written: the two markers around the content. */
 export function renderSharpenedBlock(content: string): string {
-  return `${SHARPENED_BLOCK_START}\n${content.replace(/\n+$/, '')}\n${SHARPENED_BLOCK_END}`;
+  return `${SHARPENED_BLOCK_START}\n${trimTrailingNewlines(content)}\n${SHARPENED_BLOCK_END}`;
 }
 
 interface Line {
@@ -106,7 +114,7 @@ export function upsertSharpenedBlock(body: string, heading: string, content: str
 
   // No block yet: insert after the section's last non-blank character, so the
   // whitespace that separates it from the next heading stays where it was.
-  const trimmed = section.replace(/\s+$/, '');
+  const trimmed = section.trimEnd();
   if (trimmed.length === 0) {
     const insertAt = headingLine.end;
     const lead = body.slice(0, insertAt).endsWith('\n') ? '\n' : '\n\n';

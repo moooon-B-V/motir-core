@@ -8,7 +8,7 @@ import type {
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
-import { upsertSharpenedBlock } from '@/lib/sharpening/managedBlock';
+import { trimTrailingNewlines, upsertSharpenedBlock } from '@/lib/sharpening/managedBlock';
 import {
   SharpeningInputInvalidError,
   SharpeningPlanClosedError,
@@ -86,7 +86,7 @@ function nonBlank(text: string | undefined): text is string {
 export function acceptanceContent(requirement: Partial<SubmittedRequirement>): string {
   return ACCEPTANCE_PARTS.map((part) => requirement[part])
     .filter(nonBlank)
-    .map((text) => text.replace(/\n+$/, ''))
+    .map(trimTrailingNewlines)
     .join('\n');
 }
 
@@ -97,7 +97,7 @@ export function assumptionsContent(
   plannerAssumptions: readonly PlannerAssumptionDto[],
 ): string {
   const lines: string[] = [];
-  if (nonBlank(requirement.assumptions)) lines.push(requirement.assumptions.replace(/\n+$/, ''));
+  if (nonBlank(requirement.assumptions)) lines.push(trimTrailingNewlines(requirement.assumptions));
   for (const a of plannerAssumptions) {
     lines.push(`- ${PLANNER_ASSUMPTION_PREFIX} ${a.question} — ${a.recommendation}`);
   }

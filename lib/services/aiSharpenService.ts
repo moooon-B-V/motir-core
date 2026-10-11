@@ -539,6 +539,8 @@ export const aiSharpenService = {
     jobId: string,
     ctx: ProjectContext,
   ): Promise<SharpenSettleResult> {
+    // A person who lost the project since opening the session reads nothing more.
+    await projectAccessService.assertPermission(ctx.projectId, actorOf(ctx), 'project:browse');
     const before = await loadDto(sessionId, ctx);
     if (!before.turns.some((t) => t.role === 'person' && t.jobId === jobId)) {
       return { outcome: 'pending', session: before };
@@ -559,6 +561,7 @@ export const aiSharpenService = {
 
   /** One of the caller's sessions in the active project. */
   async get(sessionId: string, ctx: ProjectContext): Promise<SharpenSessionDto> {
+    await projectAccessService.assertPermission(ctx.projectId, actorOf(ctx), 'project:browse');
     return loadDto(sessionId, ctx);
   },
 
