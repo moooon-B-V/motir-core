@@ -269,6 +269,16 @@ test.describe('an organisation that existed before', () => {
       expect(res.status()).toBe(403);
       const org = await adminDb.organization.findUniqueOrThrow({ where: { id: seed.orgId } });
       expect(org.contentLanguage).toBe('en');
+      await beat();
+    });
+
+    await chapter('Reloaded, the content language still reads English', async () => {
+      await page.reload();
+      const row = page.getByRole('main').getByTestId('content-language-readonly');
+      await expect(row.getByText('English', { exact: true })).toBeVisible({
+        timeout: FIRST_PAINT_MS,
+      });
+      await beat();
     });
   });
 
