@@ -162,6 +162,15 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'project_public_read (20260811230000) · publicHostResolution.test "primaryHostsForProjects … agrees with addressesForProject"',
   ],
 
+  // ── pre-auth: the readiness probe ──────────────────────────────────────────
+  // The readiness probe's warm-up (Bug MOTIR-8231): a raw `SELECT 1` that names no
+  // table, so no policy can gate it — the scanner flags it only because it cannot
+  // read a raw query's tables. Its one caller is Fly's health checker, with no tenant.
+  'databaseConnectionRepository.ts#ping': [
+    'pre-auth',
+    "SELECT 1 reads no table; the caller is Fly's unauthenticated health check",
+  ],
+
   // ── pre-auth: the shared rate limiter ─────────────────────────────────────
   // The surfaces it protects — sign-in, sign-up, password reset, public writes —
   // are limited BEFORE any workspace is known, which is why the table is in

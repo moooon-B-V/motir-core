@@ -465,6 +465,36 @@ describe('fly.toml — the deployment configuration', () => {
     expect(seconds * 1000).toBeGreaterThan(MONITOR_REFRESH_LEASE_MS);
     expect(seconds).toBeLessThanOrEqual(300);
   });
+
+  it('holds traffic off a new app machine until its readiness check passes', () => {
+    // MOTIR-8231. With no check, Fly's proxy sent a freshly deployed machine
+    // requests the moment its port opened — before any route module had loaded
+    // or any pool connection existed — and its first webhook failed with a P2028
+    // `maxWait` at uptime 15 s. A service check is what the proxy routes on.
+    const block = /^\s*\[\[http_service\.checks\]\]\s*$([\s\S]*?)(?=^\s*\[|(?![\s\S]))/m.exec(
+      flyToml,
+    );
+    expect(block, 'fly.toml must declare an [[http_service.checks]] entry').not.toBeNull();
+    const keys = new Map(
+      (block?.[1] ?? '')
+        .split('\n')
+        .map((l) => /^\s*([a-z_]+)\s*=\s*"([^"]*)"/.exec(l))
+        .filter((m): m is RegExpExecArray => m !== null)
+        .map((m) => [m[1], m[2]] as const),
+    );
+    expect(keys.get('path')).toBe('/api/health/ready');
+    expect(keys.get('method')?.toLowerCase()).toBe('get');
+    for (const key of ['grace_period', 'interval', 'timeout']) {
+      expect(keys.get(key), `${key} is set`).toMatch(/^\d+s$/);
+    }
+    // The check must answer inside its own interval, or two overlap.
+    expect(Number.parseInt(keys.get('timeout')!, 10)).toBeLessThan(
+      Number.parseInt(keys.get('interval')!, 10),
+    );
+    // And the route it names must exist — a check against a 404 keeps every
+    // machine out of rotation for ever.
+    expect(existsSync(join(root, 'app/api/health/ready/route.ts'))).toBe(true);
+  });
 });
 
 describe('scripts/release-migrate.mjs — the release entrypoint', () => {

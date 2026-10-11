@@ -182,6 +182,29 @@ kill_timeout = "90s"
     soft_limit = 200
     hard_limit = 250
 
+  # ⚠️ A NEW MACHINE TAKES NO TRAFFIC UNTIL IT IS WARM (MOTIR-8231). Without a
+  # check, Fly routed requests to a freshly deployed `app` machine the moment it
+  # accepted connections on 8080 — before Next had loaded a route module and
+  # before the lazy `pg.Pool` had opened a connection. The first burst (GitHub
+  # webhooks, which keep arriving through a rollout) paid for both at once, and a
+  # 2 s `maxWait` ran out at uptime 15 s on a pool that was not full, only cold.
+  #
+  # `/api/health/ready` answers 503 until it has loaded the webhook route's
+  # service graph and opened its pool's warm-up connections, then 200 for the
+  # life of the process (`lib/services/readinessService.ts`). Fly's docs: "If a
+  # Machine fails its service check, it will be marked as unhealthy by the proxy"
+  # and "it won't be routed to until its checks start passing"
+  # (docs.fly.io/reference/health-checks). The first check STARTS the warm-up and
+  # answers 503, so a machine is admitted on a later one — `interval` sets how
+  # long that takes. `grace_period` only stops a check landing before the server
+  # listens. Pinned by `tests/fly-runtime-config.test.ts`.
+  [[http_service.checks]]
+    grace_period = "5s"
+    interval     = "5s"
+    timeout      = "4s"
+    method       = "GET"
+    path         = "/api/health/ready"
+
 # ── The intended machine count is 2, and THIS FILE CANNOT CREATE IT ──────────
 #
 # ADR Q6 decides a pool of TWO machines: with one, `auto_start_machines` has
