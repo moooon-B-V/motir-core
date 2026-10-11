@@ -57,6 +57,7 @@ const githubMerge = vi.hoisted(() => ({ installGithubMergeMock: vi.fn() }));
 const codeHealth = vi.hoisted(() => ({ installCodeHealthBoundaryMock: vi.fn() }));
 const codeGraphRead = vi.hoisted(() => ({ installCodeGraphReadBoundaryMock: vi.fn() }));
 const aiJobs = vi.hoisted(() => ({ installAiJobsBoundaryMock: vi.fn() }));
+const sharpen = vi.hoisted(() => ({ installSharpenBoundaryMock: vi.fn() }));
 const lessons = vi.hoisted(() => ({ installLessonsBoundaryMock: vi.fn() }));
 const platformUsage = vi.hoisted(() => ({ installPlatformUsageBoundaryMock: vi.fn() }));
 const codeGraph = vi.hoisted(() => ({ installCodeGraphBoundaryMock: vi.fn() }));
@@ -74,6 +75,7 @@ vi.mock('@/lib/test-github-merge-mock', () => githubMerge);
 vi.mock('@/lib/test-code-health-mock', () => codeHealth);
 vi.mock('@/lib/test-code-graph-read-mock', () => codeGraphRead);
 vi.mock('@/lib/test-ai-jobs-mock', () => aiJobs);
+vi.mock('@/lib/test-sharpen-mock', () => sharpen);
 vi.mock('@/lib/test-lessons-mock', () => lessons);
 vi.mock('@/lib/test-platform-usage-mock', () => platformUsage);
 vi.mock('@/lib/test-code-graph-mock', () => codeGraph);
@@ -99,6 +101,8 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   // MOTIR-7866 — the motir-ai code-graph READ seam (Story MOTIR-7858).
   E2E_TEST_CODE_GRAPH_READ: [codeGraphRead.installCodeGraphReadBoundaryMock],
   E2E_TEST_AI_JOBS: [aiJobs.installAiJobsBoundaryMock],
+  // MOTIR-8180 — a Sharpen session's `sharpen_turn` jobs.
+  E2E_TEST_SHARPEN: [sharpen.installSharpenBoundaryMock],
   // MOTIR-3340 — the lesson-library seam. Registered HERE in the same change
   // that adds it to the shipped table, which is the whole point of the equality
   // assertion below: this file went red the moment the seam landed without it.
