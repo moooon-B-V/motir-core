@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
+import { adminDb } from './helpers/adminDb';
 
 // The READ-ONLY diagnosis role (MOTIR-8187 · MOTIR-8188).
 //
@@ -9,7 +9,7 @@ import { db } from '@/lib/db';
 // role recreated with BYPASSRLS, or a LOGIN committed to git.
 
 afterAll(async () => {
-  await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Thrown at the end of a transaction body so everything it did rolls back. */
@@ -17,7 +17,7 @@ class Rollback extends Error {}
 
 describe('the read-only diagnosis role', () => {
   it('exists without LOGIN, superuser or RLS bypass', async () => {
-    const rows = await db.$queryRawUnsafe<
+    const rows = await adminDb.$queryRawUnsafe<
       {
         rolcanlogin: boolean;
         rolsuper: boolean;
@@ -42,7 +42,7 @@ describe('the read-only diagnosis role', () => {
   });
 
   it('defaults every session to read-only with a 30 s statement timeout', async () => {
-    const [row] = await db.$queryRawUnsafe<{ rolconfig: string[] | null }[]>(
+    const [row] = await adminDb.$queryRawUnsafe<{ rolconfig: string[] | null }[]>(
       `SELECT rolconfig FROM pg_roles WHERE rolname = 'motir_readonly'`,
     );
     expect(row?.rolconfig).toEqual(
@@ -51,7 +51,7 @@ describe('the read-only diagnosis role', () => {
   });
 
   it('can SELECT every table and write none', async () => {
-    const wrong = await db.$queryRawUnsafe<{ relname: string; why: string }[]>(
+    const wrong = await adminDb.$queryRawUnsafe<{ relname: string; why: string }[]>(
       `SELECT c.relname,
               CASE WHEN NOT has_table_privilege('motir_readonly', c.oid, 'SELECT') THEN 'no SELECT'
                    ELSE 'can write' END AS why
@@ -76,7 +76,7 @@ describe('the read-only diagnosis role', () => {
     // next migration's table: it must be readable without another GRANT. Its
     // policy has the shape every workspace policy has (no `TO` clause, the
     // system-admin GUC as the cross-tenant door). All of it rolls back.
-    const seen = await db
+    const seen = await adminDb
       .$transaction(async (tx) => {
         await tx.$executeRawUnsafe(`CREATE TABLE "__readonly_role_probe" (id int PRIMARY KEY)`);
         await tx.$executeRawUnsafe(`INSERT INTO "__readonly_role_probe" VALUES (1)`);
