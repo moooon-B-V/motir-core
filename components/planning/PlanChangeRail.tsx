@@ -22,6 +22,7 @@ import { Pill } from '@/components/ui/Pill';
 import { Spinner } from '@/components/ui/Spinner';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import { PlanBriefing } from '@/components/planning/PlanBriefing';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
@@ -1001,14 +1002,29 @@ export function PlanChangeRail({
             approved or declined. */}
         {state.review && !state.decided && !index.isEmpty ? (
           <>
-            <Bubble role="assistant">
-              {tc('summary', {
-                added: index.counts.added,
-                changed: index.counts.changed,
-                removed: index.counts.removed,
-              })}
-            </Bubble>
-            <Bubble role="assistant">{tc('lockedNote')}</Bubble>
+            {/* The planner's briefing (MOTIR-8149) replaces the two canned lines:
+                its section 3 says what was left untouched and section 6 gives the
+                counts, so they would only repeat it. A plan with no summary
+                (written before the briefing existed) keeps the canned pair. */}
+            {state.review.summary?.trim() ? (
+              <Bubble role="assistant" testId="plan-change-briefing">
+                <PlanBriefing
+                  summary={state.review.summary}
+                  workItemRefs={state.session?.workItemRefs ?? {}}
+                />
+              </Bubble>
+            ) : (
+              <>
+                <Bubble role="assistant">
+                  {tc('summary', {
+                    added: index.counts.added,
+                    changed: index.counts.changed,
+                    removed: index.counts.removed,
+                  })}
+                </Bubble>
+                <Bubble role="assistant">{tc('lockedNote')}</Bubble>
+              </>
+            )}
             {gated ? (
               <GatedReviewBlock
                 view={gateView}
