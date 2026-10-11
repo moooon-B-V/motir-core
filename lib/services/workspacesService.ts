@@ -5,6 +5,7 @@ import {
 } from '@/lib/organizations/errors';
 import { organizationDeletionRequestRepository } from '@/lib/repositories/organizationDeletionRequestRepository';
 import { Prisma, type Workspace, type WorkspaceMembership } from '@/generated/prisma/client';
+import type { Locale } from '@/lib/i18n/locales';
 import { db } from '@/lib/db';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -170,7 +171,13 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
 // (each retry needs a FRESH transaction — a P2002 poisons the current one,
 // so we can't just catch-and-continue inside a single `tx`).
 async function insertWorkspaceWithOwner(
-  input: { name: string; slug: string; ownerUserId: string; organizationId?: string },
+  input: {
+    name: string;
+    slug: string;
+    ownerUserId: string;
+    organizationId?: string;
+    contentLanguage?: Locale;
+  },
   tx: Prisma.TransactionClient,
 ): Promise<{ workspace: Workspace; membership: WorkspaceMembership }> {
   // Bind the TENANT-BOOTSTRAP context (MOTIR-2512). This is the one write path
@@ -240,8 +247,10 @@ async function insertWorkspaceWithOwner(
     // always free; a 2nd+ needs a paid org). Sweep ALL org-creators, not just
     // the explicit createOrganization entry (new-access-gate-sweep-all-creators).
     await entitlementsService.assertCanCreateOrganization(input.ownerUserId, tx);
+    // The minted org's content language is seeded from the creator's browser
+    // (Story MOTIR-7731 · MOTIR-8093); absent, the column's `en` default holds.
     const organization = await organizationRepository.create(
-      { name: input.name, slug: input.slug },
+      { name: input.name, slug: input.slug, contentLanguage: input.contentLanguage },
       tx,
     );
     await organizationMembershipRepository.create(
@@ -282,6 +291,13 @@ export interface CreateWorkspaceInput {
    * workspace OPC path).
    */
   organizationId?: string;
+  /**
+   * The content language a freshly MINTED org starts with (Story MOTIR-7731 ·
+   * MOTIR-8093) — `contentLanguageFromAcceptLanguage` of the creator's request.
+   * Ignored when `organizationId` nests the workspace under an existing org,
+   * whose language is already set. Omitted ⇒ the column default, `en`.
+   */
+  contentLanguage?: Locale;
 }
 
 export interface CreateWorkspaceResult {
@@ -292,6 +308,8 @@ export interface CreateWorkspaceResult {
 export interface EnsureDefaultWorkspaceInput {
   userId: string;
   userName: string;
+  /** Seeds the minted org's content language — see `CreateWorkspaceInput`. */
+  contentLanguage?: Locale;
 }
 
 /**
@@ -534,6 +552,7 @@ export const workspacesService = {
               slug,
               ownerUserId: input.ownerUserId,
               organizationId: input.organizationId,
+              contentLanguage: input.contentLanguage,
             },
             tx,
           );
@@ -567,6 +586,7 @@ export const workspacesService = {
     return workspacesService.createWorkspace({
       name: `${input.userName}'s Workspace`,
       ownerUserId: input.userId,
+      contentLanguage: input.contentLanguage,
     });
   },
 
@@ -630,7 +650,10 @@ export const workspacesService = {
             return { workspace, membership };
           }
 
-          return insertWorkspaceWithOwner({ name, slug, ownerUserId: input.userId }, tx);
+          return insertWorkspaceWithOwner(
+            { name, slug, ownerUserId: input.userId, contentLanguage: input.contentLanguage },
+            tx,
+          );
         });
         return result;
       } catch (err) {
@@ -716,6 +739,9 @@ export const workspacesService = {
    * FOR UPDATE lock on the user row); nesting it would deadlock on the
    * same connection.
    *
+   * `contentLanguage` seeds the content language of the org that self-heal
+   * mints (Story MOTIR-7731 · MOTIR-8093); omitted, it stays `en`.
+   *
    * `userName` seeds the default workspace name on the self-heal path;
    * when the caller has no session object on hand it is read off the user
    * row before backfilling.
@@ -724,6 +750,7 @@ export const workspacesService = {
     userId: string,
     cookieWorkspaceId: string | null,
     userName?: string,
+    contentLanguage?: Locale,
   ): Promise<string | null> {
     // Set when the cookie names a workspace the user holds NO membership in —
     // the one case a second, workspace-bound read is needed (below).
@@ -816,7 +843,11 @@ export const workspacesService = {
     if (suspended) throw suspended;
 
     const name = userName ?? (await userRepository.findById(userId))?.name ?? 'My';
-    const { workspace } = await this.ensureDefaultWorkspace({ userId, userName: name });
+    const { workspace } = await this.ensureDefaultWorkspace({
+      userId,
+      userName: name,
+      contentLanguage,
+    });
     return workspace.id;
   },
 

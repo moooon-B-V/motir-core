@@ -2,6 +2,7 @@ import { type Organization, Prisma } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
+import type { Locale } from '@/lib/i18n/locales';
 
 // Organization repository — single Prisma operations on the `organization`
 // table (the root tenancy tier, Story 6.10). The org-scoped business logic
@@ -170,7 +171,12 @@ export const organizationRepository = {
   },
 
   async create(
-    data: { name: string; slug: string },
+    data: {
+      name: string;
+      slug: string;
+      /** The language new work is written in (MOTIR-8093); omitted keeps the column default `en`. */
+      contentLanguage?: Locale;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<Organization> {
     return tx.organization.create({ data });

@@ -1,6 +1,7 @@
 import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
 import { type OrganizationRole, Prisma, type WorkspaceRole } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import type { Locale } from '@/lib/i18n/locales';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -255,7 +256,16 @@ export const organizationsService = {
    * current one). Used for the multi-org case (a user creating a second org);
    * the signup-time first org is minted by workspacesService.provisionForNewUser.
    */
-  async createOrganization(input: { name: string; actorUserId: string }): Promise<OrganizationDTO> {
+  async createOrganization(input: {
+    name: string;
+    actorUserId: string;
+    /**
+     * The new org's content language (Story MOTIR-7731 · MOTIR-8093) —
+     * `contentLanguageFromAcceptLanguage` of the creator's request. Omitted ⇒
+     * the column default, `en`.
+     */
+    contentLanguage?: Locale;
+  }): Promise<OrganizationDTO> {
     const base = slugify(input.name);
     let lastAttempt = base;
     for (let attempt = 0; attempt < SLUG_RETRY_ATTEMPTS; attempt++) {
@@ -298,7 +308,10 @@ export const organizationsService = {
           // 2nd+ requires the actor to own/admin a paid (active scaled-tracker)
           // org. Inert off-cloud. Throws EntitlementExceededError otherwise.
           await entitlementsService.assertCanCreateOrganization(input.actorUserId, tx);
-          const organization = await organizationRepository.create({ name: input.name, slug }, tx);
+          const organization = await organizationRepository.create(
+            { name: input.name, slug, contentLanguage: input.contentLanguage },
+            tx,
+          );
           await organizationMembershipRepository.create(
             {
               organizationId: organization.id,
