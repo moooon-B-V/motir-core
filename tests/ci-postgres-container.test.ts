@@ -137,6 +137,8 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-8066's planner-narration coverage lane (Story MOTIR-8060): the story gate
       // drives both step doors and reads the narration back against a real database.
       'ci.yml:story-8060-coverage',
+      // MOTIR-8143's story coverage floor (Story MOTIR-8136): the outage faces.
+      'ci.yml:story-8136-coverage',
       'ci.yml:test',
     ]);
   });

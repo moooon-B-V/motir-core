@@ -14,6 +14,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { readAskOutcome } from '@/lib/planning/askResult';
+import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { debugLandingService } from '@/lib/services/debugLandingService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -375,6 +376,8 @@ async function settleMidRun(args: {
   session: PlanChangeSessionDto;
   ctx: ProjectContext;
   address: { sessionId: string };
+  /** The settled job's raw result — read only for the outage flag (MOTIR-8141). */
+  result: unknown;
 }): Promise<AskSettleResult> {
   const { jobId, turn, outcome, session, ctx, address } = args;
   const runJobId = turn.runJobId!;
@@ -498,7 +501,13 @@ async function settleMidRun(args: {
   // anything else is not an offer core can honour, and is dropped.
   const forwardOffer = outcome.offerForward?.text === turn.body ? turn.body : null;
   const updated = await planChangeSessionsService.appendAnswerTurn(
-    { jobId, body: outcome.answer, citations: outcome.citations, forwardOffer },
+    {
+      jobId,
+      body: outcome.answer,
+      citations: outcome.citations,
+      forwardOffer,
+      codeUnreadable: readCodeUnreadable(args.result) === 'answered' ? 'answered' : null,
+    },
     ctx,
     address,
   );
@@ -891,7 +900,7 @@ export const aiAskService = {
     // turn typed during a run can never reach `planChangeSessionsService.submit`
     // and open a SECOND planning job on a thread that already has one.
     if (turn.runJobId && (outcome.intent === 'plan_change' || outcome.intent === 'ask')) {
-      return settleMidRun({ jobId, turn, outcome, session, ctx, address });
+      return settleMidRun({ jobId, turn, outcome, session, ctx, address, result: job.result });
     }
 
     if (outcome.intent === 'plan_change') {
@@ -953,7 +962,13 @@ export const aiAskService = {
     if (!outcome.answer) return { outcome: 'silent', session };
 
     const updated = await planChangeSessionsService.appendAnswerTurn(
-      { jobId, body: outcome.answer, citations: outcome.citations },
+      {
+        jobId,
+        body: outcome.answer,
+        citations: outcome.citations,
+        // The answer was given without the code (MOTIR-8141): stored with the turn.
+        codeUnreadable: readCodeUnreadable(job.result) === 'answered' ? 'answered' : null,
+      },
       ctx,
       address,
     );

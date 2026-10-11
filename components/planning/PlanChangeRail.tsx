@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  CodeUnreadableAskNotice,
+  CodeUnreadableDeclinedTurn,
+} from '@/components/planning/CodeUnreadableTurn';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
@@ -851,6 +855,11 @@ export function PlanChangeRail({
               }
               afterConfirm={i > 0 && turns[i - 1]?.confirm === 'new_session'}
               midRun={midRunPropsFor(turn, i, turns, state, onSelectProposal)}
+              outageRetry={
+                latest && turn.id === latest.id && turn.codeUnreadable === 'declined'
+                  ? { onRetry, disabled: busy || userTurns.length === 0 }
+                  : null
+              }
             />
             {/* THE COPIED DIVIDER (AMENDMENT 23 §6; MOTIR-7633 sheet 3), under the
               last turn carried over from the ended session. */}
@@ -1484,6 +1493,9 @@ interface TurnProps {
   afterConfirm: boolean;
   /** The MID-RUN conversation's per-turn inputs (MOTIR-7998). */
   midRun: MidRunTurnProps;
+  /** Try again under a declined outage turn (MOTIR-8141) — null on every turn but the
+   *  latest assistant one. */
+  outageRetry: { onRetry: () => void; disabled: boolean } | null;
 }
 
 /** What a turn needs to draw the mid-run conversation: the mailbox entry its
@@ -1548,6 +1560,7 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
     debugOutcome,
     restartConfirm,
     midRun,
+    outageRetry,
   }: TurnProps) {
     const tc = useTranslations('planningWorkspace.conversation');
     const tr = useTranslations('planningWorkspace.restart');
@@ -1586,6 +1599,11 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
         </div>
       );
     }
+    // THE OUTAGE, DECLINED (MOTIR-8141): a plan-writing turn that wrote nothing because
+    // the code could not be read. The notice alone, never the failure treatment.
+    if (turn.codeUnreadable === 'declined') {
+      return <CodeUnreadableDeclinedTurn retry={outageRetry} />;
+    }
     return (
       <>
         {/* Why a SECOND assistant turn exists, in the passive marker voice. It
@@ -1615,6 +1633,8 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
             ) : undefined
           }
         >
+          {/* An answer given WITHOUT the code carries the notice first (MOTIR-8141). */}
+          {turn.codeUnreadable === 'answered' ? <CodeUnreadableAskNotice /> : null}
           {/* The shipped render path, so a report's `[KEY](motir:<id>)` references
               become the same live `WorkItemRefChip` they are everywhere else —
               never a second inline treatment invented for this surface. THIS IS
