@@ -145,7 +145,7 @@ describe('the final append carries the planner’s briefing into the plan’s su
     expect(row.summary).toBe(ORIGINAL_SUMMARY);
   });
 
-  it('a REVISION append carrying `summary` stores nothing — a revision closes no plan', async () => {
+  it('a REVISION append on a plan no revision re-opened stores nothing — there is no close to ride', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await openPlan(fx, 'job_briefing_revision');
     await append(fx, { jobId: 'job_briefing_revision', proposals: ONE_ADD, final: true });
@@ -163,6 +163,69 @@ describe('the final append carries the planner’s briefing into the plan’s su
     const row = await planRow(planId);
     expect(row.status).toBe('planned');
     expect(row.summary).toBe(ORIGINAL_SUMMARY);
+  });
+
+  // Bug MOTIR-8230 — a revision RE-OPENS its plan (MOTIR-8208), so its final
+  // append CLOSES it through `markPlanned`, and the briefing the revision sends
+  // must reach that close. The route used to forward `summary` only for a
+  // non-revision final append, so the plan kept its first generation's briefing.
+  it('a REVISION’s final append on the plan it re-opened stores the revision’s briefing', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await openPlan(fx, 'job_briefing_reopened');
+    await append(fx, {
+      jobId: 'job_briefing_reopened',
+      proposals: ONE_ADD,
+      final: true,
+      summary: 'The first generation’s briefing.',
+    });
+    await plansService.acquireRevisionLease(planId, fx.ctx, {
+      source: null,
+      harness: 'Motir AI',
+      model: null,
+    });
+    expect((await planRow(planId)).status).toBe('generating');
+
+    const res = await append(fx, {
+      jobId: 'job_briefing_reopened',
+      proposals: [],
+      final: true,
+      revision: true,
+      summary: BRIEFING,
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ planned: true, released: true });
+    const row = await planRow(planId);
+    expect(row.status).toBe('planned');
+    expect(row.summary).toBe(BRIEFING);
+  });
+
+  it('a REVISION’s final append with NO summary keeps the briefing the plan had', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await openPlan(fx, 'job_briefing_reopened_none');
+    await append(fx, {
+      jobId: 'job_briefing_reopened_none',
+      proposals: ONE_ADD,
+      final: true,
+      summary: BRIEFING,
+    });
+    await plansService.acquireRevisionLease(planId, fx.ctx, {
+      source: null,
+      harness: 'Motir AI',
+      model: null,
+    });
+
+    const res = await append(fx, {
+      jobId: 'job_briefing_reopened_none',
+      proposals: [],
+      final: true,
+      revision: true,
+    });
+
+    expect(res.status).toBe(200);
+    const row = await planRow(planId);
+    expect(row.status).toBe('planned');
+    expect(row.summary).toBe(BRIEFING);
   });
 
   it('the briefing and the status are ONE write — a rejected summary leaves the plan `generating`', async () => {
