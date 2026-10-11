@@ -146,6 +146,8 @@ describe('the DTO on the wire', () => {
       position: 'a0',
       doneAt: null,
       doneById: null,
+      textLanguage: null,
+      notesLanguage: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -178,6 +180,8 @@ describe('the DTO on the wire', () => {
       position: 'a0',
       doneAt: null,
       doneById: null,
+      textLanguage: null,
+      notesLanguage: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
