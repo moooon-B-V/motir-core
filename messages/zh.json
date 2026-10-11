@@ -6662,36 +6662,50 @@
       }
     },
     "entrance": {
-      "eyebrow": "用 AI 构建",
-      "headingDefault": "你想如何开始？",
+      "eyebrow": "欢迎使用 Motir",
+      "headingDefault": "Vibe the project",
       "headingCarried": "随时可以开始",
-      "subheadDefault": "描述你想构建的东西。Motir 会与你一起规划，然后由智能体来构建。",
+      "subheadDefault": "你带来想法，Motir 交付整个项目：计划、设计、构建、文档，以及它如何一步步成形的完整经过。",
       "subheadCarried": "我们保留了你最初的想法。如果愿意，可以补充更多，然后继续。",
       "howItWorks": "了解 Motir 的工作方式",
-      "ideaLabel": "你的想法",
+      "ideaLabel": "你在构建什么？",
       "carriedLabel": "沿用你的想法",
       "placeholder": "描述你想构建的东西——面向谁、人们应该能做的核心事情，以及任何必备功能。不必追求完美——接下来我们会追问细节。",
-      "startCta": "开始规划",
+      "startCta": "开始",
       "continueCta": "沿用这个想法继续",
-      "hintDefault": "可以从一个粗略的想法开始——发现对话会追问后续问题。",
+      "hintDefault": "几句话就够了，剩下的 Motir 会来问。",
       "hintCarried": "继续之前可以补充或完善任何内容——接下来交给发现对话。",
       "or": "或",
-      "importTitle": "我已有一个项目——迁移它",
-      "importDesc": "连接你的代码仓库，Motir 会读取你的代码，然后在现有基础上进行规划。你也可以从 Jira、Linear 或 Plane 导入现有的工作项。",
-      "importCta": "迁移"
+      "importTitle": "已经有项目了？",
+      "importDesc": "在改动任何东西之前，Motir 会先读懂你的代码、任务和历史，再规划下一步。发布什么由你决定。",
+      "importCta": "它同样可以 Vibe"
     },
     "import": {
       "title": "导入现有项目",
-      "body": "连接代码仓库并从 Jira、Linear 或 Plane 导入你的工作项即将推出。目前，你可以用 AI 开始一个新项目。",
+      "body": "连接代码仓库并从 Jira、Linear 或 Plane 导入你的工作项即将推出。目前，你可以从你的想法开始一个新项目。",
       "back": "返回开始"
     },
     "howItWorks": {
-      "title": "Motir 的工作方式",
-      "body": "完整的流程介绍——想法 → 规划 → 由智能体构建——即将推出。目前，你可以先从你的想法开始，Motir 会在过程中追问后续问题。",
-      "back": "返回开始"
+      "title": "AI 做事，你拍板。",
+      "body": "你带来想法。Motir 会一直问，直到弄明白为止，然后一步步做出计划、设计、产品和文档，全程公开透明，凡是该由你做的选择，它都会停下。",
+      "back": "返回开始",
+      "sections": {
+        "say": {
+          "title": "说出你想要什么",
+          "body": "几句话，或者一堆零散的想法都行。Motir 会一直问，直到弄明白为止。"
+        },
+        "watch": {
+          "title": "看着它逐步成形",
+          "body": "计划、设计、产品和文档一步步做出来，全程公开透明。"
+        },
+        "decide": {
+          "title": "你来决定",
+          "body": "每一部分都会回到你手上，供你查看、试用和批准。发布什么，始终由你掌控。"
+        }
+      }
     },
     "connectGate": {
-      "title": "尚未配置 AI 规划",
+      "title": "规划尚未连接",
       "body": "规划运行在 Motir Cloud 上；此自托管工作区尚未建立连接。",
       "cta": "连接 Motir AI"
     },
@@ -8088,6 +8102,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "把你的项目带进来",
+      "lede": "连接 Jira、Linear 或 Plane，Motir 会把你的工作项迁移过来，从你现在的进度出发规划下一步。"
+    },
     "chrome": {
       "title": "导入工作项",
       "titleInto": "导入工作项 · 到 {project}",
@@ -8330,7 +8348,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "迁移现有项目",
-      "planAi": "用 AI 规划"
+      "planAi": "改为从一个想法开始"
+    },
+    "hero": {
+      "headline": "已经有项目了？",
+      "lede": "在改动任何东西之前，Motir 会先读懂你的代码、任务和历史，再规划下一步。它负责运转项目，由你决定发布什么。"
     },
     "rail": {
       "title": "你的迁移",
@@ -8396,8 +8418,8 @@
     "decision": {
       "eyebrow": "设置完成",
       "heading": "你的代码库已进入 Motir",
-      "body": "现在用 AI 规划项目，或先完成稍后从项目中规划。",
-      "planNow": "现在用 AI 规划",
+      "body": "Motir 现在就可以规划下一步，你也可以先完成，稍后从项目中规划。发布什么由你决定。",
+      "planNow": "现在规划我的项目",
       "finishLater": "完成——稍后规划"
     },
     "resume": {
