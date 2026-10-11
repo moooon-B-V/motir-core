@@ -105,6 +105,14 @@ export const JOB_KINDS = [
   // `context.guideContext`. It returns ONE `guideTurn` and writes nothing; core
   // lands its actions (MOTIR-7470). Mirror of the closed motir-ai enum.
   'guide_work_item',
+  // `sharpen_turn` (Task MOTIR-1101 — MOTIR-8176 handler / MOTIR-8181 dispatch) —
+  // ONE turn of a Sharpen grilling session on a plan or one work item. Core
+  // submits one per person action (`aiSharpenService`), carrying the scope, the
+  // transcript, the STORED settled answers and assumptions and the action as
+  // `context.sharpen`. It returns ONE `sharpenTurn`; at a session end the handler
+  // itself writes the settled answers back through `PUT
+  // /api/internal/ai/plan-sharpening`. Mirror of the closed motir-ai enum.
+  'sharpen_turn',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
@@ -226,6 +234,67 @@ export interface BugAnalysisContext {
   confidentialTerms?: string[];
 }
 
+/** The four grilling branches a Sharpen question belongs to (motir-ai's closed set). */
+export type GrillingBranch = 'workflow' | 'alternative' | 'non_happy' | 'technical_thread';
+
+/** What the person did on a Sharpen turn. `start` opens a session. */
+export type SharpenAction = 'start' | 'answer' | 'own_words' | 'skip' | 'you_decide' | 'stop';
+
+/** One pickable reading of a Sharpen question; ids are assigned by motir-ai's code. */
+export interface SharpenReading {
+  id: string;
+  label: string;
+  detail: string;
+  recommended: boolean;
+}
+
+/** The one question a Sharpen turn asks. */
+export interface SharpenQuestion {
+  id: string;
+  text: string;
+  topic: GrillingBranch;
+  /** The prior answer this question narrows from, or null. */
+  because: string | null;
+  /** `technical_thread` only: the person's own words that raised it. */
+  quote: string | null;
+  readings: SharpenReading[];
+}
+
+/** An answer the PERSON settled. */
+export interface SettledAnswer {
+  questionId: string;
+  question: string;
+  answer: string;
+  topic: GrillingBranch;
+  readingId: string | null;
+  source: 'person';
+}
+
+/** An assumption the PLANNER recorded for a skipped or "you decide" question. */
+export interface SharpenAssumption {
+  questionId: string;
+  question: string;
+  recommendation: string;
+  why: string;
+  source: 'planner';
+}
+
+/** `context.sharpen` — one Sharpen turn as a `sharpen_turn` job reads it. */
+export interface SharpenJobContext {
+  scope: { kind: 'plan' | 'work_item'; ref: string };
+  /** The transcript so far, oldest first, EXCLUDING the action below. */
+  turns: { role: 'person' | 'planner'; action: SharpenAction | null; body: string }[];
+  settled: SettledAnswer[];
+  assumptions: SharpenAssumption[];
+  /** The question the action answers; null for `start`. */
+  pendingQuestion: SharpenQuestion | null;
+  action: SharpenAction;
+  /** `answer` only. */
+  readingId?: string;
+  /** `own_words` only. */
+  text?: string;
+}
+
 export interface JobContextBag {
   prompt?: string | null;
   rootItemKey?: string | null;
@@ -320,6 +389,10 @@ export interface JobContextBag {
   // temporary list) and the conversation so far, read fresh per turn. Built by
   // `buildGuideContext` (lib/ai/guideWorkItem.ts), whose type is the wire shape.
   guideContext?: GuideContext;
+  // The ONE Sharpen turn a `sharpen_turn` job takes (Task MOTIR-1101 · MOTIR-8181
+  // producer ↔ MOTIR-8176 consumer) — the wire shape motir-ai's `parseSharpenInput`
+  // reads. Built from the session's STORED state, never from a client body.
+  sharpen?: SharpenJobContext;
   // The work-item context a `generate_explanation` job (8.8.11) drafts an
   // explanation FROM — the title / description / type / parent the "Draft with
   // AI" affordance (8.8.12) sends. Loosely typed (the reserved-hole convention,
@@ -576,6 +649,10 @@ export interface ResultEnvelope {
   // MOTIR-7463) — that kind only. Typed `unknown` for the same reason: untrusted
   // model output, read only through `parseGuideTurn` (lib/ai/guideWorkItem.ts).
   guideTurn?: unknown;
+  // The ONE Sharpen turn a `sharpen_turn` job produced (Task MOTIR-1101 ·
+  // MOTIR-8176) — that kind only. Typed `unknown` for the same reason: untrusted
+  // model output, read only through `parseSharpenTurn` (lib/ai/sharpenTurn.ts).
+  sharpenTurn?: unknown;
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';

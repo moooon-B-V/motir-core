@@ -140,6 +140,19 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // Task MOTIR-1101 · MOTIR-8180 — a Sharpen session's `sharpen_turn` jobs.
+    // ⚠️ BEFORE `E2E_TEST_AI_JOBS`, and the order is load-bearing: both seams
+    // answer `/v1/jobs`, undici tries intercepts in registration order, the jobs
+    // seam accepts any kind, and this one claims only `sharpen_turn` submits and
+    // the ids it minted.
+    flag: 'E2E_TEST_SHARPEN',
+    message: 'motir-ai Sharpen (sharpen_turn) seam mocked.',
+    install: async (agent) => {
+      const { installSharpenBoundaryMock } = await import('@/lib/test-sharpen-mock');
+      installSharpenBoundaryMock(agent);
+    },
+  },
+  {
     flag: 'E2E_TEST_AI_JOBS',
     message: 'motir-ai jobs seam mocked.',
     install: async (agent) => {

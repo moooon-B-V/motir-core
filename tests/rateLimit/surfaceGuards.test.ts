@@ -781,6 +781,9 @@ describe('the routes are actually WIRED to the guards', () => {
     // target is a PLAN id rather than a work-item key, which changes nothing
     // about what it costs: it dispatches a model job.
     'app/api/ai/revise/route.ts',
+    // The SHARPEN door (Task MOTIR-1101 · MOTIR-8181): open, answer, skip,
+    // you-decide and stop each submit a `sharpen_turn` model job.
+    'app/api/ai/sharpen/route.ts',
     // A change forwarded after the walk finished becomes ONE revision job, so it
     // spends provider money like the revise door it reuses (MOTIR-7997).
     'app/api/ai/plan-change/session/late-changes/route.ts',
@@ -833,6 +836,10 @@ describe('the routes are actually WIRED to the guards', () => {
     // The revision stream RELAYS a job already paid for at its submit door —
     // the same reason every other `[jobId]/stream` in this list is here.
     'app/api/ai/revise/[jobId]/stream/route.ts',
+    // Sharpen's session READ and its settle (MOTIR-8181): a database read, and a
+    // job read back and stored — the guide settle precedent exactly.
+    'app/api/ai/sharpen/[sessionId]/route.ts',
+    'app/api/ai/sharpen/settle/route.ts',
   ];
 
   async function aiRoutes(): Promise<string[]> {

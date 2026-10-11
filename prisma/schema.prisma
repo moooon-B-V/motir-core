@@ -378,6 +378,10 @@ model User {
   createdPlanChangeSessions        PlanChangeSession[]           @relation("PlanChangeSessionCreatedBy")
   endedPlanChangeSessions          PlanChangeSession[]           @relation("PlanChangeSessionEndedBy")
   authoredPlanChangeTurns          PlanChangeTurn[]              @relation("PlanChangeTurnAuthor")
+  // Sharpen sessions this user opened (cascade: the session is theirs alone) and
+  // the turns they authored (set null). Task MOTIR-1101 · MOTIR-8182.
+  createdSharpenSessions           SharpenSession[]              @relation("SharpenSessionCreatedBy")
+  authoredSharpenTurns             SharpenTurn[]                 @relation("SharpenTurnAuthor")
   // Mid-run mailbox entries this user attached to a RUNNING planning job
   // (Story MOTIR-4054 · MOTIR-4067). SetNull, the same actor semantics as the
   // turn above — a departed author leaves the record of what was said.
@@ -1662,6 +1666,9 @@ model Workspace {
   // Workspace-scoped tenant data — cascade with the workspace.
   planChangeSessions          PlanChangeSession[]
   planChangeTurns             PlanChangeTurn[]
+  // Sharpen sessions + their turns (Task MOTIR-1101 · MOTIR-8182). Cascade.
+  sharpenSessions             SharpenSession[]
+  sharpenTurns                SharpenTurn[]
   // The BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) — what a user typed
   // while a planning job was running, and the stop that ends it.
   // Workspace-scoped tenant data; cascade with the workspace.
@@ -2129,6 +2136,8 @@ model Project {
   // `PlanChangeSession.@@unique([projectId, scopeKey])`, which is why this is a
   // list rather than the former `?` one-to-one. Cascade.
   planChangeSessions          PlanChangeSession[]
+  // Sharpen sessions in this project (Task MOTIR-1101 · MOTIR-8182). Cascade.
+  sharpenSessions             SharpenSession[]
   // The planning-target leases open in this project (Story MOTIR-2786 ·
   // MOTIR-2787). Cascade with the project.
   planTargetLocks             PlanTargetLock[]
@@ -3237,7 +3246,9 @@ model WorkItem {
   // issues may point at one work item (MOTIR-4932's manual link), one issue at
   // most one. SetNull on the child: a deleted bug leaves the issue row with a
   // null pointer, which is how the reconciler tells "deleted" from "never filed".
-  monitorIssues MonitorIssue[]
+  monitorIssues   MonitorIssue[]
+  /// Sharpen sessions about this item (Task MOTIR-1101 · MOTIR-8182). Cascade.
+  sharpenSessions SharpenSession[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -7161,24 +7172,24 @@ enum PlanSessionEndReason {
 /// untouched. The lifecycle timestamps + decider ARE the history surface (when
 /// planned / when decided / by whom). Workspace-scoped tenant data (RLS).
 model Plan {
-  id             String                  @id @default(cuid())
-  workspaceId    String                  @map("workspace_id")
-  projectId      String                  @map("project_id")
-  status         PlanStatus              @default(generating)
+  id                   String                  @id @default(cuid())
+  workspaceId          String                  @map("workspace_id")
+  projectId            String                  @map("project_id")
+  status               PlanStatus              @default(generating)
   /// A short label for the plan — typically the idea/prompt the generation came from.
-  title          String?
+  title                String?
   /// Longer human summary of what the plan proposes (Markdown), when distinct from the title.
-  summary        String?                 @db.Text
+  summary              String?                 @db.Text
   /// AI-suggested product/project name (MOTIR-1554/1551) — set on the FINAL
   /// plan-proposals append, and ONLY by the onboarding generation. Consumed at
   /// approve to rename a still-provisional draft project. Null otherwise.
-  productName    String?                 @map("product_name")
+  productName          String?                 @map("product_name")
   /// The motir-ai generation job that produced this plan, for provenance.
-  sourceJobId    String?                 @map("source_job_id")
+  sourceJobId          String?                 @map("source_job_id")
   /// WHY this plan was started (MOTIR-916) — `user` (someone clicked) or
   /// `cadence` (the auto-plan watcher fired it when the ready set drained).
   /// Set at submit; never changes afterwards.
-  origin         PlanOrigin              @default(user)
+  origin               PlanOrigin              @default(user)
   /// WHO ASKED for this plan (MOTIR-2986) — the person whose request produced
   /// it, as opposed to `decidedById`'s who APPROVED it and `authorSource`'s
   /// which AGENT wrote it. A plan has up to three parties and they are commonly
@@ -7190,7 +7201,7 @@ model Plan {
   /// person a request they never made. The requester is written ⟺ a person
   /// actually asked (`origin = 'user'`); a cadence plan is identified by its
   /// `origin`, not by a fabricated requester.
-  createdById    String?                 @map("created_by_id")
+  createdById          String?                 @map("created_by_id")
   /// WHO authored this plan (MOTIR-2986), as opposed to `origin`'s WHY,
   /// `createdById`'s WHO ASKED and `sourceJobId`'s WHICH JOB — the
   /// `source · harness · model` triple
@@ -7203,21 +7214,21 @@ model Plan {
   /// SERVER-SET at the write seam — `mcp` from the `create_plan` MCP tool, the
   /// same discipline `create_work_item` applies so an agent cannot claim
   /// `native`/`manual`. NEVER a caller field.
-  authorSource   WorkItemPlanningSource? @map("author_source")
+  authorSource         WorkItemPlanningSource? @map("author_source")
   /// The authoring agent's harness, SELF-REPORTED at `create_plan`
   /// (`plannedWithHarness`) — free text by Decision 2, stored as-supplied
   /// (trimmed, empty → null). Null on every plan Motir's own generator produced:
   /// the generator path is deliberately not retrofitted here (MOTIR-2996).
-  authorHarness  String?                 @map("author_harness")
+  authorHarness        String?                 @map("author_harness")
   /// The authoring agent's model, SELF-REPORTED at `create_plan`
   /// (`plannedWithModel`) — free text, same rules as `authorHarness`.
-  authorModel    String?                 @map("author_model")
-  createdAt      DateTime                @default(now()) @map("created_at")
+  authorModel          String?                 @map("author_model")
+  createdAt            DateTime                @default(now()) @map("created_at")
   /// Set when generation completes (→ `planned`).
-  plannedAt      DateTime?               @map("planned_at")
+  plannedAt            DateTime?               @map("planned_at")
   /// Set on approve/decline, with the deciding actor.
-  decidedAt      DateTime?               @map("decided_at")
-  decidedById    String?                 @map("decided_by_id")
+  decidedAt            DateTime?               @map("decided_at")
+  decidedById          String?                 @map("decided_by_id")
   /// WHY this plan ended, for the three histories `declined` now covers
   /// (MOTIR-3189). `reviewed` — a person read a finished plan and said no.
   /// `discarded` — a person ended a plan that never finished generating.
@@ -7239,14 +7250,14 @@ model Plan {
   /// NULL is not a fourth reason: every row written before this column existed
   /// reads null, so a consumer treats it as "not recorded" and falls back to the
   /// status. Never set on `approved` — an approval has one history.
-  decisionReason PlanDecisionReason?     @map("decision_reason")
+  decisionReason       PlanDecisionReason?     @map("decision_reason")
   /// The planning SESSION this plan belongs to (AMENDMENT 17 §5) — set at
   /// creation on every author path and NEVER re-pointed; a revision keeps it
   /// (only `sourceJobId` moves). Closes AMENDMENT 16 D5's `lastJobId` lookup.
   /// NULLABLE AT THE DATABASE only so a build predating this column can still
   /// write a plan during a rollout; "every plan has a session" is enforced by
   /// the author paths (MOTIR-6022) and the MOTIR-6020 backfill.
-  sessionId      String?                 @map("session_id")
+  sessionId            String?                 @map("session_id")
   /// WHEN anything last happened to this plan while it was being written
   /// (Story MOTIR-7820 · MOTIR-7822): stamped by every planner step signal and
   /// by every content write (create, append, deepen, edit, correction,
@@ -7254,7 +7265,15 @@ model Plan {
   /// DECISION (`planned` / `approved` / `declined`) is not activity and does not
   /// stamp it. What tells a stalled plan from a busy one — `createdAt` and the
   /// decision timestamps cannot, because a plan records nothing between them.
-  lastActivityAt DateTime                @default(now()) @map("last_activity_at")
+  lastActivityAt       DateTime                @default(now()) @map("last_activity_at")
+  /// The SHARPENED requirement (Task MOTIR-1101 · MOTIR-8183) — the answers a
+  /// person settled in a Sharpen session on this plan, plus the planner's marked
+  /// assumptions for the questions they skipped or left to it, written by the
+  /// write-back door (`planSharpeningService`) as a FULL replace each call. The
+  /// shape is `SharpenedRequirementDto` (`lib/dto/plans.ts`): the six
+  /// `SubmittedRequirement` parts, `plannerAssumptions` and `settledAt`. NULL
+  /// means nobody sharpened this plan — every plan written before the column.
+  sharpenedRequirement Json?                   @map("sharpened_requirement")
 
   workspace         Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project           Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -7278,6 +7297,8 @@ model Plan {
   /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
   /// nothing — the restore is the release path's job, not the FK's.
   targetLocks       PlanTargetLock[]
+  /// Sharpen sessions about this plan (Task MOTIR-1101 · MOTIR-8182). Cascade.
+  sharpenSessions   SharpenSession[]
 
   @@index([workspaceId])
   @@index([projectId, createdAt])
@@ -9188,6 +9209,136 @@ model PlanChangeTurn {
   @@index([sessionId, seq])
   @@index([workspaceId])
   @@map("plan_change_turn")
+}
+
+/// Is a Sharpen session about a PLAN or ONE committed WORK ITEM (Task MOTIR-1101 · MOTIR-8182).
+enum SharpenScopeKind {
+  plan
+  work_item
+
+  @@map("sharpen_scope_kind")
+}
+
+/// A Sharpen session is OPEN (waiting on the person or on a turn) or ENDED.
+enum SharpenSessionStatus {
+  open
+  ended
+
+  @@map("sharpen_session_status")
+}
+
+/// WHY a Sharpen session ended — nothing was undetermined, the planner ran out of
+/// questions, or the person stopped it.
+enum SharpenEndReason {
+  nothing_to_ask
+  finished
+  stopped
+
+  @@map("sharpen_end_reason")
+}
+
+/// Who wrote a Sharpen turn — the PERSON (an action) or the PLANNER (a job result).
+enum SharpenTurnRole {
+  person
+  planner
+
+  @@map("sharpen_turn_role")
+}
+
+/// What the person did on a Sharpen turn.
+enum SharpenAction {
+  start
+  answer
+  own_words
+  skip
+  you_decide
+  stop
+
+  @@map("sharpen_action")
+}
+
+/// A SHARPEN session (Task MOTIR-1101 · Subtask MOTIR-8182) — one person's
+/// grilling conversation about WHAT a plan or one committed work item is, one
+/// question at a time. A dedicated table rather than a `plan_change_session`
+/// origin: that model is scoped by work-item keys, has no plan scope, and its
+/// `origin` / turn `intent` enums are read by the planning, guide and
+/// conversation doors.
+///
+/// Exactly ONE of `planId` / `workItemId` is set, and it matches `scopeKind`
+/// (a CHECK in the migration). ONE OPEN session per person per target is held
+/// by two partial unique indexes (`… WHERE status = 'open'`), so two concurrent
+/// "Sharpen" clicks can never open two. The JSON columns hold motir-ai's
+/// `SharpenTurnResult` pieces and are OPAQUE here: the door's service and DTO
+/// (MOTIR-8181) type them. Workspace-scoped by RLS.
+model SharpenSession {
+  id              String               @id @default(cuid())
+  workspaceId     String               @map("workspace_id")
+  projectId       String               @map("project_id")
+  /// The person who opened it — the session is theirs alone, so it goes with them.
+  createdById     String               @map("created_by_id")
+  scopeKind       SharpenScopeKind     @map("scope_kind")
+  planId          String?              @map("plan_id")
+  workItemId      String?              @map("work_item_id")
+  status          SharpenSessionStatus @default(open)
+  endReason       SharpenEndReason?    @map("end_reason")
+  /// The question waiting on the person, or null.
+  pendingQuestion Json?                @map("pending_question")
+  /// The answers the person settled so far — the cumulative set.
+  settled         Json                 @default("[]")
+  /// The planner-marked assumptions for skipped / "you decide" questions.
+  assumptions     Json                 @default("[]")
+  /// The write-back outcome motir-ai reported when the session ended, or null.
+  writeBack       Json?                @map("write_back")
+  lastActivityAt  DateTime             @default(now()) @map("last_activity_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User          @relation("SharpenSessionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  plan      Plan?         @relation(fields: [planId], references: [id], onDelete: Cascade)
+  workItem  WorkItem?     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  turns     SharpenTurn[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([planId])
+  @@index([workItemId])
+  @@map("sharpen_session")
+}
+
+/// One TURN of a Sharpen session (Task MOTIR-1101 · Subtask MOTIR-8182) — a
+/// person's action, or the planner's result as motir-ai returned it. `seq` is
+/// gapless per session (`UNIQUE (session_id, seq)`, allocated under the
+/// session's row lock), and a job settles into at most one planner turn (a
+/// partial unique on `(session_id, job_id) WHERE role = 'planner'`). Carries its
+/// own `workspace_id` so its own RLS policy gates it — RLS does not traverse FKs.
+model SharpenTurn {
+  id          String          @id @default(cuid())
+  workspaceId String          @map("workspace_id")
+  sessionId   String          @map("session_id")
+  seq         Int
+  role        SharpenTurnRole
+  /// The person's action; null on a planner turn.
+  action      SharpenAction?
+  body        String          @db.Text
+  /// The reading the person picked (`answer` only).
+  readingId   String?         @map("reading_id")
+  /// The motir-ai job this turn submitted (person) or settled from (planner) —
+  /// an OPAQUE job token, not an FK (the `plan.source_job_id` precedent).
+  jobId       String?         @map("job_id")
+  /// The planner's result as returned, or null.
+  record      Json?
+  authorId    String?         @map("author_id")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session   SharpenSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  author    User?          @relation("SharpenTurnAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, seq])
+  @@index([workspaceId])
+  @@map("sharpen_turn")
 }
 
 /// THE BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) — what the user typed

@@ -10,6 +10,7 @@ import {
   E2E_GITHUB_WEBHOOK_SECRET,
   E2E_PROVISIONING_ORG,
 } from './tests/e2e/_helpers/github-const';
+import { E2E_CORE_CALLBACK_SECRET } from './tests/e2e/_helpers/log-bug-as-ai';
 import { E2E_LEGAL_DOCUMENTS_JSON } from './tests/e2e/_helpers/legal-manifest';
 import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
 
@@ -76,6 +77,10 @@ const PORT = new URL(BASE_URL).port || '3100';
 const MOTIR_AI_URL = 'http://motir-ai.e2e.local';
 const MOTIR_AI_BILLING_FIXTURE_PATH = path.resolve('/tmp/motir-test-billing-fixture.json');
 const MOTIR_AI_JOBS_FIXTURE_PATH = path.resolve('/tmp/motir-cloud-ai-jobs-fixture.json');
+// The SHARPEN seam's control file (Task MOTIR-1101 · MOTIR-8180): the spec writes
+// each target's script, the server's fake appends the submits and write-backs.
+const MOTIR_AI_SHARPEN_CONTROL_PATH = path.resolve('/tmp/motir-cloud-sharpen-control.json');
+process.env['MOTIR_AI_SHARPEN_CONTROL_PATH'] ??= MOTIR_AI_SHARPEN_CONTROL_PATH;
 
 // ── The boundary fixtures the specs promoted by MOTIR-2849 drive ─────────────
 // Carried over from `playwright.acceptance.config.ts` verbatim in intent: each
@@ -242,6 +247,13 @@ export default defineConfig({
         MOTIR_AI_BILLING_FIXTURE_PATH,
         E2E_TEST_AI_JOBS: '1',
         MOTIR_AI_JOBS_FIXTURE_PATH,
+        // The Sharpen seam (MOTIR-8180). An ending turn makes core's REAL
+        // write-back call, `PUT /api/internal/ai/plan-sharpening`, so the server
+        // needs the ai → core service bearer that route checks — the same literal
+        // the acceptance lane sets for its log-bug walk.
+        E2E_TEST_SHARPEN: '1',
+        MOTIR_AI_SHARPEN_CONTROL_PATH,
+        CORE_CALLBACK_SECRET: E2E_CORE_CALLBACK_SECRET,
         MOTIR_PUBLIC_SITE_URL: 'https://public.motir.e2e',
         // ⚠️ THE TENANT BASE DOMAIN, and WITHOUT IT `cloud-public-address-release`
         // CANNOT REACH THE STATES IT ASSERTS (Story MOTIR-4451 · MOTIR-4457).

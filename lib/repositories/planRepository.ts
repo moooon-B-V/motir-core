@@ -527,6 +527,26 @@ export const planRepository = {
     return tx.plan.update({ where: { id }, data });
   },
 
+  /**
+   * Store the requirement a Sharpen session settled on this plan (Task MOTIR-1101 ·
+   * MOTIR-8183) — a FULL replace, never a merge: the write-back always sends the
+   * cumulative state. `null` clears it. The value is stored as given — the
+   * service owns its shape (`SharpenedRequirementDto`).
+   */
+  async setSharpenedRequirement(
+    id: string,
+    value: object | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.plan.update({
+      where: { id },
+      data: {
+        sharpenedRequirement: value === null ? Prisma.DbNull : (value as Prisma.InputJsonValue),
+      },
+      select: { id: true },
+    });
+  },
+
   /** Stamp the plan's `lastActivityAt` (Story MOTIR-7820 · MOTIR-7822) — called
    *  inside the transaction of every step signal and every content write. */
   async touchActivity(id: string, at: Date, tx: Prisma.TransactionClient): Promise<void> {

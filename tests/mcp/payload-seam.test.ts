@@ -1061,9 +1061,16 @@ describe('the work-loop payloads', () => {
       decisionReason: 'discarded' as const,
       // The planning SESSION (MOTIR-6022) — the same MCP extension point.
       sessionId: 'session-1',
+      // What a Sharpen session settled (MOTIR-1101) — the same extension point.
+      sharpenedRequirement: {
+        outcome: 'Owners can see what changed.',
+        plannerAssumptions: [{ question: 'Who reads it?', recommendation: 'Owners only.' }],
+        settledAt: '2026-10-11T00:00:00.000Z',
+      },
       items: [{ id: 'p-1' }],
     } as never);
     expect(plan.sessionId).toBe('session-1');
+    expect(plan.sharpenedRequirement?.outcome).toBe('Owners can see what changed.');
     expect(plan.decidedById).toBe('user-1');
     expect(plan.createdById).toBe('requester-1');
     expect(plan.authorSource).toBe('mcp');

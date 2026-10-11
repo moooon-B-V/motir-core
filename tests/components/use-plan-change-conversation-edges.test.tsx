@@ -162,6 +162,7 @@ const MATERIALIZED: PlanWithItemsDto = {
   decidedAt: '2026-07-27T09:05:00.000Z',
   decidedById: 'u1',
   decisionReason: null,
+  sharpenedRequirement: null,
   items: [
     {
       id: 'pi_1',

@@ -3954,91 +3954,113 @@ async function editAddProposal(
       if (!legal) {
         throw new PlanNotInExpectedStatusError(planId, fresh.status, expectedStatus);
       }
-      const item = await planItemRepository.findById(planItemId, tx);
-      if (!item || item.planId !== planId) throw new PlanItemNotFoundError(planItemId);
-      if (item.op !== 'add') {
-        throw new InvalidProposalError(
-          'Only an `add` proposal can be edited; modify/remove target existing items.',
-        );
-      }
-      const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
-      const next = mergeProposedFields(current, input);
-      if (!next.title?.trim()) {
-        throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
-      }
-      // Re-validate sizing on the MERGED result (MOTIR-1433) so a patched-in bad
-      // point/minute value is rejected here, the same as at create.
-      validateProposedSizing(next);
-      // And the STEPS on the MERGED result (MOTIR-4616 · AMENDMENT 14 D3-D4).
-      // MERGED is load-bearing on both axes: a deepen that patches only `kind`
-      // must still be judged against the list the proposal already carries, and
-      // a deepen that patches only `todos` must still be judged against the kind
-      // it already has. Validating the PATCH alone would let a proposal become a
-      // `story` with a checklist in two calls that are each individually legal.
-      validateProposedTodos(
-        next.todos,
-        next.kind ?? DEFAULT_PROPOSED_KIND,
-        proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-      );
-      // And the DIFFICULTY on the MERGED result (MOTIR-6133), for the same
-      // reason: a deepen that patches only `kind` to `story` must still be judged
-      // against the difficulty the proposal already carries.
-      validateProposedDifficulty(
-        next.difficulty,
-        next.kind ?? DEFAULT_PROPOSED_KIND,
-        proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-      );
-      // And the bodies' item links on the MERGED result (bug MOTIR-6494).
-      validateProposedBodyRefs(
-        next,
-        proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-      );
-      await planItemRepository.update(
-        planItemId,
-        { proposedFields: next as unknown as Prisma.InputJsonValue },
-        tx,
-      );
-      // The edit, on the plan's content trail (MOTIR-3535), in the same
-      // transaction as the merge it records — and the row this whole story
-      // exists for: `editAddProposal` merges into `proposedFields` IN PLACE, so
-      // without it a proposal deepened five times is byte-indistinguishable from
-      // one written once.
-      //
-      // ⚠️ WHO acted is decided by `mode`, never by the plan's status: a `planned`
-      // plan is edited both by a person reviewing it (`review`) and by an agent
-      // revising it (`revise`), so the status alone cannot tell them apart.
-      // `deepen` and `revise` take the generation actor (null on a cadence plan,
-      // the agent triple beside it); `review` records that person and NO agent.
-      // Reading the plan's `authorSource` for a review would file a reviewer's
-      // edit under the agent that wrote what they were reviewing.
-      //
-      // The diff records the fields the edit SUPPLIED, not a value diff: the old
-      // side of a proposal is already gone by the time it is written, and the
-      // timeline shows a count rather than values in any case
-      // (`design/ai-planning/design-notes.md` Part X §5).
-      await planRevisionsService.recordRevision(
-        {
-          planId,
-          planItemId,
-          changeKind: 'edited',
-          ...(mode === 'review'
-            ? { changedById: ctx.userId, actor: null }
-            : generationActor(fresh, ctx)),
-          diff: {
-            fields: Object.keys(input),
-            proposalCount: 1,
-            ...(mode === 'revise' ? { revision: true } : {}),
-          },
-        },
-        tx,
-      );
-      // The plan's activity stamp (MOTIR-7822), beside the trail row it mirrors.
-      await planRepository.touchActivity(planId, new Date(), tx);
+      await applyAddProposalEdit(fresh, planItemId, input, ctx, mode, tx);
       const allItems = await planItemRepository.findByPlan(planId, tx);
       return { row: fresh, items: allItems };
     },
   );
   return toPlanWithItemsDto(row, items);
+}
+
+/**
+ * The IN-TRANSACTION half of an `add` proposal edit — the item checks, the
+ * merge, its re-validation, the write and the trail row — split out of
+ * {@link editAddProposal} (Task MOTIR-1101 · Subtask MOTIR-8175) so a caller that
+ * already holds the plan's row lock can apply several edits atomically. The
+ * caller has locked the plan, re-read it as `fresh` and judged its status.
+ *
+ * `sharpen` is a Sharpen write-back placing the answers a PERSON settled into a
+ * proposal's body: recorded under that person, like a `review` edit.
+ */
+async function applyAddProposalEdit(
+  fresh: Plan,
+  planItemId: string,
+  input: UpdateProposalInput,
+  ctx: ServiceContext,
+  mode: AddProposalEditMode | 'sharpen',
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const item = await planItemRepository.findById(planItemId, tx);
+  if (!item || item.planId !== fresh.id) throw new PlanItemNotFoundError(planItemId);
+  if (item.op !== 'add') {
+    throw new InvalidProposalError(
+      'Only an `add` proposal can be edited; modify/remove target existing items.',
+    );
+  }
+  const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
+  const next = mergeProposedFields(current, input);
+  if (!next.title?.trim()) {
+    throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
+  }
+  // Re-validate sizing on the MERGED result (MOTIR-1433) so a patched-in bad
+  // point/minute value is rejected here, the same as at create.
+  validateProposedSizing(next);
+  // And the STEPS on the MERGED result (MOTIR-4616 · AMENDMENT 14 D3-D4).
+  // MERGED is load-bearing on both axes: a deepen that patches only `kind`
+  // must still be judged against the list the proposal already carries, and
+  // a deepen that patches only `todos` must still be judged against the kind
+  // it already has. Validating the PATCH alone would let a proposal become a
+  // `story` with a checklist in two calls that are each individually legal.
+  validateProposedTodos(
+    next.todos,
+    next.kind ?? DEFAULT_PROPOSED_KIND,
+    proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+  );
+  // And the DIFFICULTY on the MERGED result (MOTIR-6133), for the same
+  // reason: a deepen that patches only `kind` to `story` must still be judged
+  // against the difficulty the proposal already carries.
+  validateProposedDifficulty(
+    next.difficulty,
+    next.kind ?? DEFAULT_PROPOSED_KIND,
+    proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+  );
+  // And the bodies' item links on the MERGED result (bug MOTIR-6494).
+  validateProposedBodyRefs(
+    next,
+    proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+  );
+  await planItemRepository.update(
+    planItemId,
+    { proposedFields: next as unknown as Prisma.InputJsonValue },
+    tx,
+  );
+  // The edit, on the plan's content trail (MOTIR-3535), in the same
+  // transaction as the merge it records — and the row this whole story
+  // exists for: `editAddProposal` merges into `proposedFields` IN PLACE, so
+  // without it a proposal deepened five times is byte-indistinguishable from
+  // one written once.
+  //
+  // ⚠️ WHO acted is decided by `mode`, never by the plan's status: a `planned`
+  // plan is edited both by a person reviewing it (`review`) and by an agent
+  // revising it (`revise`), so the status alone cannot tell them apart.
+  // `deepen` and `revise` take the generation actor (null on a cadence plan,
+  // the agent triple beside it); `review` records that person and NO agent.
+  // Reading the plan's `authorSource` for a review would file a reviewer's
+  // edit under the agent that wrote what they were reviewing.
+  //
+  // The diff records the fields the edit SUPPLIED, not a value diff: the old
+  // side of a proposal is already gone by the time it is written, and the
+  // timeline shows a count rather than values in any case
+  // (`design/ai-planning/design-notes.md` Part X §5).
+  await planRevisionsService.recordRevision(
+    {
+      planId: fresh.id,
+      planItemId,
+      changeKind: 'edited',
+      ...(mode === 'review' || mode === 'sharpen'
+        ? { changedById: ctx.userId, actor: null }
+        : generationActor(fresh, ctx)),
+      diff: {
+        fields: Object.keys(input),
+        proposalCount: 1,
+        ...(mode === 'revise' ? { revision: true } : {}),
+        ...(mode === 'sharpen' ? { sharpened: true } : {}),
+      },
+    },
+    tx,
+  );
+  // The plan's activity stamp (MOTIR-7822), beside the trail row it mirrors.
+  await planRepository.touchActivity(fresh.id, new Date(), tx);
 }
 
 /**
@@ -5706,6 +5728,25 @@ export const plansService = {
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'revise');
+  },
+
+  /**
+   * Write a Sharpen write-back's managed blocks into one `add` proposal's body
+   * (Task MOTIR-1101 · Subtask MOTIR-8175) — INSIDE the caller's transaction, so
+   * a plan-scope write-back lands its requirement and every proposal edit
+   * atomically. The same item checks, merge, re-validation and trail row as
+   * every other `add` edit ({@link applyAddProposalEdit}); the caller has
+   * locked the plan row, re-read it as `plan`, judged its status and gated the
+   * actor, and recorded the edit is the person's (no agent triple).
+   */
+  async sharpenProposalBodyInTx(
+    plan: Plan,
+    planItemId: string,
+    descriptionMd: string,
+    ctx: ServiceContext,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await applyAddProposalEdit(plan, planItemId, { descriptionMd }, ctx, 'sharpen', tx);
   },
 
   /**

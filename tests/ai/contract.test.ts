@@ -100,6 +100,10 @@ const CANONICAL_JOB_KINDS = [
   // already in motir-ai's canonical set. Adding it HERE, with the guide door that
   // sends it, closes the drift that card's envelope documented.
   'guide_work_item',
+  // `sharpen_turn` (Task MOTIR-1101 — MOTIR-8176 handler / MOTIR-8181 dispatch);
+  // already in motir-ai's canonical set. Adding it HERE, with the Sharpen door
+  // that sends it, closes the drift that card's envelope documented.
+  'sharpen_turn',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).
