@@ -6888,6 +6888,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "ロードマップに戻る",
+      "breadcrumb": "パンくずリスト",
+      "breadcrumbRoadmap": "ロードマップ",
+      "breadcrumbDirection": "方向性",
+      "kicker": "方向性 · {tier}",
+      "tierName": {
+        "discovery": "発見",
+        "vision": "ビジョン",
+        "feasibility": "実現可能性",
+        "validation": "検証"
+      },
+      "openFullPage": "全画面で開く",
+      "continue": "続行",
+      "close": "閉じる",
+      "loading": "方向性ドキュメントを読み込み中",
+      "errorTitle": "このドキュメントを読み込めませんでした",
+      "errorBodyRetry": "方向性の読み込み中に問題が発生しました。しばらくしてからもう一度お試しください。",
+      "errorBodyClose": "方向性の読み込み中に問題が発生しました。閉じてからもう一度お試しください。",
+      "emptyTitle": "{label}はまだ準備できていません",
+      "emptyTitleFallback": "方向性のこの部分はまだ準備できていません",
+      "emptyBody": "このプロジェクトではこの段階はまだ作成されていません。Motir がチャットでまとめると、ここに表示されます。"
+    },
     "heading": "ロードマップ",
     "subtitle": "{project} のロードマップ",
     "noProjectTitle": "プロジェクトが選択されていません",

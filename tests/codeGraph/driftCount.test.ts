@@ -254,12 +254,49 @@ describe('the PROVIDER SEAM — both hosts back the comparison, and null is neve
     } as unknown as Response;
   }
 
-  it('GitHub returns `behind_by` for a real pair', async () => {
+  it('GitHub returns `ahead_by` for a real pair — the commits on head that base lacks', async () => {
     const provider = await githubProvider();
-    fetchMock.mockResolvedValue(jsonResponse(200, { behind_by: 312, ahead_by: 0 }));
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { status: 'ahead', ahead_by: 312, behind_by: 0 }),
+    );
     await expect(provider.compareCommits('inst', 'acme', 'web', 'base', 'head')).resolves.toEqual({
       behindBy: 312,
     });
+  });
+
+  it('⚠️ the DIRECTION, pinned against a recorded GitHub compare body (MOTIR-8335)', async () => {
+    // Recorded from `GET /repos/moooon-B-V/motir-core/compare/73d4758...ef898ed`,
+    // where `ef898ed` is a child of `73d4758` on `main`: the base is the older
+    // commit (the indexed one) and the head the newer one (the branch head), the
+    // drift sweep's exact order. GitHub counts the commit head has and base lacks
+    // in `ahead_by`, and answers `behind_by: 0`. Reading `behind_by` reported
+    // every GitHub repository as current.
+    const provider = await githubProvider();
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, {
+        url: 'https://api.github.com/repos/moooon-B-V/motir-core/compare/73d4758...ef898ed',
+        status: 'ahead',
+        ahead_by: 1,
+        behind_by: 0,
+        total_commits: 1,
+      }),
+    );
+    await expect(
+      provider.compareCommits('inst', 'moooon-B-V', 'motir-core', '73d4758', 'ef898ed'),
+    ).resolves.toEqual({ behindBy: 1 });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/compare\/73d4758\.\.\.ef898ed$/);
+  });
+
+  it('a pair whose head is BEHIND base counts nothing on head — `ahead_by: 0`, not `behind_by`', async () => {
+    // The reverse order of the recorded pair above: head has no commit base
+    // lacks, so the drift is 0 even though `behind_by` is 1.
+    const provider = await githubProvider();
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { status: 'behind', ahead_by: 0, behind_by: 1, total_commits: 0 }),
+    );
+    await expect(
+      provider.compareCommits('inst', 'moooon-B-V', 'motir-core', 'ef898ed', '73d4758'),
+    ).resolves.toEqual({ behindBy: 0 });
   });
 
   it('⚠️ a 404 is NO COMMON ANCESTOR — null, never 0', async () => {
@@ -290,12 +327,12 @@ describe('the PROVIDER SEAM — both hosts back the comparison, and null is neve
     ).resolves.toMatchObject({ behindBy: null, reason: 'unreachable' });
   });
 
-  it('⚠️ a non-numeric `behind_by` is null — NOT coerced', async () => {
+  it('⚠️ a non-numeric `ahead_by` is null — NOT coerced', async () => {
     // `Number(undefined)` is NaN and `Number(null)` is 0. The second is the one
     // answer this must never invent, so the guard is a type check rather than a
-    // cast.
+    // cast. A `behind_by` alone is not read at all.
     const provider = await githubProvider();
-    fetchMock.mockResolvedValue(jsonResponse(200, { ahead_by: 3 }));
+    fetchMock.mockResolvedValue(jsonResponse(200, { behind_by: 3 }));
     await expect(
       provider.compareCommits('inst', 'acme', 'web', 'base', 'head'),
     ).resolves.toMatchObject({ behindBy: null, reason: 'inexact' });

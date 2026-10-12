@@ -6888,6 +6888,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "Wróć do roadmapy",
+      "breadcrumb": "Ścieżka nawigacji",
+      "breadcrumbRoadmap": "Roadmapa",
+      "breadcrumbDirection": "Kierunek",
+      "kicker": "Kierunek · {tier}",
+      "tierName": {
+        "discovery": "Odkrywanie",
+        "vision": "Wizja",
+        "feasibility": "Wykonalność",
+        "validation": "Walidacja"
+      },
+      "openFullPage": "Otwórz pełną stronę",
+      "continue": "Kontynuuj",
+      "close": "Zamknij",
+      "loading": "Wczytywanie dokumentu kierunku",
+      "errorTitle": "Nie udało się wczytać tego dokumentu",
+      "errorBodyRetry": "Coś poszło nie tak podczas wczytywania Twojego kierunku. Spróbuj ponownie za chwilę.",
+      "errorBodyClose": "Coś poszło nie tak podczas wczytywania Twojego kierunku. Zamknij i spróbuj ponownie.",
+      "emptyTitle": "{label}: jeszcze niegotowe",
+      "emptyTitleFallback": "Ta część Twojego kierunku nie jest jeszcze gotowa",
+      "emptyBody": "Ten poziom nie został jeszcze opracowany dla tego projektu. Pojawi się tutaj, gdy Motir opisze go na czacie."
+    },
     "heading": "Roadmapa",
     "subtitle": "Roadmapa projektu {project}",
     "noProjectTitle": "Nie wybrano projektu",

@@ -6885,6 +6885,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "로드맵으로 돌아가기",
+      "breadcrumb": "탐색 경로",
+      "breadcrumbRoadmap": "로드맵",
+      "breadcrumbDirection": "방향",
+      "kicker": "방향 · {tier}",
+      "tierName": {
+        "discovery": "발견",
+        "vision": "비전",
+        "feasibility": "타당성",
+        "validation": "검증"
+      },
+      "openFullPage": "전체 페이지 열기",
+      "continue": "계속",
+      "close": "닫기",
+      "loading": "방향 문서를 불러오는 중",
+      "errorTitle": "이 문서를 불러오지 못했습니다",
+      "errorBodyRetry": "방향을 읽는 중에 문제가 발생했습니다. 잠시 후 다시 시도하세요.",
+      "errorBodyClose": "방향을 읽는 중에 문제가 발생했습니다. 닫고 다시 시도하세요.",
+      "emptyTitle": "{label}: 아직 준비되지 않았습니다",
+      "emptyTitleFallback": "방향의 이 부분은 아직 준비되지 않았습니다",
+      "emptyBody": "이 프로젝트에서는 이 단계가 아직 작성되지 않았습니다. Motir가 채팅에서 정리하면 여기에 표시됩니다."
+    },
     "heading": "로드맵",
     "subtitle": "{project} 로드맵",
     "noProjectTitle": "선택된 프로젝트 없음",

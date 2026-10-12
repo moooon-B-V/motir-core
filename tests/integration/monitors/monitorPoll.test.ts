@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { registerGitProvider } from '@/lib/git';
+import { githubProvider } from '@/lib/git/providers/github';
+import type { ReleaseContainment, ReleaseContainsMergeInput } from '@/lib/git/types';
 import type { MonitorProvider } from '@/lib/monitors/provider';
 import {
   fakeMonitorProvider,
@@ -18,6 +21,7 @@ import {
 } from '@/lib/services/monitorIngestionService';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { connectRepairRepo, deliveredPr } from '../../helpers/repairFixtures';
 import { makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
 
@@ -372,5 +376,130 @@ describe('the loop guard, through a REAL second poll (Story MOTIR-4931 · MOTIR-
     expect(await adminDb.workItemRevision.count({ where: { workItemId: bug.id } })).toBe(
       revisionsBefore,
     );
+  });
+});
+
+// ── THE FIX-RELEASE GUARD, through a REAL second poll (Bug MOTIR-8330) ────────
+// The issue's latest event names its release (the fake's context read), the done
+// bug has a MERGED delivery, and the repository host is doubled at the registry
+// (the same runtime switch the monitor fake uses) to answer whether that release
+// carries the merge. Everything between — the link, the done category, the
+// delivery rows — is real Postgres.
+describe('the fix-release guard, through a REAL second poll (Bug MOTIR-8330)', () => {
+  const RELEASE = 'web@0123456789abcdef0123456789abcdef01234567';
+  let asked: ReleaseContainsMergeInput[] = [];
+
+  function hostAnswers(answer: ReleaseContainment): void {
+    registerGitProvider({
+      ...githubProvider,
+      async readReleaseContainsMerge(input) {
+        asked.push(input);
+        return answer;
+      },
+    });
+  }
+
+  beforeEach(() => {
+    asked = [];
+  });
+
+  afterEach(() => {
+    registerGitProvider(githubProvider);
+  });
+
+  /** Poll once to file the bug, complete it, and (optionally) deliver it by a merge. */
+  async function doneBug(opts: { merged: boolean }) {
+    const seeded = await seed();
+    fakeMonitorState().issues = [issue('fix', 5)];
+    await monitorIngestionService.pollConnection(seeded.connectionId);
+    const bug = await adminDb.workItem.findFirstOrThrow({
+      where: { projectId: seeded.fx.projectId },
+    });
+    await adminDb.workItem.update({ where: { id: bug.id }, data: { status: 'done' } });
+    const repo = await connectRepairRepo(seeded.fx, 'web');
+    const pr = await deliveredPr(seeded.fx, bug.id, repo, {
+      headRef: 'fix-it',
+      merged: opts.merged,
+      state: opts.merged ? 'closed' : 'open',
+    });
+    return { ...seeded, bug, pr };
+  }
+
+  /** The issue seen again, later, from an event on `release`. */
+  function seenAgain(release: string | null): void {
+    fakeMonitorState().issues = [{ ...issue('fix', 30, { eventCount: 7 }), release }];
+  }
+
+  it('MISSING: an event from a release without the fix files nothing and updates the link', async () => {
+    const { fx, connectionId, bug, pr } = await doneBug({ merged: true });
+    hostAnswers('missing');
+    seenAgain(RELEASE);
+
+    const second = await monitorIngestionService.pollConnection(connectionId);
+
+    expect(second).toMatchObject({ status: 'ok', filed: 0, refiled: 0, updated: 1 });
+    expect(await bugCount(fx.projectId)).toBe(1);
+    expect(asked).toEqual([
+      {
+        installationId: `inst-${fx.workspaceId}`,
+        owner: 'acme',
+        name: 'web',
+        number: pr.number,
+        release: '0123456789abcdef0123456789abcdef01234567',
+      },
+    ]);
+    const link = await adminDb.monitorIssue.findFirstOrThrow();
+    expect(link).toMatchObject({ workItemId: bug.id, eventCount: 7, release: RELEASE });
+  });
+
+  it('CONTAINS: an event from a release WITH the fix re-files relates_to the done bug', async () => {
+    const { fx, connectionId, bug } = await doneBug({ merged: true });
+    hostAnswers('contains');
+    seenAgain(RELEASE);
+
+    const second = await monitorIngestionService.pollConnection(connectionId);
+
+    expect(second).toMatchObject({ status: 'ok', refiled: 1 });
+    expect(await bugCount(fx.projectId)).toBe(2);
+    const link = await adminDb.workItemLink.findFirst({
+      where: { OR: [{ fromId: bug.id }, { toId: bug.id }] },
+    });
+    expect(link).not.toBeNull();
+  });
+
+  it('a done bug with NO merged delivery re-files as today, and the host is never asked', async () => {
+    const { fx, connectionId } = await doneBug({ merged: false });
+    hostAnswers('missing');
+    seenAgain(RELEASE);
+
+    const second = await monitorIngestionService.pollConnection(connectionId);
+
+    expect(second).toMatchObject({ status: 'ok', refiled: 1 });
+    expect(await bugCount(fx.projectId)).toBe(2);
+    expect(asked).toEqual([]);
+  });
+
+  it('an event with NO release re-files as today, and the host is never asked', async () => {
+    const { fx, connectionId } = await doneBug({ merged: true });
+    hostAnswers('missing');
+    seenAgain(null);
+
+    const second = await monitorIngestionService.pollConnection(connectionId);
+
+    expect(second).toMatchObject({ status: 'ok', refiled: 1 });
+    expect(await bugCount(fx.projectId)).toBe(2);
+    expect(asked).toEqual([]);
+  });
+
+  it('a release that names no commit (a semver) re-files as today', async () => {
+    const { fx, connectionId } = await doneBug({ merged: true });
+    hostAnswers('missing');
+    seenAgain('2.4.1');
+
+    const second = await monitorIngestionService.pollConnection(connectionId);
+
+    expect(second).toMatchObject({ status: 'ok', refiled: 1 });
+    expect(await bugCount(fx.projectId)).toBe(2);
+    expect(asked).toEqual([]);
   });
 });

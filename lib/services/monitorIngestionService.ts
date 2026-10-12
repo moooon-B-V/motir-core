@@ -1,4 +1,6 @@
 import type { MonitorIssue } from '@/generated/prisma/client';
+import { getGitProvider } from '@/lib/git';
+import type { GitProviderId, ReleaseContainment } from '@/lib/git/types';
 import { getMonitorProvider } from '@/lib/monitors';
 import { isStillAsFiled } from '@/lib/monitors/asFiled';
 import { MonitorBinderUnavailableError, MonitorProviderCallError } from '@/lib/monitors/errors';
@@ -13,6 +15,7 @@ import {
 } from '@/lib/repositories/monitorIssueRepository';
 import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectionRepository';
 import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
@@ -282,6 +285,113 @@ async function readContextQuietly(
 }
 
 /**
+ * Whether the release an issue's latest event came from carries the merge that
+ * COMPLETED its linked bug (Bug MOTIR-8330) — the read {@link reconcileIssue}
+ * consults before it re-files a done bug.
+ *
+ * `missing` means an event from a build that predates the fix: the old release
+ * still serving in the window between the merge and its deploy. It is the ONLY
+ * answer that changes a decision; `contains` and `unknown` re-file as before.
+ */
+export interface MonitorFixReleaseRead {
+  /** The bug the answer is about — the reconcile acts on it only if the link still
+   *  points there under its row lock. */
+  workItemId: string;
+  /** The commit the latest event's release named. */
+  release: string;
+  containment: ReleaseContainment;
+}
+
+/** A release that names a commit: a bare sha, or `<name>@<sha>`. Anything else
+ *  (a semver, a build number) is not a commit a host can place. */
+const RELEASE_COMMIT = /^[0-9a-f]{7,40}$/i;
+
+export function releaseCommitOf(release: string | null): string | null {
+  if (!release) return null;
+  const candidate = release.slice(release.lastIndexOf('@') + 1).trim();
+  return RELEASE_COMMIT.test(candidate) ? candidate : null;
+}
+
+/**
+ * Read {@link MonitorFixReleaseRead} for one issue — OUTSIDE any row lock, like the
+ * context read it builds on, because it is up to two host calls per merged pull
+ * request.
+ *
+ * `null` — the answer the reconcile reads as "nothing known", and re-files on —
+ * whenever there is nothing to ask: no context read this visit (an event with no
+ * release is the card's own carve-out), a release that names no commit, an issue
+ * with no linked bug, a bug that is not done, or a done bug with no MERGED
+ * delivery (completed by hand or by an approval).
+ *
+ * ⚠️ ONE MERGE THE RELEASE LACKS IS ENOUGH TO HOLD. A bug delivered by several pull
+ * requests is fixed in production only once the release carries all of them, so a
+ * single `missing` answers `missing`; every member `contains` answers `contains`,
+ * and anything in between is `unknown`. A pull request in a repository the release
+ * is not built from answers `unknown` (the host does not know the commit), which
+ * is why one is not enough to call the whole set `contains`.
+ *
+ * ⚠️ IT NEVER THROWS. The host's own failures are `unknown` by the seam's contract;
+ * a failure here (an unregistered provider, a store read) is caught and read as
+ * `null`, so a poll never loses an issue to this courtesy read.
+ */
+async function readFixReleaseQuietly(
+  connection: MonitorReconcileConnection,
+  issue: NormalizedMonitorIssue,
+  read: MonitorContextRead,
+  doneKeys: () => Promise<ReadonlySet<string>>,
+): Promise<MonitorFixReleaseRead | null> {
+  if (read.outcome !== 'read') return null;
+  const release = releaseCommitOf(read.context.release);
+  if (!release) return null;
+  try {
+    const done = await doneKeys();
+    const linked = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, connection.workspaceId);
+      const [link] = await monitorIssueRepository.listLinkedByExternalIds(
+        connection.id,
+        [issue.externalId],
+        tx,
+      );
+      if (!link) return null;
+      const bug = await workItemRepository.findById(link.workItemId, tx);
+      if (!bug || !done.has(bug.status)) return null;
+      const merged = await workItemDeliveryRepository.listMergedHostAddressesByWorkItem(bug.id, tx);
+      return { workItemId: bug.id, merged };
+    });
+    if (!linked || linked.merged.length === 0) return null;
+
+    const answers: ReleaseContainment[] = [];
+    for (const address of linked.merged) {
+      const provider = getGitProvider(address.provider as GitProviderId);
+      answers.push(
+        provider.readReleaseContainsMerge
+          ? await provider.readReleaseContainsMerge({
+              installationId: address.hostInstallationId,
+              owner: address.owner,
+              name: address.name,
+              number: address.number,
+              release,
+            })
+          : 'unknown',
+      );
+    }
+    const containment: ReleaseContainment = answers.includes('missing')
+      ? 'missing'
+      : answers.every((answer) => answer === 'contains')
+        ? 'contains'
+        : 'unknown';
+    return { workItemId: linked.workItemId, release, containment };
+  } catch (err) {
+    console.warn('[monitor-ingestion] fix-release read failed; re-filing as before', {
+      connectionId: connection.id,
+      externalIssueId: issue.externalId,
+      err,
+    });
+    return null;
+  }
+}
+
+/**
  * THE STANDING BACKFILL SWEEP (Story MOTIR-5975 · Subtask MOTIR-5983), run at the
  * end of every poll whose listing succeeded, AFTER the page walk's writes have
  * committed. It reaches the two populations nothing else revisits:
@@ -504,6 +614,8 @@ export const monitorIngestionService = {
    * | bug live (not done-category; ARCHIVED counts)   | `updated` — facts only         |
    * | bug done, and MOTIR resolved the issue with no   | `updated` — facts only (the     |
    * |   sighting since (MOTIR-5704's loop guard)       |   loop guard)                   |
+   * | bug done, and the event's release lacks the     | `updated` — facts only (the     |
+   * |   merge that completed it (MOTIR-8330)           |   fix-release guard)            |
    * | bug in a done-category status                   | `refiled`, `relates_to` the old |
    * | bug deleted (null pointer, key remembered)      | `refiled`, body names the key  |
    *
@@ -552,6 +664,13 @@ export const monitorIngestionService = {
      * DECISION below.
      */
     read?: MonitorContextRead | null,
+    /**
+     * Whether that read's release carries the merge that completed the linked bug
+     * (Bug MOTIR-8330), also read by the caller before the lock. `missing` on the
+     * bug the row still points at holds a re-file; absent or `null` changes
+     * nothing.
+     */
+    fixRelease?: MonitorFixReleaseRead | null,
   ): Promise<MonitorReconcileResult> {
     const binderId = connection.boundByUserId;
     if (!binderId) throw new MonitorBinderUnavailableError(connection.id, BINDER_MISSING);
@@ -644,6 +763,27 @@ export const monitorIngestionService = {
             relatesTo: null,
           };
         }
+      }
+
+      // ── THE FIX-RELEASE GUARD (Bug MOTIR-8330) ──────────────────────────────
+      // A done bug whose fix the event's release does not carry has not been
+      // TESTED by that event: it is the old build still serving between the merge
+      // that completed the bug and the deploy that ships it. Facts only, no card —
+      // and the next event from a release that DOES carry the merge re-files
+      // normally, because this guard reads each visit's own release.
+      //
+      // It keys on the bug the row points at NOW, under the lock: an answer read
+      // for a bug the link no longer names (re-pointed, deleted) is not about this
+      // decision. A bug completed with no merge never gets an answer at all
+      // (`readFixReleaseQuietly` returns null), so it re-files as before.
+      if (bug && fixRelease?.workItemId === bug.id && fixRelease.containment === 'missing') {
+        await writeLinkFacts(row.id, facts, contextRead, tx);
+        return {
+          outcome: 'updated' as const,
+          workItemId: bug.id,
+          identifier: bug.identifier,
+          relatesTo: null,
+        };
       }
 
       const previous: PreviousBug | null = bug
@@ -776,7 +916,10 @@ export const monitorIngestionService = {
    *    {@link MONITOR_CONTEXT_READS_PER_POLL} times, and a failed read changes
    *    nothing but those two columns' freshness.
    * 4. RECONCILE each remaining issue through {@link reconcileIssue}. One issue
-   *    failing (a binder refusal included) does not stop the others.
+   *    failing (a binder refusal included) does not stop the others. When the
+   *    issue's linked bug is done and was completed by a merge, the host is asked
+   *    first — also outside any lock — whether the event's release carries that
+   *    merge (MOTIR-8330); a release that predates it holds the re-file.
    * 5. RECORD: all reconciled ⇒ advance the watermark (compare-and-set on the
    *    level read at 1, so a lowering that landed mid-poll is NOT undone), record
    *    `ok`, and write the grant's health `connected` — a working poll is
@@ -857,6 +1000,13 @@ export const monitorIngestionService = {
     const assigneeDoneKeys = connection.syncAssignee
       ? await doneKeysOf(connection.projectId, connection.workspaceId)
       : null;
+    // The same done category for the fix-release read (MOTIR-8330), read at most
+    // once and only when an issue's latest event named a release commit.
+    let reconcileDoneKeysRead: Promise<ReadonlySet<string>> | null = assigneeDoneKeys
+      ? Promise.resolve(assigneeDoneKeys)
+      : null;
+    const reconcileDoneKeys = (): Promise<ReadonlySet<string>> =>
+      (reconcileDoneKeysRead ??= doneKeysOf(connection.projectId, connection.workspaceId));
     const target: MonitorReconcileConnection = {
       id: connection.id,
       projectId: connection.projectId,
@@ -913,7 +1063,13 @@ export const monitorIngestionService = {
       }
       try {
         const context = await contextFor(issue);
-        const result = await monitorIngestionService.reconcileIssue(target, issue, context);
+        const fixRelease = await readFixReleaseQuietly(target, issue, context, reconcileDoneKeys);
+        const result = await monitorIngestionService.reconcileIssue(
+          target,
+          issue,
+          context,
+          fixRelease,
+        );
         summary[result.outcome] += 1;
         // ASSIGNEE FROM THE MONITOR (MOTIR-4931 · MOTIR-5705), on every reconcile
         // visit, with the assignee the page already carried. A hook BESIDE
