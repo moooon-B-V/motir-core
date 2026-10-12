@@ -355,3 +355,44 @@ describe('the silence sweep leaves a resumed plan alone', () => {
     expect((await sessionRow(sessionId)).failedAt).toBeNull();
   });
 });
+
+describe('the failure-recording paths stay safe around the resume', () => {
+  it('a relay settling a job the session has moved past records nothing', T, async () => {
+    const { sessionId } = await walk();
+    // The sweep binds a newer attempt WHILE the relay reads the job (after it found the session
+    // by `job-1`): the old job's failure must not land over the running attempt.
+    const movesOn = {
+      readJob: async () => {
+        await adminDb.planChangeSession.update({
+          where: { id: sessionId },
+          data: { lastJobId: 'job-2' },
+        });
+        return { error: REAPED, walkStop: null, lostMachine: true };
+      },
+    };
+
+    expect(await settle('job-1', movesOn)).toBeNull();
+    expect((await sessionRow(sessionId)).failedAt).toBeNull();
+    expect(submitJobMock).not.toHaveBeenCalled();
+  });
+
+  it('a resume that throws is a submit_refused skip, never an exception', T, async () => {
+    const { sessionId } = await walk({ failed: true });
+    const { resumeAutomaticallySafely } = await import('@/lib/services/planSessionEndService');
+    const spy = vi
+      .spyOn(planSessionResumeService, 'resumeAutomatically')
+      .mockRejectedValueOnce(new Error('boom'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const out = await resumeAutomaticallySafely({
+      sessionId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
+
+    expect(out).toEqual({ started: false, reason: 'submit_refused' });
+    expect((await sessionRow(sessionId)).failedAt).not.toBeNull();
+    spy.mockRestore();
+    warn.mockRestore();
+  });
+});
