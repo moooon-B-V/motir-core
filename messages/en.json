@@ -9009,6 +9009,7 @@
         "out_of_credits": "the organization ran out of credits",
         "model_unavailable": "the AI provider was unavailable",
         "token_expired": "its connection to the AI provider expired",
+        "prompt_too_large": "the plan's context was too large for the model",
         "internal": "something went wrong on our side"
       },
       "refusal": {

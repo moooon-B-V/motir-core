@@ -9015,6 +9015,7 @@
         "out_of_credits": "l’organizzazione ha esaurito i crediti",
         "model_unavailable": "il fornitore di IA non era disponibile",
         "token_expired": "la connessione al fornitore di IA è scaduta",
+        "prompt_too_large": "il contesto del piano era troppo grande per il modello",
         "internal": "qualcosa è andato storto da parte nostra"
       },
       "refusal": {

@@ -7204,6 +7204,7 @@ enum PlanSessionFailureReason {
   out_of_credits
   model_unavailable
   token_expired
+  prompt_too_large
   internal
 
   @@map("plan_session_failure_reason")
