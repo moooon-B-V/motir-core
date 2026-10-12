@@ -54,6 +54,7 @@ const blob = vi.hoisted(() => ({ installBlobStoreMock: vi.fn() }));
 const billing = vi.hoisted(() => ({ installBillingBoundaryMock: vi.fn() }));
 const githubRepos = vi.hoisted(() => ({ installGithubReposMock: vi.fn() }));
 const githubMerge = vi.hoisted(() => ({ installGithubMergeMock: vi.fn() }));
+const githubAccounts = vi.hoisted(() => ({ installGithubAccountsMock: vi.fn() }));
 const codeHealth = vi.hoisted(() => ({ installCodeHealthBoundaryMock: vi.fn() }));
 const codeGraphRead = vi.hoisted(() => ({ installCodeGraphReadBoundaryMock: vi.fn() }));
 const aiJobs = vi.hoisted(() => ({ installAiJobsBoundaryMock: vi.fn() }));
@@ -71,6 +72,7 @@ vi.mock('@/lib/test-blob-mock', () => blob);
 vi.mock('@/lib/test-billing-mock', () => billing);
 vi.mock('@/lib/test-github-repos-mock', () => githubRepos);
 vi.mock('@/lib/test-github-merge-mock', () => githubMerge);
+vi.mock('@/lib/test-github-accounts-mock', () => githubAccounts);
 vi.mock('@/lib/test-code-health-mock', () => codeHealth);
 vi.mock('@/lib/test-code-graph-read-mock', () => codeGraphRead);
 vi.mock('@/lib/test-ai-jobs-mock', () => aiJobs);
@@ -95,6 +97,8 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   // MOTIR-5572 — the GitHub MERGE seam, registered here in the same change that adds
   // it to the shipped table.
   E2E_TEST_GITHUB_MERGE: [githubMerge.installGithubMergeMock],
+  // MOTIR-8225 — the Git room's account + repository pickers (Story MOTIR-8216).
+  E2E_TEST_GITHUB_ACCOUNTS: [githubAccounts.installGithubAccountsMock],
   E2E_TEST_CODE_HEALTH: [codeHealth.installCodeHealthBoundaryMock],
   // MOTIR-7866 — the motir-ai code-graph READ seam (Story MOTIR-7858).
   E2E_TEST_CODE_GRAPH_READ: [codeGraphRead.installCodeGraphReadBoundaryMock],
