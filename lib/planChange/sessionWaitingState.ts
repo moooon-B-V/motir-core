@@ -128,6 +128,7 @@ export const PLAN_SESSION_FAILURE_REASONS = [
   'out_of_credits',
   'model_unavailable',
   'token_expired',
+  'prompt_too_large',
   'internal',
 ] as const satisfies readonly PlanSessionFailureReason[];
 

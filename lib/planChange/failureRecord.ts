@@ -98,7 +98,7 @@ export interface FailureRecordInput {
 /**
  * The record `markFailed` writes. The stop point is `walkStop`, else the last
  * relayed position, else null; the reason is `walkStop.reasonCode` when it is one
- * of the five, else the mapped error; the detail is `walkStop.detail`, else the
+ * of the closed set, else the mapped error; the detail is `walkStop.detail`, else the
  * error's message, capped (the data card's schema caps again on write).
  */
 export function failureRecordFrom(input: FailureRecordInput): PlanSessionFailureRecord {

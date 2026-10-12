@@ -115,6 +115,20 @@ describe('failureRecordFrom', () => {
     });
   });
 
+  it('records a prompt_too_large walkStop as prompt_too_large, not as the provider being unavailable', () => {
+    const rec = failureRecordFrom({
+      ...base,
+      walkStop: parseJobWalkStop({
+        ...WALK_STOP,
+        reasonCode: 'prompt_too_large',
+        detail: 'the prompt is too large for this model: 210000 of 200000 tokens',
+      }),
+      error: { code: 'MOTIR_AI_JOB_FAILED' },
+    });
+    expect(rec.failureReason).toBe('prompt_too_large');
+    expect(rec.failureDetail).toMatch(/^the prompt is too large for this model/);
+  });
+
   it('records an UNKNOWN reasonCode as internal, never as prose', () => {
     const rec = failureRecordFrom({
       ...base,

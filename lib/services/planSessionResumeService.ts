@@ -75,7 +75,20 @@ async function precheck(pctx: ProjectContext, sessionId: string): Promise<Resume
     if (session.createdById !== pctx.userId && !mayResumeAny) {
       throw new NotSessionOwnerError(session.id);
     }
-    if (sessionWaitingState(session) !== 'failed' || !session.failedJobId) {
+    const state = sessionWaitingState(session);
+    if (state === 'open' && session.lastJobId) {
+      // Not failed, and an attempt is RUNNING: the session's plan is `generating` and written by
+      // the session's last job. That is what a concurrent Resume's bind leaves when it commits
+      // before this read is reached at all (MOTIR-8297) — the MOTIR-8261 re-read below covers
+      // only a bind landing between this read and the plan read. Nothing on the row tells a
+      // Resume's attempt from any other, and nothing needs to: either way there is a job to
+      // attach to rather than a session to resume, so refuse the way the bind does and name it.
+      const running = await planRepository.findLatestForResume(session.id, tx);
+      if (running?.status === 'generating' && running.sourceJobId === session.lastJobId) {
+        throw new ResumeAlreadyStartedError(session.id, session.lastJobId);
+      }
+    }
+    if (state !== 'failed' || !session.failedJobId) {
       throw new SessionNotFailedError(session.id);
     }
     const plan = await planRepository.findLatestForResume(session.id, tx);
