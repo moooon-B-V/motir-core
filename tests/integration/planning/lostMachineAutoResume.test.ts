@@ -51,12 +51,13 @@ type RawJob = { status: 'queued' | 'running' | 'failed' | 'canceled'; error?: Pr
 const abandoned = (jobId: string): RawJob => ({
   status: 'failed',
   error: {
-    type: 'https://motir.co/problems/ai_job_abandoned',
-    title: 'AI job abandoned',
-    status: 503,
+    type: 'https://motir.co/errors/ai_job_abandoned',
+    title: 'Planning job abandoned',
+    status: 500,
     code: 'ai_job_abandoned',
     jobId,
-    detail: 'the worker holding this job stopped renewing its lease',
+    detail:
+      'the worker holding this job stopped renewing its lease (claimedBy machine-1); nothing about the request was judged, so a resubmit is the right response',
   },
 });
 /** A failure motir-ai judged — the model or the walk failed, not the machine. */
