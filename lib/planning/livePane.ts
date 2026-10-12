@@ -179,7 +179,7 @@ export function arrivalsSummary(
   };
 }
 
-// ── The IN-FLIGHT cues (Story MOTIR-7820 · MOTIR-7830; Part XXV §25.6–25.7) ──
+// ── The IN-FLIGHT cues (Story MOTIR-7820 · MOTIR-7830; Part XXVI §26.6–26.7) ──
 //
 // ⚠️ A PRESENT STATE, NOT AN EVENT — and so kept OUT of the arrivals log above.
 // An arrival is news that stays counted until the reader visits its level; a cue
@@ -210,7 +210,7 @@ export interface InFlightStep {
 
 /**
  * Map the live steps to cues. A `settle` step, and any step with no target node
- * (the untargeted lay and author), mark nothing (§25.6: an item not yet on the
+ * (the untargeted lay and author), mark nothing (§26.6: an item not yet on the
  * plan has no cell). Several steps → several cues; one node named by both kinds
  * is `drafting`. `inFlight` holds one entry per cue whose level the plan's items
  * can place — a committed target the walk has not written a `modify` for, or a
@@ -252,7 +252,7 @@ export function inFlightCues(
 /**
  * The cues the reader CANNOT see: the node is not on the drawn level, and it is
  * not a `laying` cue on the level the reader stands in (that one is the bar's
- * marker, §25.7 row 2).
+ * marker, §26.7 row 2).
  */
 export function offLevelInFlight(
   inFlight: readonly InFlightCue[],
@@ -264,7 +264,7 @@ export function offLevelInFlight(
   );
 }
 
-/** What the ONE arrivals slot says (§25.7's table) — a copy key under
+/** What the ONE arrivals slot says (§26.7's table) — a copy key under
  *  `planningWorkspace.arrival`, its counts, and the trail *Go there* drills. */
 export type LiveSlot =
   | { key: 'arrivedIn' | 'arrivedAcross'; count: number; trail: readonly CanvasCrumb[] }
@@ -276,7 +276,7 @@ const levelOfTrail = (trail: readonly CanvasCrumb[]): string | null =>
   trail[trail.length - 1]?.id ?? null;
 
 /**
- * The slot's wording, by §25.7's precedence. Arrivals are NEWS and in-flight
+ * The slot's wording, by §26.7's precedence. Arrivals are NEWS and in-flight
  * steps are STATE, so arrivals win the slot — except when arrivals and drafting
  * steps are on the SAME one level, which reads as one combined sentence. With no
  * arrivals: drafting on one level, drafting across several (named by the

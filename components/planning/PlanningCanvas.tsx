@@ -171,7 +171,7 @@ export interface PlanningCanvasProps {
   animateInitial?: boolean;
   /**
    * THE DRAFTING / LAYING CUES (Story MOTIR-7820 · MOTIR-7830; design
-   * `design/ai-planning/design-notes.md` Part XXV §25.6–25.8) — a node id → cue map
+   * `design/ai-planning/design-notes.md` Part XXVI §26.6–26.8) — a node id → cue map
    * of the items the planner is writing RIGHT NOW. A cued node's BOX (the
    * `data-node-id` element, never the card `renderNode` returns) gains
    * `data-cue`, the class `canvas-node--drafting` / `canvas-node--laying`, a
@@ -188,7 +188,7 @@ export interface PlanningCanvasProps {
   className?: string;
 }
 
-/** One cue on a node box (§25.6 / §25.7). `label` is its accessible name
+/** One cue on a node box (§26.6 / §26.7). `label` is its accessible name
  *  (*Being drafted now*); `text` is the chip's visible word (*Drafting*). */
 export interface NodeCue {
   kind: 'drafting' | 'laying';

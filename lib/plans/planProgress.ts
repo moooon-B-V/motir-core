@@ -1,5 +1,5 @@
 // THE ONE PROGRESS DERIVATION for a `generating` plan (Story MOTIR-7820 ·
-// Subtask MOTIR-7825; design `design/ai-planning/design-notes.md` Part XXV).
+// Subtask MOTIR-7825; design `design/ai-planning/design-notes.md` Part XXVI).
 //
 // ⚠️ EVERY SURFACE THAT SHOWS A PLAN'S PROGRESS READS IT FROM HERE, BY NAME.
 // The progress line (pane and compact form), the canvas cues and the Workbench ›
@@ -37,7 +37,7 @@ import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import type { PlanStepDto, PlanStepKindDto } from '@/lib/dto/plans';
 
 /**
- * THE stalled threshold — design Part XXV §25.9: **15 minutes**, measured (the
+ * THE stalled threshold — design Part XXVI §26.9: **15 minutes**, measured (the
  * longest healthy quiet stretch observed on real walks was 582 s, so the
  * story's assumed 10 minutes left 3 % headroom). It has TWO uses and they are
  * deliberately the same number:
@@ -74,7 +74,7 @@ export type PlanStepPhrase =
   | 'draftingNew';
 
 /**
- * The design's copy key for each phrase (Part XXV §25.13). TOTAL over
+ * The design's copy key for each phrase (Part XXVI §26.13). TOTAL over
  * {@link PlanStepPhrase}, so a sixth phrase fails the compiler here rather than
  * rendering a blank on the line.
  */
@@ -103,7 +103,7 @@ export interface PlanProgressStep {
 
 /** The time-independent half — built once, on the server. */
 export interface PlanProgressSnapshot {
-  /** `Plan.createdAt` (ISO) — elapsed counts from here (design §25.2). */
+  /** `Plan.createdAt` (ISO) — elapsed counts from here (design §26.2). */
   startedAt: string;
   /** `Plan.lastActivityAt` (ISO). */
   lastActivityAt: string;
