@@ -6869,6 +6869,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "Terug naar roadmap",
+      "breadcrumb": "Kruimelpad",
+      "breadcrumbRoadmap": "Roadmap",
+      "breadcrumbDirection": "Richting",
+      "kicker": "Richting · {tier}",
+      "tierName": {
+        "discovery": "Verkenning",
+        "vision": "Visie",
+        "feasibility": "Haalbaarheid",
+        "validation": "Validatie"
+      },
+      "openFullPage": "Volledige pagina openen",
+      "continue": "Doorgaan",
+      "close": "Sluiten",
+      "loading": "Richtingsdocument laden",
+      "errorTitle": "Dit document kon niet worden geladen",
+      "errorBodyRetry": "Er ging iets mis bij het lezen van je richting. Probeer het zo opnieuw.",
+      "errorBodyClose": "Er ging iets mis bij het lezen van je richting. Sluit dit venster en probeer het opnieuw.",
+      "emptyTitle": "{label}: nog niet klaar",
+      "emptyTitleFallback": "Dit deel van je richting is nog niet klaar",
+      "emptyBody": "Dit niveau is voor dit project nog niet opgesteld. Het verschijnt hier zodra Motir het in de chat uitschrijft."
+    },
     "heading": "Roadmap",
     "subtitle": "Roadmap van {project}",
     "noProjectTitle": "Geen project geselecteerd",
