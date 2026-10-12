@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowRight, GitBranch, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { startPlanningAction } from '@/app/(onboarding)/onboarding/actions';
+import { OnboardingBrandBar } from '@/components/onboarding/layout';
 
 // The onboarding ENTRANCE — the fork the user lands on at `/onboarding`
 // (Subtask 7.22.4 / MOTIR-1462, designed by MOTIR-1461 in
@@ -60,18 +61,9 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
     <div className="flex h-dvh flex-col bg-(--el-page-bg)">
       {/* Brand bar — the entrance owns the whole viewport (the (onboarding) route
           group renders outside the app shell). No "Save & exit": nothing is saved
-          here (no project/session exists until the user continues). */}
-      <header className="border-(--el-border) flex items-center gap-2 border-b px-6 py-3.5">
-        <span className="flex items-center gap-2 text-sm font-semibold text-(--el-text)">
-          <span
-            className="grid size-7 place-items-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
-            aria-hidden
-          >
-            <Sparkles className="size-4" strokeWidth={2} />
-          </span>
-          Motir
-        </span>
-      </header>
+          here (no project/session exists until the user continues). The shared
+          onboarding brand bar carries the real Motir lockup (MOTIR-8252). */}
+      <OnboardingBrandBar />
 
       {/* The content fills the space below the brand bar and is vertically
           centered (`my-auto`), so the entrance always occupies exactly the

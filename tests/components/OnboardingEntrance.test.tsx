@@ -20,6 +20,7 @@ vi.mock('@/app/(onboarding)/onboarding/actions', () => ({
 }));
 
 import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
+import { WAVE_BAND_PATH } from '@/components/brand/waveBand';
 
 afterEach(cleanup);
 
@@ -51,6 +52,23 @@ describe('OnboardingEntrance', () => {
       name: /already have a project\?/i,
     });
     expect(migrateLink.getAttribute('href')).toBe('/onboarding/migrate');
+  });
+
+  it('heads the page with the onboarding brand bar: the real lockup, not a Sparkles tile', () => {
+    // MOTIR-8252 — the inline lavender tile + `Sparkles` + bare "Motir" became
+    // `OnboardingBrandBar`. The entrance's ONE remaining `Sparkles` is the
+    // eyebrow chip's own icon (which the entrance code card, MOTIR-8253, retires
+    // with the eyebrow).
+    const { container } = renderWithIntl(<OnboardingEntrance carriedIdea={null} />);
+    const bar = container.querySelector('header[data-onboarding-brand-bar]')!;
+    expect(bar).not.toBeNull();
+    const home = screen.getByRole('link', { name: 'Motir' });
+    expect(bar.contains(home)).toBe(true);
+    expect(home.querySelector('.brand-lockup svg path')!.getAttribute('d')).toBe(WAVE_BAND_PATH);
+
+    const sparkles = container.querySelectorAll('.lucide-sparkles');
+    expect(sparkles).toHaveLength(1);
+    expect(sparkles[0]!.parentElement!.textContent).toBe('Welcome to Motir');
   });
 
   it('renders the carried-over panel: pre-filled idea, Continue CTA, NO migrate row', () => {

@@ -1,7 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { History, Sparkles } from 'lucide-react';
+import { History } from 'lucide-react';
+import { BrandMark } from '@/components/brand/BrandMark';
 import { Button } from '@/components/ui/Button';
 
 // The onboarding window's persistent top bar (MOTIR-1488) — the `wz-bar` from
@@ -15,6 +16,14 @@ import { Button } from '@/components/ui/Button';
 //
 // Presentational: the shell (`DiscoveryOnboarding`) owns the exit action + the
 // step label; the labeled "Resume onboarding" re-entry door is MOTIR-1533.
+//
+// The brand is the real Motir lockup (MOTIR-8252, built to the Pattern panel of
+// `design/onboarding-entrance/onboarding-entrance--vibe-layout.mock.html`):
+// `BrandMark` lockup, default tone, 28 px — it replaced a lavender tile holding a
+// lucide `Sparkles`. It is NOT a link here: this bar's one way out is "Save &
+// exit", and a home link beside it would be a second exit that skips the save.
+// The glyph is `aria-hidden` and the visible wordmark is the text, so it carries
+// no `aria-label` (design/brand §8).
 
 export interface OnboardingTopBarProps {
   /** The active project's human-readable name (shown left, beside the brand). */
@@ -33,9 +42,7 @@ export function OnboardingTopBar({ projectName, stepLabel, onExit }: OnboardingT
       className="flex h-[3.25rem] shrink-0 items-center justify-between gap-4 border-b border-(--el-border) bg-(--el-page-bg) px-4"
     >
       <span className="inline-flex min-w-0 items-center gap-3">
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender)">
-          <Sparkles className="size-4 text-(--el-accent-on-surface)" aria-hidden="true" />
-        </span>
+        <BrandMark variant="lockup" tone="default" size={28} className="shrink-0" />
         <span className="truncate text-sm font-semibold text-(--el-text)">
           {projectName ? t('topbarProject', { project: projectName }) : t('topbarProjectFallback')}
         </span>
