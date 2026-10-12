@@ -9654,6 +9654,8 @@
   "approvalGate.refusal.primaryPending.acceptance.next": "The story's video was sent back. Once a new one is recorded, approving it merges them.",
   "approvalGate.refusal.alreadyAwaiting.title": "Another decision on this subject is already waiting.",
   "approvalGate.refusal.alreadyAwaiting.next": "Reload the page to see it.",
+  "approvalGate.refusal.deliveryUnreadable.title": "A pull request on this work item is no longer visible to this organization.",
+  "approvalGate.refusal.deliveryUnreadable.next": "Nothing was decided. Its repository now belongs to another organization: reconnect it here, or unlink that pull request from the work item.",
   "approvalGate.refusal.decidedImmutable.title": "This decision was already recorded and cannot be changed.",
   "approvalGate.refusal.decidedImmutable.next": "Reload the page. If this keeps happening, it is a defect worth reporting.",
   "approvalGate.refusal.mergeChecksNotGreen.title": "This pull request's checks are not green.",

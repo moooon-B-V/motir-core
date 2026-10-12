@@ -12356,6 +12356,10 @@
         "title": "Er wacht al een andere beslissing over dit onderwerp.",
         "next": "Laad de pagina opnieuw om hem te zien."
       },
+      "deliveryUnreadable": {
+        "title": "Een pull request op dit werkitem is niet meer zichtbaar voor deze organisatie.",
+        "next": "Er is niets besloten. De repository hoort nu bij een andere organisatie: koppel hem hier opnieuw, of ontkoppel die pull request van het werkitem."
+      },
       "decidedImmutable": {
         "title": "Deze beslissing is al vastgelegd en kan niet worden gewijzigd.",
         "next": "Laad de pagina opnieuw. Als dit blijft gebeuren, is het een defect dat het melden waard is."

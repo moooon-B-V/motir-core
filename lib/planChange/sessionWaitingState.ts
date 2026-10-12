@@ -152,7 +152,7 @@ const capped = (max: number) =>
  */
 export const planSessionFailureRecordSchema = z.object({
   failedAt: z.date(),
-  failedJobId: z.string().min(1),
+  failedJobId: z.string().min(1).nullable(),
   failureReason: z.enum(PLAN_SESSION_FAILURE_REASONS),
   failureDetail: capped(FAILURE_DETAIL_MAX),
   failureStopPhase: z.enum(['lay', 'author']).nullable().optional().default(null),
@@ -162,7 +162,9 @@ export const planSessionFailureRecordSchema = z.object({
 
 export interface PlanSessionFailureRecord {
   failedAt: Date;
-  failedJobId: string;
+  /** The job to resume from — `null` for a plan with no job (an MCP-authored plan the
+   *  sweep found silent, MOTIR-8132), which To resume lists and Resume does not offer. */
+  failedJobId: string | null;
   failureReason: PlanSessionFailureReason;
   failureDetail?: string | null;
   failureStopPhase?: PlanSessionWalkPhase | null;

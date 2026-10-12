@@ -795,6 +795,9 @@ export function useRefusalCopy(
     case 'APPROVAL_GATE_ALREADY_AWAITING':
       headline = t('alreadyAwaiting.title');
       break;
+    case 'APPROVAL_GATE_DELIVERY_UNREADABLE':
+      headline = t('deliveryUnreadable.title');
+      break;
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
       headline = t('decidedImmutable.title');
       break;
@@ -983,6 +986,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'primaryPending';
     case 'APPROVAL_GATE_ALREADY_AWAITING':
       return 'alreadyAwaiting';
+    case 'APPROVAL_GATE_DELIVERY_UNREADABLE':
+      return 'deliveryUnreadable';
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
       return 'decidedImmutable';
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':

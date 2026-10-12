@@ -87,7 +87,8 @@ export function reasonCodeFromError(
 }
 
 export interface FailureRecordInput {
-  failedJobId: string;
+  /** `null` when the plan has no job (MOTIR-8132). */
+  failedJobId: string | null;
   now: Date;
   walkStop: JobWalkStop | null;
   lastPosition: JobWalkPosition | null;

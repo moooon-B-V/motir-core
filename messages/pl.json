@@ -12356,6 +12356,10 @@
         "title": "Inna decyzja w tej sprawie już czeka.",
         "next": "Odśwież stronę, aby ją zobaczyć."
       },
+      "deliveryUnreadable": {
+        "title": "Jeden z pull requestów tego elementu roboczego nie jest już widoczny dla tej organizacji.",
+        "next": "Nic nie zostało zdecydowane. Jego repozytorium należy teraz do innej organizacji: połącz je tu ponownie albo odłącz ten pull request od elementu roboczego."
+      },
       "decidedImmutable": {
         "title": "Ta decyzja została już zapisana i nie można jej zmienić.",
         "next": "Odśwież stronę. Jeśli to się powtarza, jest to defekt, który warto zgłosić."

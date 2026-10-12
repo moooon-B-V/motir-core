@@ -24,19 +24,28 @@ import { defineJob } from '../defineJob';
 //
 // `retryPolicy: 'idempotent'`: the pass is a pure recompute from live state — a
 // reconciled plan is no longer `generating` so it stops matching, an in-flight
-// one is re-asked and left alone again, and a pass that finds nothing stops.
+// one is re-asked and left alone again, a recorded one is spared as waiting, and
+// a pass that finds nothing stops.
 // Bounded per run (`ABANDONED_PLAN_SWEEP_BATCH_SIZE`).
 
 /**
- * Hourly at :00 — thirty minutes before `autoPlanCadenceTick` (`30 * * * *`).
+ * Every five minutes — the one sub-hourly cadence (`SUB_HOURLY_CADENCE`,
+ * `lib/jobs/schedules.ts`) every sub-hourly `system.*` job shares (MOTIR-8132;
+ * MOTIR-8130 §5).
  *
- * The ORDER is the reason for the number. This sweep's only consumer is the cadence gate, so reconciling before it means a
- * plan freed this hour unpauses that project's planning in the SAME hour's tick
- * rather than the next one. Hourly is the right grain for the same reason the
- * cadence tick is: what it unblocks moves on a human timescale, and the cost of a
- * pass that finds nothing is one indexed read.
+ * The sweep now judges a plan by its SILENCE against `PLAN_STALLED_AFTER_MS`, so its
+ * period is part of how late a dead plan is noticed: 15 minutes of silence plus one
+ * period, ≤ 20 minutes here against 75 hourly. A job motir-ai already reports
+ * failed, canceled or gone is caught within one period. `*\/5` IS the conforming
+ * cadence, so it needs no `SUB_HOURLY_CADENCE_EXCEPTIONS` entry.
+ *
+ * The old ordering argument still holds: the cadence tick (`30 * * * *`) is this
+ * sweep's consumer, and a pass always runs in the half hour before it, so a plan
+ * freed this hour unpauses its project's planning in the same hour's tick. The cost
+ * of a pass is one indexed read of the `generating` set (≤ 50 rows) plus one
+ * motir-ai ask per selected plan that has a job.
  */
-export const ABANDONED_PLAN_SWEEP_CRON = '0 * * * *';
+export const ABANDONED_PLAN_SWEEP_CRON = '*/5 * * * *';
 
 export const abandonedPlanSweep = defineJob(
   {
@@ -46,7 +55,7 @@ export const abandonedPlanSweep = defineJob(
     retryPolicy: 'idempotent',
   },
   (ctx, services) => {
-    return ctx.step.run('reconcile-abandoned-plans', () =>
+    return ctx.step.run('reconcile-abandoned-plans-v2', () =>
       services.abandonedPlan.reconcileAbandoned(),
     );
   },
