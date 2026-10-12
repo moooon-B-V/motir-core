@@ -43,17 +43,14 @@ export const PLAN_TARGET_LOCK_LEASE_MS = 30 * 60 * 1000;
  * it mid-pass. A plan-held lease is refreshed by each APPEND instead, so an
  * honest pass keeps its own window open by working.
  *
- * ⚠️ AND THE NUMBER IS NOT CHOSEN — it is `ABANDONED_PLAN_MAX_AGE_HOURS`, the
- * threshold already shipped for exactly this population. `abandonedPlanService`
- * uses it as the crashed-worker arm and as the only signal available for a plan
- * with NO producer, which is every MCP-authored plan, and its own comment
- * records that it reuses that constant *"rather than introducing a threshold of
- * its own"*. A lock released on the same threshold is released exactly when the
- * plan it belongs to is declared dead.
- *
- * The agreement is PINNED rather than imported: this module is a pure leaf with
- * no imports, and reaching up into a service for a number is how a cycle starts.
- * `tests/planning/planLeaseWindow.test.ts` fails if the two ever diverge.
+ * ⚠️ THE NUMBER WAS NOT CHOSEN — it was the sweep's 24-hour max age, the
+ * threshold the abandoned-plan sweep then used for a plan with no producer, so a
+ * lock was released when the plan it belonged to was declared dead. MOTIR-8132
+ * retired that constant: the sweep now judges a plan by `PLAN_STALLED_AFTER_MS` of
+ * silence and RECORDS a dead conversation / MCP plan rather than declining it, so
+ * its cards stay held for the producer to resume. The lock lease is deliberately
+ * left at the day it was (MOTIR-8130: "target-lock release ... unchanged"), and
+ * `tests/planning/planTargetParkDoor.test.ts` pins it.
  */
 export const PLAN_TARGET_PLAN_LEASE_MS = 24 * 60 * 60 * 1000;
 

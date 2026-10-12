@@ -20,9 +20,8 @@ import { MotirAiJobNotFoundError, MotirAiUnavailableError } from '@/lib/ai/error
 import {
   abandonedPlanService,
   classifyAbandonedCandidate,
-  ABANDONED_PLAN_GRACE_MINUTES,
-  ABANDONED_PLAN_MAX_AGE_HOURS,
 } from '@/lib/services/abandonedPlanService';
+import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 import { abandonedPlanSweep } from '@/lib/jobs/definitions/abandonedPlanSweep';
 import { jobDefinitions } from '@/lib/jobs/registry';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
@@ -50,12 +49,11 @@ import type { JobStatus } from '@/lib/ai/types';
 // and the first append. The answer lives in the JOB, which is why the fix ASKS.
 //
 // What these lock, in the order the sweep decides them:
-//   * the GRACE — a fresh empty plan is not even asked about, so the reconciler
-//     can never race a submit (and AC 3's idempotent-retry guarantee holds);
-//   * the DECISION TABLE — terminal job / job gone ⇒ abandoned; in-flight ⇒
-//     left; motir-ai unreachable ⇒ left, because unreachable is not death;
-//   * the MAX AGE — the arm for a worker that died without marking its own job,
-//     which is the one failure the ASK cannot see;
+//   * the DECISION TABLE (MOTIR-8132) — terminal job / job gone ⇒ abandoned at
+//     once, the FAST PATH; anything else — a live job, an outage, no job at all —
+//     is judged by SILENCE: dead past `PLAN_STALLED_AFTER_MS` since the plan's
+//     last write, left while it is writing. That one rule replaced the 15-minute
+//     grace, the 24-hour max age and the job-less arm;
 //   * the PARTIAL arm (MOTIR-3189) — a plan HOLDING proposals whose producer is
 //     provably gone is declined too, and its proposals survive the decline;
 //     the write's guard is now a COUNT MISMATCH, so a late append is still
@@ -90,8 +88,11 @@ afterAll(async () => {
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 
-/** Well past the grace, well inside the max age — the ordinary candidate. */
-const PAST_GRACE_MS = (ABANDONED_PLAN_GRACE_MINUTES + 5) * MINUTE;
+/** Silent past the threshold — the ordinary dead candidate (MOTIR-8132). */
+const SILENT_MS = PLAN_STALLED_AFTER_MS + 5 * MINUTE;
+
+/** Wrote a minute ago — a plan that is being written. */
+const WRITING_MS = MINUTE;
 
 /** `getJob`'s answer for a job in a given state, with no error attached. */
 function jobIn(status: JobStatus): void {
@@ -104,11 +105,12 @@ function jobIn(status: JobStatus): void {
 }
 
 /**
- * Seed a plan whose producer is recorded and whose `createdAt` is backdated.
+ * Seed a plan whose producer is recorded and whose `createdAt` AND `lastActivityAt`
+ * are backdated by `ageMs` — a plan that has been silent since it was created.
  *
- * `createdAt` has a `@default(now())`, so it is set through `adminDb` (which
- * bypasses RLS) rather than by the service — the sweep's whole predicate turns
- * on age, and a test that could not backdate it would have to sleep.
+ * Both have a `@default(now())`, so they are set through `adminDb` (which
+ * bypasses RLS) rather than by the service — the sweep's verdict turns on the
+ * silence, and a test that could not backdate it would have to sleep.
  */
 async function seedGeneratingPlan(
   fx: WorkItemFixture,
@@ -120,7 +122,8 @@ async function seedGeneratingPlan(
       projectId: fx.projectId,
       status: 'generating',
       sourceJobId: opts.sourceJobId === undefined ? 'job_dead' : opts.sourceJobId,
-      createdAt: new Date(Date.now() - (opts.ageMs ?? PAST_GRACE_MS)),
+      createdAt: new Date(Date.now() - (opts.ageMs ?? SILENT_MS)),
+      lastActivityAt: new Date(Date.now() - (opts.ageMs ?? SILENT_MS)),
     },
   });
   for (let i = 0; i < (opts.items ?? 0); i += 1) {
@@ -177,101 +180,87 @@ async function makeDrainedProject(
 
 describe('the decision table — what counts as evidence the producer is gone', () => {
   // Split out as a pure function precisely so this table can be read as one
-  // thing. Every arm below is a different ANSWER about the same row, and three
-  // of them are "leave it alone" — which is the half a sweep gets wrong quietly.
+  // thing. Since MOTIR-8132 it has two halves: a FAST PATH (what motir-ai already
+  // knows) and ONE clock (how long the plan has written nothing), the rail's own.
   const reachable = (status: JobStatus) => ({ status, reachable: true, failure: null });
+  const gone = () => {
+    const err = new MotirAiJobNotFoundError('job_dead');
+    return { status: null, reachable: false, failure: { code: err.code, message: err.message } };
+  };
+  const outage = () => {
+    const err = new MotirAiUnavailableError('connect ECONNREFUSED');
+    return { status: null, reachable: false, failure: { code: err.code, message: err.message } };
+  };
 
   it.each([
     ['failed', 'job_terminal'],
     ['succeeded', 'job_terminal'],
     ['canceled', 'job_terminal'],
-  ] as const)('a %s job is abandoned (%s)', (status, reason) => {
-    expect(classifyAbandonedCandidate(reachable(status), PAST_GRACE_MS)).toEqual({
+  ] as const)('a %s job is abandoned AT ONCE, however fresh the plan (%s)', (status, reason) => {
+    for (const silentMs of [0, WRITING_MS, SILENT_MS]) {
+      expect(classifyAbandonedCandidate(reachable(status), silentMs)).toEqual({
+        abandoned: true,
+        reason,
+      });
+    }
+  });
+
+  it('a 404 is abandoned at once — motir-ai answered, and its answer was "no such job"', () => {
+    expect(classifyAbandonedCandidate(gone(), 0)).toEqual({ abandoned: true, reason: 'job_gone' });
+  });
+
+  it.each(['queued', 'running'] as const)(
+    'a %s job keeps NOTHING alive — the plan is judged by its silence',
+    (status) => {
+      expect(classifyAbandonedCandidate(reachable(status), WRITING_MS)).toEqual({
+        abandoned: false,
+        reason: 'writing',
+      });
+      expect(classifyAbandonedCandidate(reachable(status), SILENT_MS)).toEqual({
+        abandoned: true,
+        reason: 'silent',
+      });
+    },
+  );
+
+  it('an OUTAGE proves nothing either way — it falls through to the silence rule', () => {
+    // It used to be a keep at any age. A motir-ai outage longer than the threshold
+    // now settles silent plans, and a producer that comes back clears the record by
+    // writing (MOTIR-8130 §4), so nothing is lost.
+    expect(classifyAbandonedCandidate(outage(), WRITING_MS)).toEqual({
+      abandoned: false,
+      reason: 'writing',
+    });
+    expect(classifyAbandonedCandidate(outage(), SILENT_MS)).toEqual({
       abandoned: true,
-      reason,
+      reason: 'silent',
     });
   });
 
-  it.each(['queued', 'running'] as const)('a %s job is LEFT — it is still working', (status) => {
-    expect(classifyAbandonedCandidate(reachable(status), PAST_GRACE_MS)).toEqual({
+  it('NO PRODUCER is judged by the same clock, at any age', () => {
+    // MOTIR-3236's job-less plan, which used to wait a whole day. An MCP author
+    // keeps its plan alive by writing; one that stopped is dead fifteen minutes on.
+    expect(classifyAbandonedCandidate(null, WRITING_MS)).toEqual({
       abandoned: false,
-      reason: 'job_in_flight',
+      reason: 'writing',
     });
-  });
-
-  it('a 404 IS evidence — motir-ai answered, and its answer was "no such job"', () => {
-    const err = new MotirAiJobNotFoundError('job_dead');
-    expect(
-      classifyAbandonedCandidate(
-        { status: null, reachable: false, failure: { code: err.code, message: err.message } },
-        PAST_GRACE_MS,
-      ),
-    ).toEqual({ abandoned: true, reason: 'job_gone' });
-  });
-
-  it('an OUTAGE is not evidence — unreachable means we do not know', () => {
-    // The arm that would turn a motir-ai outage into a mass decline of every
-    // in-flight generation in the fleet. It has to be a leave, not a terminate.
-    const err = new MotirAiUnavailableError('connect ECONNREFUSED');
-    expect(
-      classifyAbandonedCandidate(
-        { status: null, reachable: false, failure: { code: err.code, message: err.message } },
-        PAST_GRACE_MS,
-      ),
-    ).toEqual({ abandoned: false, reason: 'ai_unreachable' });
-  });
-
-  it('NO PRODUCER past the max age is abandoned — the only signal left is time', () => {
-    // MOTIR-3236. `null` is not "the ask failed" — it is "there was nobody to
-    // ask", which an MCP-authored plan is by construction (`create_plan` writes
-    // no `sourceJobId`). AMENDMENT 2's "the discriminator is not in the plan
-    // table" is true of a producer-bearing plan and false here: an ABSENT
-    // producer IS a fact about the row, and it settles the question.
-    expect(classifyAbandonedCandidate(null, ABANDONED_PLAN_MAX_AGE_HOURS * HOUR)).toEqual({
+    expect(classifyAbandonedCandidate(null, SILENT_MS)).toEqual({
       abandoned: true,
-      reason: 'no_producer',
+      reason: 'silent',
     });
   });
 
-  it('NO PRODUCER inside the max age is LEFT — an author mid-skeleton looks the same', () => {
-    // The keep arm that makes the one above safe. The 15-minute grace is far too
-    // short to tell a stopped agent from a working one; a full day is the same
-    // judgement `max_age` already makes, which is why this REUSES that constant
-    // rather than introducing a second threshold.
-    expect(classifyAbandonedCandidate(null, PAST_GRACE_MS)).toEqual({
-      abandoned: false,
-      reason: 'no_producer_recent',
-    });
-    expect(classifyAbandonedCandidate(null, ABANDONED_PLAN_MAX_AGE_HOURS * HOUR - MINUTE)).toEqual({
-      abandoned: false,
-      reason: 'no_producer_recent',
-    });
-  });
-
-  it('a still-running job past the MAX AGE is abandoned — the crashed-worker arm', () => {
-    // motir-ai marks a job `failed` only when the HANDLER throws
-    // (`src/jobs/worker.ts`); a worker process that dies mid-job leaves the row
-    // `running` for good, so the ASK has no answer and only time is left. Same
-    // argument `planTargetLockSweep` makes about a crashed planner.
-    expect(
-      classifyAbandonedCandidate(reachable('running'), ABANDONED_PLAN_MAX_AGE_HOURS * HOUR),
-    ).toEqual({ abandoned: true, reason: 'max_age' });
-  });
-
-  it('but an OUTAGE past the max age is still not evidence — the arms do not compose', () => {
-    // The max-age arm is deliberately below the reachability check, not beside
-    // it: "motir-ai has been down for a day" must not become "every plan in the
-    // fleet is abandoned".
-    expect(
-      classifyAbandonedCandidate(
-        {
-          status: null,
-          reachable: false,
-          failure: { code: 'MOTIR_AI_UNAVAILABLE', message: 'down' },
-        },
-        ABANDONED_PLAN_MAX_AGE_HOURS * HOUR * 3,
-      ),
-    ).toEqual({ abandoned: false, reason: 'ai_unreachable' });
+  it('the threshold is the RAIL’s comparison — equal is writing, one millisecond more is silent', () => {
+    for (const job of [null, reachable('running'), outage()]) {
+      expect(classifyAbandonedCandidate(job, PLAN_STALLED_AFTER_MS)).toEqual({
+        abandoned: false,
+        reason: 'writing',
+      });
+      expect(classifyAbandonedCandidate(job, PLAN_STALLED_AFTER_MS + 1)).toEqual({
+        abandoned: true,
+        reason: 'silent',
+      });
+    }
   });
 });
 
@@ -333,48 +322,63 @@ describe('the sweep — AC 1: a dead job’s plan stops reading as undecided', (
     expect((await planRow(planId)).status).toBe('declined');
   });
 
-  it('leaves an in-flight generation alone, and does not write to it', async () => {
+  it('leaves a generation that is WRITING alone, and does not write to it', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedGeneratingPlan(fx, { ageMs: WRITING_MS });
+    jobIn('running');
+
+    const summary = await abandonedPlanService.reconcileAbandoned();
+
+    expect(summary).toMatchObject({ scanned: 1, declined: 0 });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'writing' });
+    const row = await planRow(planId);
+    expect(row.status).toBe('generating');
+    expect(row.decidedAt).toBeNull();
+  });
+
+  it('declines a SILENT plan behind a job that still says `running` (MOTIR-8132)', async () => {
+    // A worker that died mid-job leaves its row `running` for good. The job's word
+    // no longer keeps a plan alive: fifteen minutes without a write is the verdict,
+    // the same one the rail shows as stalled — not a day later.
     const { fx } = await makeDrainedProject();
     const planId = await seedGeneratingPlan(fx);
     jobIn('running');
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
-    expect(summary).toMatchObject({ scanned: 1, declined: 0 });
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'job_in_flight' });
-    const row = await planRow(planId);
-    expect(row.status).toBe('generating');
-    expect(row.decidedAt).toBeNull();
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'silent' });
+    expect((await planRow(planId)).decisionReason).toBe('abandoned');
   });
 
-  it('leaves everything alone when motir-ai cannot be reached', async () => {
+  it('an OUTAGE keeps a writing plan, and does not keep a silent one', async () => {
     const { fx } = await makeDrainedProject();
-    const planId = await seedGeneratingPlan(fx);
+    const writing = await seedGeneratingPlan(fx, { ageMs: WRITING_MS });
+    const silent = await seedGeneratingPlan(fx);
     vi.mocked(getJob).mockRejectedValue(new MotirAiUnavailableError('connect ECONNREFUSED'));
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'ai_unreachable' });
-    expect((await planRow(planId)).status).toBe('generating');
+    const byPlan = new Map(summary.outcomes.map((o) => [o.planId, o]));
+    expect(byPlan.get(writing)).toMatchObject({ outcome: 'left_as_is', reason: 'writing' });
+    expect(byPlan.get(silent)).toMatchObject({ outcome: 'declined', reason: 'silent' });
   });
 });
 
 describe('the sweep — what it must NEVER touch', () => {
-  it('AC 3: a plan INSIDE the grace is not even asked about', async () => {
-    // The window between `submitExpand`'s `createPlan` and motir-ai's first
-    // append is exactly this shape: a producer, zero items, seconds old. The
-    // grace is what keeps the reconciler out of it — which is also what keeps
-    // `autoPlanCadenceTick`'s `retryPolicy: 'idempotent'` argument true, since
-    // that depends on the just-fired project still having an undecided plan.
+  it('a FRESH plan behind a job that already FAILED is dead at once — the fast path', async () => {
+    // The old grace kept the sweep away from any plan under fifteen minutes old.
+    // Silence does that job now (a fresh plan's `lastActivityAt` is its
+    // `createdAt`), and the ask is what lets a job motir-ai already reports dead
+    // be settled within one pass rather than after the threshold (MOTIR-8130 §2).
     const { fx } = await makeDrainedProject();
-    const planId = await seedGeneratingPlan(fx, { ageMs: MINUTE });
+    const planId = await seedGeneratingPlan(fx, { ageMs: WRITING_MS });
     jobIn('failed');
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
-    expect(summary).toEqual({ scanned: 0, declined: 0, outcomes: [] });
-    expect(getJob).not.toHaveBeenCalled();
-    expect((await planRow(planId)).status).toBe('generating');
+    expect(getJob).toHaveBeenCalledTimes(1);
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'job_terminal' });
+    expect((await planRow(planId)).status).toBe('declined');
   });
 
   it('AC 3: and the just-fired project still gates on the re-run of the whole loop', async () => {
@@ -382,10 +386,14 @@ describe('the sweep — what it must NEVER touch', () => {
     // in the order production runs them: cadence fires and opens the plan, the
     // reconciler runs, cadence runs again. Exactly ONE job must have been
     // submitted at the end of it.
+    //
+    // The job is LIVE (MOTIR-8132): a job motir-ai reports failed is now dead at
+    // once, and re-firing for it is correct. What must hold is that a plan being
+    // written still gates.
     await makeDrainedProject();
     await autoPlanCadenceService.runCadenceSweep();
     expect(submitJob).toHaveBeenCalledTimes(1);
-    jobIn('failed');
+    jobIn('running');
 
     await abandonedPlanService.reconcileAbandoned();
     const second = await autoPlanCadenceService.runCadenceSweep();
@@ -397,15 +405,15 @@ describe('the sweep — what it must NEVER touch', () => {
   it('a partial plan behind a LIVE job is left alone — the same arm that protects an empty one', async () => {
     // MOTIR-3189 widened the scan onto PARTIAL plans; it did not widen what
     // counts as evidence. A plan holding proposals whose producer is still
-    // working is `job_in_flight` exactly as an empty one is, and nothing about
-    // holding proposals makes it terminable while the job says otherwise.
+    // working is `writing` exactly as an empty one is, and nothing about
+    // holding proposals makes it terminable while it is being written.
     const { fx } = await makeDrainedProject();
-    const planId = await seedGeneratingPlan(fx, { items: 2 });
+    const planId = await seedGeneratingPlan(fx, { items: 2, ageMs: WRITING_MS });
     jobIn('running');
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'job_in_flight' });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'writing' });
     expect((await planRow(planId)).status).toBe('generating');
     // And it still gates, which is the correct outcome for a live generation.
     await expect(
@@ -413,22 +421,7 @@ describe('the sweep — what it must NEVER touch', () => {
     ).resolves.toMatchObject({ id: planId });
   });
 
-  it('a partial plan inside the GRACE is not asked about either', async () => {
-    // The grace is a correctness bound about the submit→first-append window and
-    // it is unchanged by the widening. A young plan that has already taken its
-    // first append is exactly a healthy streaming generation.
-    const { fx } = await makeDrainedProject();
-    const planId = await seedGeneratingPlan(fx, { items: 1, ageMs: 60 * 1000 });
-    jobIn('failed');
-
-    const summary = await abandonedPlanService.reconcileAbandoned();
-
-    expect(summary).toEqual({ scanned: 0, declined: 0, outcomes: [] });
-    expect(getJob).not.toHaveBeenCalled();
-    expect((await planRow(planId)).status).toBe('generating');
-  });
-
-  it('does not touch a plan with NO producer INSIDE the max age — MOTIR-3236’s keep arm', async () => {
+  it('does not touch a plan with NO producer while it is WRITING — MOTIR-3236’s keep arm', async () => {
     // ⚠️ THIS TEST WAS REVERSED BY MOTIR-3236, and the old assertion is quoted
     // here rather than deleted. It read: *"does not touch a plan with NO
     // producer — that is MOTIR-3051's half, at the gate"*, and asserted
@@ -440,20 +433,21 @@ describe('the sweep — what it must NEVER touch', () => {
     // It was false of a PARTIAL one, which holds items and so is not excluded by
     // AMENDMENT 1's presence-based `items: { none: {} }` — it pauses the
     // project's cadence for ever, which is the harm the sweep exists to remove.
-    // What survives of the old test is the KEEP: inside the max age a job-less
-    // plan is still not terminated, because an agent mid-skeleton right now
-    // looks exactly like one that stopped.
+    // What survives of the old test is the KEEP: a job-less plan that is still
+    // writing is not terminated. Since MOTIR-8132 "still writing" is its own
+    // silence, not a day-long age: an agent mid-skeleton keeps it alive by working.
     const { fx } = await makeDrainedProject();
-    const planId = await seedGeneratingPlan(fx, { sourceJobId: null, items: 2 });
+    const planId = await seedGeneratingPlan(fx, {
+      sourceJobId: null,
+      items: 2,
+      ageMs: WRITING_MS,
+    });
     jobIn('failed');
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
     expect(summary.declined).toBe(0);
-    expect(summary.outcomes[0]).toMatchObject({
-      outcome: 'left_as_is',
-      reason: 'no_producer_recent',
-    });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'writing' });
     expect((await planRow(planId)).status).toBe('generating');
     // And motir-ai was never asked: there is no job id to ask about, and a 404
     // already means something else here.
@@ -517,6 +511,25 @@ describe('the sweep — what it must NEVER touch', () => {
     const summary = await abandonedPlanService.reconcileAbandoned();
 
     expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'row_moved' });
+  });
+
+  it('refuses at the WRITE when the plan WROTE between the ask and the act (MOTIR-8132)', async () => {
+    // A step signal stamps `lastActivityAt` and adds no proposal, so the count
+    // guard cannot see it. The silence the verdict was judged by moved — that
+    // producer is alive — and the write is refused on the stamp.
+    const { fx } = await makeDrainedProject();
+    const planId = await seedGeneratingPlan(fx);
+    vi.mocked(getJob).mockImplementation(async () => {
+      await adminDb.plan.update({ where: { id: planId }, data: { lastActivityAt: new Date() } });
+      return { jobId: 'job_dead', status: 'running', result: null, error: null } as Awaited<
+        ReturnType<typeof getJob>
+      >;
+    });
+
+    const summary = await abandonedPlanService.reconcileAbandoned();
+
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'row_moved' });
+    expect((await planRow(planId)).status).toBe('generating');
   });
 
   it('refuses at the WRITE when proposals land between the ask and the act', async () => {
@@ -594,32 +607,29 @@ describe('the sweep — the PARTIAL arm (MOTIR-3189)', () => {
     },
   );
 
-  it('declines a PARTIAL plan on the MAX-AGE arm — the crashed worker that never marked its job', async () => {
-    // The failure the ASK cannot see, now reachable for a partial plan: the
-    // worker vanished mid-stream, so its row reads `running` for ever and the
-    // proposals it managed to append sit behind it.
+  it('declines a SILENT partial plan — the crashed worker that never marked its job', async () => {
+    // The failure the ASK cannot see, reachable for a partial plan: the worker
+    // vanished mid-stream, so its row reads `running` for ever and the proposals it
+    // managed to append sit behind it. Silence settles it (MOTIR-8132).
     const { fx } = await makeDrainedProject();
-    const planId = await seedGeneratingPlan(fx, {
-      items: 4,
-      ageMs: (ABANDONED_PLAN_MAX_AGE_HOURS + 1) * HOUR,
-    });
+    const planId = await seedGeneratingPlan(fx, { items: 4 });
     jobIn('running');
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'max_age' });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'silent' });
     expect((await planRow(planId)).decisionReason).toBe('abandoned');
     await expect(adminDb.planItem.count({ where: { planId } })).resolves.toBe(4);
   });
 
-  it('an OUTAGE still terminates nothing, partial plan or not', async () => {
+  it('an OUTAGE terminates nothing that is still writing, partial plan or not', async () => {
     const { fx } = await makeDrainedProject();
-    const planId = await seedGeneratingPlan(fx, { items: 2 });
+    const planId = await seedGeneratingPlan(fx, { items: 2, ageMs: WRITING_MS });
     vi.mocked(getJob).mockRejectedValue(new MotirAiUnavailableError('connect ECONNREFUSED'));
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'ai_unreachable' });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'writing' });
     expect((await planRow(planId)).status).toBe('generating');
   });
 
@@ -773,23 +783,22 @@ describe('the sweep — the NO-PRODUCER arm (MOTIR-3236)', () => {
   // production for ~22 and ~20 hours when this card was written, both holding
   // proposals, both pausing the project's cadence.
   //
-  // The fix is the RE-SHAPE: the predicate selects every `generating` plan past
-  // the grace and the decision table judges it. These lock both halves — that
+  // The fix is the RE-SHAPE: the predicate selects every `generating` plan and
+  // the decision table judges it — by its silence, since MOTIR-8132. These lock both halves — that
   // the sweep can now SEE such a row, and that seeing it does not mean
   // terminating it.
 
-  it('declines a job-less plan past the max age, with a null decider and `abandoned`', async () => {
+  it('declines a SILENT job-less plan, with a null decider and `abandoned`', async () => {
     const { fx } = await makeDrainedProject();
     const planId = await seedGeneratingPlan(fx, {
       sourceJobId: null,
       items: 3,
-      ageMs: ABANDONED_PLAN_MAX_AGE_HOURS * HOUR + HOUR,
     });
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
     expect(summary).toMatchObject({ scanned: 1, declined: 1 });
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'no_producer' });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'silent' });
     const row = await planRow(planId);
     expect(row.status).toBe('declined');
     // Nobody decided it — the same honesty the other abandon arms carry.
@@ -808,14 +817,13 @@ describe('the sweep — the NO-PRODUCER arm (MOTIR-3236)', () => {
     const { fx } = await makeDrainedProject();
     await seedGeneratingPlan(fx, {
       sourceJobId: null,
-      ageMs: ABANDONED_PLAN_MAX_AGE_HOURS * HOUR + HOUR,
     });
     jobIn('running');
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
     expect(getJob).not.toHaveBeenCalled();
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'no_producer' });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'silent' });
   });
 
   it('frees the CADENCE a partial job-less plan had paused — the second harm', async () => {
@@ -828,7 +836,6 @@ describe('the sweep — the NO-PRODUCER arm (MOTIR-3236)', () => {
     await seedGeneratingPlan(fx, {
       sourceJobId: null,
       items: 2,
-      ageMs: ABANDONED_PLAN_MAX_AGE_HOURS * HOUR + HOUR,
     });
 
     const before = await autoPlanCadenceService.runCadenceSweep();
@@ -850,7 +857,6 @@ describe('the sweep — the NO-PRODUCER arm (MOTIR-3236)', () => {
     const planId = await seedGeneratingPlan(fx, {
       sourceJobId: null,
       items: 1,
-      ageMs: ABANDONED_PLAN_MAX_AGE_HOURS * HOUR + HOUR,
     });
     await adminDb.planItem.create({
       data: {
@@ -871,7 +877,7 @@ describe('the sweep — the NO-PRODUCER arm (MOTIR-3236)', () => {
     // Discovery saw 2 and the write re-counted 2 — so this one DOES land. What
     // the assertion pins is that the comparison ran at all on a producerless
     // candidate rather than being skipped with the ask.
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'no_producer' });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'silent' });
     expect(await adminDb.planItem.count({ where: { planId } })).toBe(2);
   });
 
@@ -897,7 +903,7 @@ describe('the sweep — the NO-PRODUCER arm (MOTIR-3236)', () => {
     const jobless = await seedGeneratingPlan(fx, {
       sourceJobId: null,
       items: 2,
-      ageMs: ABANDONED_PLAN_MAX_AGE_HOURS * HOUR + 2 * HOUR,
+      ageMs: 2 * HOUR,
     });
     const withJob = await seedGeneratingPlan(fx, { ageMs: HOUR });
     jobIn('failed');
@@ -907,7 +913,7 @@ describe('the sweep — the NO-PRODUCER arm (MOTIR-3236)', () => {
     expect(summary).toMatchObject({ scanned: 2, declined: 2 });
     expect(getJob).toHaveBeenCalledTimes(1);
     const byPlan = new Map(summary.outcomes.map((o) => [o.planId, o]));
-    expect(byPlan.get(jobless)).toMatchObject({ outcome: 'declined', reason: 'no_producer' });
+    expect(byPlan.get(jobless)).toMatchObject({ outcome: 'declined', reason: 'silent' });
     expect(byPlan.get(withJob)).toMatchObject({ outcome: 'declined', reason: 'job_terminal' });
   });
 });
@@ -964,7 +970,7 @@ describe('the sweep — a plan a REVISION re-opened (MOTIR-8208)', () => {
   it('gives a LAPSED job-less revision back to `planned` — the lease is the only signal', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await reopenedPlan(fx);
-    await ageTrail(planId, PAST_GRACE_MS);
+    await ageTrail(planId, SILENT_MS);
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
@@ -981,7 +987,7 @@ describe('the sweep — a plan a REVISION re-opened (MOTIR-8208)', () => {
   it('gives back a hosted revision whose JOB died unseen, and never declines it', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await reopenedPlan(fx, 'job_revision_dead');
-    await ageTrail(planId, PAST_GRACE_MS);
+    await ageTrail(planId, SILENT_MS);
     jobIn('failed');
 
     const summary = await abandonedPlanService.reconcileAbandoned();
@@ -1015,7 +1021,7 @@ describe('the sweep — cross-workspace, bounded, and wired', () => {
     expect((await planRow(planB)).status).toBe('declined');
   });
 
-  it('is bounded per pass, oldest first — a backlog drains over ticks', async () => {
+  it('is bounded per pass, STALEST first — a backlog drains over ticks', async () => {
     const { fx } = await makeDrainedProject();
     const oldest = await seedGeneratingPlan(fx, { ageMs: 5 * HOUR });
     const newer = await seedGeneratingPlan(fx, { ageMs: 2 * HOUR });

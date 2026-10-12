@@ -22,6 +22,7 @@ import {
   type SessionWaitingState,
 } from '@/lib/planChange/sessionWaitingState';
 import type { PlanJobStateDto } from '@/lib/dto/plans';
+import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 
 // ABANDONED-PLAN reconciliation (MOTIR-3064) — the recovery half of the
 // generation lifecycle, and the answer to a hole MOTIR-3051 named and left open
@@ -85,9 +86,9 @@ import type { PlanJobStateDto } from '@/lib/dto/plans';
 // table, not a condition of selection. The next unrecognised shape is a new arm
 // in a pure function with a unit test.
 //
-// The new arm is `no_producer`: nothing to ask, so the only signal is the
+// The new arm was `no_producer` (both it and `max_age` are retired below): nothing to ask, so the only signal is the
 // passage of time — which is precisely the argument `max_age` already makes for
-// a crashed worker, and it REUSES `ABANDONED_PLAN_MAX_AGE_HOURS` rather than
+// a crashed worker, and it reused that arm's 24-hour max age rather than
 // inventing a second threshold. Under the max age it is `no_producer_recent`
 // and kept, because an author mid-skeleton looks exactly like one who stopped.
 // `docs/decisions/agent-authored-plans.md` AMENDMENT 7 records it, including
@@ -99,36 +100,31 @@ import type { PlanJobStateDto } from '@/lib/dto/plans';
 // workspace — so no write is ever untenanted and the cross-tenant write refusal
 // stays load-bearing.
 
-/**
- * How old a producer-bearing `generating` plan must be before the sweep will
- * even ASK about it.
- *
- * A CORRECTNESS bound, not a performance one. Between `submitExpand`'s
- * `createPlan` and motir-ai's first append, a perfectly healthy plan holds zero
- * items with a live job — the exact shape this sweep selects. The grace keeps it
- * out of that window, so it can never be asking about a submit that happened
- * milliseconds ago. Fifteen minutes is far longer than any observed
- * submit→first-append gap and far shorter than the hourly cadence tick whose
- * pause it exists to lift.
- */
-export const ABANDONED_PLAN_GRACE_MINUTES = 15;
+// ⚠️ AND THE CLOCK IS SILENCE, NOT AGE (MOTIR-8132; MOTIR-8130's decision). The
+// two paragraphs above judged a plan by `now - createdAt` against a 15-minute grace
+// and a 24-hour max age, while the rail judged the same plan by
+// `now - lastActivityAt > PLAN_STALLED_AFTER_MS` — so the two disagreed for up to a
+// day, and a plan the rail called stalled at minute 16 sat `generating` until the
+// next morning. Now there is ONE threshold and ONE fact: a `generating` plan is dead
+// when it has been SILENT past `PLAN_STALLED_AFTER_MS`, whoever writes it, job or no
+// job. The motir-ai ask survives only as a FAST PATH — a job that already failed,
+// was canceled, finished without closing the plan, or is gone, is dead at once —
+// and no longer keeps a plan alive: `running` / `queued` and an unreachable
+// motir-ai fall through to the silence rule. And dead is RECORDED on the plan's
+// `conversation` / `mcp` session rather than declined, so the plan keeps its
+// proposals and its held cards, waits in To resume, and the producer's next write
+// clears the record (`plansService`'s activity stamp). Origins with no To resume
+// entry keep the decline. `docs/decisions/agent-authored-plans.md` AMENDMENT 7 is
+// amended accordingly.
 
 /**
- * How long a plan may sit behind a job that never reaches a terminal state
- * before the sweep treats it as abandoned anyway.
- *
- * This is the arm for the failure the ASK cannot see: a motir-ai worker that
- * dies mid-job leaves its row `running` forever, so `resolveJobState` answers
- * "still working" for all time and the plan would gate for all time with it. It
- * is the same argument `planTargetLockSweep` makes about a crashed planner —
- * "the only signal left is the passage of time" — applied to the row that crash
- * strands here.
- *
- * Deliberately a DAY rather than an hour: a long-running generation is a normal
- * thing and cutting one off would destroy work, while a paused cadence costs a
- * project one day of suggestions. The asymmetry picks the number.
+ * How long the REVISION backstop lets a revision's job stay non-terminal before it
+ * fails the revision anyway (MOTIR-7936) — the crashed-worker window for a lease, and
+ * the one place a day-long window survives: MOTIR-8130 changed how a `generating`
+ * plan is judged and left the revision backstop as it was. A `generating` plan is
+ * judged by `PLAN_STALLED_AFTER_MS` alone.
  */
-export const ABANDONED_PLAN_MAX_AGE_HOURS = 24;
+export const REVISION_JOB_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** Plans reconciled per pass — bounded, so a backlog drains over successive
  *  ticks rather than holding one long pass over a large slice of the table. */
@@ -140,21 +136,22 @@ export type AbandonReason =
   /** The job reached a terminal state — the reported case (`failed`), plus the
    *  two that are equally final (`canceled`, and a `succeeded` job that
    *  nonetheless never marked the plan `planned` — whether it appended nothing
-   *  or stopped part-way). */
+   *  or stopped part-way). The FAST PATH: dead at once, however recent the
+   *  plan's last write. */
   | 'job_terminal'
-  /** motir-ai has no such job (404). The producer is gone, not merely quiet. */
+  /** motir-ai has no such job (404). The producer is gone, not merely quiet —
+   *  the fast path's other arm. */
   | 'job_gone'
-  /** The job never reached a terminal state and the plan is older than
-   *  {@link ABANDONED_PLAN_MAX_AGE_HOURS} — the crashed-worker arm. */
+  /** The plan has written nothing for longer than `PLAN_STALLED_AFTER_MS`
+   *  (MOTIR-8132) — the one rule for every producer, the rail's own. It replaces
+   *  `max_age` (a job that never answered for a day) and `no_producer` (a job-less
+   *  plan a day old): a `running` job, an unreachable motir-ai and no job at all
+   *  are all judged by it. */
+  | 'silent'
+  /** A REVISION's job never reached a terminal state within
+   *  {@link REVISION_JOB_MAX_AGE_MS} — the revision backstop's crashed-worker arm
+   *  (MOTIR-7936). Never a `generating` plan's verdict. */
   | 'max_age'
-  /** There is NO producer to ask about (`sourceJobId` is null — an MCP-authored
-   *  plan, MOTIR-2982) and the plan is older than
-   *  {@link ABANDONED_PLAN_MAX_AGE_HOURS}. The only signal a job-less plan
-   *  offers is the passage of time, which is the same argument `max_age` makes
-   *  for a job that never answered — hence the same constant, not a second one.
-   *  Kept as its own reason because the two are found out DIFFERENTLY: `max_age`
-   *  asked and was told nothing useful; this one had nobody to ask. */
-  | 'no_producer'
   /** A revision that RE-OPENED its plan wrote nothing for the whole lease window,
    *  and nobody could be asked about it — an MCP-driven revision has no job (Bug
    *  MOTIR-8208). The window is the lease's own verdict, so the plan is given
@@ -163,21 +160,20 @@ export type AbandonReason =
 
 /** Why a candidate was left alone. */
 export type KeepReason =
-  /** `queued` / `running` inside the max age — a live run, which MUST keep
-   *  gating (the tick's `retryPolicy: 'idempotent'` depends on it). */
+  /** The plan wrote inside `PLAN_STALLED_AFTER_MS` and no fast-path answer says
+   *  its producer is gone (MOTIR-8132) — it is being written. Replaces
+   *  `job_in_flight` and `no_producer_recent` for a `generating` plan. */
+  | 'writing'
+  /** A REVISION's job is `queued` / `running` inside {@link REVISION_JOB_MAX_AGE_MS}
+   *  (MOTIR-7936). Never a `generating` plan's verdict. */
   | 'job_in_flight'
-  /** motir-ai could not be reached. Unreachable is not evidence of death, and
-   *  the next tick asks again. */
+  /** motir-ai could not be reached about a REVISION's job, and the next tick asks
+   *  again (MOTIR-7936). For a `generating` plan unreachable is no longer a keep:
+   *  it falls through to the silence rule. */
   | 'ai_unreachable'
   /** The row changed under us between discovery and the write — proposals
-   *  arrived, or somebody decided it. */
+   *  arrived, the plan wrote again, or somebody decided it. */
   | 'row_moved'
-  /** No producer, and still inside {@link ABANDONED_PLAN_MAX_AGE_HOURS} — an
-   *  agent that is mid-skeleton right now looks exactly like one that stopped,
-   *  and the grace alone is far too short to tell them apart. This is the KEEP
-   *  arm that makes `no_producer` safe: an author has a full day to close the
-   *  plan before anything touches it. */
-  | 'no_producer_recent'
   /** The plan's session is WAITING — failed and waiting to resume, or awaiting its
    *  person — so the plan is not abandoned: a person is coming back to it
    *  (MOTIR-7912; AMENDMENT 23's 2026-10-09 sub-amendment). */
@@ -229,106 +225,105 @@ const defaultDeps: AbandonedPlanDeps = {
  *  however much of it the job managed to append first. */
 const TERMINAL_JOB_STATUSES = new Set(['succeeded', 'failed', 'canceled']);
 
-/**
- * The DECISION TABLE, pure and separated from the I/O so it can be read as one
- * thing: given what the job said and how old the plan is, is the producer coming
- * back?
- */
-export function classifyAbandonedCandidate(
-  job: PlanJobStateDto | null,
-  ageMs: number,
-): { abandoned: true; reason: AbandonReason } | { abandoned: false; reason: KeepReason } {
-  // NO PRODUCER (MOTIR-3236) — `job` is null because the plan carries no
-  // `sourceJobId` and there was nothing to ask. An MCP-authored plan is written
-  // this way by construction (`create_plan` has no job), so this is not a
-  // degenerate case: it is the whole shape of one of the two ways a plan gets
-  // written.
-  //
-  // AMENDMENT 2's argument for asking — "the discriminator is not in the plan
-  // table" — is TRUE of a producer-bearing plan and FALSE here. An ABSENT
-  // producer IS a fact about the row, and it is the fact that settles the
-  // question: there is no job that could come back, so the only signal left is
-  // the passage of time. That is exactly the argument `max_age` already makes
-  // for the crashed worker, which is why this arm REUSES
-  // `ABANDONED_PLAN_MAX_AGE_HOURS` rather than introducing a threshold of its
-  // own.
-  if (job === null) {
-    if (ageMs >= ABANDONED_PLAN_MAX_AGE_HOURS * 60 * 60 * 1000) {
-      return { abandoned: true, reason: 'no_producer' };
-    }
-    return { abandoned: false, reason: 'no_producer_recent' };
-  }
+/** The FAST PATH: whether what motir-ai said about a job already proves its producer
+ *  is gone, before any clock is read. `dead: false` proves nothing either way. */
+function jobFastPath(
+  job: PlanJobStateDto,
+): { dead: true; reason: 'job_terminal' | 'job_gone' } | { dead: false } {
   // A 404 is the one unreachable-shaped answer that IS evidence: motir-ai
   // answered, and its answer was that no such job exists.
   if (!job.reachable) {
-    if (job.failure?.code === 'MOTIR_AI_JOB_NOT_FOUND') {
-      return { abandoned: true, reason: 'job_gone' };
-    }
-    return { abandoned: false, reason: 'ai_unreachable' };
+    return job.failure?.code === 'MOTIR_AI_JOB_NOT_FOUND'
+      ? { dead: true, reason: 'job_gone' }
+      : { dead: false };
   }
   if (job.status && TERMINAL_JOB_STATUSES.has(job.status)) {
-    return { abandoned: true, reason: 'job_terminal' };
+    return { dead: true, reason: 'job_terminal' };
   }
-  if (ageMs >= ABANDONED_PLAN_MAX_AGE_HOURS * 60 * 60 * 1000) {
-    return { abandoned: true, reason: 'max_age' };
-  }
-  return { abandoned: false, reason: 'job_in_flight' };
+  return { dead: false };
 }
 
 /**
- * What the sweep does with a candidate that has an open `conversation` session
- * of which it is the LATEST plan — a second pure table, composed AFTER
- * {@link classifyAbandonedCandidate} (MOTIR-7912):
+ * The DECISION TABLE for a `generating` plan, pure and separated from the I/O so it
+ * can be read as one thing (MOTIR-8132): given what the job said, if anything, and
+ * how long the plan has been SILENT (`now - lastActivityAt`), is its producer coming
+ * back?
+ *
+ *   * a job that is `failed` / `canceled` / `succeeded` (the plan is still
+ *     `generating`, so a success never closed it) → dead at once, `job_terminal`;
+ *   * a job motir-ai says does not exist (404) → dead at once, `job_gone`;
+ *   * anything else — `queued` / `running`, motir-ai unreachable, or no job to ask
+ *     (`sourceJobId` null) → the silence rule: dead (`silent`) when
+ *     `silentMs > PLAN_STALLED_AFTER_MS`, otherwise kept (`writing`).
+ *
+ * The silence rule is `readPlanProgress`'s comparison exactly — equal is not
+ * stalled, one millisecond more is — so the rail and the sweep cannot disagree.
+ */
+export function classifyAbandonedCandidate(
+  job: PlanJobStateDto | null,
+  silentMs: number,
+): { abandoned: true; reason: AbandonReason } | { abandoned: false; reason: KeepReason } {
+  if (job) {
+    const fast = jobFastPath(job);
+    if (fast.dead) return { abandoned: true, reason: fast.reason };
+  }
+  if (silentMs > PLAN_STALLED_AFTER_MS) return { abandoned: true, reason: 'silent' };
+  return { abandoned: false, reason: 'writing' };
+}
+
+/**
+ * What the sweep does with a dead candidate that is the LATEST plan of an open
+ * `conversation` or `mcp` session — the sessions To resume lists — a second pure
+ * table, composed AFTER {@link classifyAbandonedCandidate} (MOTIR-7912; widened to
+ * every verdict and both origins by MOTIR-8132):
  *
  *   * the session is waiting (failed, or awaiting its person) → `keep`;
- *   * the producer is gone because the job FAILED, vanished, or aged out → `record`
- *     the failure on the session (the plan is not declined);
- *   * anything else (a `succeeded`-but-unplanned or `canceled` job, no producer)
- *     → `decline`, exactly today's arm.
+ *   * otherwise the producer is gone, however we found out → `record` the failure on
+ *     the session: the plan is not declined and the session is not ended, so the
+ *     producer's next write picks the plan up where it stopped.
  */
 export function classifySessionCandidate(
   waiting: SessionWaitingState,
-  verdict: ReturnType<typeof classifyAbandonedCandidate>,
-  job: PlanJobStateDto | null,
-):
-  | { action: 'keep'; reason: 'session_waiting' }
-  | { action: 'record'; reason: AbandonReason }
-  | { action: 'decline' } {
+  verdict: { abandoned: true; reason: AbandonReason },
+): { action: 'keep'; reason: 'session_waiting' } | { action: 'record'; reason: AbandonReason } {
   if (waiting === 'failed' || waiting === 'awaiting_person') {
     return { action: 'keep', reason: 'session_waiting' };
   }
-  if (verdict.abandoned) {
-    if (verdict.reason === 'job_gone' || verdict.reason === 'max_age') {
-      return { action: 'record', reason: verdict.reason };
-    }
-    if (verdict.reason === 'job_terminal' && job?.status === 'failed') {
-      return { action: 'record', reason: verdict.reason };
-    }
-  }
-  return { action: 'decline' };
+  return { action: 'record', reason: verdict.reason };
 }
+
+/** The session origins whose failed-waiting sessions To resume lists, so a failure
+ *  recorded on one is seen by somebody (MOTIR-8132). Every other origin — a
+ *  `generation`, `expand` or `cadence` session — keeps the decline: a failure nobody
+ *  can see would hold a cadence plan's project paused for ever (MOTIR-3064). */
+export const RECORDABLE_SESSION_ORIGINS: ReadonlySet<string> = new Set(['conversation', 'mcp']);
 
 /**
  * The decision table for a REVISION whose lease was never closed (MOTIR-7936), pure: given
  * what the revision's job says and how long the lease has been open, what became of it?
- * Reuses {@link classifyAbandonedCandidate} for "is the producer coming back" and adds
- * the one distinction a revision needs — a `failed` (or vanished, or aged-out) job is a
- * failure to record; a `canceled` or `succeeded` one only owes its lease back.
+ * MOTIR-8132 left it as it was: the fast path first; then a lease older than
+ * {@link REVISION_JOB_MAX_AGE_MS} fails it, and a `queued` / `running` job or an
+ * unreachable motir-ai keeps it. The one distinction a revision needs — a `failed` (or
+ * vanished, or aged-out) job is a failure to record; a `canceled` or `succeeded` one only
+ * owes its lease back.
  */
 export function classifyRevisionCandidate(
-  job: PlanJobStateDto | null,
+  job: PlanJobStateDto,
   ageMs: number,
 ):
   | { action: 'fail'; reason: AbandonReason }
   | { action: 'release'; reason: AbandonReason }
   | { action: 'keep'; reason: KeepReason } {
-  const verdict = classifyAbandonedCandidate(job, ageMs);
-  if (!verdict.abandoned) return { action: 'keep', reason: verdict.reason };
-  if (verdict.reason === 'job_terminal' && job?.status !== 'failed') {
-    return { action: 'release', reason: verdict.reason };
+  const fast = jobFastPath(job);
+  if (fast.dead) {
+    if (fast.reason === 'job_terminal' && job.status !== 'failed') {
+      return { action: 'release', reason: fast.reason };
+    }
+    return { action: 'fail', reason: fast.reason };
   }
-  // A revision always has a job; a missing one is a lease nobody can end.
-  return { action: 'fail', reason: verdict.reason };
+  if (!job.reachable) return { action: 'keep', reason: 'ai_unreachable' };
+  if (ageMs >= REVISION_JOB_MAX_AGE_MS) return { action: 'fail', reason: 'max_age' };
+  return { action: 'keep', reason: 'job_in_flight' };
 }
 
 /** Whether a sweep candidate is `generating` because a revision re-opened it (MOTIR-8208). */
@@ -368,10 +363,12 @@ async function readWalkStop(jobId: string, coreProjectId: string): Promise<JobWa
 
 export const abandonedPlanService = {
   /**
-   * One reconciliation pass: find every `generating` plan whose producer has had
-   * its grace, ask motir-ai what became of that producer, and DECLINE the ones
-   * it is not coming back to. Empty or PARTIAL alike since MOTIR-3189 — what
-   * decides is the JOB, not what the plan managed to hold before it died.
+   * One reconciliation pass: read every `generating` plan, stalest first, ask
+   * motir-ai about the ones with a job, and settle the ones whose producer is not
+   * coming back — a plan silent past `PLAN_STALLED_AFTER_MS`, or whose job already
+   * ended (MOTIR-8132). Empty or PARTIAL alike since MOTIR-3189. The latest plan of
+   * an open `conversation` / `mcp` session is RECORDED as failed on that session
+   * and stays `generating`; every other plan is DECLINED, as below.
    *
    * WHY `declined` AND NOT A NEW `failed` STATE — the decision this card was
    * asked to make, recorded in full in AMENDMENT 2 and in one line here because
@@ -406,16 +403,13 @@ export const abandonedPlanService = {
     const now = opts.now ?? new Date();
     const batchSize = opts.batchSize ?? ABANDONED_PLAN_SWEEP_BATCH_SIZE;
     const deps = opts.deps ?? defaultDeps;
-    const olderThan = new Date(now.getTime() - ABANDONED_PLAN_GRACE_MINUTES * 60 * 1000);
-
     const candidates = await withSystemContext((tx) =>
-      planRepository.listAbandonedCandidates(olderThan, batchSize, tx),
+      planRepository.listAbandonedCandidates(batchSize, tx),
     );
     const outcomes: AbandonedPlanOutcome[] = [];
     for (const plan of candidates) {
       // ⚠️ A PLAN A REVISION RE-OPENED IS NOT A GENERATION (Bug MOTIR-8208). It is
-      // `generating` while the revision writes it, and its `createdAt` is the FIRST
-      // generation's, so it is always past the grace — judged here, a live revision
+      // `generating` while the revision writes it — judged here, a live revision
       // would be declined as abandoned. The revision backstop below owns it, and gives
       // it back to `planned` when its revision dies.
       if (await reopenedByRevision(plan)) continue;
@@ -427,11 +421,19 @@ export const abandonedPlanService = {
       // "the job died", on every pass, for every MCP-authored plan.
       //
       // When there IS one, the ask happens outside any transaction: it is a
-      // network call to motir-ai, and a slow one must never be holding a row.
+      // network call to motir-ai, and a slow one must never be holding a row. It is
+      // asked even inside the silence threshold, because the fast path is the whole
+      // reason to ask (MOTIR-8132).
       const job = plan.sourceJobId
         ? await deps.resolveJobState(plan.sourceJobId, plan.projectId)
         : null;
-      const verdict = classifyAbandonedCandidate(job, now.getTime() - plan.createdAt.getTime());
+      // SILENCE, from the one fact every write stamps (MOTIR-8132). Never null — the
+      // column defaults to the plan's creation — so a plan that never wrote reads
+      // silent from its `createdAt`, which is what the old grace did.
+      const verdict = classifyAbandonedCandidate(
+        job,
+        now.getTime() - plan.lastActivityAt.getTime(),
+      );
 
       if (!verdict.abandoned) {
         outcomes.push({
@@ -443,10 +445,11 @@ export const abandonedPlanService = {
         continue;
       }
 
-      // THE SESSION ARM (MOTIR-7912). A plan that is the LATEST of an open
-      // `conversation` session is judged by the second table: a waiting session is
-      // spared, and a failure nobody watched is RECORDED on it rather than the plan
-      // being declined. Every other plan falls through to today's decline.
+      // THE SESSION ARM (MOTIR-7912; widened by MOTIR-8132). A plan that is the
+      // LATEST of an open `conversation` or `mcp` session — the two To resume lists —
+      // is judged by the second table: a waiting session is spared, and a dead
+      // producer is RECORDED on it rather than the plan being declined. Every other
+      // plan falls through to the decline.
       const session = plan.sessionId
         ? await withWorkspaceServiceContext(plan.workspaceId, async (tx) => {
             const row = await planChangeSessionRepository.findById(
@@ -454,13 +457,13 @@ export const abandonedPlanService = {
               plan.workspaceId,
               tx,
             );
-            if (!row || row.endedAt || row.origin !== 'conversation') return null;
+            if (!row || row.endedAt || !RECORDABLE_SESSION_ORIGINS.has(row.origin)) return null;
             const latest = await planRepository.findLatestIdBySession(row.id, tx);
             return latest === plan.id ? row : null;
           })
         : null;
       if (session) {
-        const decision = classifySessionCandidate(sessionWaitingState(session), verdict, job);
+        const decision = classifySessionCandidate(sessionWaitingState(session), verdict);
         if (decision.action === 'keep') {
           outcomes.push({
             planId: plan.id,
@@ -470,9 +473,12 @@ export const abandonedPlanService = {
           });
           continue;
         }
-        if (decision.action === 'record' && plan.sourceJobId) {
-          // A walk stop that cannot be read is no stop point, never a failed sweep.
-          let walkStop: JobWalkStop | null = null;
+        // A walk stop that cannot be read is no stop point, never a failed sweep. A
+        // plan with no job has none to read: it is recorded with `failedJobId: null`,
+        // `internal` and no stop point (MOTIR-8130 §3), which To resume lists and
+        // Resume does not offer — its producer resumes by writing again.
+        let walkStop: JobWalkStop | null = null;
+        if (plan.sourceJobId) {
           try {
             walkStop = await (deps.getJobWalkStop ?? readWalkStop)(
               plan.sourceJobId,
@@ -481,33 +487,43 @@ export const abandonedPlanService = {
           } catch {
             walkStop = null;
           }
-          const record = failureRecordFrom({
-            failedJobId: plan.sourceJobId,
-            now,
-            walkStop,
-            lastPosition: null,
-            error: job?.failure ?? null,
-          });
-          const recorded = await withWorkspaceServiceContext(plan.workspaceId, (tx) =>
-            recordFailureWithin(tx, session.id, plan.workspaceId, record, { onlyPlanId: plan.id }),
-          );
-          outcomes.push(
-            recorded === 'recorded'
-              ? {
-                  planId: plan.id,
-                  projectId: plan.projectId,
-                  outcome: 'awaiting_resume',
-                  reason: decision.reason,
-                }
-              : {
-                  planId: plan.id,
-                  projectId: plan.projectId,
-                  outcome: 'left_as_is',
-                  reason: 'row_moved',
-                },
-          );
-          continue;
         }
+        const record = failureRecordFrom({
+          failedJobId: plan.sourceJobId,
+          now,
+          walkStop,
+          lastPosition: null,
+          error: job?.failure ?? null,
+        });
+        // GUARDED on the silence it was judged by: a write that landed since the
+        // candidate was read moved `lastActivityAt`, and that producer is alive.
+        const recorded = await withWorkspaceServiceContext(plan.workspaceId, (tx) =>
+          recordFailureWithin(tx, session.id, plan.workspaceId, record, {
+            onlyPlanId: plan.id,
+            lastActivityAt: plan.lastActivityAt,
+          }),
+        );
+        if (recorded === 'recorded') {
+          console.warn(
+            `[abandoned-plan-sweep] plan ${plan.id} (project ${plan.projectId}) recorded as failed on session ${session.id} — ${decision.reason}; ${plan._count.items} proposal(s) retained`,
+          );
+        }
+        outcomes.push(
+          recorded === 'recorded'
+            ? {
+                planId: plan.id,
+                projectId: plan.projectId,
+                outcome: 'awaiting_resume',
+                reason: decision.reason,
+              }
+            : {
+                planId: plan.id,
+                projectId: plan.projectId,
+                outcome: 'left_as_is',
+                reason: 'row_moved',
+              },
+        );
+        continue;
       }
 
       const written = await withWorkspaceServiceContext(plan.workspaceId, async (tx) => {
@@ -520,6 +536,10 @@ export const abandonedPlanService = {
         if (isReopenedByRevision(fresh, await planRevisionRepository.listByPlan(plan.id, tx))) {
           return false;
         }
+        // A WRITE since discovery means the producer is alive (MOTIR-8132) — the same
+        // guard the recording arm takes, and the one that also sees a step signal,
+        // which writes no proposal.
+        if (fresh.lastActivityAt.getTime() !== plan.lastActivityAt.getTime()) return false;
         // AND RE-COUNT, comparing against what discovery saw (MOTIR-3189). This
         // used to read `items > 0`, which was correct only while the predicate
         // guaranteed zero; a partial plan is now a legitimate candidate, so the
@@ -569,7 +589,7 @@ export const abandonedPlanService = {
       // shapes this was: a job that was asked about and reported something, or a
       // plan that never had one. Printing `job null` and a job status for a
       // job-less plan would read as a failed lookup rather than an absent
-      // producer, which is the distinction the whole `no_producer` arm turns on.
+      // producer, which is the distinction the sweep's no-ask path turns on.
       const producer = job
         ? `job ${plan.sourceJobId}; job status ${job.status ?? 'unreachable'}${
             job.failure ? ` (${job.failure.code})` : ''
@@ -589,8 +609,14 @@ export const abandonedPlanService = {
     // THE REVISION BACKSTOP (MOTIR-7936): a `planned` / `stale` plan whose revision lease was
     // opened by a job that died unseen. The relay settles the ordinary case at once; this
     // gives the lease back — and records the failure — for the one nobody was watching.
+    // Its discovery window is `PLAN_STALLED_AFTER_MS` — the same fifteen minutes the
+    // retired generation grace gave it, so the backstop's candidates are unchanged.
     const stale = await withSystemContext((tx) =>
-      planRepository.listStaleRevisionCandidates(olderThan, batchSize, tx),
+      planRepository.listStaleRevisionCandidates(
+        new Date(now.getTime() - PLAN_STALLED_AFTER_MS),
+        batchSize,
+        tx,
+      ),
     );
     for (const plan of stale) {
       // A `generating` plan is here only when a revision RE-OPENED it (Bug MOTIR-8208);

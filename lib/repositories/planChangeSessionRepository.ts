@@ -61,7 +61,9 @@ function failedOpenForOwnerWhere(args: {
     workspaceId: args.workspaceId,
     createdById: args.userId,
     projectId: { in: [...args.projectIds] },
-    origin: 'conversation',
+    // A conversation, or an MCP author's own session (MOTIR-8132): the two origins the
+    // sweep records a silent plan's failure on, so both must be where it is seen.
+    origin: { in: ['conversation', 'mcp'] },
     ...FAILED_WAITING_WHERE,
   };
 }
@@ -632,7 +634,7 @@ export const planChangeSessionRepository = {
   },
 
   /**
-   * The owner's OWN failed-waiting `conversation` sessions in the given projects,
+   * The owner's OWN failed-waiting `conversation` and `mcp` sessions in the given projects,
    * newest failure first (`id` breaks a tie), each with its failure record, its
    * anchor set and its LATEST plan id. Runs under the OWNER's workspace context —
    * the `createdById` predicate is the app-level belt for the policy's braces.

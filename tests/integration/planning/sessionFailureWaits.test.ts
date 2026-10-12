@@ -77,7 +77,8 @@ async function openSession(
   return session.id;
 }
 
-/** A plan in the session with `proposals` proposals, `ageHours` old. */
+/** A plan in the session with `proposals` proposals, `ageHours` old — and silent for
+ *  as long: its `lastActivityAt` is its `createdAt` (MOTIR-8132). */
 async function planIn(
   sessionId: string,
   opts: { status?: PlanStatus; proposals?: number; ageHours?: number; sourceJobId?: string } = {},
@@ -90,6 +91,7 @@ async function planIn(
       status: opts.status ?? 'generating',
       sourceJobId: opts.sourceJobId ?? null,
       createdAt: new Date(Date.now() - (opts.ageHours ?? 0) * HOUR),
+      lastActivityAt: new Date(Date.now() - (opts.ageHours ?? 0) * HOUR),
     },
   });
   for (let i = 0; i < (opts.proposals ?? 0); i++) {
@@ -343,7 +345,7 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
     expect(await locksOf(sessionId)).toBe(1);
   });
 
-  it('records for job_gone and for max_age too', T, async () => {
+  it('records for job_gone and for a SILENT plan behind a running job too', T, async () => {
     const goneSession = await openSession(await seedCard());
     await planIn(goneSession, { ageHours: 2, sourceJobId: 'job-gone' });
     const agedSession = await openSession(await seedCard());
@@ -411,31 +413,92 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
     },
   );
 
+  it(
+    'records EVERY dead verdict — a succeeded-but-unplanned or canceled job too (MOTIR-8132)',
+    T,
+    async () => {
+      // These two used to be the decline counterfactuals. Dead is recorded, never
+      // declined, on a session To resume lists: the plan and its cards wait for the
+      // producer to come back by writing.
+      const succeeded = await openSession(await seedCard());
+      const succeededPlan = await planIn(succeeded, { ageHours: 2, sourceJobId: 'job-s' });
+      const canceled = await openSession(await seedCard());
+      const canceledPlan = await planIn(canceled, { ageHours: 2, sourceJobId: 'job-c' });
+
+      await abandonedPlanService.reconcileAbandoned({
+        deps: {
+          resolveJobState: async (jobId) => ({
+            status: jobId === 'job-s' ? 'succeeded' : 'canceled',
+            reachable: true,
+            failure: null,
+          }),
+          getJobWalkStop: async () => null,
+        },
+      });
+
+      for (const [sessionId, planId] of [
+        [succeeded, succeededPlan.id],
+        [canceled, canceledPlan.id],
+      ] as const) {
+        expect((await planRow(planId)).status).toBe('generating');
+        const s = await sessionRow(sessionId);
+        expect(s.endedAt).toBeNull();
+        expect(s.failedAt).not.toBeNull();
+      }
+    },
+  );
+
+  it('records a SILENT plan with NO producer — no job, `internal`, no stop point', T, async () => {
+    const sessionId = await openSession(await seedCard());
+    const plan = await planIn(sessionId, { ageHours: 1, proposals: 1 });
+
+    const out = await abandonedPlanService.reconcileAbandoned({ deps: deps(failedState) });
+
+    expect(out.outcomes).toEqual([
+      { planId: plan.id, projectId: fx.projectId, outcome: 'awaiting_resume', reason: 'silent' },
+    ]);
+    const s = await sessionRow(sessionId);
+    expect(s.endedAt).toBeNull();
+    expect(s.failedJobId).toBeNull();
+    expect(s.failureReason).toBe('internal');
+    expect(s.failureStopRef).toBeNull();
+    expect((await planRow(plan.id)).status).toBe('generating');
+    expect(await locksOf(sessionId)).toBe(1);
+  });
+
+  it(
+    'records NOTHING when the plan wrote after it was judged silent — the compare-and-set (MOTIR-8132)',
+    T,
+    async () => {
+      const sessionId = await openSession(await seedCard());
+      const plan = await planIn(sessionId, { ageHours: 2, sourceJobId: 'job-late' });
+
+      const out = await abandonedPlanService.reconcileAbandoned({
+        deps: {
+          resolveJobState: async () => asState(failedState),
+          // The last read before the record: a producer write lands here and moves
+          // the stamp the sweep judged by.
+          getJobWalkStop: async () => {
+            await adminDb.plan.update({
+              where: { id: plan.id },
+              data: { lastActivityAt: new Date() },
+            });
+            return null;
+          },
+        },
+      });
+
+      expect(out.outcomes).toEqual([
+        { planId: plan.id, projectId: fx.projectId, outcome: 'left_as_is', reason: 'row_moved' },
+      ]);
+      const s = await sessionRow(sessionId);
+      expect(s.failedAt).toBeNull();
+      expect(s.endedAt).toBeNull();
+      expect((await planRow(plan.id)).status).toBe('generating');
+    },
+  );
+
   describe('still declines — the counterfactuals', () => {
-    it('a succeeded-but-unplanned job on a non-waiting session', T, async () => {
-      const sessionId = await openSession(await seedCard());
-      const plan = await planIn(sessionId, { ageHours: 2, sourceJobId: 'job-s' });
-
-      await abandonedPlanService.reconcileAbandoned({
-        deps: deps({ status: 'succeeded', reachable: true, failure: null }),
-      });
-
-      expect((await planRow(plan.id)).status).toBe('declined');
-      expect((await sessionRow(sessionId)).endReason).toBe('failed');
-    });
-
-    it('a canceled job', T, async () => {
-      const sessionId = await openSession(await seedCard());
-      const plan = await planIn(sessionId, { ageHours: 2, sourceJobId: 'job-c' });
-
-      await abandonedPlanService.reconcileAbandoned({
-        deps: deps({ status: 'canceled', reachable: true, failure: null }),
-      });
-
-      expect((await planRow(plan.id)).status).toBe('declined');
-      expect((await sessionRow(sessionId)).endReason).toBe('failed');
-    });
-
     it('a session-less plan and a `guide` session', T, async () => {
       const orphan = await planIn(await openSession(await seedCard()), {
         ageHours: 2,
@@ -452,14 +515,19 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
       expect((await sessionRow(guideSession)).failedAt).toBeNull();
     });
 
-    it('an MCP plan with no producer', T, async () => {
-      const sessionId = await openSession(await seedCard());
-      const plan = await planIn(sessionId, { ageHours: 30 });
+    it.each(['generation', 'expand', 'cadence'] as const)(
+      'a silent plan of a `%s` session — no To resume entry, so it is declined',
+      async (origin) => {
+        const sessionId = await openSession(await seedCard(), { origin });
+        const plan = await planIn(sessionId, { ageHours: 1 });
 
-      await abandonedPlanService.reconcileAbandoned({ deps: deps(failedState) });
+        await abandonedPlanService.reconcileAbandoned({ deps: deps(failedState) });
 
-      expect((await planRow(plan.id)).status).toBe('declined');
-    });
+        expect((await planRow(plan.id)).status).toBe('declined');
+        expect((await sessionRow(sessionId)).failedAt).toBeNull();
+      },
+      60_000,
+    );
   });
 });
 

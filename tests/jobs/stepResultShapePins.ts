@@ -367,12 +367,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',
     shape: '{ counted: number; indeterminate: number; scanned: number; skipped: number }',
   },
-  'reconcile-abandoned-plans': {
+  'reconcile-abandoned-plans-v2': {
     file: 'lib/jobs/definitions/abandonedPlanSweep.ts',
-    // `lease_lapsed` / `revision_held` added by MOTIR-8208: two new reason MEMBERS
-    // only, so a replayed old value is still a member of the new shape.
+    // MOTIR-8132 renamed two reason members (`no_producer` → `silent`,
+    // `no_producer_recent` → `writing`), so the id was bumped.
     shape:
-      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "no_producer_recent" | "revision_held" | "row_moved" | "session_waiting" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" }>; scanned: number }',
+      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',
   },
   'reconcile-established-runs': {
     file: 'lib/jobs/definitions/migrateOnboardingSweep.ts',
@@ -661,6 +661,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'reconcile-abandoned-plans': {
+    shape:
+      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "no_producer_recent" | "revision_held" | "row_moved" | "session_waiting" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" }>; scanned: number }',
+    supersededBy: 'reconcile-abandoned-plans-v2',
+    reason:
+      'MOTIR-8132 changed the sweep’s reason members (`no_producer` → `silent`, `no_producer_recent` → `writing`) when it began judging a plan by its silence. A memo written under the old id carries members the new reader does not know; the step is an idempotent recompute from live state, so re-executing it under the new id on a resumed run is safe.',
+  },
   'reap-orphaned-containers': {
     shape:
       '{ reaped: number; staleClaims: number; usages: Array<{ billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string }> }',

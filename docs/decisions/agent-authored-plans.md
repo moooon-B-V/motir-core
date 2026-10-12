@@ -1489,6 +1489,13 @@ terminal_.
 - **It does not shorten the grace or the max age.** Both constants are untouched; what changed is
   which rows are measured against them.
 
+> **Amended by AMENDMENT 26 (MOTIR-8130 · MOTIR-8132, 2026-10-11).** The `no_producer` arm, its
+> `no_producer_recent` keep, `max_age`, the 15-minute grace and the 24-hour constant they shared are
+> gone. A `generating` plan with or without a producer is judged by one rule — silent past
+> `PLAN_STALLED_AFTER_MS` — and a dead plan on a `conversation` / `mcp` session is recorded, not
+> declined. The bullet above is superseded; the re-shape this amendment made (select every
+> `generating` plan, let the table decide) stands.
+
 ---
 
 ## AMENDMENT 8 — a proposal can be CORRECTED and WITHDRAWN, for an explicit correction only (MOTIR-3540, 2026-08-26)
@@ -4283,3 +4290,36 @@ An `add` that PROPOSES a container with a `type` at the append is unchanged by t
 
 **Not in scope.** motir-ai's `MODIFY_PATCH_KEYS` mirror. A plan authored there cannot propose a re-kind
 until it learns the key; nothing it sends today changes.
+
+---
+
+## AMENDMENT 26 — a `generating` plan is dead when it is SILENT, and dead is RECORDED (story MOTIR-8128 · decision MOTIR-8130 · MOTIR-8132, 2026-10-11)
+
+The abandoned-plan sweep judged a plan by its AGE (`now - createdAt`) against a 15-minute grace and
+a 24-hour max age, while the rail judged the same plan by its SILENCE
+(`now - lastActivityAt > PLAN_STALLED_AFTER_MS`). The two disagreed for up to a day, and a job-less
+MCP plan could only be declined, never resumed. The decision page on MOTIR-8130 records the
+reasoning; what it changed:
+
+- **One rule.** A `generating` plan is dead when `now - lastActivityAt > PLAN_STALLED_AFTER_MS` —
+  the rail's comparison, equal is not dead. `lastActivityAt` is never null (a plan that never wrote
+  reads its `createdAt`), so the old grace's job is done by the rule itself. Selection is every
+  `generating` plan, stalest first, still bounded per pass.
+- **The job is a fast path only.** `failed`, `canceled`, or `succeeded` while still `generating`,
+  and a 404, are dead at once. `queued` / `running`, an unreachable motir-ai and no job at all fall
+  through to the silence rule (`silent`). The keep reasons for a generation are `writing`,
+  `session_waiting`, `row_moved` and `revision_held`.
+- **Dead is recorded, never declined,** on the plan's open `conversation` or `mcp` session, through
+  `recordFailureWithin` — now a compare-and-set on `lastActivityAt`, so a write that lands between
+  the read and the record wins. To resume lists both origins. A job-less plan is recorded with
+  `failed_job_id` NULL, `internal` and no stop point (the `failure_whole` CHECK no longer requires
+  the job id); Resume is not offered for it.
+- **A write resumes it.** Every content write and step signal stamps activity through one helper,
+  which clears a failed-waiting session's record when the plan is its latest and `generating`.
+- **Origins with no resume surface keep the decline** — a `generation`, `expand` or `cadence`
+  session, or no session — now reached by silence or the fast path instead of the day.
+- **The sweep runs on `SUB_HOURLY_CADENCE` (`*/5`)**, the conforming cadence, so worst-case detection
+  is 20 minutes after the last write and a job motir-ai reports dead is settled within 5.
+
+Unchanged: the revision backstop (it keeps its own lease-age window), the target-lock leases, the
+value of `PLAN_STALLED_AFTER_MS`, and motir-ai.

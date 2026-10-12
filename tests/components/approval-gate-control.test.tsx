@@ -249,6 +249,13 @@ describe('H · refused — every member of the union renders in place, with a ne
       expect: /no single decision document[\s\S]*exactly one file under docs\/decisions\//,
     },
     { refusal: { tag: 'APPROVAL_GATE_ALREADY_AWAITING' }, expect: /already waiting/ },
+    // A pull request the card cannot see (MOTIR-8236) — nothing decided, and the next
+    // action names both ways out.
+    {
+      refusal: { tag: 'APPROVAL_GATE_DELIVERY_UNREADABLE' },
+      expect:
+        /no longer visible to this organization\..*reconnect it here, or unlink that pull request/,
+    },
     { refusal: { tag: 'APPROVAL_GATE_DECIDED_IMMUTABLE' }, expect: /cannot be changed/ },
     // A card path that met a card-less (plan) gate (MOTIR-6032) — a defect, never a
     // refusal a person can act on, so it reads as the unexpected refusal does.
