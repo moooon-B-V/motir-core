@@ -14,7 +14,7 @@ import {
 import type { PlanStepDto } from '@/lib/dto/plans';
 
 // Story MOTIR-7820 · Subtask MOTIR-7825 — the ONE progress derivation, pure.
-// Every number and phrase key here is the design's (Part XXV §25.9, §25.13).
+// Every number and phrase key here is the design's (Part XXVI §26.9, §26.13).
 
 const T0 = Date.parse('2026-10-08T12:00:00.000Z');
 const at = (ms: number) => new Date(T0 + ms).toISOString();
@@ -68,11 +68,11 @@ function build(args: {
 }
 
 describe('the threshold and the copy keys are the design’s', () => {
-  it('PLAN_STALLED_AFTER_MS is 15 minutes (§25.9)', () => {
+  it('PLAN_STALLED_AFTER_MS is 15 minutes (§26.9)', () => {
     expect(PLAN_STALLED_AFTER_MS).toBe(900_000);
   });
 
-  it('maps every phrase to its §25.13 copy key', () => {
+  it('maps every phrase to its §26.13 copy key', () => {
     expect(PLAN_STEP_PHRASE_MESSAGE_KEY).toEqual({
       settling: 'planReview.progress.settling',
       layingTopLevel: 'planReview.progress.layingTopLevel',
