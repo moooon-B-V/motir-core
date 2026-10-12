@@ -727,6 +727,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'onboarding-entrance.spec.ts': 6.8,
   'onboarding-entry.spec.ts': 2.9,
   'onboarding-fresh.spec.ts': 9.3,
+  // MOTIR-8257 — a brand-new spec, ESTIMATED rather than measured: one sign-up,
+  // then nine tests that each open a context and load four onboarding screens.
+  // Rounded UP; re-measure from the first green bulk leg that includes it.
+  'onboarding-locale-sweep.spec.ts': 60.0,
   'onboarding-migrate.spec.ts': 42.0,
   'onboarding-ran-gate.spec.ts': 14.1,
   // MOTIR-7280 — a brand-new spec, ESTIMATED rather than measured: two tests,

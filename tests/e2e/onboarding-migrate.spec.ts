@@ -1,8 +1,9 @@
-import type { Page } from '@playwright/test';
+import type { Page, Response } from '@playwright/test';
 
 import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp, createFirstProject } from './_helpers/shell-session';
+import { stubMigrateRoutes } from './_helpers/onboarding-stubs';
 
 // Migrate-onboarding wizard E2E + acceptance video (MOTIR-936). Runs under
 // playwright.acceptance.config.ts (video: 'on') so the CI acceptance-video lane
@@ -15,8 +16,16 @@ import { signUp, createFirstProject } from './_helpers/shell-session';
 // deterministic DTOs.  The real MigrateWizard renders every panel.
 //
 // Per the CLAUDE.md E2E discipline: every mutation waits on the authoritative
-// response signal (page.waitForResponse BEFORE the action), never a fixed
-// waitForTimeout.
+// response signal (page.waitForResponse BEFORE the action), and the index gate
+// is read from the Next control's own enabled state, never a fixed wait.
+//
+// The one-page wizard (MOTIR-8254, design/onboarding-migrate Revisions 1-6):
+// with ONE project the run starts on arrival and opens on Connect; with several
+// the Start panel offers a choice, the open project picked. Connect reads the
+// connected repositories itself and offers Continue. The Import step runs the
+// importer inline, Skip import in its Cancel slot (its Continue appears only on
+// a finished import, which these stubs never reach).
+// Plan my project now stays on this page and opens "A few questions".
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -28,140 +37,49 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-// ── Stub helpers ─────────────────────────────────────────────────────────────
+// ── Driving the wizard ───────────────────────────────────────────────────────
 
-interface RepoStatus {
-  provider: string;
-  repoRef: string;
-  /** 'indexed' or 'pending' — drives the per-repo badge + Next gate. */
-  status: 'indexed' | 'pending';
+const isStart = (r: Response) =>
+  r.url().endsWith('/onboarding/migrate') && r.request().method() === 'POST';
+const isAdvance = (r: Response) => r.url().includes('/advance') && r.request().method() === 'POST';
+const isSkip = (r: Response) => r.url().includes('/skip-import') && r.request().method() === 'POST';
+
+/** Two projects (the sign-up default + Invoicer): Start offers the choice; pick Invoicer. */
+async function startFromChoice(page: Page): Promise<void> {
+  await page.goto('/onboarding/migrate');
+  await expect(page.getByRole('heading', { name: 'Migrate an existing codebase' })).toBeVisible();
+  await page.getByRole('radio', { name: /Invoicer/ }).check();
+  const resp = page.waitForResponse(isStart);
+  await page.getByRole('button', { name: 'Start with Invoicer' }).click();
+  expect((await resp).status()).toBe(200);
+  await expect(
+    page.getByRole('heading', { name: 'Connect the repositories in this project' }),
+  ).toBeVisible();
 }
 
-function makeRun(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'run-mig',
-    projectId: 'p1',
-    kind: 'migrate',
-    step: 'connect',
-    status: 'active',
-    connectedRepoRef: null,
-    codeGraphReady: false,
-    conventionApprovedAt: null,
-    discoveryJobId: null,
-    generateJobId: null,
-    importSkipped: false,
-    importCompleted: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    ...overrides,
-  };
+async function connectToIndex(page: Page): Promise<void> {
+  await expect(page.getByText('3 repositories are connected')).toBeVisible();
+  const resp = page.waitForResponse(isAdvance);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  expect((await resp).status()).toBe(200);
+  await expect(page.getByRole('heading', { name: 'Indexing your codebase' })).toBeVisible();
 }
 
-function makeIndexStatus(repos: RepoStatus[]) {
-  const indexed = repos.filter((r) => r.status === 'indexed').length;
-  return {
-    repos,
-    indexedCount: indexed,
-    total: repos.length,
-    hasRunning: repos.some((r) => r.status === 'pending'),
-    allIndexed: indexed === repos.length,
-  };
+async function indexToImport(page: Page): Promise<void> {
+  const next = page.getByRole('button', { name: /Next: import your work/ });
+  await expect(next).toBeEnabled({ timeout: 10_000 });
+  const resp = page.waitForResponse(isAdvance);
+  await next.click();
+  expect((await resp).status()).toBe(200);
+  await expect(page.getByRole('heading', { name: 'Bring in your existing backlog' })).toBeVisible();
 }
 
-/**
- * Install page.route stubs that simulate the migrate state machine.
- *
- * The closure holds mutable state so `step` advances on each
- * POST …/advance and GET …/index-status returns the current repo list.
- */
-async function stubMigrateRoutes(page: Page) {
-  let step: string = 'connect';
-  const repos: RepoStatus[] = [
-    { provider: 'github', repoRef: 'acme/web', status: 'pending' },
-    { provider: 'github', repoRef: 'acme/api', status: 'pending' },
-    { provider: 'github', repoRef: 'acme/shared', status: 'pending' },
-  ];
-  let allIndexed = false;
-
-  await page.route('**/api/onboarding/migrate**', async (route) => {
-    const url = route.request().url();
-    const method = route.request().method();
-
-    // POST /api/onboarding/migrate — start a new run
-    if (method === 'POST' && url.endsWith('/migrate')) {
-      step = 'connect';
-      await route.fulfill({
-        status: 200,
-        json: makeRun({ step: 'connect' }),
-      });
-      return;
-    }
-
-    // POST .../advance — move to the next step
-    if (method === 'POST' && url.includes('/advance')) {
-      const next: Record<string, string> = {
-        connect: 'index',
-        index: 'import',
-        import: 'audit_convention',
-        audit_convention: 'discovery',
-        discovery: 'generate',
-        generate: 'review',
-        review: 'done',
-      };
-      step = next[step] ?? 'done';
-      const pastSetup = !['connect', 'index'].includes(step);
-      await route.fulfill({
-        status: 200,
-        json: makeRun({
-          step,
-          codeGraphReady: pastSetup,
-          importSkipped: !['connect', 'index', 'import'].includes(step),
-          connectedRepoRef: 'acme/web',
-        }),
-      });
-      return;
-    }
-
-    // POST .../skip-import — skip the optional import step
-    if (method === 'POST' && url.includes('/skip-import')) {
-      step = 'audit_convention';
-      await route.fulfill({
-        status: 200,
-        json: makeRun({
-          step: 'audit_convention',
-          importSkipped: true,
-          codeGraphReady: true,
-        }),
-      });
-      return;
-    }
-
-    // GET .../index-status — return per-repo progress (drives aria-live region)
-    if (method === 'GET' && url.includes('/index-status')) {
-      const out = allIndexed ? repos.map((r) => ({ ...r, status: 'indexed' as const })) : repos;
-      await route.fulfill({ status: 200, json: makeIndexStatus(out) });
-      return;
-    }
-
-    // GET .../:id — resume head read (the page's server-component read)
-    if (method === 'GET' && url.match(/\/migrate\/[^/]+$/)) {
-      await route.fulfill({ status: 200, json: makeRun({ step }) });
-      return;
-    }
-
-    await route.continue();
-  });
-
-  return {
-    /** Flip every repo to indexed so the aggregate gate opens. */
-    async completeIndex() {
-      allIndexed = true;
-      // Wait for one poll tick (the wizard polls every 3 s) to pick up the
-      // change.  A faster approach would be to re-navigate, but that adds
-      // flake risk; the 3.5 s wait is a real-time-bounded signal.
-      await page.waitForTimeout(3500);
-    },
-  };
+async function skipToDecision(page: Page): Promise<void> {
+  const resp = page.waitForResponse(isSkip);
+  await page.getByRole('button', { name: 'Skip import' }).click();
+  expect((await resp).status()).toBe(200);
+  await expect(page.getByRole('button', { name: 'Plan my project now' })).toBeVisible();
+  await expect(page.getByRole('link', { name: "Finish — I'll plan later" })).toBeVisible();
 }
 
 // ── Branch A: finish early (the recorded acceptance-video test) ─────────────
@@ -176,115 +94,69 @@ test('migrate wizard — finish early: set up → skip import → finish later',
   // to the story's acceptance panel.
   acceptanceStory('MOTIR-815');
 
-  await chapter('Sign in and start migrate onboarding', async () => {
+  await chapter('Sign up — the account has its one default project', async () => {
     await signUp(page, `migrate-a-${Date.now()}@example.com`);
-    await createFirstProject(page, 'Invoicer');
   });
-  await page.waitForTimeout(2000);
 
   const stubs = await stubMigrateRoutes(page);
   // The index data fixture uses all-indexed repos, so after the first poll tick
   // the Next button is enabled.  Per-repo rows render on the first poll.
-  await stubs.completeIndex();
+  stubs.completeIndex();
 
   await chapter(
-    'The wizard opens at Connect — required tier (Connect · Index) + optional tier (Import)',
+    'One project: the run starts on arrival at Connect — Connect · Index, then optional Import',
     async () => {
+      const resp = page.waitForResponse(isStart);
       await page.goto('/onboarding/migrate');
-      // StartPanel — no run exists yet.
-      await expect(
-        page.getByRole('heading', { name: 'Migrate an existing codebase' }),
-      ).toBeVisible();
-      // Click "Start" to create the run (stubbed).
-      const resp = page.waitForResponse(
-        (r) => r.url().endsWith('/onboarding/migrate') && r.request().method() === 'POST',
-      );
-      await page.getByRole('button', { name: 'Start' }).click();
       expect((await resp).status()).toBe(200);
-
-      // Wizard now renders ConnectPanel.
+      // No Start panel with one project (Revision 3).
       await expect(
-        page.getByRole('heading', {
-          name: 'Connect the repositories in this project',
-        }),
+        page.getByRole('heading', { name: 'Connect the repositories in this project' }),
       ).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Migrate an existing codebase' })).toHaveCount(
+        0,
+      );
 
-      // Rail: Connect current, Index upcoming, Import optional.
       const rail = page.getByRole('navigation', { name: 'Your migration' });
       await expect(rail.getByText('Connect', { exact: true })).toBeVisible();
       await expect(rail.getByText('Index', { exact: true })).toBeVisible();
       await expect(rail.getByText('Import work items')).toBeVisible();
-      await expect(page.getByText('optional')).toBeVisible();
+      await expect(rail.getByText('optional')).toBeVisible();
       // NO convention/audit step (MOTIR-1660).
       await expect(rail.getByText('Audit')).toHaveCount(0);
     },
   );
-  await page.waitForTimeout(2000);
 
-  await chapter('Connect → advance to Index', async () => {
-    const resp = page.waitForResponse(
-      (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-    );
-    await page.getByRole('button', { name: /I've connected my repos/ }).click();
-    expect((await resp).status()).toBe(200);
-
-    await expect(page.getByRole('heading', { name: 'Indexing your codebase' })).toBeVisible();
+  await chapter('Connect lists the connected repositories → Continue to Index', async () => {
+    const list = page.getByRole('list', { name: 'Connected repositories' });
+    await expect(list).toContainText('web');
+    await expect(list).toContainText('api');
+    await expect(list).toContainText('shared');
+    await connectToIndex(page);
   });
-  await page.waitForTimeout(2000);
 
   await chapter('Index — per-repo rows + aggregate meter + callout', async () => {
     const indexRegion = page.locator('[aria-live][aria-busy]');
     await expect(indexRegion).toBeVisible();
-
-    // Per-repo rows with provider + repo name + status badge.
-    await expect(page.getByText('acme/web')).toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(page.getByText('acme/api')).toBeVisible();
-    await expect(page.getByText('acme/shared')).toBeVisible();
+    await expect(page.getByText('3 of 3 repositories done')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Indexed').first()).toBeVisible();
-
-    // Aggregate meter
-    await expect(page.getByText('3 of 3 repositories done')).toBeVisible();
-    // Complete note
     await expect(page.getByText(/nothing to approve/)).toBeVisible();
   });
-  await page.waitForTimeout(2000);
 
-  await chapter('Index complete → advance to Import (optional)', async () => {
-    const resp = page.waitForResponse(
-      (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-    );
-    await page.getByRole('button', { name: /Next: import your work/ }).click();
-    expect((await resp).status()).toBe(200);
-
-    await expect(
-      page.getByRole('heading', {
-        name: 'Bring in your existing backlog',
-      }),
-    ).toBeVisible();
+  await chapter('Index complete → the importer, inline (optional)', async () => {
+    await indexToImport(page);
+    await expect(page.getByRole('list', { name: 'Import work items' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Skip import' })).toBeVisible();
   });
-  await page.waitForTimeout(2000);
 
   await chapter('Skip import → land on the plan-now-or-later decision', async () => {
-    const resp = page.waitForResponse(
-      (r) => r.url().includes('/skip-import') && r.request().method() === 'POST',
-    );
-    await page.getByRole('button', { name: 'Skip import' }).click();
-    expect((await resp).status()).toBe(200);
-
-    // DecisionPanel: both CTAs present.
-    await expect(page.getByRole('button', { name: 'Plan my project now' })).toBeVisible();
-    await expect(page.getByRole('link', { name: "Finish — I'll plan later" })).toBeVisible();
+    await skipToDecision(page);
   });
-  await page.waitForTimeout(2000);
 
   await chapter('Finish early — lands in the project', async () => {
     await page.getByRole('link', { name: "Finish — I'll plan later" }).click();
     await expect(page).toHaveURL(/\/roadmap/, { timeout: 10_000 });
   });
-  await page.waitForTimeout(2000);
 });
 
 // ── Branch B: continue to plan ──────────────────────────────────────────────
@@ -294,122 +166,40 @@ test('migrate wizard — continue to plan: set up → skip import → plan now',
   await createFirstProject(page, 'Invoicer');
 
   const stubs = await stubMigrateRoutes(page);
-  await stubs.completeIndex();
+  stubs.completeIndex();
 
-  // Start.
-  await page.goto('/onboarding/migrate');
-  let resp = page.waitForResponse(
-    (r) => r.url().endsWith('/onboarding/migrate') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: 'Start' }).click();
-  expect((await resp).status()).toBe(200);
+  await startFromChoice(page);
+  await connectToIndex(page);
+  await indexToImport(page);
+  await skipToDecision(page);
 
-  // Connect → Index.
-  resp = page.waitForResponse(
-    (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: /I've connected my repos/ }).click();
-  expect((await resp).status()).toBe(200);
-
-  // Index → Import.
-  resp = page.waitForResponse(
-    (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: /Next: import your work/ }).click();
-  expect((await resp).status()).toBe(200);
-
-  // Skip import → Decision.
-  resp = page.waitForResponse(
-    (r) => r.url().includes('/skip-import') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: 'Skip import' }).click();
-  expect((await resp).status()).toBe(200);
-
-  // Plan now → navigates to the planning workspace.
+  // Plan now stays on this page and opens "A few questions" (Revision 6).
+  const resp = page.waitForResponse(isAdvance);
   await page.getByRole('button', { name: 'Plan my project now' }).click();
-  await expect(page).toHaveURL(/\/onboarding\/discovery/, { timeout: 15_000 });
+  expect((await resp).status()).toBe(200);
+  await expect(page.getByRole('heading', { name: 'A few questions' }).first()).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe('/onboarding/migrate');
 });
 
-// ── Optional import — Skip vs Advance ───────────────────────────────────────
+// ── Optional import — Skip ──────────────────────────────────────────────────
 
 test('migrate wizard — optional import: Skip proceeds without importing', async ({ page }) => {
   await signUp(page, `migrate-imp-s-${Date.now()}@example.com`);
   await createFirstProject(page, 'Invoicer');
 
   const stubs = await stubMigrateRoutes(page);
-  await stubs.completeIndex();
+  stubs.completeIndex();
 
-  await page.goto('/onboarding/migrate');
-  let resp = page.waitForResponse(
-    (r) => r.url().endsWith('/onboarding/migrate') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: 'Start' }).click();
-  expect((await resp).status()).toBe(200);
+  await startFromChoice(page);
+  await connectToIndex(page);
+  await indexToImport(page);
 
-  resp = page.waitForResponse(
-    (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: /I've connected my repos/ }).click();
-  expect((await resp).status()).toBe(200);
+  // The importer runs in the step: its own steps list, Skip import beside it.
+  const steps = page.getByRole('list', { name: 'Import work items' });
+  await expect(steps).toContainText('Connect');
+  await expect(page.getByRole('link', { name: 'Open the importer' })).toHaveCount(0);
 
-  resp = page.waitForResponse(
-    (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: /Next: import your work/ }).click();
-  expect((await resp).status()).toBe(200);
-
-  // ImportPanel: link to the importer + Skip button.
-  await expect(page.getByRole('link', { name: 'Open the importer' })).toHaveAttribute(
-    'href',
-    '/onboarding/import',
-  );
-  await expect(page.getByRole('button', { name: 'Skip import' })).toBeVisible();
-
-  // Skip → DecisionPanel.
-  resp = page.waitForResponse(
-    (r) => r.url().includes('/skip-import') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: 'Skip import' }).click();
-  expect((await resp).status()).toBe(200);
-
-  await expect(page.getByRole('button', { name: 'Plan my project now' })).toBeVisible();
-  await expect(page.getByRole('link', { name: "Finish — I'll plan later" })).toBeVisible();
-});
-
-test('migrate wizard — optional import: Advance proceeds without importing', async ({ page }) => {
-  await signUp(page, `migrate-imp-a-${Date.now()}@example.com`);
-  await createFirstProject(page, 'Invoicer');
-
-  const stubs = await stubMigrateRoutes(page);
-  await stubs.completeIndex();
-
-  await page.goto('/onboarding/migrate');
-  let resp = page.waitForResponse(
-    (r) => r.url().endsWith('/onboarding/migrate') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: 'Start' }).click();
-  expect((await resp).status()).toBe(200);
-
-  resp = page.waitForResponse(
-    (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: /I've connected my repos/ }).click();
-  expect((await resp).status()).toBe(200);
-
-  resp = page.waitForResponse(
-    (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: /Next: import your work/ }).click();
-  expect((await resp).status()).toBe(200);
-
-  // Advance from Import (no import) → audit_convention → DecisionPanel.
-  resp = page.waitForResponse(
-    (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: "I've imported — continue" }).click();
-  expect((await resp).status()).toBe(200);
-
-  await expect(page.getByRole('button', { name: 'Plan my project now' })).toBeVisible();
+  await skipToDecision(page);
 });
 
 // ── Index: Next stays disabled while repos are pending ──────────────────────
@@ -423,29 +213,13 @@ test('migrate wizard — index gate: Next stays disabled until every repo is ind
   // Stub with repos in PENDING state — allIndexed stays false.
   await stubMigrateRoutes(page);
 
-  await page.goto('/onboarding/migrate');
-  let resp = page.waitForResponse(
-    (r) => r.url().endsWith('/onboarding/migrate') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: 'Start' }).click();
-  expect((await resp).status()).toBe(200);
-
-  resp = page.waitForResponse(
-    (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: /I've connected my repos/ }).click();
-  expect((await resp).status()).toBe(200);
-
-  await expect(page.getByRole('heading', { name: 'Indexing your codebase' })).toBeVisible();
+  await startFromChoice(page);
+  await connectToIndex(page);
   await expect(page.locator('[aria-live][aria-busy]')).toBeVisible();
 
   // Per-repo rows render after the first poll tick.
-  await expect(page.getByText('acme/web')).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText('acme/api')).toBeVisible();
-  await expect(page.getByText('acme/shared')).toBeVisible();
-
-  // "Queued" badge on pending repos.
-  await expect(page.getByText('Queued').first()).toBeVisible();
+  await expect(page.getByText('Queued').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('0 of 3 repositories done')).toBeVisible();
 
   // Next is DISABLED because not all repos are indexed.
   const next = page.getByRole('button', { name: /Next: import your work/ });
@@ -468,14 +242,12 @@ test('migrate wizard — resume: a real run re-opens at the saved step', async (
   expect(body.step).toBe('connect');
 
   // Navigate to the wizard — the server component reads the REAL run from the
-  // DB and renders ConnectPanel (not the StartPanel).
+  // DB and renders Connect, not the Start choice, though there are two projects.
   await page.goto('/onboarding/migrate');
   await expect(
     page.getByRole('heading', {
       name: 'Connect the repositories in this project',
     }),
   ).toBeVisible();
-
-  // The StartPanel heading must NOT be visible (we resumed, didn't start fresh).
   await expect(page.getByRole('heading', { name: 'Migrate an existing codebase' })).toHaveCount(0);
 });
