@@ -131,9 +131,9 @@ const anyOf = (...templates: string[]): RegExp =>
 
 const authoring = (title: string) => fill(progress.authoring, { title });
 const authored = (n: number, m: number) => fill(progress.authored, { authored: n, proposed: m });
-/** The design's elapsed formats (§25.4): `<1 min` · `{m} min` · `{h} h {m} min`. */
+/** The design's elapsed formats (§26.4): `<1 min` · `{m} min` · `{h} h {m} min`. */
 const ELAPSED = anyOf(progress.elapsedUnderMinute, progress.elapsedMinutes, progress.elapsedHours);
-/** The design's last-activity formats (§25.4). */
+/** The design's last-activity formats (§26.4). */
 const LAST_ACTIVITY = new RegExp(
   [progress.lastActivityJustNow, progress.lastActivitySeconds, progress.lastActivityAgo]
     .map((t) => patternOf(t))

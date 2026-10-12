@@ -174,15 +174,27 @@ async function greenCard() {
   return { ours, item, gate };
 }
 
-/** Move the card's repository out of its organisation — the delivery row stays behind. */
+/** Move the card's pull request onto a repository of another organisation — the
+ *  delivery row stays behind. A repository row cannot change organisation in place
+ *  (`trg_github_repo_one_organization`, MOTIR-8218), so the pull request is the row
+ *  that moves; the reader sees the same NULL join either way. */
 async function moveRepositoryAway() {
   const theirs = await makeOrg('theirs@example.com', 'Theirs', 'THEM');
-  await adminDb.githubRepo.updateMany({
-    where: { repoId: REPO_PROVIDER_ID },
+  const ours = await adminDb.githubRepo.findFirstOrThrow({ where: { repoId: REPO_PROVIDER_ID } });
+  const elsewhere = await adminDb.githubRepo.create({
     data: {
+      installationId: ours.installationId,
+      repoId: `${REPO_PROVIDER_ID}-elsewhere`,
+      owner: ours.owner,
+      name: `${ours.name}-elsewhere`,
+      defaultBranch: ours.defaultBranch,
       workspaceId: theirs.workspace.id,
       organizationId: theirs.workspace.organizationId,
     },
+  });
+  await adminDb.githubPullRequest.updateMany({
+    where: { repoId: ours.id },
+    data: { repoId: elsewhere.id },
   });
   return theirs;
 }

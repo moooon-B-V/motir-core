@@ -1,4 +1,5 @@
 import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
+import { retryOnceOnTransactionStart } from '@/lib/monitoring/retryOnTransactionStart';
 import {
   OrganizationNotErasingError,
   OrganizationSuspendedError,
@@ -774,54 +775,67 @@ export const workspacesService = {
         return false;
       }
     };
-    const existing = await withUserContext(
-      userId,
-      async (tx) => {
-        if (cookieWorkspaceId) {
-          const pinned = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
+    // ONE retry when the transaction could not START (P2028 `maxWait`, MOTIR-8288):
+    // this read-only block writes nothing and takes no lock, so a fresh attempt
+    // duplicates nothing — and the failure is the stalled process's, not the
+    // pool's (the budget's doc above). `ensureDefaultWorkspace` below is NOT
+    // wrapped: it owns a write transaction with a FOR UPDATE lock.
+    const existing = await retryOnceOnTransactionStart(() =>
+      withUserContext(
+        userId,
+        async (tx) => {
+          // The retry re-enters from the top; nothing here can be left over from a
+          // start that failed, but resetting keeps the closure honest on re-entry.
+          cookieWithoutMembership = false;
+          if (cookieWorkspaceId) {
+            const pinned = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
+              userId,
+              cookieWorkspaceId,
+              tx,
+            );
+            // Not `passesGate`: a suspension of the PINNED workspace's org throws.
+            if (
+              pinned &&
+              (await organizationsService.resolveWorkspaceAccess(userId, pinned.workspaceId, tx))
+            ) {
+              return pinned.workspaceId;
+            }
+            cookieWithoutMembership = !pinned;
+          }
+          // No valid cookie pin. Before the first-by-createdAt default, try the
+          // user's GLOBAL last-active project (Subtask 8.8.27): land them back in
+          // the workspace of the project they last worked in (cross-device,
+          // account-keyed — the Linear "last visited context" standard). The
+          // resolver re-checks the access gate, so a since-revoked membership or an
+          // archived/deleted project falls through cleanly to the default below.
+          try {
+            const lastActive = await this.resolveLastActiveContext(userId, tx);
+            if (lastActive) return lastActive.workspaceId;
+          } catch (err) {
+            if (!(err instanceof OrganizationSuspendedError)) throw err;
+            suspended ??= err;
+          }
+
+          const first = await workspaceMembershipRepository.findFirstByUserWithWorkspace(
             userId,
-            cookieWorkspaceId,
             tx,
           );
-          // Not `passesGate`: a suspension of the PINNED workspace's org throws.
-          if (
-            pinned &&
-            (await organizationsService.resolveWorkspaceAccess(userId, pinned.workspaceId, tx))
-          ) {
-            return pinned.workspaceId;
+          if (first && (await passesGate(first.workspaceId, tx))) {
+            return first.workspaceId;
           }
-          cookieWithoutMembership = !pinned;
-        }
-        // No valid cookie pin. Before the first-by-createdAt default, try the
-        // user's GLOBAL last-active project (Subtask 8.8.27): land them back in
-        // the workspace of the project they last worked in (cross-device,
-        // account-keyed — the Linear "last visited context" standard). The
-        // resolver re-checks the access gate, so a since-revoked membership or an
-        // archived/deleted project falls through cleanly to the default below.
-        try {
-          const lastActive = await this.resolveLastActiveContext(userId, tx);
-          if (lastActive) return lastActive.workspaceId;
-        } catch (err) {
-          if (!(err instanceof OrganizationSuspendedError)) throw err;
-          suspended ??= err;
-        }
-
-        const first = await workspaceMembershipRepository.findFirstByUserWithWorkspace(userId, tx);
-        if (first && (await passesGate(first.workspaceId, tx))) {
-          return first.workspaceId;
-        }
-        // Only reached past a SUSPENDED first default: walk the rest of the
-        // user's memberships for one whose org is not suspended (the rare path —
-        // the common one returned above without this read).
-        if (suspended) {
-          const all = await workspaceMembershipRepository.findWorkspacesByUser(userId, tx);
-          for (const w of all) {
-            if (w.id !== first?.workspaceId && (await passesGate(w.id, tx))) return w.id;
+          // Only reached past a SUSPENDED first default: walk the rest of the
+          // user's memberships for one whose org is not suspended (the rare path —
+          // the common one returned above without this read).
+          if (suspended) {
+            const all = await workspaceMembershipRepository.findWorkspacesByUser(userId, tx);
+            for (const w of all) {
+              if (w.id !== first?.workspaceId && (await passesGate(w.id, tx))) return w.id;
+            }
           }
-        }
-        return null;
-      },
-      ACTIVE_WORKSPACE_RESOLVE_TX,
+          return null;
+        },
+        ACTIVE_WORKSPACE_RESOLVE_TX,
+      ),
     );
 
     // THE ORG OWNER — OR AN ORG ADMIN, SINCE MOTIR-6168 — OPENS A WORKSPACE THEY

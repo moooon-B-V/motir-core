@@ -6999,13 +6999,16 @@
       "state_error": "De GitHub-inlog kon niet worden geverifieerd. Probeer opnieuw te koppelen.",
       "error": "Er ging iets mis bij het koppelen met GitHub. Probeer het opnieuw.",
       "not_configured": "GitHub is nog niet geconfigureerd op deze installatie.",
-      "installed": "GitHub-app geïnstalleerd — Motir kan nu je geselecteerde repository's lezen, en de app pusht de branches van gehoste runs en opent hun pull requests.",
+      "installed": "GitHub-account gekoppeld aan deze organisatie. Repository's die het hier al verbond, blijven behouden — voeg er meer toe met Repository's toevoegen of verwijderen.",
       "repos_updated": "Toegang tot repository's bijgewerkt. Motir leest de repository's die je op GitHub hebt geselecteerd — hier hoef je verder niets af te ronden.",
       "install_unbound": "De Motir GitHub-app is op GitHub geïnstalleerd, maar niet vanuit deze werkruimte, dus hij is er nog niet aan gekoppeld. Start de installatie vanaf hier om hem te koppelen.",
       "install_expired": "De installatielink is verlopen terwijl je op GitHub was. Er is niets kapot — begin opnieuw vanuit Instellingen.",
       "install_forbidden": "Je bent geen lid van de werkruimte van waaruit deze installatie is gestart, dus er is niets gekoppeld.",
       "install_provider_error": "Motir kon GitHub niet bereiken om het koppelen van de app af te ronden. Probeer het opnieuw.",
-      "install_error": "We konden het instellen van de GitHub-app niet afronden. Probeer opnieuw te installeren."
+      "install_error": "We konden het instellen van de GitHub-app niet afronden. Probeer opnieuw te installeren.",
+      "select_repos": "De Motir GitHub App is geïnstalleerd. Kies welke repository's van het account deze organisatie koppelt.",
+      "repo_unavailable": "Die repository is al gekoppeld aan een andere organisatie en is daarom hier niet toegevoegd. Verder is er niets veranderd.",
+      "installation_not_accessible": "Je kunt dat GitHub-account niet zien op GitHub, dus het is niet aan deze organisatie gekoppeld. Er is niets gewijzigd."
     },
     "connect": {
       "title": "GitHub koppelen",
@@ -7017,14 +7020,14 @@
       },
       "step2": {
         "eyebrow": "Stap 2 · Toegang tot repository's",
-        "title": "De Motir GitHub-app installeren",
-        "body": "Kies welke repository's Motir mag lezen — je kiest de precieze repo's op het installatiescherm van GitHub. Motir ziet de rest nooit, en je kunt de selectie altijd wijzigen."
+        "title": "Een GitHub-account koppelen",
+        "body": "Kies een account waarop de Motir GitHub-app is geïnstalleerd — of installeer de app op een nieuw account — en kies vervolgens welke van de repository's deze organisatie verbindt. Een repository hoort bij één organisatie tegelijk."
       },
       "installLink": "De Motir GitHub-app installeren",
       "cta": "GitHub koppelen",
       "foot": "Je wordt naar GitHub gestuurd om toestemming te geven en daarna om repository's te kiezen.",
       "noInstallHref": "Het installeren van de Motir GitHub-app is niet beschikbaar op deze installatie.",
-      "orgFoot": "Je wordt naar GitHub gestuurd om te kiezen tot welke repository's deze organisatie Motir toegang geeft."
+      "orgFoot": "Als de Motir GitHub-app al op je GitHub-account is geïnstalleerd, toont Motir dat account — je installeert de app niet opnieuw."
     },
     "identity": {
       "connectedAs": "GitHub-identiteit · gekoppeld als {name}",
@@ -7325,6 +7328,97 @@
       "adminOnly": "Alleen eigenaren en beheerders van {org} kunnen een git-host koppelen of loskoppelen.",
       "subtitleGeneric": "Koppel je organisatie één keer aan GitHub of GitLab. Elk project in de organisatie kan dan aan een gekoppelde repository werken — als je er een kiest, wordt hij nooit opnieuw geïndexeerd.",
       "identityAtAccount": "Koppel je eigen account via Instellingen → Account → Git-accounts"
+    },
+    "accounts": {
+      "title": "GitHub-accounts",
+      "subtitle": "De accounts waaruit {org} repository's verbindt. Elke repository hoort bij één organisatie tegelijk.",
+      "connect": "GitHub verbinden",
+      "linked": "Gekoppeld",
+      "meta": "{type} · {count, plural, one {# repository} other {# repository's}} hier verbonden",
+      "type": {
+        "organization": "Organisatie",
+        "personal": "Persoonlijk"
+      },
+      "addOrRemove": "Repository's toevoegen of verwijderen",
+      "manageOnGithub": "Beheren op GitHub",
+      "disconnect": "Ontkoppelen",
+      "toastTitle": "{count, plural, one {# repository} other {# repository's}} uit {account} verbonden",
+      "toastBody": "Ze staan onder Repository's — elk project in {org} kan ze nu toevoegen."
+    },
+    "picker": {
+      "title": "GitHub verbinden",
+      "description": "Kies het GitHub-account waarvan {org} de repository's moet verbinden. Dit zijn de accounts met de Motir GitHub-app die je kunt zien.",
+      "accountsLabel": "Accounts",
+      "accountMeta": "{type} · {count, plural, one {# repository} other {# repository's}} zichtbaar voor Motir",
+      "notLinked": "Niet gekoppeld",
+      "linkedHere": "Gekoppeld aan deze organisatie",
+      "installOther": "Installeren op een ander account",
+      "installOtherMeta": "Opent GitHub om de Motir GitHub-app te installeren op een account dat de app nog niet heeft.",
+      "loadingAccounts": "GitHub-accounts laden…",
+      "accountsError": {
+        "title": "GitHub is niet bereikbaar",
+        "body": "Motir kon de accounts waarop de Motir GitHub-app is geïnstalleerd niet laden. Er is niets gewijzigd."
+      },
+      "retry": "Opnieuw proberen",
+      "noAccounts": {
+        "title": "Nog geen GitHub-account om te koppelen",
+        "body": "De Motir GitHub-app is niet geïnstalleerd op een GitHub-account dat je kunt zien. Installeer de app op een account om verder te gaan."
+      },
+      "identity": {
+        "title": "Verbind eerst je GitHub-account",
+        "body": "Motir toont de GitHub-accounts die je via je eigen GitHub-identiteit kunt zien. Verbind die in Instellingen → Account → Git-accounts en kom daarna hier terug.",
+        "action": "Naar Git-accounts"
+      },
+      "cancel": "Annuleren",
+      "back": "Alle accounts",
+      "reposTitle": "Repository's kiezen uit {account}",
+      "reposDescription": "Elke repository hoort bij één organisatie tegelijk. Repository's die een andere organisatie al heeft verbonden, kunnen hier niet worden toegevoegd.",
+      "search": "Repository's zoeken",
+      "selectAll": "Alle beschikbare selecteren ({count})",
+      "selected": "{count} geselecteerd",
+      "rowState": {
+        "selected": "geselecteerd",
+        "notSelected": "niet geselecteerd"
+      },
+      "connectedElsewhere": "Verbonden met een andere organisatie",
+      "connectedHere": "Hier verbonden",
+      "noMatches": "Geen repository komt overeen met je zoekopdracht.",
+      "hint": "Gebruik Ontkoppelen in de rij van een repository onder Repository's om die los te koppelen van {org}.",
+      "submit": "{count, plural, =0 {Repository's verbinden} one {# repository verbinden} other {# repository's verbinden}}",
+      "loadingRepos": "Repository's laden…",
+      "reposError": {
+        "title": "Repository's konden niet worden geladen",
+        "body": "Motir kon de repository's van {account} niet laden vanuit GitHub. Er is niets gewijzigd."
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "{repo} is zojuist verbonden met een andere organisatie en kan niet worden toegevoegd.",
+        "repo_selection_required": "Kies ten minste één repository om te verbinden.",
+        "repository_not_visible": "Een van deze repository's is op GitHub niet meer zichtbaar voor de Motir GitHub-app. Vernieuw de lijst en probeer het opnieuw.",
+        "installation_not_accessible": "Je kunt {account} niet meer zien op GitHub, dus het kan niet worden gekoppeld. Kies een ander account.",
+        "generic": "Er ging iets mis bij het verbinden van deze repository's. Er is niets gewijzigd — probeer het opnieuw."
+      },
+      "noneLeft": {
+        "title": "Niets meer te verbinden uit {account}",
+        "body": "Elke repository die de Motir GitHub-app op {account} kan zien, is al verbonden. Een repository hoort bij één organisatie tegelijk.",
+        "connectedHere": "Verbonden met deze organisatie",
+        "connectedElsewhere": "Verbonden met andere organisaties",
+        "hint": "Geef de Motir GitHub-app op GitHub toegang tot andere repository's om meer aan te bieden, of kies een ander account.",
+        "chooseAnother": "Ander account kiezen",
+        "manageOnGithub": "Repository's beheren op GitHub"
+      }
+    },
+    "accountDisconnect": {
+      "title": "{account} ontkoppelen van {org}?",
+      "repos": "Dit verwijdert alleen de koppeling van {org} met {account} en de {count, plural, one {# repository} other {# repository's}} die het hier verbond:",
+      "projects": "{count, plural, one {# project verliest} other {# projecten verliezen}} deze repository's:",
+      "noProjects": "Nog geen enkel project in {org} gebruikt deze repository's.",
+      "retention": "De code-index die Motir ervan heeft gebouwd, blijft {days} dagen bewaard. Als je het account vóór die tijd opnieuw koppelt en ze kiest, wordt het verwijderen geannuleerd; daarna betekent het opnieuw toevoegen van een repository een volledige indexering.",
+      "others": "Andere organisaties die aan {account} zijn gekoppeld, worden niet beïnvloed en de Motir GitHub-app blijft op GitHub geïnstalleerd. Doe dat op GitHub om de app overal te verwijderen.",
+      "loading": "Laden wat deze ontkoppeling beïnvloedt…",
+      "loadFailed": "Motir kon niet laden wat het ontkoppelen van {account} beïnvloedt. Er is niets gewijzigd — probeer het opnieuw.",
+      "failed": "Motir kon {account} niet ontkoppelen. Er is niets gewijzigd — probeer het opnieuw.",
+      "cancel": "Annuleren",
+      "confirm": "Ontkoppelen"
     }
   },
   "aiPlanning": {

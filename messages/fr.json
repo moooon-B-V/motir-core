@@ -7002,13 +7002,16 @@
       "state_error": "La connexion GitHub n'a pas pu être vérifiée. Veuillez réessayer de vous connecter.",
       "error": "Une erreur s'est produite lors de la connexion à GitHub. Veuillez réessayer.",
       "not_configured": "GitHub n'est pas encore configuré sur ce déploiement.",
-      "installed": "Application GitHub installée — Motir peut désormais lire les dépôts sélectionnés, et son application pousse les branches des exécutions hébergées et ouvre leurs pull requests.",
+      "installed": "Compte GitHub lié à cette organisation. Les dépôts qu'il a déjà connectés ici sont conservés — ajoutez-en d'autres avec « Ajouter ou retirer des dépôts ».",
       "repos_updated": "Accès aux dépôts mis à jour. Motir lit les dépôts que vous avez sélectionnés sur GitHub — il n'y a rien d'autre à terminer ici.",
       "install_unbound": "L'application GitHub Motir a été installée sur GitHub, mais pas depuis cet espace de travail ; elle n'y est donc pas encore connectée. Lancez l'installation depuis cette page pour la connecter.",
       "install_expired": "Le lien d'installation a expiré pendant que vous étiez sur GitHub. Rien n'est cassé — recommencez depuis les Paramètres.",
       "install_forbidden": "Vous n'êtes pas membre de l'espace de travail depuis lequel cette installation a été lancée ; rien n'a donc été connecté.",
       "install_provider_error": "Motir n'a pas pu joindre GitHub pour terminer la connexion de l'application. Veuillez réessayer.",
-      "install_error": "Nous n'avons pas pu terminer la configuration de l'application GitHub. Veuillez réessayer l'installation."
+      "install_error": "Nous n'avons pas pu terminer la configuration de l'application GitHub. Veuillez réessayer l'installation.",
+      "select_repos": "La Motir GitHub App est installée. Choisissez les dépôts du compte que cette organisation connecte.",
+      "repo_unavailable": "Ce dépôt est déjà connecté à une autre organisation, il n'a donc pas été ajouté ici. Rien d'autre n'a changé.",
+      "installation_not_accessible": "Vous ne voyez pas ce compte GitHub sur GitHub, il n'a donc pas été lié à cette organisation. Rien n'a été modifié."
     },
     "connect": {
       "title": "Connecter GitHub",
@@ -7020,14 +7023,14 @@
       },
       "step2": {
         "eyebrow": "Étape 2 · Accès aux dépôts",
-        "title": "Installer l'application GitHub Motir",
-        "body": "Choisissez les dépôts que Motir peut lire — vous sélectionnez les dépôts exacts sur l'écran d'installation de GitHub. Motir ne voit jamais les autres et vous pouvez modifier la sélection à tout moment."
+        "title": "Lier un compte GitHub",
+        "body": "Choisissez un compte sur lequel l'application GitHub Motir est installée — ou installez-la sur un nouveau compte — puis choisissez lesquels de ses dépôts cette organisation connecte. Un dépôt n'appartient qu'à une seule organisation à la fois."
       },
       "installLink": "Installer l'application GitHub Motir",
       "cta": "Connecter GitHub",
       "foot": "Vous serez redirigé vers GitHub pour donner votre autorisation, puis pour choisir des dépôts.",
       "noInstallHref": "L'installation de l'application GitHub Motir n'est pas disponible sur ce déploiement.",
-      "orgFoot": "Vous serez redirigé vers GitHub pour choisir les dépôts auxquels cette organisation accorde l'accès à Motir."
+      "orgFoot": "Si l'application GitHub Motir est déjà installée sur votre compte GitHub, Motir l'affiche — vous n'aurez pas à la réinstaller."
     },
     "identity": {
       "connectedAs": "Identité GitHub · connecté en tant que {name}",
@@ -7328,6 +7331,97 @@
       "adminOnly": "Seuls les propriétaires et administrateurs de {org} peuvent connecter ou déconnecter un hébergeur Git.",
       "subtitleGeneric": "Connectez votre organisation à GitHub ou GitLab une seule fois. Chaque projet de l'organisation peut ensuite travailler sur un dépôt connecté — le choisir ne le réindexe jamais.",
       "identityAtAccount": "Connectez votre propre compte dans Paramètres → Compte → Comptes Git"
+    },
+    "accounts": {
+      "title": "Comptes GitHub",
+      "subtitle": "Les comptes depuis lesquels {org} connecte des dépôts. Chaque dépôt n'appartient qu'à une seule organisation à la fois.",
+      "connect": "Connecter GitHub",
+      "linked": "Lié",
+      "meta": "{type} · {count, plural, one {# dépôt connecté} other {# dépôts connectés}} ici",
+      "type": {
+        "organization": "Organisation",
+        "personal": "Personnel"
+      },
+      "addOrRemove": "Ajouter ou retirer des dépôts",
+      "manageOnGithub": "Gérer sur GitHub",
+      "disconnect": "Déconnecter",
+      "toastTitle": "{count, plural, one {# dépôt connecté} other {# dépôts connectés}} depuis {account}",
+      "toastBody": "Ils figurent sous Dépôts — tout projet de {org} peut désormais les ajouter."
+    },
+    "picker": {
+      "title": "Connecter GitHub",
+      "description": "Choisissez le compte GitHub dont {org} doit connecter les dépôts. Voici les comptes visibles pour vous sur lesquels l'application GitHub Motir est installée.",
+      "accountsLabel": "Comptes",
+      "accountMeta": "{type} · {count, plural, one {# dépôt visible} other {# dépôts visibles}} pour Motir",
+      "notLinked": "Non lié",
+      "linkedHere": "Lié à cette organisation",
+      "installOther": "Installer sur un autre compte",
+      "installOtherMeta": "Ouvre GitHub pour installer l'application GitHub Motir sur un compte qui ne l'a pas encore.",
+      "loadingAccounts": "Chargement des comptes GitHub…",
+      "accountsError": {
+        "title": "Impossible de joindre GitHub",
+        "body": "Motir n'a pas pu charger les comptes sur lesquels l'application GitHub Motir est installée. Rien n'a été modifié."
+      },
+      "retry": "Réessayer",
+      "noAccounts": {
+        "title": "Aucun compte GitHub à lier pour l'instant",
+        "body": "L'application GitHub Motir n'est installée sur aucun compte GitHub visible pour vous. Installez-la sur l'un d'eux pour continuer."
+      },
+      "identity": {
+        "title": "Connectez d'abord votre compte GitHub",
+        "body": "Motir liste les comptes GitHub que vous pouvez voir via votre propre identité GitHub. Connectez-la dans Paramètres → Compte → Comptes Git, puis revenez ici.",
+        "action": "Aller aux comptes Git"
+      },
+      "cancel": "Annuler",
+      "back": "Tous les comptes",
+      "reposTitle": "Choisir des dépôts de {account}",
+      "reposDescription": "Chaque dépôt n'appartient qu'à une seule organisation à la fois. Les dépôts déjà connectés par une autre organisation ne peuvent pas être ajoutés ici.",
+      "search": "Rechercher des dépôts",
+      "selectAll": "Tout sélectionner parmi les disponibles ({count})",
+      "selected": "{count} sélectionné(s)",
+      "rowState": {
+        "selected": "sélectionné",
+        "notSelected": "non sélectionné"
+      },
+      "connectedElsewhere": "Connecté à une autre organisation",
+      "connectedHere": "Connecté ici",
+      "noMatches": "Aucun dépôt ne correspond à votre recherche.",
+      "hint": "Pour déconnecter un dépôt de {org}, utilisez Déconnecter sur sa ligne dans Dépôts.",
+      "submit": "{count, plural, =0 {Connecter des dépôts} one {Connecter # dépôt} other {Connecter # dépôts}}",
+      "loadingRepos": "Chargement des dépôts…",
+      "reposError": {
+        "title": "Impossible de charger les dépôts",
+        "body": "Motir n'a pas pu charger les dépôts de {account} depuis GitHub. Rien n'a été modifié."
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "{repo} vient d'être connecté à une autre organisation et ne peut pas être ajouté.",
+        "repo_selection_required": "Choisissez au moins un dépôt à connecter.",
+        "repository_not_visible": "L'un de ces dépôts n'est plus visible pour l'application GitHub Motir sur GitHub. Actualisez la liste et réessayez.",
+        "installation_not_accessible": "Vous ne pouvez plus voir {account} sur GitHub, il ne peut donc pas être lié. Choisissez un autre compte.",
+        "generic": "Une erreur s'est produite lors de la connexion de ces dépôts. Rien n'a été modifié — réessayez."
+      },
+      "noneLeft": {
+        "title": "Plus rien à connecter depuis {account}",
+        "body": "Tous les dépôts que l'application GitHub Motir peut voir sur {account} sont déjà connectés. Un dépôt n'appartient qu'à une seule organisation à la fois.",
+        "connectedHere": "Connectés à cette organisation",
+        "connectedElsewhere": "Connectés à d'autres organisations",
+        "hint": "Pour en proposer davantage, donnez à l'application GitHub Motir l'accès à d'autres dépôts sur GitHub, ou choisissez un autre compte.",
+        "chooseAnother": "Choisir un autre compte",
+        "manageOnGithub": "Gérer les dépôts sur GitHub"
+      }
+    },
+    "accountDisconnect": {
+      "title": "Déconnecter {account} de {org} ?",
+      "repos": "Cette action supprime uniquement le lien de {org} avec {account} et {count, plural, one {le # dépôt qu'il a connecté} other {les # dépôts qu'il a connectés}} ici :",
+      "projects": "{count, plural, one {# projet perd} other {# projets perdent}} ces dépôts :",
+      "noProjects": "Aucun projet de {org} n'utilise encore ces dépôts.",
+      "retention": "L'index de code que Motir en a construit est conservé pendant {days} jours. Lier à nouveau le compte et les choisir avant cette échéance annule la suppression ; au-delà, rajouter un dépôt implique une indexation complète.",
+      "others": "Les autres organisations liées à {account} ne sont pas concernées, et l'application GitHub Motir reste installée sur GitHub. Pour la désinstaller partout, faites-le sur GitHub.",
+      "loading": "Chargement des éléments concernés par cette déconnexion…",
+      "loadFailed": "Motir n'a pas pu charger ce que la déconnexion de {account} affecte. Rien n'a été modifié — réessayez.",
+      "failed": "Motir n'a pas pu déconnecter {account}. Rien n'a été modifié — réessayez.",
+      "cancel": "Annuler",
+      "confirm": "Déconnecter"
     }
   },
   "aiPlanning": {

@@ -235,7 +235,7 @@ describe('PlanProposalViews — live is off by default (the plan page is unchang
   });
 });
 
-// MOTIR-7829 — the PROGRESS LINE in the pane header (design Part XXV §25.2). It
+// MOTIR-7829 — the PROGRESS LINE in the pane header (design Part XXVI §26.2). It
 // renders on `progress`, never on `live`: the plan page passes no `live` and
 // must still show the plan being written.
 describe('PlanProposalViews — the progress line', () => {
@@ -268,7 +268,7 @@ describe('PlanProposalViews — the progress line', () => {
       'Authoring: Invoice export',
     );
     expect(within(header).getByTestId('plan-progress-pointer')).toBeTruthy();
-    // The marker comes with the line — its word carries the state (§25.1).
+    // The marker comes with the line — its word carries the state (§26.1).
     expect(within(header).getByTestId('plan-live-state').textContent).toBe('Being written');
     // The canvas stays still: the motion layer is `live`'s, not `progress`'s.
     expect(screen.getByTestId('plan-review-canvas').getAttribute('data-live')).toBe('false');

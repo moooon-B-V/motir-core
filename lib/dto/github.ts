@@ -1,3 +1,5 @@
+import type { UsingProjectDto } from '@/lib/dto/organizationRepos';
+
 // DTOs for the GitHub integration (Story 7.10 · MOTIR-1498). What crosses the
 // API boundary for a member's GitHub identity — deliberately WITHOUT the access
 // token (encrypted or not): the token never leaves the service layer.
@@ -36,6 +38,35 @@ export interface GithubInstallationDTO {
   accountType: string;
   repos: GithubRepoDTO[];
   createdAt: string;
+}
+
+/** One GitHub account the Motir App is installed on, as an organisation admin
+ *  can connect it (Story MOTIR-8216 · MOTIR-8220). Built from what GitHub says
+ *  the ACTOR can access, never from stored rows. */
+export interface GithubAccountForOrganizationDTO {
+  installationId: string;
+  accountLogin: string;
+  accountType: string;
+  avatarUrl: string | null;
+  /** How many repositories the App can see on the account; null when GitHub
+   *  could not say. */
+  visibleRepoCount: number | null;
+  linkState: 'not_linked' | 'linked_here';
+}
+
+export type GithubAccountsForOrganizationDTO =
+  | { state: 'ok'; accounts: GithubAccountForOrganizationDTO[] }
+  | { state: 'identity_required' };
+
+/** One account's repositories as this organisation may claim them. A repository
+ *  `connected_elsewhere` carries no identifier of who owns it. */
+export interface GithubAccountRepositoriesDTO {
+  repos: {
+    repoId: string;
+    fullName: string;
+    availability: 'available' | 'connected_here' | 'connected_elsewhere';
+  }[];
+  counts: { available: number; connectedHere: number; connectedElsewhere: number };
 }
 
 /**
@@ -256,4 +287,32 @@ export interface PullRequestMergeRecordDto {
   mergeAuthority: 'gate' | 'auto_mode' | null;
   /** The merge commit SHA, or `queue:<entryId>` for an enqueue. */
   mergeOutcomeRef: string | null;
+}
+
+// Disconnecting a GitHub account from ONE organisation (MOTIR-8222). The
+// preview is read by the Git room's client-side dialog, so it lives here rather
+// than in the service module a client component may not import.
+
+export interface AccountDisconnectRepoDto {
+  /** The internal `GithubRepo.id`. */
+  githubRepoId: string;
+  /** `owner/name`. */
+  repoRef: string;
+}
+
+export interface AccountDisconnectPreviewDto {
+  accountLogin: string;
+  accountType: string;
+  repos: AccountDisconnectRepoDto[];
+  /** The LIVE projects the viewer may browse that use one of these repos. */
+  projects: UsingProjectDto[];
+  /** How long the code graph is kept after the disconnect, in days. */
+  retentionWindowDays: number;
+}
+
+export interface AccountDisconnectResultDto {
+  releasedRepos: string[];
+  clearedLinks: number;
+  /** True when this was the last organisation linked, so the row went too. */
+  installationRemoved: boolean;
 }

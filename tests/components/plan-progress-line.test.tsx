@@ -17,7 +17,7 @@ import {
   type PlanStepPhrase,
 } from '@/lib/plans/planProgress';
 
-// MOTIR-7829 — the PROGRESS LINE (design Part XXV §25.1–25.5, §25.10–25.14).
+// MOTIR-7829 — the PROGRESS LINE (design Part XXVI §26.1–26.5, §26.10–26.14).
 //
 // Every state is driven by a snapshot FIXTURE through the one clock
 // (`usePlanProgressReading`), with the interval and `Date` faked so the tick is
@@ -296,7 +296,7 @@ describe('PlanProgressLine — the clock', () => {
     );
     expect(marker().textContent).toBe('Reconnecting — showing the last update');
     tick(2 * MIN);
-    // Not stalled: only a read can declare it (§25.10). The step words hold.
+    // Not stalled: only a read can declare it (§26.10). The step words hold.
     expect(marker().getAttribute('data-state')).toBe('reconnecting');
     expect(lineText()).not.toContain('no activity for');
     expect(screen.getByTestId('plan-progress-steps').textContent).toBe('Authoring: Invoice export');

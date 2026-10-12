@@ -512,6 +512,75 @@ describe('AC5 — a failed listing destroys nothing, and alerts', () => {
     expect(fakeFleetInventory.strayMachineIds()).toEqual(['m-a']);
   });
 
+  // MOTIR-8302: one `HTTP 502` from Fly's edge on an instance app's machine list
+  // raised an error-level issue for a refusal the next request would not repeat.
+  // A transient answer is asked ONCE more in the same pass; only a second
+  // failure is "the inventory is unavailable".
+  it('a single 502 on a machine list is asked again, and nobody is told', async () => {
+    fakeFleetInventory.addStray({ app: 'motir-inst-a', machineId: 'm-a', createdAt: new Date() });
+    fakeFleetInventory.failNextMachineList('motir-inst-a', 'bad gateway', { status: 502 });
+
+    const result = await fleetAttributionService.reconcile({
+      now: pastGrace,
+      listingRetryDelayMs: 0,
+    });
+
+    expect(result).toMatchObject({ unavailableApps: [], killed: [{ machineId: 'm-a' }] });
+    expect(alerts().filter((m) => m.startsWith('Could not list'))).toEqual([]);
+  });
+
+  it('a single 503 on the APP list is asked again, and the pass runs', async () => {
+    fakeFleetInventory.addStray({ app: FAKE_FLEET_APP, machineId: 'm-1', createdAt: new Date() });
+    fakeFleetInventory.failNextAppList('service unavailable', { status: 503 });
+
+    const result = await fleetAttributionService.reconcile({
+      now: pastGrace,
+      listingRetryDelayMs: 0,
+    });
+
+    expect(result).toMatchObject({ outcome: 'reconciled', killed: [{ machineId: 'm-1' }] });
+    expect(alerts().filter((m) => m.startsWith('Could not list'))).toEqual([]);
+  });
+
+  it('a 502 that repeats skips the app and alerts once — nothing destroyed there', async () => {
+    fakeFleetInventory.addStray({ app: 'motir-inst-a', machineId: 'm-a', createdAt: new Date() });
+    fakeFleetInventory.addStray({ app: 'motir-inst-b', machineId: 'm-b', createdAt: new Date() });
+    fakeFleetInventory.failNextMachineList('motir-inst-a', 'bad gateway', {
+      status: 502,
+      times: 2,
+    });
+
+    const result = await fleetAttributionService.reconcile({
+      now: pastGrace,
+      listingRetryDelayMs: 0,
+    });
+
+    expect(result).toMatchObject({
+      unavailableApps: ['motir-inst-a'],
+      killed: [{ machineId: 'm-b' }],
+    });
+    expect(fakeFleetInventory.strayMachineIds()).toEqual(['m-a']);
+    const listing = alerts().filter((m) => m.startsWith('Could not list'));
+    expect(listing).toEqual([
+      'Could not list machines in motir-inst-a: The fake orchestrator refused a call ' +
+        '(HTTP 502: bad gateway). Nothing was destroyed there.',
+    ]);
+  });
+
+  it('a refusal that is not transient is not asked again', async () => {
+    fakeFleetInventory.addStray({ app: 'app-a', machineId: 'm-a', createdAt: new Date() });
+    // Once only: were a 401 retried, the second listing would succeed and kill m-a.
+    fakeFleetInventory.failNextMachineList('app-a', 'unauthorized', { status: 401 });
+
+    const result = await fleetAttributionService.reconcile({
+      now: pastGrace,
+      listingRetryDelayMs: 0,
+    });
+
+    expect(result).toMatchObject({ unavailableApps: ['app-a'], killed: [] });
+    expect(fakeFleetInventory.strayMachineIds()).toEqual(['m-a']);
+  });
+
   it('a refused destroy is recorded, alerted, and retried on the next pass', async () => {
     fakeFleetInventory.addStray({ app: FAKE_FLEET_APP, machineId: 'm-1', createdAt: new Date() });
     fakeFleetInventory.failNextDestroy('m-1', 'machine is locked');

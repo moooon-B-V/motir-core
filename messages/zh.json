@@ -6992,13 +6992,16 @@
       "state_error": "无法验证此次 GitHub 登录，请重新尝试连接。",
       "error": "连接 GitHub 时出错，请重试。",
       "not_configured": "此部署尚未配置 GitHub。",
-      "installed": "已安装 Motir GitHub App——Motir 现在可以读取你选择的仓库，它的应用会推送托管运行的分支并打开它们的拉取请求。",
+      "installed": "GitHub 账户已关联到本组织。它此前在这里连接的仓库会保留——可通过“添加或移除仓库”添加更多。",
       "repos_updated": "仓库访问权限已更新。Motir会读取你在GitHub上选择的仓库，无需再做任何操作。",
       "install_unbound": "已在GitHub上安装Motir GitHub App，但安装并非从此工作区发起，因此尚未与它关联。请从这里重新发起安装以完成关联。",
       "install_expired": "安装链接在你停留GitHub期间已过期。并未出错——请从设置中重新开始。",
       "install_forbidden": "你不是发起此次安装的工作区的成员，因此未连接任何内容。",
       "install_provider_error": "Motir无法连接GitHub以完成App的关联，请重试。",
-      "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。"
+      "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。",
+      "select_repos": "已安装 Motir GitHub App。请选择此组织要连接该账号下的哪些仓库。",
+      "repo_unavailable": "该仓库已连接到另一个组织，因此未在此添加。其他内容均未更改。",
+      "installation_not_accessible": "你在 GitHub 上看不到该 GitHub 账号，因此它未关联到此组织。未做任何更改。"
     },
     "connect": {
       "title": "连接 GitHub",
@@ -7010,14 +7013,14 @@
       },
       "step2": {
         "eyebrow": "第 2 步 · 仓库访问",
-        "title": "安装 Motir GitHub App",
-        "body": "选择 Motir 可读取的仓库——你在 GitHub 的安装页面上挑选具体仓库。Motir 不会看到其余仓库，你可以随时更改所选范围。"
+        "title": "关联 GitHub 账户",
+        "body": "选择一个已安装 Motir GitHub App 的账户——或在新账户上安装——然后选择本组织要连接其中哪些仓库。一个仓库同一时间只属于一个组织。"
       },
       "installLink": "安装 Motir GitHub App",
       "cta": "连接 GitHub",
       "foot": "你将被带到 GitHub 进行授权，然后选择仓库。",
       "noInstallHref": "此部署不支持安装 Motir GitHub App。",
-      "orgFoot": "你将前往 GitHub，选择本组织授予 Motir 的仓库。"
+      "orgFoot": "如果你的 GitHub 账户已安装 Motir GitHub App，Motir 会将其列出——无需再次安装。"
     },
     "identity": {
       "connectedAs": "GitHub 身份 · 已连接为 {name}",
@@ -7318,6 +7321,97 @@
       "adminOnly": "只有 {org} 的所有者和管理员可以连接或断开 Git 平台。",
       "subtitleGeneric": "将你的组织与 GitHub 或 GitLab 连接一次。此后组织中的任何项目都可以使用已连接的仓库——挑选它们不会重新建立索引。",
       "identityAtAccount": "在「设置 → 账户 → Git 账户」中连接你自己的账户"
+    },
+    "accounts": {
+      "title": "GitHub 账户",
+      "subtitle": "{org} 从这些账户连接仓库。每个仓库同一时间只属于一个组织。",
+      "connect": "连接 GitHub",
+      "linked": "已关联",
+      "meta": "{type} · 在此连接了 {count, plural, other {# 个仓库}}",
+      "type": {
+        "organization": "组织",
+        "personal": "个人"
+      },
+      "addOrRemove": "添加或移除仓库",
+      "manageOnGithub": "在 GitHub 上管理",
+      "disconnect": "断开连接",
+      "toastTitle": "已从 {account} 连接 {count, plural, other {# 个仓库}}",
+      "toastBody": "它们已列在“仓库”下——{org} 中的任何项目现在都可以添加它们。"
+    },
+    "picker": {
+      "title": "连接 GitHub",
+      "description": "选择 {org} 要连接其仓库的 GitHub 账户。以下是可见的、已安装 Motir GitHub App 的账户。",
+      "accountsLabel": "账户",
+      "accountMeta": "{type} · Motir 可见 {count, plural, other {# 个仓库}}",
+      "notLinked": "未关联",
+      "linkedHere": "已关联到本组织",
+      "installOther": "安装到其他账户",
+      "installOtherMeta": "打开 GitHub，在尚未安装 Motir GitHub App 的账户上安装它。",
+      "loadingAccounts": "正在加载 GitHub 账户…",
+      "accountsError": {
+        "title": "无法连接 GitHub",
+        "body": "Motir 无法加载已安装 Motir GitHub App 的账户。未做任何更改。"
+      },
+      "retry": "重试",
+      "noAccounts": {
+        "title": "暂无可关联的 GitHub 账户",
+        "body": "可见的 GitHub 账户均未安装 Motir GitHub App。请在其中一个账户上安装后继续。"
+      },
+      "identity": {
+        "title": "请先连接你的 GitHub 账户",
+        "body": "Motir 通过你自己的 GitHub 身份列出你可见的 GitHub 账户。请在“设置 → 账户 → Git 账户”中连接，然后返回此处。",
+        "action": "前往 Git 账户"
+      },
+      "cancel": "取消",
+      "back": "所有账户",
+      "reposTitle": "从 {account} 选择仓库",
+      "reposDescription": "每个仓库同一时间只属于一个组织。其他组织已连接的仓库无法在此添加。",
+      "search": "搜索仓库",
+      "selectAll": "全选可用项（{count}）",
+      "selected": "已选 {count} 个",
+      "rowState": {
+        "selected": "已选择",
+        "notSelected": "未选择"
+      },
+      "connectedElsewhere": "已连接到其他组织",
+      "connectedHere": "已在此连接",
+      "noMatches": "没有与搜索匹配的仓库。",
+      "hint": "要从 {org} 断开某个仓库，请在“仓库”中该仓库所在行使用“断开连接”。",
+      "submit": "{count, plural, =0 {连接仓库} other {连接 # 个仓库}}",
+      "loadingRepos": "正在加载仓库…",
+      "reposError": {
+        "title": "无法加载仓库",
+        "body": "Motir 无法从 GitHub 加载 {account} 的仓库。未做任何更改。"
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "{repo} 刚刚被连接到其他组织，无法添加。",
+        "repo_selection_required": "请至少选择一个要连接的仓库。",
+        "repository_not_visible": "其中一个仓库在 GitHub 上已对 Motir GitHub App 不可见。请刷新列表后重试。",
+        "installation_not_accessible": "你在 GitHub 上已无法看到 {account}，因此无法关联。请选择其他账户。",
+        "generic": "连接这些仓库时出错。未做任何更改——请重试。"
+      },
+      "noneLeft": {
+        "title": "{account} 中已没有可连接的仓库",
+        "body": "Motir GitHub App 在 {account} 上可见的所有仓库均已连接。一个仓库同一时间只属于一个组织。",
+        "connectedHere": "已连接到本组织",
+        "connectedElsewhere": "已连接到其他组织",
+        "hint": "如需提供更多仓库，请在 GitHub 上授予 Motir GitHub App 访问其他仓库的权限，或选择其他账户。",
+        "chooseAnother": "选择其他账户",
+        "manageOnGithub": "在 GitHub 上管理仓库"
+      }
+    },
+    "accountDisconnect": {
+      "title": "要将 {account} 从 {org} 断开连接吗？",
+      "repos": "此操作仅移除 {org} 与 {account} 的关联，以及它在此连接的 {count, plural, other {# 个仓库}}：",
+      "projects": "{count, plural, other {# 个项目}}将失去这些仓库：",
+      "noProjects": "{org} 中暂无项目使用这些仓库。",
+      "retention": "Motir 基于这些仓库构建的代码索引会保留 {days} 天。在此之前重新关联该账户并选择它们，即可取消移除；超过期限后，重新添加仓库需要完整重建索引。",
+      "others": "关联到 {account} 的其他组织不受影响，Motir GitHub App 仍安装在 GitHub 上。如需在所有位置卸载，请在 GitHub 上操作。",
+      "loading": "正在加载此次断开连接的影响范围…",
+      "loadFailed": "Motir 无法加载断开 {account} 的影响范围。未做任何更改——请重试。",
+      "failed": "Motir 无法断开 {account}。未做任何更改——请重试。",
+      "cancel": "取消",
+      "confirm": "断开连接"
     }
   },
   "aiPlanning": {

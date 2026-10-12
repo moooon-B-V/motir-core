@@ -510,7 +510,7 @@ describe('PlanningCanvas motion — animateInitial (MOTIR-6300)', () => {
   });
 });
 
-// MOTIR-7830 — the DRAFTING / LAYING cue (Part XXV §25.6–25.8) under reduced
+// MOTIR-7830 — the DRAFTING / LAYING cue (Part XXVI §26.6–26.8) under reduced
 // motion: the SAME static marker, and the cue plays no motion of its own.
 describe('PlanningCanvas — the cue under REDUCED MOTION (MOTIR-7830)', () => {
   const cue = { kind: 'drafting', label: 'Being drafted now', text: 'Drafting' } as const;

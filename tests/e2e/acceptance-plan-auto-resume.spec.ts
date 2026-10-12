@@ -375,7 +375,7 @@ test('a plan whose machine is lost resumes by itself, reads resuming, keeps its 
       // (c) the pane's one live region reads Resuming; the rail says why, and offers no Resume.
       await resuming;
       await expect(liveState(page)).toHaveText(planReview.liveResuming);
-      // The marker IS the line's one live region (§25.1): the state word is said there.
+      // The marker IS the line's one live region (§26.1): the state word is said there.
       await expect(liveState(page)).toHaveAttribute('data-state', 'resuming');
       await expect(liveState(page)).toHaveAttribute('role', 'status');
       await expect(paneSteps(page)).toHaveCount(0);

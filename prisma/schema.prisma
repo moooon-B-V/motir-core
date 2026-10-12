@@ -1376,8 +1376,10 @@ model Organization {
   /// the organisation, and which projects use it is visibility configuration.
   /// Back-relations of two Cascade FKs, modelled on both sides per the
   /// FK-`@relation` rule.
-  githubInstallations GithubInstallation[]
-  githubRepos         GithubRepo[]
+  githubInstallations        GithubInstallation[]
+  githubRepos                GithubRepo[]
+  /// The GitHub accounts this organisation is linked to (MOTIR-8218).
+  githubInstallationOrgLinks GithubInstallationOrgLink[]
 
   /// Whether every member of this organization must hold a second factor
   /// (Story MOTIR-1215 · Subtask MOTIR-3644). The EFFECTIVE requirement on a
@@ -1648,6 +1650,8 @@ model Workspace {
   // installation is bound to NO workspace (MOTIR-1931); its repos are tenanted
   // through `githubRepos` below, not through here.
   githubInstallations         GithubInstallation[]
+  /// The account links connected FROM this workspace (MOTIR-8218).
+  githubInstallationOrgLinks  GithubInstallationOrgLink[]
   // Connected/created repositories owned by this workspace (MOTIR-1931). Tenancy
   // is a property of the REPO, not of the installation: one shared provisioning
   // installation holds every tenant's created repos, so the repo row is what says
@@ -7804,16 +7808,59 @@ model GithubInstallation {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  workspace    Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace    Workspace?                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// Modelled on BOTH sides with the same action the SQL uses (the FK-`@relation`
   /// rule). Cascade, exactly as the workspace relation above: a deleted
   /// organisation takes its connections with it.
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization?               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repos        GithubRepo[]
+  /// The organisations this installation is linked to (MOTIR-8218). One row per
+  /// organisation; the installation itself stays ONE fact about GitHub.
+  orgLinks     GithubInstallationOrgLink[]
 
   @@index([workspaceId])
   @@index([organizationId])
   @@map("github_installation")
+}
+
+/// THE LINK BETWEEN ONE GITHUB ACCOUNT AND ONE ORGANISATION (Story MOTIR-8216 ·
+/// MOTIR-8218).
+///
+/// A GitHub App installation is one account, and since this story one account
+/// can serve several Motir organisations, each with its own disjoint subset of
+/// the account's repositories. The installation row stays the single GitHub-side
+/// fact, keyed on GitHub's unique `installation_id`; WHICH organisations use it
+/// is this table. Its `workspace_id` / `organization_id` columns are left in
+/// place for the deploy window (the old build still writes them) — contracting
+/// them is not this story's.
+///
+/// ⚠️ Motir's SHARED PROVISIONING INSTALLATION (MOTIR-1931) gets NO row here:
+/// it is owned by no tenant, so there is nothing to link, and the backfill only
+/// copies rows that carry an organisation. That is what keeps it invisible to
+/// every tenant read of "my accounts".
+///
+/// RLS: an org read arm (`github_installation_org_link_org_read`, the
+/// `github_installation_org_read` shape), a read for the workspace the link was
+/// connected from, and writes under the system context only.
+model GithubInstallationOrgLink {
+  id             String   @id @default(cuid())
+  /// FK → GithubInstallation.id (the internal cuid, NOT GitHub's numeric id).
+  installationId String   @map("installation_id")
+  organizationId String   @map("organization_id")
+  /// The tier the link was connected FROM, as `github_repo` records it.
+  workspaceId    String   @map("workspace_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  installation GithubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// One link per (installation, organisation): a re-run install refreshes it in place.
+  @@unique([installationId, organizationId])
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@map("github_installation_org_link")
 }
 
 /// A repository selected on a GitHub App installation (Story 7.10 · MOTIR-891).
@@ -8064,6 +8111,13 @@ model GithubRepo {
   @@unique([installationId, repoId])
   @@index([installationId])
   @@index([workspaceId])
+  /// The host identity of the repository (MOTIR-8218) — what the one-org-per-repo
+  /// guard (`trg_github_repo_one_organization`) and webhook routing look up by.
+  /// NOT unique, deliberately: one organisation legitimately holds the same
+  /// repository twice after a takeover (the provisioning row keeps its coordinates
+  /// while the tenant's own installation re-selects it). What may never happen is
+  /// two ORGANISATIONS holding it, and that is the trigger's to refuse.
+  @@index([provider, repoId])
   /// Serves the org-tier reads this column exists for, and — once MOTIR-4677
   /// rewrites them — the RLS predicate itself, exactly as `@@index([workspaceId])`
   /// serves `github_repo_workspace_or_system` today.

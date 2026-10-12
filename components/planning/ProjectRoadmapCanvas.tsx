@@ -503,13 +503,13 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   levelBand?: (focus: { id: string; label: string }) => ReactNode;
   /**
-   * THE DRAFTING / LAYING CUES (MOTIR-7830; design Part XXV §25.6) — threaded to
+   * THE DRAFTING / LAYING CUES (MOTIR-7830; design Part XXVI §26.6) — threaded to
    * `PlanningCanvas` as given. Read whether or not `motion` is on (the plan page
    * draws them with motion off). Absent by default.
    */
   nodeCues?: ReadonlyMap<string, NodeCue> | null;
   /**
-   * The cues IN FLIGHT, with where each one is (MOTIR-7830; §25.7). An entry is
+   * The cues IN FLIGHT, with where each one is (MOTIR-7830; §26.7). An entry is
    * OFF-LEVEL when its node is not on the drawn level and it is not a `laying`
    * cue on the level the reader stands in; off-level entries are counted in the
    * arrivals pill's ONE slot, in the design's in-flight wording, and *Go there*
@@ -1559,7 +1559,7 @@ export function ProjectRoadmapCanvas({
   // being somewhere the reader is not. The declined one wins — it is the older
   // sentence, and it names where the plan lands just the same.
   const offer = declined ?? elsewhereOffer?.(crumbs) ?? null;
-  // THE ONE SLOT'S WORDS (§23.7, re-worded by Part XXV §25.7): the arrivals
+  // THE ONE SLOT'S WORDS (§23.7, re-worded by Part XXVI §26.7): the arrivals
   // count, joined by the cues the reader cannot see. With no `inFlight` it is the
   // arrivals pill exactly as shipped.
   const drawnIds = new Set(nodes.map((n) => n.id));
