@@ -36,6 +36,15 @@ export const HERO_SCREENS = [
 
 export type HeroScreen = (typeof HERO_SCREENS)[number];
 
+/**
+ * The screen's brand bar (`OnboardingBrandBar`). Not `getByRole('banner')`: on
+ * the entrance and How Motir works the bar's `<header>` sits inside the hero's
+ * `<section>`, where it carries no banner role.
+ */
+export function brandBar(page: Page): Locator {
+  return page.locator('[data-onboarding-brand-bar]').first();
+}
+
 /** The `BrandMark` lockup inside `scope`: the wave-band glyph and the "Motir" wordmark. */
 export async function expectLockup(scope: Locator, where: string): Promise<void> {
   const lockup = scope.locator('.brand-lockup').first();

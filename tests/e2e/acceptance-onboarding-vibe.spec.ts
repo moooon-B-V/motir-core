@@ -52,6 +52,7 @@ import {
   RETIRED_VOICE_ZH,
   expectFullWidthHero,
   expectHeadline,
+  brandBar,
   expectLockup,
   expectNoStandInOrRetiredVoice,
   type HeroScreen,
@@ -104,7 +105,7 @@ async function expectDocument(page: Page, run: Run): Promise<void> {
 async function expectHeroScreen(page: Page, run: Run, s: HeroScreen) {
   const where = `${s.name} (${run.label})`;
   const band = await expectHeadline(page, run.locale, s);
-  await expectLockup(page.getByRole('banner').first(), where);
+  await expectLockup(brandBar(page), where);
   await expectNoStandInOrRetiredVoice(
     page,
     where,

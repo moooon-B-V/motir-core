@@ -32,6 +32,7 @@ import { stubMigrateRoutes } from './_helpers/onboarding-stubs';
 import {
   HERO_SCREENS,
   expectHeadline,
+  brandBar,
   expectLockup,
   expectNoStandInOrRetiredVoice,
   type HeroScreen,
@@ -86,7 +87,7 @@ for (const locale of NEW_LOCALES) {
       expect(await htmlLang(page), `the document language on ${where}`).toMatch(
         new RegExp(`^${locale}`),
       );
-      await expectLockup(page.getByRole('banner').first(), where);
+      await expectLockup(brandBar(page), where);
       await expectNoStandInOrRetiredVoice(page, where);
 
       const headline = msg(locale, screen.headline);

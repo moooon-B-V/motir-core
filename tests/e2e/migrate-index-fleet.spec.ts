@@ -173,7 +173,10 @@ async function reachIndexStep(page: Page, email: string): Promise<string> {
   const started = page.waitForResponse(
     (r) => r.url().endsWith('/api/onboarding/migrate') && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Start' }).click();
+  // Two projects (the sign-up default + Invoicer), so the start panel offers a
+  // choice (MOTIR-8254); the repos are seeded on the workspace, so pick Invoicer.
+  await page.getByRole('radio', { name: /Invoicer/ }).check();
+  await page.getByRole('button', { name: 'Start with Invoicer' }).click();
   expect((await started).status()).toBe(200);
 
   await expect(
@@ -183,7 +186,8 @@ async function reachIndexStep(page: Page, email: string): Promise<string> {
   const advanced = page.waitForResponse(
     (r) => r.url().includes('/advance') && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: "I've connected my repos" }).click();
+  // Connect lists the connected repositories itself and moves on with Continue.
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
   expect((await advanced).status()).toBe(200);
 
   return workspaceId;
