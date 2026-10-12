@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ChevronLeft, FileQuestion } from 'lucide-react';
 import { DirectionDocView } from '@/components/onboarding/DirectionDocView';
 import {
@@ -45,6 +46,7 @@ export function DirectionDocFullPage({
   origin = 'roadmap',
 }: DirectionDocFullPageProps) {
   const router = useRouter();
+  const t = useTranslations('roadmap.directionDoc');
   const meta = TIER_META[tier];
   const basePath = origin === 'onboarding' ? '/onboarding/direction' : '/direction';
   const backClassName =
@@ -56,20 +58,20 @@ export function DirectionDocFullPage({
         {origin === 'onboarding' ? (
           <Link href={ONBOARDING_ENTRY_PATH} className={backClassName}>
             <ChevronLeft className="size-4" aria-hidden="true" />
-            Back to roadmap
+            {t('backToRoadmap')}
           </Link>
         ) : (
           <button type="button" onClick={() => router.back()} className={backClassName}>
             <ChevronLeft className="size-4" aria-hidden="true" />
-            Back to roadmap
+            {t('backToRoadmap')}
           </button>
         )}
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
-          <span className="text-(--el-text-muted)">Roadmap</span>
+        <nav aria-label={t('breadcrumb')} className="flex items-center gap-1.5 text-sm">
+          <span className="text-(--el-text-secondary)">{t('breadcrumbRoadmap')}</span>
           <span className="text-(--el-text-faint)" aria-hidden="true">
             ›
           </span>
-          <span className="text-(--el-text-muted)">Direction</span>
+          <span className="text-(--el-text-secondary)">{t('breadcrumbDirection')}</span>
           <span className="text-(--el-text-faint)" aria-hidden="true">
             ›
           </span>
@@ -80,10 +82,8 @@ export function DirectionDocFullPage({
       <div className="py-8">
         {error ? (
           <div className="mx-auto flex max-w-[45rem] flex-col items-center gap-1 py-16 text-center">
-            <p className="text-sm font-semibold text-(--el-text)">Couldn&apos;t load this doc</p>
-            <p className="text-sm text-(--el-text-muted)">
-              Something went wrong reading your direction. Try again in a moment.
-            </p>
+            <p className="text-sm font-semibold text-(--el-text)">{t('errorTitle')}</p>
+            <p className="text-sm text-(--el-text-secondary)">{t('errorBodyRetry')}</p>
           </div>
         ) : doc ? (
           <DirectionDocView
@@ -96,12 +96,9 @@ export function DirectionDocFullPage({
           <div className="mx-auto flex max-w-[45rem] flex-col items-center gap-2 py-16 text-center">
             <FileQuestion className="size-7 text-(--el-text-faint)" aria-hidden="true" />
             <p className="text-sm font-semibold text-(--el-text)">
-              {meta.label} isn&apos;t ready yet
+              {t('emptyTitle', { label: meta.label })}
             </p>
-            <p className="max-w-[24rem] text-sm text-(--el-text-muted)">
-              This tier hasn&apos;t been drafted for this project. It&apos;ll appear here once Motir
-              writes it up in the chat.
-            </p>
+            <p className="max-w-[24rem] text-sm text-(--el-text-secondary)">{t('emptyBody')}</p>
           </div>
         )}
       </div>

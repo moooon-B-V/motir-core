@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { TierDocModal } from '@/components/planning/TierDocModal';
 import type { PreplanStateDTO } from '@/lib/dto/aiPreplan';
+import zhMessages from '@/messages/zh.json';
 
 // Component tests for the on-canvas tier-doc viewer (Subtask 7.20.14 / MOTIR-1355):
 // it fetches the active project's pre-plan state, finds the clicked tier's doc, and
@@ -141,5 +142,21 @@ describe('TierDocModal', () => {
     await screen.findByText('Understanding your project');
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalled();
+  });
+  it('renders its head and error copy from the catalogue for a zh reader (MOTIR-8326)', async () => {
+    mockFetchFailing();
+    render(<TierDocModal tier="discovery" onClose={() => {}} />, {
+      locale: 'zh',
+      messages: zhMessages,
+    });
+
+    expect(await screen.findByText('无法加载此文档')).toBeTruthy();
+    // The kicker names the tier through the catalogue, not a capitalised slug.
+    expect(screen.getByText('方向 · 探索')).toBeTruthy();
+    expect(screen.getByRole('link', { name: '打开完整页面' }).getAttribute('href')).toBe(
+      '/direction/discovery',
+    );
+    expect(screen.getByRole('button', { name: '关闭' })).toBeTruthy();
+    expect(screen.queryByText(/Open full page|Couldn't load|Direction ·/)).toBeNull();
   });
 });
