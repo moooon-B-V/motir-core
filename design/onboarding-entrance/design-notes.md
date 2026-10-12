@@ -732,7 +732,7 @@ the zh title has a full-width colon and no break opportunity before it; check it
 
 **The request.** Xing (project owner): put a language control on the onboarding brand bar. That is
 a new code card, **MOTIR-8286**. The control is the one the signed-out frame already ships:
-`AuthLanguageControl` (`app/(auth)/_components/AuthLanguageControl.tsx`), drawn in
+`AuthLanguageControl` (`components/i18n/AuthLanguageControl.tsx`, moved there by MOTIR-8253), drawn in
 `design/auth/auth-frame--language-control.mock.html` and specified in `design/auth/design-notes.md`
 § _The language control on the signed-out frame_. **This revision invents nothing.** The anatomy,
 the tokens, the copy and the behaviour are that control's. The mock is revised in place again
