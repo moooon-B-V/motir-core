@@ -17,14 +17,14 @@ import {
 import { WORKBENCH_PATH } from '@/lib/workbench/tab';
 
 // THE PROGRESS LINE of a plan being written (Story MOTIR-7820 · Subtask
-// MOTIR-7829; design `design/ai-planning/design-notes.md` Part XXV §25.1–25.5,
-// §25.10–25.14, mock `plan-review--live-progress.mock.html` sheets 1–3).
+// MOTIR-7829; design `design/ai-planning/design-notes.md` Part XXVI §26.1–26.5,
+// §26.10–26.14, mock `plan-review--live-progress.mock.html` sheets 1–3).
 //
 // ONE component in two densities, so the plan surface and the Workbench ›
 // Planning row cannot say different things:
 //   · `pane`    — the pane header's [marker] [progress button + details popover]
-//                 [pointer to Workbench › Planning] (§25.2);
-//   · `compact` — one plain row, the thing a Workbench row composes (§25.5).
+//                 [pointer to Workbench › Planning] (§26.2);
+//   · `compact` — one plain row, the thing a Workbench row composes (§26.5).
 //
 // ⚠️ IT DECIDES NOTHING. The state, the live steps, each step's phrase, the
 // counts and the stall are the derivation's (`lib/plans/planProgress.ts`), read
@@ -32,7 +32,7 @@ import { WORKBENCH_PATH } from '@/lib/workbench/tab';
 // the FORMATS and the layout — never a comparison against the threshold, never
 // a filter over the steps, never a phrase chosen from `kind`.
 //
-// ⚠️ WHAT IS LIVE (§25.14). The MARKER is the only live region: `role="status"`,
+// ⚠️ WHAT IS LIVE (§26.14). The MARKER is the only live region: `role="status"`,
 // and its text is the STATE WORD alone (Starting… · Being written · Stalled ·
 // Reconnecting), so a screen reader hears a state change once and never a tick,
 // a count or a step moving between items. The progress button is NOT live — six
@@ -49,7 +49,7 @@ export const PLAN_PROGRESS_POINTER_HREF = `${WORKBENCH_PATH}?tab=planning`;
 
 export interface PlanProgressLineProps {
   progress: PlanProgressSnapshot | null;
-  /** The poll's `failing` — the dropped-read row (§25.10). */
+  /** The poll's `failing` — the dropped-read row (§26.10). */
   failing?: boolean;
   density: PlanProgressDensity;
 }
@@ -65,7 +65,7 @@ type Translate = ReturnType<typeof useTranslations>;
 
 const MINUTE_MS = 60_000;
 
-/** A duration in the design's elapsed format (§25.4): `<1 min` · `{m} min` ·
+/** A duration in the design's elapsed format (§26.4): `<1 min` · `{m} min` ·
  *  `{h} h {m} min`. Also the `{duration}` of every other key. */
 export function formatPlanDuration(ms: number, t: Translate): string {
   const totalMinutes = Math.floor(Math.max(0, ms) / MINUTE_MS);
@@ -77,7 +77,7 @@ export function formatPlanDuration(ms: number, t: Translate): string {
   });
 }
 
-/** Last activity (§25.4): `just now` under 10 s, then 10-second steps, then the
+/** Last activity (§26.4): `just now` under 10 s, then 10-second steps, then the
  *  elapsed formatter. Measured from the server-corrected `sinceActivityMs`, so
  *  it and the stalled verdict read the same clock. */
 function formatLastActivity(sinceMs: number, t: Translate): string {
@@ -123,7 +123,7 @@ function MarkerDot({ marker }: { marker: MarkerState }) {
 }
 
 /** One `· value` segment. `drop` hides it (separator and value together) below
- *  the header's width — §25.2's drop order, on the container, not the viewport. */
+ *  the header's width — §26.2's drop order, on the container, not the viewport. */
 function Segment({ children, drop }: { children: ReactNode; drop?: string }) {
   return (
     <>
@@ -135,7 +135,7 @@ function Segment({ children, drop }: { children: ReactNode; drop?: string }) {
   );
 }
 
-// §25.2's drop order: last activity first (< 720 px), then elapsed and the
+// §26.2's drop order: last activity first (< 720 px), then elapsed and the
 // pointer (< 560 px). Counts never drop.
 const DROP_LAST_ACTIVITY = '@max-[45rem]:hidden';
 const DROP_ELAPSED = '@max-[35rem]:hidden';
@@ -155,7 +155,7 @@ export function PlanProgressLineView({
   const [open, setOpen] = useState(false);
   if (!reading) return null;
 
-  // Clock times in the reader's locale AND timezone (§25.4's popover row). The
+  // Clock times in the reader's locale AND timezone (§26.4's popover row). The
   // app's global default is UTC (`i18n/request.ts`), so the browser's zone is
   // passed explicitly — safe from a hydration mismatch because the popover's
   // content renders only after a press, on the client.
@@ -239,7 +239,7 @@ export function PlanProgressLineView({
 
   return (
     <>
-      {/* THE MARKER (§25.1, §25.14) — the shipped live marker, its WORD now the
+      {/* THE MARKER (§26.1, §26.14) — the shipped live marker, its WORD now the
           state. The ONLY live region in the line. */}
       <span
         data-testid="plan-live-state"
@@ -332,7 +332,7 @@ export function PlanProgressLineView({
           </div>
         </Popover.Content>
       </Popover>
-      {/* THE POINTER (§25.2) — pane only; moves into the popover below 560 px. */}
+      {/* THE POINTER (§26.2) — pane only; moves into the popover below 560 px. */}
       <Link
         href={PLAN_PROGRESS_POINTER_HREF}
         data-testid="plan-progress-pointer"

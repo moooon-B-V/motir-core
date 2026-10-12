@@ -192,7 +192,7 @@ export function PlanDetail({
   // itself is the shared one (MOTIR-6295); this island only files each snapshot
   // into its own state, exactly as `refetch` does. Not `immediate`: the island is
   // seeded from the server read, so the first re-read waits a full interval.
-  // Its `failing` feeds the progress line's dropped-read row (MOTIR-7829, §25.10).
+  // Its `failing` feeds the progress line's dropped-read row (MOTIR-7829, §26.10).
   const { failing: liveFailing } = useGeneratingPlanPoll(
     review.status === 'generating' ? planId : null,
     {

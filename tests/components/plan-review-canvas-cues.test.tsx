@@ -9,7 +9,7 @@ import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import type { PlanProgressStep } from '@/lib/plans/planProgress';
 
 // The DRAFTING / LAYING cues on the plan's ONE canvas (Story MOTIR-7820 ·
-// MOTIR-7830; design Part XXV §25.6–25.7). `PlanReviewCanvas` maps the derivation's
+// MOTIR-7830; design Part XXVI §26.6–26.7). `PlanReviewCanvas` maps the derivation's
 // live steps to node cues and to in-flight entries for the arrivals slot; every
 // assertion reads rendered output through the real `loadLevel` over a stubbed
 // roadmap read, the way the level-band suite does.

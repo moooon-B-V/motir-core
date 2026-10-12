@@ -11,19 +11,15 @@ import { githubInstallationManageUrl } from '@/lib/github/appLinks';
 import { CODE_GRAPH_RETENTION_WINDOW_DAYS } from '@/lib/codeGraph/offboarding';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
-import { Card } from '@/components/ui/Card';
-import { Pill } from '@/components/ui/Pill';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { GithubMark } from '@/components/icons/GithubMark';
 import { GitConnectBanner } from '@/components/settings/GitConnectBanner';
 import { GitSettingsShell } from '../../workspace/_components/GitSettingsShell';
 import { GrantRow } from '../../workspace/_components/gitSettingsPrimitives';
-import { githubAppInstallUrl } from '@/lib/github/appLinks';
-import { encodeInstallState } from '@/lib/github/installState';
-import { buttonVariants } from '@/components/ui/Button';
-import { BadgeCheck, ExternalLink, FolderGit2, Lock } from 'lucide-react';
+import { BadgeCheck, FolderGit2, Lock } from 'lucide-react';
 import { GitlabConnection } from './_components/GitlabConnection';
 import { OrgGitClient } from './_components/OrgGitClient';
+import { ConnectGithubButton, GithubConnectRoom } from './_components/GithubConnectRoom';
+import type { LinkedGithubAccount } from './_components/githubAccounts';
 
 // SETTINGS → ORGANISATION → GIT (Story MOTIR-4669 · MOTIR-4680), built to
 // `design/github/github.mock.html` Panel 6 and reached by the `Git` row
@@ -52,7 +48,13 @@ import { OrgGitClient } from './_components/OrgGitClient';
 // provably is not). A disconnect does both.
 
 interface OrgGitPageProps {
-  searchParams: Promise<{ provider?: string; github?: string; gitlab?: string }>;
+  searchParams: Promise<{
+    provider?: string;
+    github?: string;
+    gitlab?: string;
+    /** Named by the install round trip alongside `?github=select_repos`. */
+    installation_id?: string;
+  }>;
 }
 
 export default async function OrganizationGitPage({ searchParams }: OrgGitPageProps) {
@@ -120,7 +122,9 @@ export default async function OrganizationGitPage({ searchParams }: OrgGitPagePr
           userId={ctx.userId}
           workspaceId={ctx.workspaceId}
           provider={provider}
-          github={sp.github}
+          selectReposInstallationId={
+            sp.github === 'select_repos' && sp.installation_id ? sp.installation_id : null
+          }
         />
       </Suspense>
     </GitSettingsShell>
@@ -132,13 +136,13 @@ async function OrgGitBody({
   userId,
   workspaceId,
   provider,
+  selectReposInstallationId,
 }: {
   userId: string;
   workspaceId: string;
   provider: 'github' | 'gitlab';
-  github?: string | undefined;
+  selectReposInstallationId: string | null;
 }) {
-  const t = await getTranslations('github');
   const ctx = { userId, workspaceId };
 
   // ⚠️ `allSettledOrThrow`, never a bare `Promise.all` (MOTIR-3066): each arm
@@ -189,96 +193,78 @@ async function OrgGitBody({
           organizationName={organizationName}
         />
         <OrgGitClient
+          key={inventoryKey(rows)}
           initialRows={rows}
           organizationName={organizationName}
           canDisconnect={canDisconnect}
-          manageOnGithubHref={null}
+          manageOnGithubHrefs={{}}
           retentionDays={CODE_GRAPH_RETENTION_WINDOW_DAYS}
         />
       </>
     );
   }
 
-  // ⚠️ THE CARD RENDERS THE SET, IT DOES NOT PICK FROM IT (MOTIR-4836). Nothing
-  // forbids two workspaces of one organisation each installing the App on a
-  // DIFFERENT GitHub account, and this card is singular — so the disposition is
-  // to MAP rather than to take `rows[0]`, which would be a guess that reads as a
-  // fact about the account. For N = 1 — every organisation on the deployment
-  // today, and the state Panel 2 of `design/github/design-notes.md` draws — the
-  // output is byte-identical to the single row this replaces; for N > 1 the page
-  // states every connection instead of choosing one. No new element is drawn:
-  // it is the SAME row, repeated, which is what the inventory below it already
-  // does with repositories.
+  // ⚠️ THE CARD RENDERS THE SET, IT DOES NOT PICK FROM IT (MOTIR-4836), and
+  // since MOTIR-8223 it says so in its own shape: `GitHub accounts`, one row per
+  // account linked to THIS organisation, each with its own actions
+  // (`design/github/github--multi-org-account.mock.html` Panels A6a/A6b).
+  // `installations.map(` below is the whole of the choice — none is made.
   //
-  // `manageOnGithubHref` is the one thing that cannot be repeated — it is a
-  // single org-wide affordance on the inventory — so it is supplied only when
-  // there IS exactly one connection to manage, and is otherwise null, which is
-  // the state the GitLab arm above already renders.
-  const soleInstallation = installations.length === 1 ? installations[0]! : null;
+  // ⚠️ THE MANAGE LINK IS PER ACCOUNT NOW, NOT PAGE-WIDE. It was supplied only
+  // when `installations.length === 1`, because one link could name only one
+  // installation; with two accounts linked the inventory's `Continue on GitHub`
+  // had nowhere to go. Each account row and each of that account's repository
+  // rows now carry the account's OWN installation settings (design § 31.7).
+  const accounts: LinkedGithubAccount[] = installations
+    .map((installation) => ({
+      installationId: installation.installationId,
+      accountLogin: installation.accountLogin,
+      accountType: installation.accountType,
+      repoCount: installation.repos.length,
+      manageUrl: githubInstallationManageUrl(installation),
+    }))
+    .sort((a, b) => a.accountLogin.localeCompare(b.accountLogin));
+  const manageOnGithubHrefs: Record<string, string> = {};
+  for (const installation of installations) {
+    const href = githubInstallationManageUrl(installation);
+    for (const repo of installation.repos) manageOnGithubHrefs[repo.id] = href;
+  }
 
   return (
     <>
-      <Card>
-        {installations.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            {installations.map((installation) => (
-              <div key={installation.installationId} className="flex flex-wrap items-center gap-3">
-                <span
-                  aria-hidden
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--el-muted) text-(--el-text-secondary)"
-                >
-                  <GithubMark className="h-5 w-5" />
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-sans text-sm font-semibold text-(--el-text)">
-                      {t('organization.connectionTitle')}
-                    </span>
-                    <Pill severity="success">
-                      {t('installation.installedOn', {
-                        account: installation.accountLogin,
-                        type: installation.accountType.toLowerCase(),
-                      })}
-                    </Pill>
-                  </div>
-                  {/* ⚠️ NOT an identity card. The member's own `GithubIdentity` moved
-                      to Settings → Account → Git accounts (MOTIR-4682); drawing a
-                      personal credential on the ORGANISATION's page is this story's
-                      own tier confusion pointed the other way. */}
-                  <span className="font-sans text-xs text-(--el-text-secondary)">
-                    {canDisconnect ? null : t('organization.adminOnly', { org: organizationName })}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <GithubConnectPanel
-            organizationName={organizationName}
-            installUrl={githubAppInstallUrl(
-              encodeInstallState({ workspaceId: ctx.workspaceId, userId: ctx.userId }),
-            )}
-          />
-        )}
-      </Card>
+      <GithubConnectRoom
+        organizationId={organization?.id ?? ''}
+        organizationName={organizationName}
+        accounts={accounts}
+        selectReposInstallationId={selectReposInstallationId}
+      >
+        <GithubConnectPanel organizationName={organizationName} />
+      </GithubConnectRoom>
 
       <OrgGitClient
+        key={inventoryKey(rows)}
         initialRows={rows}
         organizationName={organizationName}
         canDisconnect={canDisconnect}
-        manageOnGithubHref={
-          soleInstallation
-            ? githubInstallationManageUrl({
-                accountLogin: soleInstallation.accountLogin,
-                accountType: soleInstallation.accountType,
-                installationId: soleInstallation.installationId,
-              })
-            : null
-        }
+        manageOnGithubHrefs={manageOnGithubHrefs}
         retentionDays={CODE_GRAPH_RETENTION_WINDOW_DAYS}
       />
     </>
   );
+}
+
+/**
+ * The inventory island seeds `useState` once, so a link or a disconnect made in
+ * the connection card above it would never reach it through `router.refresh()`.
+ * Keying it by the repository set it was seeded with remounts it exactly when
+ * that set changes — and leaves it alone (its optimistic removal included) when
+ * a refresh changes nothing it shows.
+ */
+function inventoryKey(rows: { repo: { id: string } }[]): string {
+  return rows
+    .map((row) => row.repo.id)
+    .sort()
+    .join(',');
 }
 
 /**
@@ -298,13 +284,7 @@ async function OrgGitBody({
  * action here. The old workspace page put both on one screen because it did not
  * distinguish the tiers; that conflation is the thing this story removed.
  */
-async function GithubConnectPanel({
-  organizationName,
-  installUrl,
-}: {
-  organizationName: string;
-  installUrl: string | null;
-}) {
+async function GithubConnectPanel({ organizationName }: { organizationName: string }) {
   const t = await getTranslations('github');
   return (
     <div className="flex flex-col gap-5">
@@ -338,24 +318,12 @@ async function GithubConnectPanel({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="font-sans text-sm text-(--el-text-muted)">{t('connect.orgFoot')}</p>
-        {installUrl ? (
-          <a
-            href={installUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className={buttonVariants({ variant: 'primary' })}
-          >
-            <GithubMark className="h-4 w-4" aria-hidden />
-            {t('connect.installLink')}
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-          </a>
-        ) : (
-          /* No App slug configured — a self-hosted deployment that registered
-             none. The button would link nowhere, so it is absent and the reason
-             is stated. */
-          <p className="font-sans text-sm text-(--el-text-muted)">{t('connect.noInstallHref')}</p>
-        )}
+        <p className="font-sans text-sm text-(--el-text-secondary)">{t('connect.orgFoot')}</p>
+        {/* ⚠️ A BUTTON THAT OPENS THE PICKER, not a link to GitHub (MOTIR-8223,
+            design § 31.4). An account the App is already installed on is listed
+            there and linked without leaving Motir; installing on a new account
+            is the picker's last row. */}
+        <ConnectGithubButton />
       </div>
     </div>
   );

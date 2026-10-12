@@ -7011,13 +7011,16 @@
       "state_error": "Nie udało się zweryfikować logowania do GitHuba. Spróbuj połączyć ponownie.",
       "error": "Coś poszło nie tak podczas łączenia z GitHubem. Spróbuj ponownie.",
       "not_configured": "GitHub nie jest jeszcze skonfigurowany w tym wdrożeniu.",
-      "installed": "Aplikacja GitHub App zainstalowana — Motir może teraz czytać wybrane repozytoria, a jego aplikacja wypycha gałęzie hostowanych uruchomień i otwiera ich pull requesty.",
+      "installed": "Konto GitHub połączone z tą organizacją. Repozytoria, które już tu połączyło, zostają zachowane — dodaj więcej za pomocą opcji Dodaj lub usuń repozytoria.",
       "repos_updated": "Dostęp do repozytoriów zaktualizowany. Motir czyta repozytoria wybrane na GitHubie — nie ma tu nic więcej do dokończenia.",
       "install_unbound": "Aplikacja Motir GitHub App została zainstalowana na GitHubie, ale nie z tego obszaru roboczego, więc nie jest z nim jeszcze połączona. Rozpocznij instalację stąd, aby ją połączyć.",
       "install_expired": "Link instalacyjny wygasł podczas wizyty na GitHubie. Nic się nie zepsuło — zacznij ponownie z Ustawień.",
       "install_forbidden": "Nie należysz do obszaru roboczego, z którego rozpoczęto tę instalację, więc nic nie zostało połączone.",
       "install_provider_error": "Motir nie mógł połączyć się z GitHubem, aby dokończyć łączenie aplikacji. Spróbuj ponownie.",
-      "install_error": "Nie udało się dokończyć konfiguracji aplikacji GitHub App. Spróbuj zainstalować ponownie."
+      "install_error": "Nie udało się dokończyć konfiguracji aplikacji GitHub App. Spróbuj zainstalować ponownie.",
+      "select_repos": "Motir GitHub App jest zainstalowana. Wybierz, które repozytoria tego konta łączy ta organizacja.",
+      "repo_unavailable": "To repozytorium jest już połączone z inną organizacją, więc nie zostało tu dodane. Nic innego się nie zmieniło.",
+      "installation_not_accessible": "Nie widzisz tego konta GitHub w serwisie GitHub, więc nie zostało ono połączone z tą organizacją. Nic nie zostało zmienione."
     },
     "connect": {
       "title": "Połącz GitHuba",
@@ -7029,14 +7032,14 @@
       },
       "step2": {
         "eyebrow": "Krok 2 · Dostęp do repozytoriów",
-        "title": "Zainstaluj aplikację Motir GitHub App",
-        "body": "Wybierz, które repozytoria Motir może czytać — dokładne repozytoria wskazujesz na ekranie instalacji GitHuba. Motir nigdy nie widzi pozostałych, a wybór możesz zmienić w dowolnej chwili."
+        "title": "Połącz konto GitHub",
+        "body": "Wybierz konto, na którym jest zainstalowana aplikacja Motir GitHub App — albo zainstaluj ją na nowym — a potem wybierz, które z jego repozytoriów ta organizacja połączy. Repozytorium należy jednocześnie tylko do jednej organizacji."
       },
       "installLink": "Zainstaluj aplikację Motir GitHub App",
       "cta": "Połącz GitHuba",
       "foot": "Przekierujemy Cię na GitHuba, aby autoryzować dostęp, a następnie wybrać repozytoria.",
       "noInstallHref": "Instalacja aplikacji Motir GitHub App nie jest dostępna w tym wdrożeniu.",
-      "orgFoot": "Przekierujemy Cię na GitHuba, aby wybrać repozytoria, do których ta organizacja daje Motir dostęp."
+      "orgFoot": "Jeśli aplikacja Motir GitHub App jest już zainstalowana na Twoim koncie GitHub, Motir wyświetli to konto — nie trzeba instalować jej ponownie."
     },
     "identity": {
       "connectedAs": "Tożsamość GitHub · połączono jako {name}",
@@ -7337,6 +7340,97 @@
       "adminOnly": "Tylko właściciele i administratorzy {org} mogą połączyć lub odłączyć host git.",
       "subtitleGeneric": "Połącz organizację z GitHubem lub GitLabem jeden raz. Każdy projekt w organizacji może wtedy pracować na połączonym repozytorium — jego wybór nigdy nie indeksuje go ponownie.",
       "identityAtAccount": "Połącz własne konto w Ustawienia → Konto → Konta git"
+    },
+    "accounts": {
+      "title": "Konta GitHub",
+      "subtitle": "Konta, z których {org} łączy repozytoria. Każde repozytorium należy jednocześnie tylko do jednej organizacji.",
+      "connect": "Połącz GitHub",
+      "linked": "Połączone",
+      "meta": "{type} · {count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}} połączonych tutaj",
+      "type": {
+        "organization": "Organizacja",
+        "personal": "Osobiste"
+      },
+      "addOrRemove": "Dodaj lub usuń repozytoria",
+      "manageOnGithub": "Zarządzaj w GitHubie",
+      "disconnect": "Odłącz",
+      "toastTitle": "Połączono {count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}} z konta {account}",
+      "toastBody": "Znajdziesz je w sekcji Repozytoria — każdy projekt w {org} może je teraz dodać."
+    },
+    "picker": {
+      "title": "Połącz GitHub",
+      "description": "Wybierz konto GitHub, którego repozytoria ma połączyć {org}. To konta z zainstalowaną aplikacją Motir GitHub App, które widzisz.",
+      "accountsLabel": "Konta",
+      "accountMeta": "{type} · {count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}} widocznych dla Motir",
+      "notLinked": "Niepołączone",
+      "linkedHere": "Połączone z tą organizacją",
+      "installOther": "Zainstaluj na innym koncie",
+      "installOtherMeta": "Otwiera GitHuba, aby zainstalować aplikację Motir GitHub App na koncie, które jeszcze jej nie ma.",
+      "loadingAccounts": "Wczytywanie kont GitHub…",
+      "accountsError": {
+        "title": "Nie udało się połączyć z GitHubem",
+        "body": "Motir nie mógł wczytać kont, na których jest zainstalowana aplikacja Motir GitHub App. Nic nie zostało zmienione."
+      },
+      "retry": "Spróbuj ponownie",
+      "noAccounts": {
+        "title": "Brak konta GitHub do połączenia",
+        "body": "Aplikacja Motir GitHub App nie jest zainstalowana na żadnym koncie GitHub, które widzisz. Zainstaluj ją na jednym z nich, aby kontynuować."
+      },
+      "identity": {
+        "title": "Najpierw połącz swoje konto GitHub",
+        "body": "Motir wyświetla konta GitHub, które widzisz dzięki własnej tożsamości GitHub. Połącz ją w Ustawienia → Konto → Konta Git, a potem wróć tutaj.",
+        "action": "Przejdź do kont Git"
+      },
+      "cancel": "Anuluj",
+      "back": "Wszystkie konta",
+      "reposTitle": "Wybierz repozytoria z konta {account}",
+      "reposDescription": "Każde repozytorium należy jednocześnie tylko do jednej organizacji. Repozytoriów połączonych już przez inną organizację nie można tu dodać.",
+      "search": "Szukaj repozytoriów",
+      "selectAll": "Zaznacz wszystkie dostępne ({count})",
+      "selected": "Zaznaczono: {count}",
+      "rowState": {
+        "selected": "zaznaczone",
+        "notSelected": "niezaznaczone"
+      },
+      "connectedElsewhere": "Połączone z inną organizacją",
+      "connectedHere": "Połączone tutaj",
+      "noMatches": "Żadne repozytorium nie pasuje do wyszukiwania.",
+      "hint": "Aby odłączyć repozytorium od {org}, użyj opcji Odłącz w jego wierszu w sekcji Repozytoria.",
+      "submit": "{count, plural, =0 {Połącz repozytoria} one {Połącz # repozytorium} few {Połącz # repozytoria} many {Połącz # repozytoriów} other {Połącz # repozytorium}}",
+      "loadingRepos": "Wczytywanie repozytoriów…",
+      "reposError": {
+        "title": "Nie udało się wczytać repozytoriów",
+        "body": "Motir nie mógł wczytać repozytoriów konta {account} z GitHuba. Nic nie zostało zmienione."
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "Repozytorium {repo} zostało właśnie połączone z inną organizacją i nie można go dodać.",
+        "repo_selection_required": "Wybierz co najmniej jedno repozytorium do połączenia.",
+        "repository_not_visible": "Jedno z tych repozytoriów nie jest już widoczne dla aplikacji Motir GitHub App w GitHubie. Odśwież listę i spróbuj ponownie.",
+        "installation_not_accessible": "Konto {account} nie jest już dla Ciebie widoczne w GitHubie, więc nie można go połączyć. Wybierz inne konto.",
+        "generic": "Coś poszło nie tak podczas łączenia tych repozytoriów. Nic nie zostało zmienione — spróbuj ponownie."
+      },
+      "noneLeft": {
+        "title": "Nie ma już nic do połączenia z konta {account}",
+        "body": "Każde repozytorium, które aplikacja Motir GitHub App widzi na koncie {account}, jest już połączone. Repozytorium należy jednocześnie tylko do jednej organizacji.",
+        "connectedHere": "Połączone z tą organizacją",
+        "connectedElsewhere": "Połączone z innymi organizacjami",
+        "hint": "Aby udostępnić więcej, nadaj aplikacji Motir GitHub App dostęp do innych repozytoriów w GitHubie albo wybierz inne konto.",
+        "chooseAnother": "Wybierz inne konto",
+        "manageOnGithub": "Zarządzaj repozytoriami w GitHubie"
+      }
+    },
+    "accountDisconnect": {
+      "title": "Odłączyć konto {account} od {org}?",
+      "repos": "Spowoduje to usunięcie tylko połączenia {org} z kontem {account} oraz {count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}}, które to konto tu połączyło:",
+      "projects": "{count, plural, one {# projekt traci} few {# projekty tracą} many {# projektów traci} other {# projektu traci}} te repozytoria:",
+      "noProjects": "Żaden projekt w {org} nie używa jeszcze tych repozytoriów.",
+      "retention": "Indeks kodu zbudowany z nich przez Motir jest przechowywany przez {days} dni. Ponowne połączenie konta i wybranie ich przed upływem tego czasu anuluje usunięcie; później ponowne dodanie repozytorium oznacza pełne indeksowanie.",
+      "others": "Nie ma to wpływu na inne organizacje połączone z kontem {account}, a aplikacja Motir GitHub App pozostaje zainstalowana w GitHubie. Aby odinstalować ją wszędzie, zrób to w GitHubie.",
+      "loading": "Wczytywanie zakresu skutków odłączenia…",
+      "loadFailed": "Motir nie mógł wczytać skutków odłączenia konta {account}. Nic nie zostało zmienione — spróbuj ponownie.",
+      "failed": "Motir nie mógł odłączyć konta {account}. Nic nie zostało zmienione — spróbuj ponownie.",
+      "cancel": "Anuluj",
+      "confirm": "Odłącz"
     }
   },
   "aiPlanning": {

@@ -24,7 +24,7 @@ import type { PlanningRowOutcome } from './planningOutcome';
 // ⚠️ IT IS NOT A WORK-ITEM ROW. `WorkbenchList`'s row (kind glyph, key, Your role,
 // Assignee, Status) describes a work item and a plan has none of those, so this is
 // its own two-line anatomy over two columns — Plan · Planner — with § 29's plan
-// leading line on line 1 and Part XXV's compact progress line on line 2.
+// leading line on line 1 and Part XXVI's compact progress line on line 2.
 //
 // ⚠️ IT DECIDES THREE THINGS AND COMPOSES THE REST. What it decides: the
 // PLANNER's words, the two-line layout, and the held row's outcome sentence. What
@@ -36,7 +36,7 @@ import type { PlanningRowOutcome } from './planningOutcome';
 //     (§ 36.6), which already answers *the planning surface when the plan has a
 //     session, else `/plans/<id>`*;
 //   · its PROGRESS — `<PlanProgressLine density="compact" />`, whose words,
-//     durations, stalled form and ARIA are all Part XXV's (MOTIR-7829).
+//     durations, stalled form and ARIA are all Part XXVI's (MOTIR-7829).
 
 /** The two tracks (§ 36.4) — Plan flexes, Planner is a fixed 220px. */
 export const PLANNING_GRID_TEMPLATE = 'minmax(10rem, 1fr) 220px';
@@ -55,7 +55,7 @@ export function PlanningRow({
    * line 2 becomes its outcome. `null` is the ordinary case — still being written.
    */
   outcome: PlanningRowOutcome | null;
-  /** The poll is dropping reads (§ 36.7 / Part XXV §25.10) — the line keeps its
+  /** The poll is dropping reads (§ 36.7 / Part XXVI §26.10) — the line keeps its
    *  last snapshot and wears the warning dot. */
   failing: boolean;
 }) {

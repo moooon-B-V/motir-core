@@ -573,7 +573,7 @@ describe('the LIVE island — the poll (§ 36.7, § 36.8)', () => {
     expect(screen.getByTestId('plan-progress-compact').textContent).toContain('1 of 5 authored');
 
     await poll();
-    // Part XXV §25.10's dropped-read form: the counts stand, the dot warns, and the
+    // Part XXVI §26.10's dropped-read form: the counts stand, the dot warns, and the
     // compact line says it is showing the last update. No row leaves on a failed read.
     expect(screen.getByTestId('plan-progress-compact').textContent).toContain('Reconnecting');
     expect(screen.getByTestId('plan-progress-compact').textContent).toContain('1 of 5 authored');

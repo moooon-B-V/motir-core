@@ -5,6 +5,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { releaseProviderRepo } from '../helpers/releaseProviderRepo';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { adminDb } from '../helpers/adminDb';
 import { deliveredItemIds, linkPrByIdentifier } from '../helpers/prLink';
@@ -48,6 +49,9 @@ async function makeScenario(email: string, defaultBranch = 'main') {
     ctx,
   );
   await workItemsService.updateStatus(item.id, 'in_progress', ctx);
+  // Every scenario connects the SAME installation and repository, so the
+  // previous scenario's organisation lets it go first (MOTIR-8218).
+  await releaseProviderRepo(REPO_PROVIDER_ID);
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
     installation: {
@@ -235,15 +239,11 @@ describe('the trunk gate — a merge completes an item only on the default branc
     const s2 = await makeScenario('trunk-master2@example.com', 'master');
     const onMain = await openThenMergeInto(s2.item.identifier, 'main', 3002);
     expect(onMain).toMatchObject({ outcome: 'deferred_non_default_base' });
-    // ⚠️ NOT `implemented` any more, and the difference is not this gate's
-    // (MOTIR-3823). Both scenarios in this test share ONE mirrored repo row —
-    // `persistInstallation` upserts on the installation id — so by the time s2's
-    // card arrives at Implemented, #3001 has already been watched to merge in that
-    // repository without ever reporting a check. That is the CI-less signal, so
-    // the promotion latch legitimately moves the card to In Review: a human SHOULD
-    // look at a card whose merge went to the wrong base. What this test is about is
-    // that the merge did not COMPLETE it, which is asserted directly below and by
-    // the hop trail — the gate's own claim, unchanged.
+    // The status is not pinned to `implemented`, and the reason is not this
+    // gate's (MOTIR-3823): when two scenarios share a repository's history, a
+    // CI-less merge already watched in it can promote the card to In Review. What
+    // this test is about is that the merge did not COMPLETE it, which is asserted
+    // directly below and by the hop trail — the gate's own claim, unchanged.
     expect(await statusOf(s2.item.id)).not.toBe('done');
     expect(await statusHops(s2.item.id)).not.toContain('done');
     expect((await commentsOn(s2.item.id))[0]!.bodyMd).toContain('master');

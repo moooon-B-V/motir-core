@@ -167,7 +167,9 @@ test('@smoke connect flow: the two grants at their two TIERS → OAuth binds the
   await page.goto('/settings/organization/git');
   await expect(page.getByText('Step 1 · Identity')).toBeVisible();
   await expect(page.getByText('Step 2 · Repository access')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Install the Motir GitHub App' })).toBeVisible();
+  // Story MOTIR-8216: the first click opens Motir's account picker; leaving for
+  // GitHub's install page is a choice made inside it, so this is a BUTTON now.
+  await expect(page.getByRole('button', { name: 'Connect GitHub' })).toBeVisible();
 
   // Grant 1 — the identity OAuth round-trip (real start + callback routes). With
   // no origin recorded it lands on the DEFAULT return, which moved with the
@@ -198,7 +200,7 @@ test('@smoke connect flow: the two grants at their two TIERS → OAuth binds the
   // both in the document and an unscoped locator is a strict-mode violation.
   const main = page.locator('#main');
   await expect(
-    main.getByText(`Motir App installed on ${E2E_REPO.owner} · organization`).first(),
+    main.getByRole('list', { name: 'GitHub accounts' }).getByText(E2E_REPO.owner, { exact: true }),
   ).toBeVisible();
   await expect(main.getByText(E2E_REPO.name, { exact: true }).first()).toBeVisible();
 });

@@ -5,6 +5,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { releaseProviderRepo } from '../helpers/releaseProviderRepo';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
@@ -48,6 +49,9 @@ async function makeScenario(email: string) {
     identifier: 'ACME',
   });
   const ctx = { userId: user.id, workspaceId: workspace.id };
+  // Every scenario connects the SAME installation and repository, so the
+  // previous scenario's organisation lets it go first (MOTIR-8218).
+  await releaseProviderRepo(REPO_PROVIDER_ID);
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
     installation: {
@@ -315,7 +319,7 @@ describe('cross-tenant isolation on the delivery paths', () => {
     await workItemsService.updateStatus(others.id, 'in_progress', theirs.ctx);
 
     // The installation + repo the delivery names belongs to the SECOND tenant
-    // (the last `persistInstallation` wins the provider repo id), so the first
+    // (the first tenant released it before the second connected — MOTIR-8218), so the first
     // tenant's identically-keyed card must not move.
     await linkOne(others.identifier, 36);
     await openPr(`subtask/${others.identifier}-work`, 36);

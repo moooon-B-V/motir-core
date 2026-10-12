@@ -27,20 +27,48 @@ export interface FakeInventoryControls {
   }): void;
   /** Stray machines still on the "provider". */
   strayMachineIds(): string[];
-  /** Make the next app list throw. */
-  failNextAppList(detail?: string): void;
-  /** Make the next machine list of `app` throw. */
-  failNextMachineList(app: string, detail?: string): void;
+  /** Make the next app list throw — or the next `times` of them, with the
+   *  provider status `status` (500 unless given; `null` for no answer at all). */
+  failNextAppList(detail?: string, options?: FakeListingFailure): void;
+  /** Make the next machine list of `app` throw — `options` as for the app list. */
+  failNextMachineList(app: string, detail?: string, options?: FakeListingFailure): void;
   /** Make the next destroy of `machineId` throw. */
   failNextDestroy(machineId: string, detail?: string): void;
   /** Every destroy and stop, in order — `destroy:<app>/<id>`, `stop:<app>/<id>`. */
   readonly actions: string[];
 }
 
+/** How an arranged listing failure answers, and how many listings it fails. */
+export interface FakeListingFailure {
+  status?: number | null;
+  times?: number;
+}
+
+interface ArrangedFailure {
+  detail: string;
+  status: number | null;
+  remaining: number;
+}
+
+function arrange(detail: string, options: FakeListingFailure = {}): ArrangedFailure {
+  return {
+    detail,
+    status: options.status === undefined ? 500 : options.status,
+    remaining: Math.max(1, options.times ?? 1),
+  };
+}
+
+/** Spend one arranged failure: the error to throw, or null when none is left. */
+function spend(failure: ArrangedFailure | undefined): OrchestratorApiError | null {
+  if (!failure || failure.remaining <= 0) return null;
+  failure.remaining -= 1;
+  return new OrchestratorApiError('fake', failure.status, failure.detail);
+}
+
 const strays = new Map<string, InventoryMachine>();
 const actions: string[] = [];
-let appListFailure: string | null = null;
-const machineListFailures = new Map<string, string>();
+let appListFailure: ArrangedFailure | undefined;
+const machineListFailures = new Map<string, ArrangedFailure>();
 const destroyFailures = new Map<string, string>();
 
 function ephemeralState(state: string): PersistentContainerState {
@@ -56,7 +84,7 @@ export const fakeFleetInventory: FleetInventory & FakeInventoryControls = {
   reset() {
     strays.clear();
     actions.length = 0;
-    appListFailure = null;
+    appListFailure = undefined;
     machineListFailures.clear();
     destroyFailures.clear();
   },
@@ -77,12 +105,12 @@ export const fakeFleetInventory: FleetInventory & FakeInventoryControls = {
     return [...strays.keys()];
   },
 
-  failNextAppList(detail = 'the fake refused to list apps') {
-    appListFailure = detail;
+  failNextAppList(detail = 'the fake refused to list apps', options) {
+    appListFailure = arrange(detail, options);
   },
 
-  failNextMachineList(app, detail = 'the fake refused to list machines') {
-    machineListFailures.set(app, detail);
+  failNextMachineList(app, detail = 'the fake refused to list machines', options) {
+    machineListFailures.set(app, arrange(detail, options));
   },
 
   failNextDestroy(machineId, detail = 'the fake refused to destroy') {
@@ -90,22 +118,16 @@ export const fakeFleetInventory: FleetInventory & FakeInventoryControls = {
   },
 
   async listApps(): Promise<string[]> {
-    if (appListFailure !== null) {
-      const detail = appListFailure;
-      appListFailure = null;
-      throw new OrchestratorApiError('fake', 500, detail);
-    }
+    const refused = spend(appListFailure);
+    if (refused) throw refused;
     const apps = new Set<string>([FAKE_FLEET_APP, ...fakePersistentOrchestrator.appNames()]);
     for (const stray of strays.values()) apps.add(stray.app);
     return [...apps].sort();
   },
 
   async listMachines(app: string): Promise<InventoryMachine[]> {
-    const refused = machineListFailures.get(app);
-    if (refused !== undefined) {
-      machineListFailures.delete(app);
-      throw new OrchestratorApiError('fake', 500, refused);
-    }
+    const refused = spend(machineListFailures.get(app));
+    if (refused) throw refused;
     const listed: InventoryMachine[] =
       app === FAKE_FLEET_APP
         ? fakeOrchestrator.inventoryMachines().map((m) => ({

@@ -1,4 +1,8 @@
-import type { FleetInventory, InventoryMachine } from '@motir/orchestrator';
+import {
+  OrchestratorApiError,
+  type FleetInventory,
+  type InventoryMachine,
+} from '@motir/orchestrator';
 import { getFleetInventory } from '@/lib/orchestrator';
 import { withSystemContext } from '@/lib/workspaces/context';
 import {
@@ -42,7 +46,14 @@ import { alertFleetAttribution } from '@/lib/monitoring/fleetAttributionAlert';
 //
 // ⚠️ A LISTING ERROR IS NEVER "NOTHING IS RUNNING". A failed app list ends the
 // pass and destroys nothing anywhere; a failed machine list skips that one app.
-// Both alert. A machine the provider lists without a creation instant cannot be
+// Both alert — but only once the listing has failed TWICE when the first answer
+// was a transient one (a gateway 502/503/504, a 429, a dropped connection): the
+// provider's edge drops single requests, and an error-level issue for a refusal
+// the very next request does not repeat is noise the platform admin learns to
+// ignore (MOTIR-8302). The retry is a second READ, never a guess. A TIMEOUT is
+// not retried: it has already spent the 30 s call deadline, and a pass that
+// doubled it for every app would outlive its own five-minute cadence. A
+// machine the provider lists without a creation instant cannot be
 // aged, so it is alerted and left alone rather than destroyed on a guess.
 //
 // ⚠️ IT DOES NOT RE-CHECK PLAN OR BALANCE (§5). Refusing work for money is
@@ -61,6 +72,33 @@ export const CI_INTENT_END_AFTER_BOOT_MS = FLEET_TIME_BUDGETS.reapAfterMs;
 
 /** The teardown reasons the org stop writes (`fleetStopService`, MOTIR-6908). */
 const ORG_STOP_REASONS: ReadonlySet<string> = new Set(['credits_exhausted', 'admin_stop']);
+
+/** How long the pass waits before asking a listing a second time (MOTIR-8302). */
+export const FLEET_LISTING_RETRY_DELAY_MS = 2_000;
+
+/** Provider answers that say "ask again", not "this listing is refused". */
+const TRANSIENT_LISTING_STATUSES: ReadonlySet<number> = new Set([429, 502, 503, 504]);
+
+/** A refusal at the provider's edge, or no answer at all (`status: null`, a
+ *  dropped connection). A timeout is its own error class and is not one of these. */
+function isTransientListingFailure(err: unknown): boolean {
+  return (
+    err instanceof OrchestratorApiError &&
+    (err.status === null || TRANSIENT_LISTING_STATUSES.has(err.status))
+  );
+}
+
+/** One listing, asked once more after a transient failure. A second failure —
+ *  or a first one that is not transient — is thrown to the caller, which alerts. */
+async function listWithOneRetry<T>(read: () => Promise<T>, delayMs: number): Promise<T> {
+  try {
+    return await read();
+  } catch (err) {
+    if (!isTransientListingFailure(err)) throw err;
+    if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    return read();
+  }
+}
 
 const CI_RUNNER: FleetWorkloadKind = 'ci_runner';
 const HOSTED_AGENT: FleetWorkloadKind = 'hosted_agent';
@@ -145,15 +183,21 @@ export const fleetAttributionService = {
    * counted, alerted finding, and the pass reaches every other app and machine.
    */
   async reconcile(
-    options: { now?: () => Date; inventory?: FleetInventory | null } = {},
+    options: {
+      now?: () => Date;
+      inventory?: FleetInventory | null;
+      /** The pause before a transient listing failure is asked again. */
+      listingRetryDelayMs?: number;
+    } = {},
   ): Promise<FleetAttributionResult> {
     const inventory = options.inventory === undefined ? getFleetInventory() : options.inventory;
     if (!inventory) return { outcome: 'disabled' };
     const now = options.now ?? (() => new Date());
+    const retryDelayMs = options.listingRetryDelayMs ?? FLEET_LISTING_RETRY_DELAY_MS;
 
     let apps: string[];
     try {
-      apps = await inventory.listApps();
+      apps = await listWithOneRetry(() => inventory.listApps(), retryDelayMs);
     } catch (err) {
       alertFleetAttribution(
         new FleetInventoryUnavailableError('the fleet organization', detailOf(err)),
@@ -176,7 +220,7 @@ export const fleetAttributionService = {
     for (const app of apps) {
       let machines: InventoryMachine[];
       try {
-        machines = await inventory.listMachines(app);
+        machines = await listWithOneRetry(() => inventory.listMachines(app), retryDelayMs);
       } catch (err) {
         result.unavailableApps.push(app);
         alertFleetAttribution(new FleetInventoryUnavailableError(app, detailOf(err)));
