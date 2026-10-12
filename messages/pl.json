@@ -9012,6 +9012,7 @@
         "out_of_credits": "w organizacji skończyły się kredyty",
         "model_unavailable": "dostawca AI był niedostępny",
         "token_expired": "połączenie z dostawcą AI wygasło",
+        "prompt_too_large": "kontekst planu był zbyt duży dla modelu",
         "internal": "po naszej stronie wystąpił problem"
       },
       "refusal": {

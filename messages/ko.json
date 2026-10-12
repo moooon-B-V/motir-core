@@ -9009,6 +9009,7 @@
         "out_of_credits": "조직의 크레딧이 소진되었습니다",
         "model_unavailable": "AI 제공업체를 사용할 수 없었습니다",
         "token_expired": "AI 제공업체와의 연결이 만료되었습니다",
+        "prompt_too_large": "플랜의 컨텍스트가 모델에 비해 너무 컸습니다",
         "internal": "저희 쪽에서 문제가 발생했습니다"
       },
       "refusal": {

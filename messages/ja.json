@@ -9012,6 +9012,7 @@
         "out_of_credits": "組織のクレジットが尽きたため",
         "model_unavailable": "AIプロバイダーが利用できなかったため",
         "token_expired": "AIプロバイダーとの接続の有効期限が切れたため",
+        "prompt_too_large": "プランのコンテキストがモデルの上限を超えたため",
         "internal": "こちら側で問題が発生したため"
       },
       "refusal": {
