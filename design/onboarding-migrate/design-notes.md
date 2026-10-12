@@ -816,15 +816,19 @@ it. Every string drawn is read by key; none is typed. **motir.co, read and never
 | --- | ---------------------------------------------------------------------------------------------------------------- | ------- |
 | 0   | Access path — the entrance's import section door ("We can vibe it too") → `/onboarding/migrate`                  | 640 × 2 |
 | 1   | Start — no run yet: the bar, the **full** hero, the work band with the rail and the Start panel                  | 1280    |
-| 2   | Connect — compact hero, Connect panel                                                                            | 1280    |
+| 2a  | Connect — compact hero, **Checking** (on arrival) — Revision 1                                                   | 1280    |
+| 2b  | Connect — **Not connected yet** (Connect GitHub ↗ in a new tab, no Next) — Revision 1                            | 1280    |
+| 2c  | Connect — **Waiting for GitHub** (re-checks on focus and every ~5 s) — Revision 1                                | 1280    |
+| 2d  | Connect — **Connected** (detected repositories, Continue) — Revision 1                                           | 1280    |
 | 3   | Index — in progress (aggregate + per-repo rows, callout, Next)                                                   | 1280    |
 | 4   | Import — optional, with Skip                                                                                     | 1280    |
 | 5   | Decision — Plan now / Finish later                                                                               | 1280    |
 | 6   | Resume — a run in progress (MOTIR-4759)                                                                          | 1280    |
-| 7   | Error — the typed error alert inside the panel                                                                   | 1280    |
+| 7   | Error — the typed error alert inside the panel (drawn over 2b)                                                   | 1280    |
 | 8   | Collapsed rail — the planner-decided set (discovery + import kept, MOTIR-4766)                                   | 1280    |
 | 9   | Close-ups — 9a planAi / Save & exit rest·hover·focus · 9b language pending·failed·open · 9c planNow rest·pending | 640 × 2 |
 | 10  | Narrow — Start and Index                                                                                         | 390 × 2 |
+| 11  | Narrow — Connect 2b and 2d — Revision 1                                                                          | 390 × 2 |
 
 ### What changes, and what does not
 
@@ -847,7 +851,7 @@ it. Every string drawn is read by key; none is typed. **motir.co, read and never
 - **`StepHead`.** The heading moves to the section scale's floor, serif 34 (28 narrow). The eyebrow
   keeps its function and drops its accent look: mono 11, uppercase, 0.1 em, `--el-text-secondary`.
 - **The Decision panel's planNow button loses its AI glyph** too (the card named only the bar).
-- **Behaviour is unchanged on every step**: the same routes, the same `PanelFoot` (still no Back —
+- **Behaviour is unchanged on every step except Connect** (changed by Revision 1 below): the same routes, the same `PanelFoot` (still no Back —
   the shipped wizard never passes `onBack`, and the mock does not invent one), the same rail logic,
   the same error alert in `--el-tint-rose`.
 
@@ -926,9 +930,147 @@ does today.
 - **GIVES MOTIR-8252** nothing beyond the primitives it already owns — the compact hero is a variant
   prop of `OnboardingHero`, and the work band is `OnboardingSection`'s band with no head.
 - **GIVES MOTIR-8241** (GitHub connect) and **MOTIR-8246** (non-blocking index) the restyled frame
-  their panels sit in; their content is theirs.
+  their panels sit in; their content is theirs — except the Connect panel's four detection states,
+  which Revision 1 below draws and MOTIR-8241 builds on.
 - **GIVES MOTIR-8286** the language control in this bar (rest, open, pending, failed — Panel 9b).
 - **GIVES MOTIR-8256** the pairs to gate: secondary on `--el-surface`, the hover override, the
   focus ring on `--el-surface`; **MOTIR-8249 / MOTIR-8258** the CJK risks above; **MOTIR-8257** the
-  E2E context — the route, the step order and the keys are unchanged.
+  E2E context — the route and the step order are unchanged; the Connect keys change per Revision 1 below.
 - **Premises taken from** MOTIR-930, MOTIR-4759, MOTIR-4766, MOTIR-8248 and MOTIR-8250.
+
+### Revision 1 (2026-10-12) — the connect step detects GitHub by itself
+
+**The reviewer's note, verbatim (on the published design):** _"Can the github connected status be
+auto detected? that's the confusing part. check how other application do that"_
+
+**What was confusing.** The shipped `ConnectPanel` (`MigrateWizard.tsx`) asks the person to report
+on themselves: a link to `/settings/organization/git`, the GitLab note, and a Next labelled
+`connect.next` ("I've connected my repos"). Press it with nothing connected and the advance 409s
+(`CONNECT.checkExit` finds no repo set) and the wizard only `router.refresh()`es, so **nothing
+visible happens**. The server already knows the answer, so the person should never have to tell it.
+
+**Detection needs no new data source.** `CONNECT.checkExit` in `lib/services/migrateOnboardingService.ts`
+reads `resolveWorkspaceConnectedRepos`, and `getIndexStatus`
+(`GET /api/onboarding/migrate/[id]/index-status`, which the Index step already polls every 3 s)
+returns that same set as `repos: MigrateIndexRepoDto[]` (`provider`, `repoRef`), empty when nothing
+is connected. The Connect panel reads that route; `repos.length > 0` is "connected".
+
+#### How other products do it (research)
+
+| product                    | what it does                                                                                                                                                                                                                      | source                                                                                                                                                                                                                                         |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vercel                     | The import screen lists the repositories the GitHub App can reach. A missing one is fixed through "Configure GitHub App"; you come back to the import screen and the repository appears. No confirm step anywhere.                | https://vercel.com/kb/guide/unable-to-find-github-repository                                                                                                                                                                                   |
+| Netlify                    | Choosing GitHub prompts the app install only if it is not already installed; otherwise the repo list shows at once. "Configure the Netlify app on GitHub" sits under the list for adding access.                                  | https://docs.netlify.com/github-permissions/ · https://answers.netlify.com/t/no-longer-able-to-link-with-github-repositories/73357                                                                                                             |
+| Render                     | Connecting sends you to GitHub and back to the dashboard with your repository list; a missing repository points to the app's Repository access settings.                                                                          | https://render.com/docs/github · https://render.com/docs/git-provider                                                                                                                                                                          |
+| Codecov                    | After sign-up "you will be brought to a page with a list of repositories"; "it may take a few moments for your repositories to sync"; non-admins may need an org admin to approve.                                                | https://docs.codecov.com/docs/github-2-getting-a-codecov-account-and-uploading-coverage                                                                                                                                                        |
+| CircleCI                   | Moved its GitHub App install to a redirect that lands on a loading screen, then "users will be automatically redirected to continue with their setup".                                                                            | https://circleci.com/changelog/minor-modification-to-github-app-installation-flow                                                                                                                                                              |
+| Sentry · Linear            | The install starts from the product's own settings (Sentry: "begin the installation from Sentry"); GitHub returns to it and the integration shows as installed, with an org owner needed for org-wide access.                     | https://docs.sentry.io/organization/integrations/source-code-mgmt/github/ · https://linear.app/docs/github-integration                                                                                                                         |
+| GitHub (the platform)      | After an install GitHub redirects to the app's **Setup URL** with `installation_id`, and optionally again when the installation is **updated** (repos added or removed). The id must not be trusted alone; verify it server-side. | https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-setup-url                                                                                                                                              |
+| Popup hand-backs (caution) | `window.opener.postMessage` from a popup is unreliable: `opener` comes back null under extensions and desktop shells, and popups get stranded. Teams fall back to a server-side callback or a re-read.                            | https://forum.asana.com/t/app-installation-callback-failures/235883 · https://community.shopify.dev/t/shopify-oauth-popup-cannot-auto-close-after-successful-install-when-initiated-from-admin-shopify-com-admin-shell-reclaiming-window/28862 |
+| The browser                | `visibilitychange` fires when the person switches tabs or comes back to one, the hook for "re-check when you return".                                                                                                             | https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event                                                                                                                                                               |
+
+**The common pattern:** (1) no product asks the person to say they have connected; the screen
+**reads** the connection and shows it; (2) the screen shows the **detected account / repository
+list**, which doubles as the confirmation and as the "is the right repo in there?" check; (3) a
+quiet **"configure / adjust access on GitHub"** link stays next to the list; (4) the return trip is
+a **server-side callback** (the Setup URL) as the authority, with a **re-read on return** (focus /
+visibility) and a short **poll while waiting** as the fallback, never a popup message alone.
+Motir takes (1)–(3) now and the re-read half of (4). The callback half is MOTIR-8241's (below).
+
+#### The four states (Panels 2a–2d, light and dark; narrow 2b and 2d in Panel 11)
+
+Every state keeps the compact hero, the rail (Connect current), the eyebrow, heading and body. The
+card is the package `Card` (`--el-card-bg`, `--el-border`, `--radius-card`,
+`--spacing-card-padding`). In 2a–2c its body holds one minimum height (`min-h-[148px]`), so the
+swaps between them happen in place; only 2d grows, with its list. Each state's status line and hint
+sit in one `role="status"` region, so the change is announced politely.
+
+| state                      | element                                   | colour role                                                               | shape / size                                                  |
+| -------------------------- | ----------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **a · Checking**           | spinner (aria-hidden wrapper)             | `--el-accent-on-surface`                                                  | `Spinner sm` (`rounded-full`)                                 |
+|                            | "Checking for connected repositories…"    | `--el-text-secondary` on the card                                         | 14 px                                                         |
+|                            | (no control)                              | —                                                                         | —                                                             |
+| **b · Not connected yet**  | glyph `GitBranch` (aria-hidden)           | `--el-text-secondary`                                                     | 16 px                                                         |
+|                            | title "No repositories connected yet"     | `--el-text`, semibold                                                     | 14 px                                                         |
+|                            | hint (one line: Motir notices by itself)  | `--el-text-secondary`                                                     | 14 px, `max-w-[60ch]`                                         |
+|                            | **Connect GitHub ↗** (new tab)            | `Button primary md` (`--el-accent` / `--el-accent-text`)                  | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x/y`, w-fit |
+|                            | sr-only "(opens in a new tab)"            | —                                                                         | —                                                             |
+|                            | GitLab note                               | `--el-text-secondary` (F1)                                                | 12 px                                                         |
+| **c · Waiting for GitHub** | spinner (aria-hidden wrapper)             | `--el-accent-on-surface`                                                  | `Spinner sm`                                                  |
+|                            | title "Waiting for GitHub" · hint         | `--el-text` semibold · `--el-text-secondary`                              | 14 px                                                         |
+|                            | **Open GitHub settings again ↗**          | `Button secondary md` (`--el-border`, `--el-text`)                        | `--radius-btn`, `--height-btn-md`, w-fit                      |
+|                            | GitLab note                               | `--el-text-secondary`                                                     | 12 px                                                         |
+| **d · Connected**          | glyph `CheckCircle2` (aria-hidden)        | `--el-success` (a graphic on the card, ≥ 3:1 since MOTIR-3991)            | 16 px                                                         |
+|                            | "3 repositories are connected"            | `--el-text`, semibold — the hue is in the glyph, never the label          | 14 px                                                         |
+|                            | hint                                      | `--el-text-secondary`                                                     | 14 px                                                         |
+|                            | repo row (`owner/name`, mono)             | border `--el-border-soft`; owner `--el-text-secondary`, name `--el-text`  | `--radius-control`, `--spacing-control-x`, py-2.5, mono 13    |
+|                            | row tick `Check` (aria-hidden)            | `--el-success`                                                            | 16 px                                                         |
+|                            | Manage repositories on GitHub ↗ (new tab) | `--el-text-secondary`, underlined; focus outline `--el-accent-on-surface` | `--radius-control` (focus box)                                |
+|                            | **Continue →**                            | `Button primary md`                                                       | `--radius-btn`, `--height-btn-md`; `ml-auto` (trailing edge)  |
+
+"Connected" covers both cases: just connected (from 2c) and already connected on arrival (2a →
+2d directly, with no 2b in between). No `--el-text-muted` sits on a tint or `--el-surface`, no
+`--el-text-faint` carries text, no `--el-danger-text` appears, and nothing is a raw colour.
+
+#### The detection mechanism (for MOTIR-8254)
+
+1. **Read on mount.** The panel fetches `GET /api/onboarding/migrate/[id]/index-status` (the same
+   route and DTO the Index step polls) and shows 2a until it answers: `repos.length > 0` → 2d,
+   otherwise → 2b.
+2. **Re-read on return.** While the panel is mounted and not in 2d, a `focus` on `window` and a
+   `visibilitychange` to `visible` each trigger one read (de-duplicated: one in flight at a time,
+   seq-guarded so an older answer never overwrites a newer one).
+3. **Poll only while waiting.** Pressing Connect GitHub (or Open GitHub settings again) moves the
+   panel to 2c and starts a ~5 s poll. It stops on the first non-empty answer (→ 2d) or when the
+   person leaves the step (unmount). 2b does not poll; it re-reads on return only.
+4. **A failed read** shows the existing error alert (Panel 7, drawn over 2b) and keeps the state
+   it had; the next focus or poll retries it. No new error copy.
+5. **Continue** calls the existing advance (`connect` → `index`). It is drawn only in 2d, so it is
+   pressed only when `checkExit` will pass — **Next is never a silent no-op any more.** If the set
+   empties between the read and the press (someone removed access), the 409 now lands the panel back
+   on 2b through a re-read, not on a bare `router.refresh()`.
+
+#### Slot → key (Revision 1)
+
+All copy is proposed for `onboardingMigrate.connect.*`; `messages/` is **not** edited here
+(MOTIR-8254 adds the keys and their ten translations).
+
+| slot                                | key                            | status      | English                                                                                                      |
+| ----------------------------------- | ------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------ |
+| eyebrow · heading                   | `connect.eyebrow` · `.heading` | unchanged   | (as shipped)                                                                                                 |
+| body                                | `connect.body`                 | **CHANGED** | Motir reads the repositories you connect on GitHub and builds one map of the code across the project.        |
+| 2a status                           | `connect.checking`             | **NEW**     | Checking for connected repositories…                                                                         |
+| 2b title                            | `connect.missingTitle`         | **NEW**     | No repositories connected yet                                                                                |
+| 2b hint                             | `connect.missingHint`          | **NEW**     | Connect GitHub in a new tab. Motir notices the connection by itself, so there is nothing to confirm here.    |
+| 2b primary                          | `connect.connectCta`           | **NEW**     | Connect GitHub                                                                                               |
+| sr-only after every new-tab control | `connect.newTab`               | **NEW**     | (opens in a new tab)                                                                                         |
+| 2c title                            | `connect.waitingTitle`         | **NEW**     | Waiting for GitHub                                                                                           |
+| 2c hint                             | `connect.waitingHint`          | **NEW**     | Finish connecting in the other tab. Motir checks again when you come back, and every few seconds until then. |
+| 2c secondary                        | `connect.reopenCta`            | **NEW**     | Open GitHub settings again                                                                                   |
+| 2d success line                     | `connect.detected`             | **NEW**     | `{count, plural, one {# repository is connected} other {# repositories are connected}}`                      |
+| 2d hint                             | `connect.detectedHint`         | **NEW**     | These are the repositories Motir can read. Indexing starts when you continue.                                |
+| 2d list `aria-label`                | `connect.listLabel`            | **NEW**     | Connected repositories                                                                                       |
+| 2d primary                          | `connect.continue`             | **NEW**     | Continue                                                                                                     |
+| 2d quiet link                       | `connect.manage`               | **NEW**     | Manage repositories on GitHub                                                                                |
+| GitLab note                         | `connect.gitlabNote`           | unchanged   | GitLab connect is coming soon.                                                                               |
+| —                                   | `connect.next`                 | **DELETE**  | ("I've connected my repos" — no longer read)                                                                 |
+| —                                   | `connect.cta`                  | **DELETE**  | ("Open GitHub settings" — replaced by `connectCta` / `reopenCta`)                                            |
+
+`connect.body` changes because the shipped one says "workspace settings" (the connect surface is
+organisation-tier since MOTIR-4680) and names an internal seam ("the GitProvider seam"). Repository
+names on the board (`acme/web`, `acme/api`, `acme/infra`) are fixtures.
+
+#### GIVES / LEAVES
+
+- **GIVES MOTIR-8254** these four states, the detection mechanism above and the key table. Its
+  acceptance criterion that the **connect flow is unchanged is amended by this revision**: the
+  Connect panel's controls and copy change as drawn here; the route, the step order and the advance
+  call stay.
+- **LEAVES MOTIR-8241** the full GitHub round trip: starting the install from onboarding with its
+  own signed state, the Setup-URL return to **this** step instead of to Settings, and the
+  install-cancelled, no-repositories-selected, waiting-for-an-org-owner and error states. It draws
+  them **on top of** 2a–2d (the callback lands on 2a, which reads and resolves as above), and the
+  re-read and poll here stay as its fallback.
+- **GIVES MOTIR-8256** the new pairs to gate: `--el-success` glyph on `--el-card-bg` in both
+  themes; `--el-text-secondary` link and hint on the card; and **MOTIR-8257** the new E2E surface
+  (Continue appears only after detection; the Connect GitHub link has `target="_blank"`).
