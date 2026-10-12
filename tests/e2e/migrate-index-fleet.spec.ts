@@ -161,7 +161,11 @@ const errorBanner = (page: Page) => page.locator('main').getByRole('alert');
 
 /** Sign up, create the project, connect the repo set, and walk the wizard from
  *  its start panel to the Index step — each hop awaiting its route's 200. */
-async function reachIndexStep(page: Page, email: string): Promise<string> {
+async function reachIndexStep(
+  page: Page,
+  email: string,
+  beforeAdvance?: () => Promise<void>,
+): Promise<string> {
   await signUp(page, email);
   await createFirstProject(page, 'Invoicer');
   const workspaceId = await workspaceIdFor(email);
@@ -186,8 +190,12 @@ async function reachIndexStep(page: Page, email: string): Promise<string> {
   const advanced = page.waitForResponse(
     (r) => r.url().includes('/advance') && r.request().method() === 'POST',
   );
-  // Connect lists the connected repositories itself and moves on with Continue.
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  // Connect lists the connected repositories itself (from `index-status`, so a
+  // hold on that route must be armed only now) and moves on with Continue.
+  const proceed = page.getByRole('button', { name: 'Continue', exact: true });
+  await expect(proceed).toBeVisible();
+  await beforeAdvance?.();
+  await proceed.click();
   expect((await advanced).status()).toBe(200);
 
   return workspaceId;
@@ -209,8 +217,14 @@ test('@smoke the index lane selects the FAKE orchestrator through the shipped co
 test('@smoke migrate Index step — every repo reaches indexed, and Next opens only then', async ({
   page,
 }) => {
-  const releaseFirstPoll = await holdIndexStatus(page);
-  const workspaceId = await reachIndexStep(page, `e2e-index-${Date.now()}@example.com`);
+  let releaseFirstPoll!: () => void;
+  const workspaceId = await reachIndexStep(
+    page,
+    `e2e-index-${Date.now()}@example.com`,
+    async () => {
+      releaseFirstPoll = await holdIndexStatus(page);
+    },
+  );
 
   // ── LOADING: the step renders before it knows anything ────────────────────
   // No status yet, so no per-repo list — but a frame the user can read, and no
