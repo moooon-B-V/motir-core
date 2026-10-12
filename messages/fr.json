@@ -9109,6 +9109,7 @@
         "out_of_credits": "l’organisation n’a plus de crédits",
         "model_unavailable": "le fournisseur d’IA était indisponible",
         "token_expired": "la connexion au fournisseur d’IA a expiré",
+        "prompt_too_large": "le contexte du plan était trop volumineux pour le modèle",
         "internal": "un problème est survenu de notre côté"
       },
       "refusal": {

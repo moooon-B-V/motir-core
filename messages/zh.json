@@ -9099,6 +9099,7 @@
         "out_of_credits": "组织的额度已用完",
         "model_unavailable": "AI 服务暂不可用",
         "token_expired": "与 AI 服务的连接已过期",
+        "prompt_too_large": "计划的上下文对该模型来说过大",
         "internal": "我们这边出了故障"
       },
       "refusal": {
