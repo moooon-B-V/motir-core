@@ -1,4 +1,5 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService, ACTIVE_WORKSPACE_RESOLVE_TX } from '@/lib/services/workspacesService';
@@ -160,5 +161,79 @@ describe('the active-workspace resolver WAITS past 5 s and still answers (MOTIR-
     // `maxWaitMs` stays Prisma's default: this is a transaction that STARTED
     // and then waited, not one waiting for a connection.
     expect(ACTIVE_WORKSPACE_RESOLVE_TX.maxWaitMs).toBe(2_000);
+  });
+});
+
+// MOTIR-8288 — A STALLED PROCESS MADE THE RESOLVER'S TRANSACTION UNABLE TO START.
+//
+// Production, 2026-10-12T07:52:15Z: the web process's event loop was blocked
+// ~12.9 s (host CPU steal) with idle pool connections, so the 2 s `maxWait`
+// expired and Prisma threw P2028 "Unable to start a transaction in the given
+// time" out of this resolver — every authed page and API route that resolves the
+// workspace failed. The read-only block is retried ONCE; the cases below drive
+// the rejection instead of waiting for a stall.
+
+const MAX_WAIT = 'Transaction API error: Unable to start a transaction in the given time.';
+const EXPIRED =
+  'Transaction API error: A commit cannot be executed on an expired transaction. The timeout for this transaction was 5000 ms, however 30459 ms passed since the start of the transaction.';
+
+function p2028(message: string) {
+  return new Prisma.PrismaClientKnownRequestError(message, {
+    code: 'P2028',
+    clientVersion: 'test',
+  });
+}
+
+describe('the active-workspace resolver retries a transaction that could not start (MOTIR-8288)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('answers after ONE maxWait rejection, opening exactly one fresh transaction', async () => {
+    const { owner, workspace } = await makeMemberWithWorkspace();
+    const start = vi.spyOn(db, '$transaction').mockRejectedValueOnce(p2028(MAX_WAIT));
+
+    await expect(
+      workspacesService.resolveActiveWorkspace(owner.id, workspace.id, 'Ada'),
+    ).resolves.toBe(workspace.id);
+    // The rejected start plus the one fresh transaction that answered.
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it('propagates a second consecutive maxWait rejection — no third attempt', async () => {
+    const { owner, workspace } = await makeMemberWithWorkspace();
+    const start = vi
+      .spyOn(db, '$transaction')
+      .mockRejectedValueOnce(p2028(MAX_WAIT))
+      .mockRejectedValueOnce(p2028(MAX_WAIT));
+
+    await expect(
+      workspacesService.resolveActiveWorkspace(owner.id, workspace.id, 'Ada'),
+    ).rejects.toMatchObject({ code: 'P2028' });
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry the timeout half of P2028', async () => {
+    const { owner, workspace } = await makeMemberWithWorkspace();
+    const start = vi.spyOn(db, '$transaction').mockRejectedValueOnce(p2028(EXPIRED));
+
+    await expect(
+      workspacesService.resolveActiveWorkspace(owner.id, workspace.id, 'Ada'),
+    ).rejects.toMatchObject({ code: 'P2028' });
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry a maxWait raised from ensureDefaultWorkspace's own transaction", async () => {
+    const { owner } = await makeMemberWithWorkspace();
+    // No membership left: the resolver falls through to the self-heal write path.
+    await adminDb.workspaceMembership.deleteMany({ where: { userId: owner.id } });
+    const heal = vi
+      .spyOn(workspacesService, 'ensureDefaultWorkspace')
+      .mockRejectedValue(p2028(MAX_WAIT));
+
+    await expect(
+      workspacesService.resolveActiveWorkspace(owner.id, null, 'Ada'),
+    ).rejects.toMatchObject({ code: 'P2028' });
+    expect(heal).toHaveBeenCalledTimes(1);
   });
 });
