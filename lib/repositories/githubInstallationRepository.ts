@@ -119,6 +119,20 @@ export const githubInstallationRepository = {
     await tx.githubInstallation.update({ where: { id }, data: { organizationId } });
   },
 
+  /** Re-stamp the legacy tenancy columns onto another LINKED organisation — the
+   *  per-organisation disconnect (MOTIR-8222) when the organisation leaving is
+   *  the one the row was stamped with and another stays linked, so the leaving
+   *  organisation stops seeing the installation through `findByWorkspaceId` /
+   *  `listByOrganizationId`. */
+  async restampTenancy(
+    id: string,
+    workspaceId: string,
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.githubInstallation.update({ where: { id }, data: { workspaceId, organizationId } });
+  },
+
   /** The workspace's connection for a specific provider (`github` | `gitlab`), or
    *  null. The provider-aware read a GitLab caller uses. */
   async findByWorkspaceAndProvider(

@@ -188,3 +188,15 @@ export class InstallationNotAccessibleError extends Error {
     this.name = 'InstallationNotAccessibleError';
   }
 }
+
+/** The organisation is not linked to this GitHub installation (Story MOTIR-8216
+ *  · MOTIR-8222) — it was never connected, it has already disconnected, or it is
+ *  Motir's own shared provisioning installation, which no organisation is linked
+ *  to. Names nothing about any other organisation. */
+export class InstallationNotLinkedError extends Error {
+  readonly code = 'GITHUB_INSTALLATION_NOT_LINKED' as const;
+  constructor() {
+    super('This GitHub account is not connected to this organisation.');
+    this.name = 'InstallationNotLinkedError';
+  }
+}
