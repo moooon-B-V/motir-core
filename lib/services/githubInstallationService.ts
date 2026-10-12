@@ -667,7 +667,6 @@ export const githubInstallationService = {
       const repos = await githubRepoRepository.listByInstallation(installation.id, tx);
       const refsByWorkspace = new Map<string, string[]>();
       for (const repo of repos) {
-        if (!repo.workspaceId) continue;
         const refs = refsByWorkspace.get(repo.workspaceId) ?? [];
         refs.push(`${repo.owner}/${repo.name}`);
         refsByWorkspace.set(repo.workspaceId, refs);

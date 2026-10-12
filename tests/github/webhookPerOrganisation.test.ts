@@ -310,6 +310,38 @@ describe('installation_repositories reconciles each organisation separately', ()
     expect(await ownedBy(y)).toEqual(['3', '4']); // e released
   });
 
+  it('fails the delivery when EVERY organisation’s reconcile fails', async () => {
+    await twoOrgs();
+    vi.spyOn(githubInstallationService, 'persistInstallation').mockRejectedValue(
+      new Error('boom for everyone'),
+    );
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      githubWebhookService.handleEvent('installation_repositories', installationRepositories()),
+    ).rejects.toThrow('boom for everyone');
+  });
+
+  it('reconciles a legacy installation with no link rows under its stamped workspace', async () => {
+    const x = await makeOrg('hooks-legacy@example.com');
+    await githubInstallationService.linkInstallationToOrganization({
+      workspaceId: x.workspaceId,
+      installationId: INSTALLATION,
+      repoIds: ['1', '2'],
+    });
+    // A row from before the link table existed: tenancy on the row, no link.
+    await adminDb.githubInstallationOrgLink.deleteMany({});
+    visible = visible.filter((r) => r.id !== 2);
+
+    const res = await githubWebhookService.handleEvent(
+      'installation_repositories',
+      installationRepositories(),
+    );
+
+    expect(res).toEqual({ event: 'installation_repositories', outcome: 'synced' });
+    expect(await ownedBy(x)).toEqual(['1', '3', '4', '5']);
+  });
+
   it('never reconciles the shared provisioning installation', async () => {
     await adminDb.githubInstallation.create({
       data: {
