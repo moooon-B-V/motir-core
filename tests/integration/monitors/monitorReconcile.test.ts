@@ -7,6 +7,7 @@ import {
   MONITOR_BUG_TITLE_MAX_LENGTH,
   monitorBugTitle,
   monitorIngestionService,
+  releaseCommitOf,
   type MonitorReconcileConnection,
 } from '@/lib/services/monitorIngestionService';
 import { adminDb } from '../../helpers/adminDb';
@@ -380,6 +381,121 @@ describe('the loop guard — an issue MOTIR resolved and nobody has seen since',
     );
     expect(result.outcome).toBe('refiled');
     expect(result.workItemId).not.toBe(first.workItemId);
+  });
+});
+
+// ── THE FIX-RELEASE GUARD (Bug MOTIR-8330) ───────────────────────────────────
+// A done bug's issue sighted on a release that does not yet carry the merge that
+// completed it is the old build still serving, not a regression. The answer is
+// handed in the way the poll hands it (read outside the lock); the poll-level
+// version, through a doubled host, is in monitorPoll.test.ts.
+describe('the fix-release guard — an event from a release that predates the fix', () => {
+  async function doneBug() {
+    const seeded = await seedConnection();
+    const first = await monitorIngestionService.reconcileIssue(seeded.connection, issue());
+    await adminDb.workItem.update({ where: { id: first.workItemId }, data: { status: 'done' } });
+    return { ...seeded, first };
+  }
+
+  const later = { lastSeenAt: new Date('2026-09-19T09:00:00.000Z'), eventCount: 11 };
+
+  it('MISSING: files no work item, leaves the done bug alone, and moves the link’s facts', async () => {
+    const { fx, first } = await doneBug();
+    const bugBefore = await adminDb.workItem.findUniqueOrThrow({
+      where: { id: first.workItemId },
+    });
+
+    const result = await monitorIngestionService.reconcileIssue(
+      (await seedAgain(fx)).connection,
+      issue(later),
+      null,
+      { workItemId: first.workItemId, release: 'abc1234', containment: 'missing' },
+    );
+
+    expect(result).toEqual({ ...first, outcome: 'updated' });
+    expect(await bugsIn(fx.projectId)).toHaveLength(1);
+    const bugAfter = await adminDb.workItem.findUniqueOrThrow({ where: { id: first.workItemId } });
+    expect(bugAfter.status).toBe('done');
+    expect(bugAfter.updatedAt).toEqual(bugBefore.updatedAt);
+    const link = await adminDb.monitorIssue.findFirstOrThrow();
+    expect(link).toMatchObject({ workItemId: first.workItemId, eventCount: 11 });
+    expect(link.lastSeenAt.toISOString()).toBe(later.lastSeenAt.toISOString());
+  });
+
+  it('CONTAINS: re-files exactly as today, relates_to the done bug', async () => {
+    const { fx, first } = await doneBug();
+
+    const result = await monitorIngestionService.reconcileIssue(
+      (await seedAgain(fx)).connection,
+      issue(later),
+      null,
+      { workItemId: first.workItemId, release: 'abc1234', containment: 'contains' },
+    );
+
+    expect(result.outcome).toBe('refiled');
+    expect(result.workItemId).not.toBe(first.workItemId);
+    expect(await bugsIn(fx.projectId)).toHaveLength(2);
+    const link = await adminDb.workItemLink.findFirst({
+      where: {
+        OR: [
+          { fromId: result.workItemId, toId: first.workItemId },
+          { fromId: first.workItemId, toId: result.workItemId },
+        ],
+      },
+    });
+    expect(link).not.toBeNull();
+  });
+
+  it('UNKNOWN: a host that could not place the release re-files as today', async () => {
+    const { fx, first } = await doneBug();
+    const result = await monitorIngestionService.reconcileIssue(
+      (await seedAgain(fx)).connection,
+      issue(later),
+      null,
+      { workItemId: first.workItemId, release: 'abc1234', containment: 'unknown' },
+    );
+    expect(result.outcome).toBe('refiled');
+    expect(await bugsIn(fx.projectId)).toHaveLength(2);
+  });
+
+  it('an answer about a bug the link no longer names changes nothing', async () => {
+    const { fx, first } = await doneBug();
+    const result = await monitorIngestionService.reconcileIssue(
+      (await seedAgain(fx)).connection,
+      issue(later),
+      null,
+      { workItemId: 'some-other-bug', release: 'abc1234', containment: 'missing' },
+    );
+    expect(result.outcome).toBe('refiled');
+    expect(result.workItemId).not.toBe(first.workItemId);
+  });
+
+  it('a LIVE bug is `updated` whatever the answer — the guard only ever holds a re-file', async () => {
+    const { fx, connection } = await seedConnection();
+    const first = await monitorIngestionService.reconcileIssue(connection, issue());
+    const result = await monitorIngestionService.reconcileIssue(
+      (await seedAgain(fx)).connection,
+      issue(later),
+      null,
+      { workItemId: first.workItemId, release: 'abc1234', containment: 'contains' },
+    );
+    expect(result).toEqual({ ...first, outcome: 'updated' });
+    expect(await bugsIn(fx.projectId)).toHaveLength(1);
+  });
+});
+
+describe('releaseCommitOf — which releases name a commit a host can place', () => {
+  it.each([
+    ['abc1234', 'abc1234'],
+    ['web@0123456789abcdef0123456789abcdef01234567', '0123456789abcdef0123456789abcdef01234567'],
+    ['my-app@deadbeef', 'deadbeef'],
+    ['2.4.1', null],
+    ['web@2.4.1', null],
+    ['abc12', null],
+    ['', null],
+    [null, null],
+  ])('%s → %s', (release, expected) => {
+    expect(releaseCommitOf(release)).toBe(expected);
   });
 });
 

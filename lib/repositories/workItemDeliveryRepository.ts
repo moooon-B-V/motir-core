@@ -47,6 +47,18 @@ const WITH_CHECKS = {
   repo: true,
 } as const;
 
+/** A merged delivery's host address — see
+ *  {@link workItemDeliveryRepository.listMergedHostAddressesByWorkItem}. */
+export interface MergedDeliveryHostAddress {
+  /** The repository's provider discriminator (`github`, `gitlab`). */
+  provider: string;
+  /** The HOST's installation id (not the internal cuid) — what a token mint takes. */
+  hostInstallationId: string;
+  owner: string;
+  name: string;
+  number: number;
+}
+
 export const workItemDeliveryRepository = {
   /**
    * One card's DELIVERY SET — every pull request delivering it, oldest link first.
@@ -301,6 +313,43 @@ export const workItemDeliveryRepository = {
       repoDefaultBranch: r.repo.defaultBranch,
       merged: r.pullRequest.merged,
       baseRef: r.pullRequest.baseRef,
+    }));
+  },
+
+  /**
+   * Where each MERGED pull request delivering one card lives on its host — the
+   * provider, the host's installation id, the repository and the number (Bug
+   * MOTIR-8330). It is the address the monitor hands the host to ask whether a
+   * deployed release carries the merge that completed the bug.
+   *
+   * Merged rows only: an open or closed-unmerged pull request landed nothing a
+   * release could carry. Oldest link first, like every read on this table.
+   */
+  async listMergedHostAddressesByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<MergedDeliveryHostAddress[]> {
+    const rows = await tx.workItemDelivery.findMany({
+      where: { workItemId, pullRequest: { merged: true } },
+      select: {
+        repo: {
+          select: {
+            provider: true,
+            owner: true,
+            name: true,
+            installation: { select: { installationId: true } },
+          },
+        },
+        pullRequest: { select: { number: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((r) => ({
+      provider: r.repo.provider,
+      hostInstallationId: r.repo.installation.installationId,
+      owner: r.repo.owner,
+      name: r.repo.name,
+      number: r.pullRequest.number,
     }));
   },
 

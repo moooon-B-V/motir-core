@@ -58,6 +58,8 @@ import type {
   NormalizedUnlinkedCheckFailure,
   NormalizedReviewEvent,
   NormalizedReviewState,
+  ReleaseContainment,
+  ReleaseContainsMergeInput,
   RepositoryPermission,
   RepositoryPermissionInput,
 } from '../types';
@@ -747,6 +749,53 @@ export const githubProvider: GitProvider = {
       mergeableState: typeof mergeableState === 'string' ? mergeableState : null,
       headSha: typeof headSha === 'string' ? headSha : null,
     };
+  },
+
+  /**
+   * Two reads with the merge path's App and bound (Bug MOTIR-8330):
+   * `GET /repos/{owner}/{name}/pulls/{number}` for the pull request's
+   * `merge_commit_sha`, then `GET /repos/{owner}/{name}/compare/{merge}...{release}`,
+   * whose `status` says where the release sits relative to the merge — `ahead` or
+   * `identical` means the release's history carries it, `behind` or `diverged` that
+   * it does not.
+   *
+   * ⚠️ IT READS `status`, NOT A COUNT. GitHub's `behind_by` is the number of commits
+   * on the BASE that the head lacks (measured on this repository: `compare/73d4758
+   * ...ef898ed` answers `ahead_by: 1, behind_by: 0`), so containment could be read
+   * off it too — but `status` is the host's own word for exactly this question and
+   * carries no direction to get backwards.
+   *
+   * A squash or rebase merge records its merge commit here too, which is the commit
+   * that actually reached the base branch — never the pull request's head.
+   */
+  async readReleaseContainsMerge(input: ReleaseContainsMergeInput): Promise<ReleaseContainment> {
+    try {
+      const { repoUrl, headers } = await githubMergeContext(input);
+      const prRes = await githubMergeFetch(`${repoUrl}/pulls/${input.number}`, {
+        method: 'GET',
+        headers,
+      });
+      if (!prRes.ok) return 'unknown';
+      const pull = await mergeBodyOf(prRes);
+      const mergeSha = pull?.['merge_commit_sha'];
+      if (pull?.['merged'] !== true || typeof mergeSha !== 'string' || mergeSha === '') {
+        return 'unknown';
+      }
+      const compareRes = await githubMergeFetch(
+        `${repoUrl}/compare/${encodeURIComponent(mergeSha)}...${encodeURIComponent(input.release)}`,
+        { method: 'GET', headers },
+      );
+      // A release the host does not know (404), or any other refusal: no answer.
+      if (!compareRes.ok) return 'unknown';
+      const status = (await mergeBodyOf(compareRes))?.['status'];
+      if (status === 'ahead' || status === 'identical') return 'contains';
+      if (status === 'behind' || status === 'diverged') return 'missing';
+      return 'unknown';
+    } catch {
+      // A failed mint, a timeout, an unreachable host — the merge path's typed
+      // non-answers — and anything else: this read never fails its caller.
+      return 'unknown';
+    }
   },
 
   /**
