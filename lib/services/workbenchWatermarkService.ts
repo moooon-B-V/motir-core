@@ -1,3 +1,4 @@
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
 import { withWorkspaceContext } from '@/lib/workspaces';
 import {
@@ -80,10 +81,25 @@ async function readTabs(
     const projectIds = projectScopes.map((scope) => scope.projectId);
     // The approvals tab's own exclusion (MOTIR-7988): a plan a revision holds is
     // off the list, so it is off the reading too — and its return moves the count.
-    const heldPlanIds = await planRevisionHoldService.heldPlanIds(
-      { workspaceId: ctx.workspaceId, projectIds },
-      tx,
-    );
+    // And the planning-session liveness set (MOTIR-7913), as the approvals list
+    // reads it. Both are INPUTS to the fan-out below, so both are read before it
+    // starts — never awaited inside its argument list (see the note there).
+    const [heldPlanIds, awaitingSessionIds] = await allSettledOrThrow([
+      planRevisionHoldService.heldPlanIds({ workspaceId: ctx.workspaceId, projectIds }, tx),
+      planChangeSessionRepository.listAwaitingPersonIdsInProjects(projectIds, tx),
+    ]);
+    // ⚠️ `allSettledOrThrow`, NOT `Promise.all`, AND NO `await` INSIDE THE ARRAY
+    // (Bug MOTIR-8284). Every arm runs on the ONE interactive transaction above,
+    // and that transaction ends the moment this callback returns or throws. An arm
+    // still queued on it then is not cancelled: Prisma resolves it to `undefined`,
+    // and the repository dereferencing that `undefined` rejects with nobody
+    // listening. Production met exactly that — `Cannot read properties of
+    // undefined (reading '_count')`, as an UNHANDLED rejection — because the
+    // awaiting-sessions read used to be awaited INSIDE the array below, after the
+    // work-tab aggregates had started and before anything was awaiting them; when
+    // it failed, the transaction rolled back under all of them. Settling every
+    // arm first means no read outlives the transaction it runs on, and a failure
+    // surfaces once, as the read's own error.
     const [
       toDo,
       inProgress,
@@ -94,7 +110,7 @@ async function readTabs(
       watching,
       failedSessions,
       endedSessions,
-    ] = await Promise.all([
+    ] = await allSettledOrThrow([
       workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
         ctx.userId,
         ctx.workspaceId,
@@ -147,11 +163,7 @@ async function readTabs(
         {
           projectIds,
           userId: ctx.userId,
-          // The planning-session liveness set (MOTIR-7913), as the list reads it.
-          awaitingSessionIds: await planChangeSessionRepository.listAwaitingPersonIdsInProjects(
-            projectIds,
-            tx,
-          ),
+          awaitingSessionIds,
           heldPlanIds,
         },
         tx,
