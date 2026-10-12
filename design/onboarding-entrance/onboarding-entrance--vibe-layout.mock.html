@@ -123,6 +123,7 @@
           --color-link-pressed: #005bab;
           --radius-btn: 8px;
           --radius-card: 12px;
+          --radius-input: 8px;
           --radius-badge: 9999px;
           --radius-control: 6px;
           --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
@@ -134,8 +135,13 @@
           --spacing-input-x: 16px;
           --spacing-input-y: 12px;
           --spacing-card-padding: 24px;
+          --spacing-control-x: 10px;
+          --spacing-control-y: 6px;
+          --spacing-tooltip-x: 8px;
+          --spacing-tooltip-y: 4px;
           --height-btn-md: 40px;
           --height-btn-lg: 48px;
+          --height-control: 36px;
           --spacing-rail-inset: 0px;
           --transition-duration: 150ms;
           --active-scale: 0.98;
@@ -377,8 +383,14 @@
         .-top-1\.5 {
           top: calc(var(--spacing) * -1.5);
         }
+        .top-full {
+          top: 100%;
+        }
         .-right-1\.5 {
           right: calc(var(--spacing) * -1.5);
+        }
+        .right-0 {
+          right: calc(var(--spacing) * 0);
         }
         .isolate {
           isolation: isolate;
@@ -386,11 +398,20 @@
         .-z-10 {
           z-index: calc(10 * -1);
         }
+        .z-50 {
+          z-index: 50;
+        }
+        .col-span-2 {
+          grid-column: span 2 / span 2;
+        }
         .m-0 {
           margin: calc(var(--spacing) * 0);
         }
         .mx-auto {
           margin-inline: auto;
+        }
+        .mt-1 {
+          margin-top: calc(var(--spacing) * 1);
         }
         .mt-2 {
           margin-top: calc(var(--spacing) * 2);
@@ -400,6 +421,9 @@
         }
         .mr-auto {
           margin-right: auto;
+        }
+        .ml-1 {
+          margin-left: calc(var(--spacing) * 1);
         }
         .ml-auto {
           margin-left: auto;
@@ -453,6 +477,9 @@
         .h-\(--height-btn-md\) {
           height: var(--height-btn-md);
         }
+        .h-\(--height-control\) {
+          height: var(--height-control);
+        }
         .h-1\.5 {
           height: calc(var(--spacing) * 1.5);
         }
@@ -489,20 +516,35 @@
         .h-\[18rem\] {
           height: 18rem;
         }
+        .h-\[48px\] {
+          height: 48px;
+        }
+        .h-\[80px\] {
+          height: 80px;
+        }
         .h-\[208px\] {
           height: 208px;
         }
         .h-\[248px\] {
           height: 248px;
         }
+        .h-\[316px\] {
+          height: 316px;
+        }
         .h-full {
           height: 100%;
+        }
+        .max-h-64 {
+          max-height: calc(var(--spacing) * 64);
         }
         .min-h-\[7\.5rem\] {
           min-height: 7.5rem;
         }
         .min-h-\[10rem\] {
           min-height: 10rem;
+        }
+        .w-3\.5 {
+          width: calc(var(--spacing) * 3.5);
         }
         .w-4 {
           width: calc(var(--spacing) * 4);
@@ -570,8 +612,17 @@
         .w-\[1280px\] {
           width: 1280px;
         }
+        .w-auto {
+          width: auto;
+        }
         .w-full {
           width: 100%;
+        }
+        .w-max {
+          width: max-content;
+        }
+        .max-w-\[18rem\] {
+          max-width: 18rem;
         }
         .max-w-\[44ch\] {
           max-width: 44ch;
@@ -594,17 +645,32 @@
         .max-w-\[760px\] {
           max-width: 760px;
         }
+        .max-w-\[calc\(100vw-3rem\)\] {
+          max-width: calc(100vw - 3rem);
+        }
+        .min-w-full {
+          min-width: 100%;
+        }
         .flex-1 {
           flex: 1;
         }
         .flex-none {
           flex: none;
         }
+        .shrink-0 {
+          flex-shrink: 0;
+        }
         .animate-spin {
           animation: var(--animate-spin);
         }
+        .cursor-pointer {
+          cursor: pointer;
+        }
         .resize-none {
           resize: none;
+        }
+        .grid-cols-2 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
         .grid-cols-\[9\.5rem_minmax\(0\,1fr\)\] {
           grid-template-columns: 9.5rem minmax(0, 1fr);
@@ -690,6 +756,9 @@
         .gap-x-3 {
           column-gap: calc(var(--spacing) * 3);
         }
+        .gap-x-6 {
+          column-gap: calc(var(--spacing) * 6);
+        }
         .gap-x-14 {
           column-gap: calc(var(--spacing) * 14);
         }
@@ -699,8 +768,16 @@
         .gap-y-4 {
           row-gap: calc(var(--spacing) * 4);
         }
+        .gap-y-5 {
+          row-gap: calc(var(--spacing) * 5);
+        }
         .gap-y-6 {
           row-gap: calc(var(--spacing) * 6);
+        }
+        .truncate {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .overflow-hidden {
           overflow: hidden;
@@ -719,6 +796,9 @@
         }
         .rounded-\(--radius-control\) {
           border-radius: var(--radius-control);
+        }
+        .rounded-\(--radius-input\) {
+          border-radius: var(--radius-input);
         }
         .rounded-full {
           border-radius: calc(infinity * 1px);
@@ -779,6 +859,9 @@
         .bg-\(--el-card\) {
           background-color: var(--el-card);
         }
+        .bg-\(--el-option-active-bg\) {
+          background-color: var(--el-option-active-bg);
+        }
         .bg-\(--el-page-bg\) {
           background-color: var(--el-page-bg);
         }
@@ -821,6 +904,9 @@
         .p-0 {
           padding: calc(var(--spacing) * 0);
         }
+        .p-1 {
+          padding: calc(var(--spacing) * 1);
+        }
         .p-2\.5 {
           padding: calc(var(--spacing) * 2.5);
         }
@@ -833,8 +919,14 @@
         .px-\(--spacing-card-padding\) {
           padding-inline: var(--spacing-card-padding);
         }
+        .px-\(--spacing-control-x\) {
+          padding-inline: var(--spacing-control-x);
+        }
         .px-\(--spacing-input-x\) {
           padding-inline: var(--spacing-input-x);
+        }
+        .px-\(--spacing-tooltip-x\) {
+          padding-inline: var(--spacing-tooltip-x);
         }
         .px-3 {
           padding-inline: calc(var(--spacing) * 3);
@@ -854,8 +946,14 @@
         .px-\[calc\(var\(--spacing-card-padding\)\*2\)\] {
           padding-inline: calc(var(--spacing-card-padding) * 2);
         }
+        .py-\(--spacing-control-y\) {
+          padding-block: var(--spacing-control-y);
+        }
         .py-\(--spacing-input-y\) {
           padding-block: var(--spacing-input-y);
+        }
+        .py-\(--spacing-tooltip-y\) {
+          padding-block: var(--spacing-tooltip-y);
         }
         .py-2\.5 {
           padding-block: calc(var(--spacing) * 2.5);
@@ -954,6 +1052,9 @@
         .text-\[12\.5px\] {
           font-size: 12.5px;
         }
+        .text-\[12px\] {
+          font-size: 12px;
+        }
         .text-\[13px\] {
           font-size: 13px;
         }
@@ -1050,6 +1151,15 @@
         }
         .text-\(--el-accent-text\) {
           color: var(--el-accent-text);
+        }
+        .text-\(--el-danger-on-surface\) {
+          color: var(--el-danger-on-surface);
+        }
+        .text-\(--el-icon-muted\) {
+          color: var(--el-icon-muted);
+        }
+        .text-\(--el-link\) {
+          color: var(--el-link);
         }
         .text-\(--el-showcase-decision-text\) {
           color: var(--el-showcase-decision-text);
@@ -1171,6 +1281,13 @@
             }
           }
         }
+        .hover\:underline {
+          &:hover {
+            @media (hover: hover) {
+              text-decoration-line: underline;
+            }
+          }
+        }
         .hover\:opacity-90 {
           &:hover {
             @media (hover: hover) {
@@ -1186,6 +1303,12 @@
                 var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,)
                 var(--tw-drop-shadow,);
             }
+          }
+        }
+        .focus\:outline-none {
+          &:focus {
+            --tw-outline-style: none;
+            outline-style: none;
           }
         }
         .focus-visible\:ring-2 {
@@ -1259,6 +1382,16 @@
         .disabled\:opacity-70 {
           &:disabled {
             opacity: 70%;
+          }
+        }
+        .sm\:flex-nowrap {
+          @media (width >= 40rem) {
+            flex-wrap: nowrap;
+          }
+        }
+        .sm\:whitespace-nowrap {
+          @media (width >= 40rem) {
+            white-space: nowrap;
           }
         }
       }
@@ -5247,6 +5380,55 @@
                       ><span class="brand-word">Motir</span></span
                     ></a
                   >
+                  <div class="relative" data-language-control="">
+                    <div class="relative">
+                      <button
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Language: English"
+                        class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                      >
+                        <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-4 w-4 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m5 8 6 6"></path>
+                            <path d="m4 14 6-6 2-3"></path>
+                            <path d="M2 5h12"></path>
+                            <path d="M7 2h1"></path>
+                            <path d="m22 22-5-10-5 10"></path>
+                            <path d="M14 18h6"></path></svg></span
+                        ><span lang="en" class="text-(--el-text) truncate">English</span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <path d="m7 15 5 5 5-5"></path>
+                          <path d="m7 9 5-5 5 5"></path>
+                        </svg>
+                      </button>
+                    </div>
+                    <span role="status" class="sr-only"></span>
+                    <div role="status" class="absolute top-full right-0 mt-1"></div>
+                  </div>
                 </header>
                 <div
                   class="grid justify-items-center gap-[22px] px-[38px] pt-[64px] pb-[104px] text-center"
@@ -5373,11 +5555,12 @@
             </div>
             <div class="grid gap-1 font-sans text-[13px] leading-normal text-(--el-text-secondary)">
               <p class="m-0 max-w-[110ch]">
-                Exits, each drawn in place: Start → /onboarding/discovery (the seeded discovery
-                chat) · See how Motir works → /onboarding/how-it-works in a NEW TAB (↗ glyph,
-                target=_blank rel=noopener, screen readers hear “(opens in a new tab)”) · We can
-                vibe it too → /onboarding/migrate · the lockup → / . Inbound (context only): sign-up
-                / sign-in, and the in-app project switcher door.
+                The brand bar carries the language control at its trailing end (Revision 2 ·
+                MOTIR-8286). Exits, each drawn in place: Start → /onboarding/discovery (the seeded
+                discovery chat) · See how Motir works → /onboarding/how-it-works in a NEW TAB (↗
+                glyph, target=_blank rel=noopener, screen readers hear “(opens in a new tab)”) · We
+                can vibe it too → /onboarding/migrate · the lockup → / . Inbound (context only):
+                sign-up / sign-in, and the in-app project switcher door.
               </p>
             </div>
           </div>
@@ -5584,6 +5767,55 @@
                       ><span class="brand-word">Motir</span></span
                     ></a
                   >
+                  <div class="relative" data-language-control="">
+                    <div class="relative">
+                      <button
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Language: English"
+                        class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                      >
+                        <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-4 w-4 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m5 8 6 6"></path>
+                            <path d="m4 14 6-6 2-3"></path>
+                            <path d="M2 5h12"></path>
+                            <path d="M7 2h1"></path>
+                            <path d="m22 22-5-10-5 10"></path>
+                            <path d="M14 18h6"></path></svg></span
+                        ><span lang="en" class="text-(--el-text) truncate">English</span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <path d="m7 15 5 5 5-5"></path>
+                          <path d="m7 9 5-5 5 5"></path>
+                        </svg>
+                      </button>
+                    </div>
+                    <span role="status" class="sr-only"></span>
+                    <div role="status" class="absolute top-full right-0 mt-1"></div>
+                  </div>
                 </header>
                 <div
                   class="grid justify-items-center gap-[22px] px-[38px] pt-[64px] pb-[104px] text-center"
@@ -5710,11 +5942,12 @@
             </div>
             <div class="grid gap-1 font-sans text-[13px] leading-normal text-(--el-text-secondary)">
               <p class="m-0 max-w-[110ch]">
-                Exits, each drawn in place: Start → /onboarding/discovery (the seeded discovery
-                chat) · See how Motir works → /onboarding/how-it-works in a NEW TAB (↗ glyph,
-                target=_blank rel=noopener, screen readers hear “(opens in a new tab)”) · We can
-                vibe it too → /onboarding/migrate · the lockup → / . Inbound (context only): sign-up
-                / sign-in, and the in-app project switcher door.
+                The brand bar carries the language control at its trailing end (Revision 2 ·
+                MOTIR-8286). Exits, each drawn in place: Start → /onboarding/discovery (the seeded
+                discovery chat) · See how Motir works → /onboarding/how-it-works in a NEW TAB (↗
+                glyph, target=_blank rel=noopener, screen readers hear “(opens in a new tab)”) · We
+                can vibe it too → /onboarding/migrate · the lockup → / . Inbound (context only):
+                sign-up / sign-in, and the in-app project switcher door.
               </p>
             </div>
           </div>
@@ -5924,6 +6157,55 @@
                       ><span class="brand-word">Motir</span></span
                     ></a
                   >
+                  <div class="relative" data-language-control="">
+                    <div class="relative">
+                      <button
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Language: English"
+                        class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                      >
+                        <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-4 w-4 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m5 8 6 6"></path>
+                            <path d="m4 14 6-6 2-3"></path>
+                            <path d="M2 5h12"></path>
+                            <path d="M7 2h1"></path>
+                            <path d="m22 22-5-10-5 10"></path>
+                            <path d="M14 18h6"></path></svg></span
+                        ><span lang="en" class="text-(--el-text) truncate">English</span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <path d="m7 15 5 5 5-5"></path>
+                          <path d="m7 9 5-5 5 5"></path>
+                        </svg>
+                      </button>
+                    </div>
+                    <span role="status" class="sr-only"></span>
+                    <div role="status" class="absolute top-full right-0 mt-1"></div>
+                  </div>
                 </header>
                 <div
                   class="grid justify-items-center gap-[22px] px-[38px] pt-[64px] pb-[104px] text-center"
@@ -6221,6 +6503,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                       ><span class="brand-word">Motir</span></span
                     ></a
                   >
+                  <div class="relative" data-language-control="">
+                    <div class="relative">
+                      <button
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Language: English"
+                        class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                      >
+                        <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-4 w-4 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m5 8 6 6"></path>
+                            <path d="m4 14 6-6 2-3"></path>
+                            <path d="M2 5h12"></path>
+                            <path d="M7 2h1"></path>
+                            <path d="m22 22-5-10-5 10"></path>
+                            <path d="M14 18h6"></path></svg></span
+                        ><span lang="en" class="text-(--el-text) truncate">English</span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <path d="m7 15 5 5 5-5"></path>
+                          <path d="m7 9 5-5 5 5"></path>
+                        </svg>
+                      </button>
+                    </div>
+                    <span role="status" class="sr-only"></span>
+                    <div role="status" class="absolute top-full right-0 mt-1"></div>
+                  </div>
                 </header>
                 <div
                   class="grid justify-items-center gap-[22px] px-[38px] pt-[64px] pb-[104px] text-center"
@@ -6325,6 +6656,14 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
         >
           <div class="grid content-start gap-3">
+            <div class="grid gap-1 font-sans text-[13px] leading-normal text-(--el-text-secondary)">
+              <p class="m-0 max-w-[110ch]">
+                3h is the signed-out frame’s language control (AuthLanguageControl,
+                design/auth/auth-frame--language-control.mock.html), unchanged, in the brand bar. A
+                choice runs setLocale then router.refresh() — never a navigation — so the idea typed
+                in the box survives a switch.
+              </p>
+            </div>
             <div class="grid gap-1 font-sans text-[13px] leading-normal text-(--el-text-secondary)">
               <p class="m-0 max-w-[110ch]">
                 Every behaviour of the MOTIR-1461 Panel 3 is unchanged: an empty idea still starts,
@@ -6779,6 +7118,403 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                     ><span class="sr-only"> (opens in a new tab)</span></a
                   >
                 </div>
+                <p
+                  class="m-0 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-(--el-text-secondary)"
+                >
+                  3h · Language — rest · open (the eleven endonyms) · pending · failed
+                </p>
+                <div class="rounded-(--radius-card) bg-(--el-surface) p-(--spacing-card-padding)">
+                  <div class="grid grid-cols-2 gap-x-6 gap-y-5">
+                    <div class="grid content-start gap-2">
+                      <p class="m-0 text-[12px] leading-snug text-(--el-text-secondary)">Rest</p>
+                      <div class="flex items-start justify-end h-[48px]">
+                        <div class="relative" data-language-control="">
+                          <div class="relative">
+                            <button
+                              type="button"
+                              role="combobox"
+                              aria-haspopup="listbox"
+                              aria-expanded="false"
+                              aria-label="Language: English"
+                              class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                            >
+                              <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                                ><svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="h-4 w-4 text-(--el-text-secondary)"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m5 8 6 6"></path>
+                                  <path d="m4 14 6-6 2-3"></path>
+                                  <path d="M2 5h12"></path>
+                                  <path d="M7 2h1"></path>
+                                  <path d="m22 22-5-10-5 10"></path>
+                                  <path d="M14 18h6"></path></svg></span
+                              ><span lang="en" class="text-(--el-text) truncate">English</span
+                              ><svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                                aria-hidden="true"
+                              >
+                                <path d="m7 15 5 5 5-5"></path>
+                                <path d="m7 9 5-5 5 5"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          <span role="status" class="sr-only"></span>
+                          <div role="status" class="absolute top-full right-0 mt-1"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="grid content-start gap-2">
+                      <p class="m-0 text-[12px] leading-snug text-(--el-text-secondary)">
+                        Pending — aria-busy, spinner in the chevron’s slot; a polite sr-only status
+                        says “Switching to 日本語…”
+                      </p>
+                      <div class="flex items-start justify-end h-[48px]">
+                        <div class="relative" data-language-control="">
+                          <div class="relative">
+                            <button
+                              type="button"
+                              role="combobox"
+                              aria-haspopup="listbox"
+                              aria-expanded="false"
+                              aria-label="Language: English"
+                              aria-busy="true"
+                              class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                            >
+                              <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                                ><svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="h-4 w-4 text-(--el-text-secondary)"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m5 8 6 6"></path>
+                                  <path d="m4 14 6-6 2-3"></path>
+                                  <path d="M2 5h12"></path>
+                                  <path d="M7 2h1"></path>
+                                  <path d="m22 22-5-10-5 10"></path>
+                                  <path d="M14 18h6"></path></svg></span
+                              ><span lang="en" class="text-(--el-text) truncate">English</span
+                              ><svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-loader-circle text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0 animate-spin"
+                                data-combobox-busy=""
+                                aria-hidden="true"
+                              >
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          <span role="status" class="sr-only"
+                            >Switching to <span lang="ja">日本語</span>…</span
+                          >
+                          <div role="status" class="absolute top-full right-0 mt-1"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="grid content-start gap-2 col-span-2">
+                      <p class="m-0 text-[12px] leading-snug text-(--el-text-secondary)">
+                        Failed — no refresh, the page stays in its language; the quiet line offers
+                        Try again
+                      </p>
+                      <div class="flex items-start justify-end h-[80px]">
+                        <div class="relative" data-language-control="">
+                          <div class="relative">
+                            <button
+                              type="button"
+                              role="combobox"
+                              aria-haspopup="listbox"
+                              aria-expanded="false"
+                              aria-label="Language: English"
+                              class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                            >
+                              <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                                ><svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="h-4 w-4 text-(--el-text-secondary)"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m5 8 6 6"></path>
+                                  <path d="m4 14 6-6 2-3"></path>
+                                  <path d="M2 5h12"></path>
+                                  <path d="M7 2h1"></path>
+                                  <path d="m22 22-5-10-5 10"></path>
+                                  <path d="M14 18h6"></path></svg></span
+                              ><span lang="en" class="text-(--el-text) truncate">English</span
+                              ><svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                                aria-hidden="true"
+                              >
+                                <path d="m7 15 5 5 5-5"></path>
+                                <path d="m7 9 5-5 5 5"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          <span role="status" class="sr-only"></span>
+                          <div role="status" class="absolute top-full right-0 mt-1">
+                            <p
+                              class="flex w-max max-w-[calc(100vw-3rem)] flex-wrap items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) text-xs text-(--el-text) shadow-(--shadow-subtle) sm:flex-nowrap sm:whitespace-nowrap"
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="h-3.5 w-3.5 shrink-0 text-(--el-danger-on-surface)"
+                                aria-hidden="true"
+                              >
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M12 8v4"></path>
+                                <path d="M12 16h.01"></path></svg
+                              ><span>Couldn’t change the language.</span
+                              ><button
+                                type="button"
+                                class="inline-flex items-center gap-1 rounded-(--radius-control) font-medium text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="h-3.5 w-3.5 shrink-0"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                                  ></path>
+                                  <path d="M3 3v5h5"></path></svg
+                                >Try again
+                              </button>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="grid content-start gap-2 col-span-2">
+                      <p class="m-0 text-[12px] leading-snug text-(--el-text-secondary)">
+                        Open — the eleven endonyms from localeLabel, each in its own lang; English
+                        selected, keyboard on 日本語; the list holds eight rows and the last three
+                        (Nederlands, Polski, Português) scroll
+                      </p>
+                      <div class="flex items-start justify-end h-[316px]">
+                        <div class="relative" data-language-control="">
+                          <button
+                            type="button"
+                            role="combobox"
+                            aria-haspopup="listbox"
+                            aria-expanded="true"
+                            aria-controls="lang-lb-1"
+                            aria-label="Language: English"
+                            class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) w-auto items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm ring-(--focus-ring-color) outline-none ring-2"
+                          >
+                            <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                              ><svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="h-4 w-4 text-(--el-text-secondary)"
+                                aria-hidden="true"
+                              >
+                                <path d="m5 8 6 6"></path>
+                                <path d="m4 14 6-6 2-3"></path>
+                                <path d="M2 5h12"></path>
+                                <path d="M7 2h1"></path>
+                                <path d="m22 22-5-10-5 10"></path>
+                                <path d="M14 18h6"></path></svg></span
+                            ><span lang="en" class="text-(--el-text) truncate">English</span
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                              aria-hidden="true"
+                            >
+                              <path d="m7 15 5 5 5-5"></path>
+                              <path d="m7 9 5-5 5 5"></path>
+                            </svg>
+                          </button>
+                          <div
+                            data-menu-surface=""
+                            class="absolute top-full right-0 mt-1 z-50 w-max min-w-full max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1 shadow-(--shadow-elevated) border border-(--el-border)"
+                          >
+                            <div
+                              id="lang-lb-1"
+                              role="listbox"
+                              aria-label="Language: English"
+                              tabindex="-1"
+                              aria-activedescendant="lang-lb-1-ja"
+                              class="max-h-64 overflow-y-auto focus:outline-none"
+                            >
+                              <div
+                                id="lang-lb-1-en"
+                                role="option"
+                                aria-selected="true"
+                                lang="en"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">English</span
+                                ><svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="ml-1 h-4 w-4 shrink-0 text-(--el-accent-on-surface)"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M20 6 9 17l-5-5"></path>
+                                </svg>
+                              </div>
+                              <div
+                                id="lang-lb-1-zh"
+                                role="option"
+                                aria-selected="false"
+                                lang="zh"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">中文</span>
+                              </div>
+                              <div
+                                id="lang-lb-1-ja"
+                                role="option"
+                                aria-selected="false"
+                                lang="ja"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text) bg-(--el-option-active-bg)"
+                              >
+                                <span class="truncate">日本語</span>
+                              </div>
+                              <div
+                                id="lang-lb-1-ko"
+                                role="option"
+                                aria-selected="false"
+                                lang="ko"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">한국어</span>
+                              </div>
+                              <div
+                                id="lang-lb-1-de"
+                                role="option"
+                                aria-selected="false"
+                                lang="de"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Deutsch</span>
+                              </div>
+                              <div
+                                id="lang-lb-1-fr"
+                                role="option"
+                                aria-selected="false"
+                                lang="fr"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Français</span>
+                              </div>
+                              <div
+                                id="lang-lb-1-es"
+                                role="option"
+                                aria-selected="false"
+                                lang="es"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Español</span>
+                              </div>
+                              <div
+                                id="lang-lb-1-it"
+                                role="option"
+                                aria-selected="false"
+                                lang="it"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Italiano</span>
+                              </div>
+                              <div
+                                id="lang-lb-1-nl"
+                                role="option"
+                                aria-selected="false"
+                                lang="nl"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Nederlands</span>
+                              </div>
+                              <div
+                                id="lang-lb-1-pl"
+                                role="option"
+                                aria-selected="false"
+                                lang="pl"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Polski</span>
+                              </div>
+                              <div
+                                id="lang-lb-1-pt"
+                                role="option"
+                                aria-selected="false"
+                                lang="pt"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Português</span>
+                              </div>
+                            </div>
+                          </div>
+                          <span role="status" class="sr-only"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div
                 data-theme="dark"
@@ -7224,6 +7960,403 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                     ><span class="sr-only"> (opens in a new tab)</span></a
                   >
                 </div>
+                <p
+                  class="m-0 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-(--el-text-secondary)"
+                >
+                  3h · Language — rest · open (the eleven endonyms) · pending · failed
+                </p>
+                <div class="rounded-(--radius-card) bg-(--el-surface) p-(--spacing-card-padding)">
+                  <div class="grid grid-cols-2 gap-x-6 gap-y-5">
+                    <div class="grid content-start gap-2">
+                      <p class="m-0 text-[12px] leading-snug text-(--el-text-secondary)">Rest</p>
+                      <div class="flex items-start justify-end h-[48px]">
+                        <div class="relative" data-language-control="">
+                          <div class="relative">
+                            <button
+                              type="button"
+                              role="combobox"
+                              aria-haspopup="listbox"
+                              aria-expanded="false"
+                              aria-label="Language: English"
+                              class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                            >
+                              <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                                ><svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="h-4 w-4 text-(--el-text-secondary)"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m5 8 6 6"></path>
+                                  <path d="m4 14 6-6 2-3"></path>
+                                  <path d="M2 5h12"></path>
+                                  <path d="M7 2h1"></path>
+                                  <path d="m22 22-5-10-5 10"></path>
+                                  <path d="M14 18h6"></path></svg></span
+                              ><span lang="en" class="text-(--el-text) truncate">English</span
+                              ><svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                                aria-hidden="true"
+                              >
+                                <path d="m7 15 5 5 5-5"></path>
+                                <path d="m7 9 5-5 5 5"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          <span role="status" class="sr-only"></span>
+                          <div role="status" class="absolute top-full right-0 mt-1"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="grid content-start gap-2">
+                      <p class="m-0 text-[12px] leading-snug text-(--el-text-secondary)">
+                        Pending — aria-busy, spinner in the chevron’s slot; a polite sr-only status
+                        says “Switching to 日本語…”
+                      </p>
+                      <div class="flex items-start justify-end h-[48px]">
+                        <div class="relative" data-language-control="">
+                          <div class="relative">
+                            <button
+                              type="button"
+                              role="combobox"
+                              aria-haspopup="listbox"
+                              aria-expanded="false"
+                              aria-label="Language: English"
+                              aria-busy="true"
+                              class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                            >
+                              <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                                ><svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="h-4 w-4 text-(--el-text-secondary)"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m5 8 6 6"></path>
+                                  <path d="m4 14 6-6 2-3"></path>
+                                  <path d="M2 5h12"></path>
+                                  <path d="M7 2h1"></path>
+                                  <path d="m22 22-5-10-5 10"></path>
+                                  <path d="M14 18h6"></path></svg></span
+                              ><span lang="en" class="text-(--el-text) truncate">English</span
+                              ><svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-loader-circle text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0 animate-spin"
+                                data-combobox-busy=""
+                                aria-hidden="true"
+                              >
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          <span role="status" class="sr-only"
+                            >Switching to <span lang="ja">日本語</span>…</span
+                          >
+                          <div role="status" class="absolute top-full right-0 mt-1"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="grid content-start gap-2 col-span-2">
+                      <p class="m-0 text-[12px] leading-snug text-(--el-text-secondary)">
+                        Failed — no refresh, the page stays in its language; the quiet line offers
+                        Try again
+                      </p>
+                      <div class="flex items-start justify-end h-[80px]">
+                        <div class="relative" data-language-control="">
+                          <div class="relative">
+                            <button
+                              type="button"
+                              role="combobox"
+                              aria-haspopup="listbox"
+                              aria-expanded="false"
+                              aria-label="Language: English"
+                              class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                            >
+                              <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                                ><svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="h-4 w-4 text-(--el-text-secondary)"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m5 8 6 6"></path>
+                                  <path d="m4 14 6-6 2-3"></path>
+                                  <path d="M2 5h12"></path>
+                                  <path d="M7 2h1"></path>
+                                  <path d="m22 22-5-10-5 10"></path>
+                                  <path d="M14 18h6"></path></svg></span
+                              ><span lang="en" class="text-(--el-text) truncate">English</span
+                              ><svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                                aria-hidden="true"
+                              >
+                                <path d="m7 15 5 5 5-5"></path>
+                                <path d="m7 9 5-5 5 5"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          <span role="status" class="sr-only"></span>
+                          <div role="status" class="absolute top-full right-0 mt-1">
+                            <p
+                              class="flex w-max max-w-[calc(100vw-3rem)] flex-wrap items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) text-xs text-(--el-text) shadow-(--shadow-subtle) sm:flex-nowrap sm:whitespace-nowrap"
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="h-3.5 w-3.5 shrink-0 text-(--el-danger-on-surface)"
+                                aria-hidden="true"
+                              >
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M12 8v4"></path>
+                                <path d="M12 16h.01"></path></svg
+                              ><span>Couldn’t change the language.</span
+                              ><button
+                                type="button"
+                                class="inline-flex items-center gap-1 rounded-(--radius-control) font-medium text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="h-3.5 w-3.5 shrink-0"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                                  ></path>
+                                  <path d="M3 3v5h5"></path></svg
+                                >Try again
+                              </button>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="grid content-start gap-2 col-span-2">
+                      <p class="m-0 text-[12px] leading-snug text-(--el-text-secondary)">
+                        Open — the eleven endonyms from localeLabel, each in its own lang; English
+                        selected, keyboard on 日本語; the list holds eight rows and the last three
+                        (Nederlands, Polski, Português) scroll
+                      </p>
+                      <div class="flex items-start justify-end h-[316px]">
+                        <div class="relative" data-language-control="">
+                          <button
+                            type="button"
+                            role="combobox"
+                            aria-haspopup="listbox"
+                            aria-expanded="true"
+                            aria-controls="lang-lb-2"
+                            aria-label="Language: English"
+                            class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) w-auto items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm ring-(--focus-ring-color) outline-none ring-2"
+                          >
+                            <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                              ><svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="h-4 w-4 text-(--el-text-secondary)"
+                                aria-hidden="true"
+                              >
+                                <path d="m5 8 6 6"></path>
+                                <path d="m4 14 6-6 2-3"></path>
+                                <path d="M2 5h12"></path>
+                                <path d="M7 2h1"></path>
+                                <path d="m22 22-5-10-5 10"></path>
+                                <path d="M14 18h6"></path></svg></span
+                            ><span lang="en" class="text-(--el-text) truncate">English</span
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                              aria-hidden="true"
+                            >
+                              <path d="m7 15 5 5 5-5"></path>
+                              <path d="m7 9 5-5 5 5"></path>
+                            </svg>
+                          </button>
+                          <div
+                            data-menu-surface=""
+                            class="absolute top-full right-0 mt-1 z-50 w-max min-w-full max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1 shadow-(--shadow-elevated) border border-(--el-border)"
+                          >
+                            <div
+                              id="lang-lb-2"
+                              role="listbox"
+                              aria-label="Language: English"
+                              tabindex="-1"
+                              aria-activedescendant="lang-lb-2-ja"
+                              class="max-h-64 overflow-y-auto focus:outline-none"
+                            >
+                              <div
+                                id="lang-lb-2-en"
+                                role="option"
+                                aria-selected="true"
+                                lang="en"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">English</span
+                                ><svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="ml-1 h-4 w-4 shrink-0 text-(--el-accent-on-surface)"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M20 6 9 17l-5-5"></path>
+                                </svg>
+                              </div>
+                              <div
+                                id="lang-lb-2-zh"
+                                role="option"
+                                aria-selected="false"
+                                lang="zh"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">中文</span>
+                              </div>
+                              <div
+                                id="lang-lb-2-ja"
+                                role="option"
+                                aria-selected="false"
+                                lang="ja"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text) bg-(--el-option-active-bg)"
+                              >
+                                <span class="truncate">日本語</span>
+                              </div>
+                              <div
+                                id="lang-lb-2-ko"
+                                role="option"
+                                aria-selected="false"
+                                lang="ko"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">한국어</span>
+                              </div>
+                              <div
+                                id="lang-lb-2-de"
+                                role="option"
+                                aria-selected="false"
+                                lang="de"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Deutsch</span>
+                              </div>
+                              <div
+                                id="lang-lb-2-fr"
+                                role="option"
+                                aria-selected="false"
+                                lang="fr"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Français</span>
+                              </div>
+                              <div
+                                id="lang-lb-2-es"
+                                role="option"
+                                aria-selected="false"
+                                lang="es"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Español</span>
+                              </div>
+                              <div
+                                id="lang-lb-2-it"
+                                role="option"
+                                aria-selected="false"
+                                lang="it"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Italiano</span>
+                              </div>
+                              <div
+                                id="lang-lb-2-nl"
+                                role="option"
+                                aria-selected="false"
+                                lang="nl"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Nederlands</span>
+                              </div>
+                              <div
+                                id="lang-lb-2-pl"
+                                role="option"
+                                aria-selected="false"
+                                lang="pl"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Polski</span>
+                              </div>
+                              <div
+                                id="lang-lb-2-pt"
+                                role="option"
+                                aria-selected="false"
+                                lang="pt"
+                                class="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm cursor-pointer text-(--el-text)"
+                              >
+                                <span class="truncate">Português</span>
+                              </div>
+                            </div>
+                          </div>
+                          <span role="status" class="sr-only"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -7435,6 +8568,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                       ><span class="brand-word">Motir</span></span
                     ></a
                   >
+                  <div class="relative" data-language-control="">
+                    <div class="relative">
+                      <button
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Language: English"
+                        class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                      >
+                        <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-4 w-4 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m5 8 6 6"></path>
+                            <path d="m4 14 6-6 2-3"></path>
+                            <path d="M2 5h12"></path>
+                            <path d="M7 2h1"></path>
+                            <path d="m22 22-5-10-5 10"></path>
+                            <path d="M14 18h6"></path></svg></span
+                        ><span lang="en" class="text-(--el-text) truncate">English</span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <path d="m7 15 5 5 5-5"></path>
+                          <path d="m7 9 5-5 5 5"></path>
+                        </svg>
+                      </button>
+                    </div>
+                    <span role="status" class="sr-only"></span>
+                    <div role="status" class="absolute top-full right-0 mt-1"></div>
+                  </div>
                 </header>
                 <div
                   class="grid justify-items-center gap-[22px] px-[38px] pt-[64px] pb-[104px] text-center"
@@ -7957,6 +9139,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                       ><span class="brand-word">Motir</span></span
                     ></a
                   >
+                  <div class="relative" data-language-control="">
+                    <div class="relative">
+                      <button
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Language: English"
+                        class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                      >
+                        <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-4 w-4 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m5 8 6 6"></path>
+                            <path d="m4 14 6-6 2-3"></path>
+                            <path d="M2 5h12"></path>
+                            <path d="M7 2h1"></path>
+                            <path d="m22 22-5-10-5 10"></path>
+                            <path d="M14 18h6"></path></svg></span
+                        ><span lang="en" class="text-(--el-text) truncate">English</span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <path d="m7 15 5 5 5-5"></path>
+                          <path d="m7 9 5-5 5 5"></path>
+                        </svg>
+                      </button>
+                    </div>
+                    <span role="status" class="sr-only"></span>
+                    <div role="status" class="absolute top-full right-0 mt-1"></div>
+                  </div>
                 </header>
                 <div
                   class="grid justify-items-center gap-[22px] px-[38px] pt-[64px] pb-[104px] text-center"
@@ -8286,10 +9517,13 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
           <div class="grid content-start gap-3">
             <div class="grid gap-1 font-sans text-[13px] leading-normal text-(--el-text-secondary)">
               <p class="m-0 max-w-[110ch]">
-                Everything stacks to one column. The wave lines are CROPPED, not dropped: the field
-                is laid out for the desktop hero and sliced to the box (xMidYMid slice), so a phone
-                sees its middle. The section head drops to one column; the Start button keeps its
-                place at the right end of the card footer, wrapping below the hint.
+                Everything stacks to one column. The brand bar keeps the lockup and the FULL
+                language control (Languages glyph + endonym + chevrons) side by side: nothing
+                collapses at 390 px. The trigger is w-auto, so the longest endonym (Nederlands)
+                still leaves the lockup well clear. The wave lines are CROPPED, not dropped: the
+                field is laid out for the desktop hero and sliced to the box (xMidYMid slice), so a
+                phone sees its middle. The section head drops to one column; the Start button keeps
+                its place at the right end of the card footer, wrapping below the hint.
               </p>
             </div>
             <div class="flex flex-wrap items-start gap-6">
@@ -8479,6 +9713,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         ><span class="brand-word">Motir</span></span
                       ></a
                     >
+                    <div class="relative" data-language-control="">
+                      <div class="relative">
+                        <button
+                          type="button"
+                          role="combobox"
+                          aria-haspopup="listbox"
+                          aria-expanded="false"
+                          aria-label="Language: English"
+                          class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                        >
+                          <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="h-4 w-4 text-(--el-text-secondary)"
+                              aria-hidden="true"
+                            >
+                              <path d="m5 8 6 6"></path>
+                              <path d="m4 14 6-6 2-3"></path>
+                              <path d="M2 5h12"></path>
+                              <path d="M7 2h1"></path>
+                              <path d="m22 22-5-10-5 10"></path>
+                              <path d="M14 18h6"></path></svg></span
+                          ><span lang="en" class="text-(--el-text) truncate">English</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m7 15 5 5 5-5"></path>
+                            <path d="m7 9 5-5 5 5"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <span role="status" class="sr-only"></span>
+                      <div role="status" class="absolute top-full right-0 mt-1"></div>
+                    </div>
                   </header>
                   <div class="grid justify-items-center gap-[18px] px-4 pt-10 pb-16 text-center">
                     <h1
@@ -8785,6 +10068,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         ><span class="brand-word">Motir</span></span
                       ></a
                     >
+                    <div class="relative" data-language-control="">
+                      <div class="relative">
+                        <button
+                          type="button"
+                          role="combobox"
+                          aria-haspopup="listbox"
+                          aria-expanded="false"
+                          aria-label="Language: English"
+                          class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                        >
+                          <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="h-4 w-4 text-(--el-text-secondary)"
+                              aria-hidden="true"
+                            >
+                              <path d="m5 8 6 6"></path>
+                              <path d="m4 14 6-6 2-3"></path>
+                              <path d="M2 5h12"></path>
+                              <path d="M7 2h1"></path>
+                              <path d="m22 22-5-10-5 10"></path>
+                              <path d="M14 18h6"></path></svg></span
+                          ><span lang="en" class="text-(--el-text) truncate">English</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m7 15 5 5 5-5"></path>
+                            <path d="m7 9 5-5 5 5"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <span role="status" class="sr-only"></span>
+                      <div role="status" class="absolute top-full right-0 mt-1"></div>
+                    </div>
                   </header>
                   <div class="grid justify-items-center gap-[18px] px-4 pt-10 pb-16 text-center">
                     <h1
@@ -9091,6 +10423,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         ><span class="brand-word">Motir</span></span
                       ></a
                     >
+                    <div class="relative" data-language-control="">
+                      <div class="relative">
+                        <button
+                          type="button"
+                          role="combobox"
+                          aria-haspopup="listbox"
+                          aria-expanded="false"
+                          aria-label="Language: English"
+                          class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                        >
+                          <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="h-4 w-4 text-(--el-text-secondary)"
+                              aria-hidden="true"
+                            >
+                              <path d="m5 8 6 6"></path>
+                              <path d="m4 14 6-6 2-3"></path>
+                              <path d="M2 5h12"></path>
+                              <path d="M7 2h1"></path>
+                              <path d="m22 22-5-10-5 10"></path>
+                              <path d="M14 18h6"></path></svg></span
+                          ><span lang="en" class="text-(--el-text) truncate">English</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m7 15 5 5 5-5"></path>
+                            <path d="m7 9 5-5 5 5"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <span role="status" class="sr-only"></span>
+                      <div role="status" class="absolute top-full right-0 mt-1"></div>
+                    </div>
                   </header>
                   <div class="grid justify-items-center gap-[18px] px-4 pt-10 pb-16 text-center">
                     <h1
@@ -9600,6 +10981,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         ><span class="brand-word">Motir</span></span
                       ></a
                     >
+                    <div class="relative" data-language-control="">
+                      <div class="relative">
+                        <button
+                          type="button"
+                          role="combobox"
+                          aria-haspopup="listbox"
+                          aria-expanded="false"
+                          aria-label="Language: English"
+                          class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                        >
+                          <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="h-4 w-4 text-(--el-text-secondary)"
+                              aria-hidden="true"
+                            >
+                              <path d="m5 8 6 6"></path>
+                              <path d="m4 14 6-6 2-3"></path>
+                              <path d="M2 5h12"></path>
+                              <path d="M7 2h1"></path>
+                              <path d="m22 22-5-10-5 10"></path>
+                              <path d="M14 18h6"></path></svg></span
+                          ><span lang="en" class="text-(--el-text) truncate">English</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m7 15 5 5 5-5"></path>
+                            <path d="m7 9 5-5 5 5"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <span role="status" class="sr-only"></span>
+                      <div role="status" class="absolute top-full right-0 mt-1"></div>
+                    </div>
                   </header>
                   <div class="grid justify-items-center gap-[18px] px-4 pt-10 pb-16 text-center">
                     <h1
@@ -10107,6 +11537,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         ><span class="brand-word">Motir</span></span
                       ></a
                     >
+                    <div class="relative" data-language-control="">
+                      <div class="relative">
+                        <button
+                          type="button"
+                          role="combobox"
+                          aria-haspopup="listbox"
+                          aria-expanded="false"
+                          aria-label="Language: English"
+                          class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                        >
+                          <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="h-4 w-4 text-(--el-text-secondary)"
+                              aria-hidden="true"
+                            >
+                              <path d="m5 8 6 6"></path>
+                              <path d="m4 14 6-6 2-3"></path>
+                              <path d="M2 5h12"></path>
+                              <path d="M7 2h1"></path>
+                              <path d="m22 22-5-10-5 10"></path>
+                              <path d="M14 18h6"></path></svg></span
+                          ><span lang="en" class="text-(--el-text) truncate">English</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m7 15 5 5 5-5"></path>
+                            <path d="m7 9 5-5 5 5"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <span role="status" class="sr-only"></span>
+                      <div role="status" class="absolute top-full right-0 mt-1"></div>
+                    </div>
                   </header>
                   <div class="grid justify-items-center gap-[18px] px-4 pt-10 pb-16 text-center">
                     <h1
@@ -10381,6 +11860,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         ><span class="brand-word">Motir</span></span
                       ></a
                     >
+                    <div class="relative" data-language-control="">
+                      <div class="relative">
+                        <button
+                          type="button"
+                          role="combobox"
+                          aria-haspopup="listbox"
+                          aria-expanded="false"
+                          aria-label="Language: English"
+                          class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                        >
+                          <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="h-4 w-4 text-(--el-text-secondary)"
+                              aria-hidden="true"
+                            >
+                              <path d="m5 8 6 6"></path>
+                              <path d="m4 14 6-6 2-3"></path>
+                              <path d="M2 5h12"></path>
+                              <path d="M7 2h1"></path>
+                              <path d="m22 22-5-10-5 10"></path>
+                              <path d="M14 18h6"></path></svg></span
+                          ><span lang="en" class="text-(--el-text) truncate">English</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m7 15 5 5 5-5"></path>
+                            <path d="m7 9 5-5 5 5"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <span role="status" class="sr-only"></span>
+                      <div role="status" class="absolute top-full right-0 mt-1"></div>
+                    </div>
                   </header>
                   <div class="grid justify-items-center gap-[18px] px-4 pt-10 pb-16 text-center">
                     <h1
@@ -10533,6 +12061,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         ><span class="brand-word">Motir</span></span
                       ></a
                     >
+                    <div class="relative" data-language-control="">
+                      <div class="relative">
+                        <button
+                          type="button"
+                          role="combobox"
+                          aria-haspopup="listbox"
+                          aria-expanded="false"
+                          aria-label="Language: English"
+                          class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                        >
+                          <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="h-4 w-4 text-(--el-text-secondary)"
+                              aria-hidden="true"
+                            >
+                              <path d="m5 8 6 6"></path>
+                              <path d="m4 14 6-6 2-3"></path>
+                              <path d="M2 5h12"></path>
+                              <path d="M7 2h1"></path>
+                              <path d="m22 22-5-10-5 10"></path>
+                              <path d="M14 18h6"></path></svg></span
+                          ><span lang="en" class="text-(--el-text) truncate">English</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m7 15 5 5 5-5"></path>
+                            <path d="m7 9 5-5 5 5"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <span role="status" class="sr-only"></span>
+                      <div role="status" class="absolute top-full right-0 mt-1"></div>
+                    </div>
                   </header>
                 </div>
                 <dl
@@ -10559,6 +12136,26 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                   <dt class="font-mono text-(--el-text-secondary)">bar</dt>
                   <dd class="m-0 font-mono text-(--el-text)">
                     no fill · no rule · px --spacing-card-padding · py 16 px
+                  </dd>
+                  <dt class="font-mono text-(--el-text-secondary)"></dt>
+                  <dd class="m-0 font-mono text-(--el-text)">
+                    justify-between: lockup start · language end
+                  </dd>
+                  <dt class="font-mono text-(--el-text-secondary)">language</dt>
+                  <dd class="m-0 font-mono text-(--el-text)">
+                    AuthLanguageControl · Combobox w-auto align=end
+                  </dd>
+                  <dt class="font-mono text-(--el-text-secondary)"></dt>
+                  <dd class="m-0 font-mono text-(--el-text)">
+                    Languages 16 px --el-text-secondary · endonym --el-text
+                  </dd>
+                  <dt class="font-mono text-(--el-text-secondary)"></dt>
+                  <dd class="m-0 font-mono text-(--el-text)">
+                    --height-control · --radius-input · fill --el-page-bg
+                  </dd>
+                  <dt class="font-mono text-(--el-text-secondary)"></dt>
+                  <dd class="m-0 font-mono text-(--el-text)">
+                    label auth.language.label · setLocale → router.refresh()
                   </dd>
                 </dl>
                 <p
@@ -10744,6 +12341,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                           ><span class="brand-word">Motir</span></span
                         ></a
                       >
+                      <div class="relative" data-language-control="">
+                        <div class="relative">
+                          <button
+                            type="button"
+                            role="combobox"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                            aria-label="Language: English"
+                            class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                          >
+                            <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                              ><svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="h-4 w-4 text-(--el-text-secondary)"
+                                aria-hidden="true"
+                              >
+                                <path d="m5 8 6 6"></path>
+                                <path d="m4 14 6-6 2-3"></path>
+                                <path d="M2 5h12"></path>
+                                <path d="M7 2h1"></path>
+                                <path d="m22 22-5-10-5 10"></path>
+                                <path d="M14 18h6"></path></svg></span
+                            ><span lang="en" class="text-(--el-text) truncate">English</span
+                            ><svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                              aria-hidden="true"
+                            >
+                              <path d="m7 15 5 5 5-5"></path>
+                              <path d="m7 9 5-5 5 5"></path>
+                            </svg>
+                          </button>
+                        </div>
+                        <span role="status" class="sr-only"></span>
+                        <div role="status" class="absolute top-full right-0 mt-1"></div>
+                      </div>
                     </header>
                     <div class="grid justify-items-center gap-[18px] px-4 pt-10 pb-16 text-center">
                       <h1
@@ -10981,6 +12627,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         ><span class="brand-word">Motir</span></span
                       ></a
                     >
+                    <div class="relative" data-language-control="">
+                      <div class="relative">
+                        <button
+                          type="button"
+                          role="combobox"
+                          aria-haspopup="listbox"
+                          aria-expanded="false"
+                          aria-label="Language: English"
+                          class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                        >
+                          <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="h-4 w-4 text-(--el-text-secondary)"
+                              aria-hidden="true"
+                            >
+                              <path d="m5 8 6 6"></path>
+                              <path d="m4 14 6-6 2-3"></path>
+                              <path d="M2 5h12"></path>
+                              <path d="M7 2h1"></path>
+                              <path d="m22 22-5-10-5 10"></path>
+                              <path d="M14 18h6"></path></svg></span
+                          ><span lang="en" class="text-(--el-text) truncate">English</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m7 15 5 5 5-5"></path>
+                            <path d="m7 9 5-5 5 5"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <span role="status" class="sr-only"></span>
+                      <div role="status" class="absolute top-full right-0 mt-1"></div>
+                    </div>
                   </header>
                 </div>
                 <dl
@@ -11007,6 +12702,26 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                   <dt class="font-mono text-(--el-text-secondary)">bar</dt>
                   <dd class="m-0 font-mono text-(--el-text)">
                     no fill · no rule · px --spacing-card-padding · py 16 px
+                  </dd>
+                  <dt class="font-mono text-(--el-text-secondary)"></dt>
+                  <dd class="m-0 font-mono text-(--el-text)">
+                    justify-between: lockup start · language end
+                  </dd>
+                  <dt class="font-mono text-(--el-text-secondary)">language</dt>
+                  <dd class="m-0 font-mono text-(--el-text)">
+                    AuthLanguageControl · Combobox w-auto align=end
+                  </dd>
+                  <dt class="font-mono text-(--el-text-secondary)"></dt>
+                  <dd class="m-0 font-mono text-(--el-text)">
+                    Languages 16 px --el-text-secondary · endonym --el-text
+                  </dd>
+                  <dt class="font-mono text-(--el-text-secondary)"></dt>
+                  <dd class="m-0 font-mono text-(--el-text)">
+                    --height-control · --radius-input · fill --el-page-bg
+                  </dd>
+                  <dt class="font-mono text-(--el-text-secondary)"></dt>
+                  <dd class="m-0 font-mono text-(--el-text)">
+                    label auth.language.label · setLocale → router.refresh()
                   </dd>
                 </dl>
                 <p
@@ -11192,6 +12907,55 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                           ><span class="brand-word">Motir</span></span
                         ></a
                       >
+                      <div class="relative" data-language-control="">
+                        <div class="relative">
+                          <button
+                            type="button"
+                            role="combobox"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                            aria-label="Language: English"
+                            class="border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 w-auto"
+                          >
+                            <span aria-hidden="true" class="inline-flex shrink-0 items-center"
+                              ><svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="h-4 w-4 text-(--el-text-secondary)"
+                                aria-hidden="true"
+                              >
+                                <path d="m5 8 6 6"></path>
+                                <path d="m4 14 6-6 2-3"></path>
+                                <path d="M2 5h12"></path>
+                                <path d="M7 2h1"></path>
+                                <path d="m22 22-5-10-5 10"></path>
+                                <path d="M14 18h6"></path></svg></span
+                            ><span lang="en" class="text-(--el-text) truncate">English</span
+                            ><svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="lucide lucide-chevrons-up-down text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0"
+                              aria-hidden="true"
+                            >
+                              <path d="m7 15 5 5 5-5"></path>
+                              <path d="m7 9 5-5 5 5"></path>
+                            </svg>
+                          </button>
+                        </div>
+                        <span role="status" class="sr-only"></span>
+                        <div role="status" class="absolute top-full right-0 mt-1"></div>
+                      </div>
                     </header>
                     <div class="grid justify-items-center gap-[18px] px-4 pt-10 pb-16 text-center">
                       <h1

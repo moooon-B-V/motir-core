@@ -727,3 +727,119 @@ the zh title has a full-width colon and no break opportunity before it; check it
 | **MOTIR-8251**          | GIVES the pattern as before; the `art` slot and the link-out band are now part of it, available to the migrate wizard and importer if they want them                                                                                                                   |
 | MOTIR-8248 / MOTIR-8249 | premise unchanged; they do **not** carry the five new keys — a correction is needed only if the plan wants the voice cards to own them rather than MOTIR-8253                                                                                                          |
 | MOTIR-8238              | GIVES the integration gate one more pair to re-measure across palettes: `--el-showcase-decision-text` on `--el-showcase-decision` (4.65:1 in light `motir`)                                                                                                            |
+
+### Revision 2 (2026-10-12) — the language control in the brand bar (MOTIR-8286)
+
+**The request.** Xing (project owner): put a language control on the onboarding brand bar. That is
+a new code card, **MOTIR-8286**. The control is the one the signed-out frame already ships:
+`AuthLanguageControl` (`app/(auth)/_components/AuthLanguageControl.tsx`), drawn in
+`design/auth/auth-frame--language-control.mock.html` and specified in `design/auth/design-notes.md`
+§ _The language control on the signed-out frame_. **This revision invents nothing.** The anatomy,
+the tokens, the copy and the behaviour are that control's. The mock is revised in place again
+(this version is unapproved), and `onboarding-entrance.mock.html` is untouched.
+
+#### Placement
+
+The control goes at the **trailing end of the hero brand bar, opposite the `BrandMark` lockup**.
+The bar is already `flex items-center justify-between`: the lockup is its first child and the
+control is its second. It is in the DOM and the tab order directly after the lockup, before the
+heading, and it is on screen at first paint. It appears on every screen that carries the bar:
+
+- the entrance, default (Panel 1) and carried-over (Panel 2);
+- how-it-works (Panel 4);
+- the 390 px panels (Panel 5).
+
+Every panel is drawn in light and dark. Pattern A now specifies the bar with the control in it.
+**Close-up 3h** draws the four states side by side with the auth mock: rest, pending, failed, and
+open with the eleven endonyms.
+
+The control carries its own `--el-page-bg` fill, so no ink sits on the hero's `--el-surface` ground.
+This is the same argument the auth notes make for the wash. `--el-text-muted` and `--el-text-faint`
+are used nowhere in the control.
+
+**At 390 px nothing collapses.** I measured in Chromium against this mock's 390 px entrance frame:
+
+| item                           | figure                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| lockup                         | ends at x 104.8                                                                            |
+| trigger, "English"             | 117.7 × 36, the same 117.7 the auth notes measured; starts at x 255.3, 17 px from the edge |
+| gap between lockup and trigger | 150 px                                                                                     |
+| trigger, longest endonym       | 146.4 px wide with "Nederlands" (Português 138.0, 日本語 112.0)                            |
+| gap at the longest endonym     | still about 122 px                                                                         |
+
+So the full control fits beside the lockup at 390 px: the `Languages` glyph, the endonym and the
+chevrons. **The label does not need to collapse to glyph plus endonym.** It already is the glyph
+plus the endonym: the accessible name `auth.language.label` is never visible text. The failed line
+hangs under the trigger exactly as on the auth frame (`absolute top-full right-0`, it wraps below
+`sm`), over the hero's top padding, and it moves nothing.
+
+#### Behaviour — `AuthLanguageControl`'s, unchanged
+
+A choice runs `setLocale` (`lib/i18n/actions.ts`) inside a transition, then **`router.refresh()` —
+never a push, a replace, a redirect or a reload.** The refresh re-renders the server components in
+the new language and keeps every client component mounted. **That is what keeps the idea the
+person has typed.** `OnboardingEntrance` is a client component, and its textarea is uncontrolled
+(`defaultValue`), so the typed text lives in the mounted DOM node, and a refresh does not remount
+it. The carried-over idea and every query parameter survive the same way. A remount would lose
+the typed text.
+
+Pending, failed and superseded choices behave exactly as on the auth frame:
+
+- **Pending:** `aria-busy`, a spinner in the chevron's slot, and a polite sr-only "Switching to
+  {language}…". Nothing is disabled and nothing moves.
+- **Superseded:** a newer choice is guarded by a sequence number, so an older response cannot
+  repaint over it.
+- **Failed:** no refresh, the page stays in its current language, and a quiet line offers Try
+  again.
+
+**One difference in context, none in code.** Onboarding is signed in: the `(onboarding)` layout
+redirects a signed-out visitor to `/sign-in`. So here `setLocale` also **saves the account
+language**, as it already does on the auth frame's signed-in routes (re-consent, 2FA-required,
+OAuth consent). That is correct: the person is choosing the language of the product they are about
+to use. The control does not read the session and does not branch on it.
+
+#### Parts table — addition
+
+| part                                                                         | disposition                                                                                                                                                                                                                                                                                                                                                                                                     | built by       |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **the language control** — `AuthLanguageControl` over the package `Combobox` | **reuse, unchanged.** It is placed in the trailing end of `OnboardingHero`'s brand bar on the entrance and on how-it-works. It currently lives in the `(auth)` route group's private `_components/` folder. Whether MOTIR-8286 imports it across groups or lifts it to a shared home first (one component, two mounts) is a build decision. The design only requires that it be the same component, not a copy. | **MOTIR-8286** |
+| `Combobox` (`w-auto`, `align="end"`, `busy`, `triggerIcon`)                  | `@motir/design-system`, as is                                                                                                                                                                                                                                                                                                                                                                                   | —              |
+
+**MOTIR-8251 draws the same control in `OnboardingTopBar`.** The migrate wizard's and the
+importer's top bar carries it at the same trailing end, opposite the lockup. It has the same states
+and the same refresh-not-navigate behaviour, so every page-shaped onboarding screen offers the
+language in the same place. Still nothing is proposed for `@motir/design-system`.
+
+#### Slot → key — the rows this revision adds
+
+All of these are existing `auth.language.*` keys and the `localeLabel` endonyms, reused verbatim.
+**No new key is needed.**
+
+| slot                                                          | key                                                   | en                                                                                                           |
+| ------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| trigger's accessible name, and the listbox's                  | `auth.language.label`                                 | Language: {language}                                                                                         |
+| pending sr-only status                                        | `auth.language.switching`                             | Switching to {language}…                                                                                     |
+| failed line                                                   | `auth.language.failed`                                | Couldn’t change the language.                                                                                |
+| failed line's button                                          | `auth.language.retry`                                 | Try again                                                                                                    |
+| trigger value and the eleven options (each in its own `lang`) | `localeLabel` (`lib/i18n/locales.ts`), not translated | English · 中文 · 日本語 · 한국어 · Deutsch · Français · Español · Italiano · Nederlands · Polski · Português |
+
+**Findings on the keys.** No string reads wrong in onboarding: none of the four mentions signing in
+or the signed-out pages. The only oddity is the namespace. An `auth.*` key now renders on a
+signed-in surface. That is harmless, because the root layout passes the whole catalogue to
+`NextIntlClientProvider`, so no message pruning hides it. A rename to a neutral namespace would
+churn eleven catalogues and the auth frame's tests for no change a reader sees. **Recommendation:
+keep the keys.** If MOTIR-8286 lifts the component to a shared home, it may move the keys with it,
+as its own call.
+
+**A drafting note against the auth notes.** Their per-element table gives the active option an
+inset `--focus-ring-color` ring, but the shipped `Combobox` paints only `--el-option-active-bg`.
+This mock follows the shipped primitive. That is a stale line in the auth notes, not a change to
+the control.
+
+#### GIVES — what the sweep now says
+
+| card           | now                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-8286** | **GIVES:** mount `AuthLanguageControl` (the same component; import it or lift it) at the trailing end of the brand bar on `/onboarding` and `/onboarding/how-it-works`. Keep its `setLocale` → `router.refresh()` behaviour, and assert in a test that an idea typed in the box survives a switch. It needs no new keys, and it does not need to collapse at 390 px. |
+| **MOTIR-8251** | **GIVES additionally:** the same control at the same trailing end of `OnboardingTopBar`, for the migrate wizard and the importer                                                                                                                                                                                                                                     |
+| MOTIR-8252     | unchanged. The brand bar's second slot is a plain child of `OnboardingHero`'s header, not a new primitive.                                                                                                                                                                                                                                                           |
