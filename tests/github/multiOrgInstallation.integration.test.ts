@@ -303,6 +303,20 @@ describe('one GitHub account linked to two organisations', () => {
       workspaceId: x.workspaceId,
     });
     expect(xInstallations.flatMap((i) => i.repos.map((r) => r.repoId)).sort()).toEqual(['1', '2']);
+
+    // Y's Git room lists the SAME account, with only Y's repositories on it — the
+    // installation row is stamped with X, so a read keyed on the stamp showed Y
+    // no account at all (MOTIR-8223).
+    const yInstallations = await githubInstallationService.listOrganizationInstallations({
+      userId: y.ownerId,
+      workspaceId: y.workspaceId,
+    });
+    expect(yInstallations.map((i) => i.installationId)).toEqual([INSTALLATION]);
+    expect(yInstallations.flatMap((i) => i.repos.map((r) => r.repoId)).sort()).toEqual([
+      '3',
+      '4',
+      '5',
+    ]);
   });
 
   it('3 · X is byte-identical before and after Y links', async () => {

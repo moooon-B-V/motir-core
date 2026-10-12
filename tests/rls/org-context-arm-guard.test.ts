@@ -264,7 +264,7 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       "organisation is not — that is the system-context guard's axis, not this one.",
   },
   'lib/services/githubInstallationService.ts#listOrganizationInstallations': {
-    tables: ['github_installation', 'github_repo'],
+    tables: ['github_installation', 'github_installation_org_link', 'github_repo'],
     source: 'scan',
     why:
       'MOTIR-4836 — the ORGANISATION`s GitHub connection, for the connection card on ' +
@@ -281,7 +281,11 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'org-bound transaction, so it is this site`s table too and its arm ' +
       '(`github_repo_org_read`, MOTIR-4677) is what makes the read TOTAL rather than an ' +
       'installation with an empty repo list — the arm-the-JOIN-target-too clause, arriving ' +
-      'here as a second statement rather than a join.',
+      'here as a second statement rather than a join. MOTIR-8223 moved the read onto the ' +
+      "organisation's LINK rows (`github_installation_org_link_org_read`, MOTIR-8218), joined to " +
+      'the installation (`github_installation_linked_org_read` admits one stamped with another ' +
+      'linked organisation), because the stamp names only the first organisation an account ' +
+      'was linked to.',
   },
   'lib/services/githubAccountDisconnectService.ts#loadOwnLink': {
     tables: [

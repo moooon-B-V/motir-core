@@ -6995,7 +6995,7 @@
       "state_error": "Die GitHub-Anmeldung konnte nicht verifiziert werden. Bitte versuchen Sie erneut, die Verbindung herzustellen.",
       "error": "Beim Verbinden mit GitHub ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.",
       "not_configured": "GitHub ist in dieser Bereitstellung noch nicht konfiguriert.",
-      "installed": "GitHub App installiert – Motir kann jetzt Ihre ausgewählten Repositorys lesen, und die App pusht die Branches gehosteter Läufe und öffnet deren Pull Requests.",
+      "installed": "GitHub-Konto mit dieser Organisation verknüpft. Repositorys, die es hier bereits verbunden hat, bleiben erhalten – fügen Sie weitere über „Repositorys hinzufügen oder entfernen“ hinzu.",
       "repos_updated": "Repository-Zugriff aktualisiert. Motir liest die Repositorys, die Sie auf GitHub ausgewählt haben – hier ist nichts weiter zu tun.",
       "install_unbound": "Die Motir GitHub App wurde auf GitHub installiert, aber nicht von diesem Arbeitsbereich aus, daher ist sie noch nicht mit ihm verbunden. Starten Sie die Installation von hier aus, um sie zu verbinden.",
       "install_expired": "Der Installationslink ist abgelaufen, während Sie auf GitHub waren. Nichts ist kaputt – beginnen Sie erneut in den Einstellungen.",
@@ -7016,14 +7016,14 @@
       },
       "step2": {
         "eyebrow": "Schritt 2 · Repository-Zugriff",
-        "title": "Motir GitHub App installieren",
-        "body": "Wählen Sie, welche Repositorys Motir lesen darf – Sie wählen die genauen Repositorys im Installationsbildschirm von GitHub. Motir sieht die übrigen nie, und Sie können die Auswahl jederzeit ändern."
+        "title": "GitHub-Konto verknüpfen",
+        "body": "Wählen Sie ein Konto, auf dem die Motir GitHub App installiert ist – oder installieren Sie sie auf einem neuen –, und wählen Sie dann, welche seiner Repositorys diese Organisation verbindet. Ein Repository gehört jeweils nur zu einer Organisation."
       },
       "installLink": "Motir GitHub App installieren",
       "cta": "GitHub verbinden",
       "foot": "Sie werden zur Autorisierung zu GitHub weitergeleitet und wählen dann die Repositorys.",
       "noInstallHref": "Die Installation der Motir GitHub App ist in dieser Bereitstellung nicht verfügbar.",
-      "orgFoot": "Sie werden zu GitHub weitergeleitet, um zu wählen, welche Repositorys diese Organisation für Motir freigibt."
+      "orgFoot": "Wenn die Motir GitHub App bereits auf Ihrem GitHub-Konto installiert ist, listet Motir es auf – Sie installieren sie nicht erneut."
     },
     "identity": {
       "connectedAs": "GitHub-Identität · verbunden als {name}",
@@ -7324,6 +7324,97 @@
       "adminOnly": "Nur Inhaber und Admins von {org} können einen Git-Host verbinden oder trennen.",
       "subtitleGeneric": "Verbinden Sie Ihre Organisation einmalig mit GitHub oder GitLab. Danach kann jedes Projekt der Organisation an einem verbundenen Repository arbeiten – die Auswahl eines Repositorys löst nie eine erneute Indexierung aus.",
       "identityAtAccount": "Verbinden Sie Ihr eigenes Konto unter Einstellungen → Konto → Git-Konten"
+    },
+    "accounts": {
+      "title": "GitHub-Konten",
+      "subtitle": "Die Konten, aus denen {org} Repositorys verbindet. Jedes Repository gehört jeweils nur zu einer Organisation.",
+      "connect": "GitHub verbinden",
+      "linked": "Verknüpft",
+      "meta": "{type} · {count, plural, one {# Repository} other {# Repositorys}} hier verbunden",
+      "type": {
+        "organization": "Organisation",
+        "personal": "Persönlich"
+      },
+      "addOrRemove": "Repositorys hinzufügen oder entfernen",
+      "manageOnGithub": "Auf GitHub verwalten",
+      "disconnect": "Trennen",
+      "toastTitle": "{count, plural, one {# Repository} other {# Repositorys}} von {account} verbunden",
+      "toastBody": "Sie sind unter „Repositorys“ aufgeführt – jedes Projekt in {org} kann sie jetzt hinzufügen."
+    },
+    "picker": {
+      "title": "GitHub verbinden",
+      "description": "Wählen Sie das GitHub-Konto, dessen Repositorys {org} verbinden soll. Dies sind die für Sie sichtbaren Konten, auf denen die Motir GitHub App installiert ist.",
+      "accountsLabel": "Konten",
+      "accountMeta": "{type} · {count, plural, one {# Repository} other {# Repositorys}} für Motir sichtbar",
+      "notLinked": "Nicht verknüpft",
+      "linkedHere": "Mit dieser Organisation verknüpft",
+      "installOther": "Auf einem anderen Konto installieren",
+      "installOtherMeta": "Öffnet GitHub, um die Motir GitHub App auf einem Konto zu installieren, das sie noch nicht hat.",
+      "loadingAccounts": "GitHub-Konten werden geladen…",
+      "accountsError": {
+        "title": "GitHub nicht erreichbar",
+        "body": "Motir konnte die Konten, auf denen die Motir GitHub App installiert ist, nicht laden. Es wurde nichts geändert."
+      },
+      "retry": "Erneut versuchen",
+      "noAccounts": {
+        "title": "Noch kein GitHub-Konto zum Verknüpfen",
+        "body": "Die Motir GitHub App ist auf keinem für Sie sichtbaren GitHub-Konto installiert. Installieren Sie sie auf einem, um fortzufahren."
+      },
+      "identity": {
+        "title": "Verbinden Sie zuerst Ihr GitHub-Konto",
+        "body": "Motir listet die GitHub-Konten auf, die Sie über Ihre eigene GitHub-Identität sehen können. Verbinden Sie sie unter Einstellungen → Konto → Git-Konten und kehren Sie dann hierher zurück.",
+        "action": "Zu Git-Konten"
+      },
+      "cancel": "Abbrechen",
+      "back": "Alle Konten",
+      "reposTitle": "Repositorys von {account} auswählen",
+      "reposDescription": "Jedes Repository gehört jeweils nur zu einer Organisation. Repositorys, die bereits eine andere Organisation verbunden hat, können hier nicht hinzugefügt werden.",
+      "search": "Repositorys durchsuchen",
+      "selectAll": "Alle verfügbaren auswählen ({count})",
+      "selected": "{count} ausgewählt",
+      "rowState": {
+        "selected": "ausgewählt",
+        "notSelected": "nicht ausgewählt"
+      },
+      "connectedElsewhere": "Mit einer anderen Organisation verbunden",
+      "connectedHere": "Hier verbunden",
+      "noMatches": "Kein Repository entspricht Ihrer Suche.",
+      "hint": "Um ein Repository von {org} zu trennen, verwenden Sie „Trennen“ in seiner Zeile unter „Repositorys“.",
+      "submit": "{count, plural, =0 {Repositorys verbinden} one {# Repository verbinden} other {# Repositorys verbinden}}",
+      "loadingRepos": "Repositorys werden geladen…",
+      "reposError": {
+        "title": "Repositorys konnten nicht geladen werden",
+        "body": "Motir konnte die Repositorys von {account} nicht von GitHub laden. Es wurde nichts geändert."
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "{repo} wurde soeben mit einer anderen Organisation verbunden und kann nicht hinzugefügt werden.",
+        "repo_selection_required": "Wählen Sie mindestens ein Repository zum Verbinden aus.",
+        "repository_not_visible": "Eines dieser Repositorys ist für die Motir GitHub App auf GitHub nicht mehr sichtbar. Aktualisieren Sie die Liste und versuchen Sie es erneut.",
+        "installation_not_accessible": "Sie können {account} auf GitHub nicht mehr sehen, daher kann es nicht verknüpft werden. Wählen Sie ein anderes Konto.",
+        "generic": "Beim Verbinden dieser Repositorys ist ein Fehler aufgetreten. Es wurde nichts geändert – versuchen Sie es erneut."
+      },
+      "noneLeft": {
+        "title": "Nichts mehr von {account} zu verbinden",
+        "body": "Jedes Repository, das die Motir GitHub App auf {account} sehen kann, ist bereits verbunden. Ein Repository gehört jeweils nur zu einer Organisation.",
+        "connectedHere": "Mit dieser Organisation verbunden",
+        "connectedElsewhere": "Mit anderen Organisationen verbunden",
+        "hint": "Um mehr anzubieten, gewähren Sie der Motir GitHub App auf GitHub Zugriff auf weitere Repositorys, oder wählen Sie ein anderes Konto.",
+        "chooseAnother": "Anderes Konto wählen",
+        "manageOnGithub": "Repositorys auf GitHub verwalten"
+      }
+    },
+    "accountDisconnect": {
+      "title": "{account} von {org} trennen?",
+      "repos": "Dadurch werden nur die Verknüpfung von {org} mit {account} und die {count, plural, one {# Repository} other {# Repositorys}}, die es hier verbunden hat, entfernt:",
+      "projects": "{count, plural, one {# Projekt verliert} other {# Projekte verlieren}} diese Repositorys:",
+      "noProjects": "Noch kein Projekt in {org} verwendet diese Repositorys.",
+      "retention": "Der Codeindex, den Motir daraus erstellt hat, wird {days} Tage lang aufbewahrt. Wenn Sie das Konto vorher erneut verknüpfen und sie auswählen, wird die Entfernung abgebrochen; danach bedeutet das erneute Hinzufügen eines Repositorys eine vollständige Indizierung.",
+      "others": "Andere mit {account} verknüpfte Organisationen sind nicht betroffen, und die Motir GitHub App bleibt auf GitHub installiert. Um sie überall zu deinstallieren, tun Sie dies auf GitHub.",
+      "loading": "Auswirkungen der Trennung werden geladen…",
+      "loadFailed": "Motir konnte nicht laden, worauf sich das Trennen von {account} auswirkt. Es wurde nichts geändert – versuchen Sie es erneut.",
+      "failed": "Motir konnte {account} nicht trennen. Es wurde nichts geändert – versuchen Sie es erneut.",
+      "cancel": "Abbrechen",
+      "confirm": "Trennen"
     }
   },
   "aiPlanning": {

@@ -735,6 +735,17 @@ export const githubInstallationService = {
    * `app.organization_id` so the FOR SELECT arm answers. An unbound read is
    * refused rather than wrong — the MOTIR-2956 shape, which is why the binding
    * and the read are in the same transaction.
+   *
+   * ⚠️ IT READS THE LINKS, NOT THE STAMP (Story MOTIR-8216 · MOTIR-8223). Once
+   * one installation can be linked to several organisations, the installation
+   * row's `organization_id` names only the FIRST of them, so a read keyed on it
+   * showed a second organisation no account at all — `Connect GitHub` on the
+   * very account its repositories came from. The organisation's accounts are
+   * the installations stamped with it PLUS its `github_installation_org_link`
+   * rows — the stamp still carries every connection with no link row (a GitLab
+   * connection, a seeded or provisioning installation) — and each account's
+   * repositories are only THIS organisation's on it: another organisation's
+   * repositories on a shared account are not this card's to count.
    */
   async listOrganizationInstallations(ctx: {
     userId: string;
@@ -746,13 +757,25 @@ export const githubInstallationService = {
         const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
         await assertOrgMember(ctx.userId, organizationId, tx);
         await bindOrganizationContext(tx, organizationId);
-        const installations = await githubInstallationRepository.listByOrganizationId(
+        const stamped = await githubInstallationRepository.listByOrganizationId(organizationId, tx);
+        const links = await githubInstallationOrgLinkRepository.listByOrganizationId(
           organizationId,
           tx,
         );
+        const seen = new Set(stamped.map((installation) => installation.id));
+        const installations = [
+          ...stamped,
+          ...links
+            .map((link) => link.installation)
+            .filter((installation) => !seen.has(installation.id)),
+        ];
         const dtos: GithubInstallationDTO[] = [];
         for (const installation of installations) {
-          const repos = await githubRepoRepository.listByInstallation(installation.id, tx);
+          const repos = await githubRepoRepository.listByInstallationAndOrg(
+            installation.id,
+            organizationId,
+            tx,
+          );
           dtos.push(toGithubInstallationDTO(installation, repos));
         }
         return dtos;
