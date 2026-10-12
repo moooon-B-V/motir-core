@@ -629,6 +629,8 @@ export const planChangeSessionRepository = {
         failureStopTitle: true,
         awaitingPersonSince: true,
         awaitingPersonCause: true,
+        autoResumeCount: true,
+        lastAutoResumedAt: true,
       },
     });
   },
@@ -778,6 +780,31 @@ export const planChangeSessionRepository = {
       select: { guideBugsFiled: true },
     });
     return row.guideBugsFiled;
+  },
+
+  /**
+   * Record one automatic resume of an OPEN session (MOTIR-8305), bound included:
+   * the count moves only while it is under `max`, in the same statement that
+   * moves it, so two callers racing from `max - 1` cannot both pass. Answers the
+   * new count, or `null` when the session is ended, unknown or at its bound —
+   * nothing was written then.
+   */
+  async recordAutoResume(
+    id: string,
+    args: { at: Date; max: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<number | null> {
+    const rows = await tx.$queryRaw<Array<{ auto_resume_count: number }>>`
+      UPDATE "plan_change_session"
+         SET "auto_resume_count" = "auto_resume_count" + 1,
+             "last_auto_resumed_at" = ${args.at},
+             "updated_at" = ${args.at}
+       WHERE "id" = ${id}
+         AND "ended_at" IS NULL
+         AND "auto_resume_count" < ${args.max}
+      RETURNING "auto_resume_count"
+    `;
+    return rows[0]?.auto_resume_count ?? null;
   },
 
   async update(
