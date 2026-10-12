@@ -6879,6 +6879,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "Zurück zur Roadmap",
+      "breadcrumb": "Brotkrümelnavigation",
+      "breadcrumbRoadmap": "Roadmap",
+      "breadcrumbDirection": "Richtung",
+      "kicker": "Richtung · {tier}",
+      "tierName": {
+        "discovery": "Entdeckung",
+        "vision": "Vision",
+        "feasibility": "Machbarkeit",
+        "validation": "Validierung"
+      },
+      "openFullPage": "Vollständige Seite öffnen",
+      "continue": "Weiter",
+      "close": "Schließen",
+      "loading": "Ausrichtungsdokument wird geladen",
+      "errorTitle": "Dieses Dokument konnte nicht geladen werden",
+      "errorBodyRetry": "Beim Lesen Ihrer Ausrichtung ist ein Fehler aufgetreten. Versuchen Sie es gleich noch einmal.",
+      "errorBodyClose": "Beim Lesen Ihrer Ausrichtung ist ein Fehler aufgetreten. Schließen Sie das Fenster und versuchen Sie es erneut.",
+      "emptyTitle": "{label}: noch nicht fertig",
+      "emptyTitleFallback": "Dieser Teil Ihrer Ausrichtung ist noch nicht fertig",
+      "emptyBody": "Diese Stufe wurde für dieses Projekt noch nicht entworfen. Sie erscheint hier, sobald Motir sie im Chat ausformuliert."
+    },
     "heading": "Roadmap",
     "subtitle": "Roadmap von {project}",
     "noProjectTitle": "Kein Projekt ausgewählt",

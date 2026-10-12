@@ -628,6 +628,35 @@ export interface MergeChangeRequestInput {
 export type ChangeRequestMergeabilityInput = Omit<MergeChangeRequestInput, 'expectedHeadSha'>;
 
 /**
+ * Does a deployed RELEASE carry what one MERGED change request landed? (Bug
+ * MOTIR-8330.) The address is the change request's — the host resolves its own
+ * merge commit — and `release` is the commit the release was built from, as the
+ * monitor reported it (a full or abbreviated sha).
+ */
+export interface ReleaseContainsMergeInput {
+  installationId: string;
+  owner: string;
+  name: string;
+  number: number;
+  release: string;
+}
+
+/**
+ * The host's answer, in three words and no fourth.
+ *
+ * - `contains` — the release's commit has the change request's merge commit in its
+ *   history (or IS it).
+ * - `missing` — both commits exist on the host and the release's does NOT have the
+ *   merge in its history: the release was built before the merge, or off a line
+ *   that never took it.
+ * - `unknown` — anything else: not merged, no merge commit recorded, a release the
+ *   host does not know, a refusal, a timeout. ⚠️ NEVER folded into `missing`: the
+ *   one caller suppresses a re-file on `missing` alone, so a host that said nothing
+ *   must leave today's behaviour standing.
+ */
+export type ReleaseContainment = 'contains' | 'missing' | 'unknown';
+
+/**
  * The host's answer to *can this change request merge into its base right now?*
  * (MOTIR-5913, for bug MOTIR-5907).
  *

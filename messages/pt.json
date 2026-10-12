@@ -6879,6 +6879,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "Voltar ao roadmap",
+      "breadcrumb": "Trilha de navegação",
+      "breadcrumbRoadmap": "Roadmap",
+      "breadcrumbDirection": "Direção",
+      "kicker": "Direção · {tier}",
+      "tierName": {
+        "discovery": "Descoberta",
+        "vision": "Visão",
+        "feasibility": "Viabilidade",
+        "validation": "Validação"
+      },
+      "openFullPage": "Abrir página completa",
+      "continue": "Continuar",
+      "close": "Fechar",
+      "loading": "Carregando o documento de direção",
+      "errorTitle": "Não foi possível carregar este documento",
+      "errorBodyRetry": "Algo deu errado ao ler sua direção. Tente novamente em instantes.",
+      "errorBodyClose": "Algo deu errado ao ler sua direção. Feche e tente novamente.",
+      "emptyTitle": "{label}: ainda não está pronto",
+      "emptyTitleFallback": "Esta parte da sua direção ainda não está pronta",
+      "emptyBody": "Este nível ainda não foi redigido para este projeto. Ele aparecerá aqui assim que o Motir escrevê-lo no chat."
+    },
     "heading": "Roadmap",
     "subtitle": "Roadmap de {project}",
     "noProjectTitle": "Nenhum projeto selecionado",

@@ -6869,6 +6869,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "返回路线图",
+      "breadcrumb": "面包屑导航",
+      "breadcrumbRoadmap": "路线图",
+      "breadcrumbDirection": "方向",
+      "kicker": "方向 · {tier}",
+      "tierName": {
+        "discovery": "探索",
+        "vision": "愿景",
+        "feasibility": "可行性",
+        "validation": "市场验证"
+      },
+      "openFullPage": "打开完整页面",
+      "continue": "继续",
+      "close": "关闭",
+      "loading": "正在加载方向文档",
+      "errorTitle": "无法加载此文档",
+      "errorBodyRetry": "读取你的方向时出错了。请稍后重试。",
+      "errorBodyClose": "读取你的方向时出错了。请关闭后重试。",
+      "emptyTitle": "{label}尚未就绪",
+      "emptyTitleFallback": "你的方向的这一部分尚未就绪",
+      "emptyBody": "此项目尚未起草这一层级。Motir 在聊天中写好后，它会显示在这里。"
+    },
     "heading": "路线图",
     "subtitle": "{project} 的路线图",
     "noProjectTitle": "未选择项目",

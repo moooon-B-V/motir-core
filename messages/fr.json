@@ -6879,6 +6879,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "Retour à la feuille de route",
+      "breadcrumb": "Fil d'Ariane",
+      "breadcrumbRoadmap": "Feuille de route",
+      "breadcrumbDirection": "Orientation",
+      "kicker": "Orientation · {tier}",
+      "tierName": {
+        "discovery": "Découverte",
+        "vision": "Vision",
+        "feasibility": "Faisabilité",
+        "validation": "Validation"
+      },
+      "openFullPage": "Ouvrir la page complète",
+      "continue": "Continuer",
+      "close": "Fermer",
+      "loading": "Chargement du document d'orientation",
+      "errorTitle": "Impossible de charger ce document",
+      "errorBodyRetry": "Un problème est survenu lors de la lecture de votre orientation. Réessayez dans un instant.",
+      "errorBodyClose": "Un problème est survenu lors de la lecture de votre orientation. Fermez et réessayez.",
+      "emptyTitle": "{label} : pas encore prêt",
+      "emptyTitleFallback": "Cette partie de votre orientation n'est pas encore prête",
+      "emptyBody": "Ce niveau n'a pas encore été rédigé pour ce projet. Il apparaîtra ici dès que Motir l'aura rédigé dans le chat."
+    },
     "heading": "Feuille de route",
     "subtitle": "Feuille de route de {project}",
     "noProjectTitle": "Aucun projet sélectionné",

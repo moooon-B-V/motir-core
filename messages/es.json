@@ -6879,6 +6879,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "Volver a la hoja de ruta",
+      "breadcrumb": "Ruta de navegación",
+      "breadcrumbRoadmap": "Hoja de ruta",
+      "breadcrumbDirection": "Dirección",
+      "kicker": "Dirección · {tier}",
+      "tierName": {
+        "discovery": "Descubrimiento",
+        "vision": "Visión",
+        "feasibility": "Viabilidad",
+        "validation": "Validación"
+      },
+      "openFullPage": "Abrir página completa",
+      "continue": "Continuar",
+      "close": "Cerrar",
+      "loading": "Cargando el documento de dirección",
+      "errorTitle": "No se pudo cargar este documento",
+      "errorBodyRetry": "Algo salió mal al leer tu dirección. Vuelve a intentarlo en un momento.",
+      "errorBodyClose": "Algo salió mal al leer tu dirección. Cierra y vuelve a intentarlo.",
+      "emptyTitle": "{label}: todavía no está listo",
+      "emptyTitleFallback": "Esta parte de tu dirección todavía no está lista",
+      "emptyBody": "Este nivel todavía no se ha redactado para este proyecto. Aparecerá aquí cuando Motir lo escriba en el chat."
+    },
     "heading": "Hoja de ruta",
     "subtitle": "Hoja de ruta de {project}",
     "noProjectTitle": "No hay ningún proyecto seleccionado",

@@ -6873,6 +6873,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "Back to roadmap",
+      "breadcrumb": "Breadcrumb",
+      "breadcrumbRoadmap": "Roadmap",
+      "breadcrumbDirection": "Direction",
+      "kicker": "Direction · {tier}",
+      "tierName": {
+        "discovery": "Discovery",
+        "vision": "Vision",
+        "feasibility": "Feasibility",
+        "validation": "Validation"
+      },
+      "openFullPage": "Open full page",
+      "continue": "Continue",
+      "close": "Close",
+      "loading": "Loading the direction doc",
+      "errorTitle": "Couldn't load this doc",
+      "errorBodyRetry": "Something went wrong reading your direction. Try again in a moment.",
+      "errorBodyClose": "Something went wrong reading your direction. Close and try again.",
+      "emptyTitle": "{label} isn't ready yet",
+      "emptyTitleFallback": "This part of your direction isn't ready yet",
+      "emptyBody": "This tier hasn't been drafted for this project. It'll appear here once Motir writes it up in the chat."
+    },
     "heading": "Roadmap",
     "subtitle": "{project}'s roadmap",
     "noProjectTitle": "No project selected",
