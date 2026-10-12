@@ -84,6 +84,19 @@ export type Theme = 'light' | 'dark';
 
 const classesOf = (el: Element) => el.getAttribute('class') ?? '';
 
+/**
+ * The classes that colour this element's TEXT. A `placeholder:` variant paints
+ * only the placeholder, which is never the element's text content, so it is
+ * dropped here: matched, it measured a field's typed VALUE in its placeholder ink
+ * (MOTIR-8256 — the entrance's carried idea, under `disabled:opacity-70`). A
+ * placeholder is not text this guard can see; an empty field is `no-text`.
+ */
+const textInkClassesOf = (el: Element) =>
+  classesOf(el)
+    .split(/\s+/)
+    .filter((c) => !c.startsWith('placeholder:'))
+    .join(' ');
+
 /** `text-(--el-x)`, with or without a variant prefix (`hover:`, `group-hover:`). */
 const inkClass = (token: string) => `text-(${token})`;
 /** Every `bg-(--el-x)` on one element, prefixed or not. */
@@ -98,10 +111,23 @@ const PAINTS_BACKGROUND = /bg-\((--el-[\w-]+)\)/g;
  */
 const OPACITY_UTILITY = /(?:^|[\s:])opacity-(?:(\d{1,3})|\[([\d.]+)\])(?![\w-])/g;
 
+/**
+ * A `disabled:` variant dims only a DISABLED control, and disabled text is what
+ * 1.4.3 exempts — so an opacity under it is dropped, as the `disabled` exemption
+ * drops the element itself (MOTIR-8256: every `Button` and the language
+ * control's trigger carry `disabled:opacity-50`, which this read as a resting
+ * 3.2:1 in every palette).
+ */
+const DISABLED_VARIANT = /^(?:[\w-]+:)*(?:disabled|aria-disabled|group-disabled|peer-disabled):/;
+
 /** Every opacity this element declares, as a factor in `[0, 1]`. */
 function opacitiesOf(el: Element): number[] {
   const out: number[] = [];
-  for (const m of classesOf(el).matchAll(OPACITY_UTILITY)) {
+  const classes = classesOf(el)
+    .split(/\s+/)
+    .filter((c) => !DISABLED_VARIANT.test(c))
+    .join(' ');
+  for (const m of classes.matchAll(OPACITY_UTILITY)) {
     const value = m[1] !== undefined ? Number(m[1]) / 100 : Number(m[2]);
     if (Number.isFinite(value) && value >= 0 && value < 1) out.push(value);
   }
@@ -119,20 +145,24 @@ function opacitiesOf(el: Element): number[] {
 export type TokenHexes = Readonly<Record<string, string>>;
 
 const HEX = /^#[0-9a-f]{6}$/i;
-const cache = new Map<Theme, TokenHexes>();
+const cache = new Map<string, TokenHexes>();
 
-export function tokenHexes(theme: Theme): TokenHexes {
-  const hit = cache.get(theme);
+/** The palette the guard measures in when a caller names none. */
+export const DEFAULT_INK_PALETTE = 'amethyst';
+
+export function tokenHexes(theme: Theme, palette: string = DEFAULT_INK_PALETTE): TokenHexes {
+  const key = `${palette}:${theme}`;
+  const hit = cache.get(key);
   if (hit) return hit;
   const layer = loadTokenLayer();
   const out: Record<string, string> = {};
   for (const token of layer.elementTokens) {
-    const { value, unresolved } = resolveToken(layer.rules, { palette: 'amethyst', theme }, token);
+    const { value, unresolved } = resolveToken(layer.rules, { palette, theme }, token);
     if (unresolved.length > 0) continue;
     const flat = flattenColorMix(value);
     if (HEX.test(flat)) out[token] = flat.toLowerCase();
   }
-  cache.set(theme, out);
+  cache.set(key, out);
   return out;
 }
 
@@ -288,8 +318,13 @@ export interface ResolvedSurface {
  *     than a decline — and `defaulted` is carried on the result so a test can
  *     assert it mounted the composing surface rather than the leaf alone.
  */
-export function resolveSurface(el: Element, theme: Theme, ink: string): ResolvedSurface {
-  const hexes = tokenHexes(theme);
+export function resolveSurface(
+  el: Element,
+  theme: Theme,
+  ink: string,
+  palette: string = DEFAULT_INK_PALETTE,
+): ResolvedSurface {
+  const hexes = tokenHexes(theme, palette);
   const inkHex = hexes[ink];
 
   /** The worst background this one element paints, or null if it paints none. */
@@ -357,8 +392,13 @@ export function resolveSurface(el: Element, theme: Theme, ink: string): Resolved
  * full strength on the undimmed fill is the reading that let a title re-inked to
  * clear AA (6.18:1 on `--el-muted`) ship at 3.95:1 over the canvas.
  */
-export function composedRatio(theme: Theme, ink: string, surface: ResolvedSurface): number | null {
-  const hexes = tokenHexes(theme);
+export function composedRatio(
+  theme: Theme,
+  ink: string,
+  surface: ResolvedSurface,
+  palette: string = DEFAULT_INK_PALETTE,
+): number | null {
+  const hexes = tokenHexes(theme, palette);
   const inkHex = hexes[ink];
   const surfaceHex = hexes[surface.token];
   if (!inkHex || !surfaceHex) return null;
@@ -376,6 +416,8 @@ export interface RenderedInkFinding {
   surface: string;
   ratio: number;
   theme: Theme;
+  /** The palette measured in (MOTIR-8256 sweeps every one). */
+  palette: string;
   tag: string;
   classes: string;
   text: string;
@@ -402,6 +444,8 @@ export interface InkSweepOptions {
   theme?: Theme;
   /** Which inks to measure. Default: the muted and faint inks. */
   inks?: readonly string[];
+  /** Which palette's resolved values to measure with. Default `DEFAULT_INK_PALETTE`. */
+  palette?: string;
 }
 
 /**
@@ -427,6 +471,7 @@ export function findInkContrastFailures(
 ): RenderedInkFinding[] {
   const theme = options.theme ?? 'light';
   const inks = options.inks ?? DEFAULT_INKS;
+  const palette = options.palette ?? DEFAULT_INK_PALETTE;
   const list = rootList(roots);
   const seen = new Set<Element>();
   const findings: RenderedInkFinding[] = [];
@@ -436,17 +481,19 @@ export function findInkContrastFailures(
       if (seen.has(el)) continue;
       seen.add(el);
       const classes = classesOf(el);
+      const textInks = textInkClassesOf(el);
       for (const ink of inks) {
-        if (!classes.includes(inkClass(ink))) continue;
+        if (!textInks.includes(inkClass(ink))) continue;
         if (exemptionFor(el) !== null) continue;
-        const surface = resolveSurface(el, theme, ink);
-        const measured = composedRatio(theme, ink, surface);
+        const surface = resolveSurface(el, theme, ink, palette);
+        const measured = composedRatio(theme, ink, surface, palette);
         if (measured === null || measured >= AA) continue;
         findings.push({
           ink,
           surface: surface.token,
           ratio: Number(measured.toFixed(2)),
           theme,
+          palette,
           tag: el.tagName.toLowerCase(),
           classes,
           text: (ownText(el) || paintedText(el)).slice(0, 60),
@@ -462,7 +509,7 @@ export function findInkContrastFailures(
 
 export function formatRenderedFinding(f: RenderedInkFinding): string {
   const composite = f.opacity < 1 ? ` composited at opacity ${f.opacity} over ${f.backdrop}` : '';
-  return `${f.ink} on ${f.surface}${composite} — ${f.ratio}:1 (${f.theme}, AA is ${AA}) — <${f.tag} class="${f.classes}"> "${f.text}"`;
+  return `${f.ink} on ${f.surface}${composite} — ${f.ratio}:1 (${f.palette} ${f.theme}, AA is ${AA}) — <${f.tag} class="${f.classes}"> "${f.text}"`;
 }
 
 /**
@@ -512,6 +559,7 @@ export function measuredInkSites(
 ): MeasuredInkSite[] {
   const theme = options.theme ?? 'light';
   const inks = options.inks ?? DEFAULT_INKS;
+  const palette = options.palette ?? DEFAULT_INK_PALETTE;
   const list = rootList(roots);
   const seen = new Set<Element>();
   const out: MeasuredInkSite[] = [];
@@ -519,15 +567,15 @@ export function measuredInkSites(
     for (const el of Array.from(root.querySelectorAll<Element>('*'))) {
       if (seen.has(el)) continue;
       seen.add(el);
-      const classes = classesOf(el);
+      const textInks = textInkClassesOf(el);
       for (const ink of inks) {
-        if (!classes.includes(inkClass(ink))) continue;
+        if (!textInks.includes(inkClass(ink))) continue;
         if (exemptionFor(el) !== null) continue;
-        const surface = resolveSurface(el, theme, ink);
+        const surface = resolveSurface(el, theme, ink, palette);
         out.push({
           ink,
           surface: surface.token,
-          ratio: composedRatio(theme, ink, surface),
+          ratio: composedRatio(theme, ink, surface, palette),
           opacity: surface.opacity,
           tag: el.tagName.toLowerCase(),
           text: (ownText(el) || paintedText(el)).slice(0, 60),
