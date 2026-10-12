@@ -123,20 +123,32 @@ export const CONDUCTOR_SSE =
     docs: TIERS.map((kind, i) => ({ id: `d${i + 1}`, kind, version: 1 })),
   })}\n\n`;
 
+/** A conductor turn that only replies: no tiers, so the loop stays on the hub. */
+export const CONDUCTOR_REPLY_SSE = `event: assistant\ndata: ${JSON.stringify({ text: 'Who is it for?' })}\n\n`;
+
 /**
  * Stub the three motir-ai-backed endpoints. Pre-plan returns the EMPTY state
  * until a chat turn is submitted, then the FULL 4-tier + catalog state — gated
  * on the POST having happened (robust to however many times the hook re-reads
  * pre-plan on mount).
+ *
+ * `produceTiers: false` keeps the interview at its first question: the turn is
+ * answered with a reply alone and pre-plan stays EMPTY, so the hub (canvas +
+ * chat rail) stays on screen instead of opening the last tier's review. An
+ * entrance idea is sent as the first turn on arrival, so a walk that comes in
+ * from the entrance needs this to see the hub at all.
  */
-export async function stubDiscoveryApi(page: Page): Promise<void> {
+export async function stubDiscoveryApi(
+  page: Page,
+  { produceTiers = true }: { produceTiers?: boolean } = {},
+): Promise<void> {
   let turnSubmitted = false;
 
   await page.route('**/api/ai/pre-plan', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(turnSubmitted ? FULL_PREPLAN : EMPTY_PREPLAN),
+      body: JSON.stringify(produceTiers && turnSubmitted ? FULL_PREPLAN : EMPTY_PREPLAN),
     });
   });
 
@@ -150,7 +162,11 @@ export async function stubDiscoveryApi(page: Page): Promise<void> {
   });
 
   await page.route('**/api/ai/chat/*/stream', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'text/event-stream', body: CONDUCTOR_SSE });
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: produceTiers ? CONDUCTOR_SSE : CONDUCTOR_REPLY_SSE,
+    });
   });
 }
 

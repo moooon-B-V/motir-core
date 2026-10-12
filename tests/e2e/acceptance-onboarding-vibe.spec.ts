@@ -133,7 +133,9 @@ for (const run of RUNS) {
       let projectId = '';
 
       await resetDatabase();
-      await stubDiscoveryApi(page);
+      // The entrance's idea is sent as discovery's first turn; a reply alone
+      // keeps the hub on screen rather than the last tier's review.
+      await stubDiscoveryApi(page, { produceTiers: false });
       const migrate = await stubMigrateRoutes(page);
       // The stubbed repositories are indexed from the start, so the wizard's
       // Index step opens with its Next control enabled.
