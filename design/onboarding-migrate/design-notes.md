@@ -812,23 +812,25 @@ it. Every string drawn is read by key; none is typed. **motir.co, read and never
 
 ### Panels (light AND dark)
 
-| #   | Panel                                                                                                            | frame   |
-| --- | ---------------------------------------------------------------------------------------------------------------- | ------- |
-| 0   | Access path — the entrance's import section door ("We can vibe it too") → `/onboarding/migrate`                  | 640 × 2 |
-| 1   | Start — no run yet: the bar, the **full** hero, the work band with the rail and the Start panel                  | 1280    |
-| 2a  | Connect — compact hero, **Checking** (on arrival) — Revision 1                                                   | 1280    |
-| 2b  | Connect — **Not connected yet** (Connect GitHub ↗ in a new tab, no Next) — Revision 1                            | 1280    |
-| 2c  | Connect — **Waiting for GitHub** (re-checks on focus and every ~5 s) — Revision 1                                | 1280    |
-| 2d  | Connect — **Connected** (detected repositories, Continue) — Revision 1                                           | 1280    |
-| 3   | Index — in progress (aggregate + per-repo rows, callout, Next)                                                   | 1280    |
-| 4   | Import — optional, with Skip                                                                                     | 1280    |
-| 5   | Decision — Plan now / Finish later                                                                               | 1280    |
-| 6   | Resume — a run in progress (MOTIR-4759)                                                                          | 1280    |
-| 7   | Error — the typed error alert inside the panel (drawn over 2b)                                                   | 1280    |
-| 8   | Collapsed rail — the planner-decided set (discovery + import kept, MOTIR-4766)                                   | 1280    |
-| 9   | Close-ups — 9a planAi / Save & exit rest·hover·focus · 9b language pending·failed·open · 9c planNow rest·pending | 640 × 2 |
-| 10  | Narrow — Start and Index                                                                                         | 390 × 2 |
-| 11  | Narrow — Connect 2b and 2d — Revision 1                                                                          | 390 × 2 |
+| #   | Panel                                                                                                                                                   | frame   |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| 0   | Access path — the entrance's import section door ("We can vibe it too") → `/onboarding/migrate`                                                         | 640 × 2 |
+| 1   | Start — no run yet: the bar, the **full** hero, the work band with the rail and the Start panel                                                         | 1280    |
+| 2a  | Connect — compact hero, **Checking** (on arrival) — Revision 1                                                                                          | 1280    |
+| 2b  | Connect — **Not connected yet** (Connect GitHub ↗ in a new tab, no Next) — Revision 1                                                                   | 1280    |
+| 2c  | Connect — **Waiting for GitHub** (re-checks on focus and every ~5 s) — Revision 1                                                                       | 1280    |
+| 2d  | Connect — **Connected** (detected repositories, Continue) — Revision 1                                                                                  | 1280    |
+| 3a  | After Connect — straight on to Import, the indexing chip in the bar, Index as a background rail row — Revision 2                                        | 1280    |
+| 3b  | The indexing chip opened — the per-repository detail popover over the step — Revision 2                                                                 | 1280    |
+| 3c  | Reading failed — the chip and detail in their failed state, on Decision — Revision 2                                                                    | 1280    |
+| 4   | Import — optional, with Skip (the chip at the moment reading finishes — Revision 2)                                                                     | 1280    |
+| 5   | Decision — Plan now / Finish later, while the code is still being read (Revision 2)                                                                     | 1280    |
+| 6   | Resume — a run in progress (MOTIR-4759)                                                                                                                 | 1280    |
+| 7   | Error — the typed error alert inside the panel (drawn over 2b)                                                                                          | 1280    |
+| 8   | Collapsed rail — the planner-decided set (discovery + import kept, MOTIR-4766)                                                                          | 1280    |
+| 9   | Close-ups — 9a planAi / Save & exit rest·hover·focus · 9b language pending·failed·open · 9c indexing chip states (Revision 2) · 9d planNow rest·pending | 640 × 2 |
+| 10  | Narrow — Start, and Import with the code being read (chip closed, then opened) — Revision 2                                                             | 390 × 2 |
+| 11  | Narrow — Connect 2b and 2d — Revision 1                                                                                                                 | 390 × 2 |
 
 ### What changes, and what does not
 
@@ -1074,3 +1076,118 @@ names on the board (`acme/web`, `acme/api`, `acme/infra`) are fixtures.
 - **GIVES MOTIR-8256** the new pairs to gate: `--el-success` glyph on `--el-card-bg` in both
   themes; `--el-text-secondary` link and hint on the card; and **MOTIR-8257** the new E2E surface
   (Continue appears only after detection; the Connect GitHub link has `target="_blank"`).
+
+### Revision 2 (2026-10-12) — the code index never holds onboarding
+
+**The reviewer's note, verbatim (on Revision 1):** _"The user should not be blocked on the index
+step. the index can take a long time, the user should be go forward. the index only blocks
+planning, not onboarding"_
+
+**What was wrong.** Revision 1 kept Panel 3 "as it ships today": after Connect the person landed on
+an Index screen whose only job was to wait (spinner, per-repo list, a disabled Next, and a callout
+saying Next stays disabled until every repository finishes). On a large codebase that is minutes of
+watching a bar, and a failed index never ends it (`INDEX.checkExit` and `runIndexSweep` only look
+for a _succeeded_ index).
+
+**Why this is a redraw and not a replan.** The behaviour the note asks for is already planned, in
+detail, by the sibling story **MOTIR-8246** ("Onboarding moves on while the code index builds"):
+the `index` exit becomes "an index exists in any state", generation waits in the background through
+a widened `runIndexSweep`, the convention is derived once the graph exists, MOTIR-933's "no plan
+from unread code" stands, and a failure undoes nothing. MOTIR-8246 owes a design subtask that draws
+those states "in the restyled onboarding look". This revision draws them now, in this frame, so the
+reviewer decides the restyle and the non-blocking index together, and MOTIR-8246's design work
+composes these panels instead of starting over. No card's scope moves: the **build** stays with
+MOTIR-8246 (it needs service, sweep and generate changes no restyle card owns).
+
+#### What changes on the board
+
+| panel    | before (Revision 1)                       | now                                                                                                                                                                                                                                  |
+| -------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2d       | Continue → Index                          | Continue → **Import** directly. The hint says reading starts and the person will not have to wait.                                                                                                                                   |
+| 3        | Index — the waiting screen, Next disabled | **Removed.** There is no Index panel.                                                                                                                                                                                                |
+| 3a (new) | —                                         | Import, arrived straight from Connect: the **indexing chip** in the bar reads _Reading your code · 33%_; the rail's Index row is a **background row**.                                                                               |
+| 3b (new) | —                                         | The chip opened: a popover with what the old Index panel showed (aggregate line, bar, per-repository rows), plus one line saying only drafting the plan waits.                                                                       |
+| 3c (new) | —                                         | Reading failed, surfaced on whatever step the person reached (drawn on Decision): chip and rail in the failed state, the detail naming the repository, **Try again** and **Check the connection**.                                   |
+| 4        | Import                                    | Import at the moment reading finishes: the chip says _Your code is read_, announced once, then leaves the bar; the rail's Index row becomes an ordinary done row.                                                                    |
+| 5        | Decision                                  | Decision while reading still runs: both buttons stay enabled; a sky-tint note says the plan is drafted as soon as reading finishes and the person is told. With reading done the note is absent (as before). Failed: a sibling note. |
+| 9c (new) | —                                         | The chip's five looks: queued · reading · focus-visible · read · failed.                                                                                                                                                             |
+| 10       | Narrow — Start and Index                  | Narrow — Start, and Import with the chip (closed, then opened: the detail drops full-width under the hero instead of floating).                                                                                                      |
+
+#### The indexing chip and its detail — per element
+
+| element                                                            | colour role                                                                                                                                                                                   | shape / size                                                                            |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| chip (a `button`, `aria-expanded`, `aria-controls="index-detail"`) | `Button secondary sm` on `--el-page-bg`; label `--el-text`                                                                                                                                    | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x/y-sm`                               |
+| chip glyph — queued / reading                                      | `Spinner sm`, `--el-accent-on-surface` (aria-hidden)                                                                                                                                          | `rounded-full`                                                                          |
+| chip glyph — read                                                  | `CheckCircle2`, `--el-success` (a graphic, ≥ 3:1)                                                                                                                                             | 14 px                                                                                   |
+| chip — failed                                                      | border `--el-danger`, glyph `CircleAlert` `--el-danger-on-surface`; label stays `--el-text`                                                                                                   | as above                                                                                |
+| chip label                                                         | inside an `aria-live="polite"` span, so a state change is announced, never focused                                                                                                            | 12–13 px                                                                                |
+| chip focus-visible                                                 | `--focus-ring-color` ring, offset on `--el-surface`                                                                                                                                           | ring-2                                                                                  |
+| detail popover (`role="dialog"`, `data-surface="popover"`)         | `--el-page-bg`, border `--el-border`, `--shadow-elevated`                                                                                                                                     | `--radius-card`, `--spacing-card-padding`; 380 px, full-width at 390                    |
+| title · Close                                                      | `--el-text` semibold · `Button ghost sm`                                                                                                                                                      | —                                                                                       |
+| body / failed body · aggregate line                                | `--el-text-secondary` on `--el-page-bg`                                                                                                                                                       | 14 px · 12 px                                                                           |
+| progress bar                                                       | track `--el-muted`, fill `--el-accent`                                                                                                                                                        | `rounded-full`, 6 px                                                                    |
+| repo rows                                                          | border `--el-border-soft`; owner `--el-text-secondary`, name `--el-text`, mono; chips as shipped (`--el-tint-mint` + `--el-text-strong` indexed, `--el-muted` + `--el-text-secondary` queued) | `--radius-control`, `--spacing-control-x`; chips `--radius-badge`, `--spacing-chip-x/y` |
+| failed row                                                         | border `--el-danger`; glyph and "Could not read the code" `--el-danger-on-surface`                                                                                                            | as above                                                                                |
+| Try again · Check the connection                                   | `Button primary sm` with `RotateCcw` · `Button ghost sm` → `/settings/organization/git`                                                                                                       | `--radius-btn`, `--height-btn-sm`                                                       |
+| rail background row — marker                                       | reading: `Spinner sm` in a `--el-border` ring, `--el-accent-on-surface`; failed: `CircleAlert` `--el-danger-on-surface`                                                                       | `size-5`, `rounded-full`                                                                |
+| rail background row — label · meta                                 | `--el-text` · `--el-text-secondary` (12 px). Never `aria-current`; the current step stays the step the person is on.                                                                          | `--radius-control`, `--spacing-control-x`                                               |
+| Decision note (reading / failed)                                   | `--el-tint-sky` with `--el-text-strong`; `Spinner sm` / `CircleAlert` glyph                                                                                                                   | `--radius-card`, `--spacing-card-padding`                                               |
+
+No `--el-text-muted` on a surface or tint, no `--el-text-faint` text, no `--el-danger-text`, no raw
+colour. Chip placement: first in the bar's control group (before _Start from an idea instead_); at
+390 px it takes the flow-name row's trailing edge.
+
+#### Behaviour the board depicts (built by MOTIR-8246, not by MOTIR-8254)
+
+1. **Connect → Import.** The `index` exit becomes "an index exists for this run's repository in
+   any state", so the advance from Connect passes straight through (MOTIR-8246 §1). The rail keeps
+   its Index row; it is never the current step.
+2. **One read, two places.** The chip and the rail row read the same
+   `GET /api/onboarding/migrate/[id]/index-status` the old panel polled, on the same cadence, for the
+   rest of onboarding; it stops once every repository is indexed (the chip shows _read_ for a few
+   seconds, then leaves).
+3. **Opening the detail changes nothing.** The popover closes on Close, Escape or an outside click
+   and returns focus to the chip; the step underneath is never re-rendered or advanced.
+4. **The plan waits, the person does not.** Plan my project now and Finish later stay enabled;
+   generation is started by the widened sweep when the graph succeeds (MOTIR-8246 §3). This board
+   draws only the Decision note; the discovery canvas's own "your plan will be drafted when
+   indexing finishes" state and the "your plan is ready" notice are MOTIR-8246's to draw in the
+   ai-chat frame (`design/ai-chat/onboarding--vibe-lockup.mock.html`).
+5. **Failure undoes nothing.** Every completed step stays done; Try again uses the index's existing
+   re-enqueue (MOTIR-8246 §4 and its HOW 5); Check the connection opens the git settings.
+
+#### Slot → key (Revision 2, proposed — `messages/` is not edited here)
+
+| slot                                         | key                                                                                                                           | status                                                                        | English                                                                                                                                                                                                                                                  |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| rail sub-line                                | `rail.sub`                                                                                                                    | **CHANGED**                                                                   | Reading your code runs in the background. Nothing here waits for it.                                                                                                                                                                                     |
+| rail Index meta (reading)                    | `rail.indexBackground`                                                                                                        | **NEW**                                                                       | In the background · {pct}%                                                                                                                                                                                                                               |
+| rail Index meta (queued)                     | `rail.indexQueued`                                                                                                            | **NEW**                                                                       | In the background · queued                                                                                                                                                                                                                               |
+| rail Index meta / failed row                 | `rail.indexFailed`                                                                                                            | **NEW**                                                                       | Could not read the code                                                                                                                                                                                                                                  |
+| chip — queued · reading · read · failed      | `indexing.queued` · `.running` · `.done` · `.failed`                                                                          | **NEW**                                                                       | Queued to read your code · Reading your code · {pct}% · Your code is read · Could not read your code                                                                                                                                                     |
+| detail title · Close                         | `indexing.detailTitle` · `.close`                                                                                             | **NEW**                                                                       | Reading your code · Close                                                                                                                                                                                                                                |
+| detail body                                  | `indexing.detailBody`                                                                                                         | **NEW**                                                                       | This runs in the background, so keep going. Only drafting your plan waits for it, and it starts by itself when reading finishes.                                                                                                                         |
+| detail failed body                           | `indexing.failedBody`                                                                                                         | **NEW**                                                                       | Motir could not read {repo}. Nothing you have done is lost. Your plan waits until the code can be read.                                                                                                                                                  |
+| failed actions                               | `indexing.retry` · `.checkConnection`                                                                                         | **NEW**                                                                       | Try again · Check the connection                                                                                                                                                                                                                         |
+| Decision note — reading · failed             | `decision.waitNote` · `.failedNote`                                                                                           | **NEW**                                                                       | Motir is still reading your code. Pick either one now: your plan is drafted as soon as reading finishes, and you are told when it is ready. · Motir could not read your code yet. Either choice is safe: your plan is drafted once the code can be read. |
+| 2d hint                                      | `connect.detectedHint`                                                                                                        | **CHANGED** (vs Revision 1)                                                   | Motir starts reading their code as soon as you continue. You will not have to wait for it.                                                                                                                                                               |
+| detail aggregate · per-repo head · row chips | `index.aggregate` · `index.perRepo` · `index.state.*`                                                                         | unchanged, re-used                                                            | (as shipped)                                                                                                                                                                                                                                             |
+| —                                            | `index.eyebrow` · `.heading` · `.body` · `.building` · `.callout` · `.next` · `.waiting` · `.completeTitle` · `.completeNote` | **RETIRED with the panel** (MOTIR-8246 deletes them when it removes the stop) | —                                                                                                                                                                                                                                                        |
+
+**Chinese-length risk (MOTIR-8249 / MOTIR-8258):** the chip label is the bar's longest new slot;
+it must fit `--height-btn-sm` on one line at 1280 px beside _Start from an idea instead_. At 390 px
+it shares the flow-name row, which truncates the flow name first, never the chip.
+
+#### GIVES / TAKES (Revision 2)
+
+- **TAKES** the Index panel (Panel 3 of Revision 1 and of MOTIR-930's record) and its disabled Next.
+- **GIVES MOTIR-8246** the chip, the detail, the background rail row, the failed state and the
+  Decision note as its drawn surfaces, and their build. Its owed design subtask composes these
+  panels and adds only the canvas-side states (plan waiting, plan ready). Comment posted there.
+- **GIVES MOTIR-8254** nothing new to build: it restyles the frame as Revision 1 said; until
+  MOTIR-8246 lands, the shipped Index stop keeps working in the restyled frame, and its acceptance
+  is unchanged by this revision.
+- **GIVES MOTIR-8256** the new pairs to gate: `--el-danger` border + `--el-danger-on-surface` glyph
+  on `--el-page-bg`, `--el-text-strong` on `--el-tint-sky`; **MOTIR-8257** nothing (the E2E walks
+  the shipped stop until MOTIR-8246).
