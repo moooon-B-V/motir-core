@@ -73,7 +73,17 @@ export const githubInstallationService = {
     workspaceId: string;
     installation: { installationId: string; accountLogin: string; accountType: string };
     repos: NormalizedRepo[];
+    /**
+     * Whether a repository NO organisation owns yet is claimed (default `true`).
+     * The webhook reconcile passes `false` when several organisations are linked
+     * to the installation: a repository newly added on the account is then left
+     * free for an admin to pick, never silently attached to every linked
+     * organisation (MOTIR-8221). Repositories this organisation already owns are
+     * kept either way.
+     */
+    claimFree?: boolean;
   }): Promise<GithubInstallationDTO> {
+    const claimFree = input.claimFree ?? true;
     const { dto, prunedRefs, selectedRefs } = await withSystemContext(async (tx) => {
       // THE OWNING ORGANISATION (Story MOTIR-4669 · MOTIR-4649), resolved THROUGH
       // the workspace. `workspace.organizationId` is NOT NULL, so this read is
@@ -109,7 +119,22 @@ export const githubInstallationService = {
         tx,
       );
       const ownedElsewhere = new Set(conflicts.map((repo) => repo.repoId));
-      const claimable = input.repos.filter((repo) => !ownedElsewhere.has(repo.providerRepoId));
+      const ownedHere = claimFree
+        ? null
+        : new Set(
+            (
+              await githubRepoRepository.listByInstallationAndOrg(
+                installation.id,
+                organizationId,
+                tx,
+              )
+            ).map((repo) => repo.repoId),
+          );
+      const claimable = input.repos.filter(
+        (repo) =>
+          !ownedElsewhere.has(repo.providerRepoId) &&
+          (ownedHere === null || ownedHere.has(repo.providerRepoId)),
+      );
 
       await upsertRepos(installation.id, input.workspaceId, organizationId, claimable, tx);
       // WHICH repos this reconcile DROPS (MOTIR-2166 ·
@@ -624,15 +649,39 @@ export const githubInstallationService = {
   /**
    * Remove an installation on uninstall (the `installation` webhook with
    * `action: deleted`, MOTIR-892). System context — the webhook has no active
-   * workspace. Cascades to the installation's repos + PR rows. Idempotent: a
-   * redelivered uninstall (row already gone) is a no-op returning `false`.
-   * Returns whether a row was actually removed.
+   * workspace. Cascades to every organisation's link row, repos and PR rows.
+   * Idempotent: a redelivered uninstall (row already gone) is a no-op returning
+   * `false` and enqueues nothing. Returns whether a row was actually removed.
+   *
+   * PER ORGANISATION since MOTIR-8221: the repos are read BEFORE the delete, so
+   * each one's `owner/name` and the workspace that owns it are known, and after
+   * commit every workspace's code graph is offboarded for its own repos only.
    */
   async removeInstallation(installationId: string): Promise<boolean> {
-    return withSystemContext(async (tx) => {
-      const removed = await githubInstallationRepository.deleteByInstallationId(installationId, tx);
-      return removed > 0;
+    const { removed, refsByWorkspace } = await withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        installationId,
+        tx,
+      );
+      if (!installation) return { removed: false, refsByWorkspace: new Map<string, string[]>() };
+      const repos = await githubRepoRepository.listByInstallation(installation.id, tx);
+      const refsByWorkspace = new Map<string, string[]>();
+      for (const repo of repos) {
+        if (!repo.workspaceId) continue;
+        const refs = refsByWorkspace.get(repo.workspaceId) ?? [];
+        refs.push(`${repo.owner}/${repo.name}`);
+        refsByWorkspace.set(repo.workspaceId, refs);
+      }
+      const count = await githubInstallationRepository.deleteByInstallationId(installationId, tx);
+      return { removed: count > 0, refsByWorkspace };
     });
+
+    // POST-COMMIT, BEST-EFFORT, one workspace at a time: an uninstall is a
+    // disconnect of every repository it carried (`repo_disconnected`).
+    for (const [workspaceId, refs] of refsByWorkspace) {
+      await codeGraphOffboardingService.enqueueForRepos(workspaceId, refs, 'repo_disconnected');
+    }
+    return removed;
   },
 
   /**
