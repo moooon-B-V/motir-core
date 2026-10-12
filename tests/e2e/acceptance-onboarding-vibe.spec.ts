@@ -260,31 +260,34 @@ for (const run of RUNS) {
         await expect(saveExit).toHaveAttribute('href', expected);
       });
 
-      await chapter(`Connect, index, and on to the importer — ${run.label}`, async () => {
-        const advanced = () =>
-          page.waitForResponse(
-            (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-          );
-        let resp = advanced();
-        await page.getByRole('button', { name: t('onboardingMigrate.connect.continue') }).click();
-        expect((await resp).status()).toBe(200);
-        const next = page.getByRole('button', { name: t('onboardingMigrate.index.next') });
-        await expect(next).toBeEnabled({ timeout: 15_000 });
-        resp = advanced();
-        await next.click();
-        expect((await resp).status()).toBe(200);
-        await expect(
-          page.getByRole('heading', { name: t('onboardingMigrate.import.heading') }),
-        ).toBeVisible();
-        // The Import step runs the importer inline now; the importer's own page
-        // is the same flow at its own address, opened here for the project.
-        await page.goto(`/onboarding/import?projectId=${projectId}`);
-        await page.waitForURL('**/onboarding/import**');
-        await expectHeroScreen(page, run, screen('importer'));
-        const steps = page.getByRole('list', { name: t('import.chrome.title') });
-        await expect(steps).toBeVisible();
-        await expect(steps).toContainText(t('import.steps.connect'));
-      });
+      await chapter(
+        `Connect, index, then the importer opened at its own address — ${run.label}`,
+        async () => {
+          const advanced = () =>
+            page.waitForResponse(
+              (r) => r.url().includes('/advance') && r.request().method() === 'POST',
+            );
+          let resp = advanced();
+          await page.getByRole('button', { name: t('onboardingMigrate.connect.continue') }).click();
+          expect((await resp).status()).toBe(200);
+          const next = page.getByRole('button', { name: t('onboardingMigrate.index.next') });
+          await expect(next).toBeEnabled({ timeout: 15_000 });
+          resp = advanced();
+          await next.click();
+          expect((await resp).status()).toBe(200);
+          await expect(
+            page.getByRole('heading', { name: t('onboardingMigrate.import.heading') }),
+          ).toBeVisible();
+          // The Import step runs the importer inline now; the importer's own page
+          // is the same flow at its own address, opened here for the project.
+          await page.goto(`/onboarding/import?projectId=${projectId}`);
+          await page.waitForURL('**/onboarding/import**');
+          await expectHeroScreen(page, run, screen('importer'));
+          const steps = page.getByRole('list', { name: t('import.chrome.title') });
+          await expect(steps).toBeVisible();
+          await expect(steps).toContainText(t('import.steps.connect'));
+        },
+      );
     });
   });
 }
