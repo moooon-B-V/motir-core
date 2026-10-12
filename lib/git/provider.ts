@@ -270,7 +270,7 @@ export interface GitProvider {
    * permits. Comparing two commits has no such constraint: the call happens
    * HERE, in the process holding the token, and what leaves is a number. GitHub
    * backs it with `GET /repos/{owner}/{name}/compare/{base}...{head}`
-   * (`behind_by`), GitLab with
+   * (`ahead_by`), GitLab with
    * `GET /api/v4/projects/:id/repository/compare` — so both hosts can, and
    * therefore both must. Declaring it optional would re-create the exact
    * disguise MOTIR-2124 removed: a provider that looks complete while the
