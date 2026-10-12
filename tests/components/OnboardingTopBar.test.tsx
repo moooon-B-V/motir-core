@@ -12,6 +12,11 @@ import { OnboardingTopBar } from '@/components/onboarding/OnboardingTopBar';
 // MOTIR-8255 sets the bar's own spec (design/ai-chat § 2026-10-12, F6): the
 // lockup at 22 px and a 1 px divider before the project label.
 
+// The language control (MOTIR-8286) reads `useRouter()` and calls the
+// `setLocale` server action, so both are stubbed.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+vi.mock('@/lib/i18n/actions', () => ({ setLocale: vi.fn() }));
+
 afterEach(cleanup);
 
 describe('OnboardingTopBar', () => {
@@ -48,5 +53,16 @@ describe('OnboardingTopBar', () => {
   it('falls back to "New project" with no project name', () => {
     renderWithIntl(<OnboardingTopBar projectName={null} stepLabel="Building" onExit={() => {}} />);
     screen.getByText('New project');
+  });
+
+  it('closes its trailing end with the language control, after Save & exit (MOTIR-8286)', () => {
+    renderWithIntl(
+      <OnboardingTopBar projectName="Leave tracker" stepLabel="Building" onExit={() => {}} />,
+    );
+    const bar = screen.getByRole('banner', { name: 'Onboarding' });
+    const control = screen.getByRole('combobox', { name: /Language/ });
+    expect(bar.contains(control)).toBe(true);
+    const exit = screen.getByRole('button', { name: 'Save & exit' });
+    expect(exit.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

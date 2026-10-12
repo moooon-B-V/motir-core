@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { AuthLanguageControl } from '@/components/i18n/AuthLanguageControl';
 import { OnboardingBrandBar } from './OnboardingBrandBar';
 
 // The wizard screens' bar (MOTIR-8254) — the migrate wizard's and the
@@ -14,6 +15,11 @@ import { OnboardingBrandBar } from './OnboardingBrandBar';
 //   initial                 `--el-tint-sky` fill, `--el-text-strong` letter,
 //                           `rounded-full` 28 px, aria-hidden
 //
+// The language control (MOTIR-8286) is the bar's own last control, after the
+// caller's (Save & exit), before the initial — the same `AuthLanguageControl` the
+// signed-out frame and the entrance carry, mounted as is (`auth.language` reads
+// right here: "Language: English").
+//
 // Narrow: the controls wrap under the lockup row (`OnboardingBrandBar` wraps);
 // the flow name truncates first. Presentational: strings and nodes in.
 
@@ -22,7 +28,7 @@ export interface OnboardingWizardBarProps {
   flowName: string;
   /** The decorative user initial at the far edge. */
   userInitial: string;
-  /** The bar's controls, in order (planAi, Save & exit, language…). */
+  /** The flow's controls, in order (planAi, Save & exit); the language control follows. */
   children?: ReactNode;
 }
 
@@ -36,6 +42,7 @@ export function OnboardingWizardBar({ flowName, userInitial, children }: Onboard
   return (
     <OnboardingBrandBar
       linked={false}
+      size={22}
       lead={
         <>
           <span aria-hidden="true" className="text-sm text-(--el-text-secondary)">
@@ -47,6 +54,7 @@ export function OnboardingWizardBar({ flowName, userInitial, children }: Onboard
     >
       <span className="ml-auto flex flex-wrap items-center gap-2">
         {children}
+        <AuthLanguageControl />
         <span
           aria-hidden="true"
           className="grid size-7 flex-none place-items-center rounded-full bg-(--el-tint-sky) text-xs font-semibold text-(--el-text-strong)"

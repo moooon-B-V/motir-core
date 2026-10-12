@@ -124,6 +124,20 @@ describe('the first screen', () => {
   });
 });
 
+describe('the bar', () => {
+  it('carries the language control after Save & exit, before the initial (MOTIR-8286)', () => {
+    fakeFetch(() => json({}, 404));
+    const { container } = renderWithIntl(
+      <MigrateWizard initialRun={makeRun()} projectName="Quiet Harbor" userInitial="Y" />,
+    );
+    const bar = container.querySelector('[data-onboarding-brand-bar]') as HTMLElement;
+    const control = screen.getByRole('combobox', { name: /Language/ });
+    expect(bar.contains(control)).toBe(true);
+    const exit = screen.getByRole('link', { name: 'Save & exit' });
+    expect(exit.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe('Connect notices the connection by itself (Revision 1)', () => {
   it('shows the connected repositories and Continue, with no "I have connected" button', async () => {
     fakeFetch((url) => {

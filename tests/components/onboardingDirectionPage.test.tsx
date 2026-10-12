@@ -12,6 +12,12 @@ import { MotirAiUnavailableError } from '@/lib/ai/errors';
 // `/direction/[tier]` — which renders the same shared `DirectionDocFullPage` —
 // gains nothing. The shared component is stubbed to record the props it gets.
 
+vi.mock('next/navigation', async (orig) => ({
+  ...(await orig<typeof import('next/navigation')>()),
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+}));
+vi.mock('@/lib/i18n/actions', () => ({ setLocale: vi.fn() }));
+
 const docProps = vi.fn();
 vi.mock('@/app/(authed)/direction/[tier]/_components/DirectionDocFullPage', () => ({
   DirectionDocFullPage: (p: { tier: string; error: boolean; origin?: string }) => {
@@ -59,6 +65,8 @@ describe('the onboarding direction-doc page', () => {
     expect(lockup.querySelector('.brand-word')!.textContent).toBe('Motir');
     // not a link, and no second Back: the doc's own Back returns to /onboarding
     expect(row.querySelector('a')).toBeNull();
+    // its trailing end is the language control (MOTIR-8286)
+    expect(row.querySelector('[role="combobox"]')).not.toBeNull();
     // the row comes first in the doc's own column
     const column = row.parentElement as HTMLElement;
     expect(column.className).toContain('max-w-[60rem]');

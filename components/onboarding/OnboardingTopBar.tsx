@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { History } from 'lucide-react';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { Button } from '@/components/ui/Button';
+import { AuthLanguageControl } from '@/components/i18n/AuthLanguageControl';
 
 // The onboarding window's persistent top bar (MOTIR-1488) — the `wz-bar` from
 // `design/ai-chat/onboarding.mock.html`, present on EVERY step of the full-page
@@ -28,6 +29,11 @@ import { Button } from '@/components/ui/Button';
 // second exit that skips the save.
 // The glyph is `aria-hidden` and the visible wordmark is the text, so it carries
 // no `aria-label` (design/brand §8).
+//
+// The language control (MOTIR-8286) closes the trailing end, after Save & exit
+// (design/ai-chat § 2026-10-12, Panel 3): the shared `AuthLanguageControl`,
+// mounted as is — a refresh, never a navigation, so the canvas and the chat keep
+// their state across a switch.
 
 export interface OnboardingTopBarProps {
   /** The active project's human-readable name (shown left, beside the brand). */
@@ -64,6 +70,7 @@ export function OnboardingTopBar({ projectName, stepLabel, onExit }: OnboardingT
         >
           {t('saveExit')}
         </Button>
+        <AuthLanguageControl />
       </span>
     </header>
   );
