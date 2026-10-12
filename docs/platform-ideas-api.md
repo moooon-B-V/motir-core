@@ -56,7 +56,7 @@ slug writes nothing.
 | `title`               | 1–120 characters                                                                                                                       |
 | `pitch`               | 1–400 characters                                                                                                                       |
 | `kind`                | `motir_buys` or `direction`                                                                                                            |
-| `category`            | one of the fixed `IdeaCategory` values (`lib/ideas/categories.ts`)                                                                     |
+| `category`            | one of the fixed `IdeaCategory` slugs — see [Categories](#categories)                                                                  |
 | `tags`                | at most 6 EXISTING vocabulary slugs (add a tag first with `POST …/tags`)                                                               |
 | `capabilities`        | at most 8 strings of at most 300 characters, in order                                                                                  |
 | `evidence`            | at most 10 of `{ claim (≤ 400), sourceName (≤ 200), url (https, ≤ 2000), sourceDate? (YYYY-MM-DD) }`; a `direction` needs at least one |
@@ -67,6 +67,57 @@ slug writes nothing.
 `reviewed: true` (stamps `lastReviewedAt`) and `reason` (the audit row's reason;
 defaults to one naming the credential). `evidence` and `tags` **replace** their
 lists wholesale when given.
+
+## Categories
+
+`category` is one of these 34 slugs, in `IDEA_CATEGORIES` order (the key order
+of `IDEA_CATEGORY_LABELS` in `lib/ideas/categories.ts`, which is also the
+Prisma `IdeaCategory` enum's order and the public OpenAPI `IdeaCategory`
+enum). A slug is never translated. The public reads return each category's
+`label` in the requested locale (`?locale=`), falling back to the English label
+below for a locale outside the eleven. Any other value is refused:
+`400 INVALID_REQUEST` on a staff write, `400 INVALID_IDEA_FILTER` on the public
+list's `?category=`.
+
+The meaning column records what a category covers where its label alone does
+not say; it is documentation, never shown as a label.
+
+| Slug                  | English label         | Group              | Meaning                                                         |
+| --------------------- | --------------------- | ------------------ | --------------------------------------------------------------- |
+| `legal`               | Legal                 | Business functions | —                                                               |
+| `finance`             | Finance               | Business functions | —                                                               |
+| `security_compliance` | Security & compliance | Business functions | —                                                               |
+| `customer_support`    | Customer support      | Business functions | —                                                               |
+| `localization`        | Localization          | Business functions | —                                                               |
+| `growth_marketing`    | Growth & marketing    | Business functions | —                                                               |
+| `sales`               | Sales                 | Business functions | —                                                               |
+| `people_hr`           | People & HR           | Business functions | —                                                               |
+| `operations`          | Operations            | Business functions | —                                                               |
+| `engineering`         | Engineering           | Business functions | —                                                               |
+| `ecommerce`           | E-commerce            | Verticals          | —                                                               |
+| `healthcare`          | Healthcare            | Verticals          | —                                                               |
+| `education`           | Education             | Verticals          | —                                                               |
+| `financial_services`  | Financial services    | Verticals          | —                                                               |
+| `real_estate`         | Real estate           | Verticals          | —                                                               |
+| `logistics`           | Logistics             | Verticals          | —                                                               |
+| `construction`        | Construction          | Verticals          | —                                                               |
+| `agriculture`         | Agriculture           | Verticals          | —                                                               |
+| `pets`                | Pets                  | Verticals          | —                                                               |
+| `family_care`         | Family care           | Verticals          | —                                                               |
+| `public_sector`       | Public sector         | Verticals          | —                                                               |
+| `entertainment_media` | Entertainment & media | Verticals          | Film, music, games, publishing, creators and the media business |
+| `hospitality_travel`  | Hospitality & travel  | Verticals          | Hotels, restaurants, venues and travel                          |
+| `mobility`            | Mobility & automotive | Verticals          | Transport, fleets, vehicles and the automotive trade            |
+| `energy_climate`      | Energy & climate      | Verticals          | Energy production and use, and climate work                     |
+| `manufacturing`       | Manufacturing         | Verticals          | Making physical goods, and the factories that do it             |
+| `local_services`      | Local services        | Verticals          | Salons, home services, repair, fitness studios                  |
+| `personal_growth`     | Personal growth       | Consumer           | —                                                               |
+| `personal_finance`    | Personal finance      | Consumer           | —                                                               |
+| `health_wellness`     | Health & wellness     | Consumer           | —                                                               |
+| `social_community`    | Social & community    | Consumer           | Social products, communities and the people who run them        |
+| `silver_economy`      | Silver economy        | Consumer           | Products for older adults themselves                            |
+| `independent_work`    | Independent work      | Consumer           | Freelancers, gig workers, solo creators                         |
+| `ai_infrastructure`   | AI infrastructure     | Platform           | —                                                               |
 
 ## Translations
 
