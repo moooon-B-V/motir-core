@@ -58,7 +58,9 @@ async function startFromChoice(page: Page): Promise<void> {
 }
 
 async function connectToIndex(page: Page): Promise<void> {
-  await expect(page.getByText('3 repositories are connected')).toBeVisible();
+  await expect(
+    page.getByRole('list', { name: 'Connected repositories' }).getByRole('listitem'),
+  ).toHaveCount(3);
   const resp = page.waitForResponse(isAdvance);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   expect((await resp).status()).toBe(200);
@@ -219,7 +221,9 @@ test('migrate wizard — index gate: Next stays disabled until every repo is ind
 
   // Per-repo rows render after the first poll tick.
   await expect(page.getByText('Queued').first()).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText('0 of 3 repositories done')).toBeVisible();
+  await expect(
+    page.locator('[aria-live][aria-busy]').getByText('0 of 3 repositories done'),
+  ).toBeVisible();
 
   // Next is DISABLED because not all repos are indexed.
   const next = page.getByRole('button', { name: /Next: import your work/ });
