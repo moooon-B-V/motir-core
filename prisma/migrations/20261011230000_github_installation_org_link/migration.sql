@@ -97,6 +97,25 @@ CREATE POLICY "github_installation_org_link_org_read" ON "github_installation_or
     OR "organization_id" = (SELECT current_setting('app.organization_id', true))
   );
 
+-- The installation itself is readable by every organisation it is LINKED to.
+-- `github_installation.organization_id` names only the first organisation, so
+-- without this arm a second organisation's repository reads its installation
+-- back as NULL (`pr.repo.installation` — the merge path needs its id). The
+-- subquery is uncorrelated (it names no column of the outer row), so Postgres
+-- evaluates it once per query as a hashed SubPlan, the same cost property the
+-- other org arms keep; it reads the link table under the caller's own policies.
+-- `FOR SELECT` only: a linked organisation can never delete or re-point the row.
+CREATE POLICY "github_installation_linked_org_read" ON "github_installation"
+  FOR SELECT
+  USING (
+    "id" IN (
+      SELECT l."installation_id"
+        FROM "github_installation_org_link" l
+       WHERE l."organization_id" = (SELECT app_caller_organization_id())
+          OR l."organization_id" = (SELECT current_setting('app.organization_id', true))
+    )
+  );
+
 -- 3. Refuse to proceed over data the guard would forbid ---------------------
 --
 -- Fails the deploy LOUDLY, naming each repository, rather than installing a

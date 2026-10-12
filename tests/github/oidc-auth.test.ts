@@ -176,10 +176,17 @@ describe('authenticateGithubOidc', () => {
   });
 
   it('403s (never silently picks) an ambiguous repo connected under two workspaces', async () => {
+    // Two workspaces of ONE organisation: a repository belongs to one
+    // organisation (MOTIR-8218), so the ambiguity left to guard is a sibling
+    // workspace connecting it a second time.
     const w1 = await makeWorkspace('e1@example.com');
-    const w2 = await makeWorkspace('e2@example.com');
+    const { workspace: w2 } = await workspacesService.createWorkspace({
+      name: 'Acme 2',
+      ownerUserId: w1.user.id,
+      organizationId: w1.workspace.organizationId,
+    });
     await connectRepo(w1.workspace.id, 'inst-e1');
-    await connectRepo(w2.workspace.id, 'inst-e2'); // same owner/name, second tenant
+    await connectRepo(w2.id, 'inst-e2'); // same owner/name, sibling workspace
 
     const result = await authenticateGithubOidc(oidcReq(await mintToken()));
     expect(result).toEqual({ ok: false, status: 403, reason: 'repo_not_connected' });
