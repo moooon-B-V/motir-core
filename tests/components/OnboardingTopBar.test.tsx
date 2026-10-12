@@ -9,6 +9,8 @@ import { OnboardingTopBar } from '@/components/onboarding/OnboardingTopBar';
 // (`BrandMark`, Pattern A of the MOTIR-8250 vibe-layout mock) where it drew a
 // lavender tile holding a lucide `Sparkles`. Nothing else in the bar moves: the
 // project name, the step label and "Save & exit" (which still fires `onExit`).
+// MOTIR-8255 sets the bar's own spec (design/ai-chat § 2026-10-12, F6): the
+// lockup at 22 px and a 1 px divider before the project label.
 
 afterEach(cleanup);
 
@@ -20,7 +22,12 @@ describe('OnboardingTopBar', () => {
     const bar = screen.getByRole('banner', { name: 'Onboarding' });
     const lockup = bar.querySelector('.brand-lockup') as HTMLElement;
     expect(lockup).not.toBeNull();
-    expect(lockup.style.getPropertyValue('--brand-size')).toBe('28px');
+    expect(lockup.style.getPropertyValue('--brand-size')).toBe('22px');
+    // the divider: decorative, between the lockup and the project label
+    const divider = lockup.nextElementSibling as HTMLElement;
+    expect(divider.getAttribute('aria-hidden')).toBe('true');
+    expect(divider.className).toContain('bg-(--el-border)');
+    expect(divider.nextElementSibling!.textContent).toBe('Leave tracker · new project');
     expect(lockup.querySelector('svg path')!.getAttribute('d')).toBe(WAVE_BAND_PATH);
     expect(lockup.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true');
     expect(lockup.querySelector('.brand-word')!.textContent).toBe('Motir');

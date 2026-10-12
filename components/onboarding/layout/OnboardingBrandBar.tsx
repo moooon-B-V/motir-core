@@ -29,6 +29,10 @@ import { BrandMark } from '@/components/brand/BrandMark';
 // bars carry their own exits (Save & exit, Start from an idea instead) and a
 // third one on the logo would compete with them. Their trailing group wraps
 // under the lockup on a narrow screen instead of squeezing it.
+//
+// The onboarding direction-doc page (MOTIR-8255, design/ai-chat § 2026-10-12
+// Panel 6) uses `inset="row"`: a slim row inside the doc's own `max-w-[60rem]`
+// column — no horizontal padding of its own, `pb-4` — with the lockup at 24 px.
 
 export interface OnboardingBrandBarProps {
   /** The trailing control(s), opposite the lockup. Omitted renders the lockup alone. */
@@ -37,6 +41,10 @@ export interface OnboardingBrandBarProps {
   lead?: ReactNode;
   /** Link the lockup home. Default `true`; the wizard bars pass `false`. */
   linked?: boolean;
+  /** The lockup's size in px. Default 28 (the hero bar); the doc row passes 24. */
+  size?: number;
+  /** `bar` (default) pads itself; `row` sits flush inside a column the page pads. */
+  inset?: 'bar' | 'row';
   className?: string;
 }
 
@@ -44,9 +52,11 @@ export function OnboardingBrandBar({
   children,
   lead,
   linked = true,
+  size = 28,
+  inset = 'bar',
   className,
 }: OnboardingBrandBarProps) {
-  const mark = <BrandMark variant="lockup" tone="default" size={28} />;
+  const mark = <BrandMark variant="lockup" tone="default" size={size} />;
   const lockup = linked ? (
     <Link
       href="/"
@@ -63,7 +73,8 @@ export function OnboardingBrandBar({
     <header
       data-onboarding-brand-bar=""
       className={[
-        'relative z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 md:px-(--spacing-card-padding) md:py-4',
+        'relative z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2',
+        inset === 'row' ? 'pb-4' : 'px-4 py-3 md:px-(--spacing-card-padding) md:py-4',
         className ?? '',
       ]
         .filter(Boolean)

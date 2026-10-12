@@ -19,9 +19,13 @@ import { Button } from '@/components/ui/Button';
 //
 // The brand is the real Motir lockup (MOTIR-8252, built to the Pattern panel of
 // `design/onboarding-entrance/onboarding-entrance--vibe-layout.mock.html`):
-// `BrandMark` lockup, default tone, 28 px — it replaced a lavender tile holding a
-// lucide `Sparkles`. It is NOT a link here: this bar's one way out is "Save &
-// exit", and a home link beside it would be a second exit that skips the save.
+// `BrandMark` lockup, default tone — it replaced a lavender tile holding a
+// lucide `Sparkles`. MOTIR-8255 sets it to the discovery bar's own spec
+// (design/ai-chat/design-notes.md § 2026-10-12, F6): 22 px, since the 52 px bar
+// is denser than the hero bar's 28, then a 1 px `--el-border` divider, which keeps
+// the fallback label from reading "Motir New project". It is NOT a link here:
+// this bar's one way out is "Save & exit", and a home link beside it would be a
+// second exit that skips the save.
 // The glyph is `aria-hidden` and the visible wordmark is the text, so it carries
 // no `aria-label` (design/brand §8).
 
@@ -42,7 +46,8 @@ export function OnboardingTopBar({ projectName, stepLabel, onExit }: OnboardingT
       className="flex h-[3.25rem] shrink-0 items-center justify-between gap-4 border-b border-(--el-border) bg-(--el-page-bg) px-4"
     >
       <span className="inline-flex min-w-0 items-center gap-3">
-        <BrandMark variant="lockup" tone="default" size={28} className="shrink-0" />
+        <BrandMark variant="lockup" tone="default" size={22} className="shrink-0" />
+        <span aria-hidden="true" className="block h-5 w-px flex-none bg-(--el-border)" />
         <span className="truncate text-sm font-semibold text-(--el-text)">
           {projectName ? t('topbarProject', { project: projectName }) : t('topbarProjectFallback')}
         </span>

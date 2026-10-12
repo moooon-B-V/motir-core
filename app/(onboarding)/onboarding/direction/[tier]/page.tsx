@@ -8,6 +8,7 @@ import { findTierDoc, producedTierKinds } from '@/lib/onboarding/preplanClient';
 import type { PreplanStateDTO } from '@/lib/dto/aiPreplan';
 import { DirectionDocFullPage } from '@/app/(authed)/direction/[tier]/_components/DirectionDocFullPage';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
+import { OnboardingBrandBar } from '@/components/onboarding/layout';
 
 // GET /onboarding/direction/[tier] (MOTIR-1366) — the SHELL-LESS full page for one
 // pre-plan direction-tier doc, opened in a NEW TAB from the onboarding tier-doc
@@ -17,6 +18,12 @@ import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 // in-shell twin (`/direction/[tier]`, under `(authed)`) is what the roadmap canvas
 // uses; both render the SAME `DirectionDocFullPage`, here with `origin="onboarding"`
 // (Back → /onboarding, cross-links stay shell-less).
+//
+// MOTIR-8255 gives this wrapper its brand row (design/ai-chat § 2026-10-12,
+// Panel 6): the lockup at 24 px, not a link, flush in the doc's column. It sits
+// on the wrapper, never in the shared `DirectionDocFullPage`, so the in-shell
+// page is untouched. No second Back (F5): the component's own Back already
+// returns to /onboarding in this origin.
 
 export default async function OnboardingDirectionDocPage({
   params,
@@ -47,6 +54,7 @@ export default async function OnboardingDirectionDocPage({
   return (
     <main className="min-h-dvh overflow-y-auto bg-(--el-surface) px-4 py-6 sm:px-8">
       <div className="mx-auto max-w-[60rem]">
+        <OnboardingBrandBar linked={false} size={24} inset="row" />
         <DirectionDocFullPage
           tier={tier}
           doc={state ? findTierDoc(state, tier) : null}

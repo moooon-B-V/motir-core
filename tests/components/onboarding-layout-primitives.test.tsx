@@ -72,6 +72,16 @@ describe('OnboardingBrandBar — the lockup bar (Pattern A)', () => {
     );
   });
 
+  it('inset="row" sits flush in a column the page pads, with the size it is given (MOTIR-8255)', () => {
+    const { container } = render(<OnboardingBrandBar inset="row" size={24} linked={false} />);
+    const bar = classes(container.querySelector('header')!);
+    expect(bar).toContain('pb-4');
+    expect(bar.some((c) => /^(md:)?p[xy]-/.test(c))).toBe(false);
+    const lockup = container.querySelector('.brand-lockup') as HTMLElement;
+    expect(lockup.style.getPropertyValue('--brand-size')).toBe('24px');
+    expect(container.querySelector('a')).toBeNull();
+  });
+
   it('puts its children in the trailing slot, after the lockup', () => {
     const { container } = render(
       <OnboardingBrandBar>
