@@ -1,6 +1,15 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { WAVE_BAND_PATH } from '@motir/brand';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { msg } from './i18n-walk';
+
+// The wave-band path, read from `design/brand/wave-band-24.svg` — the file
+// `tests/brand/waveBand.test.ts` pins `WAVE_BAND_PATH` to byte for byte.
+// `@motir/brand` itself exports ESM only, which Playwright's CommonJS
+// transform cannot `require`.
+const WAVE_BAND_PATH = /\sd="([^"]+)"/.exec(
+  readFileSync(join(process.cwd(), 'design', 'brand', 'wave-band-24.svg'), 'utf8'),
+)![1]!;
 
 // The assertions the onboarding-vibe walk makes on EVERY screen (Story
 // MOTIR-8238 · MOTIR-8257), shared by the acceptance walk
