@@ -7,6 +7,17 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { workspacesService } from '@/lib/services/workspacesService';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { resolveReturnPath } from '@/lib/github/returnSurface';
+import {
+  InstallationNotAccessibleError,
+  InstallationNotLinkableError,
+  RepoSelectionRequiredError,
+  RepositoryOwnedByOtherOrganizationError,
+} from '@/lib/github/errors';
+import {
+  OrganizationClosingError,
+  OrganizationNotFoundError,
+  OrgForbiddenError,
+} from '@/lib/organizations/errors';
 
 // GET /api/github/setup (Story 7.10 · MOTIR-1588) — the GitHub App's **Setup URL**.
 // After a user installs the App, GitHub redirects here with `installation_id` +
@@ -25,9 +36,15 @@ import { resolveReturnPath } from '@/lib/github/returnSurface';
 // narrowed back to a known surface id on decode. Every outcome BEFORE the state
 // has been read (and every one where it cannot be read) falls back to the
 // historical settings path, which is what the handler did for all of them.
-function settingsRedirect(status: GithubBannerStatus, origin?: string | null): NextResponse {
+function settingsRedirect(
+  status: GithubBannerStatus,
+  origin?: string | null,
+  installationId?: string,
+): NextResponse {
+  // `select_repos` names the installation, so the room opens its repo picker.
+  const extra = installationId ? `&installation_id=${encodeURIComponent(installationId)}` : '';
   return NextResponse.redirect(
-    `${resolveBaseUrlTrimmed()}${resolveReturnPath(origin ?? null)}?github=${status}`,
+    `${resolveBaseUrlTrimmed()}${resolveReturnPath(origin ?? null)}?github=${status}${extra}`,
   );
 }
 
@@ -102,6 +119,37 @@ export async function GET(req: NextRequest): Promise<Response> {
   // outcome returns the person to the surface they started from.
   const origin = decoded.state.origin ?? null;
 
+  // THE ORGANISATION BRANCH (Story MOTIR-8216 · MOTIR-8220). A state that names
+  // an organisation was minted by the Git room's "Install on another account",
+  // and one GitHub account can now serve several organisations — so it goes
+  // through the per-organisation link: the actor must ADMINISTER that
+  // organisation (not merely belong to a workspace), the state's workspace must
+  // belong to it, and the actor must be able to see the installation on GitHub.
+  // `repoIds` is omitted, so a first link of an unshared account and a refresh
+  // of an already-linked one behave as before, and a new link beside another
+  // organisation sends the person to choose instead of taking anything.
+  const organizationId = decoded.state.organizationId;
+  if (organizationId) {
+    try {
+      await githubInstallationService.linkExistingInstallation({
+        organizationId,
+        actorUserId: session.user.id,
+        installationId,
+        via: 'install_return',
+        workspaceIdHint: decoded.state.workspaceId,
+        requireHintInOrganization: true,
+      });
+    } catch (err) {
+      const status = orgBranchOutcome(err);
+      return settingsRedirect(
+        status,
+        origin,
+        status === 'select_repos' ? installationId : undefined,
+      );
+    }
+    return settingsRedirect('installed', origin);
+  }
+
   // Authorize: the acting user must be a member of the target workspace — no
   // cross-workspace binding even with a validly-signed state.
   const role = await workspacesService.getMemberRole(session.user.id, decoded.state.workspaceId);
@@ -112,11 +160,36 @@ export async function GET(req: NextRequest): Promise<Response> {
       workspaceId: decoded.state.workspaceId,
       installationId,
     });
-  } catch {
+  } catch (err) {
+    // Another organisation already uses this account (MOTIR-8219): nothing was
+    // written, and the person picks their repositories instead.
+    if (err instanceof RepoSelectionRequiredError) {
+      return settingsRedirect('select_repos', origin, installationId);
+    }
     // Provider/config failure (e.g. GITHUB_APP_ID/PRIVATE_KEY unset) — surface a
     // clean banner, never a 500.
     return settingsRedirect('install_provider_error', origin);
   }
 
   return settingsRedirect('installed', origin);
+}
+
+/** Which banner an organisation-branch refusal returns to. */
+function orgBranchOutcome(err: unknown): GithubBannerStatus {
+  if (err instanceof RepoSelectionRequiredError) return 'select_repos';
+  if (err instanceof RepositoryOwnedByOtherOrganizationError) return 'repo_unavailable';
+  if (
+    err instanceof InstallationNotAccessibleError ||
+    err instanceof InstallationNotLinkableError
+  ) {
+    return 'installation_not_accessible';
+  }
+  if (
+    err instanceof OrgForbiddenError ||
+    err instanceof OrganizationNotFoundError ||
+    err instanceof OrganizationClosingError
+  ) {
+    return 'install_forbidden';
+  }
+  return 'install_provider_error';
 }

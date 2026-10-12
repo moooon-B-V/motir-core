@@ -44,6 +44,11 @@ export interface InstallState {
    *  App install starts from a bare github.com URL where no cookie can be set,
    *  so this value takes the round trip and has to come back unforged. */
   origin?: GithubReturnSurfaceId;
+  /** The ORGANISATION the install was started for (Story MOTIR-8216 ·
+   *  MOTIR-8220) — payload key `g`, omitted when absent exactly as `o` is, so a
+   *  token minted before this field still decodes (to a state with none). Its
+   *  presence routes the setup round trip through the per-organisation link. */
+  organizationId?: string;
 }
 
 /** Encode + sign a short-lived install-state token.
@@ -56,12 +61,19 @@ export function encodeInstallState(
   state: InstallState,
   nowSeconds: number = Math.floor(Date.now() / 1000),
 ): string {
-  const payload: { w: string; u: string; exp: number; o?: GithubReturnSurfaceId } = {
+  const payload: {
+    w: string;
+    u: string;
+    exp: number;
+    o?: GithubReturnSurfaceId;
+    g?: string;
+  } = {
     w: state.workspaceId,
     u: state.userId,
     exp: nowSeconds + TTL_SECONDS,
   };
   if (state.origin) payload.o = state.origin;
+  if (state.organizationId) payload.g = state.organizationId;
   const b64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return `${b64}.${sign(b64)}`;
 }
@@ -95,7 +107,7 @@ export function decodeInstallStateResult(
   const b = Buffer.from(expectedSig);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return { ok: false, reason: 'malformed' };
 
-  let payload: { w?: unknown; u?: unknown; exp?: unknown; o?: unknown };
+  let payload: { w?: unknown; u?: unknown; exp?: unknown; o?: unknown; g?: unknown };
   try {
     payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8')) as typeof payload;
   } catch {
@@ -119,7 +131,14 @@ export function decodeInstallStateResult(
   const origin = parseReturnSurfaceId(typeof payload.o === 'string' ? payload.o : null);
   return {
     ok: true,
-    state: { workspaceId: payload.w, userId: payload.u, ...(origin ? { origin } : {}) },
+    state: {
+      workspaceId: payload.w,
+      userId: payload.u,
+      ...(origin ? { origin } : {}),
+      ...(typeof payload.g === 'string' && payload.g.length > 0
+        ? { organizationId: payload.g }
+        : {}),
+    },
   };
 }
 

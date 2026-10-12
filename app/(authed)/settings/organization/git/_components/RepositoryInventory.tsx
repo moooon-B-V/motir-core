@@ -61,8 +61,13 @@ export interface RepositoryInventoryProps {
   organizationName: string;
   /** Whether the actor may disconnect. Reading the inventory is org MEMBERSHIP. */
   canDisconnect: boolean;
-  /** GitHub's removal happens on github.com; this is where it hands off. */
-  manageOnGithubHref: string | null;
+  /**
+   * GitHub's removal happens on github.com; this is where it hands off, PER
+   * REPOSITORY (MOTIR-8223): keyed by `repo.id`, each the installation settings
+   * of the account that repository came through. One page-wide href was right
+   * only while an organisation had one account, and was null once it had two.
+   */
+  manageOnGithubHrefs: Readonly<Record<string, string>>;
   /** Resolves once the repository is disconnected (GitLab only). */
   onDisconnect: (row: OrgRepoInventoryRowDto) => Promise<void>;
   retentionDays: number;
@@ -72,7 +77,7 @@ export function RepositoryInventory({
   rows,
   organizationName,
   canDisconnect,
-  manageOnGithubHref,
+  manageOnGithubHrefs,
   onDisconnect,
   retentionDays,
 }: RepositoryInventoryProps) {
@@ -205,11 +210,12 @@ export function RepositoryInventory({
                       applies to a `domain` entry: *a control that cannot keep its
                       promise is worse than its absence*.
 
-                      `manageOnGithubHref` is computed ONCE for the page from
+                      The GitHub hand-off was computed ONCE for the page from
                       `soleInstallation` (`page.tsx`) and handed to every row. That
                       is right for an organisation-wide affordance and wrong for a
                       PER-ROW act, and the two are indistinguishable for as long as
-                      every row belongs to the same installation. A repository Motir
+                      every row belongs to the same installation — which is why it
+                      is now per repository (MOTIR-8223). A repository Motir
                       hosts does not: it sits under the SHARED provisioning
                       installation, which is `organizationId: null` on purpose
                       because it spans tenants. So `Continue on GitHub` sent the
@@ -353,9 +359,9 @@ export function RepositoryInventory({
               >
                 {td('confirm')}
               </Button>
-            ) : manageOnGithubHref ? (
+            ) : confirming && manageOnGithubHrefs[confirming.repo.id] ? (
               <a
-                href={manageOnGithubHref}
+                href={manageOnGithubHrefs[confirming.repo.id]}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) py-(--spacing-btn-y) font-sans text-sm font-medium text-(--el-accent-text)"

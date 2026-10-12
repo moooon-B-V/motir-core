@@ -6989,13 +6989,16 @@
       "state_error": "GitHub 로그인을 확인할 수 없습니다. 다시 연결해 보세요.",
       "error": "GitHub에 연결하는 중 문제가 발생했습니다. 다시 시도하세요.",
       "not_configured": "이 배포에는 아직 GitHub가 구성되지 않았습니다.",
-      "installed": "GitHub App이 설치되었습니다 — 이제 Motir가 선택한 저장소를 읽을 수 있으며, 앱이 호스팅 실행의 브랜치를 푸시하고 풀 리퀘스트를 엽니다.",
+      "installed": "GitHub 계정이 이 조직에 연결되었습니다. 이 계정이 이미 여기에 연결한 저장소는 유지됩니다. 더 추가하려면 저장소 추가 또는 제거를 사용하십시오.",
       "repos_updated": "저장소 액세스가 업데이트되었습니다. Motir는 GitHub에서 선택한 저장소를 읽습니다 — 여기서 더 할 일은 없습니다.",
       "install_unbound": "Motir GitHub App이 GitHub에 설치되었지만 이 워크스페이스에서 설치하지 않았으므로 아직 연결되지 않았습니다. 연결하려면 여기에서 설치를 시작하세요.",
       "install_expired": "GitHub에 있는 동안 설치 링크가 만료되었습니다. 문제가 생긴 것은 아니니 설정에서 다시 시작하세요.",
       "install_forbidden": "이 설치를 시작한 워크스페이스의 멤버가 아니므로 연결된 것은 없습니다.",
       "install_provider_error": "Motir가 App 연결을 마치기 위해 GitHub에 접속하지 못했습니다. 다시 시도하세요.",
-      "install_error": "GitHub App 설정을 마치지 못했습니다. 다시 설치해 보세요."
+      "install_error": "GitHub App 설정을 마치지 못했습니다. 다시 설치해 보세요.",
+      "select_repos": "Motir GitHub App이 설치되었습니다. 이 조직이 연결할 계정의 리포지토리를 선택하세요.",
+      "repo_unavailable": "해당 리포지토리는 이미 다른 조직에 연결되어 있어 여기에 추가되지 않았습니다. 다른 변경 사항은 없습니다.",
+      "installation_not_accessible": "GitHub에서 해당 GitHub 계정을 볼 수 없어 이 조직에 연결되지 않았습니다. 변경된 내용은 없습니다."
     },
     "connect": {
       "title": "GitHub 연결",
@@ -7007,14 +7010,14 @@
       },
       "step2": {
         "eyebrow": "2단계 · 저장소 액세스",
-        "title": "Motir GitHub App 설치",
-        "body": "Motir가 읽을 수 있는 저장소를 선택하세요 — GitHub 설치 화면에서 정확한 저장소를 고릅니다. Motir는 나머지 저장소를 볼 수 없으며, 선택은 언제든 바꿀 수 있습니다."
+        "title": "GitHub 계정 연결",
+        "body": "Motir GitHub App이 설치된 계정을 선택하거나 새 계정에 설치한 다음, 이 조직이 연결할 해당 계정의 저장소를 선택합니다. 저장소는 한 번에 하나의 조직에만 속합니다."
       },
       "installLink": "Motir GitHub App 설치",
       "cta": "GitHub 연결",
       "foot": "GitHub로 이동하여 승인한 다음 저장소를 선택합니다.",
       "noInstallHref": "이 배포에서는 Motir GitHub App을 설치할 수 없습니다.",
-      "orgFoot": "GitHub로 이동하여 이 조직이 Motir에 허용할 저장소를 선택합니다."
+      "orgFoot": "Motir GitHub App이 이미 GitHub 계정에 설치되어 있으면 Motir가 해당 계정을 표시하므로 다시 설치할 필요가 없습니다."
     },
     "identity": {
       "connectedAs": "GitHub ID · {name}(으)로 연결됨",
@@ -7315,6 +7318,97 @@
       "adminOnly": "{org}의 소유자와 관리자만 Git 호스트를 연결하거나 연결 해제할 수 있습니다.",
       "subtitleGeneric": "조직을 GitHub 또는 GitLab에 한 번만 연결하세요. 그러면 조직의 모든 프로젝트가 연결된 저장소에서 작업할 수 있으며, 저장소를 선택해도 다시 인덱싱되지 않습니다.",
       "identityAtAccount": "설정 → 계정 → Git 계정에서 본인 계정을 연결하세요"
+    },
+    "accounts": {
+      "title": "GitHub 계정",
+      "subtitle": "{org}에서 저장소를 연결하는 계정입니다. 각 저장소는 한 번에 하나의 조직에만 속합니다.",
+      "connect": "GitHub 연결",
+      "linked": "연결됨",
+      "meta": "{type} · 여기에 연결된 저장소 {count, plural, other {#개}}",
+      "type": {
+        "organization": "조직",
+        "personal": "개인"
+      },
+      "addOrRemove": "저장소 추가 또는 제거",
+      "manageOnGithub": "GitHub에서 관리",
+      "disconnect": "연결 해제",
+      "toastTitle": "{account}에서 저장소 {count, plural, other {#개}}를 연결했습니다",
+      "toastBody": "저장소 목록에 표시됩니다. 이제 {org}의 모든 프로젝트에서 추가할 수 있습니다."
+    },
+    "picker": {
+      "title": "GitHub 연결",
+      "description": "{org}에 연결할 저장소가 있는 GitHub 계정을 선택하십시오. Motir GitHub App이 설치되어 있고 회원님이 볼 수 있는 계정입니다.",
+      "accountsLabel": "계정",
+      "accountMeta": "{type} · Motir에 표시되는 저장소 {count, plural, other {#개}}",
+      "notLinked": "연결되지 않음",
+      "linkedHere": "이 조직에 연결됨",
+      "installOther": "다른 계정에 설치",
+      "installOtherMeta": "GitHub를 열어 아직 Motir GitHub App이 없는 계정에 설치합니다.",
+      "loadingAccounts": "GitHub 계정을 불러오는 중…",
+      "accountsError": {
+        "title": "GitHub에 연결할 수 없습니다",
+        "body": "Motir가 Motir GitHub App이 설치된 계정을 불러오지 못했습니다. 변경된 내용은 없습니다."
+      },
+      "retry": "다시 시도",
+      "noAccounts": {
+        "title": "아직 연결할 GitHub 계정이 없습니다",
+        "body": "회원님이 볼 수 있는 GitHub 계정 중 Motir GitHub App이 설치된 계정이 없습니다. 계속하려면 한 계정에 설치하십시오."
+      },
+      "identity": {
+        "title": "먼저 GitHub 계정을 연결하십시오",
+        "body": "Motir는 회원님의 GitHub ID를 통해 볼 수 있는 GitHub 계정을 표시합니다. 설정 → 계정 → Git 계정에서 연결한 다음 여기로 돌아오십시오.",
+        "action": "Git 계정으로 이동"
+      },
+      "cancel": "취소",
+      "back": "모든 계정",
+      "reposTitle": "{account}의 저장소 선택",
+      "reposDescription": "각 저장소는 한 번에 하나의 조직에만 속합니다. 다른 조직이 이미 연결한 저장소는 여기에 추가할 수 없습니다.",
+      "search": "저장소 검색",
+      "selectAll": "선택 가능한 항목 모두 선택({count})",
+      "selected": "{count}개 선택됨",
+      "rowState": {
+        "selected": "선택됨",
+        "notSelected": "선택되지 않음"
+      },
+      "connectedElsewhere": "다른 조직에 연결됨",
+      "connectedHere": "여기에 연결됨",
+      "noMatches": "검색과 일치하는 저장소가 없습니다.",
+      "hint": "{org}에서 저장소 연결을 해제하려면 저장소 목록에서 해당 행의 연결 해제를 사용하십시오.",
+      "submit": "{count, plural, =0 {저장소 연결} other {저장소 #개 연결}}",
+      "loadingRepos": "저장소를 불러오는 중…",
+      "reposError": {
+        "title": "저장소를 불러올 수 없습니다",
+        "body": "Motir가 GitHub에서 {account}의 저장소를 불러오지 못했습니다. 변경된 내용은 없습니다."
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "{repo} 저장소가 방금 다른 조직에 연결되어 추가할 수 없습니다.",
+        "repo_selection_required": "연결할 저장소를 하나 이상 선택하십시오.",
+        "repository_not_visible": "이 저장소 중 하나가 더 이상 GitHub에서 Motir GitHub App에 표시되지 않습니다. 목록을 새로 고친 후 다시 시도하십시오.",
+        "installation_not_accessible": "GitHub에서 더 이상 {account} 계정을 볼 수 없으므로 연결할 수 없습니다. 다른 계정을 선택하십시오.",
+        "generic": "저장소를 연결하는 중 문제가 발생했습니다. 변경된 내용은 없습니다. 다시 시도하십시오."
+      },
+      "noneLeft": {
+        "title": "{account}에서 더 연결할 저장소가 없습니다",
+        "body": "Motir GitHub App이 {account}에서 볼 수 있는 모든 저장소가 이미 연결되어 있습니다. 저장소는 한 번에 하나의 조직에만 속합니다.",
+        "connectedHere": "이 조직에 연결됨",
+        "connectedElsewhere": "다른 조직에 연결됨",
+        "hint": "더 추가하려면 GitHub에서 Motir GitHub App에 다른 저장소에 대한 액세스 권한을 부여하거나 다른 계정을 선택하십시오.",
+        "chooseAnother": "다른 계정 선택",
+        "manageOnGithub": "GitHub에서 저장소 관리"
+      }
+    },
+    "accountDisconnect": {
+      "title": "{org}에서 {account} 계정의 연결을 해제하시겠습니까?",
+      "repos": "이 작업은 {org}과(와) {account} 사이의 연결 및 해당 계정이 여기에 연결한 저장소 {count, plural, other {#개}}만 제거합니다:",
+      "projects": "이 저장소를 잃게 되는 프로젝트 {count, plural, other {#개}}:",
+      "noProjects": "{org}에서 아직 이 저장소를 사용하는 프로젝트가 없습니다.",
+      "retention": "Motir가 이 저장소로 만든 코드 인덱스는 {days}일 동안 보관됩니다. 그 전에 계정을 다시 연결하고 저장소를 선택하면 제거가 취소되며, 그 이후에 다시 추가하면 전체 인덱싱이 필요합니다.",
+      "others": "{account} 계정에 연결된 다른 조직에는 영향이 없으며, Motir GitHub App은 GitHub에 설치된 상태로 유지됩니다. 모든 곳에서 제거하려면 GitHub에서 제거하십시오.",
+      "loading": "이 연결 해제의 영향을 불러오는 중…",
+      "loadFailed": "Motir가 {account} 계정 연결 해제의 영향을 불러오지 못했습니다. 변경된 내용은 없습니다. 다시 시도하십시오.",
+      "failed": "Motir가 {account} 계정의 연결을 해제하지 못했습니다. 변경된 내용은 없습니다. 다시 시도하십시오.",
+      "cancel": "취소",
+      "confirm": "연결 해제"
     }
   },
   "aiPlanning": {
