@@ -299,12 +299,13 @@ describe('the (auth) frame mounts it once, outside the card', () => {
     });
   }
 
-  it('is imported by app/(auth)/layout.tsx and, under app/, only by the onboarding how-it-works page', () => {
+  it('is imported by app/(auth)/layout.tsx and, under app/, only by the onboarding how-it-works and direction-doc pages', () => {
     // MOTIR-8253 moved the control to `components/i18n/` so the onboarding brand
     // bar can carry it too (design/onboarding-entrance Revision 2, MOTIR-8286).
     // The entrance mounts it from `components/onboarding/OnboardingEntrance.tsx`;
-    // the only OTHER route under app/ that may name it is how-it-works, which has
-    // no client entrance of its own. The (auth) frame still mounts it once.
+    // the only OTHER routes under app/ that may name it are how-it-works and the
+    // direction-doc page (MOTIR-8286), whose bars are server-rendered and have no
+    // client entrance of their own. The (auth) frame still mounts it once.
     const importers = walk('app')
       .filter((f) => readFileSync(f, 'utf8').includes('AuthLanguageControl'))
       .sort();
@@ -312,6 +313,7 @@ describe('the (auth) frame mounts it once, outside the card', () => {
       [
         join('app', '(auth)', 'layout.tsx'),
         join('app', '(onboarding)', 'onboarding', 'how-it-works', 'page.tsx'),
+        join('app', '(onboarding)', 'onboarding', 'direction', '[tier]', 'page.tsx'),
       ].sort(),
     );
   });
