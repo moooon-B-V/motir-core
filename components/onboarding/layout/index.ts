@@ -19,3 +19,11 @@ export {
   type ArtBarProps,
 } from './SectionArt';
 export { OnboardingLinkOut, type OnboardingLinkOutProps } from './OnboardingLinkOut';
+export { WarmButton, WARM_CTA } from './WarmButton';
+export {
+  OnboardingWizardBar,
+  BAR_SECONDARY_HOVER,
+  BAR_GHOST_HOVER,
+  type OnboardingWizardBarProps,
+} from './OnboardingWizardBar';
+export { OnboardingWorkBand, type OnboardingWorkBandProps } from './OnboardingWorkBand';

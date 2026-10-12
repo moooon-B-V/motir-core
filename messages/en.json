@@ -8387,16 +8387,30 @@
       "eyebrow": "Existing codebase",
       "heading": "Migrate an existing codebase",
       "body": "Connect your repositories, let Motir read the code and derive conventions, then optionally import your backlog and plan.",
-      "projectLine": "The migrate wizard runs for this project.",
-      "cta": "Start"
+      "chooseLabel": "Which project are you migrating?",
+      "current": "Open now",
+      "currentMeta": "The project you have open",
+      "otherMeta": "Switches to this project, then starts",
+      "ctaFor": "Start with {project}"
     },
     "connect": {
       "eyebrow": "Step 1 of 2 · Set up",
       "heading": "Connect the repositories in this project",
-      "body": "Connect your GitHub repositories in workspace settings. Motir reads them through the GitProvider seam to build one code graph across the project.",
-      "cta": "Open GitHub settings",
+      "body": "Motir reads the repositories you connect on GitHub and builds one map of the code across the project.",
       "gitlabNote": "GitLab connect is coming soon.",
-      "next": "I've connected my repos"
+      "checking": "Checking for connected repositories…",
+      "missingTitle": "No repositories connected yet",
+      "missingHint": "Connect GitHub in a new tab. Motir notices the connection by itself, so there is nothing to confirm here.",
+      "connectCta": "Connect GitHub",
+      "newTab": "(opens in a new tab)",
+      "waitingTitle": "Waiting for GitHub",
+      "waitingHint": "Finish connecting in the other tab. Motir checks again when you come back, and every few seconds until then.",
+      "reopenCta": "Open GitHub settings again",
+      "detected": "{count, plural, one {# repository is connected} other {# repositories are connected}}",
+      "detectedHint": "These are the repositories Motir can read. Indexing starts when you continue.",
+      "listLabel": "Connected repositories",
+      "continue": "Continue",
+      "manage": "Manage repositories on GitHub"
     },
     "index": {
       "eyebrow": "Step 2 of 2 · Set up",
@@ -8419,10 +8433,10 @@
       "eyebrow": "Optional · Import & plan",
       "heading": "Bring in your existing backlog",
       "body": "Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Import it into this project — you'll review a dry-run preview before anything is written. Skip this if you have no backlog to bring in.",
-      "cta": "Open the importer",
       "reconcile": "When you then generate a plan, Motir reconciles the two so nothing is duplicated.",
       "skip": "Skip import",
-      "next": "I've imported — continue"
+      "bodyInline": "Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Bring it in right here. You review a dry-run preview before anything is written. Skip this if you have no backlog to bring in.",
+      "continue": "Continue"
     },
     "decision": {
       "eyebrow": "Set up complete",
@@ -8436,6 +8450,18 @@
       "heading": "Continue planning",
       "body": "You started planning this project. Continue in the planning workspace.",
       "cta": "Continue planning"
+    },
+    "questions": {
+      "eyebrow": "Your direction",
+      "heading": "A few questions",
+      "body": "Motir has read your code. A few answers about where the project is going, and it drafts your first plan from both.",
+      "progress": "Question {n} of about {total}",
+      "draftingTitle": "Drafting your first plan",
+      "draftingBody": "From your code, your backlog and your answers. You can leave this page; Motir tells you when it is ready.",
+      "draftingWaits": "Waiting for Motir to finish reading your code, then drafting starts by itself.",
+      "readyTitle": "Your first plan is ready",
+      "readyBody": "{count, plural, one {# item is} other {# items are}} drafted for {project}. Nothing is final until you approve it.",
+      "readyCta": "Review your plan"
     }
   },
   "repositorySet": {

@@ -8360,17 +8360,13 @@
     "start": {
       "eyebrow": "Istniejąca baza kodu",
       "heading": "Przenieś istniejącą bazę kodu",
-      "body": "Połącz repozytoria, pozwól Motir przeczytać kod i wyprowadzić konwencje, a następnie opcjonalnie zaimportuj Backlog i zaplanuj.",
-      "projectLine": "Kreator migracji działa dla tego projektu.",
-      "cta": "Rozpocznij"
+      "body": "Połącz repozytoria, pozwól Motir przeczytać kod i wyprowadzić konwencje, a następnie opcjonalnie zaimportuj Backlog i zaplanuj."
     },
     "connect": {
       "eyebrow": "Krok 1 z 2 · Konfiguracja",
       "heading": "Połącz repozytoria w tym projekcie",
       "body": "Połącz repozytoria GitHub w ustawieniach obszaru roboczego. Motir czyta je przez warstwę GitProvider, aby zbudować jeden graf kodu dla całego projektu.",
-      "cta": "Otwórz ustawienia GitHub",
-      "gitlabNote": "Łączenie z GitLabem pojawi się wkrótce.",
-      "next": "Repozytoria są połączone"
+      "gitlabNote": "Łączenie z GitLabem pojawi się wkrótce."
     },
     "index": {
       "eyebrow": "Krok 2 z 2 · Konfiguracja",
@@ -8393,10 +8389,8 @@
       "eyebrow": "Opcjonalne · Import i planowanie",
       "heading": "Przenieś istniejący Backlog",
       "body": "Śledzisz już pracę w Jira, Linear, GitHubie, Plane lub pliku CSV? Zaimportuj ją do tego projektu — przed zapisaniem czegokolwiek przejrzysz podgląd próbny. Pomiń ten krok, jeśli nie masz Backlogu do przeniesienia.",
-      "cta": "Otwórz importer",
       "reconcile": "Gdy potem wygenerujesz plan, Motir uzgodni oba źródła, aby nic się nie zduplikowało.",
-      "skip": "Pomiń import",
-      "next": "Zaimportowano — kontynuuj"
+      "skip": "Pomiń import"
     },
     "decision": {
       "eyebrow": "Konfiguracja zakończona",

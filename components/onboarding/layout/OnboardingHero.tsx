@@ -26,6 +26,12 @@ import { OnboardingBrandBar } from './OnboardingBrandBar';
 //   waves    cropped, not dropped, at narrow widths: the field always fills the
 //            band's box, so a phone sees the middle of the same field
 //
+// COMPACT (MOTIR-8254, design/onboarding-migrate § 2026-10-12 "The hero"): the
+// wizard screens take the full hero only on a run's FIRST screen and this
+// smaller one after every step advance, so the step stays above the fold —
+// h1 56 px (34 narrow), lede 17 px (16 narrow), `pt-6 pb-12` (`pt-4 pb-8`
+// narrow), the same ground and waves.
+//
 // Presentational: strings and nodes in, no `useTranslations`.
 
 export interface OnboardingHeroProps {
@@ -51,6 +57,11 @@ export interface OnboardingHeroProps {
   brandBar?: boolean;
   /** The brand bar's trailing slot (e.g. the language control). */
   barEnd?: ReactNode;
+  /** A whole bar to render in place of the default `OnboardingBrandBar` — the
+   *  wizard screens pass theirs (flow name, exits, language, initial). */
+  bar?: ReactNode;
+  /** The compact variant — every wizard step after the first. Default `false`. */
+  compact?: boolean;
 }
 
 export const ONBOARDING_HERO_CONTROL_ID = 'onboarding-hero-control';
@@ -64,30 +75,50 @@ export function OnboardingHero({
   waves = true,
   brandBar = true,
   barEnd,
+  bar,
+  compact = false,
 }: OnboardingHeroProps) {
   const headingId = useId();
   const hasControl = children != null && children !== false;
   return (
     <section
-      data-onboarding-hero=""
+      data-onboarding-hero={compact ? 'compact' : 'full'}
       aria-labelledby={headingId}
       className="relative isolate overflow-hidden bg-(--el-surface)"
     >
       {waves ? <HeroWaves focusId={controlId} /> : null}
-      {brandBar ? <OnboardingBrandBar>{barEnd}</OnboardingBrandBar> : null}
-      <div className="grid justify-items-center gap-[18px] px-[clamp(16px,3vw,48px)] pt-[clamp(40px,5vw,64px)] pb-[clamp(64px,8vw,104px)] text-center md:gap-[22px]">
+      {bar ?? (brandBar ? <OnboardingBrandBar>{barEnd}</OnboardingBrandBar> : null)}
+      <div
+        className={
+          compact
+            ? 'grid justify-items-center gap-2 px-[clamp(16px,3vw,48px)] pt-4 pb-8 text-center md:gap-3 md:pt-6 md:pb-12'
+            : 'grid justify-items-center gap-[18px] px-[clamp(16px,3vw,48px)] pt-[clamp(40px,5vw,64px)] pb-[clamp(64px,8vw,104px)] text-center md:gap-[22px]'
+        }
+      >
         <div
           id={hasControl ? undefined : controlId}
-          className="grid justify-items-center gap-[18px] md:gap-[22px]"
+          className={
+            compact
+              ? 'grid justify-items-center gap-2 md:gap-3'
+              : 'grid justify-items-center gap-[18px] md:gap-[22px]'
+          }
         >
           <h1
             id={headingId}
-            className="m-0 font-serif text-[clamp(48px,7.5vw,112px)] leading-[0.94] font-bold tracking-[-0.035em] text-balance text-(--el-text)"
+            className={
+              (compact ? 'text-[34px] md:text-[56px]' : 'text-[clamp(48px,7.5vw,112px)]') +
+              ' m-0 font-serif leading-[0.94] font-bold tracking-[-0.035em] text-balance text-(--el-text)'
+            }
           >
             {headline}
           </h1>
           {lede != null ? (
-            <p className="m-0 max-w-[62ch] text-[clamp(17px,1.45vw,21px)] leading-normal font-medium text-balance text-(--el-accent-on-surface)">
+            <p
+              className={
+                (compact ? 'text-[16px] md:text-[17px]' : 'text-[clamp(17px,1.45vw,21px)]') +
+                ' m-0 max-w-[62ch] leading-normal font-medium text-balance text-(--el-accent-on-surface)'
+              }
+            >
               {lede}
             </p>
           ) : null}

@@ -22,30 +22,61 @@ import { BrandMark } from '@/components/brand/BrandMark';
 // — the language control (MOTIR-8286, design Revision 2) or a screen control
 // such as the migrate card's "Start from an idea instead". Presentational: it
 // takes nodes, calls no `useTranslations`, and owns no copy.
+//
+// The wizard screens (MOTIR-8254, design/onboarding-migrate § 2026-10-12) use
+// two more slots: `lead` — the `· {flow name}` that follows the lockup — and
+// `linked={false}`, which renders the lockup as a plain span, because those
+// bars carry their own exits (Save & exit, Start from an idea instead) and a
+// third one on the logo would compete with them. Their trailing group wraps
+// under the lockup on a narrow screen instead of squeezing it.
 
 export interface OnboardingBrandBarProps {
   /** The trailing control(s), opposite the lockup. Omitted renders the lockup alone. */
   children?: ReactNode;
+  /** Set right after the lockup — the wizard bars' `· {flow name}`. */
+  lead?: ReactNode;
+  /** Link the lockup home. Default `true`; the wizard bars pass `false`. */
+  linked?: boolean;
   className?: string;
 }
 
-export function OnboardingBrandBar({ children, className }: OnboardingBrandBarProps) {
+export function OnboardingBrandBar({
+  children,
+  lead,
+  linked = true,
+  className,
+}: OnboardingBrandBarProps) {
+  const mark = <BrandMark variant="lockup" tone="default" size={28} />;
+  const lockup = linked ? (
+    <Link
+      href="/"
+      className="inline-flex flex-none items-center rounded-(--radius-control) no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
+    >
+      {mark}
+    </Link>
+  ) : (
+    <span data-brand-position="" className="inline-flex flex-none items-center">
+      {mark}
+    </span>
+  );
   return (
     <header
       data-onboarding-brand-bar=""
       className={[
-        'flex items-center justify-between gap-4 px-4 py-3 md:px-(--spacing-card-padding) md:py-4',
+        'relative z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 md:px-(--spacing-card-padding) md:py-4',
         className ?? '',
       ]
         .filter(Boolean)
         .join(' ')}
     >
-      <Link
-        href="/"
-        className="inline-flex items-center rounded-(--radius-control) no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
-      >
-        <BrandMark variant="lockup" tone="default" size={28} />
-      </Link>
+      {lead != null ? (
+        <span className="flex min-w-0 items-center gap-3">
+          {lockup}
+          {lead}
+        </span>
+      ) : (
+        lockup
+      )}
       {children}
     </header>
   );

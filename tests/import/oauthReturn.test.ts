@@ -25,6 +25,15 @@ describe('safeImportReturnPath', () => {
     );
   });
 
+  it('accepts the migrate wizard, whose Import step runs the importer inline (MOTIR-8254)', () => {
+    expect(safeImportReturnPath('/onboarding/migrate')).toBe('/onboarding/migrate');
+    expect(safeImportReturnPath('/onboarding/migrate?projectId=x')).toBe(
+      '/onboarding/migrate?projectId=x',
+    );
+    // Only the wizard itself — not a sibling path that merely shares its prefix.
+    expect(safeImportReturnPath('/onboarding/migrate-evil')).toBe(IMPORT_RETURN_DEFAULT);
+  });
+
   it('falls back to the default for a missing / empty value', () => {
     expect(safeImportReturnPath(null)).toBe(IMPORT_RETURN_DEFAULT);
     expect(safeImportReturnPath(undefined)).toBe(IMPORT_RETURN_DEFAULT);

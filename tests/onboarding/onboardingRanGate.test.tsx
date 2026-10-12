@@ -65,6 +65,17 @@ vi.mock('@/lib/services/migrateOnboardingService', () => ({
   },
 }));
 
+// The page's two other reads (MOTIR-8254): the workspace's projects, for Start's
+// choice and the one-project arrival, and the inline importer's data. Neither
+// decides a redirect, so they answer with one project and no importer.
+const listProjects = vi.fn();
+vi.mock('@/lib/services/projectsService', () => ({
+  projectsService: { listProjects: (...a: unknown[]) => listProjects(...a) },
+}));
+vi.mock('@/app/(onboarding)/onboarding/import/_data', () => ({
+  loadImportWizard: async () => ({ kind: 'unauthenticated' }),
+}));
+
 // Sentinel for the wizard island so we can assert the page returned IT (and with
 // which run) without rendering the real client component.
 function MigrateWizardStub() {
@@ -119,6 +130,7 @@ function makeRun(overrides: Partial<MigrateOnboardingDto> = {}): MigrateOnboardi
  *  fields matter here. */
 function mockProject(onboardingRanAt: Date | null) {
   getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue' } });
+  listProjects.mockResolvedValue([{ id: 'proj-1', name: 'MOTIR', identifier: 'MOTIR' }]);
   getActiveProject.mockResolvedValue({
     userId: 'u1',
     workspaceId: 'ws1',
@@ -174,6 +186,25 @@ describe('/onboarding/migrate — a project mid-journey still resumes (MOTIR-209
 
     expect(redirect).not.toHaveBeenCalled();
     expect(result).toMatchObject({ type: MigrateWizardStub, props: { initialRun: null } });
+  });
+
+  // MOTIR-8251 Revisions 3 and 4: Start is a choice, so it exists only when
+  // there is something to choose. One project starts the run on arrival.
+  it('starts on arrival with ONE project, and offers the choice with two', async () => {
+    mockProject(null);
+    getForProject.mockResolvedValue(null);
+    const one = await MigrateOnboardingPage(NO_QUERY);
+    expect(one).toMatchObject({
+      props: { autoStart: true, activeProjectId: 'proj-1', projects: [{ id: 'proj-1' }] },
+    });
+
+    listProjects.mockResolvedValue([
+      { id: 'proj-1', name: 'MOTIR', identifier: 'MOTIR' },
+      { id: 'proj-2', name: 'Other', identifier: 'OTH' },
+    ]);
+    const two = await MigrateOnboardingPage(NO_QUERY);
+    expect(two).toMatchObject({ props: { autoStart: false } });
+    expect((two as { props: { projects: unknown[] } }).props.projects).toHaveLength(2);
   });
 
   it('still forwards a COMPLETED run to /roadmap — the pre-existing gate is untouched', async () => {

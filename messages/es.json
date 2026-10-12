@@ -8363,17 +8363,13 @@
     "start": {
       "eyebrow": "Código existente",
       "heading": "Migrar un código existente",
-      "body": "Conecta tus repositorios, deja que Motir lea el código y derive convenciones, y luego, si quieres, importa tu Backlog y planifica.",
-      "projectLine": "El asistente de migración se ejecuta para este proyecto.",
-      "cta": "Empezar"
+      "body": "Conecta tus repositorios, deja que Motir lea el código y derive convenciones, y luego, si quieres, importa tu Backlog y planifica."
     },
     "connect": {
       "eyebrow": "Paso 1 de 2 · Configuración",
       "heading": "Conecta los repositorios de este proyecto",
       "body": "Conecta tus repositorios de GitHub en la configuración del espacio de trabajo. Motir los lee a través de la interfaz GitProvider para construir un único grafo de código para todo el proyecto.",
-      "cta": "Abrir la configuración de GitHub",
-      "gitlabNote": "La conexión con GitLab llegará pronto.",
-      "next": "Ya conecté mis repositorios"
+      "gitlabNote": "La conexión con GitLab llegará pronto."
     },
     "index": {
       "eyebrow": "Paso 2 de 2 · Configuración",
@@ -8396,10 +8392,8 @@
       "eyebrow": "Opcional · Importar y planificar",
       "heading": "Trae tu Backlog existente",
       "body": "¿Ya haces seguimiento del trabajo en Jira, Linear, GitHub, Plane o un CSV? Impórtalo en este proyecto: revisarás una vista previa simulada antes de que se escriba nada. Omite esto si no tienes Backlog que traer.",
-      "cta": "Abrir el importador",
       "reconcile": "Cuando luego generes un plan, Motir concilia ambos para que nada se duplique.",
-      "skip": "Omitir la importación",
-      "next": "Ya importé: continuar"
+      "skip": "Omitir la importación"
     },
     "decision": {
       "eyebrow": "Configuración completada",

@@ -1,19 +1,32 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { Card } from '@/components/ui/Card';
+import { buttonVariants } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import {
+  BAR_GHOST_HOVER,
+  OnboardingHero,
+  OnboardingWizardBar,
+  OnboardingWorkBand,
+} from '@/components/onboarding/layout';
+import { getSession } from '@/lib/auth';
+import { cn } from '@/lib/utils/cn';
+import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 import { ImportWizard } from './_components/ImportWizard';
-import type { ImportSourceId } from './_components/importClient';
 import { loadImportWizard } from './_data';
+import { resolveJustConnected } from './_justConnected';
 
 // The import wizard (Story 7.16 · MOTIR-942) — connect → map → dry-run preview →
 // run. Lives at `/onboarding/import` because the shipped per-vendor OAuth flows
 // (7.16.11–13) hardcode this as their return path (`IMPORT_PATH`); it REPLACES
-// the 7.22.4 "coming soon" hand-off stub in place. The design's Settings ›
-// Project › Import door mounts the same wizard component (a follow-up, once the
-// OAuth start routes carry a `returnTo`). Server Component: reads via services,
-// hands the client island its data + connected-source state (4-layer).
+// the 7.22.4 "coming soon" hand-off stub in place. The migrate wizard's Import
+// step runs the same component inline (MOTIR-8254); this route stays for the
+// person who reaches it directly. Server Component: reads via services, hands
+// the client island its data + connected-source state (4-layer).
+//
+// On the onboarding vibe layout (MOTIR-8254, `design/import/design-notes.md`
+// § 2026-10-12): the wizard's bar, a hero (full on the picker, compact on the
+// wizard) and one band, with no outer centred card.
 
 export default async function OnboardingImportPage({
   searchParams,
@@ -28,34 +41,61 @@ export default async function OnboardingImportPage({
   if (result.kind === 'unauthenticated') redirect('/sign-in?next=%2Fonboarding%2Fimport');
 
   const t = await getTranslations('import');
+  const tm = await getTranslations('onboardingMigrate');
+  const session = await getSession();
+  const userInitial = (session?.user.name?.[0] ?? 'M').toUpperCase();
+
+  // F1: the importer has no Save & exit of its own; it borrows the wizard's key
+  // (same words) and goes where the Connect step's Cancel goes.
+  const bar = (
+    <OnboardingWizardBar flowName={t('chrome.title')} userInitial={userInitial}>
+      <Link
+        href={ONBOARDING_ENTRY_PATH}
+        className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), BAR_GHOST_HOVER)}
+      >
+        {tm('common.saveExit')}
+      </Link>
+    </OnboardingWizardBar>
+  );
 
   if (result.kind === 'chooseProject') {
     return (
-      <div className="mx-auto w-full max-w-[41.25rem] px-6 py-10">
-        <Card className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-lg font-semibold text-(--el-text-strong)">
+      <div className="flex min-h-dvh flex-col bg-(--el-page-bg)">
+        <OnboardingHero bar={bar} headline={t('hero.headline')} lede={t('hero.lede')} />
+        <OnboardingWorkBand>
+          <div className="mx-auto grid w-full max-w-[72rem] items-start gap-x-14 gap-y-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+            <h2 className="m-0 font-serif text-[34px] leading-[0.98] font-bold tracking-[-0.03em] text-balance text-(--el-text) md:text-[56px]">
               {t('projectPicker.heading')}
-            </h1>
-            <p className="text-sm text-(--el-text-muted)">{t('projectPicker.body')}</p>
+            </h2>
+            <div className="grid gap-5">
+              <p className="m-0 max-w-[44ch] text-[18px] leading-normal text-(--el-text-secondary)">
+                {t('projectPicker.body')}
+              </p>
+              {result.data.projects.length === 0 ? (
+                <EmptyState
+                  title={t('projectPicker.label')}
+                  description={t('projectPicker.empty')}
+                />
+              ) : (
+                <ul
+                  aria-label={t('projectPicker.label')}
+                  className="m-0 flex list-none flex-col gap-2 p-0"
+                >
+                  {result.data.projects.map((p) => (
+                    <li key={p.id}>
+                      <Link
+                        href={`/onboarding/import?projectId=${encodeURIComponent(p.id)}`}
+                        className="block rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-3 text-sm text-(--el-text) hover:border-(--el-border-strong)"
+                      >
+                        {p.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
-          {result.data.projects.length === 0 ? (
-            <EmptyState title={t('projectPicker.label')} description={t('projectPicker.empty')} />
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {result.data.projects.map((p) => (
-                <li key={p.id}>
-                  <Link
-                    href={`/onboarding/import?projectId=${encodeURIComponent(p.id)}`}
-                    className="block rounded-(--radius-control) border border-(--el-border) px-4 py-3 text-sm text-(--el-text) hover:bg-(--el-surface)"
-                  >
-                    {p.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        </OnboardingWorkBand>
       </div>
     );
   }
@@ -64,35 +104,19 @@ export default async function OnboardingImportPage({
   const justConnected = resolveJustConnected(sp);
 
   return (
-    <ImportWizard
-      project={data.project}
-      statuses={data.statuses}
-      connected={data.connected}
-      existingImportId={data.existingImport?.id ?? null}
-      justConnected={justConnected}
-    />
+    <div className="flex min-h-dvh flex-col bg-(--el-page-bg)">
+      <OnboardingHero bar={bar} compact headline={t('hero.headline')} lede={t('hero.lede')} />
+      <OnboardingWorkBand>
+        <div className="mx-auto w-full max-w-[72rem]">
+          <ImportWizard
+            project={data.project}
+            statuses={data.statuses}
+            connected={data.connected}
+            existingImportId={data.existingImport?.id ?? null}
+            justConnected={justConnected}
+          />
+        </div>
+      </OnboardingWorkBand>
+    </div>
   );
-}
-
-/** Parse the OAuth round-trip return params the shipped callbacks set, recovering
- *  BOTH the source (so its card re-selects) and the success/failure flag:
- *   - Jira → `?jira=connected|denied|state_error|not_configured|error`.
- *   - Linear → `?import=linear_connected|linear_denied|…`.
- *   - Plane  → `?import=plane_connected|plane_denied|…`.
- *  Success is exactly the `…connected` outcome; every other value is a failure. */
-function resolveJustConnected(
-  sp: Record<string, string | string[] | undefined>,
-): { source: ImportSourceId | null; failed: boolean } | undefined {
-  const jira = typeof sp['jira'] === 'string' ? sp['jira'] : undefined;
-  if (jira) return { source: 'jira', failed: jira !== 'connected' };
-  const generic = typeof sp['import'] === 'string' ? sp['import'] : undefined;
-  if (generic) {
-    const source: ImportSourceId | null = generic.startsWith('linear_')
-      ? 'linear'
-      : generic.startsWith('plane_')
-        ? 'plane'
-        : null;
-    return { source, failed: !generic.endsWith('connected') };
-  }
-  return undefined;
 }

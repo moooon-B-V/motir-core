@@ -8363,17 +8363,13 @@
     "start": {
       "eyebrow": "Bestehende Codebasis",
       "heading": "Bestehende Codebasis migrieren",
-      "body": "Verbinden Sie Ihre Repositorys, lassen Sie Motir den Code lesen und Konventionen ableiten, und importieren Sie dann optional Ihr Backlog und planen Sie.",
-      "projectLine": "Der Migrationsassistent läuft für dieses Projekt.",
-      "cta": "Starten"
+      "body": "Verbinden Sie Ihre Repositorys, lassen Sie Motir den Code lesen und Konventionen ableiten, und importieren Sie dann optional Ihr Backlog und planen Sie."
     },
     "connect": {
       "eyebrow": "Schritt 1 von 2 · Einrichten",
       "heading": "Die Repositorys dieses Projekts verbinden",
       "body": "Verbinden Sie Ihre GitHub-Repositorys in den Einstellungen des Arbeitsbereichs. Motir liest sie über die GitProvider-Schnittstelle, um einen gemeinsamen Code-Graphen für das gesamte Projekt zu erstellen.",
-      "cta": "GitHub-Einstellungen öffnen",
-      "gitlabNote": "Die GitLab-Verbindung ist bald verfügbar.",
-      "next": "Ich habe meine Repositorys verbunden"
+      "gitlabNote": "Die GitLab-Verbindung ist bald verfügbar."
     },
     "index": {
       "eyebrow": "Schritt 2 von 2 · Einrichten",
@@ -8396,10 +8392,8 @@
       "eyebrow": "Optional · Importieren & planen",
       "heading": "Ihr bestehendes Backlog übernehmen",
       "body": "Verfolgen Sie Arbeit bereits in Jira, Linear, GitHub, Plane oder einer CSV-Datei? Importieren Sie sie in dieses Projekt – Sie prüfen eine Vorschau des Testlaufs, bevor etwas geschrieben wird. Überspringen Sie dies, wenn Sie kein Backlog übernehmen möchten.",
-      "cta": "Import öffnen",
       "reconcile": "Wenn Sie anschließend einen Plan generieren, gleicht Motir beides ab, damit nichts doppelt vorkommt.",
-      "skip": "Import überspringen",
-      "next": "Ich habe importiert – fortfahren"
+      "skip": "Import überspringen"
     },
     "decision": {
       "eyebrow": "Einrichtung abgeschlossen",

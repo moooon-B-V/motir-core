@@ -8383,16 +8383,30 @@
       "eyebrow": "现有代码库",
       "heading": "迁移现有代码库",
       "body": "连接你的仓库，让 Motir 读取代码并推导编码规范，然后可选地导入你的工作项并规划。",
-      "projectLine": "迁移向导将针对此项目运行。",
-      "cta": "开始"
+      "chooseLabel": "你要迁移哪个项目？",
+      "current": "当前打开",
+      "currentMeta": "你当前打开的项目",
+      "otherMeta": "先切换到这个项目，再开始",
+      "ctaFor": "从 {project} 开始"
     },
     "connect": {
       "eyebrow": "第 1 步，共 2 步 · 设置",
       "heading": "连接本项目中的仓库",
-      "body": "在工作区设置中连接你的 GitHub 仓库。Motir 通过 GitProvider 接口读取它们，为整个项目构建一个代码图谱。",
-      "cta": "打开 GitHub 设置",
+      "body": "Motir 会读取你在 GitHub 上连接的仓库，为整个项目建立一张代码地图。",
       "gitlabNote": "GitLab 连接即将推出。",
-      "next": "我已连接仓库"
+      "checking": "正在检查已连接的仓库……",
+      "missingTitle": "还没有连接任何仓库",
+      "missingHint": "在新标签页中连接 GitHub。Motir 会自己发现连接，这里不需要你确认。",
+      "connectCta": "连接 GitHub",
+      "newTab": "（在新标签页中打开）",
+      "waitingTitle": "正在等待 GitHub",
+      "waitingHint": "在另一个标签页中完成连接。你回来时 Motir 会再检查一次，在那之前每隔几秒检查一次。",
+      "reopenCta": "再次打开 GitHub 设置",
+      "detected": "{count, plural, other {已连接 # 个仓库}}",
+      "detectedHint": "这些是 Motir 可以读取的仓库。继续后开始索引。",
+      "listLabel": "已连接的仓库",
+      "continue": "继续",
+      "manage": "在 GitHub 上管理仓库"
     },
     "index": {
       "eyebrow": "第 2 步，共 2 步 · 设置",
@@ -8415,10 +8429,10 @@
       "eyebrow": "可选 · 导入与规划",
       "heading": "导入你现有的工作项",
       "body": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作项？将其导入此项目——写入前你会先预览试运行结果。没有工作项要导入则跳过。",
-      "cta": "打开导入器",
       "reconcile": "随后生成计划时，Motir 会核对二者，避免重复。",
       "skip": "跳过导入",
-      "next": "已导入——继续"
+      "bodyInline": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作？就在这里导入。写入任何内容之前，你会先查看试运行预览。没有工作项要导入就跳过这一步。",
+      "continue": "继续"
     },
     "decision": {
       "eyebrow": "设置完成",
@@ -8432,6 +8446,18 @@
       "heading": "继续规划",
       "body": "你已开始规划此项目。在规划工作区中继续。",
       "cta": "继续规划"
+    },
+    "questions": {
+      "eyebrow": "你的方向",
+      "heading": "几个问题",
+      "body": "Motir 已经读过你的代码。回答几个关于项目走向的问题，它会结合两者起草你的第一份计划。",
+      "progress": "第 {n} 个问题，共约 {total} 个",
+      "draftingTitle": "正在起草你的第一份计划",
+      "draftingBody": "依据你的代码、工作项和回答。你可以离开这个页面，计划好了 Motir 会告诉你。",
+      "draftingWaits": "正在等待 Motir 读完你的代码，之后会自动开始起草。",
+      "readyTitle": "你的第一份计划已就绪",
+      "readyBody": "已为 {project} 起草 {count, plural, other {# 个工作项}}。在你批准之前，一切都不是最终的。",
+      "readyCta": "查看你的计划"
     }
   },
   "repositorySet": {

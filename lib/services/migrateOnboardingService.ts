@@ -18,6 +18,7 @@ import {
 import { importRepository } from '@/lib/repositories/importRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ExistingWorkItemRef } from '@/lib/ai/types';
@@ -31,6 +32,7 @@ import { aiConventionService } from '@/lib/services/aiConventionService';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { aiPreplanService } from '@/lib/services/aiPreplanService';
 import type {
+  MigrateGeneratedPlanDto,
   MigrateIndexStatusDto,
   MigrateOnboardingDto,
   StartMigrateOnboardingInput,
@@ -917,6 +919,31 @@ export const migrateOnboardingService = {
     if (!row) throw new MigrateOnboardingNotFoundError(id);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toMigrateOnboardingDto(row);
+  },
+
+  /**
+   * The plan this run's generate step drafted (MOTIR-8254 · design Revision 6,
+   * Panel 6c) — the wizard's "A few questions" step reads it once the run
+   * reaches `review`, to say how many items are drafted and to open the plan's
+   * review. Browse-gated, like the head read. No plan yet (generation not
+   * kicked, or its job has not opened one) reads as `planId: null`.
+   */
+  async getGeneratedPlan(id: string, ctx: ServiceContext): Promise<MigrateGeneratedPlanDto> {
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findById(id, ctx.workspaceId, tx),
+    );
+    if (!row) throw new MigrateOnboardingNotFoundError(id);
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    const generateJobId = row.generateJobId;
+    if (!generateJobId) return { planId: null, status: null, itemCount: 0 };
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(generateJobId, ctx.workspaceId, tx),
+    );
+    if (!plan) return { planId: null, status: null, itemCount: 0 };
+    const itemCount = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.countByPlan(plan.id, tx),
+    );
+    return { planId: plan.id, status: plan.status, itemCount };
   },
 
   /**

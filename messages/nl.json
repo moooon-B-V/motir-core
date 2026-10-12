@@ -8360,17 +8360,13 @@
     "start": {
       "eyebrow": "Bestaande codebase",
       "heading": "Een bestaande codebase migreren",
-      "body": "Koppel je repository's, laat Motir de code lezen en conventies afleiden, en importeer daarna optioneel je Backlog en plan.",
-      "projectLine": "De migratiewizard draait voor dit project.",
-      "cta": "Beginnen"
+      "body": "Koppel je repository's, laat Motir de code lezen en conventies afleiden, en importeer daarna optioneel je Backlog en plan."
     },
     "connect": {
       "eyebrow": "Stap 1 van 2 · Inrichten",
       "heading": "De repository's in dit project koppelen",
       "body": "Koppel je GitHub-repository's in de werkruimte-instellingen. Motir leest ze via de GitProvider-koppeling om één codegraaf voor het hele project te bouwen.",
-      "cta": "GitHub-instellingen openen",
-      "gitlabNote": "GitLab koppelen komt binnenkort.",
-      "next": "Ik heb mijn repo's gekoppeld"
+      "gitlabNote": "GitLab koppelen komt binnenkort."
     },
     "index": {
       "eyebrow": "Stap 2 van 2 · Inrichten",
@@ -8393,10 +8389,8 @@
       "eyebrow": "Optioneel · Importeren en plannen",
       "heading": "Je bestaande Backlog meenemen",
       "body": "Houd je al werk bij in Jira, Linear, GitHub, Plane of een CSV? Importeer het in dit project — je bekijkt eerst een voorbeeld van een proefrun voordat er iets wordt geschreven. Sla dit over als je geen Backlog hebt om mee te nemen.",
-      "cta": "De importtool openen",
       "reconcile": "Als je daarna een plan genereert, brengt Motir de twee met elkaar in overeenstemming, zodat er niets dubbel komt.",
-      "skip": "Import overslaan",
-      "next": "Ik heb geïmporteerd — doorgaan"
+      "skip": "Import overslaan"
     },
     "decision": {
       "eyebrow": "Inrichten voltooid",
