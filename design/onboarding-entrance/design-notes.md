@@ -614,3 +614,116 @@ and the Pattern panel's spec lists are board chrome.
 | MOTIR-1458                                 | premise only — the carried idea and its cookie, unchanged                                                                                                                             |
 | MOTIR-2475                                 | premise only — the placeholder ink stays `--el-text-secondary`                                                                                                                        |
 | MOTIR-6470 / MOTIR-6471                    | premise only — the default `motir` palette drawn                                                                                                                                      |
+
+### Revision 1 (2026-10-12) — drawings, a new-tab explainer, and the motir.co link-out
+
+**The review (Mo, "Request changes", verdict `revise`, on `b3b534e`):**
+
+> "add some drawing like motir.co/how-it-works in app.motir.co how motir works page, for each section.
+> how it works page of app.motir.co should open in a new tab, and add the link section like motir.co
+> landing page to link to motir.co/how-it-works"
+
+The version was refused before approval, so the delta mock
+[`onboarding-entrance--vibe-layout.mock.html`](./onboarding-entrance--vibe-layout.mock.html) is revised
+**in place** (no second delta); `onboarding-entrance.mock.html` is still byte-identical to `main`.
+Everything in the 2026-10-11 section above stands except where this subsection says otherwise.
+
+**motir.co read for this revision**, `motir-marketing` `origin/main` **`0c2e37b`** (re-fetched; unchanged):
+`motir-marketing/app/[locale]/how-it-works/page.tsx` and
+`motir-marketing/app/[locale]/how-it-works/_components/ModuleArt.tsx` (each module beside a flat colour
+field holding a small example screen, `aria-hidden`, `h-[300px]`, `--radius-card`, `--shadow-card`); the
+landing's closing block in `motir-marketing/app/[locale]/page.tsx` (`data-showcase="field"`, a centred
+`H2` + body + buttons on `--el-showcase-field`, the developers' door in the warm
+`--el-showcase-decision` fill linking to `https://motir.co/how-it-works`); and the landing's `SayArt` / `WatchArt` /
+`DecideArt` in `motir-marketing/app/_components/landing/Art.tsx`, which draw the same three beats.
+
+#### What changed
+
+1. **Each how-it-works section band carries a drawing** (Panels 4 and 5, light and dark). The band
+   becomes two columns at desktop (title + body left, drawing right, `items-center`, gap-x 56) and one
+   column narrow (drawing under the body). The drawings are motir.co's ModuleArt idiom — a tinted field
+   holding a small example screen — with one deliberate departure: **they are wordless.** motir.co's
+   pictures carry example copy from its own catalogue (`howItWorks.art.*`); in-app that would be a set
+   of strings with no keys, so the screens are drawn with skeleton bars instead, and the heading and
+   body beside each one carry the meaning. Each is `aria-hidden="true"`, so no text in them is measured
+   and none is rendered.
+
+   | drawing | field                | what it shows                                                                                                                                       | tokens                                                                                                                                                                                                             |
+   | ------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+   | Say     | `--el-tint-sky`      | a few lines typed (with a caret), Motir asking back (the `BrandMark` mark, 14 px), three answer chips, one picked                                   | papers `--el-card` / `--el-border` / `--shadow-subtle`; bars `--el-border-strong`; caret `--el-accent-on-surface`; picked chip `--el-accent`; chips `--radius-badge`                                               |
+   | Watch   | `--el-tint-lavender` | a plan tree filling in (Motir's rows `--el-accent-on-surface` squares, the person's row `--el-showcase-decision`), a design frame, a progress strip | ticks `--el-success`; open rows `--el-border-strong` rings; frame block `--el-tint-sky`; track `--el-border`, fill `--el-accent-on-surface`; `--radius-control`                                                    |
+   | Decide  | `--el-tint-peach`    | a finished piece back for review: title bar, preview, a secondary and an Approve shape, the decision marker                                         | title bar `--el-text-secondary`; preview `--el-surface`; secondary shape `--el-button-border` on `--el-card`; Approve `--el-accent` + check in `--el-accent-text`, `--radius-btn`; marker `--el-showcase-decision` |
+
+   Every field takes `--radius-card`, `--spacing-card-padding`, `--shadow-card`, `--el-border`; height
+   248 px (208 narrow). No hue is invented: every fill is an existing `--el-*` token, and the three
+   fields are three different tint slots so they read apart in every palette.
+
+2. **"See how Motir works" opens `/onboarding/how-it-works` in a NEW TAB.** `target="_blank"
+rel="noopener"`, the trailing glyph changes from `ArrowRight` to **`ArrowUpRight`** (the new-tab
+   affordance motir.co's chrome uses), and a visually hidden `sr-only` span appends "(opens in a new
+   tab)" to its accessible name. Drawn in Panels 1, 2 and 5 and in close-up **3f** (rest · hover —
+   underline drops · focus-visible — `--el-accent-on-surface` ring). Why a new tab is right here: the
+   entrance holds an idea the person may be half-way through typing, and nothing saves it; a new tab
+   keeps it on screen.
+3. **"Back to start" on a page opened in a new tab — the ruling.** Same label, same `ArrowLeft`, same
+   secondary `Button`. **It closes this tab** (`window.close()`), which returns the person to the entrance
+   tab with their idea intact; a tab opened by a `target="_blank"` link has a one-entry history and is
+   script-closable. **Where the tab cannot be closed** — a direct visit, a reload that grew the history,
+   a browser that refuses — it **navigates to `/onboarding`** (its `href`, so it also works without
+   script). It is never removed: the page must stay leavable when it was not opened from the entrance.
+   Marked `data-closes-tab` in the mock.
+4. **A link-out section to motir.co** sits after the three section bands and before Back (Panels 4 and
+   5): motir.co's landing closing block, adapted — an inset `--el-showcase-field` card (`--radius-card`,
+   `--shadow-card`, padding `2 × --spacing-card-padding`), a centred serif H2 and body in
+   `--el-showcase-field-text`, and ONE warm button in `--el-showcase-decision` /
+   `--el-showcase-decision-text` (`--radius-btn`, `--height-btn-lg`, `--spacing-btn-x`) linking to
+   **`https://motir.co/how-it-works`**, `target="_blank" rel="noopener"`, `ArrowUpRight`, sr-only
+   "(opens in a new tab)". Close-up **3g** draws rest · hover (`brightness-105`, motir.co's) · focus
+   (`--el-showcase-field-text` ring). Measured in the mock's computed `motir` values: field-text on
+   field **6.31:1** light / **6.34:1** dark; decision-text on decision **4.65:1** / **5.89:1**. The
+   button's fill against the field is 1.66 / 2.23:1 — under 3:1, and acceptable because the label, not
+   the fill edge, identifies the control (motir.co ships the same pair); the integration gate should
+   re-measure the 4.65 pair across palettes.
+
+#### Parts table — additions
+
+| part                                                                     | disposition                                                                                                      | built by                                                                                        |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **`SectionArt`** (the tinted field + paper + skeleton bar kit)           | **product-local component** — a drawing vocabulary for Motir's own explainer; nothing a scaffolded product needs | **MOTIR-8252** (foundation primitives), with `OnboardingSection` gaining an optional `art` slot |
+| **`SayArt` · `WatchArt` · `DecideArt`**                                  | **product-local components** — the three wordless drawings, composed from `SectionArt`                           | **MOTIR-8253** (the screen)                                                                     |
+| **`OnboardingLinkOut`** (the showcase-field band + warm external button) | **product-local component** — motir.co's closing-block shape, pointed outward                                    | **MOTIR-8252** (primitive); placed on how-it-works by **MOTIR-8253**                            |
+| `BrandMark variant="mark"` (inside Say)                                  | `@motir/brand`, as is                                                                                            | —                                                                                               |
+
+Still nothing is proposed for `@motir/design-system`.
+
+#### Slot → key — what the table now says
+
+The 2026-10-11 table stands (the "See how Motir works" slot keeps `onboarding.entrance.howItWorks`), plus
+**five NEW keys this revision specifies**. They are drawn verbatim in the mock and are **not in
+`messages/en.json`**: MOTIR-8248 (English) and MOTIR-8249 (Chinese) have already landed without them.
+**MOTIR-8253 must add all five in all eleven catalogues** before rendering these slots — or, if the plan
+prefers the voice cards to own every string, a correction re-opens MOTIR-8248 / 8249 for them. Either
+way this is a finding, not a slot to fill with an ad-hoc literal. The zh suggestions take motir.co's own
+zh vocabulary where it has one (`landing.close.developers`, `howItWorks.lede`) and the existing
+`platformAdmin.ideas.detail.newTab` wording.
+
+| slot                          | NEW key                                   | en                                                                                                                                                                  | zh (suggestion)                                                                                           |
+| ----------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| entrance link, sr-only hint   | `onboarding.entrance.howItWorksNewTab`    | (opens in a new tab)                                                                                                                                                | （在新标签页中打开）                                                                                      |
+| link-out H2                   | `onboarding.howItWorks.developers.title`  | How Motir works, for developers                                                                                                                                     | 面向开发者：Motir 的工作方式                                                                              |
+| link-out body                 | `onboarding.howItWorks.developers.body`   | Every Motir project runs through the same instrument: the modules are Motir and its agents, and the switches are yours. motir.co walks through it module by module. | 每个 Motir 项目都运行在同一台“仪器”上：模块是 Motir 和它的智能体，开关属于你。motir.co 会逐个模块讲清楚。 |
+| link-out button               | `onboarding.howItWorks.developers.cta`    | Read it on motir.co                                                                                                                                                 | 到 motir.co 阅读                                                                                          |
+| link-out button, sr-only hint | `onboarding.howItWorks.developers.newTab` | (opens in a new tab)                                                                                                                                                | （在新标签页中打开）                                                                                      |
+
+The drawings carry no strings. **Chinese-length risk added:** the link-out H2 at 48 px (32 narrow) —
+the zh title has a full-width colon and no break opportunity before it; check it wraps cleanly at 390.
+
+#### GIVES / TAKES — what the sweep now says
+
+| card                    | now                                                                                                                                                                                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-8253**          | TAKES as before (eyebrow, OR divider, centred column). **GIVES additionally:** the three drawings on how-it-works, the new-tab entrance link, the Back-to-start close-or-navigate ruling, the link-out placement, and the five NEW keys to add (all eleven catalogues) |
+| **MOTIR-8252**          | GIVES as before, **plus** `SectionArt` (and `OnboardingSection`'s `art` slot) and `OnboardingLinkOut`                                                                                                                                                                  |
+| **MOTIR-8251**          | GIVES the pattern as before; the `art` slot and the link-out band are now part of it, available to the migrate wizard and importer if they want them                                                                                                                   |
+| MOTIR-8248 / MOTIR-8249 | premise unchanged; they do **not** carry the five new keys — a correction is needed only if the plan wants the voice cards to own them rather than MOTIR-8253                                                                                                          |
+| MOTIR-8238              | GIVES the integration gate one more pair to re-measure across palettes: `--el-showcase-decision-text` on `--el-showcase-decision` (4.65:1 in light `motir`)                                                                                                            |

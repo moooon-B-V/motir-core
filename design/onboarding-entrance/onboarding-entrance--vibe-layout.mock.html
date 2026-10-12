@@ -123,6 +123,7 @@
           --color-link-pressed: #005bab;
           --radius-btn: 8px;
           --radius-card: 12px;
+          --radius-badge: 9999px;
           --radius-control: 6px;
           --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
           --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
@@ -130,6 +131,8 @@
           --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
           --spacing-md: 16px;
           --spacing-btn-x: 18px;
+          --spacing-input-x: 16px;
+          --spacing-input-y: 12px;
           --spacing-card-padding: 24px;
           --height-btn-md: 40px;
           --height-btn-lg: 48px;
@@ -351,6 +354,17 @@
         .pointer-events-none {
           pointer-events: none;
         }
+        .sr-only {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip-path: inset(50%);
+          white-space: nowrap;
+          border-width: 0;
+        }
         .absolute {
           position: absolute;
         }
@@ -359,6 +373,12 @@
         }
         .inset-0 {
           inset: calc(var(--spacing) * 0);
+        }
+        .-top-1\.5 {
+          top: calc(var(--spacing) * -1.5);
+        }
+        .-right-1\.5 {
+          right: calc(var(--spacing) * -1.5);
         }
         .isolate {
           isolation: isolate;
@@ -403,9 +423,25 @@
           width: calc(var(--spacing) * 1.5);
           height: calc(var(--spacing) * 1.5);
         }
+        .size-2\.5 {
+          width: calc(var(--spacing) * 2.5);
+          height: calc(var(--spacing) * 2.5);
+        }
+        .size-3 {
+          width: calc(var(--spacing) * 3);
+          height: calc(var(--spacing) * 3);
+        }
+        .size-3\.5 {
+          width: calc(var(--spacing) * 3.5);
+          height: calc(var(--spacing) * 3.5);
+        }
         .size-4 {
           width: calc(var(--spacing) * 4);
           height: calc(var(--spacing) * 4);
+        }
+        .size-7 {
+          width: calc(var(--spacing) * 7);
+          height: calc(var(--spacing) * 7);
         }
         .size-full {
           width: 100%;
@@ -417,8 +453,32 @@
         .h-\(--height-btn-md\) {
           height: var(--height-btn-md);
         }
+        .h-1\.5 {
+          height: calc(var(--spacing) * 1.5);
+        }
+        .h-2 {
+          height: calc(var(--spacing) * 2);
+        }
+        .h-3 {
+          height: calc(var(--spacing) * 3);
+        }
+        .h-3\.5 {
+          height: calc(var(--spacing) * 3.5);
+        }
         .h-4 {
           height: calc(var(--spacing) * 4);
+        }
+        .h-6 {
+          height: calc(var(--spacing) * 6);
+        }
+        .h-7 {
+          height: calc(var(--spacing) * 7);
+        }
+        .h-14 {
+          height: calc(var(--spacing) * 14);
+        }
+        .h-16 {
+          height: calc(var(--spacing) * 16);
         }
         .h-\[11rem\] {
           height: 11rem;
@@ -429,6 +489,15 @@
         .h-\[18rem\] {
           height: 18rem;
         }
+        .h-\[208px\] {
+          height: 208px;
+        }
+        .h-\[248px\] {
+          height: 248px;
+        }
+        .h-full {
+          height: 100%;
+        }
         .min-h-\[7\.5rem\] {
           min-height: 7.5rem;
         }
@@ -437,6 +506,60 @@
         }
         .w-4 {
           width: calc(var(--spacing) * 4);
+        }
+        .w-12 {
+          width: calc(var(--spacing) * 12);
+        }
+        .w-14 {
+          width: calc(var(--spacing) * 14);
+        }
+        .w-16 {
+          width: calc(var(--spacing) * 16);
+        }
+        .w-20 {
+          width: calc(var(--spacing) * 20);
+        }
+        .w-\[2px\] {
+          width: 2px;
+        }
+        .w-\[36\%\] {
+          width: 36%;
+        }
+        .w-\[42\%\] {
+          width: 42%;
+        }
+        .w-\[44\%\] {
+          width: 44%;
+        }
+        .w-\[46\%\] {
+          width: 46%;
+        }
+        .w-\[48\%\] {
+          width: 48%;
+        }
+        .w-\[50\%\] {
+          width: 50%;
+        }
+        .w-\[56\%\] {
+          width: 56%;
+        }
+        .w-\[58\%\] {
+          width: 58%;
+        }
+        .w-\[62\%\] {
+          width: 62%;
+        }
+        .w-\[70\%\] {
+          width: 70%;
+        }
+        .w-\[72\%\] {
+          width: 72%;
+        }
+        .w-\[80\%\] {
+          width: 80%;
+        }
+        .w-\[88\%\] {
+          width: 88%;
         }
         .w-\[390px\] {
           width: 390px;
@@ -453,6 +576,9 @@
         .max-w-\[44ch\] {
           max-width: 44ch;
         }
+        .max-w-\[46ch\] {
+          max-width: 46ch;
+        }
         .max-w-\[62ch\] {
           max-width: 62ch;
         }
@@ -468,6 +594,9 @@
         .max-w-\[760px\] {
           max-width: 760px;
         }
+        .flex-1 {
+          flex: 1;
+        }
         .flex-none {
           flex: none;
         }
@@ -480,14 +609,26 @@
         .grid-cols-\[9\.5rem_minmax\(0\,1fr\)\] {
           grid-template-columns: 9.5rem minmax(0, 1fr);
         }
+        .grid-cols-\[minmax\(0\,1\.3fr\)_minmax\(0\,1fr\)\] {
+          grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+        }
         .grid-cols-\[minmax\(0\,1\.4fr\)_minmax\(0\,1fr\)\] {
           grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        }
+        .grid-cols-\[minmax\(0\,1fr\)_minmax\(0\,1fr\)\] {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         }
         .flex-col {
           flex-direction: column;
         }
         .flex-wrap {
           flex-wrap: wrap;
+        }
+        .place-items-center {
+          place-items: center;
+        }
+        .content-center {
+          align-content: center;
         }
         .content-start {
           align-content: flex-start;
@@ -503,6 +644,9 @@
         }
         .justify-center {
           justify-content: center;
+        }
+        .justify-end {
+          justify-content: flex-end;
         }
         .justify-items-center {
           justify-items: center;
@@ -555,11 +699,17 @@
         .gap-y-4 {
           row-gap: calc(var(--spacing) * 4);
         }
+        .gap-y-6 {
+          row-gap: calc(var(--spacing) * 6);
+        }
         .overflow-hidden {
           overflow: hidden;
         }
         .overflow-y-auto {
           overflow-y: auto;
+        }
+        .rounded-\(--radius-badge\) {
+          border-radius: var(--radius-badge);
         }
         .rounded-\(--radius-btn\) {
           border-radius: var(--radius-btn);
@@ -581,6 +731,10 @@
           border-style: var(--tw-border-style);
           border-width: 0px;
         }
+        .border-2 {
+          border-style: var(--tw-border-style);
+          border-width: 2px;
+        }
         .border-\[1\.5px\] {
           border-style: var(--tw-border-style);
           border-width: 1.5px;
@@ -589,11 +743,17 @@
           border-top-style: var(--tw-border-style);
           border-top-width: 1px;
         }
+        .border-\(--el-accent\) {
+          border-color: var(--el-accent);
+        }
         .border-\(--el-border\) {
           border-color: var(--el-border);
         }
         .border-\(--el-border-soft\) {
           border-color: var(--el-border-soft);
+        }
+        .border-\(--el-border-strong\) {
+          border-color: var(--el-border-strong);
         }
         .border-\(--el-button-border\) {
           border-color: var(--el-button-border);
@@ -607,14 +767,41 @@
         .bg-\(--el-accent\) {
           background-color: var(--el-accent);
         }
+        .bg-\(--el-accent-on-surface\) {
+          background-color: var(--el-accent-on-surface);
+        }
+        .bg-\(--el-border\) {
+          background-color: var(--el-border);
+        }
+        .bg-\(--el-border-strong\) {
+          background-color: var(--el-border-strong);
+        }
         .bg-\(--el-card\) {
           background-color: var(--el-card);
         }
         .bg-\(--el-page-bg\) {
           background-color: var(--el-page-bg);
         }
+        .bg-\(--el-showcase-decision\) {
+          background-color: var(--el-showcase-decision);
+        }
+        .bg-\(--el-showcase-field\) {
+          background-color: var(--el-showcase-field);
+        }
         .bg-\(--el-surface\) {
           background-color: var(--el-surface);
+        }
+        .bg-\(--el-text-secondary\) {
+          background-color: var(--el-text-secondary);
+        }
+        .bg-\(--el-tint-lavender\) {
+          background-color: var(--el-tint-lavender);
+        }
+        .bg-\(--el-tint-peach\) {
+          background-color: var(--el-tint-peach);
+        }
+        .bg-\(--el-tint-sky\) {
+          background-color: var(--el-tint-sky);
         }
         .bg-transparent {
           background-color: transparent;
@@ -634,6 +821,9 @@
         .p-0 {
           padding: calc(var(--spacing) * 0);
         }
+        .p-2\.5 {
+          padding: calc(var(--spacing) * 2.5);
+        }
         .p-8 {
           padding: calc(var(--spacing) * 8);
         }
@@ -642,6 +832,15 @@
         }
         .px-\(--spacing-card-padding\) {
           padding-inline: var(--spacing-card-padding);
+        }
+        .px-\(--spacing-input-x\) {
+          padding-inline: var(--spacing-input-x);
+        }
+        .px-3 {
+          padding-inline: calc(var(--spacing) * 3);
+        }
+        .px-3\.5 {
+          padding-inline: calc(var(--spacing) * 3.5);
         }
         .px-4 {
           padding-inline: calc(var(--spacing) * 4);
@@ -652,8 +851,20 @@
         .px-\[38px\] {
           padding-inline: 38px;
         }
+        .px-\[calc\(var\(--spacing-card-padding\)\*2\)\] {
+          padding-inline: calc(var(--spacing-card-padding) * 2);
+        }
+        .py-\(--spacing-input-y\) {
+          padding-block: var(--spacing-input-y);
+        }
+        .py-2\.5 {
+          padding-block: calc(var(--spacing) * 2.5);
+        }
         .py-3 {
           padding-block: calc(var(--spacing) * 3);
+        }
+        .py-3\.5 {
+          padding-block: calc(var(--spacing) * 3.5);
         }
         .py-4 {
           padding-block: calc(var(--spacing) * 4);
@@ -667,11 +878,20 @@
         .py-\[56px\] {
           padding-block: 56px;
         }
+        .py-\[64px\] {
+          padding-block: 64px;
+        }
         .py-\[72px\] {
           padding-block: 72px;
         }
+        .py-\[calc\(var\(--spacing-card-padding\)\*2\.5\)\] {
+          padding-block: calc(var(--spacing-card-padding) * 2.5);
+        }
         .pt-\(--spacing-md\) {
           padding-top: var(--spacing-md);
+        }
+        .pt-1 {
+          padding-top: calc(var(--spacing) * 1);
         }
         .pt-10 {
           padding-top: calc(var(--spacing) * 10);
@@ -679,11 +899,23 @@
         .pt-\[64px\] {
           padding-top: 64px;
         }
+        .pb-10 {
+          padding-bottom: calc(var(--spacing) * 10);
+        }
         .pb-16 {
           padding-bottom: calc(var(--spacing) * 16);
         }
+        .pb-\[56px\] {
+          padding-bottom: 56px;
+        }
         .pb-\[104px\] {
           padding-bottom: 104px;
+        }
+        .pl-4 {
+          padding-left: calc(var(--spacing) * 4);
+        }
+        .pl-8 {
+          padding-left: calc(var(--spacing) * 8);
         }
         .text-center {
           text-align: center;
@@ -739,6 +971,9 @@
         }
         .text-\[19px\] {
           font-size: 19px;
+        }
+        .text-\[32px\] {
+          font-size: 32px;
         }
         .text-\[34px\] {
           font-size: 34px;
@@ -816,6 +1051,15 @@
         .text-\(--el-accent-text\) {
           color: var(--el-accent-text);
         }
+        .text-\(--el-showcase-decision-text\) {
+          color: var(--el-showcase-decision-text);
+        }
+        .text-\(--el-showcase-field-text\) {
+          color: var(--el-showcase-field-text);
+        }
+        .text-\(--el-success\) {
+          color: var(--el-success);
+        }
         .text-\(--el-text\) {
           color: var(--el-text);
         }
@@ -853,12 +1097,24 @@
             var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
             var(--tw-ring-shadow), var(--tw-shadow);
         }
+        .shadow-\(--shadow-subtle\) {
+          --tw-shadow: var(--shadow-subtle);
+          box-shadow:
+            var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
+            var(--tw-ring-shadow), var(--tw-shadow);
+        }
         .ring-2 {
           --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width))
             var(--tw-ring-color, currentcolor);
           box-shadow:
             var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
             var(--tw-ring-shadow), var(--tw-shadow);
+        }
+        .ring-\(--el-accent-on-surface\) {
+          --tw-ring-color: var(--el-accent-on-surface);
+        }
+        .ring-\(--el-showcase-field-text\) {
+          --tw-ring-color: var(--el-showcase-field-text);
         }
         .ring-\(--focus-ring-color\) {
           --tw-ring-color: var(--focus-ring-color);
@@ -871,8 +1127,17 @@
         .ring-offset-\(--el-page-bg\) {
           --tw-ring-offset-color: var(--el-page-bg);
         }
+        .ring-offset-\(--el-showcase-field\) {
+          --tw-ring-offset-color: var(--el-showcase-field);
+        }
         .ring-offset-\(--el-surface\) {
           --tw-ring-offset-color: var(--el-surface);
+        }
+        .brightness-105 {
+          --tw-brightness: brightness(105%);
+          filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,)
+            var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,)
+            var(--tw-drop-shadow,);
         }
         .transition-\[transform\,background-color\,border-color\,color\] {
           transition-property: transform, background-color, border-color, color;
@@ -910,6 +1175,16 @@
           &:hover {
             @media (hover: hover) {
               opacity: 90%;
+            }
+          }
+        }
+        .hover\:brightness-105 {
+          &:hover {
+            @media (hover: hover) {
+              --tw-brightness: brightness(105%);
+              filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,)
+                var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,)
+                var(--tw-drop-shadow,);
             }
           }
         }
@@ -953,6 +1228,11 @@
         .focus-visible\:outline-\(--el-accent-on-surface\) {
           &:focus-visible {
             outline-color: var(--el-accent-on-surface);
+          }
+        }
+        .focus-visible\:outline-\(--el-showcase-field-text\) {
+          &:focus-visible {
+            outline-color: var(--el-showcase-field-text);
           }
         }
         .focus-visible\:outline-none {
@@ -4649,6 +4929,59 @@
         inherits: false;
         initial-value: 0 0 #0000;
       }
+      @property --tw-blur {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-brightness {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-contrast {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-grayscale {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-hue-rotate {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-invert {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-opacity {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-saturate {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-sepia {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-drop-shadow {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-drop-shadow-color {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-drop-shadow-alpha {
+        syntax: '<percentage>';
+        inherits: false;
+        initial-value: 100%;
+      }
+      @property --tw-drop-shadow-size {
+        syntax: '*';
+        inherits: false;
+      }
       @property --tw-duration {
         syntax: '*';
         inherits: false;
@@ -4688,6 +5021,19 @@
             --tw-ring-offset-width: 0px;
             --tw-ring-offset-color: #fff;
             --tw-ring-offset-shadow: 0 0 #0000;
+            --tw-blur: initial;
+            --tw-brightness: initial;
+            --tw-contrast: initial;
+            --tw-grayscale: initial;
+            --tw-hue-rotate: initial;
+            --tw-invert: initial;
+            --tw-opacity: initial;
+            --tw-saturate: initial;
+            --tw-sepia: initial;
+            --tw-drop-shadow: initial;
+            --tw-drop-shadow-color: initial;
+            --tw-drop-shadow-alpha: 100%;
+            --tw-drop-shadow-size: initial;
             --tw-duration: initial;
             --tw-outline-style: solid;
           }
@@ -4919,8 +5265,11 @@
                   <div>
                     <a
                       href="/onboarding/how-it-works"
-                      class="text-[16px] inline-flex items-center gap-1.5 font-semibold text-(--el-text) underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
-                      >See how Motir works<svg
+                      target="_blank"
+                      rel="noopener"
+                      class="text-[16px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline"
+                      ><span>See how Motir works</span
+                      ><svg
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -4930,9 +5279,10 @@
                         class="size-4"
                         aria-hidden="true"
                       >
-                        <path d="M5 12h14"></path>
-                        <path d="m12 5 7 7-7 7"></path></svg
-                    ></a>
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    >
                   </div>
                   <div class="mt-[18px] flex w-full max-w-[760px]">
                     <form
@@ -5024,9 +5374,10 @@
             <div class="grid gap-1 font-sans text-[13px] leading-normal text-(--el-text-secondary)">
               <p class="m-0 max-w-[110ch]">
                 Exits, each drawn in place: Start → /onboarding/discovery (the seeded discovery
-                chat) · See how Motir works → /onboarding/how-it-works · We can vibe it too →
-                /onboarding/migrate · the lockup → / . Inbound (context only): sign-up / sign-in,
-                and the in-app project switcher door.
+                chat) · See how Motir works → /onboarding/how-it-works in a NEW TAB (↗ glyph,
+                target=_blank rel=noopener, screen readers hear “(opens in a new tab)”) · We can
+                vibe it too → /onboarding/migrate · the lockup → / . Inbound (context only): sign-up
+                / sign-in, and the in-app project switcher door.
               </p>
             </div>
           </div>
@@ -5251,8 +5602,11 @@
                   <div>
                     <a
                       href="/onboarding/how-it-works"
-                      class="text-[16px] inline-flex items-center gap-1.5 font-semibold text-(--el-text) underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
-                      >See how Motir works<svg
+                      target="_blank"
+                      rel="noopener"
+                      class="text-[16px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline"
+                      ><span>See how Motir works</span
+                      ><svg
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -5262,9 +5616,10 @@
                         class="size-4"
                         aria-hidden="true"
                       >
-                        <path d="M5 12h14"></path>
-                        <path d="m12 5 7 7-7 7"></path></svg
-                    ></a>
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    >
                   </div>
                   <div class="mt-[18px] flex w-full max-w-[760px]">
                     <form
@@ -5356,9 +5711,10 @@
             <div class="grid gap-1 font-sans text-[13px] leading-normal text-(--el-text-secondary)">
               <p class="m-0 max-w-[110ch]">
                 Exits, each drawn in place: Start → /onboarding/discovery (the seeded discovery
-                chat) · See how Motir works → /onboarding/how-it-works · We can vibe it too →
-                /onboarding/migrate · the lockup → / . Inbound (context only): sign-up / sign-in,
-                and the in-app project switcher door.
+                chat) · See how Motir works → /onboarding/how-it-works in a NEW TAB (↗ glyph,
+                target=_blank rel=noopener, screen readers hear “(opens in a new tab)”) · We can
+                vibe it too → /onboarding/migrate · the lockup → / . Inbound (context only): sign-up
+                / sign-in, and the in-app project switcher door.
               </p>
             </div>
           </div>
@@ -5585,8 +5941,11 @@
                   <div>
                     <a
                       href="/onboarding/how-it-works"
-                      class="text-[16px] inline-flex items-center gap-1.5 font-semibold text-(--el-text) underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
-                      >See how Motir works<svg
+                      target="_blank"
+                      rel="noopener"
+                      class="text-[16px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline"
+                      ><span>See how Motir works</span
+                      ><svg
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -5596,9 +5955,10 @@
                         class="size-4"
                         aria-hidden="true"
                       >
-                        <path d="M5 12h14"></path>
-                        <path d="m12 5 7 7-7 7"></path></svg
-                    ></a>
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    >
                   </div>
                   <div class="mt-[18px] flex w-full max-w-[760px]">
                     <form
@@ -5878,8 +6238,11 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                   <div>
                     <a
                       href="/onboarding/how-it-works"
-                      class="text-[16px] inline-flex items-center gap-1.5 font-semibold text-(--el-text) underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
-                      >See how Motir works<svg
+                      target="_blank"
+                      rel="noopener"
+                      class="text-[16px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline"
+                      ><span>See how Motir works</span
+                      ><svg
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -5889,9 +6252,10 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         class="size-4"
                         aria-hidden="true"
                       >
-                        <path d="M5 12h14"></path>
-                        <path d="m12 5 7 7-7 7"></path></svg
-                    ></a>
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    >
                   </div>
                   <div class="mt-[18px] flex w-full max-w-[760px]">
                     <form
@@ -6280,6 +6644,141 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                     ></a>
                   </div>
                 </div>
+                <p
+                  class="m-0 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-(--el-text-secondary)"
+                >
+                  3f · See how Motir works — opens in a new tab — rest · hover · focus-visible
+                </p>
+                <div class="rounded-(--radius-card) bg-(--el-surface) p-(--spacing-card-padding)">
+                  <div class="flex flex-wrap items-center gap-6">
+                    <a
+                      href="/onboarding/how-it-works"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-[16px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline"
+                      ><span>See how Motir works</span
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    ><a
+                      href="/onboarding/how-it-works"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-[16px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) no-underline"
+                      ><span>See how Motir works</span
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    ><a
+                      href="/onboarding/how-it-works"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-[16px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline ring-2 ring-(--el-accent-on-surface) ring-offset-2 ring-offset-(--el-surface)"
+                      ><span>See how Motir works</span
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    >
+                  </div>
+                </div>
+                <p
+                  class="m-0 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-(--el-text-secondary)"
+                >
+                  3g · Read it on motir.co — new tab — rest · hover · focus-visible
+                </p>
+                <div
+                  data-showcase="field"
+                  class="flex flex-wrap items-center gap-4 rounded-(--radius-card) bg-(--el-showcase-field) p-(--spacing-card-padding)"
+                >
+                  <a
+                    href="https://motir.co/how-it-works"
+                    target="_blank"
+                    rel="noopener"
+                    class="inline-flex h-(--height-btn-lg) items-center gap-2 rounded-(--radius-btn) bg-(--el-showcase-decision) px-(--spacing-btn-x) text-[15px] font-medium text-(--el-showcase-decision-text) no-underline hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-showcase-field-text)"
+                    ><span>Read it on motir.co</span
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="size-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M7 7h10v10"></path>
+                      <path d="M7 17 17 7"></path></svg
+                    ><span class="sr-only"> (opens in a new tab)</span></a
+                  ><a
+                    href="https://motir.co/how-it-works"
+                    target="_blank"
+                    rel="noopener"
+                    class="inline-flex h-(--height-btn-lg) items-center gap-2 rounded-(--radius-btn) bg-(--el-showcase-decision) px-(--spacing-btn-x) text-[15px] font-medium text-(--el-showcase-decision-text) no-underline hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-showcase-field-text) brightness-105"
+                    ><span>Read it on motir.co</span
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="size-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M7 7h10v10"></path>
+                      <path d="M7 17 17 7"></path></svg
+                    ><span class="sr-only"> (opens in a new tab)</span></a
+                  ><a
+                    href="https://motir.co/how-it-works"
+                    target="_blank"
+                    rel="noopener"
+                    class="inline-flex h-(--height-btn-lg) items-center gap-2 rounded-(--radius-btn) bg-(--el-showcase-decision) px-(--spacing-btn-x) text-[15px] font-medium text-(--el-showcase-decision-text) no-underline hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-showcase-field-text) ring-2 ring-(--el-showcase-field-text) ring-offset-2 ring-offset-(--el-showcase-field)"
+                    ><span>Read it on motir.co</span
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="size-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M7 7h10v10"></path>
+                      <path d="M7 17 17 7"></path></svg
+                    ><span class="sr-only"> (opens in a new tab)</span></a
+                  >
+                </div>
               </div>
               <div
                 data-theme="dark"
@@ -6590,6 +7089,141 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                     ></a>
                   </div>
                 </div>
+                <p
+                  class="m-0 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-(--el-text-secondary)"
+                >
+                  3f · See how Motir works — opens in a new tab — rest · hover · focus-visible
+                </p>
+                <div class="rounded-(--radius-card) bg-(--el-surface) p-(--spacing-card-padding)">
+                  <div class="flex flex-wrap items-center gap-6">
+                    <a
+                      href="/onboarding/how-it-works"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-[16px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline"
+                      ><span>See how Motir works</span
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    ><a
+                      href="/onboarding/how-it-works"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-[16px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) no-underline"
+                      ><span>See how Motir works</span
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    ><a
+                      href="/onboarding/how-it-works"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-[16px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline ring-2 ring-(--el-accent-on-surface) ring-offset-2 ring-offset-(--el-surface)"
+                      ><span>See how Motir works</span
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    >
+                  </div>
+                </div>
+                <p
+                  class="m-0 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-(--el-text-secondary)"
+                >
+                  3g · Read it on motir.co — new tab — rest · hover · focus-visible
+                </p>
+                <div
+                  data-showcase="field"
+                  class="flex flex-wrap items-center gap-4 rounded-(--radius-card) bg-(--el-showcase-field) p-(--spacing-card-padding)"
+                >
+                  <a
+                    href="https://motir.co/how-it-works"
+                    target="_blank"
+                    rel="noopener"
+                    class="inline-flex h-(--height-btn-lg) items-center gap-2 rounded-(--radius-btn) bg-(--el-showcase-decision) px-(--spacing-btn-x) text-[15px] font-medium text-(--el-showcase-decision-text) no-underline hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-showcase-field-text)"
+                    ><span>Read it on motir.co</span
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="size-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M7 7h10v10"></path>
+                      <path d="M7 17 17 7"></path></svg
+                    ><span class="sr-only"> (opens in a new tab)</span></a
+                  ><a
+                    href="https://motir.co/how-it-works"
+                    target="_blank"
+                    rel="noopener"
+                    class="inline-flex h-(--height-btn-lg) items-center gap-2 rounded-(--radius-btn) bg-(--el-showcase-decision) px-(--spacing-btn-x) text-[15px] font-medium text-(--el-showcase-decision-text) no-underline hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-showcase-field-text) brightness-105"
+                    ><span>Read it on motir.co</span
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="size-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M7 7h10v10"></path>
+                      <path d="M7 17 17 7"></path></svg
+                    ><span class="sr-only"> (opens in a new tab)</span></a
+                  ><a
+                    href="https://motir.co/how-it-works"
+                    target="_blank"
+                    rel="noopener"
+                    class="inline-flex h-(--height-btn-lg) items-center gap-2 rounded-(--radius-btn) bg-(--el-showcase-decision) px-(--spacing-btn-x) text-[15px] font-medium text-(--el-showcase-decision-text) no-underline hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-showcase-field-text) ring-2 ring-(--el-showcase-field-text) ring-offset-2 ring-offset-(--el-showcase-field)"
+                    ><span>Read it on motir.co</span
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="size-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M7 7h10v10"></path>
+                      <path d="M7 17 17 7"></path></svg
+                    ><span class="sr-only"> (opens in a new tab)</span></a
+                  >
+                </div>
               </div>
             </div>
           </div>
@@ -6608,9 +7242,11 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
           <div class="grid content-start gap-3">
             <div class="grid gap-1 font-sans text-[13px] leading-normal text-(--el-text-secondary)">
               <p class="m-0 max-w-[110ch]">
-                The hero is the title and body; three section bands follow (say · watch · decide),
-                then Back to start → /onboarding. Reached from the entrance hero’s See how Motir
-                works.
+                Opened in a new tab from the entrance. The hero is the title and body; three section
+                bands follow (say · watch · decide), each with its drawing; then the motir.co
+                link-out (Read it on motir.co → https://motir.co/how-it-works, new tab); then Back
+                to start, which CLOSES this tab and returns the person to the entrance tab, or goes
+                to /onboarding where the tab cannot be closed.
               </p>
             </div>
             <div
@@ -6819,38 +7455,91 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
               </section>
               <section
                 data-section-band=""
-                class="bg-(--el-page-bg) border-t border-(--el-border) px-[38px] py-[72px]"
+                class="bg-(--el-page-bg) border-t border-(--el-border) px-[38px] py-[64px]"
               >
-                <div
-                  class="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start gap-x-14 gap-y-4"
-                >
-                  <h2
-                    class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                  >
-                    Say what you want
-                  </h2>
-                  <div class="grid justify-items-start gap-5">
+                <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-14">
+                  <div class="grid content-start gap-4">
+                    <h2
+                      class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                    >
+                      Say what you want
+                    </h2>
                     <p
                       class="text-[18px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                     >
                       A few sentences or a messy brain dump. Motir asks until it understands.
                     </p>
                   </div>
+                  <div
+                    aria-hidden="true"
+                    data-section-art="say"
+                    class="h-[248px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-sky) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid gap-2 px-(--spacing-input-x) py-(--spacing-input-y)"
+                    >
+                      <span
+                        class="block h-2 w-[88%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                      ></span
+                      ><span class="flex items-center gap-1"
+                        ><span
+                          class="block h-2 w-[56%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span
+                        ><span class="block h-3.5 w-[2px] bg-(--el-accent-on-surface)"></span
+                      ></span>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                      <span
+                        class="grid size-7 flex-none place-items-center rounded-full border border-(--el-border) bg-(--el-card)"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          width="14"
+                          height="14"
+                          class="brand-glyph"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          ></path></svg
+                      ></span>
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid flex-1 gap-2 px-3 py-2.5"
+                      >
+                        <span
+                          class="block h-2 w-[72%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span
+                        ><span
+                          class="block h-2 w-[44%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span>
+                      </div>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                      <span
+                        class="block h-6 w-14 rounded-(--radius-badge) border border-(--el-border-strong) bg-(--el-card)"
+                      ></span
+                      ><span
+                        class="block h-6 w-16 rounded-(--radius-badge) border border-(--el-accent) bg-(--el-accent)"
+                      ></span
+                      ><span
+                        class="block h-6 w-12 rounded-(--radius-badge) border border-(--el-border-strong) bg-(--el-card)"
+                      ></span>
+                    </div>
+                  </div>
                 </div>
               </section>
               <section
                 data-section-band=""
-                class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-[38px] py-[72px]"
+                class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-[38px] py-[64px]"
               >
-                <div
-                  class="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start gap-x-14 gap-y-4"
-                >
-                  <h2
-                    class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                  >
-                    Watch it take shape
-                  </h2>
-                  <div class="grid justify-items-start gap-5">
+                <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-14">
+                  <div class="grid content-start gap-4">
+                    <h2
+                      class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                    >
+                      Watch it take shape
+                    </h2>
                     <p
                       class="text-[18px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                     >
@@ -6858,21 +7547,99 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                       out in the open.
                     </p>
                   </div>
+                  <div
+                    aria-hidden="true"
+                    data-section-art="watch"
+                    class="h-[248px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-lavender) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                  >
+                    <div class="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-3">
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid content-start gap-2.5 px-3 py-3"
+                      >
+                        <span class="flex items-center gap-2"
+                          ><span class="block size-2.5 flex-none bg-(--el-accent-on-surface)"></span
+                          ><span
+                            class="block h-2 w-[58%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span class="ml-auto inline-flex text-(--el-success)"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="size-3.5"
+                              aria-hidden="true"
+                            >
+                              <path d="M20 6 9 17l-5-5"></path></svg></span></span
+                        ><span class="flex items-center gap-2 pl-4"
+                          ><span class="block size-2.5 flex-none bg-(--el-accent-on-surface)"></span
+                          ><span
+                            class="block h-2 w-[50%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span class="ml-auto inline-flex text-(--el-success)"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="size-3.5"
+                              aria-hidden="true"
+                            >
+                              <path d="M20 6 9 17l-5-5"></path></svg></span></span
+                        ><span class="flex items-center gap-2 pl-4"
+                          ><span class="block size-2.5 flex-none bg-(--el-showcase-decision)"></span
+                          ><span
+                            class="block h-2 w-[42%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span
+                            class="ml-auto block size-3.5 rounded-full border-2 border-(--el-border-strong)"
+                          ></span></span
+                        ><span class="flex items-center gap-2 pl-8"
+                          ><span class="block size-2.5 flex-none bg-(--el-accent-on-surface)"></span
+                          ><span
+                            class="block h-2 w-[36%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span
+                            class="ml-auto block size-3.5 rounded-full border-2 border-(--el-border-strong)"
+                          ></span
+                        ></span>
+                      </div>
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid content-start gap-2 p-2.5"
+                      >
+                        <span
+                          class="block h-14 rounded-(--radius-control) bg-(--el-tint-sky)"
+                        ></span
+                        ><span
+                          class="block h-2 w-[70%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span
+                        ><span
+                          class="block h-2 w-[46%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span>
+                      </div>
+                    </div>
+                    <span
+                      class="block h-1.5 overflow-hidden rounded-(--radius-badge) bg-(--el-border)"
+                      ><span class="block h-full w-[62%] bg-(--el-accent-on-surface)"></span
+                    ></span>
+                  </div>
                 </div>
               </section>
               <section
                 data-section-band=""
-                class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-[38px] py-[72px]"
+                class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-[38px] py-[64px]"
               >
-                <div
-                  class="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start gap-x-14 gap-y-4"
-                >
-                  <h2
-                    class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                  >
-                    You decide
-                  </h2>
-                  <div class="grid justify-items-start gap-5">
+                <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-14">
+                  <div class="grid content-start gap-4">
+                    <h2
+                      class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                    >
+                      You decide
+                    </h2>
                     <p
                       class="text-[18px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                     >
@@ -6880,11 +7647,89 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                       of what ships.
                     </p>
                   </div>
+                  <div
+                    aria-hidden="true"
+                    data-section-art="decide"
+                    class="h-[248px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-peach) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid gap-2.5 px-3.5 py-3.5"
+                    >
+                      <span
+                        class="block h-3 w-[48%] rounded-(--radius-badge) bg-(--el-text-secondary)"
+                      ></span
+                      ><span class="block h-16 rounded-(--radius-control) bg-(--el-surface)"></span
+                      ><span
+                        class="block h-2 w-[80%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                      ></span
+                      ><span class="flex items-center justify-end gap-2 pt-1"
+                        ><span
+                          class="block h-7 w-16 rounded-(--radius-btn) border border-(--el-button-border) bg-(--el-card)"
+                        ></span
+                        ><span
+                          class="relative inline-flex h-7 w-20 items-center justify-center rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text)"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="size-4"
+                            aria-hidden="true"
+                          >
+                            <path d="M20 6 9 17l-5-5"></path></svg
+                          ><span
+                            class="absolute -top-1.5 -right-1.5 block size-3 bg-(--el-showcase-decision)"
+                          ></span></span
+                      ></span>
+                    </div>
+                  </div>
                 </div>
               </section>
+              <div class="bg-(--el-page-bg) px-[38px] pb-[56px]">
+                <section
+                  data-showcase="field"
+                  class="grid justify-items-center gap-5 rounded-(--radius-card) border border-(--el-border) bg-(--el-showcase-field) text-center text-(--el-showcase-field-text) shadow-(--shadow-card) px-[calc(var(--spacing-card-padding)*2)] py-[calc(var(--spacing-card-padding)*2.5)]"
+                >
+                  <h2
+                    class="text-[48px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-showcase-field-text)"
+                  >
+                    How Motir works, for developers
+                  </h2>
+                  <p
+                    class="text-[18px] m-0 max-w-[46ch] leading-normal text-(--el-showcase-field-text)"
+                  >
+                    Every Motir project runs through the same instrument: the modules are Motir and
+                    its agents, and the switches are yours. motir.co walks through it module by
+                    module.
+                  </p>
+                  <a
+                    href="https://motir.co/how-it-works"
+                    target="_blank"
+                    rel="noopener"
+                    class="inline-flex h-(--height-btn-lg) items-center gap-2 rounded-(--radius-btn) bg-(--el-showcase-decision) px-(--spacing-btn-x) text-[15px] font-medium text-(--el-showcase-decision-text) no-underline hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-showcase-field-text)"
+                    ><span>Read it on motir.co</span
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="size-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M7 7h10v10"></path>
+                      <path d="M7 17 17 7"></path></svg
+                    ><span class="sr-only"> (opens in a new tab)</span></a
+                  >
+                </section>
+              </div>
               <div class="border-t border-(--el-border-soft) bg-(--el-page-bg) px-[38px] py-[56px]">
                 <a
                   href="/onboarding"
+                  data-closes-tab=""
                   class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-lg) px-6 text-base no-underline"
                   ><span aria-hidden="true" class="inline-flex"
                     ><svg
@@ -6919,9 +7764,11 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
           <div class="grid content-start gap-3">
             <div class="grid gap-1 font-sans text-[13px] leading-normal text-(--el-text-secondary)">
               <p class="m-0 max-w-[110ch]">
-                The hero is the title and body; three section bands follow (say · watch · decide),
-                then Back to start → /onboarding. Reached from the entrance hero’s See how Motir
-                works.
+                Opened in a new tab from the entrance. The hero is the title and body; three section
+                bands follow (say · watch · decide), each with its drawing; then the motir.co
+                link-out (Read it on motir.co → https://motir.co/how-it-works, new tab); then Back
+                to start, which CLOSES this tab and returns the person to the entrance tab, or goes
+                to /onboarding where the tab cannot be closed.
               </p>
             </div>
             <div
@@ -7130,38 +7977,91 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
               </section>
               <section
                 data-section-band=""
-                class="bg-(--el-page-bg) border-t border-(--el-border) px-[38px] py-[72px]"
+                class="bg-(--el-page-bg) border-t border-(--el-border) px-[38px] py-[64px]"
               >
-                <div
-                  class="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start gap-x-14 gap-y-4"
-                >
-                  <h2
-                    class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                  >
-                    Say what you want
-                  </h2>
-                  <div class="grid justify-items-start gap-5">
+                <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-14">
+                  <div class="grid content-start gap-4">
+                    <h2
+                      class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                    >
+                      Say what you want
+                    </h2>
                     <p
                       class="text-[18px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                     >
                       A few sentences or a messy brain dump. Motir asks until it understands.
                     </p>
                   </div>
+                  <div
+                    aria-hidden="true"
+                    data-section-art="say"
+                    class="h-[248px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-sky) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid gap-2 px-(--spacing-input-x) py-(--spacing-input-y)"
+                    >
+                      <span
+                        class="block h-2 w-[88%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                      ></span
+                      ><span class="flex items-center gap-1"
+                        ><span
+                          class="block h-2 w-[56%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span
+                        ><span class="block h-3.5 w-[2px] bg-(--el-accent-on-surface)"></span
+                      ></span>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                      <span
+                        class="grid size-7 flex-none place-items-center rounded-full border border-(--el-border) bg-(--el-card)"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          width="14"
+                          height="14"
+                          class="brand-glyph"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          ></path></svg
+                      ></span>
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid flex-1 gap-2 px-3 py-2.5"
+                      >
+                        <span
+                          class="block h-2 w-[72%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span
+                        ><span
+                          class="block h-2 w-[44%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span>
+                      </div>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                      <span
+                        class="block h-6 w-14 rounded-(--radius-badge) border border-(--el-border-strong) bg-(--el-card)"
+                      ></span
+                      ><span
+                        class="block h-6 w-16 rounded-(--radius-badge) border border-(--el-accent) bg-(--el-accent)"
+                      ></span
+                      ><span
+                        class="block h-6 w-12 rounded-(--radius-badge) border border-(--el-border-strong) bg-(--el-card)"
+                      ></span>
+                    </div>
+                  </div>
                 </div>
               </section>
               <section
                 data-section-band=""
-                class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-[38px] py-[72px]"
+                class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-[38px] py-[64px]"
               >
-                <div
-                  class="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start gap-x-14 gap-y-4"
-                >
-                  <h2
-                    class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                  >
-                    Watch it take shape
-                  </h2>
-                  <div class="grid justify-items-start gap-5">
+                <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-14">
+                  <div class="grid content-start gap-4">
+                    <h2
+                      class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                    >
+                      Watch it take shape
+                    </h2>
                     <p
                       class="text-[18px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                     >
@@ -7169,21 +8069,99 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                       out in the open.
                     </p>
                   </div>
+                  <div
+                    aria-hidden="true"
+                    data-section-art="watch"
+                    class="h-[248px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-lavender) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                  >
+                    <div class="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-3">
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid content-start gap-2.5 px-3 py-3"
+                      >
+                        <span class="flex items-center gap-2"
+                          ><span class="block size-2.5 flex-none bg-(--el-accent-on-surface)"></span
+                          ><span
+                            class="block h-2 w-[58%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span class="ml-auto inline-flex text-(--el-success)"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="size-3.5"
+                              aria-hidden="true"
+                            >
+                              <path d="M20 6 9 17l-5-5"></path></svg></span></span
+                        ><span class="flex items-center gap-2 pl-4"
+                          ><span class="block size-2.5 flex-none bg-(--el-accent-on-surface)"></span
+                          ><span
+                            class="block h-2 w-[50%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span class="ml-auto inline-flex text-(--el-success)"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="size-3.5"
+                              aria-hidden="true"
+                            >
+                              <path d="M20 6 9 17l-5-5"></path></svg></span></span
+                        ><span class="flex items-center gap-2 pl-4"
+                          ><span class="block size-2.5 flex-none bg-(--el-showcase-decision)"></span
+                          ><span
+                            class="block h-2 w-[42%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span
+                            class="ml-auto block size-3.5 rounded-full border-2 border-(--el-border-strong)"
+                          ></span></span
+                        ><span class="flex items-center gap-2 pl-8"
+                          ><span class="block size-2.5 flex-none bg-(--el-accent-on-surface)"></span
+                          ><span
+                            class="block h-2 w-[36%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span
+                            class="ml-auto block size-3.5 rounded-full border-2 border-(--el-border-strong)"
+                          ></span
+                        ></span>
+                      </div>
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid content-start gap-2 p-2.5"
+                      >
+                        <span
+                          class="block h-14 rounded-(--radius-control) bg-(--el-tint-sky)"
+                        ></span
+                        ><span
+                          class="block h-2 w-[70%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span
+                        ><span
+                          class="block h-2 w-[46%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span>
+                      </div>
+                    </div>
+                    <span
+                      class="block h-1.5 overflow-hidden rounded-(--radius-badge) bg-(--el-border)"
+                      ><span class="block h-full w-[62%] bg-(--el-accent-on-surface)"></span
+                    ></span>
+                  </div>
                 </div>
               </section>
               <section
                 data-section-band=""
-                class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-[38px] py-[72px]"
+                class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-[38px] py-[64px]"
               >
-                <div
-                  class="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start gap-x-14 gap-y-4"
-                >
-                  <h2
-                    class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                  >
-                    You decide
-                  </h2>
-                  <div class="grid justify-items-start gap-5">
+                <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-14">
+                  <div class="grid content-start gap-4">
+                    <h2
+                      class="text-[56px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                    >
+                      You decide
+                    </h2>
                     <p
                       class="text-[18px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                     >
@@ -7191,11 +8169,89 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                       of what ships.
                     </p>
                   </div>
+                  <div
+                    aria-hidden="true"
+                    data-section-art="decide"
+                    class="h-[248px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-peach) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid gap-2.5 px-3.5 py-3.5"
+                    >
+                      <span
+                        class="block h-3 w-[48%] rounded-(--radius-badge) bg-(--el-text-secondary)"
+                      ></span
+                      ><span class="block h-16 rounded-(--radius-control) bg-(--el-surface)"></span
+                      ><span
+                        class="block h-2 w-[80%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                      ></span
+                      ><span class="flex items-center justify-end gap-2 pt-1"
+                        ><span
+                          class="block h-7 w-16 rounded-(--radius-btn) border border-(--el-button-border) bg-(--el-card)"
+                        ></span
+                        ><span
+                          class="relative inline-flex h-7 w-20 items-center justify-center rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text)"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="size-4"
+                            aria-hidden="true"
+                          >
+                            <path d="M20 6 9 17l-5-5"></path></svg
+                          ><span
+                            class="absolute -top-1.5 -right-1.5 block size-3 bg-(--el-showcase-decision)"
+                          ></span></span
+                      ></span>
+                    </div>
+                  </div>
                 </div>
               </section>
+              <div class="bg-(--el-page-bg) px-[38px] pb-[56px]">
+                <section
+                  data-showcase="field"
+                  class="grid justify-items-center gap-5 rounded-(--radius-card) border border-(--el-border) bg-(--el-showcase-field) text-center text-(--el-showcase-field-text) shadow-(--shadow-card) px-[calc(var(--spacing-card-padding)*2)] py-[calc(var(--spacing-card-padding)*2.5)]"
+                >
+                  <h2
+                    class="text-[48px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-showcase-field-text)"
+                  >
+                    How Motir works, for developers
+                  </h2>
+                  <p
+                    class="text-[18px] m-0 max-w-[46ch] leading-normal text-(--el-showcase-field-text)"
+                  >
+                    Every Motir project runs through the same instrument: the modules are Motir and
+                    its agents, and the switches are yours. motir.co walks through it module by
+                    module.
+                  </p>
+                  <a
+                    href="https://motir.co/how-it-works"
+                    target="_blank"
+                    rel="noopener"
+                    class="inline-flex h-(--height-btn-lg) items-center gap-2 rounded-(--radius-btn) bg-(--el-showcase-decision) px-(--spacing-btn-x) text-[15px] font-medium text-(--el-showcase-decision-text) no-underline hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-showcase-field-text)"
+                    ><span>Read it on motir.co</span
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="size-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M7 7h10v10"></path>
+                      <path d="M7 17 17 7"></path></svg
+                    ><span class="sr-only"> (opens in a new tab)</span></a
+                  >
+                </section>
+              </div>
               <div class="border-t border-(--el-border-soft) bg-(--el-page-bg) px-[38px] py-[56px]">
                 <a
                   href="/onboarding"
+                  data-closes-tab=""
                   class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-lg) px-6 text-base no-underline"
                   ><span aria-hidden="true" class="inline-flex"
                     ><svg
@@ -7439,8 +8495,11 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                     <div>
                       <a
                         href="/onboarding/how-it-works"
-                        class="text-[15px] inline-flex items-center gap-1.5 font-semibold text-(--el-text) underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
-                        >See how Motir works<svg
+                        target="_blank"
+                        rel="noopener"
+                        class="text-[15px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline"
+                        ><span>See how Motir works</span
+                        ><svg
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -7450,9 +8509,10 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                           class="size-4"
                           aria-hidden="true"
                         >
-                          <path d="M5 12h14"></path>
-                          <path d="m12 5 7 7-7 7"></path></svg
-                      ></a>
+                          <path d="M7 7h10v10"></path>
+                          <path d="M7 17 17 7"></path></svg
+                        ><span class="sr-only"> (opens in a new tab)</span></a
+                      >
                     </div>
                     <div class="mt-2 flex w-full">
                       <form
@@ -7741,8 +8801,11 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                     <div>
                       <a
                         href="/onboarding/how-it-works"
-                        class="text-[15px] inline-flex items-center gap-1.5 font-semibold text-(--el-text) underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
-                        >See how Motir works<svg
+                        target="_blank"
+                        rel="noopener"
+                        class="text-[15px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline"
+                        ><span>See how Motir works</span
+                        ><svg
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -7752,9 +8815,10 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                           class="size-4"
                           aria-hidden="true"
                         >
-                          <path d="M5 12h14"></path>
-                          <path d="m12 5 7 7-7 7"></path></svg
-                      ></a>
+                          <path d="M7 7h10v10"></path>
+                          <path d="M7 17 17 7"></path></svg
+                        ><span class="sr-only"> (opens in a new tab)</span></a
+                      >
                     </div>
                     <div class="mt-2 flex w-full">
                       <form
@@ -8047,18 +9111,75 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                   data-section-band=""
                   class="bg-(--el-page-bg) border-t border-(--el-border) px-4 py-12"
                 >
-                  <div class="grid gap-y-4">
-                    <h2
-                      class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                    >
-                      Say what you want
-                    </h2>
-                    <div class="grid justify-items-start gap-5">
+                  <div class="grid gap-y-6">
+                    <div class="grid content-start gap-4">
+                      <h2
+                        class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                      >
+                        Say what you want
+                      </h2>
                       <p
                         class="text-[17px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                       >
                         A few sentences or a messy brain dump. Motir asks until it understands.
                       </p>
+                    </div>
+                    <div
+                      aria-hidden="true"
+                      data-section-art="say"
+                      class="h-[208px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-sky) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                    >
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid gap-2 px-(--spacing-input-x) py-(--spacing-input-y)"
+                      >
+                        <span
+                          class="block h-2 w-[88%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span
+                        ><span class="flex items-center gap-1"
+                          ><span
+                            class="block h-2 w-[56%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span class="block h-3.5 w-[2px] bg-(--el-accent-on-surface)"></span
+                        ></span>
+                      </div>
+                      <div class="flex items-start gap-2.5">
+                        <span
+                          class="grid size-7 flex-none place-items-center rounded-full border border-(--el-border) bg-(--el-card)"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            width="14"
+                            height="14"
+                            class="brand-glyph"
+                            aria-hidden="true"
+                            focusable="false"
+                          >
+                            <path
+                              d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                              fill="currentColor"
+                            ></path></svg
+                        ></span>
+                        <div
+                          class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid flex-1 gap-2 px-3 py-2.5"
+                        >
+                          <span
+                            class="block h-2 w-[72%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span
+                            class="block h-2 w-[44%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span>
+                        </div>
+                      </div>
+                      <div class="flex justify-end gap-2">
+                        <span
+                          class="block h-6 w-14 rounded-(--radius-badge) border border-(--el-border-strong) bg-(--el-card)"
+                        ></span
+                        ><span
+                          class="block h-6 w-16 rounded-(--radius-badge) border border-(--el-accent) bg-(--el-accent)"
+                        ></span
+                        ><span
+                          class="block h-6 w-12 rounded-(--radius-badge) border border-(--el-border-strong) bg-(--el-card)"
+                        ></span>
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -8066,13 +9187,13 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                   data-section-band=""
                   class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-4 py-12"
                 >
-                  <div class="grid gap-y-4">
-                    <h2
-                      class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                    >
-                      Watch it take shape
-                    </h2>
-                    <div class="grid justify-items-start gap-5">
+                  <div class="grid gap-y-6">
+                    <div class="grid content-start gap-4">
+                      <h2
+                        class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                      >
+                        Watch it take shape
+                      </h2>
                       <p
                         class="text-[17px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                       >
@@ -8080,19 +9201,107 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         out in the open.
                       </p>
                     </div>
+                    <div
+                      aria-hidden="true"
+                      data-section-art="watch"
+                      class="h-[208px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-lavender) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                    >
+                      <div class="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-3">
+                        <div
+                          class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid content-start gap-2.5 px-3 py-3"
+                        >
+                          <span class="flex items-center gap-2"
+                            ><span
+                              class="block size-2.5 flex-none bg-(--el-accent-on-surface)"
+                            ></span
+                            ><span
+                              class="block h-2 w-[58%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                            ></span
+                            ><span class="ml-auto inline-flex text-(--el-success)"
+                              ><svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="size-3.5"
+                                aria-hidden="true"
+                              >
+                                <path d="M20 6 9 17l-5-5"></path></svg></span></span
+                          ><span class="flex items-center gap-2 pl-4"
+                            ><span
+                              class="block size-2.5 flex-none bg-(--el-accent-on-surface)"
+                            ></span
+                            ><span
+                              class="block h-2 w-[50%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                            ></span
+                            ><span class="ml-auto inline-flex text-(--el-success)"
+                              ><svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="size-3.5"
+                                aria-hidden="true"
+                              >
+                                <path d="M20 6 9 17l-5-5"></path></svg></span></span
+                          ><span class="flex items-center gap-2 pl-4"
+                            ><span
+                              class="block size-2.5 flex-none bg-(--el-showcase-decision)"
+                            ></span
+                            ><span
+                              class="block h-2 w-[42%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                            ></span
+                            ><span
+                              class="ml-auto block size-3.5 rounded-full border-2 border-(--el-border-strong)"
+                            ></span></span
+                          ><span class="flex items-center gap-2 pl-8"
+                            ><span
+                              class="block size-2.5 flex-none bg-(--el-accent-on-surface)"
+                            ></span
+                            ><span
+                              class="block h-2 w-[36%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                            ></span
+                            ><span
+                              class="ml-auto block size-3.5 rounded-full border-2 border-(--el-border-strong)"
+                            ></span
+                          ></span>
+                        </div>
+                        <div
+                          class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid content-start gap-2 p-2.5"
+                        >
+                          <span
+                            class="block h-14 rounded-(--radius-control) bg-(--el-tint-sky)"
+                          ></span
+                          ><span
+                            class="block h-2 w-[70%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span
+                            class="block h-2 w-[46%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span>
+                        </div>
+                      </div>
+                      <span
+                        class="block h-1.5 overflow-hidden rounded-(--radius-badge) bg-(--el-border)"
+                        ><span class="block h-full w-[62%] bg-(--el-accent-on-surface)"></span
+                      ></span>
+                    </div>
                   </div>
                 </section>
                 <section
                   data-section-band=""
                   class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-4 py-12"
                 >
-                  <div class="grid gap-y-4">
-                    <h2
-                      class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                    >
-                      You decide
-                    </h2>
-                    <div class="grid justify-items-start gap-5">
+                  <div class="grid gap-y-6">
+                    <div class="grid content-start gap-4">
+                      <h2
+                        class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                      >
+                        You decide
+                      </h2>
                       <p
                         class="text-[17px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                       >
@@ -8100,11 +9309,91 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         charge of what ships.
                       </p>
                     </div>
+                    <div
+                      aria-hidden="true"
+                      data-section-art="decide"
+                      class="h-[208px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-peach) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                    >
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid gap-2.5 px-3.5 py-3.5"
+                      >
+                        <span
+                          class="block h-3 w-[48%] rounded-(--radius-badge) bg-(--el-text-secondary)"
+                        ></span
+                        ><span
+                          class="block h-16 rounded-(--radius-control) bg-(--el-surface)"
+                        ></span
+                        ><span
+                          class="block h-2 w-[80%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span
+                        ><span class="flex items-center justify-end gap-2 pt-1"
+                          ><span
+                            class="block h-7 w-16 rounded-(--radius-btn) border border-(--el-button-border) bg-(--el-card)"
+                          ></span
+                          ><span
+                            class="relative inline-flex h-7 w-20 items-center justify-center rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text)"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="size-4"
+                              aria-hidden="true"
+                            >
+                              <path d="M20 6 9 17l-5-5"></path></svg
+                            ><span
+                              class="absolute -top-1.5 -right-1.5 block size-3 bg-(--el-showcase-decision)"
+                            ></span></span
+                        ></span>
+                      </div>
+                    </div>
                   </div>
                 </section>
+                <div class="bg-(--el-page-bg) px-4 pb-10">
+                  <section
+                    data-showcase="field"
+                    class="grid justify-items-center gap-5 rounded-(--radius-card) border border-(--el-border) bg-(--el-showcase-field) text-center text-(--el-showcase-field-text) shadow-(--shadow-card) px-(--spacing-card-padding) py-10"
+                  >
+                    <h2
+                      class="text-[32px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-showcase-field-text)"
+                    >
+                      How Motir works, for developers
+                    </h2>
+                    <p
+                      class="text-[16px] m-0 max-w-[46ch] leading-normal text-(--el-showcase-field-text)"
+                    >
+                      Every Motir project runs through the same instrument: the modules are Motir
+                      and its agents, and the switches are yours. motir.co walks through it module
+                      by module.
+                    </p>
+                    <a
+                      href="https://motir.co/how-it-works"
+                      target="_blank"
+                      rel="noopener"
+                      class="inline-flex h-(--height-btn-lg) items-center gap-2 rounded-(--radius-btn) bg-(--el-showcase-decision) px-(--spacing-btn-x) text-[15px] font-medium text-(--el-showcase-decision-text) no-underline hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-showcase-field-text)"
+                      ><span>Read it on motir.co</span
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    >
+                  </section>
+                </div>
                 <div class="border-t border-(--el-border-soft) bg-(--el-page-bg) px-4 py-10">
                   <a
                     href="/onboarding"
+                    data-closes-tab=""
                     class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-lg) px-6 text-base no-underline"
                     ><span aria-hidden="true" class="inline-flex"
                       ><svg
@@ -8331,18 +9620,75 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                   data-section-band=""
                   class="bg-(--el-page-bg) border-t border-(--el-border) px-4 py-12"
                 >
-                  <div class="grid gap-y-4">
-                    <h2
-                      class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                    >
-                      Say what you want
-                    </h2>
-                    <div class="grid justify-items-start gap-5">
+                  <div class="grid gap-y-6">
+                    <div class="grid content-start gap-4">
+                      <h2
+                        class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                      >
+                        Say what you want
+                      </h2>
                       <p
                         class="text-[17px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                       >
                         A few sentences or a messy brain dump. Motir asks until it understands.
                       </p>
+                    </div>
+                    <div
+                      aria-hidden="true"
+                      data-section-art="say"
+                      class="h-[208px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-sky) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                    >
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid gap-2 px-(--spacing-input-x) py-(--spacing-input-y)"
+                      >
+                        <span
+                          class="block h-2 w-[88%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span
+                        ><span class="flex items-center gap-1"
+                          ><span
+                            class="block h-2 w-[56%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span class="block h-3.5 w-[2px] bg-(--el-accent-on-surface)"></span
+                        ></span>
+                      </div>
+                      <div class="flex items-start gap-2.5">
+                        <span
+                          class="grid size-7 flex-none place-items-center rounded-full border border-(--el-border) bg-(--el-card)"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            width="14"
+                            height="14"
+                            class="brand-glyph"
+                            aria-hidden="true"
+                            focusable="false"
+                          >
+                            <path
+                              d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                              fill="currentColor"
+                            ></path></svg
+                        ></span>
+                        <div
+                          class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid flex-1 gap-2 px-3 py-2.5"
+                        >
+                          <span
+                            class="block h-2 w-[72%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span
+                            class="block h-2 w-[44%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span>
+                        </div>
+                      </div>
+                      <div class="flex justify-end gap-2">
+                        <span
+                          class="block h-6 w-14 rounded-(--radius-badge) border border-(--el-border-strong) bg-(--el-card)"
+                        ></span
+                        ><span
+                          class="block h-6 w-16 rounded-(--radius-badge) border border-(--el-accent) bg-(--el-accent)"
+                        ></span
+                        ><span
+                          class="block h-6 w-12 rounded-(--radius-badge) border border-(--el-border-strong) bg-(--el-card)"
+                        ></span>
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -8350,13 +9696,13 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                   data-section-band=""
                   class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-4 py-12"
                 >
-                  <div class="grid gap-y-4">
-                    <h2
-                      class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                    >
-                      Watch it take shape
-                    </h2>
-                    <div class="grid justify-items-start gap-5">
+                  <div class="grid gap-y-6">
+                    <div class="grid content-start gap-4">
+                      <h2
+                        class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                      >
+                        Watch it take shape
+                      </h2>
                       <p
                         class="text-[17px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                       >
@@ -8364,19 +9710,107 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         out in the open.
                       </p>
                     </div>
+                    <div
+                      aria-hidden="true"
+                      data-section-art="watch"
+                      class="h-[208px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-lavender) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                    >
+                      <div class="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-3">
+                        <div
+                          class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid content-start gap-2.5 px-3 py-3"
+                        >
+                          <span class="flex items-center gap-2"
+                            ><span
+                              class="block size-2.5 flex-none bg-(--el-accent-on-surface)"
+                            ></span
+                            ><span
+                              class="block h-2 w-[58%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                            ></span
+                            ><span class="ml-auto inline-flex text-(--el-success)"
+                              ><svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="size-3.5"
+                                aria-hidden="true"
+                              >
+                                <path d="M20 6 9 17l-5-5"></path></svg></span></span
+                          ><span class="flex items-center gap-2 pl-4"
+                            ><span
+                              class="block size-2.5 flex-none bg-(--el-accent-on-surface)"
+                            ></span
+                            ><span
+                              class="block h-2 w-[50%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                            ></span
+                            ><span class="ml-auto inline-flex text-(--el-success)"
+                              ><svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="size-3.5"
+                                aria-hidden="true"
+                              >
+                                <path d="M20 6 9 17l-5-5"></path></svg></span></span
+                          ><span class="flex items-center gap-2 pl-4"
+                            ><span
+                              class="block size-2.5 flex-none bg-(--el-showcase-decision)"
+                            ></span
+                            ><span
+                              class="block h-2 w-[42%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                            ></span
+                            ><span
+                              class="ml-auto block size-3.5 rounded-full border-2 border-(--el-border-strong)"
+                            ></span></span
+                          ><span class="flex items-center gap-2 pl-8"
+                            ><span
+                              class="block size-2.5 flex-none bg-(--el-accent-on-surface)"
+                            ></span
+                            ><span
+                              class="block h-2 w-[36%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                            ></span
+                            ><span
+                              class="ml-auto block size-3.5 rounded-full border-2 border-(--el-border-strong)"
+                            ></span
+                          ></span>
+                        </div>
+                        <div
+                          class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid content-start gap-2 p-2.5"
+                        >
+                          <span
+                            class="block h-14 rounded-(--radius-control) bg-(--el-tint-sky)"
+                          ></span
+                          ><span
+                            class="block h-2 w-[70%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span
+                          ><span
+                            class="block h-2 w-[46%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                          ></span>
+                        </div>
+                      </div>
+                      <span
+                        class="block h-1.5 overflow-hidden rounded-(--radius-badge) bg-(--el-border)"
+                        ><span class="block h-full w-[62%] bg-(--el-accent-on-surface)"></span
+                      ></span>
+                    </div>
                   </div>
                 </section>
                 <section
                   data-section-band=""
                   class="bg-(--el-page-bg) border-t border-(--el-border-soft) px-4 py-12"
                 >
-                  <div class="grid gap-y-4">
-                    <h2
-                      class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
-                    >
-                      You decide
-                    </h2>
-                    <div class="grid justify-items-start gap-5">
+                  <div class="grid gap-y-6">
+                    <div class="grid content-start gap-4">
+                      <h2
+                        class="text-[34px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-text)"
+                      >
+                        You decide
+                      </h2>
                       <p
                         class="text-[17px] m-0 max-w-[44ch] leading-normal text-(--el-text-secondary)"
                       >
@@ -8384,11 +9818,91 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                         charge of what ships.
                       </p>
                     </div>
+                    <div
+                      aria-hidden="true"
+                      data-section-art="decide"
+                      class="h-[208px] relative grid content-center gap-3 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-peach) p-(--spacing-card-padding) shadow-(--shadow-card)"
+                    >
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) shadow-(--shadow-subtle) grid gap-2.5 px-3.5 py-3.5"
+                      >
+                        <span
+                          class="block h-3 w-[48%] rounded-(--radius-badge) bg-(--el-text-secondary)"
+                        ></span
+                        ><span
+                          class="block h-16 rounded-(--radius-control) bg-(--el-surface)"
+                        ></span
+                        ><span
+                          class="block h-2 w-[80%] rounded-(--radius-badge) bg-(--el-border-strong)"
+                        ></span
+                        ><span class="flex items-center justify-end gap-2 pt-1"
+                          ><span
+                            class="block h-7 w-16 rounded-(--radius-btn) border border-(--el-button-border) bg-(--el-card)"
+                          ></span
+                          ><span
+                            class="relative inline-flex h-7 w-20 items-center justify-center rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text)"
+                            ><svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="size-4"
+                              aria-hidden="true"
+                            >
+                              <path d="M20 6 9 17l-5-5"></path></svg
+                            ><span
+                              class="absolute -top-1.5 -right-1.5 block size-3 bg-(--el-showcase-decision)"
+                            ></span></span
+                        ></span>
+                      </div>
+                    </div>
                   </div>
                 </section>
+                <div class="bg-(--el-page-bg) px-4 pb-10">
+                  <section
+                    data-showcase="field"
+                    class="grid justify-items-center gap-5 rounded-(--radius-card) border border-(--el-border) bg-(--el-showcase-field) text-center text-(--el-showcase-field-text) shadow-(--shadow-card) px-(--spacing-card-padding) py-10"
+                  >
+                    <h2
+                      class="text-[32px] m-0 font-serif font-bold leading-[0.98] tracking-[-0.03em] text-balance text-(--el-showcase-field-text)"
+                    >
+                      How Motir works, for developers
+                    </h2>
+                    <p
+                      class="text-[16px] m-0 max-w-[46ch] leading-normal text-(--el-showcase-field-text)"
+                    >
+                      Every Motir project runs through the same instrument: the modules are Motir
+                      and its agents, and the switches are yours. motir.co walks through it module
+                      by module.
+                    </p>
+                    <a
+                      href="https://motir.co/how-it-works"
+                      target="_blank"
+                      rel="noopener"
+                      class="inline-flex h-(--height-btn-lg) items-center gap-2 rounded-(--radius-btn) bg-(--el-showcase-decision) px-(--spacing-btn-x) text-[15px] font-medium text-(--el-showcase-decision-text) no-underline hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-showcase-field-text)"
+                      ><span>Read it on motir.co</span
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path></svg
+                      ><span class="sr-only"> (opens in a new tab)</span></a
+                    >
+                  </section>
+                </div>
                 <div class="border-t border-(--el-border-soft) bg-(--el-page-bg) px-4 py-10">
                   <a
                     href="/onboarding"
+                    data-closes-tab=""
                     class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-lg) px-6 text-base no-underline"
                     ><span aria-hidden="true" class="inline-flex"
                       ><svg
@@ -8608,8 +10122,11 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                     <div>
                       <a
                         href="/onboarding/how-it-works"
-                        class="text-[15px] inline-flex items-center gap-1.5 font-semibold text-(--el-text) underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
-                        >See how Motir works<svg
+                        target="_blank"
+                        rel="noopener"
+                        class="text-[15px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline"
+                        ><span>See how Motir works</span
+                        ><svg
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -8619,9 +10136,10 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                           class="size-4"
                           aria-hidden="true"
                         >
-                          <path d="M5 12h14"></path>
-                          <path d="m12 5 7 7-7 7"></path></svg
-                      ></a>
+                          <path d="M7 7h10v10"></path>
+                          <path d="M7 17 17 7"></path></svg
+                        ><span class="sr-only"> (opens in a new tab)</span></a
+                      >
                     </div>
                     <div class="mt-2 flex w-full">
                       <form
@@ -8878,8 +10396,11 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                     <div>
                       <a
                         href="/onboarding/how-it-works"
-                        class="text-[15px] inline-flex items-center gap-1.5 font-semibold text-(--el-text) underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
-                        >See how Motir works<svg
+                        target="_blank"
+                        rel="noopener"
+                        class="text-[15px] inline-flex items-center gap-1.5 rounded-(--radius-control) font-semibold text-(--el-text) underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface) underline"
+                        ><span>See how Motir works</span
+                        ><svg
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -8889,9 +10410,10 @@ A booking app for a hair salon where clients pick a stylist and a time, get a te
                           class="size-4"
                           aria-hidden="true"
                         >
-                          <path d="M5 12h14"></path>
-                          <path d="m12 5 7 7-7 7"></path></svg
-                      ></a>
+                          <path d="M7 7h10v10"></path>
+                          <path d="M7 17 17 7"></path></svg
+                        ><span class="sr-only"> (opens in a new tab)</span></a
+                      >
                     </div>
                     <div class="mt-2 flex w-full">
                       <form
