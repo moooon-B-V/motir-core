@@ -33,6 +33,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **The plan drawn as it is written**             | **`plan-review--live-drawing.mock.html`**                 | MOTIR-6294           | Part XXIII |
 | **A Plans row NAMES its refused work item**     | **`plans-sessions--seeded.mock.html`**                    | MOTIR-6206           | § at end   |
 | **Approve, while it runs**                      | **`plan-review--approve-progress.mock.html`**             | MOTIR-5248           | Part XXV   |
+| **A plan resumed after a lost machine**         | **`plan-review--live-progress--resuming.mock.html`**      | MOTIR-8306           | Part XXVII |
 
 **A Part number is an address in THIS file.** Before taking the next number, check the area's
 published design results too (`list_designs` with `pathPrefix: design/ai-planning/`): a result that
@@ -7450,3 +7451,318 @@ Mock: `plans-tabbed-list--situation-2.mock.html` (a DELTA on MOTIR-7907's `plans
 - **The door:** the overlay at that session through MOTIR-7884; an undecided plan keeps its chip door (MOTIR-7889), and the row's own door is the same overlay.
 - Drawn beside a failed-walk row (_Waiting to resume_) and a Closed row, in light, dark and zh.
 - **GIVES:** MOTIR-7921 and MOTIR-7944 (the row; both still fit). **TAKES:** nothing from MOTIR-7907.
+
+# Part XXVII — a plan RESUMED BY ITSELF after its machine was lost: the _Resuming_ state of the progress line, its tail, its popover, its rail line, and when it turns _Stalled_ (MOTIR-8306 · Story MOTIR-8301 — `plan-review--live-progress--resuming.mock.html`, DATED 2026-10-12)
+
+**Design system — the files read and the verdict.** `package.json` depends on
+`@motir/design-system` (`workspace:*`, installed `0.13.0`), and `app/globals.css` imports
+`@motir/design-system/theme.css`. **Verdict: on Motir Design (branch a).** The project's axes come
+from the root layout's `data-style` / `data-palette` / `data-type` (`app/layout.tsx`, from the
+reader's applied appearance); the mock draws the defaults the shipped progress-line mock drew. The
+package exports `@motir/design-system/mock`, but **every part on this surface is product-local**, so
+the mock composes those components' markup over the package's `theme.css` exactly as Part XXV's
+asset did:
+
+| part                                       | kind                    | reason                                                |
+| ------------------------------------------ | ----------------------- | ----------------------------------------------------- |
+| `PlanProgressLineView` (pane and compact)  | product-local component | the plan's progress line; nothing generic about it    |
+| `PlanProposalViews`' pane header           | product-local component | the strip the line sits in                            |
+| `PlanActRecord` (the rail's act record)    | product-local component | the planning rail's own record                        |
+| `Popover` surface (`data-surface=popover`) | product-local primitive | `components/ui/Popover`, already composed by the line |
+
+No part is proposed as an addition to `@motir/design-system`.
+
+**The number.** Part XXIV is MOTIR-6628's published result, not landed here. Part XXV is used twice
+already: MOTIR-7821's published live-progress design calls itself Part XXV, and this file's Part XXV
+is MOTIR-5248's _Approve, while it runs_. motir-core#3545 (MOTIR-8299, open when this was written)
+lands MOTIR-7821's design in this file as **Part XXVI**. This Part therefore takes **XXVII**. Below,
+**"the progress design"** means MOTIR-7821's published result and its sections are cited by their
+published numbers (§25.1–25.18), which #3545 renumbers to §26.x.
+
+**A DELTA.** Base: the progress design, `ai-planning/plan-review--live-progress.mock.html` (a
+published result, not in this checkout — paths relative to `design/` per the note above Part XXII's
+successor sections). It is not edited. Composed unchanged: MOTIR-7907's
+`design/workbench/workbench--planning-session-needs-you.mock.html` (the To resume entry) and
+`design/ai-chat/planning-workspace--waiting-on-you.mock.html` (the overlay's _failed, waiting to
+resume_ state with Resume).
+
+## 27.1 What this Part adds
+
+Story MOTIR-8301 makes core start the shipped Resume (MOTIR-7916) **by itself** when a hosted `plan`
+job is reaped as abandoned (motir-ai's `ai_job_abandoned`, read in core as the lost-machine fact,
+MOTIR-8304) and its plan already holds a proposal. The new job then waits to be claimed by another
+machine, and during that wait nothing writes. Without this Part the line would read _Being written_
+over a plan that is doing nothing. This Part adds:
+
+1. **ONE marker state, `resuming`** — the fifth value of `MarkerState`, on the pane form, the
+   compact form and the rail (Sheets 1, 5, 6).
+2. **The tail while resuming** — a reason segment, an optional _second attempt_ segment, the counts
+   and times unchanged (Sheet 1).
+3. **The popover while resuming** — one sentence and a _Resumed automatically at_ row (Sheet 2).
+4. **The rail's one narration line** — an act row, and what the rail must NOT show (Sheet 6).
+5. **The stall rule for a resuming plan** (§27.5, Sheet 3), the dropped read (Sheet 4), the narrow
+   widths (Sheet 7), dark and zh (Sheet 8).
+
+It adds no route, no control, no motion and no notification. A person cannot cancel an automatic
+resume from here (story scope).
+
+## 27.2 Every panel is labelled `marker state · surface · density`
+
+| marker (`MarkerState`) | word (en / zh)                         | dot                       | when                                                                                  | sheets  |
+| ---------------------- | -------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------- | ------- |
+| `writing`              | Being written / 正在编写               | `--el-status-in-progress` | shipped                                                                               | 1, 3, 5 |
+| **`resuming`**         | **Resuming / 正在继续**                | `--el-status-in-progress` | Motir resumed the plan by itself and the new job has written and reported nothing yet | 1–8     |
+| `stalled`              | Stalled / 已停滞                       | `--el-warning`            | shipped — for a resuming plan, 15 min after the resume (§27.5)                        | 3, 5    |
+| `reconnecting`         | Reconnecting — showing the last update | `--el-warning`            | shipped — wins over `resuming` as over everything (`markerOf`)                        | 4       |
+| `starting`             | Starting…                              | `--el-status-in-progress` | shipped — **never follows a resume**: a resume needs a saved proposal                 | —       |
+
+**Precedence (`markerOf`), extended by one rung:** `failing → reconnecting`, then `stalled`, then
+**`resuming`**, then `starting`, else `writing`. `stalled` outranks `resuming` because a resume
+nobody claimed for 15 minutes is a stall, and saying _Resuming_ forever would hide it.
+
+**Why the in-progress role, not the warning role.** _Stalled_ and _Reconnecting_ wear `--el-warning`
+because each says "something may be wrong, look". Resuming says the opposite: something went wrong,
+Motir already handled it, and there is nothing for the person to do. A warning dot would call them
+to act on a state that needs no act and that usually lasts seconds. The word carries the news, and
+the reason segment carries the cause (§25.14's _not colour alone_ holds).
+
+**The word.** _Resuming_ in en. In zh **正在继续**, not 正在恢复: the shipped catalogue translates
+_resume_ as 继续 everywhere a person meets it (`workbench.planningSession.resume` 继续,
+`resuming` 正在继续…, `waitingToResume` 待继续), and a second verb for the same act would read as a
+different act. The automatic state drops the ellipsis that the manual button's in-flight label
+carries, because it is a state, not a pressed control.
+
+## 27.3 The line's tail while resuming (Sheets 1, 2, 5)
+
+**Order:** `[marker] [reason] [· second attempt] [· N of M authored] [· elapsed] [· last activity]`.
+
+- **The step words are absent.** No session is running, so the derivation returns no live step.
+- **The reason segment, `planReview.progress.resumingReason`**: _picking up where it stopped_ /
+  从中断处接着写. `text-xs --el-text-secondary`, not tabular, `data-testid="plan-progress-reason"`. It
+  says what is happening in the person's terms. The cause (_lost its machine_) is in the popover and
+  the rail, because the marker plus a short reason is what fits a row.
+- **The second automatic attempt, `planReview.progress.resumingSecond`**: _second attempt_ /
+  第二次尝试, a segment right after the reason, only when the session's automatic-resume count is 2.
+  The words are the shipped _Second attempt_ pill's (`workbench.planningSession.second`), so one event
+  is not named two ways. There is no third (§27.7).
+- **N of M authored, elapsed, last activity — unchanged.** N of M is kept: the saved proposals are on
+  the plan. Elapsed keeps ticking from `Plan.createdAt`. **Last activity reads _just now_ at the
+  resume** because the resume's bind stamps `Plan.lastActivityAt` (`planRepository.repointSourceJob`,
+  "so the resumed plan does not read as stalled before its first signal"), and then ticks by §25.4.
+- **The compact form:** the state word leads (no step is in words), then the same tail (Sheet 5).
+
+**Narrow widths — §25.2's drop order, with the new segments in front (Sheet 7).** The reason and the
+_second attempt_ segment drop FIRST (below 50rem of header width), then last activity (below 45rem),
+then elapsed and the pointer (below 35rem). Counts never drop. Implement it on the header's own width,
+as §25.2 says. The compact row drops in the same order.
+
+## 27.4 The popover while resuming (Sheet 2)
+
+The shipped `Popover` and its layout. While resuming:
+
+- **The eyebrow** reads `planReview.progress.detailsResumingHead` (_Picking up where it stopped_)
+  instead of _Working on now_, because there is no step to list.
+- **In place of the step list, ONE sentence**, `planReview.progress.detailsResuming`,
+  `text-sm --el-text`, `data-testid="plan-progress-resuming"`: _The machine writing this plan was
+  lost. Motir started the plan again by itself, and it continues from where it stopped — the items
+  already written are kept and are not written again._
+- **The facts block** is the shipped one (counts, _Started … · running …_, _Last activity …_) with ONE
+  new row between _Started_ and _Last activity_: `planReview.progress.detailsResumedAt`, _Resumed
+  automatically at {time}_ (`HH:mm:ss`, §25.4's clock format), or `detailsResumedAtSecond`, _Resumed
+  automatically at {time} · second attempt_. `data-testid="plan-progress-resumed-at"`.
+- **The pointer sentence stays**, with its link.
+
+**The resumed-at row outlives the state.** It is shown whenever the session has an automatic resume
+and the plan is still `generating` — on _Being written_ and _Stalled_ after a resume too (Sheet 3) —
+because "when did Motir pick this up" is exactly what a person reading a stalled plan wants to know.
+
+## 27.5 THE STALL RULE for a resuming plan — the ONE shipped threshold, from the resume's instant
+
+**Rule:** a resuming plan turns _Stalled_ when `serverNow − (the automatic resume's instant) >
+PLAN_STALLED_AFTER_MS` (900 000 ms, §25.9). No second constant.
+
+**Why from the resume, not from the last write before the machine died.** The machine dies at some
+point after the plan's last write; the lease then has to lapse and the reap has to be read before
+core resumes. Measured from the last write, a plan whose last write was 14 minutes before the death
+would read _Stalled_ a minute after Motir picked it up, which is false: the new job has had one
+minute, not fifteen.
+
+**It needs no new comparison today.** The resume's bind stamps `Plan.lastActivityAt` at the
+resume (§27.3), and the shipped derivation measures stalled from `lastActivityAt`. So the shipped rule
+already measures from the resume's instant, provided the automatic path goes through the shipped bind.
+The progress-state card keeps it that way, and its test pins it: _resume at T, no signal; at
+T + 15 min the plan reads `resuming`, at T + 15 min + 1 ms `stalled`_.
+
+**Transitions (Sheet 3):** _Resuming_ → _Stalled_ past the threshold, with the shipped stalled tail
+(_no activity for 15 min_) and the shipped stalled sentence; _Stalled_ → _Being written_ on the next
+read that sees a later `lastActivityAt` (the shipped recovery, §25.11).
+
+## 27.6 Hand-over out of Resuming (Sheet 1)
+
+- **The new job's first signal** (a step): the marker turns _Being written_ and the step words return
+  through the shipped phrases. N of M is unchanged.
+- **A first proposal write with no signal** (a planner that does not report steps): the marker turns
+  _Being written_ in the shipped _writing_ form (no step words, the counts move).
+- **When `resuming` holds, stated for the card that computes it.** The plan is `generating`, its
+  session is open and not failed, the session has an automatic resume on record, and **nothing has
+  been signalled or written since that resume**: no step started after it, and `lastActivityAt` has
+  not moved past the resume's own stamp. The cleanest way to make the last clause exact is to record
+  the automatic resume's instant with the SAME instant the bind stamps on the plan (see §27.8's
+  finding 2).
+
+## 27.7 The rail (Sheet 6)
+
+**One quiet narration line, an act row in `PlanActRecord`:** glyph `rotate-ccw` (lucide, new to this
+area), mono label `planningWorkspace.conversation.act.resumed` (_resume_ / 继续), line
+`act.resumedLine` (_Lost its machine — Motir started it again and it picks up where it stopped_), or
+`act.resumedLineSecond` for the second. `data-testid="plan-change-act-resumed"`. Same ink as every act
+row (`--el-text-secondary`; the glyph `--el-text-secondary`), the record's `--el-surface-soft`
+fill. It is ordinary record content: no spinner, not live, not `role="alert"`, no button. The new
+job's acts append below it.
+
+**What the rail must NOT show while an automatic resume is in flight:** MOTIR-7907's failure block
+(_This attempt stopped_, the reason, _Waiting to resume_, **Resume**; `FailedWaitingNotice`). Its
+condition is the session's failure record, which the bind clears; so it is absent by the shipped
+rule, provided the record is cleared before a read can see it (§27.8's finding 1).
+
+**The bound used (Sheet 6, composed).** The third lost machine on one session finds
+`recordAutoResume` refused (`AUTO_RESUMES_PER_SESSION = 2`), so the failure stays recorded like any
+other. Everything that follows is MOTIR-7907's, unchanged: the plan leaves Workbench › Planning by its
+shipped leave frame (MOTIR-7907's amendment of MOTIR-7823's), lands in To resume, and the rail shows
+_This attempt stopped_ with _Second attempt_ and Resume (`FailedWaitingNotice`, `failed-again`). The
+marker leaves _Resuming_ on the next read.
+
+**Never _Resuming_:**
+
+- **Nothing saved** — the machine is lost before the first proposal. Nothing resumes it
+  automatically; it fails exactly as today.
+- **Not a lost machine** — a judged failure (rate limit, credits, prompt too large, …), a cancel or a
+  stop. Never resumed automatically.
+- **Other planners and jobs** — `plan.py` and MCP-authored plans, and `revise_plan` / `generate_tree`
+  jobs. Nothing resumes them automatically, so they never read _Resuming_.
+
+## 27.8 List membership — checked against the reads, and two findings
+
+**A resuming plan STAYS in Workbench › Planning.** Membership is
+`planRepository.generatingRequestedByWhere`, read by both `workbenchPlanningService.listMyPlansBeingWritten`
+and the tab's badge; it carves out a FAILED plan through `FAILED_WAITING_WHERE` (MOTIR-7914). A
+resuming plan is `generating` and its session's failure record has been cleared by the bind
+(`planSessionResumeService`'s `bind` → `planChangeSessionRepository.clearFailure`), so it is listed.
+
+**A resuming plan is NOT in To resume.** `homeService.listToResume` lists the owner's open sessions
+with a failure on record (`countFailedOpenForOwner` / `listFailedOpenForOwner`). The cleared record
+keeps it out.
+
+**Finding 1, for the auto-resume card (MOTIR-8307): a window where both reads say "failed".** The
+shipped Resume submits FIRST and binds SECOND (`planSessionResumeService`: "the SUBMIT comes first …
+and the BIND second"), and the failure record is written before either, by `settleFailedJob` or the
+sweep. Between the failure write and the bind's `clearFailure` — one motir-ai submit round trip —
+the plan is out of Planning and in To resume, and a poll landing there would draw MOTIR-7907's
+failure block with Resume for one frame. Not drawn around here: the auto-resume card either keeps the
+window from being observable or states that the one-poll flash is accepted. A submit that is
+REFUSED (out of credits, rate limited, motir-ai unreachable) leaves the record in place, which is
+right: that plan does need its person.
+
+**Finding 2, for the auto-resume card and the progress-state card (MOTIR-8309).** The cleanest
+`resuming` test is "the plan's `lastActivityAt` equals the session's `lastAutoResumedAt`", which holds
+only if the automatic resume is recorded in the bind's own transaction with the bind's own instant.
+Recording it earlier (to reserve the bound before the submit) leaves the two instants milliseconds
+apart and forces the derivation into a tolerance. Recommended: record it inside the bind, with the
+same `now`.
+
+## 27.9 Copy — `messages/en.json` AND `messages/zh.json`
+
+| key                                                    | en                                                                                                                                                                                     | zh                                                                                                      |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `planReview.liveResuming`                              | Resuming                                                                                                                                                                               | 正在继续                                                                                                |
+| `planReview.progress.resumingReason`                   | picking up where it stopped                                                                                                                                                            | 从中断处接着写                                                                                          |
+| `planReview.progress.resumingSecond`                   | second attempt                                                                                                                                                                         | 第二次尝试                                                                                              |
+| `planReview.progress.detailsResumingHead`              | Picking up where it stopped                                                                                                                                                            | 从中断处接着写                                                                                          |
+| `planReview.progress.detailsResuming`                  | The machine writing this plan was lost. Motir started the plan again by itself, and it continues from where it stopped — the items already written are kept and are not written again. | 编写此计划的机器丢失了。Motir 已自动重新开始此计划，它会从中断处继续 — 已写好的工作项会保留，不会重写。 |
+| `planReview.progress.detailsResumedAt`                 | Resumed automatically at {time}                                                                                                                                                        | 已于 {time} 自动继续                                                                                    |
+| `planReview.progress.detailsResumedAtSecond`           | Resumed automatically at {time} · second attempt                                                                                                                                       | 已于 {time} 自动继续 · 第二次尝试                                                                       |
+| `planningWorkspace.conversation.act.resumed`           | resume                                                                                                                                                                                 | 继续                                                                                                    |
+| `planningWorkspace.conversation.act.resumedLine`       | Lost its machine — Motir started it again and it picks up where it stopped                                                                                                             | 机器丢失 — Motir 已重新开始，从中断处继续                                                               |
+| `planningWorkspace.conversation.act.resumedLineSecond` | Lost its machine again — second automatic attempt, picking up where it stopped                                                                                                         | 机器再次丢失 — 第二次自动尝试，从中断处继续                                                             |
+
+**No string names an internal code**: never _lease_, _reaped_, _abandoned_ or `ai_job_abandoned`.
+The person's terms are _the machine was lost_ and _picking up where it stopped_. The reader-facing
+noun stays _item_ / 工作项. Reused verbatim: every key of §25.13, and
+`workbench.planningSession.second`'s wording (copied, not referenced, so the line does not depend on
+the Workbench namespace).
+
+## 27.10 a11y — what is live
+
+| element                         | role / live                         | what it announces                                                                                  |
+| ------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- |
+| marker (shipped)                | `role="status"`, `aria-live=polite` | its WORD only: _Being written → Resuming → Being written_, once each; never a tick or the reason   |
+| reason / second-attempt segment | plain text inside the button        | nothing; read with the button on focus                                                             |
+| popover sentence and row        | inside the shipped dialog           | nothing; read on open                                                                              |
+| rail act row                    | record content in the `role="log"`  | the act record's own sr-only announcer says its line once, when the row is appended (shipped rule) |
+| compact line                    | plain text — NOT live               | nothing                                                                                            |
+
+## 27.11 Token and shape roles
+
+| element          | colour (`--el-*`)                                                  | shape                                       |
+| ---------------- | ------------------------------------------------------------------ | ------------------------------------------- |
+| resuming dot     | `--el-status-in-progress` (§27.2)                                  | `size-1.5`, `--radius-badge` (shipped)      |
+| reason segment   | `--el-text-secondary`                                              | inside the shipped progress button          |
+| popover sentence | `--el-text` on `--el-page-bg`                                      | shipped `Popover`                           |
+| resumed-at row   | `--el-text-secondary`                                              | shipped facts block                         |
+| rail act row     | `--el-text-secondary` glyph, label and line on `--el-surface-soft` | shipped `--radius-card` record, `px-3 py-2` |
+
+`--el-text-muted` and `--el-text-faint` carry nothing new.
+
+## 27.12 How the asset was produced
+
+- Every strip is the markup of `PlanProposalViews`' pane header, `PlanProgressLineView` (both
+  densities) and `PlanActRecord`, written class for class from the component source on the parent
+  branch `parent/MOTIR-8301-auto-resume-lost-machine` and from the DOM MOTIR-7821's published mock
+  carries; the new state is spliced in. The Segmented's markup is that mock's, verbatim.
+- The first stylesheet is Tailwind v4's output (`@tailwindcss/postcss`) compiled over this document's
+  class attributes with `@motir/design-system/theme.css`; the second is Part XXV's board chrome
+  (`--el-*` only) plus three host classes. The dark panels use `data-theme="dark"` with
+  `data-appearance-scope`, so the Tier-3 layer re-resolves in the nested scope.
+- Every glyph is a `<symbol>` extracted from `lucide-react@1.16.0`'s `__iconNode`:
+  `node scripts/audit-mock-sprites.mjs … --strict` reports **9 symbols, 0 undeclared, 0 drifted**.
+  New to the area: `rotate-ccw`.
+- Rendered in headless Chromium and looked at sheet by sheet.
+
+## 27.13 GIVES / TAKES
+
+- **MOTIR-8301** (the story) — neither; the container.
+- **MOTIR-8304** (core reads the lost-machine fact) — **GIVES** the fact this state depends on;
+  TAKES nothing.
+- **MOTIR-8305** (the session's automatic-resume record) — **GIVES** `autoResumeCount` and
+  `lastAutoResumedAt`, which decide `resuming` and _second attempt_; TAKES nothing.
+- **MOTIR-8307** (resume a lost machine's plan automatically) — **TAKES** findings 1 and 2 (§27.8):
+  the visible window between the failure write and the bind, and recording the resume with the
+  bind's instant. Its estimate still fits: both are choices about where an existing write sits.
+- **MOTIR-8309** (a plan resumed automatically reads "resuming") — **TAKES** §27.2–27.7 and §27.9–27.11:
+  the fifth `MarkerState`, its precedence, the tail, the popover, the rail row, the copy and the stall
+  test of §27.5. Re-checked against what it is handed: the derivation gains one state from two fields
+  it can read, and the view gains one word, two segments, one popover branch and one act row. It
+  still fits its estimate; the one risk is the rail row's data source (the act record is fed by the
+  stream, and the row has to come from the session's record so a reload draws it too), which that
+  card should name.
+- **MOTIR-8310 / MOTIR-8311** (the integration and E2E cards) — **TAKE** the `data-testid`s:
+  `plan-live-state` with `data-state="resuming"`, `plan-progress-reason`, `plan-progress-resuming`,
+  `plan-progress-resumed-at`, `plan-progress-compact` with `data-state="resuming"`,
+  `plan-change-act-resumed`; and, for the acceptance video, Sheet 1's _Being written → Resuming →
+  Being written_ path. Their estimates still fit.
+- **MOTIR-7907** — **TAKES nothing.** Its _resuming (held)_ To resume row and its _Resuming…_ button
+  stay the MANUAL Resume's, unchanged.
+- **MOTIR-7916 / MOTIR-7914 / MOTIR-8128** — read, not changed: the resume's bind, the membership
+  reads, and the silence sweep.
+- **MOTIR-7821 / MOTIR-8299** — the base design and the card landing it as Part XXVI; neither.
+- **MOTIR-7823** — its leave frame (as MOTIR-7907 amended it) is composed for the bound-used case;
+  neither.
+
+## 27.14 What Part XXVII does NOT draw or decide
+
+- Computing `resuming` (MOTIR-8309), when an automatic resume starts and its bound (MOTIR-8305,
+  MOTIR-8307), keeping the silence sweep off a resuming plan (MOTIR-8307).
+- MOTIR-7907's manual-resume states, the To resume entry, any change to the step words or to _N of M_.
+- A notification, a cancel control, an ETA.
+- The minutes between a machine dying and its job being reaped: the line reads as it does today
+  (_Being written_, and _Stalled_ if the last write was long enough ago), because nothing knows yet.
