@@ -6662,12 +6662,12 @@
       }
     },
     "entrance": {
-      "eyebrow": "欢迎使用 Motir",
       "headingDefault": "Vibe the project",
       "headingCarried": "随时可以开始",
       "subheadDefault": "你带来想法，Motir 交付整个项目：计划、设计、构建、文档，以及它如何一步步成形的完整经过。",
       "subheadCarried": "我们保留了你最初的想法。如果愿意，可以补充更多，然后继续。",
       "howItWorks": "了解 Motir 的工作方式",
+      "howItWorksNewTab": "（在新标签页中打开）",
       "ideaLabel": "你在构建什么？",
       "carriedLabel": "沿用你的想法",
       "placeholder": "描述你想构建的东西——面向谁、人们应该能做的核心事情，以及任何必备功能。不必追求完美——接下来我们会追问细节。",
@@ -6675,7 +6675,6 @@
       "continueCta": "沿用这个想法继续",
       "hintDefault": "几句话就够了，剩下的 Motir 会来问。",
       "hintCarried": "继续之前可以补充或完善任何内容——接下来交给发现对话。",
-      "or": "或",
       "importTitle": "已经有项目了？",
       "importDesc": "在改动任何东西之前，Motir 会先读懂你的代码、任务和历史，再规划下一步。发布什么由你决定。",
       "importCta": "它同样可以 Vibe"
@@ -6702,6 +6701,12 @@
           "title": "你来决定",
           "body": "每一部分都会回到你手上，供你查看、试用和批准。发布什么，始终由你掌控。"
         }
+      },
+      "developers": {
+        "title": "面向开发者：Motir 的工作方式",
+        "body": "每个 Motir 项目都运行在同一台“仪器”上：模块是 Motir 和它的智能体，开关属于你。motir.co 会逐个模块讲清楚。",
+        "cta": "到 motir.co 阅读",
+        "newTab": "（在新标签页中打开）"
       }
     },
     "connectGate": {

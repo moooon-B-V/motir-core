@@ -14,6 +14,10 @@ import { setLocale } from '@/lib/i18n/actions';
  * `design/auth/design-notes.md` § _The language control on the signed-out frame_.
  * `app/(auth)/layout.tsx` mounts it ONCE, in the page's top-right corner on the
  * wash, so every `(auth)` route inherits it the way it inherits the lockup.
+ * The onboarding brand bar carries the same control at its trailing end
+ * (`design/onboarding-entrance/design-notes.md` Revision 2, MOTIR-8286) — the
+ * entrance and how-it-works — which is why it lives in `components/i18n/`
+ * rather than the `(auth)` group's private `_components/` (moved by MOTIR-8253).
  *
  * A choice runs `setLocale` inside a transition and then `router.refresh()` — the
  * shape `LanguageCard` ships in Settings. Signed out, `setLocale` writes this

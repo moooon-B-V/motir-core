@@ -34,7 +34,7 @@ vi.mock('next-intl/server', () => ({
   getTranslations: vi.fn(async () => (key: string) => key),
 }));
 
-import { AuthLanguageControl } from '@/app/(auth)/_components/AuthLanguageControl';
+import { AuthLanguageControl } from '@/components/i18n/AuthLanguageControl';
 import AuthLayout from '@/app/(auth)/layout';
 
 const MESSAGES: Partial<Record<Locale, Record<string, unknown>>> = {
@@ -284,7 +284,7 @@ describe('AuthLanguageControl — both session states, one behaviour', () => {
   }
 
   it('reads no session: the component imports nothing from @/lib/auth', () => {
-    const src = readFileSync('app/(auth)/_components/AuthLanguageControl.tsx', 'utf8');
+    const src = readFileSync('components/i18n/AuthLanguageControl.tsx', 'utf8');
     expect(src).not.toMatch(/from ['"]@\/lib\/auth/);
     expect(src).not.toMatch(/useSession|getSession/);
     expect(src).not.toMatch(/\.(push|replace)\(/);
@@ -299,13 +299,21 @@ describe('the (auth) frame mounts it once, outside the card', () => {
     });
   }
 
-  it('is imported by app/(auth)/layout.tsx and by nothing else under app/', () => {
-    const importers = walk('app').filter(
-      (f) =>
-        !f.endsWith('AuthLanguageControl.tsx') &&
-        readFileSync(f, 'utf8').includes('AuthLanguageControl'),
+  it('is imported by app/(auth)/layout.tsx and, under app/, only by the onboarding how-it-works page', () => {
+    // MOTIR-8253 moved the control to `components/i18n/` so the onboarding brand
+    // bar can carry it too (design/onboarding-entrance Revision 2, MOTIR-8286).
+    // The entrance mounts it from `components/onboarding/OnboardingEntrance.tsx`;
+    // the only OTHER route under app/ that may name it is how-it-works, which has
+    // no client entrance of its own. The (auth) frame still mounts it once.
+    const importers = walk('app')
+      .filter((f) => readFileSync(f, 'utf8').includes('AuthLanguageControl'))
+      .sort();
+    expect(importers).toEqual(
+      [
+        join('app', '(auth)', 'layout.tsx'),
+        join('app', '(onboarding)', 'onboarding', 'how-it-works', 'page.tsx'),
+      ].sort(),
     );
-    expect(importers).toEqual([join('app', '(auth)', 'layout.tsx')]);
   });
 
   it('renders one control, in the corner, before and outside <main>', async () => {
@@ -335,7 +343,7 @@ describe('the (auth) frame mounts it once, outside the card', () => {
   });
 
   it('uses no ink on the control that fails AA on the wash', () => {
-    const src = readFileSync('app/(auth)/_components/AuthLanguageControl.tsx', 'utf8');
+    const src = readFileSync('components/i18n/AuthLanguageControl.tsx', 'utf8');
     expect(src).not.toMatch(/--el-text-(muted|faint)/);
     expect(localeLabel.en).toBe('English');
   });

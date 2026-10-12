@@ -3125,7 +3125,7 @@ export default defineConfig({
         'scripts/i18n/glossary.ts',
         'scripts/i18n/messageShape.ts',
         'scripts/i18n/sourceRecord.ts',
-        'app/**/_components/AuthLanguageControl.tsx',
+        'components/i18n/AuthLanguageControl.tsx',
         // ── Story MOTIR-5266 · /ready's Expand opens the planning overlay (MOTIR-7877) ──
         // The nudge became a LAUNCHER (MOTIR-7876): it reads the nudge, hides on ✕,
         // and shallowPushes the overlay's start-turn address. Measured on this branch
@@ -7158,7 +7158,7 @@ export default defineConfig({
         'scripts/i18n/glossary.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'scripts/i18n/messageShape.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'scripts/i18n/sourceRecord.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
-        'app/**/_components/AuthLanguageControl.tsx': {
+        'components/i18n/AuthLanguageControl.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

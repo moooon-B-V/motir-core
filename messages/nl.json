@@ -6669,7 +6669,6 @@
       }
     },
     "entrance": {
-      "eyebrow": "Bouwen met AI",
       "headingDefault": "Hoe wil je beginnen?",
       "headingCarried": "Klaar wanneer jij dat bent",
       "subheadDefault": "Beschrijf wat je wilt bouwen. Motir plant het samen met jou, daarna bouwen agents het.",
@@ -6682,7 +6681,6 @@
       "continueCta": "Doorgaan met dit idee",
       "hintDefault": "Je kunt met een ruw idee beginnen — de verkenningschat stelt vervolgvragen.",
       "hintCarried": "Voeg iets toe of verfijn het voordat je verdergaat — de verkenningschat neemt het vanaf hier over.",
-      "or": "OF",
       "importTitle": "Ik heb een bestaand project — migreren",
       "importDesc": "Koppel je repository en Motir leest je code en plant daarna verder op wat er al is. Je kunt ook bestaande werkitems uit Jira, Linear of Plane meenemen.",
       "importCta": "Migreren"

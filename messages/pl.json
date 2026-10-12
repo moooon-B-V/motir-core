@@ -6669,7 +6669,6 @@
       }
     },
     "entrance": {
-      "eyebrow": "Buduj z AI",
       "headingDefault": "Jak chcesz zacząć?",
       "headingCarried": "Gotowe, kiedy tylko zechcesz",
       "subheadDefault": "Opisz, co chcesz zbudować. Motir zaplanuje to razem z Tobą, a potem agenci to zbudują.",
@@ -6682,7 +6681,6 @@
       "continueCta": "Kontynuuj z tym pomysłem",
       "hintDefault": "Możesz zacząć od ogólnego pomysłu — czat odkrywczy zada pytania uzupełniające.",
       "hintCarried": "Dodaj lub dopracuj cokolwiek przed kontynuacją — dalej przejmie to czat odkrywczy.",
-      "or": "LUB",
       "importTitle": "Mam istniejący projekt — przenieś go",
       "importDesc": "Połącz repozytorium, a Motir przeczyta kod i zaplanuje pracę na podstawie tego, co już istnieje. Możesz też przenieść istniejące elementy robocze z Jira, Linear lub Plane.",
       "importCta": "Przenieś"

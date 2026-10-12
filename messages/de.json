@@ -6672,7 +6672,6 @@
       }
     },
     "entrance": {
-      "eyebrow": "Mit AI bauen",
       "headingDefault": "Wie möchten Sie beginnen?",
       "headingCarried": "Bereit, wenn Sie es sind",
       "subheadDefault": "Beschreiben Sie, was Sie bauen möchten. Motir plant es mit Ihnen, dann bauen Agenten es.",
@@ -6685,7 +6684,6 @@
       "continueCta": "Mit dieser Idee fortfahren",
       "hintDefault": "Sie können mit einer groben Idee beginnen – im Discovery-Chat werden Rückfragen gestellt.",
       "hintCarried": "Ergänzen oder verfeinern Sie alles, bevor Sie fortfahren – der Discovery-Chat übernimmt ab hier.",
-      "or": "ODER",
       "importTitle": "Ich habe ein bestehendes Projekt – migrieren",
       "importDesc": "Verbinden Sie Ihr Repository, und Motir liest Ihren Code und plant dann auf dem auf, was bereits vorhanden ist. Sie können auch bestehende Arbeitselemente aus Jira, Linear oder Plane übernehmen.",
       "importCta": "Migrieren"

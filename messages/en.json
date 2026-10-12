@@ -6666,12 +6666,12 @@
       }
     },
     "entrance": {
-      "eyebrow": "Welcome to Motir",
       "headingDefault": "Vibe the project",
       "headingCarried": "Ready when you are",
       "subheadDefault": "You bring the idea. Motir delivers the whole project: the plan, the design, the build, the documents, and the full story of how it got there.",
       "subheadCarried": "We kept the idea you started with. Add more if you like, then continue.",
       "howItWorks": "See how Motir works",
+      "howItWorksNewTab": "(opens in a new tab)",
       "ideaLabel": "What are you building?",
       "carriedLabel": "Carried over from your idea",
       "placeholder": "Describe what you want to build — who it's for, the core things people should be able to do, and any must-haves. Don't worry about getting it perfect — we'll ask follow-up questions next.",
@@ -6679,7 +6679,6 @@
       "continueCta": "Continue with this idea",
       "hintDefault": "A few sentences is enough. Motir asks about the rest.",
       "hintCarried": "Add or refine anything before you continue — the discovery chat takes it from here.",
-      "or": "OR",
       "importTitle": "Already have a project?",
       "importDesc": "Motir reads your code, tasks and history before changing anything, then plans what's next. You decide what ships.",
       "importCta": "We can vibe it too"
@@ -6706,6 +6705,12 @@
           "title": "You decide",
           "body": "Every piece comes back to you to look at, try and approve. You stay in charge of what ships."
         }
+      },
+      "developers": {
+        "title": "How Motir works, for developers",
+        "body": "Every Motir project runs through the same instrument: the modules are Motir and its agents, and the switches are yours. motir.co walks through it module by module.",
+        "cta": "Read it on motir.co",
+        "newTab": "(opens in a new tab)"
       }
     },
     "connectGate": {

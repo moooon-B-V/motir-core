@@ -6672,7 +6672,6 @@
       }
     },
     "entrance": {
-      "eyebrow": "Construir con IA",
       "headingDefault": "¿Cómo te gustaría empezar?",
       "headingCarried": "Listo cuando tú lo estés",
       "subheadDefault": "Describe lo que quieres construir. Motir lo planifica contigo y luego los agentes lo construyen.",
@@ -6685,7 +6684,6 @@
       "continueCta": "Continuar con esta idea",
       "hintDefault": "Puedes empezar con una idea aproximada: el chat de descubrimiento hace preguntas de seguimiento.",
       "hintCarried": "Añade o ajusta lo que quieras antes de continuar: el chat de descubrimiento se encarga a partir de aquí.",
-      "or": "O",
       "importTitle": "Tengo un proyecto existente: migrarlo",
       "importDesc": "Conecta tu repositorio y Motir lee tu código, y luego planifica sobre lo que ya existe. También puedes traer elementos de trabajo existentes desde Jira, Linear o Plane.",
       "importCta": "Migrar"

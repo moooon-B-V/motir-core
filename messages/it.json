@@ -6672,7 +6672,6 @@
       }
     },
     "entrance": {
-      "eyebrow": "Crea con l’AI",
       "headingDefault": "Come vuoi iniziare?",
       "headingCarried": "Pronti quando vuoi",
       "subheadDefault": "Descrivi cosa vuoi creare. Motir lo pianifica con te, poi gli agenti lo realizzano.",
@@ -6685,7 +6684,6 @@
       "continueCta": "Continua con questa idea",
       "hintDefault": "Puoi partire da un’idea approssimativa: la chat di scoperta ti farà altre domande.",
       "hintCarried": "Aggiungi o perfeziona qualsiasi cosa prima di continuare: da qui prosegue la chat di scoperta.",
-      "or": "OPPURE",
       "importTitle": "Ho un progetto esistente: migralo",
       "importDesc": "Collega il tuo repository: Motir legge il codice e pianifica a partire da ciò che c’è già. Puoi anche importare elementi di lavoro esistenti da Jira, Linear o Plane.",
       "importCta": "Migra"

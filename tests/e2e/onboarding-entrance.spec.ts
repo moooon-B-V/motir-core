@@ -58,7 +58,12 @@ test('the existing-project door routes to the migrate wizard', async ({ page }) 
   await createFirstProject(page, 'Invoicer');
 
   await page.goto('/onboarding');
-  await page.getByRole('link', { name: /already have a project\?/i }).click();
+  // The import door is a section band under the hero (MOTIR-8253): its heading
+  // is "Already have a project?" and its control is the "We can vibe it too" link.
+  await expect(
+    page.getByRole('heading', { level: 2, name: /already have a project\?/i }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: /we can vibe it too/i }).click();
 
   // The entrance's existing-project door routes to the migrate wizard
   // (MOTIR-934); its optional Import step reaches the importer (MOTIR-942) at
@@ -67,16 +72,23 @@ test('the existing-project door routes to the migrate wizard', async ({ page }) 
   await expect(page.getByRole('heading', { name: 'Migrate an existing codebase' })).toBeVisible();
 });
 
-test('the "See how Motir works" link routes to the explainer hand-off', async ({ page }) => {
+test('the "See how Motir works" link opens the explainer in a new tab', async ({ page }) => {
   await signUp(page, `entrance-howitworks-${Date.now()}@example.com`);
   await createFirstProject(page, 'Invoicer');
 
   await page.goto('/onboarding');
+  // The entrance holds an idea the person may be half-way through typing, so the
+  // explainer opens in a NEW TAB (design Revision 1, MOTIR-8253): wait on the
+  // popup event — the authoritative signal — not on the opener's URL.
+  const popupPromise = page.waitForEvent('popup');
   await page.getByRole('link', { name: /see how motir works/i }).click();
+  const popup = await popupPromise;
 
-  await page.waitForURL('**/onboarding/how-it-works');
+  await popup.waitForURL('**/onboarding/how-it-works');
   await expect(
-    page.getByRole('heading', { name: 'AI does the work. You make the calls.' }),
+    popup.getByRole('heading', { level: 1, name: 'AI does the work. You make the calls.' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Back to start' })).toBeVisible();
+  await expect(popup.getByRole('link', { name: 'Back to start' })).toBeVisible();
+  // The opener stays on the entrance.
+  expect(new URL(page.url()).pathname).toBe('/onboarding');
 });

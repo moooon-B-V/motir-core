@@ -3,7 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { type ReactNode } from 'react';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { HeroWaves } from '@/components/brand/HeroWaves';
-import { AuthLanguageControl } from './_components/AuthLanguageControl';
+import { AuthLanguageControl } from '@/components/i18n/AuthLanguageControl';
 
 /**
  * Shared frame for the auth pages (sign-in, sign-up, reset-password,
