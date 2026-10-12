@@ -6672,34 +6672,55 @@
       }
     },
     "entrance": {
-      "headingDefault": "Wie möchten Sie beginnen?",
+      "headingDefault": "Vibe the project",
       "headingCarried": "Bereit, wenn Sie es sind",
-      "subheadDefault": "Beschreiben Sie, was Sie bauen möchten. Motir plant es mit Ihnen, dann bauen Agenten es.",
+      "subheadDefault": "Sie bringen die Idee. Motir liefert das ganze Projekt: den Plan, das Design, die Umsetzung, die Dokumente und die vollständige Geschichte, wie es dazu kam.",
       "subheadCarried": "Wir haben Ihre ursprüngliche Idee übernommen. Ergänzen Sie sie bei Bedarf und fahren Sie dann fort.",
       "howItWorks": "So funktioniert Motir",
-      "ideaLabel": "Ihre Idee",
+      "howItWorksNewTab": "(öffnet in einem neuen Tab)",
+      "ideaLabel": "Was bauen Sie?",
       "carriedLabel": "Aus Ihrer Idee übernommen",
       "placeholder": "Beschreiben Sie, was Sie bauen möchten – für wen es ist, was die Leute damit im Kern tun können sollen und was unbedingt dazugehört. Es muss nicht perfekt sein – wir stellen als Nächstes Rückfragen.",
-      "startCta": "Planung starten",
+      "startCta": "Starten",
       "continueCta": "Mit dieser Idee fortfahren",
-      "hintDefault": "Sie können mit einer groben Idee beginnen – im Discovery-Chat werden Rückfragen gestellt.",
+      "hintDefault": "Ein paar Sätze genügen. Nach dem Rest fragt Motir.",
       "hintCarried": "Ergänzen oder verfeinern Sie alles, bevor Sie fortfahren – der Discovery-Chat übernimmt ab hier.",
-      "importTitle": "Ich habe ein bestehendes Projekt – migrieren",
-      "importDesc": "Verbinden Sie Ihr Repository, und Motir liest Ihren Code und plant dann auf dem auf, was bereits vorhanden ist. Sie können auch bestehende Arbeitselemente aus Jira, Linear oder Plane übernehmen.",
-      "importCta": "Migrieren"
+      "importTitle": "Sie haben schon ein Projekt?",
+      "importDesc": "Motir liest Ihren Code, Ihre Aufgaben und den bisherigen Verlauf, bevor es etwas ändert, und plant dann die nächsten Schritte. Was ausgeliefert wird, entscheiden Sie.",
+      "importCta": "Auch das können wir viben"
     },
     "import": {
       "title": "Bestehendes Projekt importieren",
-      "body": "Das Verbinden eines Repositorys und der Import Ihrer Arbeit aus Jira, Linear oder Plane sind bald verfügbar. Bis dahin können Sie ein neues Projekt mit AI starten.",
+      "body": "Das Verbinden eines Repositorys und der Import Ihrer Arbeit aus Jira, Linear oder Plane kommen bald. Bis dahin können Sie ein neues Projekt aus Ihrer Idee starten.",
       "back": "Zurück zum Start"
     },
     "howItWorks": {
-      "title": "So funktioniert Motir",
-      "body": "Eine vollständige Einführung – Idee → Plan → Agenten bauen es – ist in Arbeit. Bis dahin beginnen Sie mit Ihrer Idee, und Motir stellt unterwegs Rückfragen.",
-      "back": "Zurück zum Start"
+      "title": "Die KI macht die Arbeit. Sie treffen die Entscheidungen.",
+      "body": "Sie bringen die Idee. Motir fragt nach, bis es verstanden hat, und erstellt dann Plan, Design, Produkt und Dokumente Schritt für Schritt, ganz offen – und hält überall an, wo die Entscheidung bei Ihnen liegt.",
+      "back": "Zurück zum Start",
+      "sections": {
+        "say": {
+          "title": "Sagen Sie, was Sie wollen",
+          "body": "Ein paar Sätze oder ein ungeordneter Gedankenstrom. Motir fragt nach, bis es verstanden hat."
+        },
+        "watch": {
+          "title": "Sehen Sie zu, wie es Gestalt annimmt",
+          "body": "Plan, Designs, Produkt und Dokumente entstehen Schritt für Schritt, ganz offen."
+        },
+        "decide": {
+          "title": "Entscheiden",
+          "body": "Jedes Teil kommt zu Ihnen zurück, damit Sie es ansehen, ausprobieren und genehmigen. Sie behalten die Kontrolle darüber, was ausgeliefert wird."
+        }
+      },
+      "developers": {
+        "title": "So funktioniert Motir – für Entwickler",
+        "body": "Jedes Motir-Projekt läuft über dasselbe Instrument: Die Module sind Motir und seine Agenten, die Schalter gehören Ihnen. Auf motir.co wird es Modul für Modul erklärt.",
+        "cta": "Auf motir.co lesen",
+        "newTab": "(öffnet in einem neuen Tab)"
+      }
     },
     "connectGate": {
-      "title": "AI-Planung ist nicht konfiguriert",
+      "title": "Die Planung ist noch nicht verbunden",
       "body": "Die Planung läuft über Motir Cloud; dieser selbst gehostete Arbeitsbereich ist noch nicht verbunden.",
       "cta": "Motir AI verbinden"
     },
@@ -8096,6 +8117,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "Ihr Projekt übernehmen",
+      "lede": "Verbinden Sie Jira, Linear oder Plane, und Motir übernimmt Ihre Arbeitselemente, damit es von Ihrem aktuellen Stand aus die nächsten Schritte planen kann."
+    },
     "chrome": {
       "title": "Arbeitselemente importieren",
       "titleInto": "Arbeitselemente importieren · in {project}",
@@ -8338,7 +8363,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "Bestehendes Projekt migrieren",
-      "planAi": "Mit AI planen"
+      "planAi": "Stattdessen mit einer Idee beginnen"
+    },
+    "hero": {
+      "headline": "Sie haben schon ein Projekt?",
+      "lede": "Motir liest Ihren Code, Ihre Aufgaben und den bisherigen Verlauf, bevor es etwas ändert, und plant dann die nächsten Schritte. Motir führt das Projekt. Was ausgeliefert wird, entscheiden Sie."
     },
     "rail": {
       "title": "Ihre Migration",
@@ -8363,13 +8392,31 @@
     "start": {
       "eyebrow": "Bestehende Codebasis",
       "heading": "Bestehende Codebasis migrieren",
-      "body": "Verbinden Sie Ihre Repositorys, lassen Sie Motir den Code lesen und Konventionen ableiten, und importieren Sie dann optional Ihr Backlog und planen Sie."
+      "body": "Verbinden Sie Ihre Repositorys, lassen Sie Motir den Code lesen und Konventionen ableiten, und importieren Sie dann optional Ihr Backlog und planen Sie.",
+      "chooseLabel": "Welches Projekt migrieren Sie?",
+      "current": "Gerade geöffnet",
+      "currentMeta": "Das Projekt, das Sie geöffnet haben",
+      "otherMeta": "Wechselt zu diesem Projekt und startet dann",
+      "ctaFor": "Mit {project} starten"
     },
     "connect": {
       "eyebrow": "Schritt 1 von 2 · Einrichten",
       "heading": "Die Repositorys dieses Projekts verbinden",
-      "body": "Verbinden Sie Ihre GitHub-Repositorys in den Einstellungen des Arbeitsbereichs. Motir liest sie über die GitProvider-Schnittstelle, um einen gemeinsamen Code-Graphen für das gesamte Projekt zu erstellen.",
-      "gitlabNote": "Die GitLab-Verbindung ist bald verfügbar."
+      "body": "Motir liest die Repositorys, die Sie auf GitHub verbinden, und erstellt daraus eine gemeinsame Übersicht des Codes im ganzen Projekt.",
+      "gitlabNote": "Die GitLab-Verbindung ist bald verfügbar.",
+      "checking": "Verbundene Repositorys werden geprüft…",
+      "missingTitle": "Noch keine Repositorys verbunden",
+      "missingHint": "Verbinden Sie GitHub in einem neuen Tab. Motir erkennt die Verbindung von selbst, Sie müssen hier also nichts bestätigen.",
+      "connectCta": "GitHub verbinden",
+      "newTab": "(öffnet in einem neuen Tab)",
+      "waitingTitle": "Warten auf GitHub",
+      "waitingHint": "Schließen Sie die Verbindung im anderen Tab ab. Motir prüft erneut, wenn Sie zurückkommen, und bis dahin alle paar Sekunden.",
+      "reopenCta": "GitHub-Einstellungen erneut öffnen",
+      "detected": "{count, plural, one {# Repository ist verbunden} other {# Repositorys sind verbunden}}",
+      "detectedHint": "Diese Repositorys kann Motir lesen. Die Indexierung beginnt, wenn Sie fortfahren.",
+      "listLabel": "Verbundene Repositorys",
+      "continue": "Weiter",
+      "manage": "Repositorys auf GitHub verwalten"
     },
     "index": {
       "eyebrow": "Schritt 2 von 2 · Einrichten",
@@ -8393,12 +8440,14 @@
       "heading": "Ihr bestehendes Backlog übernehmen",
       "body": "Verfolgen Sie Arbeit bereits in Jira, Linear, GitHub, Plane oder einer CSV-Datei? Importieren Sie sie in dieses Projekt – Sie prüfen eine Vorschau des Testlaufs, bevor etwas geschrieben wird. Überspringen Sie dies, wenn Sie kein Backlog übernehmen möchten.",
       "reconcile": "Wenn Sie anschließend einen Plan generieren, gleicht Motir beides ab, damit nichts doppelt vorkommt.",
-      "skip": "Import überspringen"
+      "skip": "Import überspringen",
+      "bodyInline": "Sie verwalten Ihre Arbeit bereits in Jira, Linear, GitHub, Plane oder einer CSV-Datei? Übernehmen Sie sie gleich hier. Bevor etwas geschrieben wird, prüfen Sie eine Vorschau als Probelauf. Überspringen Sie diesen Schritt, wenn Sie kein Backlog übernehmen möchten.",
+      "continue": "Weiter"
     },
     "decision": {
       "eyebrow": "Einrichtung abgeschlossen",
       "heading": "Ihre Codebasis ist in Motir",
-      "body": "Planen Sie Ihr Projekt jetzt mit AI, oder schließen Sie ab und planen Sie später im Projekt.",
+      "body": "Motir kann jetzt die nächsten Schritte planen, oder Sie schließen ab und planen später im Projekt. Was ausgeliefert wird, entscheiden Sie.",
       "planNow": "Mein Projekt jetzt planen",
       "finishLater": "Abschließen – ich plane später"
     },
@@ -8407,6 +8456,18 @@
       "heading": "Planung fortsetzen",
       "body": "Sie haben mit der Planung dieses Projekts begonnen. Setzen Sie sie im Planungsbereich fort.",
       "cta": "Planung fortsetzen"
+    },
+    "questions": {
+      "eyebrow": "Ihre Richtung",
+      "heading": "Ein paar Fragen",
+      "body": "Motir hat Ihren Code gelesen. Ein paar Antworten dazu, wohin das Projekt gehen soll, und es entwirft aus beidem Ihren ersten Plan.",
+      "progress": "Frage {n} von etwa {total}",
+      "draftingTitle": "Ihr erster Plan wird entworfen",
+      "draftingBody": "Aus Ihrem Code, Ihrem Backlog und Ihren Antworten. Sie können diese Seite verlassen; Motir sagt Ihnen Bescheid, wenn er fertig ist.",
+      "draftingWaits": "Motir liest Ihren Code noch zu Ende, danach beginnt der Entwurf von selbst.",
+      "readyTitle": "Ihr erster Plan ist fertig",
+      "readyBody": "{count, plural, one {# Element ist} other {# Elemente sind}} für {project} entworfen. Nichts ist endgültig, bis Sie es genehmigen.",
+      "readyCta": "Plan prüfen"
     }
   },
   "repositorySet": {
