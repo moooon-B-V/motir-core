@@ -19,6 +19,11 @@ import {
 // `walkStop`, and an error class nobody mapped all fall to `internal` rather than
 // being stored as prose or refused (a record that throws while recording a failure
 // would turn one failure into two).
+//
+// The LOST-MACHINE fact (`FailedJobFacts.lostMachine`, MOTIR-8304) deliberately
+// does not reach the record or its reason: a reaped job still reads
+// `model_unavailable` to a person. It is handed back to the settle paths' callers,
+// which decide whether to resume.
 
 /** Where a walk stopped, as motir-ai's terminal `Problem.walkStop` carries it. */
 export const jobWalkStopSchema = z.object({
@@ -61,6 +66,14 @@ export function parseWalkPosition(raw: unknown): JobWalkPosition | null {
 }
 
 export type JobWalkStop = NonNullable<ReturnType<typeof parseJobWalkStop>>;
+
+/** What core reads about a failed job, in the one shape both settle paths use (MOTIR-8304). */
+export interface FailedJobFacts {
+  error: { code: string; message?: string } | null;
+  walkStop: JobWalkStop | null;
+  /** motir-ai failed the job because its machine stopped renewing the lease. */
+  lostMachine: boolean;
+}
 
 const REASONS: ReadonlySet<string> = new Set(PLAN_SESSION_FAILURE_REASONS);
 

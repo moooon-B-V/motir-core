@@ -114,7 +114,7 @@ describe('a failed revision', () => {
       { readJob },
     );
 
-    expect(out).toEqual({ settled: 'recorded', sessionId });
+    expect(out).toEqual({ settled: 'recorded', sessionId, arm: 'revision', lostMachine: false });
     expect(await trail(plan.id, 'revision_ended')).toBe(1);
     const s = await sessionRow(sessionId);
     expect(s.endedAt).toBeNull();
@@ -137,7 +137,7 @@ describe('a failed revision', () => {
       { readJob },
     );
 
-    expect(out).toEqual({ settled: 'released', sessionId });
+    expect(out).toEqual({ settled: 'released', sessionId, arm: 'revision', lostMachine: false });
     expect(await trail(plan.id, 'revision_ended')).toBe(1);
     expect((await sessionRow(sessionId)).failedAt).toBeNull();
   });
@@ -273,7 +273,10 @@ describe('the sweep backstop', () => {
       await startRevision(plan.id, 'rev-sweep-stop', 30 * MIN);
 
       const summary = await abandonedPlanService.reconcileAbandoned({
-        deps: { ...dead('failed'), getJobWalkStop: async () => null } as never,
+        deps: {
+          ...dead('failed'),
+          getFailedJobFacts: async () => ({ walkStop: null, lostMachine: false }),
+        } as never,
       });
 
       expect(summary.outcomes).toContainEqual(

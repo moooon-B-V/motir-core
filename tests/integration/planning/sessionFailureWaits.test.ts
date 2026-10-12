@@ -139,7 +139,7 @@ describe('the relay — a failed attempt is RECORDED, not ended', () => {
       { readJob: readJobWith(WALK_STOP) },
     );
 
-    expect(out).toEqual({ settled: 'recorded', sessionId });
+    expect(out).toEqual({ settled: 'recorded', sessionId, arm: 'session', lostMachine: false });
     const s = await sessionRow(sessionId);
     expect(s.endedAt).toBeNull();
     expect(s.failedAt).not.toBeNull();
@@ -310,7 +310,10 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
   } as const;
   const deps = (state: Parameters<typeof asState>[0]) => ({
     resolveJobState: async () => asState(state),
-    getJobWalkStop: async () => ({ ...WALK_STOP, reasonCode: 'model_unavailable' }),
+    getFailedJobFacts: async () => ({
+      walkStop: { ...WALK_STOP, reasonCode: 'model_unavailable' },
+      lostMachine: false,
+    }),
   });
   function asState(s: {
     status: 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | null;
@@ -333,6 +336,7 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
         projectId: fx.projectId,
         outcome: 'awaiting_resume',
         reason: 'job_terminal',
+        lostMachine: false,
       },
     ]);
     const s = await sessionRow(sessionId);
@@ -361,7 +365,7 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
                 failure: { code: 'MOTIR_AI_JOB_NOT_FOUND', message: 'gone' },
               }
             : { status: 'running', reachable: true, failure: null },
-        getJobWalkStop: async () => null,
+        getFailedJobFacts: async () => ({ walkStop: null, lostMachine: false }),
       },
     });
 
@@ -432,7 +436,7 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
             reachable: true,
             failure: null,
           }),
-          getJobWalkStop: async () => null,
+          getFailedJobFacts: async () => ({ walkStop: null, lostMachine: false }),
         },
       });
 
@@ -455,7 +459,13 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
     const out = await abandonedPlanService.reconcileAbandoned({ deps: deps(failedState) });
 
     expect(out.outcomes).toEqual([
-      { planId: plan.id, projectId: fx.projectId, outcome: 'awaiting_resume', reason: 'silent' },
+      {
+        planId: plan.id,
+        projectId: fx.projectId,
+        outcome: 'awaiting_resume',
+        reason: 'silent',
+        lostMachine: false,
+      },
     ]);
     const s = await sessionRow(sessionId);
     expect(s.endedAt).toBeNull();
@@ -478,12 +488,12 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
           resolveJobState: async () => asState(failedState),
           // The last read before the record: a producer write lands here and moves
           // the stamp the sweep judged by.
-          getJobWalkStop: async () => {
+          getFailedJobFacts: async () => {
             await adminDb.plan.update({
               where: { id: plan.id },
               data: { lastActivityAt: new Date() },
             });
-            return null;
+            return { walkStop: null, lostMachine: false };
           },
         },
       });
@@ -730,7 +740,7 @@ describe('concurrency — one failure, one record', () => {
                 reachable: true,
                 failure: { code: 'MOTIR_AI_UNAVAILABLE', message: 'x' },
               }),
-              getJobWalkStop: async () => WALK_STOP,
+              getFailedJobFacts: async () => ({ walkStop: WALK_STOP, lostMachine: false }),
             },
           }),
         ]);

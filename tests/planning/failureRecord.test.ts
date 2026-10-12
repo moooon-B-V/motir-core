@@ -153,6 +153,38 @@ describe('failureRecordFrom', () => {
     });
     expect(rec.failureDetail).toContain('gateway 503');
   });
+
+  it('records a REAPED job exactly as it reads today — model_unavailable, its detail (MOTIR-8304)', async () => {
+    // What `getJob` maps motir-ai's `ai_job_abandoned` problem to: the lost-machine
+    // fact rides beside the error and never reaches the record.
+    const detail =
+      'the worker holding this job stopped renewing its lease (claimedBy m1); nothing about the request was judged, so a resubmit is the right response';
+    process.env['MOTIR_AI_URL'] = 'https://ai.example.test';
+    process.env['MOTIR_AI_SERVICE_TOKEN'] = 'svc-token';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            jobId: 'job_1',
+            status: 'failed',
+            result: null,
+            error: { type: 't', title: 'abandoned', status: 503, code: 'ai_job_abandoned', detail },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+    const view = await getJob('job_1', 'pj_1');
+    vi.unstubAllGlobals();
+    expect(view.lostMachine).toBe(true);
+
+    const rec = failureRecordFrom({ ...base, walkStop: view.walkStop ?? null, error: view.error });
+
+    expect(rec.failureReason).toBe('model_unavailable');
+    // Exactly the detail any unavailable failure with this message is stored with.
+    expect(rec.failureDetail).toBe(new MotirAiUnavailableError(detail).message);
+  });
 });
 
 describe('the frame readers', () => {

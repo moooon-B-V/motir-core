@@ -29,7 +29,7 @@ import { PlanChangeSessionNotFoundError } from '@/lib/planChange/errors';
 import {
   failureRecordFrom,
   type JobWalkPosition,
-  type JobWalkStop,
+  type FailedJobFacts,
 } from '@/lib/planChange/failureRecord';
 import type { PlanSessionFailureRecord } from '@/lib/planChange/sessionWaitingState';
 import { getJob } from '@/lib/ai/motirAiClient';
@@ -480,6 +480,15 @@ export interface SettleFailedJobResult {
    *  recorded (a canceled job, or a plan with no open conversation session). */
   settled: 'recorded' | 'ended' | 'released';
   sessionId: string | null;
+  /** Which settle arm answered: a walk's session, or a revision (MOTIR-8304). */
+  arm: 'session' | 'revision';
+  /**
+   * `true` only when the job was READ and motir-ai reports it lost its machine
+   * (`JobView.lostMachine`). A canceled job, a non-conversation session and a read
+   * that failed all report `false`: unknown resolves to not lost, so that failure
+   * waits in To resume (MOTIR-8304).
+   */
+  lostMachine: boolean;
 }
 
 /** The seam a test replaces: what motir-ai says about the failed job. */
@@ -487,7 +496,7 @@ export interface SettleFailedJobDeps {
   readJob?: (
     jobId: string,
     coreProjectId: string,
-  ) => Promise<{ error: { code: string; message?: string } | null; walkStop: JobWalkStop | null }>;
+  ) => Promise<Omit<FailedJobFacts, 'lostMachine'> & { lostMachine?: boolean }>;
 }
 
 /**
@@ -526,14 +535,15 @@ export async function settleFailedJob(
   );
   if (!session || session.endedAt) return null;
 
-  const end = async (): Promise<SettleFailedJobResult> => {
+  const end = async (lostMachine = false): Promise<SettleFailedJobResult> => {
     // No `actorId`: Motir ended it, so the restores are signed by the session's starter.
     await endSession(session.id, 'failed', { workspaceId: ctx.workspaceId });
-    return { settled: 'ended', sessionId: session.id };
+    return { settled: 'ended', sessionId: session.id, arm: 'session', lostMachine };
   };
   if (input.status === 'canceled' || session.origin !== 'conversation') return end();
 
   const job = await (deps.readJob ?? readFailedJob)(jobId, ctx.projectId).catch(() => null);
+  const lostMachine = job?.lostMachine ?? false;
   const record = failureRecordFrom({
     failedJobId: jobId,
     now: new Date(),
@@ -544,9 +554,11 @@ export async function settleFailedJob(
   const outcome = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
     recordFailureWithin(tx, session.id, ctx.workspaceId, record),
   );
-  if (outcome === 'recorded') return { settled: 'recorded', sessionId: session.id };
+  if (outcome === 'recorded') {
+    return { settled: 'recorded', sessionId: session.id, arm: 'session', lostMachine };
+  }
   if (outcome === 'ended') return null;
-  return end();
+  return end(lostMachine);
 }
 
 /**
@@ -599,6 +611,7 @@ async function settleFailedRevision(
   const job = recordable
     ? await (deps.readJob ?? readFailedJob)(jobId, ctx.projectId).catch(() => null)
     : null;
+  const lostMachine = job?.lostMachine ?? false;
   const record = recordable
     ? failureRecordFrom({
         failedJobId: jobId,
@@ -636,16 +649,22 @@ async function settleFailedRevision(
         const outcome = await recordFailureWithin(tx, session.id, ctx.workspaceId, record, {
           onlyPlanId: plan.id,
         });
-        if (outcome === 'recorded') return { settled: 'recorded', sessionId: session.id };
+        if (outcome === 'recorded') {
+          return { settled: 'recorded', sessionId: session.id, arm: 'revision', lostMachine };
+        }
       }
-      return { settled: 'released', sessionId: session?.id ?? null } as const;
+      return { settled: 'released', sessionId: session?.id ?? null, arm: 'revision', lostMachine };
     },
   );
 }
 
-async function readFailedJob(jobId: string, coreProjectId: string) {
+async function readFailedJob(jobId: string, coreProjectId: string): Promise<FailedJobFacts> {
   const view = await getJob(jobId, coreProjectId);
-  return { error: view.error, walkStop: view.walkStop };
+  return {
+    error: view.error,
+    walkStop: view.walkStop ?? null,
+    lostMachine: view.lostMachine ?? false,
+  };
 }
 
 /**
