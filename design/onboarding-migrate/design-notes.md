@@ -772,3 +772,698 @@ The hand-off that SENDS a user here — and shows them the kept set before they 
 `design/ai-chat/reading-and-handoff.mock.html` Panel 4, published under the same card. The two
 assets share the `satisfied` vocabulary on purpose: the chip strip in the hand-off and the collapsed
 row in the rail are the same fact, said once before the journey and once during it.
+
+## 2026-10-12 — the vibe layout on the migrate wizard: the lockup in the bar, a hero and a work band (MOTIR-8251)
+
+**Amends:** MOTIR-930's wizard (§ _Panels_, the `BrandBar` and every step panel, and § _Per-element
+`--el-*` colour role_) and the MOTIR-4759 amendment above (the resume panel and the collapsed rail).
+**Delta mock:**
+[`onboarding-migrate--vibe-layout.mock.html`](./onboarding-migrate--vibe-layout.mock.html).
+`onboarding-migrate.mock.html` is a record and is **not edited**. Story MOTIR-8238; sibling sections:
+[`design/import/design-notes.md` § 2026-10-12](../import/design-notes.md) (the importer) and
+[`design/ai-chat/design-notes.md` § 2026-10-12](../ai-chat/design-notes.md) (the discovery top bar,
+the chat rail and the direction-doc page).
+
+**Composes, never re-draws:** MOTIR-8250's Pattern panel —
+`design/onboarding-entrance/onboarding-entrance--vibe-layout.mock.html` **Panel 6** (A the lockup ·
+B the hero · C one section band) and
+[`design/onboarding-entrance/design-notes.md` § 2026-10-11](../onboarding-entrance/design-notes.md).
+`OnboardingHero`, `HeroWaves` and `OnboardingSection` are that card's product-local parts, built by
+MOTIR-8252. This section adds one **variant** (the compact hero) and one composition (the work band),
+and nothing else.
+
+**Design system — files read:** root `package.json` (`"@motir/design-system": "workspace:*"`),
+`app/globals.css` (line 13 `@import '@motir/design-system/theme.css'`, line 25
+`@import '@motir/brand/brand.css'`), `packages/design-system/package.json` (**`0.13.0`**, exports
+`./mock`), `app/layout.tsx`. No `DESIGN.md`. **Verdict: ON MOTIR DESIGN — branch (a).** The mock is
+built with `renderMock` from the package's real `Button`, `Card`, `Pill`, `Spinner` and
+`buttonVariants`; `BrandMark` (`lockup`, `glyph`) and `WAVE_BAND_PATH` come from `@motir/brand`
+with `brand.css`'s lockup rules inlined. Axes are the `:root` defaults —
+`data-style="warm-editorial"` · `data-palette="motir"` · `data-type="motir"` — and every frame is a
+`[data-appearance-scope]` carrying `data-theme` and the axes. `--focus-ring-color` is re-pointed to
+`--el-accent-on-surface` per frame, as MOTIR-8250 finding F4 did. Nothing is proposed for the package.
+
+**Shipped reality read** at the branch head: `app/(onboarding)/onboarding/migrate/_components/MigrateWizard.tsx` (the
+`BrandBar`, `Rail`, `StepHead`, `PanelFoot` and the six panels), `messages/en.json` as MOTIR-8248 left
+it. Every string drawn is read by key; none is typed. **motir.co, read and never imported** —
+`motir-marketing` at `origin/main` **`06c0411`** (only ideas files changed since MOTIR-8250 read
+`0c2e37b`): `motir-marketing/app/_components/SiteHeader.tsx` (no fill, no rule, `BrandTile` 28) and
+`motir-marketing/app/_components/LanguageSwitcher.tsx` (the globe is the bar's LAST control).
+
+### Panels (light AND dark)
+
+| #   | Panel                                                                                                                                                   | frame   |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| 0   | Access path — the entrance's import section door ("We can vibe it too") → `/onboarding/migrate`                                                         | 640 × 2 |
+| 1a  | Arrival with only the default project — Start skipped, the wizard opens on **Connect** with the **full** hero — Revision 3                              | 1280    |
+| 1b  | Start — only when the workspace has two or more projects: the bar, the **full** hero, the rail and the project choice (Revision 4)                      | 1280    |
+| 2a  | Connect — compact hero, **Checking** (on arrival) — Revision 1                                                                                          | 1280    |
+| 2b  | Connect — **Not connected yet** (Connect GitHub ↗ in a new tab, no Next) — Revision 1                                                                   | 1280    |
+| 2c  | Connect — **Waiting for GitHub** (re-checks on focus and every ~5 s) — Revision 1                                                                       | 1280    |
+| 2d  | Connect — **Connected** (detected repositories, Continue) — Revision 1                                                                                  | 1280    |
+| 3a  | After Connect — straight on to Import, the indexing chip in the bar, Index as a background rail row — Revision 2                                        | 1280    |
+| 3b  | The indexing chip opened — the per-repository detail popover over the step — Revision 2                                                                 | 1280    |
+| 3c  | Reading failed — the chip and detail in their failed state, on Decision — Revision 2                                                                    | 1280    |
+| 4   | Import — optional, with Skip (the chip at the moment reading finishes — Revision 2)                                                                     | 1280    |
+| 5   | Decision — Plan now / Finish later, while the code is still being read (Revision 2)                                                                     | 1280    |
+| 6   | Resume — a run in progress (MOTIR-4759)                                                                                                                 | 1280    |
+| 7   | Error — the typed error alert inside the panel (drawn over 2b)                                                                                          | 1280    |
+| 8   | Collapsed rail — the planner-decided set (discovery + import kept, MOTIR-4766)                                                                          | 1280    |
+| 9   | Close-ups — 9a planAi / Save & exit rest·hover·focus · 9b language pending·failed·open · 9c indexing chip states (Revision 2) · 9d planNow rest·pending | 640 × 2 |
+| 10  | Narrow — arrival on Connect (default project only), and Import with the code being read (chip closed, then opened) — Revision 3                         | 390 × 2 |
+| 11  | Narrow — Connect 2b and 2d — Revision 1                                                                                                                 | 390 × 2 |
+
+### What changes, and what does not
+
+- **The bar.** The lavender tile with the AI glyph and the word "Motir" are TAKEN; the `BrandMark`
+  **lockup** (22 px) takes their place as a non-link span — this bar has its own exits, and a third
+  one on the logo would compete with Save & exit. Then `· {flowName}`, then, trailing: the planAi link
+  (`secondary` sm, **its AI glyph TAKEN**, a trailing `ArrowRight`), Save & exit (`ghost` sm), the
+  **language control** (MOTIR-8286, the same `AuthLanguageControl` as
+  `design/auth/auth-frame--language-control.mock.html`), and the decorative user initial, which keeps
+  the far edge. The bar has no fill and no rule, as motir.co's header.
+- **The hero.** The **full** hero (H1 96 px, `pt-[56px] pb-[88px]`, waves) shows only on the ARRIVAL screen —
+  Start with no run. Every later step gets the **compact** hero (H1 56 px, `pt-6 pb-12`, lede 17 px,
+  the same waves) so the panel stays above the fold. Measured from the frame top at 1280: Start
+  band 382 / heading 456 / last control 638; compact steps band 257 / heading 330; last control
+  Connect 629, Index 918 (the repo list is tall), Import 624, Decision 495, Resume 463. The heading and
+  the card start above a 768 px fold on every step.
+- **The work band.** `OnboardingSection`'s band (`border-t --el-border`, `--el-page-bg`,
+  `px-[38px] py-[48px]`) holds the existing rail + panel grid unchanged. There is no outer centred
+  card any more; the panel card is the one card.
+- **`StepHead`.** The heading moves to the section scale's floor, serif 34 (28 narrow). The eyebrow
+  keeps its function and drops its accent look: mono 11, uppercase, 0.1 em, `--el-text-secondary`.
+- **The Decision panel's planNow button loses its AI glyph** too (the card named only the bar).
+- **Behaviour is unchanged on every step except Connect** (changed by Revision 1 below): the same routes, the same `PanelFoot` (still no Back —
+  the shipped wizard never passes `onBack`, and the mock does not invent one), the same rail logic,
+  the same error alert in `--el-tint-rose`.
+
+### Per-element `--el-*` and shape role
+
+| element                 | colour                                                                  | shape / size                               |
+| ----------------------- | ----------------------------------------------------------------------- | ------------------------------------------ |
+| bar                     | none (transparent on the hero's `--el-surface`)                         | `px-(--spacing-card-padding) py-4`         |
+| lockup                  | `brand.css` (glyph + word in `--el-text`)                               | 22 px                                      |
+| `· flowName`            | `--el-text-secondary`                                                   | 14 px                                      |
+| planAi                  | `Button secondary sm`; **hover** `--el-page-bg` + `--el-border-strong`  | `--radius-btn`, `--height-btn-sm`          |
+| Save & exit             | `Button ghost sm`; **hover** `--el-page-bg`                             | `--radius-btn`, `--height-btn-sm`          |
+| language control        | package `Combobox` trigger, `--el-text-secondary` glyph                 | `--radius-input`, `--height-control`       |
+| user initial            | `--el-tint-sky` fill, `--el-text-strong` letter, aria-hidden            | `rounded-full` 28 px                       |
+| hero ground · H1 · lede | `--el-surface` · `--el-text` · `--el-accent-on-surface` (as MOTIR-8250) | serif 96 / 56 compact; lede `max-w-[62ch]` |
+| waves                   | `--el-showcase-wave-1..3`, aria-hidden                                  | 1 px strokes                               |
+| work band               | `--el-page-bg`, `border-t --el-border`                                  | `px-[38px] py-[48px]`                      |
+| eyebrow                 | `--el-text-secondary`                                                   | mono 11 uppercase                          |
+| step heading · body     | `--el-text` · `--el-text-secondary`                                     | serif 34 · 15                              |
+| panel card              | `Card` (`--el-card-bg`, `--el-border`)                                  | `--radius-card`, `--spacing-card-padding`  |
+| error alert             | `--el-tint-rose`, `--el-danger-on-surface` title                        | `--radius-card`                            |
+| focus ring              | `--el-accent-on-surface`                                                | `ring-2`                                   |
+
+### Slot → key
+
+| slot                                        | key                                                                                 |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| hero H1 · lede                              | `onboardingMigrate.hero.headline` · `onboardingMigrate.hero.lede`                   |
+| flow name                                   | `onboardingMigrate.brandBar.flowName`                                               |
+| planAi                                      | `onboardingMigrate.brandBar.planAi`                                                 |
+| Save & exit                                 | `onboardingMigrate.common.saveExit`                                                 |
+| language trigger · pending · failed · retry | `auth.language.{label,switching,failed,retry}` + the `localeLabel` endonyms         |
+| step eyebrow · heading · body · cta         | `onboardingMigrate.{start,connect,index,import,decision,resume}.*` (unchanged keys) |
+| rail                                        | `onboardingMigrate.rail.*` (unchanged keys)                                         |
+| error                                       | `onboardingMigrate.common.error`                                                    |
+| access-path door (Panel 0)                  | `onboarding.entrance.{importTitle,importDesc,importCta}`                            |
+
+Fixtures (the project name, repository names, counts) are illustrative data, not product copy.
+
+### Findings
+
+- **F1 — the shipped wizard paints its captions in `--el-text-muted`** (14 sites in
+  `MigrateWizard.tsx`, among them the bar's `·` separator at line 229 and the panel notes at 510,
+  543, 677, 679, 719). On today's white page and card that is 4.54:1 and passes with 0.04 to spare;
+  the bar now sits on the hero's `--el-surface`, where muted is 4.17:1 and fails. The mock draws the
+  separator, the flow name and every caption in `--el-text-secondary` (6.24:1 on `--el-surface`), and
+  MOTIR-8254 should do the same rather than move muted ink onto the new ground.
+- **F2 — the package `Button`'s `secondary` and `ghost` hover fill is `--el-surface`**, which is the
+  hero's own ground, so the hover is invisible in this bar. The mock overrides hover to
+  `--el-page-bg` (planAi also raises its border to `--el-border-strong`), drawn in Panel 9a. It is a
+  local override; whether the package should grow an on-surface hover is a question for the design
+  system, not this card.
+- **F3 — the Decision panel's planNow glyph** is also taken; the card's criteria named only the bar.
+- **F4 — MOTIR-8286's premise** says the wizard renders `OnboardingTopBar`; it does not, it has its
+  own `BrandBar`. This design gives the wizard's bar its own trailing language control, at the same
+  place in the order as MOTIR-8250's.
+
+### Chinese-length risks (for MOTIR-8249 / MOTIR-8258)
+
+The 96 px H1 (wraps to three lines at 1280 if the string is long — the compact 56 px step hero is
+safer); the flow name in the bar (truncates with an ellipsis on narrow, row 2); the planAi label
+(`secondary sm` has no max width — on narrow it takes its own row 3, so it may wrap there).
+
+### Narrow (390)
+
+The bar becomes three rows: lockup … language · initial; then the flow name; then planAi … Save &
+exit. The full hero's H1 is 48 px, the compact one 34 px. The rail collapses above the panel as it
+does today.
+
+### GIVES / TAKES
+
+- **TAKES** the lavender AI-glyph tile and the word "Motir" from `BrandBar`, the AI glyph from the
+  planAi link and from the Decision panel's planNow button.
+- **GIVES MOTIR-8254** the build of this frame: the bar, the full/compact hero, the work band, the
+  `StepHead` restyle, the caption ink (F1), the hover override (F2).
+- **GIVES MOTIR-8252** nothing beyond the primitives it already owns — the compact hero is a variant
+  prop of `OnboardingHero`, and the work band is `OnboardingSection`'s band with no head.
+- **GIVES MOTIR-8241** (GitHub connect) and **MOTIR-8246** (non-blocking index) the restyled frame
+  their panels sit in; their content is theirs — except the Connect panel's four detection states,
+  which Revision 1 below draws and MOTIR-8241 builds on.
+- **GIVES MOTIR-8286** the language control in this bar (rest, open, pending, failed — Panel 9b).
+- **GIVES MOTIR-8256** the pairs to gate: secondary on `--el-surface`, the hover override, the
+  focus ring on `--el-surface`; **MOTIR-8249 / MOTIR-8258** the CJK risks above; **MOTIR-8257** the
+  E2E context — the route and the step order are unchanged; the Connect keys change per Revision 1 below.
+- **Premises taken from** MOTIR-930, MOTIR-4759, MOTIR-4766, MOTIR-8248 and MOTIR-8250.
+
+### Revision 1 (2026-10-12) — the connect step detects GitHub by itself
+
+**The reviewer's note, verbatim (on the published design):** _"Can the github connected status be
+auto detected? that's the confusing part. check how other application do that"_
+
+**What was confusing.** The shipped `ConnectPanel` (`MigrateWizard.tsx`) asks the person to report
+on themselves: a link to `/settings/organization/git`, the GitLab note, and a Next labelled
+`connect.next` ("I've connected my repos"). Press it with nothing connected and the advance 409s
+(`CONNECT.checkExit` finds no repo set) and the wizard only `router.refresh()`es, so **nothing
+visible happens**. The server already knows the answer, so the person should never have to tell it.
+
+**Detection needs no new data source.** `CONNECT.checkExit` in `lib/services/migrateOnboardingService.ts`
+reads `resolveWorkspaceConnectedRepos`, and `getIndexStatus`
+(`GET /api/onboarding/migrate/[id]/index-status`, which the Index step already polls every 3 s)
+returns that same set as `repos: MigrateIndexRepoDto[]` (`provider`, `repoRef`), empty when nothing
+is connected. The Connect panel reads that route; `repos.length > 0` is "connected".
+
+#### How other products do it (research)
+
+| product                    | what it does                                                                                                                                                                                                                      | source                                                                                                                                                                                                                                         |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vercel                     | The import screen lists the repositories the GitHub App can reach. A missing one is fixed through "Configure GitHub App"; you come back to the import screen and the repository appears. No confirm step anywhere.                | https://vercel.com/kb/guide/unable-to-find-github-repository                                                                                                                                                                                   |
+| Netlify                    | Choosing GitHub prompts the app install only if it is not already installed; otherwise the repo list shows at once. "Configure the Netlify app on GitHub" sits under the list for adding access.                                  | https://docs.netlify.com/github-permissions/ · https://answers.netlify.com/t/no-longer-able-to-link-with-github-repositories/73357                                                                                                             |
+| Render                     | Connecting sends you to GitHub and back to the dashboard with your repository list; a missing repository points to the app's Repository access settings.                                                                          | https://render.com/docs/github · https://render.com/docs/git-provider                                                                                                                                                                          |
+| Codecov                    | After sign-up "you will be brought to a page with a list of repositories"; "it may take a few moments for your repositories to sync"; non-admins may need an org admin to approve.                                                | https://docs.codecov.com/docs/github-2-getting-a-codecov-account-and-uploading-coverage                                                                                                                                                        |
+| CircleCI                   | Moved its GitHub App install to a redirect that lands on a loading screen, then "users will be automatically redirected to continue with their setup".                                                                            | https://circleci.com/changelog/minor-modification-to-github-app-installation-flow                                                                                                                                                              |
+| Sentry · Linear            | The install starts from the product's own settings (Sentry: "begin the installation from Sentry"); GitHub returns to it and the integration shows as installed, with an org owner needed for org-wide access.                     | https://docs.sentry.io/organization/integrations/source-code-mgmt/github/ · https://linear.app/docs/github-integration                                                                                                                         |
+| GitHub (the platform)      | After an install GitHub redirects to the app's **Setup URL** with `installation_id`, and optionally again when the installation is **updated** (repos added or removed). The id must not be trusted alone; verify it server-side. | https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-setup-url                                                                                                                                              |
+| Popup hand-backs (caution) | `window.opener.postMessage` from a popup is unreliable: `opener` comes back null under extensions and desktop shells, and popups get stranded. Teams fall back to a server-side callback or a re-read.                            | https://forum.asana.com/t/app-installation-callback-failures/235883 · https://community.shopify.dev/t/shopify-oauth-popup-cannot-auto-close-after-successful-install-when-initiated-from-admin-shopify-com-admin-shell-reclaiming-window/28862 |
+| The browser                | `visibilitychange` fires when the person switches tabs or comes back to one, the hook for "re-check when you return".                                                                                                             | https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event                                                                                                                                                               |
+
+**The common pattern:** (1) no product asks the person to say they have connected; the screen
+**reads** the connection and shows it; (2) the screen shows the **detected account / repository
+list**, which doubles as the confirmation and as the "is the right repo in there?" check; (3) a
+quiet **"configure / adjust access on GitHub"** link stays next to the list; (4) the return trip is
+a **server-side callback** (the Setup URL) as the authority, with a **re-read on return** (focus /
+visibility) and a short **poll while waiting** as the fallback, never a popup message alone.
+Motir takes (1)–(3) now and the re-read half of (4). The callback half is MOTIR-8241's (below).
+
+#### The four states (Panels 2a–2d, light and dark; narrow 2b and 2d in Panel 11)
+
+Every state keeps the compact hero, the rail (Connect current), the eyebrow, heading and body. The
+card is the package `Card` (`--el-card-bg`, `--el-border`, `--radius-card`,
+`--spacing-card-padding`). In 2a–2c its body holds one minimum height (`min-h-[148px]`), so the
+swaps between them happen in place; only 2d grows, with its list. Each state's status line and hint
+sit in one `role="status"` region, so the change is announced politely.
+
+| state                      | element                                   | colour role                                                               | shape / size                                                  |
+| -------------------------- | ----------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **a · Checking**           | spinner (aria-hidden wrapper)             | `--el-accent-on-surface`                                                  | `Spinner sm` (`rounded-full`)                                 |
+|                            | "Checking for connected repositories…"    | `--el-text-secondary` on the card                                         | 14 px                                                         |
+|                            | (no control)                              | —                                                                         | —                                                             |
+| **b · Not connected yet**  | glyph `GitBranch` (aria-hidden)           | `--el-text-secondary`                                                     | 16 px                                                         |
+|                            | title "No repositories connected yet"     | `--el-text`, semibold                                                     | 14 px                                                         |
+|                            | hint (one line: Motir notices by itself)  | `--el-text-secondary`                                                     | 14 px, `max-w-[60ch]`                                         |
+|                            | **Connect GitHub ↗** (new tab)            | `Button primary md` (`--el-accent` / `--el-accent-text`)                  | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x/y`, w-fit |
+|                            | sr-only "(opens in a new tab)"            | —                                                                         | —                                                             |
+|                            | GitLab note                               | `--el-text-secondary` (F1)                                                | 12 px                                                         |
+| **c · Waiting for GitHub** | spinner (aria-hidden wrapper)             | `--el-accent-on-surface`                                                  | `Spinner sm`                                                  |
+|                            | title "Waiting for GitHub" · hint         | `--el-text` semibold · `--el-text-secondary`                              | 14 px                                                         |
+|                            | **Open GitHub settings again ↗**          | `Button secondary md` (`--el-border`, `--el-text`)                        | `--radius-btn`, `--height-btn-md`, w-fit                      |
+|                            | GitLab note                               | `--el-text-secondary`                                                     | 12 px                                                         |
+| **d · Connected**          | glyph `CheckCircle2` (aria-hidden)        | `--el-success` (a graphic on the card, ≥ 3:1 since MOTIR-3991)            | 16 px                                                         |
+|                            | "3 repositories are connected"            | `--el-text`, semibold — the hue is in the glyph, never the label          | 14 px                                                         |
+|                            | hint                                      | `--el-text-secondary`                                                     | 14 px                                                         |
+|                            | repo row (`owner/name`, mono)             | border `--el-border-soft`; owner `--el-text-secondary`, name `--el-text`  | `--radius-control`, `--spacing-control-x`, py-2.5, mono 13    |
+|                            | row tick `Check` (aria-hidden)            | `--el-success`                                                            | 16 px                                                         |
+|                            | Manage repositories on GitHub ↗ (new tab) | `--el-text-secondary`, underlined; focus outline `--el-accent-on-surface` | `--radius-control` (focus box)                                |
+|                            | **Continue →**                            | `Button primary md`                                                       | `--radius-btn`, `--height-btn-md`; `ml-auto` (trailing edge)  |
+
+"Connected" covers both cases: just connected (from 2c) and already connected on arrival (2a →
+2d directly, with no 2b in between). No `--el-text-muted` sits on a tint or `--el-surface`, no
+`--el-text-faint` carries text, no `--el-danger-text` appears, and nothing is a raw colour.
+
+#### The detection mechanism (for MOTIR-8254)
+
+1. **Read on mount.** The panel fetches `GET /api/onboarding/migrate/[id]/index-status` (the same
+   route and DTO the Index step polls) and shows 2a until it answers: `repos.length > 0` → 2d,
+   otherwise → 2b.
+2. **Re-read on return.** While the panel is mounted and not in 2d, a `focus` on `window` and a
+   `visibilitychange` to `visible` each trigger one read (de-duplicated: one in flight at a time,
+   seq-guarded so an older answer never overwrites a newer one).
+3. **Poll only while waiting.** Pressing Connect GitHub (or Open GitHub settings again) moves the
+   panel to 2c and starts a ~5 s poll. It stops on the first non-empty answer (→ 2d) or when the
+   person leaves the step (unmount). 2b does not poll; it re-reads on return only.
+4. **A failed read** shows the existing error alert (Panel 7, drawn over 2b) and keeps the state
+   it had; the next focus or poll retries it. No new error copy.
+5. **Continue** calls the existing advance (`connect` → `index`). It is drawn only in 2d, so it is
+   pressed only when `checkExit` will pass — **Next is never a silent no-op any more.** If the set
+   empties between the read and the press (someone removed access), the 409 now lands the panel back
+   on 2b through a re-read, not on a bare `router.refresh()`.
+
+#### Slot → key (Revision 1)
+
+All copy is proposed for `onboardingMigrate.connect.*`; `messages/` is **not** edited here
+(MOTIR-8254 adds the keys and their ten translations).
+
+| slot                                | key                            | status      | English                                                                                                      |
+| ----------------------------------- | ------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------ |
+| eyebrow · heading                   | `connect.eyebrow` · `.heading` | unchanged   | (as shipped)                                                                                                 |
+| body                                | `connect.body`                 | **CHANGED** | Motir reads the repositories you connect on GitHub and builds one map of the code across the project.        |
+| 2a status                           | `connect.checking`             | **NEW**     | Checking for connected repositories…                                                                         |
+| 2b title                            | `connect.missingTitle`         | **NEW**     | No repositories connected yet                                                                                |
+| 2b hint                             | `connect.missingHint`          | **NEW**     | Connect GitHub in a new tab. Motir notices the connection by itself, so there is nothing to confirm here.    |
+| 2b primary                          | `connect.connectCta`           | **NEW**     | Connect GitHub                                                                                               |
+| sr-only after every new-tab control | `connect.newTab`               | **NEW**     | (opens in a new tab)                                                                                         |
+| 2c title                            | `connect.waitingTitle`         | **NEW**     | Waiting for GitHub                                                                                           |
+| 2c hint                             | `connect.waitingHint`          | **NEW**     | Finish connecting in the other tab. Motir checks again when you come back, and every few seconds until then. |
+| 2c secondary                        | `connect.reopenCta`            | **NEW**     | Open GitHub settings again                                                                                   |
+| 2d success line                     | `connect.detected`             | **NEW**     | `{count, plural, one {# repository is connected} other {# repositories are connected}}`                      |
+| 2d hint                             | `connect.detectedHint`         | **NEW**     | These are the repositories Motir can read. Indexing starts when you continue.                                |
+| 2d list `aria-label`                | `connect.listLabel`            | **NEW**     | Connected repositories                                                                                       |
+| 2d primary                          | `connect.continue`             | **NEW**     | Continue                                                                                                     |
+| 2d quiet link                       | `connect.manage`               | **NEW**     | Manage repositories on GitHub                                                                                |
+| GitLab note                         | `connect.gitlabNote`           | unchanged   | GitLab connect is coming soon.                                                                               |
+| —                                   | `connect.next`                 | **DELETE**  | ("I've connected my repos" — no longer read)                                                                 |
+| —                                   | `connect.cta`                  | **DELETE**  | ("Open GitHub settings" — replaced by `connectCta` / `reopenCta`)                                            |
+
+`connect.body` changes because the shipped one says "workspace settings" (the connect surface is
+organisation-tier since MOTIR-4680) and names an internal seam ("the GitProvider seam"). Repository
+names on the board (`acme/web`, `acme/api`, `acme/infra`) are fixtures.
+
+#### GIVES / LEAVES
+
+- **GIVES MOTIR-8254** these four states, the detection mechanism above and the key table. Its
+  acceptance criterion that the **connect flow is unchanged is amended by this revision**: the
+  Connect panel's controls and copy change as drawn here; the route, the step order and the advance
+  call stay.
+- **LEAVES MOTIR-8241** the full GitHub round trip: starting the install from onboarding with its
+  own signed state, the Setup-URL return to **this** step instead of to Settings, and the
+  install-cancelled, no-repositories-selected, waiting-for-an-org-owner and error states. It draws
+  them **on top of** 2a–2d (the callback lands on 2a, which reads and resolves as above), and the
+  re-read and poll here stay as its fallback.
+- **GIVES MOTIR-8256** the new pairs to gate: `--el-success` glyph on `--el-card-bg` in both
+  themes; `--el-text-secondary` link and hint on the card; and **MOTIR-8257** the new E2E surface
+  (Continue appears only after detection; the Connect GitHub link has `target="_blank"`).
+
+### Revision 2 (2026-10-12) — the code index never holds onboarding
+
+Published as evidence `cmv53f83v00yqhyshnxkzzqq9` (commit `478dc22`) and republished from the commit
+that adds this line; it supersedes Revision 1's `cmv527yiv00qlhxoi3hiys1q2`.
+
+**The reviewer's note, verbatim (on Revision 1):** _"The user should not be blocked on the index
+step. the index can take a long time, the user should be go forward. the index only blocks
+planning, not onboarding"_
+
+**What was wrong.** Revision 1 kept Panel 3 "as it ships today": after Connect the person landed on
+an Index screen whose only job was to wait (spinner, per-repo list, a disabled Next, and a callout
+saying Next stays disabled until every repository finishes). On a large codebase that is minutes of
+watching a bar, and a failed index never ends it (`INDEX.checkExit` and `runIndexSweep` only look
+for a _succeeded_ index).
+
+**Why this is a redraw and not a replan.** The behaviour the note asks for is already planned, in
+detail, by the sibling story **MOTIR-8246** ("Onboarding moves on while the code index builds"):
+the `index` exit becomes "an index exists in any state", generation waits in the background through
+a widened `runIndexSweep`, the convention is derived once the graph exists, MOTIR-933's "no plan
+from unread code" stands, and a failure undoes nothing. MOTIR-8246 owes a design subtask that draws
+those states "in the restyled onboarding look". This revision draws them now, in this frame, so the
+reviewer decides the restyle and the non-blocking index together, and MOTIR-8246's design work
+composes these panels instead of starting over. No card's scope moves: the **build** stays with
+MOTIR-8246 (it needs service, sweep and generate changes no restyle card owns).
+
+#### What changes on the board
+
+| panel    | before (Revision 1)                       | now                                                                                                                                                                                                                                  |
+| -------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2d       | Continue → Index                          | Continue → **Import** directly. The hint says reading starts and the person will not have to wait.                                                                                                                                   |
+| 3        | Index — the waiting screen, Next disabled | **Removed.** There is no Index panel.                                                                                                                                                                                                |
+| 3a (new) | —                                         | Import, arrived straight from Connect: the **indexing chip** in the bar reads _Reading your code · 33%_; the rail's Index row is a **background row**.                                                                               |
+| 3b (new) | —                                         | The chip opened: a popover with what the old Index panel showed (aggregate line, bar, per-repository rows), plus one line saying only drafting the plan waits.                                                                       |
+| 3c (new) | —                                         | Reading failed, surfaced on whatever step the person reached (drawn on Decision): chip and rail in the failed state, the detail naming the repository, **Try again** and **Check the connection**.                                   |
+| 4        | Import                                    | Import at the moment reading finishes: the chip says _Your code is read_, announced once, then leaves the bar; the rail's Index row becomes an ordinary done row.                                                                    |
+| 5        | Decision                                  | Decision while reading still runs: both buttons stay enabled; a sky-tint note says the plan is drafted as soon as reading finishes and the person is told. With reading done the note is absent (as before). Failed: a sibling note. |
+| 9c (new) | —                                         | The chip's five looks: queued · reading · focus-visible · read · failed.                                                                                                                                                             |
+| 10       | Narrow — Start and Index                  | Narrow — Start, and Import with the chip (closed, then opened: the detail drops full-width under the hero instead of floating).                                                                                                      |
+
+#### The indexing chip and its detail — per element
+
+| element                                                            | colour role                                                                                                                                                                                   | shape / size                                                                            |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| chip (a `button`, `aria-expanded`, `aria-controls="index-detail"`) | `Button secondary sm` on `--el-page-bg`; label `--el-text`                                                                                                                                    | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x/y-sm`                               |
+| chip glyph — queued / reading                                      | `Spinner sm`, `--el-accent-on-surface` (aria-hidden)                                                                                                                                          | `rounded-full`                                                                          |
+| chip glyph — read                                                  | `CheckCircle2`, `--el-success` (a graphic, ≥ 3:1)                                                                                                                                             | 14 px                                                                                   |
+| chip — failed                                                      | border `--el-danger`, glyph `CircleAlert` `--el-danger-on-surface`; label stays `--el-text`                                                                                                   | as above                                                                                |
+| chip label                                                         | inside an `aria-live="polite"` span, so a state change is announced, never focused                                                                                                            | 12–13 px                                                                                |
+| chip focus-visible                                                 | `--focus-ring-color` ring, offset on `--el-surface`                                                                                                                                           | ring-2                                                                                  |
+| detail popover (`role="dialog"`, `data-surface="popover"`)         | `--el-page-bg`, border `--el-border`, `--shadow-elevated`                                                                                                                                     | `--radius-card`, `--spacing-card-padding`; 380 px, full-width at 390                    |
+| title · Close                                                      | `--el-text` semibold · `Button ghost sm`                                                                                                                                                      | —                                                                                       |
+| body / failed body · aggregate line                                | `--el-text-secondary` on `--el-page-bg`                                                                                                                                                       | 14 px · 12 px                                                                           |
+| progress bar                                                       | track `--el-muted`, fill `--el-accent`                                                                                                                                                        | `rounded-full`, 6 px                                                                    |
+| repo rows                                                          | border `--el-border-soft`; owner `--el-text-secondary`, name `--el-text`, mono; chips as shipped (`--el-tint-mint` + `--el-text-strong` indexed, `--el-muted` + `--el-text-secondary` queued) | `--radius-control`, `--spacing-control-x`; chips `--radius-badge`, `--spacing-chip-x/y` |
+| failed row                                                         | border `--el-danger`; glyph and "Could not read the code" `--el-danger-on-surface`                                                                                                            | as above                                                                                |
+| Try again · Check the connection                                   | `Button primary sm` with `RotateCcw` · `Button ghost sm` → `/settings/organization/git`                                                                                                       | `--radius-btn`, `--height-btn-sm`                                                       |
+| rail background row — marker                                       | reading: `Spinner sm` in a `--el-border` ring, `--el-accent-on-surface`; failed: `CircleAlert` `--el-danger-on-surface`                                                                       | `size-5`, `rounded-full`                                                                |
+| rail background row — label · meta                                 | `--el-text` · `--el-text-secondary` (12 px). Never `aria-current`; the current step stays the step the person is on.                                                                          | `--radius-control`, `--spacing-control-x`                                               |
+| Decision note (reading / failed)                                   | `--el-tint-sky` with `--el-text-strong`; `Spinner sm` / `CircleAlert` glyph                                                                                                                   | `--radius-card`, `--spacing-card-padding`                                               |
+
+No `--el-text-muted` on a surface or tint, no `--el-text-faint` text, no `--el-danger-text`, no raw
+colour. Chip placement: first in the bar's control group (before _Start from an idea instead_); at
+390 px it takes the flow-name row's trailing edge.
+
+#### Behaviour the board depicts (built by MOTIR-8246, not by MOTIR-8254)
+
+1. **Connect → Import.** The `index` exit becomes "an index exists for this run's repository in
+   any state", so the advance from Connect passes straight through (MOTIR-8246 §1). The rail keeps
+   its Index row; it is never the current step.
+2. **One read, two places.** The chip and the rail row read the same
+   `GET /api/onboarding/migrate/[id]/index-status` the old panel polled, on the same cadence, for the
+   rest of onboarding; it stops once every repository is indexed (the chip shows _read_ for a few
+   seconds, then leaves).
+3. **Opening the detail changes nothing.** The popover closes on Close, Escape or an outside click
+   and returns focus to the chip; the step underneath is never re-rendered or advanced.
+4. **The plan waits, the person does not.** Plan my project now and Finish later stay enabled;
+   generation is started by the widened sweep when the graph succeeds (MOTIR-8246 §3). This board
+   draws only the Decision note; the discovery canvas's own "your plan will be drafted when
+   indexing finishes" state and the "your plan is ready" notice are MOTIR-8246's to draw in the
+   ai-chat frame (`design/ai-chat/onboarding--vibe-lockup.mock.html`).
+5. **Failure undoes nothing.** Every completed step stays done; Try again uses the index's existing
+   re-enqueue (MOTIR-8246 §4 and its HOW 5); Check the connection opens the git settings.
+
+#### Slot → key (Revision 2, proposed — `messages/` is not edited here)
+
+| slot                                         | key                                                                                                                           | status                                                                        | English                                                                                                                                                                                                                                                  |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| rail sub-line                                | `rail.sub`                                                                                                                    | **CHANGED**                                                                   | Reading your code runs in the background. Nothing here waits for it.                                                                                                                                                                                     |
+| rail Index meta (reading)                    | `rail.indexBackground`                                                                                                        | **NEW**                                                                       | In the background · {pct}%                                                                                                                                                                                                                               |
+| rail Index meta (queued)                     | `rail.indexQueued`                                                                                                            | **NEW**                                                                       | In the background · queued                                                                                                                                                                                                                               |
+| rail Index meta / failed row                 | `rail.indexFailed`                                                                                                            | **NEW**                                                                       | Could not read the code                                                                                                                                                                                                                                  |
+| chip — queued · reading · read · failed      | `indexing.queued` · `.running` · `.done` · `.failed`                                                                          | **NEW**                                                                       | Queued to read your code · Reading your code · {pct}% · Your code is read · Could not read your code                                                                                                                                                     |
+| detail title · Close                         | `indexing.detailTitle` · `.close`                                                                                             | **NEW**                                                                       | Reading your code · Close                                                                                                                                                                                                                                |
+| detail body                                  | `indexing.detailBody`                                                                                                         | **NEW**                                                                       | This runs in the background, so keep going. Only drafting your plan waits for it, and it starts by itself when reading finishes.                                                                                                                         |
+| detail failed body                           | `indexing.failedBody`                                                                                                         | **NEW**                                                                       | Motir could not read {repo}. Nothing you have done is lost. Your plan waits until the code can be read.                                                                                                                                                  |
+| failed actions                               | `indexing.retry` · `.checkConnection`                                                                                         | **NEW**                                                                       | Try again · Check the connection                                                                                                                                                                                                                         |
+| Decision note — reading · failed             | `decision.waitNote` · `.failedNote`                                                                                           | **NEW**                                                                       | Motir is still reading your code. Pick either one now: your plan is drafted as soon as reading finishes, and you are told when it is ready. · Motir could not read your code yet. Either choice is safe: your plan is drafted once the code can be read. |
+| 2d hint                                      | `connect.detectedHint`                                                                                                        | **CHANGED** (vs Revision 1)                                                   | Motir starts reading their code as soon as you continue. You will not have to wait for it.                                                                                                                                                               |
+| detail aggregate · per-repo head · row chips | `index.aggregate` · `index.perRepo` · `index.state.*`                                                                         | unchanged, re-used                                                            | (as shipped)                                                                                                                                                                                                                                             |
+| —                                            | `index.eyebrow` · `.heading` · `.body` · `.building` · `.callout` · `.next` · `.waiting` · `.completeTitle` · `.completeNote` | **RETIRED with the panel** (MOTIR-8246 deletes them when it removes the stop) | —                                                                                                                                                                                                                                                        |
+
+**Chinese-length risk (MOTIR-8249 / MOTIR-8258):** the chip label is the bar's longest new slot;
+it must fit `--height-btn-sm` on one line at 1280 px beside _Start from an idea instead_. At 390 px
+it shares the flow-name row, which truncates the flow name first, never the chip.
+
+#### GIVES / TAKES (Revision 2)
+
+- **TAKES** the Index panel (Panel 3 of Revision 1 and of MOTIR-930's record) and its disabled Next.
+- **GIVES MOTIR-8246** the chip, the detail, the background rail row, the failed state and the
+  Decision note as its drawn surfaces, and their build. Its owed design subtask composes these
+  panels and adds only the canvas-side states (plan waiting, plan ready). Comment posted there.
+- **GIVES MOTIR-8254** nothing new to build: it restyles the frame as Revision 1 said; until
+  MOTIR-8246 lands, the shipped Index stop keeps working in the restyled frame, and its acceptance
+  is unchanged by this revision.
+- **GIVES MOTIR-8256** the new pairs to gate: `--el-danger` border + `--el-danger-on-surface` glyph
+  on `--el-page-bg`, `--el-text-strong` on `--el-tint-sky`; **MOTIR-8257** nothing (the E2E walks
+  the shipped stop until MOTIR-8246).
+
+### Revision 3 (2026-10-12) — no Start panel when the only project is the sign-up default
+
+**The reviewer's note, verbatim (on Revision 2):** _"When there is only the default project, don't
+need to show the project. The user didn't create the project, and it's the only project available,
+go to connect step directly"_
+
+**What was wrong.** The shipped wizard renders `StartPanel` whenever the project has no run
+(`run === null` in `MigrateWizard.tsx`): a card naming the active project and a Start button that
+POSTs `/api/onboarding/migrate`. For a new sign-up the workspace holds one project, the one Motir
+created for them, so the card asks them to confirm a choice they never made and could not make
+differently. (The importer already skips its picker in this case: `loadImportWizard` in
+`app/(onboarding)/onboarding/import/_data.ts` falls through to the first project when no
+`projectId` is given and shows the picker only for an empty or a bad request, so the importer is
+unchanged by this revision.)
+
+**What the board now draws.**
+
+| panel | before (Revision 2)                     | now                                                                                                                                               |
+| ----- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1a    | —                                       | **Arrival with only the default project**: no Start panel; the wizard opens on **Connect** (2a → 2b/2d) under the **full** hero, rail on Connect. |
+| 1b    | Start (the arrival screen for everyone) | Start, **only when the workspace has two or more projects**, unchanged in look and copy.                                                          |
+| 10    | Narrow — Start and Import               | Narrow — the 1a arrival on Connect, and Import with the indexing chip.                                                                            |
+
+**The hero rule changes from "full on Start" to "full on a run's first screen"** — Start (1b) or
+Connect (1a) — and compact after any step advance. Measured on the board at 1280 px, the 1a Connect
+card's action still sits above a laptop fold (its Connect GitHub button lands about 700 px down the
+frame, inside an 800 px laptop viewport); no new token, no new string.
+
+**Behaviour (for MOTIR-8254).**
+
+1. **The condition is the workspace's project count**, read on the server by the migrate page:
+   `run === null` and exactly one project in the workspace → the island receives `autoStart`.
+   Schema has no "created at sign-up" flag, and none is needed: a one-project workspace has nothing
+   to choose, whoever created the project.
+2. **The island starts the run on mount** with the same `startRun` call (so the MOTIR-4759 kept set
+   still rides the START call from the query), and renders Connect's 2a Checking state while the
+   POST and the first read are in flight; the result lands on 2b or 2d in place. No Start panel
+   is ever painted, so there is no flash.
+3. **A failed start** shows the existing error alert above the Start panel (1b's panel, as the
+   retry), never a dead Connect panel. A 409 (a run already exists) refreshes, as today.
+4. **Two or more projects** → exactly today's Start (1b).
+
+Copy: nothing new; Start's keys stay for 1b.
+
+#### GIVES / TAKES (Revision 3)
+
+- **TAKES** the Start panel from the one-project arrival.
+- **GIVES MOTIR-8254** the `autoStart` arrival above (one server read of the project count, one
+  mount effect, the fallback); its "every step unchanged" criterion is amended for Start exactly
+  as Revision 1 amended it for Connect. Comment posted there.
+- **GIVES MOTIR-8257** the E2E change: a fresh sign-up on `/onboarding/migrate` sees Connect, not
+  Start; a two-project workspace still sees Start.
+- **MOTIR-8246 and Revision 2 are unaffected.**
+
+### Revision 4 (2026-10-12) — Start is a project choice, and the wizard turns warm
+
+**The reviewer's notes, verbatim (on Revision 3):** _"screen 1b is still showing the single
+project, what did you do?"_ and _"make the UI more colorful, use the warm color, the orange and the
+yellow we added to the color palette"_
+
+**What was wrong with 1b.** Revision 3 kept Start for a workspace with two or more projects but
+drew it exactly as before: one card naming the open project and a Start button. With nothing else
+on the screen it read as the single-project Start that Revision 3 removed, and it gave a person who
+does have several projects no way to say which one they mean. Start now exists only when there is
+something to choose, so it is drawn as the choice.
+
+**1b, per element.**
+
+| element                                            | primitive / markup                       | colour                                                                                                | shape                                             |
+| -------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| legend "Which project are you migrating?"          | `fieldset` + `legend`                    | `--el-text`                                                                                           | —                                                 |
+| one row per project in the workspace (fixtures: 3) | `label` wrapping a native `radio`        | border `--el-border`, fill `--el-page-bg`; hover border `--el-border-strong`                          | `--radius-card`, `--spacing-card-padding` × 12 px |
+| the picked row (the open project, pre-selected)    | same, `checked`                          | fill `--el-tint-yellow`, border + 1 px ring `--el-highlight` (3.34:1 on the tint, light; 4.34:1 dark) | same                                              |
+| radio                                              | native                                   | —                                                                                                     | 16 px                                             |
+| project key tile                                   | `span`, mono key                         | `--el-text-strong` on the next tint in peach → yellow → rose                                          | `--radius-control`, 36 px                         |
+| name · meta                                        | text                                     | `--el-text` · `--el-text-secondary` (5.93:1 on yellow, 5.36:1 on peach)                               | —                                                 |
+| "Open now" chip on the open project                | chip                                     | `--el-tint-peach`, `--el-text-strong`                                                                 | `--radius-badge`, `--spacing-chip-x/y`            |
+| CTA "Start with {project}"                         | `Button` primary md, trailing ArrowRight | the ink CTA, unchanged                                                                                | `--radius-btn`                                    |
+
+**Behaviour (for MOTIR-8254).** The page passes the workspace's projects with the active one
+marked. Picking the open project and pressing Start is today's `startRun`. Picking another project
+first switches the active project with the existing `setActiveProjectAction` (the sidebar's
+ProjectSwitcher path), then starts the run for it; the CTA's name follows the pick. Revision 3's
+point 4 ("two or more projects → exactly today's Start") is replaced by this; its points 1 to 3 stand,
+and a failed start shows the error alert above this panel.
+
+**Proposed copy** (in the board's `NEW` map; `messages/` is not edited here):
+
+| key                                   | English                               |
+| ------------------------------------- | ------------------------------------- |
+| `onboardingMigrate.start.chooseLabel` | Which project are you migrating?      |
+| `onboardingMigrate.start.current`     | Open now                              |
+| `onboardingMigrate.start.currentMeta` | The project you have open             |
+| `onboardingMigrate.start.otherMeta`   | Switches to this project, then starts |
+| `onboardingMigrate.start.ctaFor`      | Start with {project}                  |
+
+`start.projectLine` and `start.cta` retire with the single-project card.
+
+**The warm pass — the motir palette's warm touches (design-system §8, MOTIR-7583).** The orange is
+`--el-highlight` / `--el-progress-fill` (`#d66000` light, `#fa5500` dark) and the yellow is
+`--el-tint-yellow` (with `--el-tint-peach` beside it); the citrine gold is `--el-type-design`. All
+are DECORATIVE roles, so the orange is used only for fills, rings, borders and glyphs, never for
+text; every label stays on the ink tokens. It applies to all three boards (this one, the importer
+and discovery), since they share the bar and hero.
+
+| element                                      | before                                    | now                                                                                                                            |
+| -------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| hero background                              | `--el-surface`                            | `--el-hero-glow`: a peach glow top-left and a yellow glow bottom-right over `--el-surface-soft` (light), the dark tints (dark) |
+| hero waves                                   | the three `--el-showcase-wave-*` hues     | `--el-hero-wave-1/2/3` → orange, citrine, orange, at a slightly higher alpha                                                   |
+| hero lede                                    | `--el-accent-on-surface` (blue)           | `--el-text-strong` (AA on every glow stop)                                                                                     |
+| step eyebrow                                 | text only                                 | an 8 px `--el-highlight` dot before it (`aria-hidden`)                                                                         |
+| rail: current step                           | `--el-surface` row, blue ring, ink marker | `--el-tint-yellow` row, `--el-highlight` ring, `--el-highlight` marker with a 22 % halo                                        |
+| rail: background Index marker, spinners      | `--el-accent-on-surface`                  | `--el-highlight`                                                                                                               |
+| Connect card                                 | plain card                                | `Card` tint by state: checking yellow, not connected peach, connected mint                                                     |
+| progress bars                                | ink fill on `--el-muted`                  | `--el-progress-fill` on `--el-tint-yellow`                                                                                     |
+| info callout, answered-steps marker          | `--el-tint-sky`                           | `--el-tint-yellow`, `--el-tint-peach`                                                                                          |
+| avatar initial                               | `--el-tint-sky`                           | `--el-tint-peach`                                                                                                              |
+| importer: current step marker                | ink fill, white number                    | `--el-tint-yellow` fill, `--el-text-strong` number, `--el-highlight` ring                                                      |
+| importer: picked source card                 | ink border + ring                         | `--el-highlight` border + 22 % ring                                                                                            |
+| discovery canvas: the "you are here" station | blue border + ring                        | `--el-highlight` border + ring                                                                                                 |
+
+Measured pairs (WCAG): `--el-highlight` is 3.80:1 on the page, 3.34:1 on `--el-tint-yellow` and
+3.01:1 on `--el-tint-peach` in light, and 4.34 / 4.53:1 on the dark tints, so every orange ring,
+border and glyph clears the 3:1 non-text bar. Error, danger and success keep their own tokens.
+
+**Four new Tier-3 roles** (withdrawn by Revision 5), declared in each board's own token block and proposed for
+`packages/design-system/theme.css` (every input is a palette token, so a `data-palette` swap
+re-tints them): `--el-hero-wave-1: var(--el-highlight)`, `--el-hero-wave-2: var(--el-type-design)`,
+`--el-hero-wave-3: var(--el-highlight)`, and `--el-hero-glow` (the two radial gradients over
+`--el-tint-peach` / `--el-tint-yellow` / `--el-surface-soft`).
+
+#### GIVES / TAKES (Revision 4)
+
+- **GIVES MOTIR-8254** the 1b project choice (the projects list, the switch-then-start path, the
+  five keys), the warm pass on the migrate wizard and the importer, and the four hero roles in the
+  design-system theme. The hero is the shared primitive MOTIR-8252 built, so the entrance and
+  how-it-works (MOTIR-8250) warm with it; their layout and copy do not change.
+- **GIVES MOTIR-8255** the warm pass on the discovery canvas's "you are here" station.
+- **GIVES MOTIR-8256** the new orange and yellow pairs for its contrast run across every palette.
+- **GIVES MOTIR-8257** the E2E change: a two-project workspace sees the project choice with the
+  open project picked.
+- **GIVES MOTIR-8258** the five new keys to translate.
+
+### Revision 5 (2026-10-12) — warm on the button and the small things, the tone stays cool
+
+**The reviewer's note, verbatim (on Revision 4):** _"use the warm colors for the button and small
+things like progress bar. the overall tone should still be cool"_
+
+**What changes.** Revision 4's warm pass went too far: it washed the hero and tinted whole rows and
+cards. This revision takes the warm colour back off every surface and keeps it only on the
+primary button and on small marks. Revision 4's 1b project choice stands, and so does its copy.
+Where Revision 4's tables say otherwise, this section wins.
+
+| element                                       | Revision 4                                           | now                                                                                                     |
+| --------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **primary button** (every board)              | the ink CTA                                          | **`--el-cta-warm` fill, `--el-cta-warm-text` label**: the warm orange, ink label                        |
+| hero background, waves, lede                  | peach and yellow glow, warm waves, ink lede          | back to the shipped hero: `--el-surface`, `--el-showcase-wave-*`, `--el-accent-on-surface` lede         |
+| step eyebrow dot                              | `--el-highlight`                                     | kept                                                                                                    |
+| rail: current step                            | yellow row, orange ring                              | `--el-surface` row with the `--el-accent-on-surface` ring (cool); the **marker** stays `--el-highlight` |
+| rail: background Index marker, spinners       | `--el-highlight`                                     | kept                                                                                                    |
+| progress bars                                 | `--el-progress-fill` on `--el-tint-yellow`           | kept                                                                                                    |
+| Connect card                                  | tinted by state                                      | plain `Card`                                                                                            |
+| info callout · answered-steps marker · avatar | yellow · peach · peach                               | `--el-tint-sky` (as shipped)                                                                            |
+| 1b picked row · key tiles · "Open now" chip   | yellow fill, orange ring · peach/yellow/rose · peach | `--el-surface` fill, `--el-accent-on-surface` border and ring · sky/lavender/mint · lavender            |
+| importer: current step marker                 | yellow fill, orange ring                             | `--el-cta-warm` fill, `--el-cta-warm-text` number, 22 % halo (the same pair as the button)              |
+| importer: picked source card                  | orange border                                        | the shipped ink border                                                                                  |
+| discovery canvas: "you are here" station      | orange border                                        | the shipped `--el-accent-on-surface` border                                                             |
+
+**The two new roles, replacing Revision 4's four hero roles** (which are withdrawn). Each board declares
+them in its own token block, and the build adds them to `packages/design-system/theme.css`:
+
+| role                 | light                             | dark                              | measured (WCAG)               |
+| -------------------- | --------------------------------- | --------------------------------- | ----------------------------- |
+| `--el-cta-warm`      | `var(--el-highlight)` (`#d66000`) | `var(--el-highlight)` (`#fa5500`) | —                             |
+| `--el-cta-warm-text` | `var(--el-text)` (`#16191d`)      | `var(--el-page-bg)` (`#0c0d0f`)   | 4.65:1 light, 5.9:1 dark (AA) |
+
+The label is dark in BOTH themes because white on the warm orange is 3.8:1 in light and 3.3:1 in
+dark, both under AA. The button keeps `Button`'s primary shape, sizes and `hover:opacity-90`; only the
+two colour roles change, so the build is a `warm` treatment of the primary variant (a className pair
+or a variant), not a new component. Disabled keeps `Button`'s own disabled opacity.
+
+#### GIVES / TAKES (Revision 5)
+
+- **GIVES MOTIR-8254** the warm primary button on the migrate wizard and the importer, the two roles
+  above in the design-system theme, and the importer's warm current-step marker. It **TAKES** back
+  Revision 4's hero roles and its surface tints.
+- **GIVES MOTIR-8255** the warm primary button on the discovery and direction-doc surfaces. The
+  "you are here" station stays as shipped.
+- **GIVES MOTIR-8256** the two new pairs for its contrast run across every palette.
+- MOTIR-8257 and MOTIR-8258 are unchanged from Revision 4.
+
+### Revision 6 (2026-10-12) — one page to finish onboarding
+
+**The reviewer's note, verbatim (on Revision 5):** _"1. I don't see the design for "A few questions" 2. is design/ai-chat/onboarding--vibe-lockup.mock.html for "A few questions"? I don't see how we get
+there. if it's not for "A few questions" the design doesn't show me how we get there 3. use some
+yellow color from the palette too 4. don't send the user to a different page/tab for the importing
+work items, the importer can be on the same page. one page to finish the onboarding"_
+
+**What changes.** The migrate wizard becomes the one page a person finishes onboarding on. The
+importer runs inside its Import step, and "A few questions" is a step of the same page, reached from
+Decision. Nothing before the plan is ready leaves `/onboarding/migrate`. Revision 5's colour rules
+stand; this revision adds the palette's yellow to small chips. Where earlier sections say otherwise
+(Panel 4's Open the importer, Panel 5's hand-off to `/onboarding/discovery`, Panel 6's Resume link),
+this section wins.
+
+| panel | what it shows                                                                                                                                                                                                                                         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4a    | Import, with the importer IN the panel: the importer's own step rail (Connect · Map · Preview · Import) and its Connect step inside one `Card`. **Skip import** (ghost) takes the importer's Cancel slot. No link to `/onboarding/import`, no new tab |
+| 4b    | a source connected: the vendor OAuth round trip returns to `/onboarding/migrate` on the Import step (`?jira=connected`), not to `/onboarding/import`                                                                                                  |
+| 4c–4e | the importer's Map, Preview and Import-running steps, unchanged, in the same card                                                                                                                                                                     |
+| 4f    | the importer's finished state, whose action is **Continue** (primary). It advances to Decision; the importer's View imported backlog is not offered here                                                                                              |
+| 5     | Decision. **Plan my project now** advances to "A few questions" on this page; it no longer leaves for `/onboarding/discovery`                                                                                                                         |
+| 6a    | **"A few questions"**, the screen the rail has always named: the rail's Your direction group marks it current. One conversation card: a yellow progress chip, the turns (the chat rail's bubbles and BrandMark avatar), the composer and Send         |
+| 6b    | answered: the card becomes a status, Drafting your first plan (warm spinner, warm fill on the yellow track). While the code is still being read it says drafting starts by itself when reading finishes                                               |
+| 6c    | the plan is ready: a mint check, the drafted count and **Review your plan** (primary), the one exit at the end of onboarding, to the plan's review page that `GenerationHandoff` opens today                                                          |
+| 6d    | Resume: **Continue planning** resumes 6a in place instead of linking to `/onboarding/discovery`                                                                                                                                                       |
+
+**The rail now reads in the order the person goes through it**: Set up your codebase, then Import
+your work (optional), then Your direction. Before, Your direction was drawn above Import.
+
+**Where the discovery canvas fits (point 2).** `design/ai-chat/onboarding--vibe-lockup.mock.html` is
+not "A few questions". It is the canvas for a person who starts from an idea, reached from the
+entrance's Start and from this bar's **Start from an idea instead**. Its new Panel 0 draws that path.
+A person migrating code never reaches it.
+
+**Yellow (point 3).** `--el-tint-yellow` with `--el-text-strong`, on small chips only; the tone stays
+cool:
+
+| element                             | before                              | now                                    | measured (WCAG)             |
+| ----------------------------------- | ----------------------------------- | -------------------------------------- | --------------------------- |
+| rail: Import's "optional" chip      | `--el-muted`, `--el-text-secondary` | `--el-tint-yellow`, `--el-text-strong` | 13.70:1 light, 10.14:1 dark |
+| 1b: the "Open now" chip             | `--el-tint-lavender`                | `--el-tint-yellow`                     | 13.70:1 light, 10.14:1 dark |
+| 6a: "Question 2 of about 5"         | (new)                               | `--el-tint-yellow`, `--el-text-strong` | 13.70:1 light, 10.14:1 dark |
+| progress tracks (index, import, 6b) | `--el-tint-yellow` (Revision 5)     | kept                                   | —                           |
+
+#### Slot → key (Revision 6, proposed — `messages/` is not edited here)
+
+| slot                     | key                                    | English                                                                                                                                                                                       |
+| ------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Import body (inline)     | `onboardingMigrate.import.bodyInline`  | Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Bring it in right here. You review a dry-run preview before anything is written. Skip this if you have no backlog to bring in. |
+| 4f action                | `onboardingMigrate.import.continue`    | Continue                                                                                                                                                                                      |
+| 6 eyebrow                | `onboardingMigrate.questions.eyebrow`  | Your direction                                                                                                                                                                                |
+| 6 heading                | `onboardingMigrate.questions.heading`  | A few questions                                                                                                                                                                               |
+| 6 body                   | `onboardingMigrate.questions.body`     | Motir has read your code. A few answers about where the project is going, and it drafts your first plan from both.                                                                            |
+| 6a chip                  | `onboardingMigrate.questions.progress` | Question {n} of about {total}                                                                                                                                                                 |
+| 6b title                 | `…questions.draftingTitle`             | Drafting your first plan                                                                                                                                                                      |
+| 6b line                  | `…questions.draftingBody`              | From your code, your backlog and your answers. You can leave this page; Motir tells you when it is ready.                                                                                     |
+| 6b line, code still read | `…questions.draftingWaits`             | Waiting for Motir to finish reading your code, then drafting starts by itself.                                                                                                                |
+| 6c title                 | `…questions.readyTitle`                | Your first plan is ready                                                                                                                                                                      |
+| 6c line                  | `…questions.readyBody`                 | {count, plural, one {# item is} other {# items are}} drafted for {project}. Nothing is final until you approve it.                                                                            |
+| 6c action                | `…questions.readyCta`                  | Review your plan                                                                                                                                                                              |
+
+The importer's steps, the composer placeholder and Send keep their existing `import.*` and
+`onboarding.chat.*` keys. `onboardingMigrate.import.cta` (Open the importer) and `import.next`
+(I've imported — continue) retire.
+
+#### GIVES / TAKES (Revision 6)
+
+- **GIVES MOTIR-8254** the inline importer: the importer's steps rendered inside the migrate wizard's
+  Import step, Skip import in its Cancel slot, Continue on its finished state, and the vendor OAuth
+  return to `/onboarding/migrate` (`lib/import/oauthReturn.ts` allows only `/onboarding/import` and
+  `/settings/…` today, so the allow-list grows by one path). It also **GIVES** the "A few questions"
+  step (6a–6d) inside the wizard, driven by the discovery turn API the canvas uses, with the hand-off
+  to the plan review when the draft is ready, and Decision and Resume advancing in place. It
+  **TAKES** the Open the importer link and the two hand-offs to `/onboarding/discovery`.
+- **GIVES MOTIR-8255** nothing new to build: the discovery canvas keeps the idea path only, and its
+  board gains a Panel 0 showing that door.
+- **GIVES MOTIR-8256** the yellow chip pair (`--el-text-strong` on `--el-tint-yellow`) for its
+  contrast run across every palette.
+- **GIVES MOTIR-8257** a changed path: the migrate E2E no longer leaves the wizard for the importer
+  or for discovery. **GIVES MOTIR-8258** the twelve keys above.

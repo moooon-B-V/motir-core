@@ -192,6 +192,10 @@ export function DiscoveryChatRail({
   );
 }
 
+/** One chat turn, with its avatar — also composed by the migrate wizard's
+ *  "A few questions" card (MOTIR-8254), so the two conversations look alike. */
+export { Bubble as DiscoveryChatBubble };
+
 function Bubble({ turn }: { turn: ChatTurn }) {
   const isUser = turn.role === 'user';
   return (

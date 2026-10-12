@@ -6676,36 +6676,55 @@
       }
     },
     "entrance": {
-      "eyebrow": "Bouwen met AI",
-      "headingDefault": "Hoe wil je beginnen?",
+      "headingDefault": "Vibe the project",
       "headingCarried": "Klaar wanneer jij dat bent",
-      "subheadDefault": "Beschrijf wat je wilt bouwen. Motir plant het samen met jou, daarna bouwen agents het.",
+      "subheadDefault": "Jij brengt het idee. Motir levert het hele project: het plan, het ontwerp, de bouw, de documenten en het volledige verhaal van hoe het zover kwam.",
       "subheadCarried": "We hebben het idee waarmee je begon bewaard. Voeg desgewenst meer toe en ga dan verder.",
       "howItWorks": "Bekijk hoe Motir werkt",
-      "ideaLabel": "Je idee",
+      "howItWorksNewTab": "(opent in een nieuw tabblad)",
+      "ideaLabel": "Wat ga je bouwen?",
       "carriedLabel": "Overgenomen uit je idee",
       "placeholder": "Beschrijf wat je wilt bouwen — voor wie het is, de belangrijkste dingen die mensen ermee moeten kunnen en eventuele must-haves. Het hoeft niet perfect te zijn — we stellen hierna vervolgvragen.",
-      "startCta": "Beginnen met plannen",
+      "startCta": "Beginnen",
       "continueCta": "Doorgaan met dit idee",
-      "hintDefault": "Je kunt met een ruw idee beginnen — de verkenningschat stelt vervolgvragen.",
+      "hintDefault": "Een paar zinnen is genoeg. Motir vraagt naar de rest.",
       "hintCarried": "Voeg iets toe of verfijn het voordat je verdergaat — de verkenningschat neemt het vanaf hier over.",
-      "or": "OF",
-      "importTitle": "Ik heb een bestaand project — migreren",
-      "importDesc": "Koppel je repository en Motir leest je code en plant daarna verder op wat er al is. Je kunt ook bestaande werkitems uit Jira, Linear of Plane meenemen.",
-      "importCta": "Migreren"
+      "importTitle": "Heb je al een project?",
+      "importDesc": "Motir leest je code, taken en geschiedenis voordat het iets verandert, en plant daarna wat er volgt. Jij beslist wat er live gaat.",
+      "importCta": "Dat kunnen we ook viben"
     },
     "import": {
       "title": "Een bestaand project importeren",
-      "body": "Een repository koppelen en je werk uit Jira, Linear of Plane importeren komt binnenkort. Voorlopig kun je een nieuw project met AI beginnen.",
+      "body": "Een repository koppelen en je werk uit Jira, Linear of Plane importeren komt binnenkort. Voorlopig kun je een nieuw project beginnen vanuit je idee.",
       "back": "Terug naar het begin"
     },
     "howItWorks": {
-      "title": "Hoe Motir werkt",
-      "body": "Een volledige rondleiding — idee → plan → agents bouwen het — is onderweg. Begin voorlopig met je idee; Motir stelt onderweg vervolgvragen.",
-      "back": "Terug naar het begin"
+      "title": "AI doet het werk. Jij neemt de beslissingen.",
+      "body": "Jij brengt het idee. Motir vraagt door tot het het begrijpt, en maakt dan stap voor stap het plan, het ontwerp, het product en de documenten, voor iedereen zichtbaar, en stopt overal waar een keuze aan jou is.",
+      "back": "Terug naar het begin",
+      "sections": {
+        "say": {
+          "title": "Zeg wat je wilt",
+          "body": "Een paar zinnen of een rommelige braindump. Motir blijft vragen tot het begrijpt wat je bedoelt."
+        },
+        "watch": {
+          "title": "Zie het vorm krijgen",
+          "body": "Het plan, de ontwerpen, het product en de documenten worden stap voor stap gemaakt, voor iedereen zichtbaar."
+        },
+        "decide": {
+          "title": "Jij beslist",
+          "body": "Elk onderdeel komt terug bij jou om te bekijken, uit te proberen en goed te keuren. Jij houdt de regie over wat er live gaat."
+        }
+      },
+      "developers": {
+        "title": "Hoe Motir werkt, voor developers",
+        "body": "Elk Motir-project loopt door hetzelfde instrument: de modules zijn Motir en zijn agents, de schakelaars zijn van jou. Op motir.co lees je het module voor module.",
+        "cta": "Lees het op motir.co",
+        "newTab": "(opent in een nieuw tabblad)"
+      }
     },
     "connectGate": {
-      "title": "AI-planning is niet geconfigureerd",
+      "title": "Planning is nog niet gekoppeld",
       "body": "Planning draait op Motir Cloud; deze zelf gehoste werkruimte heeft nog geen verbinding.",
       "cta": "Motir AI koppelen"
     },
@@ -8222,6 +8241,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "Breng je project mee",
+      "lede": "Koppel Jira, Linear of Plane, en Motir neemt je werkitems over, zodat het vanaf waar je nu staat kan plannen wat er volgt."
+    },
     "chrome": {
       "title": "Werkitems importeren",
       "titleInto": "Werkitems importeren · in {project}",
@@ -8464,7 +8487,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "Een bestaand project migreren",
-      "planAi": "Plannen met AI"
+      "planAi": "Begin liever vanuit een idee"
+    },
+    "hero": {
+      "headline": "Heb je al een project?",
+      "lede": "Motir leest je code, taken en geschiedenis voordat het iets verandert, en plant daarna wat er volgt. Motir runt het project. Jij beslist wat er live gaat."
     },
     "rail": {
       "title": "Je migratie",
@@ -8490,16 +8517,30 @@
       "eyebrow": "Bestaande codebase",
       "heading": "Een bestaande codebase migreren",
       "body": "Koppel je repository's, laat Motir de code lezen en conventies afleiden, en importeer daarna optioneel je Backlog en plan.",
-      "projectLine": "De migratiewizard draait voor dit project.",
-      "cta": "Beginnen"
+      "chooseLabel": "Welk project migreer je?",
+      "current": "Nu geopend",
+      "currentMeta": "Het project dat je open hebt",
+      "otherMeta": "Schakelt naar dit project en begint dan",
+      "ctaFor": "Beginnen met {project}"
     },
     "connect": {
       "eyebrow": "Stap 1 van 2 · Inrichten",
       "heading": "De repository's in dit project koppelen",
-      "body": "Koppel je GitHub-repository's in de werkruimte-instellingen. Motir leest ze via de GitProvider-koppeling om één codegraaf voor het hele project te bouwen.",
-      "cta": "GitHub-instellingen openen",
+      "body": "Motir leest de repository's die je op GitHub koppelt en maakt één overzicht van de code in het hele project.",
       "gitlabNote": "GitLab koppelen komt binnenkort.",
-      "next": "Ik heb mijn repo's gekoppeld"
+      "checking": "Controleren op gekoppelde repository's…",
+      "missingTitle": "Nog geen repository's gekoppeld",
+      "missingHint": "Koppel GitHub in een nieuw tabblad. Motir merkt de koppeling zelf op, dus je hoeft hier niets te bevestigen.",
+      "connectCta": "GitHub koppelen",
+      "newTab": "(opent in een nieuw tabblad)",
+      "waitingTitle": "Wachten op GitHub",
+      "waitingHint": "Rond het koppelen af in het andere tabblad. Motir controleert opnieuw als je terugkomt, en tot die tijd elke paar seconden.",
+      "reopenCta": "GitHub-instellingen opnieuw openen",
+      "detected": "{count, plural, one {# repository is gekoppeld} other {# repository's zijn gekoppeld}}",
+      "detectedHint": "Dit zijn de repository's die Motir kan lezen. Het indexeren begint als je doorgaat.",
+      "listLabel": "Gekoppelde repository's",
+      "continue": "Doorgaan",
+      "manage": "Repository's beheren op GitHub"
     },
     "index": {
       "eyebrow": "Stap 2 van 2 · Inrichten",
@@ -8522,15 +8563,15 @@
       "eyebrow": "Optioneel · Importeren en plannen",
       "heading": "Je bestaande Backlog meenemen",
       "body": "Houd je al werk bij in Jira, Linear, GitHub, Plane of een CSV? Importeer het in dit project — je bekijkt eerst een voorbeeld van een proefrun voordat er iets wordt geschreven. Sla dit over als je geen Backlog hebt om mee te nemen.",
-      "cta": "De importtool openen",
       "reconcile": "Als je daarna een plan genereert, brengt Motir de twee met elkaar in overeenstemming, zodat er niets dubbel komt.",
       "skip": "Import overslaan",
-      "next": "Ik heb geïmporteerd — doorgaan"
+      "bodyInline": "Houd je al werk bij in Jira, Linear, GitHub, Plane of een CSV? Neem het hier direct mee. Je bekijkt eerst een voorbeeld van een proefrun voordat er iets wordt geschreven. Sla dit over als je geen Backlog hebt om mee te nemen.",
+      "continue": "Doorgaan"
     },
     "decision": {
       "eyebrow": "Inrichten voltooid",
       "heading": "Je codebase staat in Motir",
-      "body": "Plan je project nu met AI, of rond af en plan later vanuit het project.",
+      "body": "Motir kan nu plannen wat er volgt, of je rondt af en plant later vanuit het project. Jij beslist wat er live gaat.",
       "planNow": "Mijn project nu plannen",
       "finishLater": "Afronden — ik plan later"
     },
@@ -8539,6 +8580,18 @@
       "heading": "Verder plannen",
       "body": "Je bent begonnen met het plannen van dit project. Ga verder in de planningsomgeving.",
       "cta": "Verder plannen"
+    },
+    "questions": {
+      "eyebrow": "Jouw richting",
+      "heading": "Een paar vragen",
+      "body": "Motir heeft je code gelezen. Geef een paar antwoorden over waar het project naartoe gaat, en Motir maakt op basis van beide een eerste plan.",
+      "progress": "Vraag {n} van ongeveer {total}",
+      "draftingTitle": "Je eerste plan wordt opgesteld",
+      "draftingBody": "Op basis van je code, je Backlog en je antwoorden. Je kunt deze pagina verlaten; Motir laat het je weten als het klaar is.",
+      "draftingWaits": "Wachten tot Motir klaar is met het lezen van je code; daarna begint het opstellen vanzelf.",
+      "readyTitle": "Je eerste plan is klaar",
+      "readyBody": "{count, plural, one {# item is} other {# items zijn}} opgesteld voor {project}. Niets is definitief totdat je het goedkeurt.",
+      "readyCta": "Je plan bekijken"
     }
   },
   "repositorySet": {

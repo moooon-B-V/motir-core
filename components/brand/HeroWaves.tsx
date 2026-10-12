@@ -3,16 +3,26 @@
 import { useEffect, useRef } from 'react';
 
 /*
- * The signed-out frame's background: the wave lines from motir.co's hero,
- * ported from `motir-marketing`'s `app/_components/landing/HeroWaves.tsx` so the
- * sign-in page reads as the same product the visitor just came from.
+ * motir.co's hero wave lines — `HeroWaves`, ported from `motir-marketing`'s
+ * `app/_components/landing/HeroWaves.tsx` — serving BOTH places Motir greets
+ * someone: the signed-out frame (`app/(auth)/layout.tsx`, gathered around the
+ * auth card) and the onboarding hero (`components/onboarding/layout/
+ * OnboardingHero.tsx`, gathered around the hero's control — the idea box). Both
+ * read as the same product the visitor just came from.
+ *
+ * It lives in `components/brand/` because the lines ARE the brand mark's wave
+ * (`WAVE_BAND_PATH`, beside `BrandMark`), and because one component shared by
+ * two route groups cannot sit in either group's private `_components/`
+ * (MOTIR-8252 moved it here, renamed, out of the `(auth)` group's private
+ * folder; a second copy would drift the first time one was tuned). Its behaviour
+ * did not change with the move.
  *
  * The wave from the Motir mark, repeated as engraved lines across the full
- * width. The lines bunch towards the auth card and spread out to the edges, and
- * they MOVE: each one drifts along its own wave and breathes a little, while a
- * band of the palette's wave hues (`--el-showcase-wave-1..3` — primary, teal,
+ * width. The lines bunch towards the focus element and spread out to the edges,
+ * and they MOVE: each one drifts along its own wave and breathes a little, while
+ * a band of the palette's wave hues (`--el-showcase-wave-1..3` — primary, teal,
  * accent) slides across the field. Two lines pick up the decision and highlight
- * touches where they pass the card, and a few small squares ride the lines.
+ * touches where they pass the focus, and a few small squares ride the lines.
  *
  * Every ink is a design-system token read from the live theme, so the field
  * follows the reader's theme and palette and re-reads them when either changes.
@@ -20,8 +30,10 @@ import { useEffect, useRef } from 'react';
  * drawing while off screen or while the tab is hidden.
  *
  * Decorative only: `aria-hidden`, no pointer events, nothing to tab to. It is
- * absolutely positioned, so it adds nothing to the page's height — the
- * `/device` fold budget in `app/(auth)/layout.tsx` is untouched.
+ * absolutely positioned (`absolute inset-0 -z-10`), so its HOST must be
+ * `relative isolate` — it then adds nothing to the host's height (the `/device`
+ * fold budget in `app/(auth)/layout.tsx` is untouched), and at any width it is
+ * the middle of the same field, cropped to the host's box rather than dropped.
  */
 
 const LINES = 46;
@@ -63,7 +75,11 @@ function seeded(seed: number): () => number {
  * to): the canvas normalises it, and the channels are read back from that.
  */
 function withAlpha(ctx: CanvasRenderingContext2D, colour: string, a: number): string {
-  ctx.fillStyle = '#000';
+  // The reset, written before the token so an unparseable token reads back as
+  // a known value (black, at alpha `a`) instead of the previous call's colour.
+  // `transparent` normalises to `rgba(0, 0, 0, 0)`: the same black channels the
+  // old hex-black reset produced, without a colour literal in a rendered source.
+  ctx.fillStyle = 'transparent';
   ctx.fillStyle = colour;
   const n = String(ctx.fillStyle);
   if (n.startsWith('#') && n.length === 7) {
@@ -90,8 +106,12 @@ interface Box {
   h: number;
 }
 
-/** `focusId` names the element the lines gather around — the auth card. */
-export function AuthWaves({ focusId = 'auth-card' }: Readonly<{ focusId?: string }>) {
+/**
+ * `focusId` names the element the lines gather around: the auth card by
+ * default (so the signed-out frame passes nothing), or the onboarding hero's
+ * control (`OnboardingHero` passes its `controlId`).
+ */
+export function HeroWaves({ focusId = 'auth-card' }: Readonly<{ focusId?: string }>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -359,6 +379,10 @@ export function AuthWaves({ focusId = 'auth-card' }: Readonly<{ focusId?: string
   return (
     <canvas
       ref={canvasRef}
+      // Names the field and what it gathers around, so a test (or a reader of
+      // the DOM) can see the wiring without a canvas to draw on.
+      data-hero-waves=""
+      data-focus-id={focusId}
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 -z-10 block size-full"
     />

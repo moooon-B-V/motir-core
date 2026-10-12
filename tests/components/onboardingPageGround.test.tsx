@@ -21,6 +21,9 @@ import { loadTokenLayer, resolveToken } from '../theme/paletteCascade';
 // and the ink lint measure with.)
 
 vi.mock('@/app/(onboarding)/onboarding/actions', () => ({ startPlanningAction: vi.fn() }));
+// The entrance's brand bar carries the language control (MOTIR-8253), which
+// calls the `setLocale` server action.
+vi.mock('@/lib/i18n/actions', () => ({ setLocale: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   // MOTIR-4770 — the wizard reads the RETURN ADDRESS the hand-off wrote, so it
@@ -49,10 +52,12 @@ function resolve(token: string, theme: 'light' | 'dark') {
   return resolveToken(rules, { palette: 'amethyst', theme }, token);
 }
 
-/** The root `h-dvh` div of a rendered full-viewport onboarding surface. */
+/** The root `h-dvh` / `min-h-dvh` div of a rendered full-viewport onboarding
+ *  surface (the entrance is page-shaped since MOTIR-8253, so it grows past the
+ *  viewport: `min-h-dvh`). */
 function pageRoot(container: HTMLElement): Element {
   const root = container.querySelector('[class*="h-dvh"]');
-  expect(root, 'no h-dvh root rendered').not.toBeNull();
+  expect(root, 'no h-dvh / min-h-dvh root rendered').not.toBeNull();
   return root!;
 }
 

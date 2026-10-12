@@ -396,3 +396,450 @@ Icons are **lucide** (`History`, `Sparkles`, `RotateCw`, `Command`, + the existi
 | The in-session "Save & exit" (wz-bar)                     | MOTIR-1488 (done)                                |
 | "Continue your plan" (finished-plan empty state)          | MOTIR-1485 / 1486                                |
 | The generic "Plan with AI" launcher                       | MOTIR-1299 (done)                                |
+
+---
+
+## 2026-10-11 — the vibe layout: the Motir lockup, a full-width hero and section bands (MOTIR-8250)
+
+**Amends:** MOTIR-1461's
+entrance (§ _Surfaces / panels_, Panels 1–3, and § _Primitives composed_) and the
+MOTIR-4370 2026-09-04 amendment at the top of this file. **Delta mock:**
+[`onboarding-entrance--vibe-layout.mock.html`](./onboarding-entrance--vibe-layout.mock.html).
+`onboarding-entrance.mock.html` is a record and is **not edited**. Story MOTIR-8238.
+
+**Design system — files read:** `package.json` (root; `"@motir/design-system": "workspace:*"`),
+`app/globals.css` (line 13, `@import '@motir/design-system/theme.css'`; line 25,
+`@import '@motir/brand/brand.css'`), `node_modules/@motir/design-system/package.json` (→
+`packages/design-system`, **`"version": "0.13.0"`**, exports `./mock`), `app/layout.tsx` (the
+`data-style` / `data-palette` / `data-type` attributes it stamps on `<html>`), and
+`packages/design-system/src/theme/{styles,palettes}.ts` (the defaults). There is no `DESIGN.md`.
+
+**Verdict: ON MOTIR DESIGN — branch (a).** Both checks hold. Version **0.13.0** exports
+`@motir/design-system/mock`, so the asset is **built with `renderMock`** from the package's real parts.
+The project's axes: `app/layout.tsx` writes each signed-in person's own preference and, with none,
+nothing — so the `:root` defaults apply, **`data-style="warm-editorial"` · `data-palette="motir"` ·
+`data-type="motir"`**. `motir` is the monochrome palette (MOTIR-6470 / MOTIR-6471); the mock renders
+at exactly those axes. Every panel is drawn twice, light and dark, each frame a
+`[data-appearance-scope]` subtree carrying `data-theme` and the three axes, so both themes resolve from
+the same compiled `theme.css` in one document.
+
+| part                                                | where it comes from                                                        | disposition                                                                                        |
+| --------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `Button` (primary md · loading; secondary lg)       | `@motir/design-system`, rendered by `renderMock`                           | as is; the import and Back links wear `buttonVariants({ variant: 'secondary', size: 'lg' })`       |
+| `Spinner`                                           | `@motir/design-system`, inside `<Button loading>`                          | as is                                                                                              |
+| `BrandMark` (`lockup`, `default`, 28)               | `@motir/brand` (`packages/brand/src/BrandMark.tsx`) + `brand.css`, inlined | as is — Motir's own brand chrome, deliberately not in the design system                            |
+| the idea control (form card + textarea + footer)    | product-local — `components/onboarding/OnboardingEntrance.tsx` today       | restyled, not new: the same control in a wider frame                                               |
+| **`OnboardingHero`** (ground, lockup bar, waves)    | NEW                                                                        | **product-local component** — it speaks Motir's own brand and voice; a scaffolded product has none |
+| **`HeroWaves`** (the static wave field)             | NEW                                                                        | **product-local component** — built from `WAVE_BAND_PATH`, which lives in `@motir/brand`, not here |
+| **`OnboardingSection`** (band + SectionHead + slot) | NEW                                                                        | **product-local component** for now — see finding F5 for why it is not proposed for the package    |
+
+Nothing is proposed as an addition to `@motir/design-system`.
+
+**Shipped reality read**, at the branch head `aad2def` (over `origin/main` `6676b80`): the components
+above, `app/(onboarding)/onboarding/how-it-works/page.tsx` (an `EmptyState` placeholder seam with a
+`Sparkles` icon in the same `max-w-[41.25rem]` column), `packages/brand/src/{BrandMark,waveBand}.ts`,
+`design/brand/design-notes.md` §3, §7, §8, §10, and `messages/en.json` as MOTIR-8248 left it (commit
+`35e82f9`). Every string drawn is read from that file by key; none is typed.
+
+**motir.co, read and never imported** — `motir-marketing` at `origin/main` **`0c2e37b`**:
+`motir-marketing/app/[locale]/page.tsx` (the hero section, `GUTTER = px-[clamp(16px,3vw,48px)]`, the `H2` scale,
+`SectionHead`'s `[1.4fr 1fr]` grid and its `max-w-[44ch]` `--el-text-secondary` body),
+`motir-marketing/app/_components/SiteHeader.tsx` (no fill and no rule; `BrandTile size={28}`;
+`px-(--spacing-card-padding) py-4`), `motir-marketing/app/_components/BrandTile.tsx` (the lockup on a tile, glyph
+decorative, word as the name), and — because the hero cites it — `motir-marketing/app/_components/landing/HeroWaves.tsx`
+(46 lines of the mark's top edge, 1 px, `--el-showcase-wave-1..3`, alpha 0.03–0.13 light / 0.06–0.19
+dark, gathered on the idea box) and `motir-marketing/app/_components/landing/HeroBrief.tsx` (label · textarea · hint-left / Start-right footer,
+`max-w-[700px]`). What is taken is the layout **language**; the parts are motir-core's.
+
+### Panels (light AND dark, every one)
+
+| #   | Panel                                                                                                          | frame      |
+| --- | -------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1   | Entrance, default — the hero with the empty (focused) idea box, and the import section under it                | 1280 px    |
+| 2   | Entrance, carried-over idea — pre-filled long idea, carried label, continue CTA, **no import section**         | 1280 px    |
+| 3   | Close-ups — 3a box at rest · 3b focused · 3c long idea · 3d Start rest/hover/focus/pending · 3e import control | 640 px × 2 |
+| 4   | How it works, populated — hero (title + body) + three section bands + Back                                     | 1280 px    |
+| 5   | Narrow — entrance default, entrance carried, how it works                                                      | 390 px     |
+| 6   | Pattern — A the lockup · B the hero with waves · C one section band, each with its tokens and spacing          | 640 px × 2 |
+
+The access path is drawn in place: **Start** (→ `/onboarding/discovery`, seeded), **See how Motir works**
+(→ `/onboarding/how-it-works`), **We can vibe it too** (→ `/onboarding/migrate`), **Back to start** (→
+`/onboarding`) and the lockup (→ `/`). Inbound — sign-up / sign-in and the in-app project switcher door
+— is unchanged and is context only.
+
+### The idea-first ruling, restated (MOTIR-4370 holds)
+
+This design takes motir.co's layout language and **keeps** the 2026-09-04 ruling: the entrance is
+**idea-first, not motir.co's symmetric fork**. The idea box is the hero's control; import is ONE section
+band below it, visibly secondary (a smaller serif head, a secondary button, the page ground rather than
+the hero's). **Panel 2 still drops the import section entirely** — a reader who arrived with an idea
+answered the fork at the door. **What changes is one premise of that ruling:** it said the ~660 px
+centred column's width constraint "still holds, and only this surface has it". **It no longer applies.**
+The centred column is gone; the hero gives the idea box a 760 px slot (wider than motir.co's 700 px
+brief), so the constraint that made a two-door fork impossible is not what keeps it idea-first now — the
+ruling's other reason, the reader's moment, is. A future revisit of the asymmetry should argue from that
+reason alone.
+
+### What stays the same (Panel 3 of MOTIR-1461)
+
+Every behaviour is unchanged; only how each existing state LOOKS moves. An empty idea still starts; the
+textarea holds focus on load (`autoFocus`, so Panel 1 is drawn with its focus ring); `⌘/Ctrl+Enter`
+submits and a bare Enter is a newline; the import control is a focusable link with its own ring; there
+is no "Save & exit". No state is added and none removed. **Two looks are now specified that were not:**
+
+- **A long idea GROWS, then scrolls.** The textarea starts at `min-h 7.5rem` (`10rem` narrow, so the
+  placeholder fits), grows with its content (`field-sizing: content`), and caps at **`18rem`**, after
+  which it scrolls inside the card. The footer — and Start — never move below the fold. `resize: none`.
+- **Pending is the package Button's own `loading`** (3d): the Spinner, `disabled`, `aria-busy`, the label
+  unchanged ("Start" / "Continue with this idea"), and the textarea `disabled` beside it. That is what
+  `useFormStatus().pending` drives; no new copy (finding F2).
+
+### Primitives composed — the updated table (replaces MOTIR-1461's for this surface)
+
+Colour role is the Tier-3 `--el-*` token; shape is the `[data-style]` element token. Values measured are
+the default (`motir`) palette.
+
+| Element                                    | Primitive                                                               | Colour (`--el-*`)                                                                                                                    | Shape / size                                                                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| **Lockup** (replaces the Sparkles tile)    | `BrandMark variant="lockup" tone="default" size={28}` in a link to `/`  | glyph `--el-accent-on-surface` (`.brand-glyph`); wordmark `--el-text` (`.brand-word`, the Space Grotesk face pin)                    | 28 px glyph, gap `0.33×`, word `0.74×`; link focus outline `--el-accent-on-surface`, `--radius-control`           |
+| Lockup bar                                 | header row (motir.co `SiteHeader`)                                      | **no fill, no rule** — sits on the hero ground                                                                                       | `px-(--spacing-card-padding) py-4` (`px-4 py-3` narrow)                                                           |
+| ~~Eyebrow chip~~                           | **REMOVED, not relabelled**                                             | —                                                                                                                                    | —                                                                                                                 |
+| **Hero ground**                            | `OnboardingHero` section, `relative isolate overflow-hidden`            | `--el-surface`                                                                                                                       | gutter `clamp(16px,3vw,48px)`; `pt clamp(40px,5vw,64px)` · `pb clamp(64px,8vw,104px)`; gap 22 px (18 narrow)      |
+| **Wave lines**                             | `HeroWaves` — inline SVG, `aria-hidden`, `pointer-events-none`, `-z-10` | stroke `--el-showcase-wave-1` / `-2` / `-3` in turn; alpha 0.03–0.13 light, 0.06–0.19 dark, highest on the lines through the control | 23 lines of `WAVE_BAND_PATH`'s top contour, 1 px `non-scaling-stroke`, `preserveAspectRatio="xMidYMid slice"`     |
+| H1                                         | serif heading                                                           | `--el-text`                                                                                                                          | `--font-serif` 700, `clamp(48px,7.5vw,112px)`, lh 0.94, `-0.035em`, `text-balance`                                |
+| Lede                                       | paragraph                                                               | `--el-accent-on-surface` (motir.co's hero lede ink)                                                                                  | 500, `clamp(17px,1.45vw,21px)`, `max-w 62ch`                                                                      |
+| "See how Motir works →"                    | inline text link                                                        | `--el-text`, underlined (the lede is already the accent ink); focus outline `--el-accent-on-surface`                                 | 16 px 600 (15 narrow), `ArrowRight` size-4                                                                        |
+| Idea control                               | form card                                                               | `--el-card` on `--el-border`; focus-within `ring-2` `--focus-ring-color`, offset 2 px                                                | `--radius-card`, `--spacing-card-padding`, `--shadow-elevated`; slot `max-w 760px` (full width narrow)            |
+| Idea label                                 | mono label                                                              | `--el-text-secondary`                                                                                                                | 11 px 600 uppercase, `0.1em`                                                                                      |
+| Carried label                              | mono label + dot                                                        | text `--el-accent-on-surface`; dot `--el-accent`                                                                                     | dot `rounded-full` size-1.5                                                                                       |
+| Textarea + placeholder                     | `<textarea>`                                                            | value `--el-text`; placeholder `--el-text-secondary` (MOTIR-2475)                                                                    | 18 px (17 narrow); min `7.5rem` / `10rem`, max `18rem`; no own radius                                             |
+| Card footer + hint                         | row                                                                     | rule `--el-border-soft`; hint `--el-text-secondary` (moved INTO the card, motir.co's place for it)                                   | `pt-(--spacing-md)`, gap 12, `flex-wrap`; hint `mr-auto`, Start `ml-auto`                                         |
+| Start / Continue                           | `Button variant="primary"` + `rightIcon` ArrowRight                     | `--el-accent` / `--el-accent-text`; hover `opacity-90`; focus ring `--focus-ring-color`                                              | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x`                                                              |
+| ~~"OR" divider~~                           | **REMOVED** — the section band is the separation                        | —                                                                                                                                    | —                                                                                                                 |
+| ~~Import option row + sky icon tile~~      | **REPLACED by the import section band**                                 | —                                                                                                                                    | —                                                                                                                 |
+| **Section band**                           | `OnboardingSection` — `<section>` + SectionHead grid                    | ground `--el-page-bg`; top rule `--el-border` (first band) / `--el-border-soft` (a band stacked on a band)                           | gutter as the hero; `py clamp(48px,7vw,88px)`; head `[1.4fr 1fr]`, gap-x 56, gap-y 16, `items-start`; 1 col < 768 |
+| Section title (H2)                         | serif heading                                                           | `--el-text`                                                                                                                          | `--font-serif` 700, `clamp(34px,4.4vw,56px)`, lh 0.98, `-0.03em`                                                  |
+| Section body                               | paragraph                                                               | `--el-text-secondary`                                                                                                                | 18 px (17 narrow), `max-w 44ch`                                                                                   |
+| "We can vibe it too →" / "← Back to start" | link styled `buttonVariants('secondary','lg')`                          | `--el-text` on `--el-button-border`; hover `--el-surface`; focus ring `--focus-ring-color`                                           | `--radius-btn`, `--height-btn-lg`; gap 20 above                                                                   |
+
+**Why the sections sit on `--el-page-bg` and the hero on `--el-surface`:** the secondary Button's hover
+fill IS `--el-surface`, so on a surface ground its hover would paint nothing. The split also makes the
+section read as a different, quieter place than the hero.
+
+**The waves never fail the text over them — measured.** The rule is "never under text at a contrast that
+fails", so the worst case was computed: each ink against the hero ground with the brightest line at full
+alpha mixed in (light 0.13, dark 0.19), in the mock's computed `motir` values:
+
+| ink                             | light: on surface → over a line | dark: on surface → over a line |
+| ------------------------------- | ------------------------------- | ------------------------------ |
+| `--el-text` (H1)                | 15.45 → 12.81                   | 15.14 → 10.52                  |
+| `--el-text-secondary`           | 5.91 → 4.91                     | 7.81 → 5.42                    |
+| `--el-accent-on-surface` (lede) | 5.53 → **4.59**                 | 9.05 → 6.28                    |
+
+The light lede over a blue line is the tight pair (4.59:1, AA by 0.09) and it is a 1 px line. **The
+integration gate (MOTIR-8238's contrast run) must re-measure this pair in the other nine palettes** — it
+is the one most likely to cross; if it does, the remedy is to lower the line alpha, never to change the
+lede ink.
+
+### Narrow (~390 px)
+
+Everything stacks: the head of a section drops to one column, the idea box takes the full width, the
+footer wraps (hint above, Start at the right end below it), H1 48 px, section titles 34 px. **The wave
+lines are CROPPED, not dropped** — the field is laid out for the desktop hero and sliced to the box
+(`xMidYMid slice`), so a phone sees the middle of the same field. It stays decorative, and the contrast
+table above holds at every width because it is a per-pixel bound.
+
+### Slot → key (every visible product string in the delta)
+
+| slot                           | key                                                                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| H1, default · carried          | `onboarding.entrance.headingDefault` · `headingCarried`                                                                |
+| lede, default · carried        | `onboarding.entrance.subheadDefault` · `subheadCarried`                                                                |
+| explainer link                 | `onboarding.entrance.howItWorks`                                                                                       |
+| idea label · carried label     | `onboarding.entrance.ideaLabel` · `carriedLabel`                                                                       |
+| placeholder                    | `onboarding.entrance.placeholder`                                                                                      |
+| hint, default · carried        | `onboarding.entrance.hintDefault` · `hintCarried`                                                                      |
+| primary CTA, default · carried | `onboarding.entrance.startCta` · `continueCta`                                                                         |
+| section title · body · control | `onboarding.entrance.importTitle` · `importDesc` · `importCta`                                                         |
+| how-it-works H1 · lede         | `onboarding.howItWorks.title` · `body`                                                                                 |
+| the three sections             | `onboarding.howItWorks.sections.{say,watch,decide}.{title,body}`                                                       |
+| back control                   | `onboarding.howItWorks.back`                                                                                           |
+| wordmark                       | `BrandMark`'s `label` default, "Motir" (the brand name, not catalogue copy — as every other slot in `design/brand` §7) |
+
+**Not product copy:** the pre-filled idea in Panels 2 / 3c / 5 is a fixture of the person's own text
+(what the `motir_pending_idea` cookie carries) and has no key by design. Panel captions, the exits line
+and the Pattern panel's spec lists are board chrome.
+
+### Findings
+
+- **F1 — `onboarding.entrance.eyebrow` is REMOVED, not relabelled.** MOTIR-8248 reworded it to "Welcome
+  to Motir"; this design has no eyebrow at all, so the entrance code card (MOTIR-8253) **deletes the key**
+  (in all eleven catalogues) rather than rendering the new value.
+- **F2 — `onboarding.entrance.or` has no slot either.** The section band replaces the "OR" divider, so
+  that key is orphaned too; MOTIR-8253 deletes it with the eyebrow. (The card named only the eyebrow; this
+  is the same removal one row down.)
+- **F3 — no key for a pending announcement.** motir.co's brief announces "submitting" through an
+  `aria-live` region (`copy.landing.hero.statusSubmitting`). The entrance has no such key and this design
+  does not invent one: the pending state is carried by `aria-busy` + `disabled` on the Button. If
+  MOTIR-8253 wants the live announcement, it needs a key from the voice card first — a slot without a key.
+- **F4 — `--focus-ring-color` is declared on `:root` only.** It is not in the `[data-appearance-scope]`
+  re-emission, so a nested dark scope keeps the LIGHT ring (`#155bc4`) instead of the dark `#7db1ff`. The
+  app is unaffected (`<html>` carries the theme), but a mock or the onboarding Design step's preview
+  inherits the wrong ring. The delta re-points it to `--el-accent-on-surface` inside each scope so the
+  drawn ring is the one the app paints. Out of scope here; worth a one-line fix in `theme.css`.
+- **F5 — why the section band is product-local, not a package proposal.** Its shape is generic, but its
+  rhythm is motir.co's marketing rhythm, which a scaffolded product should not inherit by default. If a
+  second, non-onboarding Motir surface adopts it, promote it then.
+- **Chinese-length risks** (the Chinese card, MOTIR-8249, draws the strings; this design flags the slots):
+  the **96 px H1** — a CJK headline does not hyphenate and `text-balance` cannot split inside a word, so a
+  long `headingCarried` wraps to three lines at 1280 and must be checked at 390 (48 px); the **idea-card
+  footer**, where a long `hintCarried` already pushes the CTA to its own row in English (that wrap is the
+  designed behaviour, not a defect); the **secondary button `importCta`** (`whitespace-nowrap` — a long
+  value widens the button, which is fine at desktop and must stay under ~340 px at 390); and the **mono
+  uppercase labels** (`ideaLabel` / `carriedLabel`), where `uppercase` and `0.1em` tracking do nothing for
+  CJK and the label will read heavier than in English — acceptable, flagged.
+
+### Allocation sweep — every card the delta and this section name
+
+| card                                       | GIVES / TAKES                                                                                                                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-8253** (entrance code)             | **TAKES** the eyebrow chip (and its `eyebrow` key, F1), the "OR" divider (`or` key, F2) and the centred `max-w-[41.25rem]` column; GIVES it the new layout to render for both screens |
+| **MOTIR-8252** (foundation code)           | **GIVES** the primitives: `BrandMark` in the onboarding chrome, `OnboardingHero`, `HeroWaves`, `OnboardingSection` (Pattern panel A–C)                                                |
+| **MOTIR-8251** (migrate / importer design) | **GIVES** the pattern (Pattern panel), which it composes and does not redraw                                                                                                          |
+| MOTIR-8248 (English voice)                 | TAKES its strings verbatim as the premise; gives back F1–F3                                                                                                                           |
+| MOTIR-8249 (Chinese voice)                 | GIVES the Chinese-length risk list above                                                                                                                                              |
+| MOTIR-8238 (story)                         | GIVES the integration gate the `--el-*` role of every element and the one tight pair to re-measure across palettes                                                                    |
+| MOTIR-1461                                 | amended (this section); its mock stays the record                                                                                                                                     |
+| MOTIR-4370                                 | ruling KEPT; its width premise retired                                                                                                                                                |
+| MOTIR-1458                                 | premise only — the carried idea and its cookie, unchanged                                                                                                                             |
+| MOTIR-2475                                 | premise only — the placeholder ink stays `--el-text-secondary`                                                                                                                        |
+| MOTIR-6470 / MOTIR-6471                    | premise only — the default `motir` palette drawn                                                                                                                                      |
+
+### Revision 1 (2026-10-12) — drawings, a new-tab explainer, and the motir.co link-out
+
+**The review (Mo, "Request changes", verdict `revise`, on `b3b534e`):**
+
+> "add some drawing like motir.co/how-it-works in app.motir.co how motir works page, for each section.
+> how it works page of app.motir.co should open in a new tab, and add the link section like motir.co
+> landing page to link to motir.co/how-it-works"
+
+The version was refused before approval, so the delta mock
+[`onboarding-entrance--vibe-layout.mock.html`](./onboarding-entrance--vibe-layout.mock.html) is revised
+**in place** (no second delta); `onboarding-entrance.mock.html` is still byte-identical to `main`.
+Everything in the 2026-10-11 section above stands except where this subsection says otherwise.
+
+**motir.co read for this revision**, `motir-marketing` `origin/main` **`0c2e37b`** (re-fetched; unchanged):
+`motir-marketing/app/[locale]/how-it-works/page.tsx` and
+`motir-marketing/app/[locale]/how-it-works/_components/ModuleArt.tsx` (each module beside a flat colour
+field holding a small example screen, `aria-hidden`, `h-[300px]`, `--radius-card`, `--shadow-card`); the
+landing's closing block in `motir-marketing/app/[locale]/page.tsx` (`data-showcase="field"`, a centred
+`H2` + body + buttons on `--el-showcase-field`, the developers' door in the warm
+`--el-showcase-decision` fill linking to `https://motir.co/how-it-works`); and the landing's `SayArt` / `WatchArt` /
+`DecideArt` in `motir-marketing/app/_components/landing/Art.tsx`, which draw the same three beats.
+
+#### What changed
+
+1. **Each how-it-works section band carries a drawing** (Panels 4 and 5, light and dark). The band
+   becomes two columns at desktop (title + body left, drawing right, `items-center`, gap-x 56) and one
+   column narrow (drawing under the body). The drawings are motir.co's ModuleArt idiom — a tinted field
+   holding a small example screen — with one deliberate departure: **they are wordless.** motir.co's
+   pictures carry example copy from its own catalogue (`howItWorks.art.*`); in-app that would be a set
+   of strings with no keys, so the screens are drawn with skeleton bars instead, and the heading and
+   body beside each one carry the meaning. Each is `aria-hidden="true"`, so no text in them is measured
+   and none is rendered.
+
+   | drawing | field                | what it shows                                                                                                                                       | tokens                                                                                                                                                                                                             |
+   | ------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+   | Say     | `--el-tint-sky`      | a few lines typed (with a caret), Motir asking back (the `BrandMark` mark, 14 px), three answer chips, one picked                                   | papers `--el-card` / `--el-border` / `--shadow-subtle`; bars `--el-border-strong`; caret `--el-accent-on-surface`; picked chip `--el-accent`; chips `--radius-badge`                                               |
+   | Watch   | `--el-tint-lavender` | a plan tree filling in (Motir's rows `--el-accent-on-surface` squares, the person's row `--el-showcase-decision`), a design frame, a progress strip | ticks `--el-success`; open rows `--el-border-strong` rings; frame block `--el-tint-sky`; track `--el-border`, fill `--el-accent-on-surface`; `--radius-control`                                                    |
+   | Decide  | `--el-tint-peach`    | a finished piece back for review: title bar, preview, a secondary and an Approve shape, the decision marker                                         | title bar `--el-text-secondary`; preview `--el-surface`; secondary shape `--el-button-border` on `--el-card`; Approve `--el-accent` + check in `--el-accent-text`, `--radius-btn`; marker `--el-showcase-decision` |
+
+   Every field takes `--radius-card`, `--spacing-card-padding`, `--shadow-card`, `--el-border`; height
+   248 px (208 narrow). No hue is invented: every fill is an existing `--el-*` token, and the three
+   fields are three different tint slots so they read apart in every palette.
+
+2. **"See how Motir works" opens `/onboarding/how-it-works` in a NEW TAB.** `target="_blank"
+rel="noopener"`, the trailing glyph changes from `ArrowRight` to **`ArrowUpRight`** (the new-tab
+   affordance motir.co's chrome uses), and a visually hidden `sr-only` span appends "(opens in a new
+   tab)" to its accessible name. Drawn in Panels 1, 2 and 5 and in close-up **3f** (rest · hover —
+   underline drops · focus-visible — `--el-accent-on-surface` ring). Why a new tab is right here: the
+   entrance holds an idea the person may be half-way through typing, and nothing saves it; a new tab
+   keeps it on screen.
+3. **"Back to start" on a page opened in a new tab — the ruling.** Same label, same `ArrowLeft`, same
+   secondary `Button`. **It closes this tab** (`window.close()`), which returns the person to the entrance
+   tab with their idea intact; a tab opened by a `target="_blank"` link has a one-entry history and is
+   script-closable. **Where the tab cannot be closed** — a direct visit, a reload that grew the history,
+   a browser that refuses — it **navigates to `/onboarding`** (its `href`, so it also works without
+   script). It is never removed: the page must stay leavable when it was not opened from the entrance.
+   Marked `data-closes-tab` in the mock.
+4. **A link-out section to motir.co** sits after the three section bands and before Back (Panels 4 and
+   5): motir.co's landing closing block, adapted — an inset `--el-showcase-field` card (`--radius-card`,
+   `--shadow-card`, padding `2 × --spacing-card-padding`), a centred serif H2 and body in
+   `--el-showcase-field-text`, and ONE warm button in `--el-showcase-decision` /
+   `--el-showcase-decision-text` (`--radius-btn`, `--height-btn-lg`, `--spacing-btn-x`) linking to
+   **`https://motir.co/how-it-works`**, `target="_blank" rel="noopener"`, `ArrowUpRight`, sr-only
+   "(opens in a new tab)". Close-up **3g** draws rest · hover (`brightness-105`, motir.co's) · focus
+   (`--el-showcase-field-text` ring). Measured in the mock's computed `motir` values: field-text on
+   field **6.31:1** light / **6.34:1** dark; decision-text on decision **4.65:1** / **5.89:1**. The
+   button's fill against the field is 1.66 / 2.23:1 — under 3:1, and acceptable because the label, not
+   the fill edge, identifies the control (motir.co ships the same pair); the integration gate should
+   re-measure the 4.65 pair across palettes.
+
+#### Parts table — additions
+
+| part                                                                     | disposition                                                                                                      | built by                                                                                        |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **`SectionArt`** (the tinted field + paper + skeleton bar kit)           | **product-local component** — a drawing vocabulary for Motir's own explainer; nothing a scaffolded product needs | **MOTIR-8252** (foundation primitives), with `OnboardingSection` gaining an optional `art` slot |
+| **`SayArt` · `WatchArt` · `DecideArt`**                                  | **product-local components** — the three wordless drawings, composed from `SectionArt`                           | **MOTIR-8253** (the screen)                                                                     |
+| **`OnboardingLinkOut`** (the showcase-field band + warm external button) | **product-local component** — motir.co's closing-block shape, pointed outward                                    | **MOTIR-8252** (primitive); placed on how-it-works by **MOTIR-8253**                            |
+| `BrandMark variant="mark"` (inside Say)                                  | `@motir/brand`, as is                                                                                            | —                                                                                               |
+
+Still nothing is proposed for `@motir/design-system`.
+
+#### Slot → key — what the table now says
+
+The 2026-10-11 table stands (the "See how Motir works" slot keeps `onboarding.entrance.howItWorks`), plus
+**five NEW keys this revision specifies**. They are drawn verbatim in the mock and are **not in
+`messages/en.json`**: MOTIR-8248 (English) and MOTIR-8249 (Chinese) have already landed without them.
+**MOTIR-8253 must add all five in all eleven catalogues** before rendering these slots — or, if the plan
+prefers the voice cards to own every string, a correction re-opens MOTIR-8248 / 8249 for them. Either
+way this is a finding, not a slot to fill with an ad-hoc literal. The zh suggestions take motir.co's own
+zh vocabulary where it has one (`landing.close.developers`, `howItWorks.lede`) and the existing
+`platformAdmin.ideas.detail.newTab` wording.
+
+| slot                          | NEW key                                   | en                                                                                                                                                                  | zh (suggestion)                                                                                           |
+| ----------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| entrance link, sr-only hint   | `onboarding.entrance.howItWorksNewTab`    | (opens in a new tab)                                                                                                                                                | （在新标签页中打开）                                                                                      |
+| link-out H2                   | `onboarding.howItWorks.developers.title`  | How Motir works, for developers                                                                                                                                     | 面向开发者：Motir 的工作方式                                                                              |
+| link-out body                 | `onboarding.howItWorks.developers.body`   | Every Motir project runs through the same instrument: the modules are Motir and its agents, and the switches are yours. motir.co walks through it module by module. | 每个 Motir 项目都运行在同一台“仪器”上：模块是 Motir 和它的智能体，开关属于你。motir.co 会逐个模块讲清楚。 |
+| link-out button               | `onboarding.howItWorks.developers.cta`    | Read it on motir.co                                                                                                                                                 | 到 motir.co 阅读                                                                                          |
+| link-out button, sr-only hint | `onboarding.howItWorks.developers.newTab` | (opens in a new tab)                                                                                                                                                | （在新标签页中打开）                                                                                      |
+
+The drawings carry no strings. **Chinese-length risk added:** the link-out H2 at 48 px (32 narrow) —
+the zh title has a full-width colon and no break opportunity before it; check it wraps cleanly at 390.
+
+#### GIVES / TAKES — what the sweep now says
+
+| card                    | now                                                                                                                                                                                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-8253**          | TAKES as before (eyebrow, OR divider, centred column). **GIVES additionally:** the three drawings on how-it-works, the new-tab entrance link, the Back-to-start close-or-navigate ruling, the link-out placement, and the five NEW keys to add (all eleven catalogues) |
+| **MOTIR-8252**          | GIVES as before, **plus** `SectionArt` (and `OnboardingSection`'s `art` slot) and `OnboardingLinkOut`                                                                                                                                                                  |
+| **MOTIR-8251**          | GIVES the pattern as before; the `art` slot and the link-out band are now part of it, available to the migrate wizard and importer if they want them                                                                                                                   |
+| MOTIR-8248 / MOTIR-8249 | premise unchanged; they do **not** carry the five new keys — a correction is needed only if the plan wants the voice cards to own them rather than MOTIR-8253                                                                                                          |
+| MOTIR-8238              | GIVES the integration gate one more pair to re-measure across palettes: `--el-showcase-decision-text` on `--el-showcase-decision` (4.65:1 in light `motir`)                                                                                                            |
+
+### Revision 2 (2026-10-12) — the language control in the brand bar (MOTIR-8286)
+
+**The request.** Xing (project owner): put a language control on the onboarding brand bar. That is
+a new code card, **MOTIR-8286**. The control is the one the signed-out frame already ships:
+`AuthLanguageControl` (`components/i18n/AuthLanguageControl.tsx`, moved there by MOTIR-8253), drawn in
+`design/auth/auth-frame--language-control.mock.html` and specified in `design/auth/design-notes.md`
+§ _The language control on the signed-out frame_. **This revision invents nothing.** The anatomy,
+the tokens, the copy and the behaviour are that control's. The mock is revised in place again
+(this version is unapproved), and `onboarding-entrance.mock.html` is untouched.
+
+#### Placement
+
+The control goes at the **trailing end of the hero brand bar, opposite the `BrandMark` lockup**.
+The bar is already `flex items-center justify-between`: the lockup is its first child and the
+control is its second. It is in the DOM and the tab order directly after the lockup, before the
+heading, and it is on screen at first paint. It appears on every screen that carries the bar:
+
+- the entrance, default (Panel 1) and carried-over (Panel 2);
+- how-it-works (Panel 4);
+- the 390 px panels (Panel 5).
+
+Every panel is drawn in light and dark. Pattern A now specifies the bar with the control in it.
+**Close-up 3h** draws the four states side by side with the auth mock: rest, pending, failed, and
+open with the eleven endonyms.
+
+The control carries its own `--el-page-bg` fill, so no ink sits on the hero's `--el-surface` ground.
+This is the same argument the auth notes make for the wash. `--el-text-muted` and `--el-text-faint`
+are used nowhere in the control.
+
+**At 390 px nothing collapses.** I measured in Chromium against this mock's 390 px entrance frame:
+
+| item                           | figure                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| lockup                         | ends at x 104.8                                                                            |
+| trigger, "English"             | 117.7 × 36, the same 117.7 the auth notes measured; starts at x 255.3, 17 px from the edge |
+| gap between lockup and trigger | 150 px                                                                                     |
+| trigger, longest endonym       | 146.4 px wide with "Nederlands" (Português 138.0, 日本語 112.0)                            |
+| gap at the longest endonym     | still about 122 px                                                                         |
+
+So the full control fits beside the lockup at 390 px: the `Languages` glyph, the endonym and the
+chevrons. **The label does not need to collapse to glyph plus endonym.** It already is the glyph
+plus the endonym: the accessible name `auth.language.label` is never visible text. The failed line
+hangs under the trigger exactly as on the auth frame (`absolute top-full right-0`, it wraps below
+`sm`), over the hero's top padding, and it moves nothing.
+
+#### Behaviour — `AuthLanguageControl`'s, unchanged
+
+A choice runs `setLocale` (`lib/i18n/actions.ts`) inside a transition, then **`router.refresh()` —
+never a push, a replace, a redirect or a reload.** The refresh re-renders the server components in
+the new language and keeps every client component mounted. **That is what keeps the idea the
+person has typed.** `OnboardingEntrance` is a client component, and its textarea is uncontrolled
+(`defaultValue`), so the typed text lives in the mounted DOM node, and a refresh does not remount
+it. The carried-over idea and every query parameter survive the same way. A remount would lose
+the typed text.
+
+Pending, failed and superseded choices behave exactly as on the auth frame:
+
+- **Pending:** `aria-busy`, a spinner in the chevron's slot, and a polite sr-only "Switching to
+  {language}…". Nothing is disabled and nothing moves.
+- **Superseded:** a newer choice is guarded by a sequence number, so an older response cannot
+  repaint over it.
+- **Failed:** no refresh, the page stays in its current language, and a quiet line offers Try
+  again.
+
+**One difference in context, none in code.** Onboarding is signed in: the `(onboarding)` layout
+redirects a signed-out visitor to `/sign-in`. So here `setLocale` also **saves the account
+language**, as it already does on the auth frame's signed-in routes (re-consent, 2FA-required,
+OAuth consent). That is correct: the person is choosing the language of the product they are about
+to use. The control does not read the session and does not branch on it.
+
+#### Parts table — addition
+
+| part                                                                         | disposition                                                                                                                                                                                                                                                                                                                                                                                                     | built by       |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **the language control** — `AuthLanguageControl` over the package `Combobox` | **reuse, unchanged.** It is placed in the trailing end of `OnboardingHero`'s brand bar on the entrance and on how-it-works. It currently lives in the `(auth)` route group's private `_components/` folder. Whether MOTIR-8286 imports it across groups or lifts it to a shared home first (one component, two mounts) is a build decision. The design only requires that it be the same component, not a copy. | **MOTIR-8286** |
+| `Combobox` (`w-auto`, `align="end"`, `busy`, `triggerIcon`)                  | `@motir/design-system`, as is                                                                                                                                                                                                                                                                                                                                                                                   | —              |
+
+**MOTIR-8251 draws the same control in `OnboardingTopBar`.** The migrate wizard's and the
+importer's top bar carries it at the same trailing end, opposite the lockup. It has the same states
+and the same refresh-not-navigate behaviour, so every page-shaped onboarding screen offers the
+language in the same place. Still nothing is proposed for `@motir/design-system`.
+
+#### Slot → key — the rows this revision adds
+
+All of these are existing `auth.language.*` keys and the `localeLabel` endonyms, reused verbatim.
+**No new key is needed.**
+
+| slot                                                          | key                                                   | en                                                                                                           |
+| ------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| trigger's accessible name, and the listbox's                  | `auth.language.label`                                 | Language: {language}                                                                                         |
+| pending sr-only status                                        | `auth.language.switching`                             | Switching to {language}…                                                                                     |
+| failed line                                                   | `auth.language.failed`                                | Couldn’t change the language.                                                                                |
+| failed line's button                                          | `auth.language.retry`                                 | Try again                                                                                                    |
+| trigger value and the eleven options (each in its own `lang`) | `localeLabel` (`lib/i18n/locales.ts`), not translated | English · 中文 · 日本語 · 한국어 · Deutsch · Français · Español · Italiano · Nederlands · Polski · Português |
+
+**Findings on the keys.** No string reads wrong in onboarding: none of the four mentions signing in
+or the signed-out pages. The only oddity is the namespace. An `auth.*` key now renders on a
+signed-in surface. That is harmless, because the root layout passes the whole catalogue to
+`NextIntlClientProvider`, so no message pruning hides it. A rename to a neutral namespace would
+churn eleven catalogues and the auth frame's tests for no change a reader sees. **Recommendation:
+keep the keys.** If MOTIR-8286 lifts the component to a shared home, it may move the keys with it,
+as its own call.
+
+**A drafting note against the auth notes.** Their per-element table gives the active option an
+inset `--focus-ring-color` ring, but the shipped `Combobox` paints only `--el-option-active-bg`.
+This mock follows the shipped primitive. That is a stale line in the auth notes, not a change to
+the control.
+
+#### GIVES — what the sweep now says
+
+| card           | now                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-8286** | **GIVES:** mount `AuthLanguageControl` (the same component; import it or lift it) at the trailing end of the brand bar on `/onboarding` and `/onboarding/how-it-works`. Keep its `setLocale` → `router.refresh()` behaviour, and assert in a test that an idea typed in the box survives a switch. It needs no new keys, and it does not need to collapse at 390 px. |
+| **MOTIR-8251** | **GIVES additionally:** the same control at the same trailing end of `OnboardingTopBar`, for the migrate wizard and the importer                                                                                                                                                                                                                                     |
+| MOTIR-8252     | unchanged. The brand bar's second slot is a plain child of `OnboardingHero`'s header, not a new primitive.                                                                                                                                                                                                                                                           |

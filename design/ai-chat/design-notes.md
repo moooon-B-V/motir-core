@@ -5917,3 +5917,149 @@ key under `act.call` — `act.call.tool.*` (40 keys), `act.call.family.*` (12),
 `tests/design-three-file-set.test.ts` pass on it. It amends sheet 3 and MOTIR-7975's
 section, which stay as records. It gates **MOTIR-8064** (the rendering and the en
 and zh catalogues).
+
+## 2026-10-12 — the vibe layout in discovery: the lockup in `OnboardingTopBar`, the chat rail's voice, a brand row on the direction-doc page (MOTIR-8251)
+
+**Amends:** the onboarding top bar (the `wz-bar` drawn in [`onboarding.mock.html`](./onboarding.mock.html)
+and shipped by MOTIR-1488 as `components/onboarding/OnboardingTopBar.tsx`) — its brand position and its
+trailing end — and the onboarding-origin direction-doc page. **Delta mock:**
+[`onboarding--vibe-lockup.mock.html`](./onboarding--vibe-lockup.mock.html). `onboarding.mock.html` is a
+record and is **not edited**. Story MOTIR-8238; sibling sections:
+[`design/onboarding-migrate/design-notes.md` § 2026-10-12](../onboarding-migrate/design-notes.md) and
+[`design/import/design-notes.md` § 2026-10-12](../import/design-notes.md).
+
+**Composes, never re-draws:** MOTIR-8250's Pattern panel A (the lockup) —
+`design/onboarding-entrance/onboarding-entrance--vibe-layout.mock.html` **Panel 6** — and the
+language control from `design/auth/auth-frame--language-control.mock.html` (MOTIR-8286's control, in
+MOTIR-8250's position: the last control of the bar).
+
+**Design system — files read:** root `package.json`, `app/globals.css` (lines 13 and 25),
+`packages/design-system/package.json` (**`0.13.0`**, exports `./mock`), `app/layout.tsx`. No
+`DESIGN.md`. **Verdict: ON MOTIR DESIGN — branch (a)**, built with `renderMock` from the package's
+`Button`, `Combobox`, `Spinner` and `buttonVariants`, plus `@motir/brand`'s `BrandMark`; axes
+`warm-editorial` · `motir` · `motir`, light and dark per frame. Nothing is proposed for the package.
+
+**Shipped reality read** at `origin/main`: `OnboardingTopBar.tsx` (52 px; lavender tile with the AI
+glyph + `topbarProject`; the step caption in `--el-accent-on-surface` mono; ghost Save & exit with
+`History`), `DiscoveryChatRail.tsx` (header dot + `railLabel`; the avatar is `BrandMark` mark,
+inverted, 13 px; `assistantName` is not rendered), `DiscoveryOnboarding.tsx` (grid `1fr_22rem`),
+`app/(onboarding)/onboarding/direction/[tier]/page.tsx` (`main`, `bg-(--el-surface)`, `max-w-[60rem]`),
+`DirectionDocFullPage.tsx`, `TierDocModal.tsx` and `messages/en.json`. motir.co read at
+`motir-marketing` `origin/main` **`06c0411`**.
+
+### Panels (light AND dark)
+
+| #   | Panel                                                                                                     | frame         |
+| --- | --------------------------------------------------------------------------------------------------------- | ------------- |
+| 1   | Discovery canvas + chat rail with the top bar — the one change is the brand position and the trailing end | 1280          |
+| 2   | Top-bar strips — 2a with a project name · 2b the fallback ("New project") · 2c revisiting a step          | light \| dark |
+| 3   | Language control in the bar — 3a pending · 3b failed · 3c open                                            | light \| dark |
+| 4   | Chat rail close-up — header, one assistant turn, composer (voice only; layout unchanged)                  | light \| dark |
+| 5   | Access path — the tier-doc modal's "Open full page" (a new tab to `/onboarding/direction/{tier}`)         | 620 × 2       |
+| 6   | Direction-doc page, onboarding origin, with a doc — the slim brand row added                              | 1280          |
+| 7   | Direction-doc page, the error state                                                                       | 1280          |
+
+### What changes, and what does not
+
+- **`OnboardingTopBar`.** The lavender tile with the AI glyph is TAKEN. The `BrandMark` **lockup** (22
+  px, not a link) takes it, then a 1 px `--el-border` divider, then `{project} · new project` (or the
+  fallback). Lockup rather than glyph: the glyph alone is the chat rail's assistant avatar, so a
+  glyph-only bar reads as "the assistant"; and without the divider the fallback would read "Motir New
+  project". The step caption and Save & exit are unchanged; the **language control** joins the trailing
+  end, after Save & exit. Height stays 52 px.
+- **The chat rail — voice only.** The English voice card (MOTIR-8248) re-worded no `onboarding.chat.*`
+  key, so the rail is drawn exactly as shipped: "Chat", the glyph avatar on `--el-accent`, "Reply, or
+  ask a question…". No visible assistant name is added. The layout (`1fr_22rem`) is unchanged.
+- **The direction-doc page (onboarding origin only).** A slim brand row — the lockup (24 px, not a
+  link) and the language control — on the onboarding wrapper `page.tsx`, inside the same
+  `max-w-[60rem]` column. **No second Back:** the shared component's own "Back to roadmap" already goes
+  to `/onboarding` in this origin. `DirectionDocFullPage` and the in-shell `/direction/[tier]` are
+  **unchanged**.
+- **Behaviour is unchanged**: Save & exit, the canvas, the rail, the modal's new-tab door, the doc
+  page's links and its error state.
+
+### Per-element `--el-*` and shape role
+
+| element                     | colour                                                    | shape / size                         |
+| --------------------------- | --------------------------------------------------------- | ------------------------------------ |
+| top bar                     | unchanged (`--el-page-bg` ground, `border-b --el-border`) | 52 px                                |
+| lockup                      | `brand.css` (glyph + word in `--el-text`)                 | 22 px (bar) · 24 px (doc row)        |
+| divider                     | `--el-border`                                             | 1 px × 16 px                         |
+| project label               | `--el-text`                                               | 14 px, truncates                     |
+| step caption                | `--el-accent-on-surface` mono (unchanged)                 | —                                    |
+| Save & exit                 | `Button ghost sm` (unchanged)                             | `--radius-btn`, `--height-btn-sm`    |
+| language control            | package `Combobox` trigger                                | `--radius-input`, `--height-control` |
+| rail avatar                 | `--el-accent` fill, inverted glyph (unchanged)            | `rounded-full`                       |
+| doc brand row               | no fill, no rule, on the page's `--el-surface`            | `py-4`, `max-w-[60rem]`              |
+| doc breadcrumb · error body | drawn `--el-text-secondary` (see F3)                      | —                                    |
+| focus ring                  | `--el-accent-on-surface`                                  | `ring-2`                             |
+
+### Slot → key
+
+| slot                                                        | key                                                                                                                                                                  |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| bar label · project · fallback                              | `onboarding.chat.{topbarLabel,topbarProject,topbarProjectFallback}`                                                                                                  |
+| step caption                                                | `onboarding.chat.canvas.caption`                                                                                                                                     |
+| Save & exit                                                 | `onboarding.chat.saveExit`                                                                                                                                           |
+| language control                                            | `auth.language.{label,switching,failed,retry}` + `localeLabel`                                                                                                       |
+| rail header · composer · send · drafting                    | `onboarding.chat.{railLabel,composerPlaceholder,send,drafting}`                                                                                                      |
+| canvas stations and pills                                   | `onboarding.chat.canvas.*` (unchanged)                                                                                                                               |
+| modal "Open full page"                                      | `issueViews.openFullPage` — see F2                                                                                                                                   |
+| doc "Back to roadmap" · "Roadmap" · "Direction" · doc title | `publicProjects.requestBackToRoadmap` · `roadmap.canvas.breadcrumbRoot` · `platformAdmin.ideas.kind.direction` · `onboarding.landing.steps.understandTitle` — see F2 |
+| doc error copy · "Direction · Discovery" kicker             | **no key** — see F2                                                                                                                                                  |
+
+The chat turn, the idea and the doc body are fixtures, not product copy.
+
+### Findings
+
+- **F1 — the card's premise "Motir AI kept as the assistant's name" is wrong.**
+  `onboarding.chat.assistantName` is "Motir" and is not rendered anywhere; the rail shows no name. The
+  design keeps it that way.
+- **F2 — `DirectionDocFullPage` and `TierDocModal` hard-code English literals** ("Back to roadmap",
+  "Roadmap", "Direction", "Couldn't load this doc", "Open full page", …). The mock draws the values
+  that match existing keys (listed above) and draws the error copy and the "Direction · Discovery"
+  kicker as shipped, flagged as having **no key**. A Chinese E2E (MOTIR-8257) will see English there.
+  Moving them onto keys is outside this card; MOTIR-8255 should file it.
+- **F3 — the shipped breadcrumb and error body use `--el-text-muted` on the `--el-surface` page**:
+  4.17:1, an AA failure today. The mock draws them in `--el-text-secondary`. Because the component is
+  shared with the in-shell route, the fix is the component's, not this wrapper's.
+- **F4 — MOTIR-8286's premise** assumes the wizard, the importer and the direction-doc page render
+  `OnboardingTopBar`; only discovery does. This design gives the other three their own trailing
+  language control (the sibling sections and Panel 6 here).
+- **F5 — the card asked for a Back in the doc page's brand row.** It is not drawn: the shared
+  component's "Back to roadmap" already returns to `/onboarding`, and a second one would be a
+  duplicate. This changes MOTIR-8255's criteria.
+
+- **F6 — the working tree already moves on this bar.** MOTIR-8252, building in the same worktree,
+  has an uncommitted `OnboardingTopBar.tsx` that swaps the tile for `BrandMark` lockup at **28 px with
+  no divider**. This design specifies **22 px plus the 1 px divider** (and the language control): 28
+  px is the hero bar's size, the 52 px bar is denser, and the divider is what keeps the fallback from
+  reading "Motir New project". Whoever lands the bar (MOTIR-8252 or MOTIR-8255) should reconcile to
+  this section.
+
+### Chinese-length risks (for MOTIR-8249 / MOTIR-8258)
+
+`topbarProject` with a long project name (truncates before the caption; the lockup and the controls
+never shrink).
+
+### GIVES / TAKES
+
+- **TAKES** the lavender AI-glyph tile from `OnboardingTopBar`.
+- **GIVES MOTIR-8255** the build: the bar's lockup + divider + language control, the rail (no change),
+  the doc page's brand row, F3 and F5.
+- **GIVES MOTIR-8286** the language control in this bar and on the doc page (Panels 3, 6, 7).
+- **GIVES MOTIR-8256** the pairs to gate (the lockup on `--el-page-bg`, the doc row on `--el-surface`);
+  **MOTIR-8249 / MOTIR-8258** the CJK risk; **MOTIR-8257** the E2E context and F2.
+- **Premises taken from** MOTIR-1488, MOTIR-8248 and MOTIR-8250.
+
+### Revision 4 (2026-10-12) — the warm pass
+
+The vibe-layout board in this area takes the warm pass described in `design/onboarding-migrate/design-notes.md` § _Revision 4_: the hero glow and warm waves, the orange step dot, and orange (`--el-highlight`) for the current step, the picked row and the "you are here" marker, with `--el-tint-yellow` behind progress. Every label stays on the ink tokens; the orange is used for fills, rings, borders and glyphs only.
+
+### Revision 5 (2026-10-12) — warm on the button only
+
+The warm pass narrows to the primary button and small marks (the step dot, spinners, progress fills); every surface returns to the cool shipped look. See `design/onboarding-migrate/design-notes.md` § _Revision 5_ for the two new roles (`--el-cta-warm`, `--el-cta-warm-text`) and their measured contrast.
+
+### Revision 6 (2026-10-12) — how this canvas is reached
+
+This board is the discovery canvas for a person who starts from an idea. It is not the migrate wizard's "A few questions", which is now a step of the wizard page (`design/onboarding-migrate/design-notes.md` § _Revision 6_, Panels 6a–6d). The new Panel 0 draws the door: the migrate wizard's bar link **Start from an idea instead** → `/onboarding/discovery`, with its focus ring; the entrance's Start reaches it too. Panel 1's note no longer lists the wizard's Decision and Resume, which now advance in place.

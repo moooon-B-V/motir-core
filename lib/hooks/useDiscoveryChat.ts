@@ -81,10 +81,14 @@ export interface UseDiscoveryChatOptions {
   /** The idea preserved across the auth redirect (7.3.14 cookie) — seeded as the
    *  FIRST turn for a fresh session, ignored when a session already exists. */
   initialIdea?: string | null;
+  /** A discovery job the server already submitted for this session (the migrate
+   *  wizard's opening turn, `MigrateOnboardingDto.discoveryJobId`). Read on mount,
+   *  in place of `initialIdea`, so its question is the conversation's first turn. */
+  attachJobId?: string | null;
 }
 
 export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDiscoveryChat {
-  const { initialIdea } = options;
+  const { initialIdea, attachJobId } = options;
   const [state, dispatch] = useReducer(reduceDiscovery, undefined, initialDiscoveryState);
 
   // One in-flight turn at a time; abort it on unmount. `mountedRef` guards every
@@ -102,6 +106,69 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
     if (!res.ok) return null;
     return (await res.json()) as PreplanStateDTO;
   }, []);
+
+  /** Read one job's SSE stream into the reducer, then pull any tier bodies it
+   *  announced. Shared by a user turn and by attaching to a job the SERVER
+   *  submitted (`attachJobId`). Throws a `StreamFailure` on a refused stream. */
+  const readJob = useCallback(
+    async (jobId: string, controller: AbortController) => {
+      const streamRes = await fetch(`/api/ai/chat/${encodeURIComponent(jobId)}/stream`, {
+        headers: { Accept: 'text/event-stream' },
+        signal: controller.signal,
+      });
+      if (!streamRes.ok || !streamRes.body) {
+        const body = (await streamRes.json().catch(() => ({}))) as SubmitResponse;
+        throw new StreamFailure(body.code ?? 'MOTIR_AI_UNAVAILABLE', body.error);
+      }
+
+      const reader = streamRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      // Kinds announced this turn whose bodies we must fetch + which to open.
+      let docsAnnounced = false;
+      let openKind: DirectionDocKind | null = null;
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const { frames, rest } = drainSseFrames(buffer);
+        buffer = rest;
+        for (const { event, data } of frames) {
+          const frame = normalizeFrame(event, data);
+          if (!frame || !mountedRef.current) continue;
+          dispatch({ type: 'frame', frame });
+          if (frame.event === 'docs') {
+            docsAnnounced = true;
+            openKind = frame.data.docs[frame.data.docs.length - 1]!.kind;
+          } else if (frame.event === 'revisions') {
+            docsAnnounced = true; // refresh affected bodies, don't auto-open (1179)
+          }
+        }
+      }
+
+      // A tier was (re)drafted this turn → pull its read-only body and, for a
+      // freshly-drafted tier, jump into its review gate.
+      if (docsAnnounced && mountedRef.current) {
+        const dto = await fetchPreplan(controller.signal);
+        if (dto && mountedRef.current) {
+          // Thread the bodies AND the per-artifact forward revision logs + diffs
+          // (7.3.71) AND the feature catalog (7.3.79): the gate renders the diffs
+          // from the seam (never recomputes) + the catalog in the vision review.
+          dispatch({
+            type: 'docsLoaded',
+            docs: mapDocs(dto),
+            revisions: mapRevisions(dto),
+            catalog: dto.catalog,
+          });
+          // A freshly-drafted tier opens its gate; a `revisions` cascade already
+          // routed to its attributed tier in the reducer, so don't override it.
+          if (openKind) dispatch({ type: 'openReview', kind: openKind });
+        }
+      }
+    },
+    [fetchPreplan],
+  );
 
   const runTurn = useCallback(
     async (text: string) => {
@@ -122,61 +189,7 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
         if (!submitRes.ok || !submitBody.jobId) {
           throw new StreamFailure(submitBody.code ?? 'MOTIR_AI_UNAVAILABLE', submitBody.error);
         }
-
-        const streamRes = await fetch(
-          `/api/ai/chat/${encodeURIComponent(submitBody.jobId)}/stream`,
-          { headers: { Accept: 'text/event-stream' }, signal: controller.signal },
-        );
-        if (!streamRes.ok || !streamRes.body) {
-          const body = (await streamRes.json().catch(() => ({}))) as SubmitResponse;
-          throw new StreamFailure(body.code ?? 'MOTIR_AI_UNAVAILABLE', body.error);
-        }
-
-        const reader = streamRes.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        // Kinds announced this turn whose bodies we must fetch + which to open.
-        let docsAnnounced = false;
-        let openKind: DirectionDocKind | null = null;
-
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const { frames, rest } = drainSseFrames(buffer);
-          buffer = rest;
-          for (const { event, data } of frames) {
-            const frame = normalizeFrame(event, data);
-            if (!frame || !mountedRef.current) continue;
-            dispatch({ type: 'frame', frame });
-            if (frame.event === 'docs') {
-              docsAnnounced = true;
-              openKind = frame.data.docs[frame.data.docs.length - 1]!.kind;
-            } else if (frame.event === 'revisions') {
-              docsAnnounced = true; // refresh affected bodies, don't auto-open (1179)
-            }
-          }
-        }
-
-        // A tier was (re)drafted this turn → pull its read-only body and, for a
-        // freshly-drafted tier, jump into its review gate.
-        if (docsAnnounced && mountedRef.current) {
-          const dto = await fetchPreplan(controller.signal);
-          if (dto && mountedRef.current) {
-            // Thread the bodies AND the per-artifact forward revision logs + diffs
-            // (7.3.71) AND the feature catalog (7.3.79): the gate renders the diffs
-            // from the seam (never recomputes) + the catalog in the vision review.
-            dispatch({
-              type: 'docsLoaded',
-              docs: mapDocs(dto),
-              revisions: mapRevisions(dto),
-              catalog: dto.catalog,
-            });
-            // A freshly-drafted tier opens its gate; a `revisions` cascade already
-            // routed to its attributed tier in the reducer, so don't override it.
-            if (openKind) dispatch({ type: 'openReview', kind: openKind });
-          }
-        }
+        await readJob(submitBody.jobId, controller);
       } catch (err) {
         if (mountedRef.current && !isAbort(err)) {
           const code = err instanceof StreamFailure ? err.code : 'MOTIR_AI_UNAVAILABLE';
@@ -188,7 +201,29 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
         if (mountedRef.current) dispatch({ type: 'streamEnd' });
       }
     },
-    [fetchPreplan],
+    [readJob],
+  );
+
+  /** Show the reply to a turn the SERVER submitted (MOTIR-8254: the migrate
+   *  wizard's code-grounded opening turn), with no user bubble before it. A
+   *  stream that cannot be read is not the person's error, so it settles
+   *  quietly and leaves the composer open. */
+  const attachJob = useCallback(
+    async (jobId: string) => {
+      if (abortRef.current) return;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      dispatch({ type: 'streamStart' });
+      try {
+        await readJob(jobId, controller);
+      } catch {
+        // quiet: the composer stays usable
+      } finally {
+        abortRef.current = null;
+        if (mountedRef.current) dispatch({ type: 'streamEnd' });
+      }
+    },
+    [readJob],
   );
 
   // Resume on mount: hydrate from the persisted pre-plan state; if there's none
@@ -216,7 +251,9 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
         dispatch({ type: 'hydrateSettled' });
       }
       const fresh = !dto || dto.session === null;
-      if (fresh && initialIdea && initialIdea.trim()) {
+      if (attachJobId) {
+        void attachJob(attachJobId);
+      } else if (fresh && initialIdea && initialIdea.trim()) {
         void runTurn(initialIdea.trim());
       }
     })();

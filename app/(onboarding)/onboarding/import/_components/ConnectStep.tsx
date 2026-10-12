@@ -4,7 +4,7 @@ import { useId, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Check, CircleDot, FileUp, GitBranch, SquareKanban, Table2 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { WarmButton as Button } from '@/components/onboarding/layout/WarmButton';
 import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { Pill } from '@/components/ui/Pill';
@@ -151,6 +151,7 @@ export function ConnectStep({
   error,
   justConnectedFailed,
   onNext,
+  cancel,
 }: {
   source: ImportSourceId | null;
   onSelectSource: (s: ImportSourceId) => void;
@@ -162,6 +163,9 @@ export function ConnectStep({
   error: { code: string } | null;
   justConnectedFailed: boolean;
   onNext: () => void;
+  /** Replaces the footer's Cancel link — the migrate wizard puts its Skip import
+   *  there when it hosts the importer inline (MOTIR-8254, design Revision 6). */
+  cancel?: React.ReactNode;
 }) {
   const t = useTranslations('import');
   const csvInputRef = useRef<HTMLInputElement>(null);
@@ -293,12 +297,14 @@ export function ConnectStep({
       ) : null}
 
       <Footer>
-        <a
-          href={ONBOARDING_ENTRY_PATH}
-          className="text-sm text-(--el-link) hover:text-(--el-link-pressed)"
-        >
-          {t('chrome.cancel')}
-        </a>
+        {cancel ?? (
+          <a
+            href={ONBOARDING_ENTRY_PATH}
+            className="text-sm text-(--el-link) hover:text-(--el-link-pressed)"
+          >
+            {t('chrome.cancel')}
+          </a>
+        )}
         <Button onClick={onNext} disabled={!canProceed} loading={busy}>
           {t('connect.next')}
         </Button>

@@ -6679,36 +6679,55 @@
       }
     },
     "entrance": {
-      "eyebrow": "Construir con IA",
-      "headingDefault": "¿Cómo te gustaría empezar?",
+      "headingDefault": "Vibe the project",
       "headingCarried": "Listo cuando tú lo estés",
-      "subheadDefault": "Describe lo que quieres construir. Motir lo planifica contigo y luego los agentes lo construyen.",
+      "subheadDefault": "Tú pones la idea. Motir entrega el proyecto entero: el plan, el diseño, la construcción, los documentos y la historia completa de cómo se llegó hasta ahí.",
       "subheadCarried": "Conservamos la idea con la que empezaste. Añade más si quieres y luego continúa.",
       "howItWorks": "Ver cómo funciona Motir",
-      "ideaLabel": "Tu idea",
+      "howItWorksNewTab": "(se abre en una pestaña nueva)",
+      "ideaLabel": "¿Qué estás construyendo?",
       "carriedLabel": "Traída de tu idea",
       "placeholder": "Describe lo que quieres construir: para quién es, lo esencial que la gente debería poder hacer y cualquier imprescindible. No te preocupes por que quede perfecto: después te haremos preguntas.",
-      "startCta": "Empezar a planificar",
+      "startCta": "Empezar",
       "continueCta": "Continuar con esta idea",
-      "hintDefault": "Puedes empezar con una idea aproximada: el chat de descubrimiento hace preguntas de seguimiento.",
+      "hintDefault": "Con unas pocas frases basta. Motir te pregunta el resto.",
       "hintCarried": "Añade o ajusta lo que quieras antes de continuar: el chat de descubrimiento se encarga a partir de aquí.",
-      "or": "O",
-      "importTitle": "Tengo un proyecto existente: migrarlo",
-      "importDesc": "Conecta tu repositorio y Motir lee tu código, y luego planifica sobre lo que ya existe. También puedes traer elementos de trabajo existentes desde Jira, Linear o Plane.",
-      "importCta": "Migrar"
+      "importTitle": "¿Ya tienes un proyecto?",
+      "importDesc": "Motir lee tu código, tus tareas y tu historial antes de cambiar nada, y luego planifica lo siguiente. Tú decides qué se publica.",
+      "importCta": "También podemos hacerle vibe"
     },
     "import": {
       "title": "Importar un proyecto existente",
-      "body": "Pronto podrás conectar un repositorio e importar tu trabajo desde Jira, Linear o Plane. Por ahora, puedes empezar un proyecto nuevo con IA.",
+      "body": "Pronto podrás conectar un repositorio e importar tu trabajo desde Jira, Linear o Plane. Por ahora, puedes empezar un proyecto nuevo a partir de tu idea.",
       "back": "Volver al inicio"
     },
     "howItWorks": {
-      "title": "Cómo funciona Motir",
-      "body": "Pronto llegará un recorrido completo (idea → plan → los agentes lo construyen). Por ahora, empieza con tu idea y Motir te hará preguntas de seguimiento por el camino.",
-      "back": "Volver al inicio"
+      "title": "La IA hace el trabajo. Tú tomas las decisiones.",
+      "body": "Tú pones la idea. Motir pregunta hasta entenderla y luego hace el plan, el diseño, el producto y los documentos paso a paso, a la vista, y se detiene allí donde la decisión es tuya.",
+      "back": "Volver al inicio",
+      "sections": {
+        "say": {
+          "title": "Di lo que quieres",
+          "body": "Unas pocas frases o un montón de ideas desordenadas. Motir pregunta hasta entenderlo."
+        },
+        "watch": {
+          "title": "Mira cómo toma forma",
+          "body": "El plan, los diseños, el producto y los documentos se hacen paso a paso, a la vista."
+        },
+        "decide": {
+          "title": "Tú decides",
+          "body": "Cada pieza vuelve a ti para que la mires, la pruebes y la apruebes. Tú sigues decidiendo qué se publica."
+        }
+      },
+      "developers": {
+        "title": "Cómo funciona Motir, para desarrolladores",
+        "body": "Todos los proyectos de Motir pasan por el mismo instrumento: los módulos son Motir y sus agentes, y los interruptores son tuyos. motir.co lo recorre módulo a módulo.",
+        "cta": "Léelo en motir.co",
+        "newTab": "(se abre en una pestaña nueva)"
+      }
     },
     "connectGate": {
-      "title": "La planificación con IA no está configurada",
+      "title": "La planificación aún no está conectada",
       "body": "La planificación funciona en Motir Cloud; este espacio de trabajo autoalojado aún no tiene conexión.",
       "cta": "Conectar Motir AI"
     },
@@ -8225,6 +8244,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "Trae tu proyecto",
+      "lede": "Conecta Jira, Linear o Plane, y Motir trae tus elementos de trabajo para planificar lo siguiente desde donde estás."
+    },
     "chrome": {
       "title": "Importar elementos de trabajo",
       "titleInto": "Importar elementos de trabajo · en {project}",
@@ -8467,7 +8490,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "Migrar un proyecto existente",
-      "planAi": "Planificar con IA"
+      "planAi": "Empezar desde una idea"
+    },
+    "hero": {
+      "headline": "¿Ya tienes un proyecto?",
+      "lede": "Motir lee tu código, tus tareas y tu historial antes de cambiar nada, y luego planifica lo siguiente. Motir lleva el proyecto. Tú decides qué se publica."
     },
     "rail": {
       "title": "Tu migración",
@@ -8493,16 +8520,30 @@
       "eyebrow": "Código existente",
       "heading": "Migrar un código existente",
       "body": "Conecta tus repositorios, deja que Motir lea el código y derive convenciones, y luego, si quieres, importa tu Backlog y planifica.",
-      "projectLine": "El asistente de migración se ejecuta para este proyecto.",
-      "cta": "Empezar"
+      "chooseLabel": "¿Qué proyecto estás migrando?",
+      "current": "Abierto ahora",
+      "currentMeta": "El proyecto que tienes abierto",
+      "otherMeta": "Cambia a este proyecto y luego empieza",
+      "ctaFor": "Empezar con {project}"
     },
     "connect": {
       "eyebrow": "Paso 1 de 2 · Configuración",
       "heading": "Conecta los repositorios de este proyecto",
-      "body": "Conecta tus repositorios de GitHub en la configuración del espacio de trabajo. Motir los lee a través de la interfaz GitProvider para construir un único grafo de código para todo el proyecto.",
-      "cta": "Abrir la configuración de GitHub",
+      "body": "Motir lee los repositorios que conectas en GitHub y crea un único mapa del código de todo el proyecto.",
       "gitlabNote": "La conexión con GitLab llegará pronto.",
-      "next": "Ya conecté mis repositorios"
+      "checking": "Buscando repositorios conectados…",
+      "missingTitle": "Aún no hay repositorios conectados",
+      "missingHint": "Conecta GitHub en una pestaña nueva. Motir detecta la conexión por sí solo, así que no hay nada que confirmar aquí.",
+      "connectCta": "Conectar GitHub",
+      "newTab": "(se abre en una pestaña nueva)",
+      "waitingTitle": "Esperando a GitHub",
+      "waitingHint": "Termina de conectar en la otra pestaña. Motir vuelve a comprobarlo cuando regreses y, hasta entonces, cada pocos segundos.",
+      "reopenCta": "Volver a abrir la configuración de GitHub",
+      "detected": "{count, plural, one {# repositorio conectado} other {# repositorios conectados}}",
+      "detectedHint": "Estos son los repositorios que Motir puede leer. La indexación empieza cuando continúas.",
+      "listLabel": "Repositorios conectados",
+      "continue": "Continuar",
+      "manage": "Gestionar repositorios en GitHub"
     },
     "index": {
       "eyebrow": "Paso 2 de 2 · Configuración",
@@ -8525,15 +8566,15 @@
       "eyebrow": "Opcional · Importar y planificar",
       "heading": "Trae tu Backlog existente",
       "body": "¿Ya haces seguimiento del trabajo en Jira, Linear, GitHub, Plane o un CSV? Impórtalo en este proyecto: revisarás una vista previa simulada antes de que se escriba nada. Omite esto si no tienes Backlog que traer.",
-      "cta": "Abrir el importador",
       "reconcile": "Cuando luego generes un plan, Motir concilia ambos para que nada se duplique.",
       "skip": "Omitir la importación",
-      "next": "Ya importé: continuar"
+      "bodyInline": "¿Ya haces seguimiento de tu trabajo en Jira, Linear, GitHub, Plane o un CSV? Tráelo aquí mismo. Revisas una vista previa de simulación antes de que se escriba nada. Omite este paso si no tienes un Backlog que traer.",
+      "continue": "Continuar"
     },
     "decision": {
       "eyebrow": "Configuración completada",
       "heading": "Tu código está en Motir",
-      "body": "Planifica tu proyecto ahora con IA, o termina y planifica más tarde desde el proyecto.",
+      "body": "Motir puede planificar lo siguiente ahora, o puedes terminar y planificar más tarde desde el proyecto. Tú decides qué se publica.",
       "planNow": "Planificar mi proyecto ahora",
       "finishLater": "Terminar: planificaré más tarde"
     },
@@ -8542,6 +8583,18 @@
       "heading": "Continuar planificando",
       "body": "Empezaste a planificar este proyecto. Continúa en el espacio de planificación.",
       "cta": "Continuar planificando"
+    },
+    "questions": {
+      "eyebrow": "Tu dirección",
+      "heading": "Unas pocas preguntas",
+      "body": "Motir ya ha leído tu código. Con unas pocas respuestas sobre hacia dónde va el proyecto, redacta tu primer plan a partir de ambos.",
+      "progress": "Pregunta {n} de unas {total}",
+      "draftingTitle": "Redactando tu primer plan",
+      "draftingBody": "A partir de tu código, tu Backlog y tus respuestas. Puedes salir de esta página; Motir te avisa cuando esté listo.",
+      "draftingWaits": "Esperando a que Motir termine de leer tu código; después la redacción empieza sola.",
+      "readyTitle": "Tu primer plan está listo",
+      "readyBody": "{count, plural, one {# elemento redactado} other {# elementos redactados}} para {project}. Nada es definitivo hasta que lo apruebes.",
+      "readyCta": "Revisar tu plan"
     }
   },
   "repositorySet": {

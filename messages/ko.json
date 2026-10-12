@@ -6673,36 +6673,55 @@
       }
     },
     "entrance": {
-      "eyebrow": "AI로 빌드",
-      "headingDefault": "어떻게 시작하시겠어요?",
+      "headingDefault": "Vibe the project",
       "headingCarried": "준비되면 시작하세요",
-      "subheadDefault": "만들고 싶은 것을 설명하세요. Motir가 함께 계획하고, 에이전트가 빌드합니다.",
+      "subheadDefault": "아이디어만 가져오세요. 계획, 디자인, 빌드, 문서, 그리고 그 모든 과정의 기록까지, Motir가 프로젝트 전체를 완성합니다.",
       "subheadCarried": "처음에 입력한 아이디어를 보관해 두었습니다. 원하면 내용을 더 추가한 후 계속하세요.",
       "howItWorks": "Motir 작동 방식 보기",
-      "ideaLabel": "아이디어",
+      "howItWorksNewTab": "(새 탭에서 열림)",
+      "ideaLabel": "무엇을 만들고 계신가요?",
       "carriedLabel": "입력한 아이디어에서 가져옴",
       "placeholder": "만들고 싶은 것을 설명하세요. 누구를 위한 것인지, 사용자가 할 수 있어야 하는 핵심 기능, 꼭 필요한 요소 등을 적어 주세요. 완벽하지 않아도 괜찮습니다. 다음 단계에서 추가 질문을 드립니다.",
-      "startCta": "계획 시작",
+      "startCta": "시작하기",
       "continueCta": "이 아이디어로 계속",
-      "hintDefault": "대략적인 아이디어로 시작해도 됩니다. 탐색 채팅에서 추가 질문을 합니다.",
+      "hintDefault": "몇 문장이면 충분합니다. 나머지는 Motir가 물어봅니다.",
       "hintCarried": "계속하기 전에 무엇이든 추가하거나 다듬으세요. 이후는 탐색 채팅이 이어받습니다.",
-      "or": "또는",
-      "importTitle": "기존 프로젝트가 있습니다 — 마이그레이션하기",
-      "importDesc": "저장소를 연결하면 Motir가 코드를 읽은 다음 이미 있는 것을 바탕으로 계획합니다. Jira, Linear 또는 Plane의 기존 작업 항목도 가져올 수 있습니다.",
-      "importCta": "마이그레이션"
+      "importTitle": "이미 프로젝트가 있으신가요?",
+      "importDesc": "Motir는 무엇이든 바꾸기 전에 코드, 작업, 기록을 먼저 읽은 다음, 다음에 할 일을 계획합니다. 무엇을 출시할지는 당신이 결정합니다.",
+      "importCta": "그것도 바이브할 수 있습니다"
     },
     "import": {
       "title": "기존 프로젝트 가져오기",
-      "body": "저장소 연결과 Jira, Linear, Plane에서 작업 가져오기 기능은 곧 제공됩니다. 지금은 AI로 새 프로젝트를 시작할 수 있습니다.",
+      "body": "저장소 연결과 Jira, Linear 또는 Plane에서 작업 가져오기는 곧 제공됩니다. 지금은 아이디어로 새 프로젝트를 시작할 수 있습니다.",
       "back": "처음으로 돌아가기"
     },
     "howItWorks": {
-      "title": "Motir 작동 방식",
-      "body": "아이디어 → 계획 → 에이전트 빌드로 이어지는 전체 안내가 곧 제공됩니다. 지금은 아이디어로 시작하면 Motir가 진행하면서 추가 질문을 합니다.",
-      "back": "처음으로 돌아가기"
+      "title": "일은 AI가 하고, 결정은 당신이 합니다.",
+      "body": "아이디어만 가져오세요. Motir는 이해할 때까지 묻고, 계획, 디자인, 제품, 문서를 모두가 볼 수 있게 한 단계씩 만들며, 당신이 선택해야 할 곳에서는 멈춥니다.",
+      "back": "처음으로 돌아가기",
+      "sections": {
+        "say": {
+          "title": "원하는 것을 말하세요",
+          "body": "몇 문장이든, 두서없이 쏟아낸 생각이든 괜찮습니다. Motir는 이해할 때까지 묻습니다."
+        },
+        "watch": {
+          "title": "형태를 갖춰 가는 과정을 지켜보세요",
+          "body": "계획, 디자인, 제품, 문서가 한 단계씩, 모두가 볼 수 있게 만들어집니다."
+        },
+        "decide": {
+          "title": "결정하기",
+          "body": "모든 결과물은 당신에게 돌아와 확인하고, 사용해 보고, 승인을 받습니다. 무엇을 출시할지는 언제나 당신이 결정합니다."
+        }
+      },
+      "developers": {
+        "title": "개발자를 위한 Motir 작동 방식",
+        "body": "모든 Motir 프로젝트는 같은 방식으로 움직입니다. 모듈은 Motir와 그 에이전트이고, 스위치는 당신의 몫입니다. motir.co에서 모듈별로 자세히 설명합니다.",
+        "cta": "motir.co에서 읽기",
+        "newTab": "(새 탭에서 열림)"
+      }
     },
     "connectGate": {
-      "title": "AI 계획이 구성되지 않았습니다",
+      "title": "계획 기능이 아직 연결되지 않았습니다",
       "body": "계획은 Motir Cloud에서 실행됩니다. 이 자체 호스팅 워크스페이스는 아직 연결되지 않았습니다.",
       "cta": "Motir AI 연결"
     },
@@ -8219,6 +8238,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "프로젝트 가져오기",
+      "lede": "Jira, Linear 또는 Plane을 연결하면 Motir가 작업 항목을 옮겨 와서 지금 상태에서 다음에 할 일을 계획할 수 있습니다."
+    },
     "chrome": {
       "title": "작업 항목 가져오기",
       "titleInto": "작업 항목 가져오기 · {project}(으)로",
@@ -8461,7 +8484,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "기존 프로젝트 마이그레이션",
-      "planAi": "AI로 계획"
+      "planAi": "대신 아이디어로 시작하기"
+    },
+    "hero": {
+      "headline": "이미 프로젝트가 있으신가요?",
+      "lede": "Motir는 무엇이든 바꾸기 전에 코드, 작업, 기록을 먼저 읽은 다음, 다음에 할 일을 계획합니다. 프로젝트는 Motir가 진행하고, 무엇을 출시할지는 당신이 결정합니다."
     },
     "rail": {
       "title": "마이그레이션",
@@ -8487,16 +8514,30 @@
       "eyebrow": "기존 코드베이스",
       "heading": "기존 코드베이스 마이그레이션",
       "body": "저장소를 연결하면 Motir가 코드를 읽고 규칙을 도출합니다. 이후 원하면 백로그를 가져와 계획하세요.",
-      "projectLine": "이 프로젝트에 대해 마이그레이션 마법사가 실행됩니다.",
-      "cta": "시작"
+      "chooseLabel": "어떤 프로젝트를 마이그레이션하시겠습니까?",
+      "current": "현재 열려 있음",
+      "currentMeta": "지금 열려 있는 프로젝트",
+      "otherMeta": "이 프로젝트로 전환한 후 시작합니다",
+      "ctaFor": "{project}(으)로 시작"
     },
     "connect": {
       "eyebrow": "2단계 중 1단계 · 설정",
       "heading": "이 프로젝트의 저장소 연결",
-      "body": "워크스페이스 설정에서 GitHub 저장소를 연결하세요. Motir는 GitProvider 경계를 통해 저장소를 읽어 프로젝트 전체에 걸친 하나의 코드 그래프를 빌드합니다.",
-      "cta": "GitHub 설정 열기",
+      "body": "Motir는 GitHub에서 연결한 저장소를 읽고, 프로젝트 전체의 코드를 하나의 지도로 만듭니다.",
       "gitlabNote": "GitLab 연결은 곧 제공됩니다.",
-      "next": "저장소를 연결했습니다"
+      "checking": "연결된 저장소를 확인하는 중…",
+      "missingTitle": "아직 연결된 저장소가 없습니다",
+      "missingHint": "새 탭에서 GitHub를 연결하세요. Motir가 연결을 스스로 감지하므로 여기서 확인할 것은 없습니다.",
+      "connectCta": "GitHub 연결",
+      "newTab": "(새 탭에서 열림)",
+      "waitingTitle": "GitHub를 기다리는 중",
+      "waitingHint": "다른 탭에서 연결을 마치세요. Motir는 돌아오시면 다시 확인하고, 그때까지 몇 초마다 확인합니다.",
+      "reopenCta": "GitHub 설정 다시 열기",
+      "detected": "{count, plural, other {저장소 #개가 연결되어 있습니다}}",
+      "detectedHint": "Motir가 읽을 수 있는 저장소입니다. 계속하면 인덱싱이 시작됩니다.",
+      "listLabel": "연결된 저장소",
+      "continue": "계속",
+      "manage": "GitHub에서 저장소 관리"
     },
     "index": {
       "eyebrow": "2단계 중 2단계 · 설정",
@@ -8519,15 +8560,15 @@
       "eyebrow": "선택 사항 · 가져오기 및 계획",
       "heading": "기존 백로그 가져오기",
       "body": "이미 Jira, Linear, GitHub, Plane 또는 CSV로 작업을 관리하고 있나요? 이 프로젝트로 가져오세요 — 기록하기 전에 시험 실행 미리보기를 검토합니다. 가져올 백로그가 없다면 건너뛰세요.",
-      "cta": "가져오기 도구 열기",
       "reconcile": "이후 계획을 생성하면 Motir가 둘을 조정하여 중복되지 않게 합니다.",
       "skip": "가져오기 건너뛰기",
-      "next": "가져왔습니다 — 계속"
+      "bodyInline": "이미 Jira, Linear, GitHub, Plane 또는 CSV로 작업을 관리하고 계신가요? 바로 여기서 가져오세요. 무엇이든 기록되기 전에 시험 실행 미리 보기를 검토합니다. 가져올 백로그가 없다면 이 단계를 건너뛰세요.",
+      "continue": "계속"
     },
     "decision": {
       "eyebrow": "설정 완료",
       "heading": "코드베이스가 Motir에 들어왔습니다",
-      "body": "지금 AI로 프로젝트를 계획하거나, 마치고 나중에 프로젝트에서 계획하세요.",
+      "body": "지금 Motir가 다음에 할 일을 계획하게 하거나, 여기서 마치고 나중에 프로젝트에서 계획할 수 있습니다. 무엇을 출시할지는 당신이 결정합니다.",
       "planNow": "지금 프로젝트 계획하기",
       "finishLater": "마치기 — 나중에 계획"
     },
@@ -8536,6 +8577,18 @@
       "heading": "계획 계속하기",
       "body": "이 프로젝트의 계획을 시작했습니다. 계획 워크스페이스에서 계속하세요.",
       "cta": "계획 계속하기"
+    },
+    "questions": {
+      "eyebrow": "방향",
+      "heading": "몇 가지 질문",
+      "body": "Motir가 코드를 읽었습니다. 프로젝트가 나아갈 방향에 대해 몇 가지 답해 주시면, 두 가지를 바탕으로 첫 계획의 초안을 만듭니다.",
+      "progress": "질문 {n}/약 {total}",
+      "draftingTitle": "첫 계획의 초안을 만드는 중",
+      "draftingBody": "코드, 백로그, 답변을 바탕으로 만들고 있습니다. 이 페이지를 떠나도 됩니다. 준비되면 Motir가 알려 드립니다.",
+      "draftingWaits": "Motir가 코드를 다 읽을 때까지 기다리는 중입니다. 그다음 초안 작성이 자동으로 시작됩니다.",
+      "readyTitle": "첫 계획이 준비되었습니다",
+      "readyBody": "{project}에 대해 {count, plural, other {항목 #개}}의 초안을 만들었습니다. 승인하기 전까지는 확정되지 않습니다.",
+      "readyCta": "계획 검토"
     }
   },
   "repositorySet": {
