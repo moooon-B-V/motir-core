@@ -86,14 +86,6 @@ export async function GET(
         let reasonEmitted = false;
         let lastPosition: JobWalkPosition | null = null;
         while (!result.done) {
-          controller.enqueue(encoder.encode(formatFrame(result.value)));
-          if (!reasonEmitted) {
-            const reason = await failureReasonFrame(jobId, result.value, ctx.projectId);
-            if (reason) {
-              reasonEmitted = true;
-              controller.enqueue(encoder.encode(formatFrame(reason)));
-            }
-          }
           // The last `walk_position` frame is the stop point when the terminal
           // problem carries none (a machine that died names no `walkStop`).
           lastPosition = walkPositionOf(result.value) ?? lastPosition;
@@ -110,6 +102,18 @@ export async function GET(
               .catch((err) =>
                 console.warn(`[stream] settling the session of job ${jobId} failed`, err),
               );
+          }
+          // ⚠️ SETTLED BEFORE the frame goes out (bug MOTIR-8336): the browser re-reads the
+          // session the moment the terminal frame and its reason arrive, so a settle still in
+          // flight shows it a recorded failure that a lost machine's automatic resume is about
+          // to clear — and it never learns of the new attempt.
+          controller.enqueue(encoder.encode(formatFrame(result.value)));
+          if (!reasonEmitted) {
+            const reason = await failureReasonFrame(jobId, result.value, ctx.projectId);
+            if (reason) {
+              reasonEmitted = true;
+              controller.enqueue(encoder.encode(formatFrame(reason)));
+            }
           }
           result = await iterator.next();
         }
