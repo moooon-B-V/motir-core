@@ -800,8 +800,17 @@ export const githubProvider: GitProvider = {
 
   /**
    * `GET /repos/{owner}/{name}/compare/{base}...{head}` — GitHub answers with
-   * `behind_by`, the count of commits on `head` that are not on `base`, which is
+   * `ahead_by`, the count of commits on `head` that are not on `base`, which is
    * exactly the drift this surface renders.
+   *
+   * ⚠️ `ahead_by`, NOT `behind_by` (MOTIR-8335). GitHub states both counts from
+   * HEAD's side: `ahead_by` is what `head` has that `base` lacks, `behind_by` is
+   * what `base` has that `head` lacks. The drift sweep passes the indexed commit
+   * as `base` and the default branch's head as `head`, so a branch that moved on
+   * answers `status: "ahead", ahead_by: N, behind_by: 0` — measured on this
+   * repository: `compare/73d4758...ef898ed` (a parent and its child) answers
+   * `ahead_by: 1, behind_by: 0`. Reading `behind_by` reported every GitHub repo's
+   * drift as 0, which is CURRENT to every consumer.
    *
    * ⚠️ 404 IS `no_common_ancestor`, NOT AN ERROR. A force-push or a rewritten
    * history leaves the indexed sha unreachable from the current head, and GitHub
@@ -847,19 +856,19 @@ export const githubProvider: GitProvider = {
     if (!res.ok) return { behindBy: null, reason: 'unreachable' };
 
     const body: unknown = await res.json().catch(() => null);
-    const behind =
-      body && typeof body === 'object' ? (body as Record<string, unknown>)['behind_by'] : undefined;
+    const ahead =
+      body && typeof body === 'object' ? (body as Record<string, unknown>)['ahead_by'] : undefined;
     // ⚠️ A NON-NUMBER IS `null`, NOT A COERCION. `Number(undefined)` is `NaN` and
     // `Number(null)` is 0 — and 0 is the one answer this must never invent.
-    if (typeof behind !== 'number' || !Number.isFinite(behind) || behind < 0) {
+    if (typeof ahead !== 'number' || !Number.isFinite(ahead) || ahead < 0) {
       return { behindBy: null, reason: 'inexact' };
     }
-    return { behindBy: behind };
+    return { behindBy: ahead };
   },
 
   /**
    * `GET /repos/{owner}/{name}/compare/{base}...{head}` — the endpoint
-   * {@link compareCommits} reads `behind_by` from, read here for `files[]`
+   * {@link compareCommits} reads `ahead_by` from, read here for `files[]`
    * (MOTIR-6619). THREE-DOT, so the list is what `head` changed since it left
    * `base`, not everything `base` moved on since.
    *

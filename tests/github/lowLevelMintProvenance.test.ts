@@ -75,7 +75,7 @@ function stubHost(): ReturnType<typeof vi.fn> {
       return new Response(null, { status: 302, headers: { location: CODELOAD_URL } });
     // compareCommits
     if (url.includes('/compare/'))
-      return new Response(JSON.stringify({ behind_by: 3 }), { status: 200 });
+      return new Response(JSON.stringify({ ahead_by: 3 }), { status: 200 });
     // fetchWorkflowRunJobs
     if (url.includes('/attempts/'))
       return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
