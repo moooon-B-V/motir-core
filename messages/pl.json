@@ -6998,7 +6998,10 @@
       "install_expired": "Link instalacyjny wygasł podczas wizyty na GitHubie. Nic się nie zepsuło — zacznij ponownie z Ustawień.",
       "install_forbidden": "Nie należysz do obszaru roboczego, z którego rozpoczęto tę instalację, więc nic nie zostało połączone.",
       "install_provider_error": "Motir nie mógł połączyć się z GitHubem, aby dokończyć łączenie aplikacji. Spróbuj ponownie.",
-      "install_error": "Nie udało się dokończyć konfiguracji aplikacji GitHub App. Spróbuj zainstalować ponownie."
+      "install_error": "Nie udało się dokończyć konfiguracji aplikacji GitHub App. Spróbuj zainstalować ponownie.",
+      "select_repos": "Motir GitHub App jest zainstalowana. Wybierz, które repozytoria tego konta łączy ta organizacja.",
+      "repo_unavailable": "To repozytorium jest już połączone z inną organizacją, więc nie zostało tu dodane. Nic innego się nie zmieniło.",
+      "installation_not_accessible": "Nie widzisz tego konta GitHub w serwisie GitHub, więc nie zostało ono połączone z tą organizacją. Nic nie zostało zmienione."
     },
     "connect": {
       "title": "Połącz GitHuba",

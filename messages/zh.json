@@ -6991,7 +6991,10 @@
       "install_expired": "安装链接在你停留GitHub期间已过期。并未出错——请从设置中重新开始。",
       "install_forbidden": "你不是发起此次安装的工作区的成员，因此未连接任何内容。",
       "install_provider_error": "Motir无法连接GitHub以完成App的关联，请重试。",
-      "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。"
+      "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。",
+      "select_repos": "已安装 Motir GitHub App。请选择此组织要连接该账号下的哪些仓库。",
+      "repo_unavailable": "该仓库已连接到另一个组织，因此未在此添加。其他内容均未更改。",
+      "installation_not_accessible": "你在 GitHub 上看不到该 GitHub 账号，因此它未关联到此组织。未做任何更改。"
     },
     "connect": {
       "title": "连接 GitHub",

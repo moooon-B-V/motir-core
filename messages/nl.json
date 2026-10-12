@@ -6998,7 +6998,10 @@
       "install_expired": "De installatielink is verlopen terwijl je op GitHub was. Er is niets kapot — begin opnieuw vanuit Instellingen.",
       "install_forbidden": "Je bent geen lid van de werkruimte van waaruit deze installatie is gestart, dus er is niets gekoppeld.",
       "install_provider_error": "Motir kon GitHub niet bereiken om het koppelen van de app af te ronden. Probeer het opnieuw.",
-      "install_error": "We konden het instellen van de GitHub-app niet afronden. Probeer opnieuw te installeren."
+      "install_error": "We konden het instellen van de GitHub-app niet afronden. Probeer opnieuw te installeren.",
+      "select_repos": "De Motir GitHub App is geïnstalleerd. Kies welke repository's van het account deze organisatie koppelt.",
+      "repo_unavailable": "Die repository is al gekoppeld aan een andere organisatie en is daarom hier niet toegevoegd. Verder is er niets veranderd.",
+      "installation_not_accessible": "Je kunt dat GitHub-account niet zien op GitHub, dus het is niet aan deze organisatie gekoppeld. Er is niets gewijzigd."
     },
     "connect": {
       "title": "GitHub koppelen",

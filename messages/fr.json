@@ -7001,7 +7001,10 @@
       "install_expired": "Le lien d'installation a expiré pendant que vous étiez sur GitHub. Rien n'est cassé — recommencez depuis les Paramètres.",
       "install_forbidden": "Vous n'êtes pas membre de l'espace de travail depuis lequel cette installation a été lancée ; rien n'a donc été connecté.",
       "install_provider_error": "Motir n'a pas pu joindre GitHub pour terminer la connexion de l'application. Veuillez réessayer.",
-      "install_error": "Nous n'avons pas pu terminer la configuration de l'application GitHub. Veuillez réessayer l'installation."
+      "install_error": "Nous n'avons pas pu terminer la configuration de l'application GitHub. Veuillez réessayer l'installation.",
+      "select_repos": "La Motir GitHub App est installée. Choisissez les dépôts du compte que cette organisation connecte.",
+      "repo_unavailable": "Ce dépôt est déjà connecté à une autre organisation, il n'a donc pas été ajouté ici. Rien d'autre n'a changé.",
+      "installation_not_accessible": "Vous ne voyez pas ce compte GitHub sur GitHub, il n'a donc pas été lié à cette organisation. Rien n'a été modifié."
     },
     "connect": {
       "title": "Connecter GitHub",

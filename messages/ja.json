@@ -6998,7 +6998,10 @@
       "install_expired": "GitHub での操作中にインストールリンクの有効期限が切れました。問題は発生していません。設定からもう一度始めてください。",
       "install_forbidden": "このインストールを開始したワークスペースのメンバーではないため、何も接続されていません。",
       "install_provider_error": "Motir は App の接続を完了するために GitHub に接続できませんでした。もう一度お試しください。",
-      "install_error": "GitHub App のセットアップを完了できませんでした。もう一度インストールしてください。"
+      "install_error": "GitHub App のセットアップを完了できませんでした。もう一度インストールしてください。",
+      "select_repos": "Motir GitHub App はインストール済みです。この組織が接続する、このアカウントのリポジトリを選択してください。",
+      "repo_unavailable": "そのリポジトリは既に別の組織に接続されているため、ここには追加されませんでした。ほかには何も変更されていません。",
+      "installation_not_accessible": "GitHub 上でその GitHub アカウントを表示できないため、この組織にリンクされませんでした。何も変更されていません。"
     },
     "connect": {
       "title": "GitHub を接続",
