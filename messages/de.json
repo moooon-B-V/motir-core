@@ -6640,6 +6640,31 @@
       "logIn": "Anmelden",
       "signUp": "Registrieren"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Ihr Projekt verstehen",
+          "kicker": "Was Sie bauen und für wen"
+        },
+        "vision": {
+          "label": "Was wir bauen",
+          "kicker": "Die Form von v1"
+        },
+        "feasibility": {
+          "label": "Lohnt es sich, das zu bauen?",
+          "kicker": "Ein Realitätscheck"
+        },
+        "validation": {
+          "label": "Wollen die Leute das?",
+          "kicker": "Der Markt"
+        }
+      },
+      "optional": "optional",
+      "readHint": "<b>Nur lesen.</b> Stimmt etwas nicht? Sagen Sie es Motir einfach im Chat – Motir schreibt die Zusammenfassung für Sie neu. Noch ist nichts festgelegt.",
+      "openQuestions": "Offene Fragen",
+      "crossLinksLabel": "Weitere Teile Ihrer Ausrichtung",
+      "related": "Verwandt"
+    },
     "landing": {
       "badge": "Vibe-Projekt",
       "headline": "Was möchten Sie bauen?",

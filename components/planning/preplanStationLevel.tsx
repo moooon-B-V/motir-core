@@ -48,7 +48,10 @@ const STATION_H = 220;
  * shape, none of them openable — a drill into a journey that produced nothing still
  * lands somewhere worth being (design panel E), never on an error.
  */
-export function buildPreplanStationLevel(state: PreplanStateDTO | null): {
+export function buildPreplanStationLevel(
+  state: PreplanStateDTO | null,
+  tierLabel: (kind: DirectionDocKind) => string,
+): {
   nodes: ProjectCanvasNode[];
   deps: ProjectCanvasDep[];
 } {
@@ -77,8 +80,8 @@ export function buildPreplanStationLevel(state: PreplanStateDTO | null): {
       // document is viewable, so an unproduced station surfaces no View button at
       // all. `WorkItemRoadmap`'s `onView` routes these ids to the tier-doc modal.
       viewable: isProduced,
-      searchText: `${TIER_META[kind].label} ${kind}`,
-      crumbLabel: TIER_META[kind].label,
+      searchText: `${tierLabel(kind)} ${kind}`,
+      crumbLabel: tierLabel(kind),
       content: (
         <StationCard
           station={station}

@@ -6637,6 +6637,31 @@
       "logIn": "Inloggen",
       "signUp": "Registreren"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Je project begrijpen",
+          "kicker": "Wat je bouwt en voor wie"
+        },
+        "vision": {
+          "label": "Wat we gaan bouwen",
+          "kicker": "De vorm van v1"
+        },
+        "feasibility": {
+          "label": "Is het de moeite waard om te bouwen?",
+          "kicker": "Een realiteitscheck"
+        },
+        "validation": {
+          "label": "Zullen mensen het willen?",
+          "kicker": "De markt"
+        }
+      },
+      "optional": "optioneel",
+      "readHint": "<b>Alleen-lezen.</b> Klopt er iets niet? Zeg het Motir gewoon in de chat; Motir herschrijft het stuk voor je. Er ligt nog niets vast.",
+      "openQuestions": "Open vragen",
+      "crossLinksLabel": "Andere delen van je richting",
+      "related": "Gerelateerd"
+    },
     "landing": {
       "badge": "Vibe-project",
       "headline": "Wat wil je bouwen?",

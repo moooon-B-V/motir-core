@@ -6640,6 +6640,31 @@
       "logIn": "Accedi",
       "signUp": "Registrati"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Capire il tuo progetto",
+          "kicker": "Cosa stai creando e per chi"
+        },
+        "vision": {
+          "label": "Cosa creeremo",
+          "kicker": "La forma della v1"
+        },
+        "feasibility": {
+          "label": "Vale la pena realizzarlo?",
+          "kicker": "Una verifica di realtà"
+        },
+        "validation": {
+          "label": "Le persone lo vorranno?",
+          "kicker": "Il mercato"
+        }
+      },
+      "optional": "facoltativo",
+      "readHint": "<b>Sola lettura.</b> Qualcosa non va? Dillo a Motir nella chat: riscriverà il documento per te. Non c'è ancora nulla di definitivo.",
+      "openQuestions": "Domande aperte",
+      "crossLinksLabel": "Altre parti della tua direzione",
+      "related": "Correlati"
+    },
     "landing": {
       "badge": "Progetto vibe",
       "headline": "Cosa vuoi creare?",

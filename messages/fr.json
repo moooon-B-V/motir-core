@@ -6640,6 +6640,31 @@
       "logIn": "Se connecter",
       "signUp": "S'inscrire"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Comprendre votre projet",
+          "kicker": "Ce que vous créez et pour qui"
+        },
+        "vision": {
+          "label": "Ce que nous allons créer",
+          "kicker": "Les contours de la v1"
+        },
+        "feasibility": {
+          "label": "Cela vaut-il la peine d'être créé ?",
+          "kicker": "Un retour à la réalité"
+        },
+        "validation": {
+          "label": "Les gens le voudront-ils ?",
+          "kicker": "Le marché"
+        }
+      },
+      "optional": "facultatif",
+      "readHint": "<b>Lecture seule.</b> Quelque chose cloche ? Dites-le simplement à Motir dans le chat : il réécrit le document pour vous. Rien n'est encore figé.",
+      "openQuestions": "Questions ouvertes",
+      "crossLinksLabel": "Autres parties de votre orientation",
+      "related": "Voir aussi"
+    },
     "landing": {
       "badge": "Projet vibe",
       "headline": "Que voulez-vous créer ?",

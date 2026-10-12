@@ -6630,6 +6630,31 @@
       "logIn": "登录",
       "signUp": "注册"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "理解你的项目",
+          "kicker": "你在做什么、为谁而做"
+        },
+        "vision": {
+          "label": "我们要做什么",
+          "kicker": "v1 的形态"
+        },
+        "feasibility": {
+          "label": "值得做吗？",
+          "kicker": "现实检验"
+        },
+        "validation": {
+          "label": "会有人想要它吗？",
+          "kicker": "市场"
+        }
+      },
+      "optional": "可选",
+      "readHint": "<b>只读。</b>有哪里不对？在聊天中告诉 Motir 即可，它会为你重写这份文档。目前还没有任何内容被锁定。",
+      "openQuestions": "待解答的疑问",
+      "crossLinksLabel": "方向的其他部分",
+      "related": "相关"
+    },
     "landing": {
       "badge": "氛围项目",
       "headline": "你想做点什么？",

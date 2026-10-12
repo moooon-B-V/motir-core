@@ -1,6 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
+import { useTranslations } from 'next-intl';
 import { MessageSquare, HelpCircle, ArrowRight } from 'lucide-react';
 import { renderMarkdown } from '@/lib/markdown/render';
 import { FeatureCatalogView } from './FeatureCatalogView';
@@ -9,6 +10,7 @@ import {
   type DirectionDocKind,
   type FeatureCatalogView as FeatureCatalogModel,
   TIER_META,
+  DIRECTION_DOC_NAMESPACE,
   DIRECTION_DOC_ORDER,
   splitOpenQuestions,
   stripLeadingTitle,
@@ -61,7 +63,9 @@ export function DirectionDocView({
   onNavigate,
   className,
 }: DirectionDocViewProps) {
+  const t = useTranslations(DIRECTION_DOC_NAMESPACE);
   const meta = TIER_META[doc.kind];
+  const label = t(meta.labelKey);
   const stripped = stripLeadingTitle(doc.contentMd);
   const { body, openQuestionsMd } = splitOpenQuestions(stripped);
 
@@ -74,22 +78,19 @@ export function DirectionDocView({
     <article
       className={['dd-doc', className].filter(Boolean).join(' ')}
       style={{ '--dd-accent': `var(${meta.accentVar})` } as CSSProperties}
-      aria-label={meta.label}
+      aria-label={label}
     >
       <div className="dd-meta">
         <span className="dd-dot" aria-hidden="true" />
-        <span>{meta.kicker}</span>
-        {meta.optional && <span className="dd-opt">optional</span>}
+        <span>{t(meta.kickerKey)}</span>
+        {meta.optional && <span className="dd-opt">{t('optional')}</span>}
       </div>
 
-      <h1 className="dd-title">{meta.label}</h1>
+      <h1 className="dd-title">{label}</h1>
 
       <div className="dd-readhint">
         <MessageSquare className="ic" width={15} height={15} aria-hidden="true" />
-        <span>
-          <b>Read-only.</b> Anything off? Just tell Motir in the chat — it rewrites the write-up for
-          you. Nothing&apos;s locked yet.
-        </span>
+        <span>{t.rich('readHint', { b: (chunks) => <b>{chunks}</b> })}</span>
       </div>
 
       <div className="dd-prose wmde-markdown">{renderMarkdown(body)}</div>
@@ -97,20 +98,20 @@ export function DirectionDocView({
       {doc.kind === 'vision' && catalog && <FeatureCatalogView catalog={catalog} />}
 
       {openQuestionsMd && (
-        <aside className="dd-openq" aria-label="Open questions">
+        <aside className="dd-openq" aria-label={t('openQuestions')}>
           <span className="dd-openq-icon" aria-hidden="true">
             <HelpCircle width={18} height={18} />
           </span>
           <div>
-            <div className="dd-openq-title">Open questions</div>
+            <div className="dd-openq-title">{t('openQuestions')}</div>
             <div className="dd-prose wmde-markdown">{renderMarkdown(openQuestionsMd)}</div>
           </div>
         </aside>
       )}
 
       {crossLinks.length > 0 && (
-        <nav className="dd-xlinks" aria-label="Other parts of your direction">
-          <div className="dd-xlinks-label">Related</div>
+        <nav className="dd-xlinks" aria-label={t('crossLinksLabel')}>
+          <div className="dd-xlinks-label">{t('related')}</div>
           <div className="dd-xlinks-row">
             {crossLinks.map((kind) => {
               const m = TIER_META[kind];
@@ -129,13 +130,13 @@ export function DirectionDocView({
                   onClick={() => onNavigate(kind)}
                 >
                   {dot}
-                  {m.label}
+                  {t(m.labelKey)}
                   <ArrowRight width={13} height={13} aria-hidden="true" />
                 </button>
               ) : (
                 <span key={kind} className="dd-xlink">
                   {dot}
-                  {m.label}
+                  {t(m.labelKey)}
                 </span>
               );
             })}

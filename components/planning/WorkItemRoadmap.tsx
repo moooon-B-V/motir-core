@@ -16,6 +16,7 @@ import {
   ORIGIN_ID,
 } from '@/components/planning/workItemLevel';
 import { buildPreplanStationLevel } from '@/components/planning/preplanStationLevel';
+import { useTierLabel } from '@/components/onboarding/useTierLabel';
 import { FolderEmptyLevel } from '@/components/planning/WorkItemNode';
 import { TierDocModal } from '@/components/planning/TierDocModal';
 import { isDirectionDocKind, type DirectionDocKind } from '@/lib/onboarding/directionDoc';
@@ -186,6 +187,7 @@ export function WorkItemRoadmap({
   onLevelChange,
 }: WorkItemRoadmapProps) {
   const t = useTranslations('roadmap.canvas');
+  const tierLabel = useTierLabel();
   // Levels cached so re-drilling a node doesn't re-hit the API. Keyed by
   // project+parent (a ref — mutable — so a new key just misses; no reset needed).
   const cacheRef = useRef(new Map<string, RoadmapLevelData>());
@@ -355,7 +357,7 @@ export function WorkItemRoadmap({
         if (parentId === ORIGIN_ID) {
           // Synthetic: no cache key, so no level for the tile to uncap (MOTIR-4501).
           levelKeyRef.current = null;
-          return buildPreplanStationLevel(await readPreplan());
+          return buildPreplanStationLevel(await readPreplan(), tierLabel);
         }
         // THE GROUPED NODE'S LEVEL (MOTIR-3490) — synthetic, and served from the
         // ROOT level this canvas has ALREADY fetched: those rows came back in the
@@ -515,6 +517,7 @@ export function WorkItemRoadmap({
       readRootLevel,
       foldersOn,
       t,
+      tierLabel,
     ],
   );
 

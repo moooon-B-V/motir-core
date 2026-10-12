@@ -6,8 +6,8 @@ import { ArrowRight, ArrowUpRight, FileQuestion, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { DirectionDocView } from '@/components/onboarding/DirectionDocView';
+import { useTierLabel } from '@/components/onboarding/useTierLabel';
 import {
-  TIER_META,
   type DirectionDocKind,
   type DirectionDocView as DirectionDocModel,
   type FeatureCatalogView,
@@ -118,7 +118,8 @@ export function TierDocModal({
     return () => controller.abort();
   }, [tier]);
 
-  const meta = tier ? TIER_META[tier] : null;
+  const tierLabel = useTierLabel();
+  const label = tier ? tierLabel(tier) : null;
 
   return (
     <Modal
@@ -129,7 +130,7 @@ export function TierDocModal({
       size="xl"
       // The doc renders its own visible heading (plain-language tier label), so we
       // give the dialog its accessible name via srTitle rather than a visible title.
-      srTitle={meta?.label}
+      srTitle={label ?? undefined}
       // The head below carries the close + Open-full-page controls (the design's
       // thin m-head), so suppress Modal's own corner ×.
       hideClose
@@ -221,7 +222,7 @@ export function TierDocModal({
           <div className="flex min-h-[16rem] flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
             <FileQuestion className="size-6 text-(--el-text-faint)" aria-hidden="true" />
             <p className="text-sm font-semibold text-(--el-text)">
-              {meta ? meta.label : 'This part of your direction'} isn&apos;t ready yet
+              {label ?? 'This part of your direction'} isn&apos;t ready yet
             </p>
             <p className="max-w-[22rem] text-sm text-(--el-text-muted)">
               This tier hasn&apos;t been drafted for this project. It&apos;ll appear here once Motir

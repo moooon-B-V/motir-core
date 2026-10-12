@@ -6637,6 +6637,31 @@
       "logIn": "ログイン",
       "signUp": "新規登録"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "プロジェクトを理解する",
+          "kicker": "何を、誰のために作るのか"
+        },
+        "vision": {
+          "label": "作るもの",
+          "kicker": "v1 の形"
+        },
+        "feasibility": {
+          "label": "作る価値はありますか?",
+          "kicker": "現実的な検証"
+        },
+        "validation": {
+          "label": "求められていますか?",
+          "kicker": "市場"
+        }
+      },
+      "optional": "オプション",
+      "readHint": "<b>閲覧のみ。</b>気になる点があれば、チャットで Motir に伝えてください。Motir が内容を書き直します。まだ何も確定していません。",
+      "openQuestions": "未解決の質問",
+      "crossLinksLabel": "方向性のほかの部分",
+      "related": "関連"
+    },
     "landing": {
       "badge": "Vibe プロジェクト",
       "headline": "何を作りたいですか?",
