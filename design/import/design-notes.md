@@ -416,3 +416,7 @@ The wizard's narrow bar, one row shorter (no planAi): lockup … language · ini
 ### Revision 4 (2026-10-12) — the warm pass
 
 The vibe-layout board in this area takes the warm pass described in `design/onboarding-migrate/design-notes.md` § _Revision 4_: the hero glow and warm waves, the orange step dot, and orange (`--el-highlight`) for the current step, the picked row and the "you are here" marker, with `--el-tint-yellow` behind progress. Every label stays on the ink tokens; the orange is used for fills, rings, borders and glyphs only.
+
+### Revision 5 (2026-10-12) — warm on the button only
+
+The warm pass narrows to the primary button and small marks (the step dot, spinners, progress fills); every surface returns to the cool shipped look. See `design/onboarding-migrate/design-notes.md` § _Revision 5_ for the two new roles (`--el-cta-warm`, `--el-cta-warm-text`) and their measured contrast.

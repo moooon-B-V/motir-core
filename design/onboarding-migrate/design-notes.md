@@ -1321,7 +1321,7 @@ Measured pairs (WCAG): `--el-highlight` is 3.80:1 on the page, 3.34:1 on `--el-t
 3.01:1 on `--el-tint-peach` in light, and 4.34 / 4.53:1 on the dark tints, so every orange ring,
 border and glyph clears the 3:1 non-text bar. Error, danger and success keep their own tokens.
 
-**Four new Tier-3 roles**, declared in each board's own token block and proposed for
+**Four new Tier-3 roles** (withdrawn by Revision 5), declared in each board's own token block and proposed for
 `packages/design-system/theme.css` (every input is a palette token, so a `data-palette` swap
 re-tints them): `--el-hero-wave-1: var(--el-highlight)`, `--el-hero-wave-2: var(--el-type-design)`,
 `--el-hero-wave-3: var(--el-highlight)`, and `--el-hero-glow` (the two radial gradients over
@@ -1338,3 +1338,51 @@ re-tints them): `--el-hero-wave-1: var(--el-highlight)`, `--el-hero-wave-2: var(
 - **GIVES MOTIR-8257** the E2E change: a two-project workspace sees the project choice with the
   open project picked.
 - **GIVES MOTIR-8258** the five new keys to translate.
+
+### Revision 5 (2026-10-12) — warm on the button and the small things, the tone stays cool
+
+**The reviewer's note, verbatim (on Revision 4):** _"use the warm colors for the button and small
+things like progress bar. the overall tone should still be cool"_
+
+**What changes.** Revision 4's warm pass went too far: it washed the hero and tinted whole rows and
+cards. This revision takes the warm colour back off every surface and keeps it only on the
+primary button and on small marks. Revision 4's 1b project choice stands, and so does its copy.
+Where Revision 4's tables say otherwise, this section wins.
+
+| element                                       | Revision 4                                           | now                                                                                                     |
+| --------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **primary button** (every board)              | the ink CTA                                          | **`--el-cta-warm` fill, `--el-cta-warm-text` label**: the warm orange, ink label                        |
+| hero background, waves, lede                  | peach and yellow glow, warm waves, ink lede          | back to the shipped hero: `--el-surface`, `--el-showcase-wave-*`, `--el-accent-on-surface` lede         |
+| step eyebrow dot                              | `--el-highlight`                                     | kept                                                                                                    |
+| rail: current step                            | yellow row, orange ring                              | `--el-surface` row with the `--el-accent-on-surface` ring (cool); the **marker** stays `--el-highlight` |
+| rail: background Index marker, spinners       | `--el-highlight`                                     | kept                                                                                                    |
+| progress bars                                 | `--el-progress-fill` on `--el-tint-yellow`           | kept                                                                                                    |
+| Connect card                                  | tinted by state                                      | plain `Card`                                                                                            |
+| info callout · answered-steps marker · avatar | yellow · peach · peach                               | `--el-tint-sky` (as shipped)                                                                            |
+| 1b picked row · key tiles · "Open now" chip   | yellow fill, orange ring · peach/yellow/rose · peach | `--el-surface` fill, `--el-accent-on-surface` border and ring · sky/lavender/mint · lavender            |
+| importer: current step marker                 | yellow fill, orange ring                             | `--el-cta-warm` fill, `--el-cta-warm-text` number, 22 % halo (the same pair as the button)              |
+| importer: picked source card                  | orange border                                        | the shipped ink border                                                                                  |
+| discovery canvas: "you are here" station      | orange border                                        | the shipped `--el-accent-on-surface` border                                                             |
+
+**The two new roles, replacing Revision 4's four hero roles** (which are withdrawn). Each board declares
+them in its own token block, and the build adds them to `packages/design-system/theme.css`:
+
+| role                 | light                             | dark                              | measured (WCAG)               |
+| -------------------- | --------------------------------- | --------------------------------- | ----------------------------- |
+| `--el-cta-warm`      | `var(--el-highlight)` (`#d66000`) | `var(--el-highlight)` (`#fa5500`) | —                             |
+| `--el-cta-warm-text` | `var(--el-text)` (`#16191d`)      | `var(--el-page-bg)` (`#0c0d0f`)   | 4.65:1 light, 5.9:1 dark (AA) |
+
+The label is dark in BOTH themes because white on the warm orange is 3.8:1 in light and 3.3:1 in
+dark, both under AA. The button keeps `Button`'s primary shape, sizes and `hover:opacity-90`; only the
+two colour roles change, so the build is a `warm` treatment of the primary variant (a className pair
+or a variant), not a new component. Disabled keeps `Button`'s own disabled opacity.
+
+#### GIVES / TAKES (Revision 5)
+
+- **GIVES MOTIR-8254** the warm primary button on the migrate wizard and the importer, the two roles
+  above in the design-system theme, and the importer's warm current-step marker. It **TAKES** back
+  Revision 4's hero roles and its surface tints.
+- **GIVES MOTIR-8255** the warm primary button on the discovery and direction-doc surfaces. The
+  "you are here" station stays as shipped.
+- **GIVES MOTIR-8256** the two new pairs for its contrast run across every palette.
+- MOTIR-8257 and MOTIR-8258 are unchanged from Revision 4.

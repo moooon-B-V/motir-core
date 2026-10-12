@@ -48,16 +48,15 @@
       [data-appearance-scope] {
         --focus-ring-color: var(--el-accent-on-surface);
       }
-      /* Revision 4 (MOTIR-8251) PROPOSED Tier-3 roles — the onboarding hero's warm
-   layer. Every input is a palette token, so a data-palette swap re-tints it. */
+      /* Revision 5 (MOTIR-8251) PROPOSED Tier-3 roles — the warm CTA. Every input is
+   a palette token, so a data-palette swap re-tints it. Light: ink on the warm
+   orange (4.65:1); dark: the page ink on the brighter orange (5.9:1). */
       [data-appearance-scope] {
-        --el-hero-wave-1: var(--el-highlight);
-        --el-hero-wave-2: var(--el-type-design);
-        --el-hero-wave-3: var(--el-highlight);
-        --el-hero-glow:
-          radial-gradient(75% 110% at 10% 0%, var(--el-tint-peach), transparent 75%),
-          radial-gradient(70% 110% at 92% 100%, var(--el-tint-yellow), transparent 78%),
-          linear-gradient(var(--el-surface-soft), var(--el-surface-soft));
+        --el-cta-warm: var(--el-highlight);
+        --el-cta-warm-text: var(--el-text);
+      }
+      [data-appearance-scope][data-theme='dark'] {
+        --el-cta-warm-text: var(--el-page-bg);
       }
       [data-hero-waves] use {
         fill: none;
@@ -712,6 +711,9 @@
           --tw-border-style: dashed;
           border-style: dashed;
         }
+        .border-\(--el-accent-on-surface\) {
+          border-color: var(--el-accent-on-surface);
+        }
         .border-\(--el-border\) {
           border-color: var(--el-border);
         }
@@ -720,9 +722,6 @@
         }
         .border-\(--el-chip-border\) {
           border-color: var(--el-chip-border);
-        }
-        .border-\(--el-highlight\) {
-          border-color: var(--el-highlight);
         }
         .border-current {
           border-color: currentcolor;
@@ -753,6 +752,9 @@
         }
         .bg-\(--el-chip-bg\) {
           background-color: var(--el-chip-bg);
+        }
+        .bg-\(--el-cta-warm\) {
+          background-color: var(--el-cta-warm);
         }
         .bg-\(--el-muted\) {
           background-color: var(--el-muted);
@@ -935,6 +937,9 @@
         .text-\(--el-accent-text\) {
           color: var(--el-accent-text);
         }
+        .text-\(--el-cta-warm-text\) {
+          color: var(--el-cta-warm-text);
+        }
         .text-\(--el-danger-on-surface\) {
           color: var(--el-danger-on-surface);
         }
@@ -998,8 +1003,8 @@
             var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
             var(--tw-ring-shadow), var(--tw-shadow);
         }
-        .ring-\(--el-highlight\) {
-          --tw-ring-color: var(--el-highlight);
+        .ring-\(--el-accent-on-surface\) {
+          --tw-ring-color: var(--el-accent-on-surface);
         }
         .ring-\(--focus-ring-color\) {
           --tw-ring-color: var(--focus-ring-color);
@@ -4995,7 +5000,7 @@
                           >
                         </div>
                         <div
-                          class="grid w-[13.5rem] gap-1.5 rounded-(--radius-card) border bg-(--el-card) p-3 shadow-(--shadow-subtle) border-(--el-highlight) ring-1 ring-(--el-highlight)"
+                          class="grid w-[13.5rem] gap-1.5 rounded-(--radius-card) border bg-(--el-card) p-3 shadow-(--shadow-subtle) border-(--el-accent-on-surface) ring-1 ring-(--el-accent-on-surface)"
                         >
                           <span
                             aria-hidden="true"
@@ -5159,7 +5164,7 @@
                       /><button
                         type="submit"
                         data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 hover:opacity-90 h-(--height-btn-sm) px-3 text-xs bg-(--el-cta-warm) text-(--el-cta-warm-text)"
                         disabled=""
                         aria-label="Send"
                       >
@@ -5363,7 +5368,7 @@
                           >
                         </div>
                         <div
-                          class="grid w-[13.5rem] gap-1.5 rounded-(--radius-card) border bg-(--el-card) p-3 shadow-(--shadow-subtle) border-(--el-highlight) ring-1 ring-(--el-highlight)"
+                          class="grid w-[13.5rem] gap-1.5 rounded-(--radius-card) border bg-(--el-card) p-3 shadow-(--shadow-subtle) border-(--el-accent-on-surface) ring-1 ring-(--el-accent-on-surface)"
                         >
                           <span
                             aria-hidden="true"
@@ -5527,7 +5532,7 @@
                       /><button
                         type="submit"
                         data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 hover:opacity-90 h-(--height-btn-sm) px-3 text-xs bg-(--el-cta-warm) text-(--el-cta-warm-text)"
                         disabled=""
                         aria-label="Send"
                       >
@@ -7366,7 +7371,7 @@
                       /><button
                         type="submit"
                         data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 hover:opacity-90 h-(--height-btn-sm) px-3 text-xs bg-(--el-cta-warm) text-(--el-cta-warm-text)"
                         disabled=""
                         aria-label="Send"
                       >
@@ -7453,7 +7458,7 @@
                       /><button
                         type="submit"
                         data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 hover:opacity-90 h-(--height-btn-sm) px-3 text-xs bg-(--el-cta-warm) text-(--el-cta-warm-text)"
                         disabled=""
                         aria-label="Send"
                       >
