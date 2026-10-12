@@ -283,6 +283,25 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'installation with an empty repo list — the arm-the-JOIN-target-too clause, arriving ' +
       'here as a second statement rather than a join.',
   },
+  'lib/services/githubAccountDisconnectService.ts#loadOwnLink': {
+    tables: [
+      'github_installation',
+      'github_installation_org_link',
+      'github_repo',
+      'project_repository',
+    ],
+    source: 'scan',
+    why:
+      'MOTIR-8222 — the per-organisation disconnect of one GitHub account, and its preview. ' +
+      'The admin-gated, org-bound read loads the installation, THIS organisation`s link row, ' +
+      'its repositories under that installation and their project links. Each answers under ' +
+      'an org arm: github_installation_org_read / github_installation_linked_org_read (the ' +
+      'installation may be stamped with another linked organisation), ' +
+      'github_installation_org_link_org_read (MOTIR-8218), github_repo_org_read (MOTIR-4677) ' +
+      'and project_repository_org_read (MOTIR-4679). Only the READ is org-bound: the clears ' +
+      'are workspace-bound per affected workspace and the deletes run under the system ' +
+      'context, the `disconnectFromOrganisation` split.',
+  },
   'lib/services/organizationRepoService.ts#listRepositoryUsage': {
     tables: ['github_repo', 'project_repository'],
     source: 'scan',
