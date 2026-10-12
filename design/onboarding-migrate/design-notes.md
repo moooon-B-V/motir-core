@@ -815,7 +815,8 @@ it. Every string drawn is read by key; none is typed. **motir.co, read and never
 | #   | Panel                                                                                                                                                   | frame   |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | 0   | Access path — the entrance's import section door ("We can vibe it too") → `/onboarding/migrate`                                                         | 640 × 2 |
-| 1   | Start — no run yet: the bar, the **full** hero, the work band with the rail and the Start panel                                                         | 1280    |
+| 1a  | Arrival with only the default project — Start skipped, the wizard opens on **Connect** with the **full** hero — Revision 3                              | 1280    |
+| 1b  | Start — only when the workspace has two or more projects: the bar, the **full** hero, the rail and the Start panel                                      | 1280    |
 | 2a  | Connect — compact hero, **Checking** (on arrival) — Revision 1                                                                                          | 1280    |
 | 2b  | Connect — **Not connected yet** (Connect GitHub ↗ in a new tab, no Next) — Revision 1                                                                   | 1280    |
 | 2c  | Connect — **Waiting for GitHub** (re-checks on focus and every ~5 s) — Revision 1                                                                       | 1280    |
@@ -829,7 +830,7 @@ it. Every string drawn is read by key; none is typed. **motir.co, read and never
 | 7   | Error — the typed error alert inside the panel (drawn over 2b)                                                                                          | 1280    |
 | 8   | Collapsed rail — the planner-decided set (discovery + import kept, MOTIR-4766)                                                                          | 1280    |
 | 9   | Close-ups — 9a planAi / Save & exit rest·hover·focus · 9b language pending·failed·open · 9c indexing chip states (Revision 2) · 9d planNow rest·pending | 640 × 2 |
-| 10  | Narrow — Start, and Import with the code being read (chip closed, then opened) — Revision 2                                                             | 390 × 2 |
+| 10  | Narrow — arrival on Connect (default project only), and Import with the code being read (chip closed, then opened) — Revision 3                         | 390 × 2 |
 | 11  | Narrow — Connect 2b and 2d — Revision 1                                                                                                                 | 390 × 2 |
 
 ### What changes, and what does not
@@ -1194,3 +1195,57 @@ it shares the flow-name row, which truncates the flow name first, never the chip
 - **GIVES MOTIR-8256** the new pairs to gate: `--el-danger` border + `--el-danger-on-surface` glyph
   on `--el-page-bg`, `--el-text-strong` on `--el-tint-sky`; **MOTIR-8257** nothing (the E2E walks
   the shipped stop until MOTIR-8246).
+
+### Revision 3 (2026-10-12) — no Start panel when the only project is the sign-up default
+
+**The reviewer's note, verbatim (on Revision 2):** _"When there is only the default project, don't
+need to show the project. The user didn't create the project, and it's the only project available,
+go to connect step directly"_
+
+**What was wrong.** The shipped wizard renders `StartPanel` whenever the project has no run
+(`run === null` in `MigrateWizard.tsx`): a card naming the active project and a Start button that
+POSTs `/api/onboarding/migrate`. For a new sign-up the workspace holds one project, the one Motir
+created for them, so the card asks them to confirm a choice they never made and could not make
+differently. (The importer already skips its picker in this case: `loadImportWizard` in
+`app/(onboarding)/onboarding/import/_data.ts` falls through to the first project when no
+`projectId` is given and shows the picker only for an empty or a bad request, so the importer is
+unchanged by this revision.)
+
+**What the board now draws.**
+
+| panel | before (Revision 2)                     | now                                                                                                                                               |
+| ----- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1a    | —                                       | **Arrival with only the default project**: no Start panel; the wizard opens on **Connect** (2a → 2b/2d) under the **full** hero, rail on Connect. |
+| 1b    | Start (the arrival screen for everyone) | Start, **only when the workspace has two or more projects**, unchanged in look and copy.                                                          |
+| 10    | Narrow — Start and Import               | Narrow — the 1a arrival on Connect, and Import with the indexing chip.                                                                            |
+
+**The hero rule changes from "full on Start" to "full on a run's first screen"** — Start (1b) or
+Connect (1a) — and compact after any step advance. Measured on the board at 1280 px, the 1a Connect
+card's action still sits above a laptop fold (its Connect GitHub button lands about 700 px down the
+frame, inside an 800 px laptop viewport); no new token, no new string.
+
+**Behaviour (for MOTIR-8254).**
+
+1. **The condition is the workspace's project count**, read on the server by the migrate page:
+   `run === null` and exactly one project in the workspace → the island receives `autoStart`.
+   Schema has no "created at sign-up" flag, and none is needed: a one-project workspace has nothing
+   to choose, whoever created the project.
+2. **The island starts the run on mount** with the same `startRun` call (so the MOTIR-4759 kept set
+   still rides the START call from the query), and renders Connect's 2a Checking state while the
+   POST and the first read are in flight; the result lands on 2b or 2d in place. No Start panel
+   is ever painted, so there is no flash.
+3. **A failed start** shows the existing error alert above the Start panel (1b's panel, as the
+   retry), never a dead Connect panel. A 409 (a run already exists) refreshes, as today.
+4. **Two or more projects** → exactly today's Start (1b).
+
+Copy: nothing new; Start's keys stay for 1b.
+
+#### GIVES / TAKES (Revision 3)
+
+- **TAKES** the Start panel from the one-project arrival.
+- **GIVES MOTIR-8254** the `autoStart` arrival above (one server read of the project count, one
+  mount effect, the fallback); its "every step unchanged" criterion is amended for Start exactly
+  as Revision 1 amended it for Connect. Comment posted there.
+- **GIVES MOTIR-8257** the E2E change: a fresh sign-up on `/onboarding/migrate` sees Connect, not
+  Start; a two-project workspace still sees Start.
+- **MOTIR-8246 and Revision 2 are unaffected.**
