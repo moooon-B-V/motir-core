@@ -278,8 +278,11 @@ test('a repository is connected once, to the organisation, and the second projec
     await beat();
 
     // And the ORGANISATION-level one, which names every affected project BEFORE
-    // it runs — the disclosure, not a warning after the fact.
+    // it runs — the disclosure, not a warning after the fact. It is the
+    // REPOSITORY's Disconnect: since MOTIR-8216 the room also lists each GitHub
+    // account with a Disconnect of its own, above the inventory.
     await page
+      .locator(`#main ul:not([aria-label="${enMessages.github.accounts.title}"])`)
       .getByRole('button', { name: new RegExp(disc.confirm) })
       .first()
       .click();
