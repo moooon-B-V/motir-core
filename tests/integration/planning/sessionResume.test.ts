@@ -13,6 +13,7 @@ import {
 } from '@/lib/planChange/errors';
 import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -281,10 +282,9 @@ describe('every refusal costs nothing', () => {
     expect(submitJobMock).not.toHaveBeenCalled();
   });
 
-  it('an open session that is not failed is refused SESSION_NOT_FAILED', T, async () => {
-    const f = await failedSession();
-    await adminDb.planChangeSession.update({
-      where: { id: f.sessionId },
+  const clearFailure = (sessionId: string) =>
+    adminDb.planChangeSession.update({
+      where: { id: sessionId },
       data: {
         failedAt: null,
         failedJobId: null,
@@ -295,12 +295,61 @@ describe('every refusal costs nothing', () => {
       },
     });
 
-    await expectRefusal(
-      () => planSessionResumeService.resume(me(), f.sessionId),
-      SessionNotFailedError,
-      f,
-    );
-  });
+  it(
+    'an open session that is not failed and runs nothing is refused SESSION_NOT_FAILED',
+    T,
+    async () => {
+      const f = await failedSession();
+      await clearFailure(f.sessionId);
+      // Its last attempt finished: the plan is in front of the person, not being written.
+      await adminDb.plan.update({ where: { id: f.planId }, data: { status: 'planned' } });
+
+      await expectRefusal(
+        () => planSessionResumeService.resume(me(), f.sessionId),
+        SessionNotFailedError,
+        f,
+      );
+    },
+  );
+
+  it(
+    'an open session whose last job is still writing its plan is RESUME_ALREADY_STARTED naming that job (MOTIR-8297)',
+    T,
+    async () => {
+      // The state a concurrent Resume's bind leaves, reached by a Resume that arrives after it.
+      const f = await failedSession();
+      await clearFailure(f.sessionId);
+
+      const before = [await sessionRow(f.sessionId), await planRow(f.planId)];
+      const err = await planSessionResumeService.resume(me(), f.sessionId).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(ResumeAlreadyStartedError);
+      expect((err as ResumeAlreadyStartedError).jobId).toBe('job-1');
+      expect(submitJobMock).not.toHaveBeenCalled();
+      expect([await sessionRow(f.sessionId), await planRow(f.planId)]).toEqual(before);
+    },
+  );
+
+  it(
+    'an awaiting-person session is refused SESSION_NOT_FAILED even while its plan generates',
+    T,
+    async () => {
+      const f = await failedSession();
+      await clearFailure(f.sessionId);
+      await adminDb.planChangeSession.update({
+        where: { id: f.sessionId },
+        data: { awaitingPersonSince: new Date(), awaitingPersonCause: 'question' },
+      });
+
+      await expectRefusal(
+        () => planSessionResumeService.resume(me(), f.sessionId),
+        SessionNotFailedError,
+        f,
+      );
+    },
+  );
 
   it('a guide session is refused', T, async () => {
     const f = await failedSession();
@@ -464,6 +513,43 @@ describe('real concurrency', () => {
             await winner;
           }
           return realFind(sessionId, tx);
+        });
+      try {
+        const loser = await planSessionResumeService.resume(me(), f.sessionId).then(
+          () => null,
+          (err: unknown) => err,
+        );
+        const won = await winner!;
+        expect(loser).toBeInstanceOf(ResumeAlreadyStartedError);
+        expect((loser as ResumeAlreadyStartedError).jobId).toBe(won.jobId);
+        // The loser spent no job: only the winner submitted.
+        expect(submitJobMock).toHaveBeenCalledTimes(1);
+        expect((await planRow(f.planId)).sourceJobId).toBe(won.jobId);
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it(
+    'a Resume whose pre-check reads the session only AFTER the winner has bound is RESUME_ALREADY_STARTED (MOTIR-8297)',
+    T,
+    async () => {
+      // The other schedule the 20-iteration race above can hit under CI load, forced: the loser
+      // is held at its permission read, BEFORE its first session read, while the winner runs to
+      // completion. By the time the loser reads the session the failure is already cleared, so
+      // the first read — not the MOTIR-8261 re-read — is the one that has to recognise the race.
+      const f = await failedSession();
+      const realGetPermissions = projectAccessService.getPermissions.bind(projectAccessService);
+      let winner: Promise<{ jobId: string }> | null = null;
+      const spy = vi
+        .spyOn(projectAccessService, 'getPermissions')
+        .mockImplementation(async (...args) => {
+          if (!winner) {
+            winner = planSessionResumeService.resume(me(), f.sessionId);
+            await winner;
+          }
+          return realGetPermissions(...args);
         });
       try {
         const loser = await planSessionResumeService.resume(me(), f.sessionId).then(
