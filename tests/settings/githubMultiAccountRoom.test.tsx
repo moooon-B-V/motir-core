@@ -315,6 +315,34 @@ describe('the repo picker — the story`s scenario (X has A, B; Y connects)', ()
     expect(box.hasAttribute('disabled')).toBe(true);
     expect(screen.getByText('Connected here')).toBeTruthy();
   });
+
+  it('keeps the repositories already connected here in the link request', async () => {
+    // The link REPLACES the organisation's set on the account, so an add that
+    // left F out would release it.
+    routes[`GET /api/organizations/${ORG_ID}/github/accounts/7001/repositories`] = () => ({
+      status: 200,
+      body: {
+        repos: [
+          { repoId: '3', fullName: 'moooon-labs/c', availability: 'available' },
+          { repoId: '6', fullName: 'moooon-labs/f', availability: 'connected_here' },
+        ],
+        counts: { available: 1, connectedHere: 1, connectedElsewhere: 0 },
+      },
+    });
+    routes[`POST /api/organizations/${ORG_ID}/github/installations`] = () => ({
+      status: 200,
+      body: { claimed: ['moooon-labs/c'], released: [] },
+    });
+    const { onLinked } = renderFlow();
+    fireEvent.click(await screen.findByRole('checkbox', { name: /moooon-labs\/c,/ }));
+    await act(async () => {
+      fireEvent.click(submitButton());
+    });
+    const posts = calls.filter((c) => c.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.body).toEqual({ installationId: '7001', repoIds: ['6', '3'] });
+    expect(onLinked).toHaveBeenCalledWith({ account: ACCOUNT, count: 1 });
+  });
 });
 
 const PREVIEW = {

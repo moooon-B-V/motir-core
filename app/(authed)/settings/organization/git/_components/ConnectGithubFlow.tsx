@@ -241,6 +241,9 @@ export function ConnectGithubFlow({
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   }, [repos, taken]);
   const available = rows.filter((row) => row.availability === 'available');
+  const connectedHereIds = rows
+    .filter((row) => row.availability === 'connected_here')
+    .map((row) => row.repoId);
   const visible = query.trim()
     ? rows.filter((row) => row.fullName.toLowerCase().includes(query.trim().toLowerCase()))
     : rows;
@@ -266,8 +269,8 @@ export function ConnectGithubFlow({
   };
 
   const submit = async (account: GithubAccountRef) => {
-    const repoIds = available.filter((row) => selected.has(row.repoId)).map((row) => row.repoId);
-    if (repoIds.length === 0) {
+    const added = available.filter((row) => selected.has(row.repoId)).map((row) => row.repoId);
+    if (added.length === 0) {
       setFormError('repo_selection_required');
       return;
     }
@@ -277,10 +280,17 @@ export function ConnectGithubFlow({
       const res = await fetch(`${base}/installations`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ installationId: account.installationId, repoIds }),
+        // ⚠️ THE BODY IS THE ORGANISATION'S WHOLE SET ON THIS ACCOUNT, not the
+        // additions: the link replaces this organisation's repositories with
+        // exactly `repoIds`, so leaving out the ones already connected here
+        // would release them. The picker only adds, so it sends both.
+        body: JSON.stringify({
+          installationId: account.installationId,
+          repoIds: [...connectedHereIds, ...added],
+        }),
       });
       if (res.ok) {
-        onLinked({ account, count: repoIds.length });
+        onLinked({ account, count: added.length });
         return;
       }
       const body = await readJson(res);
