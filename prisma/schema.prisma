@@ -13941,6 +13941,18 @@ enum IdeaCategory {
   family_care
   /// Public sector
   public_sector
+  /// Entertainment & media
+  entertainment_media
+  /// Hospitality & travel
+  hospitality_travel
+  /// Mobility & automotive
+  mobility
+  /// Energy & climate
+  energy_climate
+  /// Manufacturing
+  manufacturing
+  /// Local services
+  local_services
   // ── Consumer
   /// Personal growth
   personal_growth
@@ -13948,6 +13960,12 @@ enum IdeaCategory {
   personal_finance
   /// Health & wellness
   health_wellness
+  /// Social & community
+  social_community
+  /// Silver economy
+  silver_economy
+  /// Independent work
+  independent_work
   // ── Platform
   /// AI infrastructure
   ai_infrastructure

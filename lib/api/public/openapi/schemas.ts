@@ -1,4 +1,6 @@
 import { z } from 'zod/v4';
+import type { IdeaCategory } from '@/generated/prisma/client';
+import { IDEA_CATEGORIES } from '@/lib/ideas/categories';
 
 // The RESPONSE SCHEMAS of the published public read surface (MOTIR-3946).
 //
@@ -666,8 +668,20 @@ const ideaKind = z
   .enum(['motir_buys', 'direction'])
   .meta({ id: 'IdeaKind', description: '`motir_buys`: a team Motir itself would buy.' });
 
+/**
+ * The fixed category list (Story MOTIR-8273 widened it to 34). DERIVED from
+ * `IDEA_CATEGORIES` — the key order of `IDEA_CATEGORY_LABELS` — rather than
+ * retyped, so the published enum can never drift from the Prisma enum.
+ */
+export const ideaCategory = z.enum(IDEA_CATEGORIES as [IdeaCategory, ...IdeaCategory[]]).meta({
+  id: 'IdeaCategory',
+  description:
+    'One of the fixed idea categories, in their grouped order. A slug is never translated; ' +
+    'its `label` is returned in the requested locale.',
+});
+
 const ideaCategoryRef = z
-  .object({ slug: z.string(), label: z.string() })
+  .object({ slug: ideaCategory, label: z.string() })
   .strict()
   .meta({ id: 'IdeaCategoryRef' });
 
@@ -708,7 +722,7 @@ export const publicIdeaSchema = z
   .meta({ id: 'PublicIdea' });
 
 const publicIdeaCategoryCount = z
-  .object({ slug: z.string(), label: z.string(), count: z.number().int() })
+  .object({ slug: ideaCategory, label: z.string(), count: z.number().int() })
   .strict()
   .meta({ id: 'PublicIdeaCategoryCount' });
 
